@@ -1,37 +1,74 @@
 import hmac
+from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from nexgraph_engine import GRAPHIFY_COMMIT, __version__
+from nexgraph_engine.api import routes_events, routes_graph, routes_projects
+from nexgraph_engine.api.errors import ApiError, error_response
+from nexgraph_engine.api.services import Services
 from nexgraph_engine.selftest import run_selftest
 
 
-def _error(status: int, code: str, message: str) -> JSONResponse:
-    return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
+class Guard:
+    """ASGI thuần (không dùng BaseHTTPMiddleware để SSE không bị chặn): kiểm Host rồi token."""
+
+    def __init__(self, app, token: str, allowed_hosts: set[str]) -> None:
+        self.app, self.expected, self.allowed_hosts = app, token.encode("utf-8"), allowed_hosts
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 1008})
+                return
+            await self.app(scope, receive, send)
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
+        if headers.get("host", "") not in self.allowed_hosts:
+            response = error_response(403, "forbidden_host", "Host không được phép")
+        else:
+            scheme, _, supplied = headers.get("authorization", "").partition(" ")
+            if scheme != "Bearer" or not hmac.compare_digest(supplied.encode("utf-8"), self.expected):
+                response = error_response(401, "unauthorized", "Thiếu hoặc sai token")
+            else:
+                await self.app(scope, receive, send)
+                return
+        await response(scope, receive, send)
 
 
-def create_app(token: str, allowed_hosts: set[str]) -> FastAPI:
+def create_app(token: str, allowed_hosts: set[str], *, data_dir: Path | None = None,
+               sse_ping_seconds: float = 15.0) -> FastAPI:
     app = FastAPI(title="NexGraph Engine", docs_url=None, redoc_url=None, openapi_url=None)
-    expected = token.encode("utf-8")
+    app.state.services = Services(data_dir)
+    app.state.sse_ping_seconds = sse_ping_seconds
 
-    @app.middleware("http")
-    async def guard(request: Request, call_next):
-        if request.headers.get("host", "") not in allowed_hosts:
-            return _error(403, "forbidden_host", "Host không được phép")
-        header = request.headers.get("authorization", "")
-        scheme, _, supplied = header.partition(" ")
-        if scheme != "Bearer" or not hmac.compare_digest(supplied.encode("utf-8"), expected):
-            return _error(401, "unauthorized", "Thiếu hoặc sai token")
-        return await call_next(request)
+    @app.exception_handler(ApiError)
+    async def _api_error(_: Request, exc: ApiError):
+        return error_response(exc.status, exc.code, exc.message)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation(_: Request, exc: RequestValidationError):
+        first = exc.errors()[0] if exc.errors() else {}
+        where = ".".join(str(p) for p in first.get("loc", ())[1:]) or "request"
+        return error_response(400, "bad_param", f"Tham số không hợp lệ ({where}): {first.get('msg', '')}")
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http(_: Request, exc: StarletteHTTPException):
+        return error_response(exc.status_code, "not_found" if exc.status_code == 404 else "http_error", str(exc.detail))
 
     @app.get("/v1/health")
     def health():
-        return {"status": "ok", "api_version": "1",
-                "engine_version": __version__, "graphify_commit": GRAPHIFY_COMMIT}
+        return {"status": "ok", "api_version": "1", "engine_version": __version__,
+                "graphify_commit": GRAPHIFY_COMMIT}
 
     @app.get("/v1/selftest")
     def selftest():
         return run_selftest()
 
+    app.include_router(routes_projects.router)
+    app.include_router(routes_graph.router)
+    app.include_router(routes_events.router)
+    app.add_middleware(Guard, token=token, allowed_hosts=allowed_hosts)
     return app

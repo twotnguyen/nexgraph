@@ -1,0 +1,76 @@
+from fastapi import APIRouter, Request
+from pydantic import BaseModel
+
+from nexgraph_engine.api.errors import ApiError
+from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
+from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.store.projects import ProjectInfo, ProjectPathError
+
+router = APIRouter(prefix="/v1")
+
+
+class OpenBody(BaseModel):
+    path: str
+
+
+def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
+    if not info.graph_db.exists():
+        return None, None
+    try:
+        conn = open_graph_db(info.graph_db, read_only=True)
+        try:
+            run = GraphStore(conn).last_completed_run()
+        finally:
+            conn.close()
+    except Exception:
+        return None, None
+    return run if run else (None, None)
+
+
+def _summary(info: ProjectInfo) -> dict:
+    return {"project_id": info.project_id, "path": str(info.path), "name": info.name, "is_git": info.is_git,
+            "storage": info.storage}
+
+
+@router.post("/projects")
+def open_project(body: OpenBody, request: Request) -> dict:
+    try:
+        return _summary(request.app.state.services.registry.open_project(body.path))
+    except ProjectPathError as exc:
+        raise ApiError(400, "bad_path", str(exc)) from exc
+
+
+@router.get("/projects")
+def list_projects(request: Request) -> list[dict]:
+    out = []
+    for info in request.app.state.services.registry.list_projects():
+        at, commit = _last_run(info)
+        out.append({**_summary(info), "last_indexed_at": at, "last_index_commit": commit})
+    return out
+
+
+@router.post("/projects/{project_id}/index", status_code=202)
+def start_index(project_id: str, request: Request) -> dict:
+    try:
+        return {"job_id": request.app.state.services.jobs.start_index(project_id)}
+    except UnknownProject as exc:
+        raise ApiError(404, "unknown_project", f"Không có dự án {project_id}") from exc
+    except IndexAlreadyRunning as exc:
+        raise ApiError(409, "index_running", "Dự án đang được lập chỉ mục") from exc
+
+
+@router.get("/jobs/{job_id}")
+def get_job(job_id: str, request: Request) -> dict:
+    job = request.app.state.services.jobs.get(job_id)
+    if job is None:
+        raise ApiError(404, "unknown_job", f"Không có công việc {job_id}")
+    return job
+
+
+@router.delete("/jobs/{job_id}")
+def cancel_job(job_id: str, request: Request) -> dict:
+    jobs = request.app.state.services.jobs
+    if jobs.get(job_id) is None:
+        raise ApiError(404, "unknown_job", f"Không có công việc {job_id}")
+    return {"cancelled": jobs.cancel(job_id)}

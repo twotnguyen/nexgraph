@@ -68,6 +68,25 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 
 **Tool MCP** (kế hoạch con 5) dùng chung code với các route trên: `search`, `get_node`, `get_neighbors`, `get_impact`, `get_architecture`, `read_code`, `trace_flow`. Chạy được qua `nexgraph-engine mcp --project <path> --data-dir <dir>` (stdio). Từ 2026-10-24 (spec §5.10), CSDL đồ thị của project nằm ở `<path>/.nexgraph/`; `--data-dir` chỉ còn là thư mục dữ liệu cấp app và là nơi dự phòng khi `<path>` không ghi được. Kế hoạch con 2 chốt tham số cụ thể.
 
+## Hình dạng JSON v1 (chốt ở kế hoạch con 2, 2026-10-27)
+
+```
+Node  = {id, kind, label, qualified_name, language|null, file|null, line_start|null, line_end|null,
+         is_test, origin, signature|null, community: null}
+Edge  = {id, source, target, type, subtype|null, confidence, confidence_score, origin,
+         evidence: {file, line, col|null} | null}
+Job   = {job_id, project_id, state: "queued"|"structure"|"resolve"|"done"|"error"|"cancelled",
+         files_done, files_total, message|null}
+```
+
+- `POST /v1/projects` → `{project_id, path, name, is_git, storage: "in_project"|"app_dir"}` (`400 bad_path`). `GET /v1/projects` thêm `last_indexed_at` (giây Unix hoặc `null`) và `last_index_commit`.
+- `POST /v1/projects/{pid}/index` → `202 {job_id}`; `404 unknown_project`, `409 index_running`. `DELETE /v1/jobs/{id}` → `{cancelled: bool}`; hủy cộng tác giữa các tệp.
+- `GET /v1/events` (SSE): `data: {"type":"job_progress", ...Job}` và `data: {"type":"graph_updated","project_id":...}` (phát hai lần mỗi lần index: sau giai đoạn 1 và sau giai đoạn 2); dòng `: ping` định kỳ.
+- `GET /v1/projects/{pid}/neighbors?node&types&direction&depth(1–3)&limit(1–2000)` → `{nodes, edges, truncated}`; tham số sai `400 bad_param`, nút lạ `404 unknown_node`. `GET .../nodes/{id}` (id mã hoá URL) → `Node`.
+- `GET .../code?file&start&end` → `{file, start, end, text, language, stale}`. Chỉ phục vụ **tệp đã lập chỉ mục**; `file` phải là đường dẫn tương đối trong project (`400 bad_path`, `403 outside_project`, `404 file_not_found`); tối đa 2.000 dòng; `stale` là `true` khi tệp đã đổi so với lần lập chỉ mục.
+- `GET .../stats` → `{files, nodes_by_kind, edges_by_type, languages, unresolved}`.
+- Nút gốc có id `.#repository`; thư mục `{rel_path}#directory`; tệp `{rel_path}#file`.
+
 ## Enum schema
 
 Cố định từ đây. Spec §5.3 giao việc chốt tên cho builder.

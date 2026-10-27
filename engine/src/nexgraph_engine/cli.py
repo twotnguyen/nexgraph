@@ -47,7 +47,7 @@ def _serve(data_dir: Path, port: int, exit_on_stdin_close: bool) -> int:
     sock.bind(("127.0.0.1", port))
     sock.listen(128)  # nhận kết nối vào hàng đợi ngay cả trước khi uvicorn accept
     real_port = sock.getsockname()[1]
-    app = create_app(token, {f"127.0.0.1:{real_port}", f"localhost:{real_port}"})
+    app = create_app(token, {f"127.0.0.1:{real_port}", f"localhost:{real_port}"}, data_dir=data_dir)
 
     print(json.dumps({"event": "ready", "port": real_port, "pid": os.getpid()}), flush=True)
     server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
