@@ -23,8 +23,10 @@ class UnknownProject(KeyError):
 
 
 class JobManager:
-    def __init__(self, registry: ProjectRegistry, bus: EventBus, *, indexer_cls: type[Indexer] = Indexer) -> None:
+    def __init__(self, registry: ProjectRegistry, bus: EventBus, *, indexer_cls: type[Indexer] = Indexer,
+                 locks=None) -> None:
         self._registry, self._bus, self._indexer_cls = registry, bus, indexer_cls
+        self._locks = locks
         self._jobs: dict[str, dict] = {}
         self._cancels: dict[str, threading.Event] = {}
         self._threads: list[threading.Thread] = []
@@ -49,6 +51,10 @@ class JobManager:
         self._bus.publish({"type": "job_progress", **self._jobs[job_id]})
         thread.start()
         return job_id
+
+    def is_active(self, project_id: str) -> bool:
+        with self._lock:
+            return any(j["project_id"] == project_id and j["state"] in ACTIVE for j in self._jobs.values())
 
     def get(self, job_id: str) -> dict | None:
         with self._lock:
@@ -85,6 +91,9 @@ class JobManager:
 
     def _run(self, job_id: str, info, cancel: threading.Event, subdir: str | None) -> None:
         conn = None
+        lock = self._locks.get(info.project_id) if self._locks else None
+        if lock is not None:
+            lock.acquire()  # đợi một lần refresh đang chạy dở (vài giây) rồi mới ghi đồ thị
         try:
             conn = open_graph_db(info.graph_db)
             store = GraphStore(conn)
@@ -96,3 +105,5 @@ class JobManager:
         finally:
             if conn is not None:
                 conn.close()
+            if lock is not None:
+                lock.release()

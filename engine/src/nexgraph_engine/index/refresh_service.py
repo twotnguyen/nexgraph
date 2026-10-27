@@ -1,0 +1,58 @@
+"""Điều phối `POST /refresh`: không chạy chồng với lập chỉ mục đầy đủ hay với một lần refresh khác của cùng project."""
+from __future__ import annotations
+
+import threading
+
+from nexgraph_engine.index.events import EventBus
+from nexgraph_engine.index.jobs import JobManager, UnknownProject
+from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.store.projects import ProjectRegistry
+
+
+class ProjectLocks:
+    """Một khoá cho mỗi project: lập chỉ mục và refresh không bao giờ cùng ghi vào một graph.db."""
+
+    def __init__(self) -> None:
+        self._guard = threading.Lock()
+        self._locks: dict[str, threading.Lock] = {}
+
+    def get(self, project_id: str) -> threading.Lock:
+        with self._guard:
+            return self._locks.setdefault(project_id, threading.Lock())
+
+
+class RefreshService:
+    def __init__(self, registry: ProjectRegistry, bus: EventBus, jobs: JobManager, locks: ProjectLocks) -> None:
+        self._registry, self._bus, self._jobs, self._locks = registry, bus, jobs, locks
+
+    @staticmethod
+    def _skipped(reason: str) -> dict:
+        return {"status": "skipped", "reason": reason, "added": 0, "changed": 0, "removed": 0, "seconds": 0.0}
+
+    def refresh(self, project_id: str) -> dict:
+        info = self._registry.get(project_id)
+        if info is None:
+            raise UnknownProject(project_id)
+        if self._jobs.is_active(project_id):
+            return self._skipped("index_running")
+        lock = self._locks.get(project_id)
+        if not lock.acquire(blocking=False):
+            return self._skipped("refresh_running")
+        try:
+            conn = open_graph_db(info.graph_db)
+            try:
+                store = GraphStore(conn)
+                if store.last_completed_run() is None:
+                    return self._skipped("not_indexed")
+                result = refresh_project(store, info.path)
+            finally:
+                conn.close()
+        finally:
+            lock.release()
+        if result.added or result.changed or result.removed:
+            self._bus.publish({"type": "graph_updated", "project_id": project_id})
+            self._bus.publish({"type": "changes_updated", "project_id": project_id})
+        return {"status": "ok", "reason": None, "added": result.added, "changed": result.changed,
+                "removed": result.removed, "seconds": round(result.seconds, 3)}

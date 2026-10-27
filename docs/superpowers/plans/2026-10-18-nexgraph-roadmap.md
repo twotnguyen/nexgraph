@@ -61,7 +61,8 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 | `GET /v1/projects/{pid}/code?file&start&end` | 2 | `{file, start, end, text, language}` |
 | `GET /v1/projects/{pid}/architecture?parent=` | 3 | `{blocks:[{id,label,kind,size}], links:[{from,to,count,types}]}` |
 | `GET /v1/projects/{pid}/architecture/evidence?from&to&limit=50` | 3 | `[{edge, file, line}]` |
-| `GET /v1/projects/{pid}/changes` | 4 | `{base:"git_head"\|"last_index", changed_files, changed_nodes, impacted:[{node,score,hops}], tests:[Node], test_gaps:[Node]}` |
+| `GET /v1/projects/{pid}/changes?refresh=true` | 4 | `Changes` (xem "Hình dạng JSON bổ sung (kế hoạch con 4)") |
+| `POST /v1/projects/{pid}/refresh` | 4 | `Refresh`: lập chỉ mục tăng dần; `status:"skipped"` khi đang lập chỉ mục đầy đủ (`index_running`), đang refresh (`refresh_running`) hoặc chưa lập chỉ mục (`not_indexed`) |
 | `POST /v1/projects/{pid}/paths` `{node_ids, max_hops=4}` | 5 | `{nodes, edges, unconnected:[node_id]}` (chỉ cạnh thật) |
 | `GET /v1/projects/{pid}/tour` | 6 | `[{step, title, node_ids, file, start, end, text}]` |
 | `GET /v1/projects/{pid}/flutter/widgets?root` · `/flutter/routes` | 6 | cây widget · `[{route, screen_node, navigations}]` |
@@ -102,6 +103,23 @@ Scan      = {files, by_language, large, threshold: 5000, top_dirs: [{path, files
 - Mũi tên chỉ tổng hợp cạnh `IMPORTS` và `CALLS` giữa hai tệp khác nhau; `count` bằng đúng số mục `Evidence` (khi `limit` đủ lớn). Lỗi: `404 unknown_block`, `400 bad_param`.
 - `GET .../search`: `400 bad_param` khi chuỗi không có từ nào tìm được; từ khoá nằm trong ngoặc kép nên toán tử FTS5 trong dữ liệu người dùng không có nghĩa.
 - `POST .../index` nhận thân tuỳ chọn `{"subdir": "lib/features"}`; `400 bad_path` khi thư mục con không hợp lệ.
+
+## Hình dạng JSON bổ sung (chốt ở kế hoạch con 4, 2026-10-27)
+
+```
+Changes = {base: "git_head"|"last_index", base_commit: str|null, note: str|null,
+           changed_files: [{path, status: "M"|"A"|"D"|"R", old_path: str|null}],
+           changed_nodes: [Node],
+           impacted: [{node: Node, score: float, hops: 1|2}],     # giảm dần theo score; không chứa nút kiểm thử
+           tests: [Node], test_gaps: [Node], truncated: bool}
+Refresh = {status: "ok"|"skipped", reason: "index_running"|"refresh_running"|"not_indexed"|null,
+           added, changed, removed, seconds}
+SSE: {"type": "changes_updated", "project_id": str}               # sau mỗi refresh có thay đổi (kèm graph_updated)
+```
+
+- `note` khác null khi không so với Git: "Không có Git: so với lần lập chỉ mục trước" hoặc "Repo Git chưa có commit: …". Chế độ này so mã băm với mốc `moc_tep` của lần lập chỉ mục đầy đủ; `changed_nodes` là mọi nút của tệp đổi.
+- Lan truyền ngược chiều phụ thuộc (CALLS 1.0, INHERITS/IMPLEMENTS 0.9, REFERENCES/USES_TYPE 0.6, IMPORTS 0.5; TESTED_BY xuôi 0.7), decay 0.6, tối đa 2 bước, ngưỡng 0.2, tối đa 200 nút. Test liên quan = `TESTED_BY` của nút đổi hoặc của người gọi trong 2 bước; test gap = hàm/phương thức đổi không có test liên quan.
+- `graph.sql` phiên bản 2 (cộng thêm): `kieu_bien`, `moc_tep`, `lan_lap_chi_muc.thu_muc_con`.
 
 ## Enum schema
 
