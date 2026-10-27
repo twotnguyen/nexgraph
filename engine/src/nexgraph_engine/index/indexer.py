@@ -13,6 +13,7 @@ from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
+from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.index.generic import extract_generic
 from nexgraph_engine.index.resolver import _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
@@ -78,6 +79,7 @@ class Indexer:
             name = _package_name(pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None)
             store.add_bindings(bindings)
             resolve_references(store, package_name=name)
+            derive_tested_by(store)
             try:
                 detect_communities(store)
             except Exception as exc:  # khối cộng đồng chỉ là phần phụ: lỗi ở đây không làm hỏng lần lập chỉ mục
