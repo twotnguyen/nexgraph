@@ -27,3 +27,4 @@ spikes/*/corpus/
 
 # Scratch của công cụ làm việc
 .superpowers/
+engine/third_party/graphify/tests/fixtures/graphify-out/cache/stat-index.json

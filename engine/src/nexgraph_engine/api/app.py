@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from nexgraph_engine import GRAPHIFY_COMMIT, __version__
+from nexgraph_engine.selftest import run_selftest
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -28,5 +29,9 @@ def create_app(token: str, allowed_hosts: set[str]) -> FastAPI:
     def health():
         return {"status": "ok", "api_version": "1",
                 "engine_version": __version__, "graphify_commit": GRAPHIFY_COMMIT}
+
+    @app.get("/v1/selftest")
+    def selftest():
+        return run_selftest()
 
     return app
