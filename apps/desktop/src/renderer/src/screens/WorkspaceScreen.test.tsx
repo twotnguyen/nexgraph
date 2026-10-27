@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood } from '@shared/graph-types'
-import { installNexgraph, project } from '../test-utils'
+import { emptyChanges, installNexgraph, project } from '../test-utils'
 
 vi.mock('../services/elkLayoutService', async () => ({
   layoutGraph: async (nodes: { id: string }[]) => Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }]))
@@ -58,5 +58,35 @@ describe('WorkspaceScreen', () => {
     expect(screen.getByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
     await waitFor(() => expect(neighbors).toHaveBeenCalledWith('p1', expect.objectContaining({ node: 'lib/a.dart::AuthService.login#method' })))
     expect(await screen.findByText('lib/a.dart:3–9')).toBeInTheDocument() // NodeInspector của nút đã chọn
+  })
+})
+
+describe('WorkspaceScreen: changes', () => {
+  const changes = emptyChanges({
+    changed_files: [{ path: 'lib/a.dart', status: 'M', old_path: null }],
+    changed_nodes: [gnode('lib/a.dart::AuthService.login#method', 'login')],
+    impacted: [{ node: gnode('lib/b.dart::build#method', 'build'), score: 1, hops: 1 }]
+  })
+
+  it('watches the project folder while mounted and stops on unmount', async () => {
+    const { api } = installNexgraph()
+    const { unmount } = render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await waitFor(() => expect(api.watch.start).toHaveBeenCalledTimes(1))
+    expect(api.watch.start).toHaveBeenCalledWith('p1', '/Đồ án/demo')
+    unmount()
+    expect(api.watch.stop).toHaveBeenCalledWith('p1')
+  })
+
+  it('opens the Thay đổi panel and jumps to the Graph tab with the node highlighted', async () => {
+    const neighbors = vi.fn(async (_p: string, q: { node: string }) => ({ nodes: [gnode(q.node, 'build')], edges: [], truncated: false }))
+    const { api } = installNexgraph({ graph: { changes: vi.fn(async () => changes), neighbors } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.click(screen.getByRole('button', { name: 'Thay đổi' }))
+    const impacted = await screen.findByRole('region', { name: 'Vùng ảnh hưởng' })
+    expect(api.graph.changes).toHaveBeenCalled()
+    await userEvent.click(within(impacted).getByRole('button', { name: /build/ }))
+    expect(screen.getByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
+    await waitFor(() => expect(neighbors).toHaveBeenCalledWith('p1', expect.objectContaining({ node: 'lib/b.dart::build#method' })))
+    expect(await screen.findByText('ảnh hưởng')).toBeInTheDocument()
   })
 })

@@ -9,3 +9,10 @@ const COLORS: Partial<Record<NodeKind, string>> = {
 export function kindStyle(kind: NodeKind): { color: string } {
   return { color: COLORS[kind] ?? '#5b6b7d' }
 }
+
+export type HighlightKind = 'changed' | 'impacted' | 'test' | 'gap'
+
+// Màu ngữ nghĩa của vùng ảnh hưởng (spec §5.9): ảnh hưởng, test, chưa có test.
+export const HIGHLIGHT_COLORS: Record<HighlightKind, string> = {
+  changed: '#b86e00', impacted: '#b86e00', test: '#2e7d4f', gap: '#b3261e'
+}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
@@ -82,5 +82,32 @@ describe('NodeInspector', () => {
   it('shows nothing selected message when node is null', () => {
     render(<NodeInspector node={null} />)
     expect(screen.getByText('Chọn một nút để xem chi tiết')).toBeInTheDocument()
+  })
+})
+
+describe('GraphCanvas highlights', () => {
+  const renderWith = (highlights?: Record<string, 'changed' | 'impacted' | 'test' | 'gap'>) => {
+    installNexgraph({ graph: { neighbors: vi.fn(async () => hood(['.#repository', 'a', 'b', 'c', 'd'])) } })
+    render(<div style={{ width: 800, height: 600 }}><GraphCanvas projectId="p1" startNodeId=".#repository" highlights={highlights} /></div>)
+  }
+  const nodeEl = (label: string) => screen.getByText(label).closest('.react-flow__node') as HTMLElement
+
+  it('tags and colours highlighted nodes by meaning', async () => {
+    renderWith({ a: 'changed', b: 'impacted', c: 'test', d: 'gap' })
+    await screen.findByText('a')
+    expect(nodeEl('a')).toHaveStyle({ borderColor: '#b86e00' })
+    expect(within(nodeEl('a')).getByText('đã đổi')).toBeInTheDocument()
+    expect(within(nodeEl('b')).getByText('ảnh hưởng')).toBeInTheDocument()
+    expect(nodeEl('c')).toHaveStyle({ borderColor: '#2e7d4f' })
+    expect(within(nodeEl('c')).getByText('test')).toBeInTheDocument()
+    expect(nodeEl('d')).toHaveStyle({ borderColor: '#b3261e' })
+    expect(within(nodeEl('d')).getByText('chưa có test')).toBeInTheDocument()
+  })
+
+  it('leaves the look unchanged without highlights', async () => {
+    renderWith()
+    await screen.findByText('a')
+    expect(nodeEl('a')).toHaveStyle({ borderColor: '#1f5fbf' })
+    expect(document.querySelectorAll('.tag')).toHaveLength(0)
   })
 })

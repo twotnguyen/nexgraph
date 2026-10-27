@@ -49,7 +49,28 @@ export const vi = {
     files: (n: number) => `${n} tệp`
   },
   activity: {
-    search: 'Tìm kiếm'
+    search: 'Tìm kiếm',
+    changes: 'Thay đổi'
+  },
+  changes: {
+    title: 'Thay đổi',
+    reload: 'Làm mới',
+    loading: 'Đang tải…',
+    none: 'Chưa có thay đổi',
+    truncated: 'Danh sách đã bị cắt bớt',
+    baseGit: (sha: string) => `So với HEAD ${sha}`,
+    baseIndex: 'Không có Git: so với lần lập chỉ mục trước',
+    changedFiles: 'Đã thay đổi',
+    changedNodes: 'Hàm và lớp đã đổi',
+    impacted: 'Vùng ảnh hưởng',
+    tests: 'Test liên quan',
+    gaps: 'Chưa có test',
+    noneImpacted: 'Không có nút nào bị ảnh hưởng',
+    noneTests: 'Không tìm thấy test liên quan',
+    noneGaps: 'Mọi hàm đã đổi đều có test',
+    hops: (n: number) => `${n} bước`,
+    openCode: 'Mở mã',
+    tag: { changed: 'đã đổi', impacted: 'ảnh hưởng', test: 'test', gap: 'chưa có test' }
   },
   search: {
     label: 'Tìm kiếm',

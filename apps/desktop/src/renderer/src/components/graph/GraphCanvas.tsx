@@ -4,7 +4,7 @@ import type { GraphNode } from '@shared/graph-types'
 import { layoutGraph } from '../../services/elkLayoutService'
 import { vi } from '../../strings'
 import { AutoFit } from '../common/AutoFit'
-import { kindStyle } from './kindStyle'
+import { HIGHLIGHT_COLORS, kindStyle, type HighlightKind } from './kindStyle'
 
 const W = 180
 const H = 44
@@ -16,11 +16,13 @@ interface Props {
   /** Khi đổi sang một id khác null thì chuyển tâm sang nút đó (dùng khi mở kết quả tìm kiếm). */
   focusNodeId?: string | null
   onSelect?: (node: GraphNode) => void
+  /** Nút cần tô theo vùng ảnh hưởng (id -> loại); vắng mặt thì giao diện như cũ. */
+  highlights?: Record<string, HighlightKind>
 }
 
-interface View { nodes: Node[]; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean }
+interface View { pos: Record<string, { x: number; y: number }>; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean }
 
-export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect }: Props) {
+export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, highlights }: Props) {
   const [center, setCenter] = useState(focusNodeId ?? startNodeId)
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -43,14 +45,7 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect }: P
       setView({
         raw: new Map(hood.nodes.map((n) => [n.id, n])),
         truncated: hood.truncated,
-        nodes: hood.nodes.map((n) => ({
-          id: n.id,
-          position: pos[n.id] ?? { x: 0, y: 0 },
-          initialWidth: W,
-          initialHeight: H,
-          data: { label: (<div><b>{n.label}</b><small className="kind">{n.kind}</small></div>) },
-          style: { width: W, borderColor: kindStyle(n.kind).color, borderWidth: n.id === center ? 3 : 1.5, borderStyle: 'solid', borderRadius: 8, fontSize: 12 }
-        })),
+        pos,
         edges: hood.edges.map((e) => ({ id: String(e.id), source: e.source, target: e.target, label: e.type }))
       })
     })().catch((err: Error) => alive && setError(err.message))
@@ -67,6 +62,27 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect }: P
     },
     [view, onSelect]
   )
+  const nodes = useMemo<Node[]>(
+    () =>
+      view
+        ? [...view.raw.values()].map((n) => {
+            const h = highlights?.[n.id]
+            const color = h ? HIGHLIGHT_COLORS[h] : kindStyle(n.kind).color
+            return {
+              id: n.id,
+              position: view.pos[n.id] ?? { x: 0, y: 0 },
+              initialWidth: W,
+              initialHeight: H,
+              data: { label: (<div><b>{n.label}</b><small className="kind">{n.kind}</small>{h && <small className="tag" style={{ color }}>{vi.changes.tag[h]}</small>}</div>) },
+              style: {
+                width: W, borderColor: color, borderWidth: n.id === center || h === 'changed' || h === 'gap' ? 3 : h ? 2.5 : 1.5,
+                borderStyle: 'solid', borderRadius: 8, fontSize: 12
+              }
+            }
+          })
+        : [],
+    [view, highlights, center]
+  )
   const toolbar = useMemo(
     () => (<div className="graph-toolbar"><button type="button" onClick={() => setCenter(startNodeId)}>{vi.graph.backToRoot}</button></div>),
     [startNodeId]
@@ -78,7 +94,7 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect }: P
       {error && <p role="alert" className="error">{error}</p>}
       {view?.truncated && <p role="status" className="muted">{vi.graph.truncated}</p>}
       {view && (
-        <ReactFlow key={center} nodes={view.nodes} edges={view.edges} onNodeClick={onNodeClick} nodesDraggable={false} proOptions={{ hideAttribution: true }}>
+        <ReactFlow key={center} nodes={nodes} edges={view.edges} onNodeClick={onNodeClick} nodesDraggable={false} proOptions={{ hideAttribution: true }}>
           <Background />
           <Controls showInteractive={false} />
           <AutoFit />

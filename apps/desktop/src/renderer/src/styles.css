@@ -400,3 +400,72 @@ button:disabled {
   display: grid;
   gap: 2px;
 }
+
+.sidebar.wide {
+  width: 300px;
+  overflow-y: auto;
+  word-break: normal;
+}
+
+.changes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.changes-head h3 {
+  margin: 0;
+}
+
+.changes-panel h4 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+
+.changes-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.changes-panel li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: baseline;
+  padding: 2px 0;
+}
+
+.changes-panel .status {
+  font-weight: 700;
+  min-width: 14px;
+}
+
+.changes-panel button.entry,
+.changes-panel button.link {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.changes-panel button.entry {
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  text-decoration: underline;
+}
+
+.changes-panel button.link {
+  margin-left: auto;
+  color: var(--color-map-blue);
+}
+
+.tag {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
