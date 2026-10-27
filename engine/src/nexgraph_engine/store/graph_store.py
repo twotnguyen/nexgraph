@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Iterable, Iterator
 from typing import Literal
 
+from nexgraph_engine.index.keywords import search_keywords
 from nexgraph_engine.schema.db import SCHEMA_VERSION
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.models import (
@@ -121,6 +122,11 @@ class GraphStore:
                  n.doc, self._file(n.file) if n.file else None),
             )
             self._node_pk[n.id] = int(cur.lastrowid)
+            if n.kind != NodeKind.REPOSITORY:  # nút gốc không phải thứ để tìm
+                self.conn.execute(
+                    "INSERT INTO nut_fts (rowid, nhan, ten_day_du, chu_ky, tai_lieu, tu_khoa) VALUES (?, ?, ?, ?, ?, ?)",
+                    (cur.lastrowid, n.label[:255], n.qualified_name[:1024], n.signature and n.signature[:2000], n.doc,
+                     search_keywords(n.label[:255], n.qualified_name[:1024])))
 
     def add_edges(self, edges: Iterable[Edge]) -> int:
         added = 0

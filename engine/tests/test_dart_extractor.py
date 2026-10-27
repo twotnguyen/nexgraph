@@ -164,3 +164,31 @@ def test_duplicate_test_names_get_unique_ids():
     x = extract_dart("test/a_test.dart", src, is_test=True)
     ids = [n.id for n in x.nodes if n.kind == NodeKind.TEST]
     assert len(ids) == 2 and len(set(ids)) == 2
+
+
+def test_doc_comments():
+    src = """/// Dịch vụ đăng nhập.
+/// Gọi API xác thực.
+class AuthService {
+  /// Đăng nhập bằng email.
+  @override
+  Future<User> login(String e) async => User();
+  // chú thích thường
+  void other() {}
+}
+/** block doc */
+void f() {}
+
+/// cách một dòng trống
+
+void g() {}
+void h() {}
+""".encode()
+    n = by_qname(extract_dart("lib/a.dart", src, is_test=False))
+    assert n["AuthService"].doc == "Dịch vụ đăng nhập.\nGọi API xác thực."
+    assert n["AuthService.login"].doc == "Đăng nhập bằng email."  # annotation giữa chú thích và khai báo vẫn tính
+    assert n["AuthService.other"].doc is None                     # `//` thường không phải tài liệu
+    assert n["f"].doc == "block doc"
+    assert n["g"].doc is None and n["h"].doc is None
+    assert len(by_qname(extract_dart("lib/a.dart", ("/// " + "x" * 3000 + "\nvoid long() {}\n").encode(),
+                                      is_test=False))["long"].doc) == 2000

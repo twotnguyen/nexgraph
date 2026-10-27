@@ -72,6 +72,34 @@ def _strip_generics(name: str) -> str:
         name = new
 
 
+_MAX_DOC = 2000
+
+
+def _clean_doc(raw: str) -> str:
+    if raw.startswith("///"):
+        return raw[3:].removeprefix(" ").rstrip()
+    body = raw.removeprefix("/**").removesuffix("*/")
+    return "\n".join(re.sub(r"^\s*\*? ?", "", line).rstrip() for line in body.strip().splitlines()).strip()
+
+
+def _doc_for(decl: TsNode) -> str | None:
+    """Chú thích tài liệu `///` hoặc `/** */` nằm liền kề ngay trước khai báo (chỉ chú thích `//` thường thì không tính)."""
+    expected = decl.start_point[0]  # dòng (0-based) mà chú thích phải kết thúc ngay trước
+    lines: list[str] = []
+    prev = decl.prev_sibling
+    while prev is not None:
+        if prev.type == "annotation" and prev.end_point[0] + 1 >= expected:
+            expected = prev.start_point[0]
+        elif prev.type == "documentation_comment" and prev.end_point[0] + 1 == expected:
+            lines.append(_clean_doc(_txt(prev)))
+            expected = prev.start_point[0]
+        else:
+            break
+        prev = prev.prev_sibling
+    doc = "\n".join(reversed(lines)).strip()
+    return doc[:_MAX_DOC] or None
+
+
 def _string_value(n: TsNode) -> str:
     return _txt(n).strip().strip("'\"")
 
@@ -209,7 +237,7 @@ def extract_dart(rel_path: str, source: bytes, *, is_test: bool) -> FileExtracti
         used_ids.add(nid)
         nodes.append(Node(id=nid, kind=kind, label=label, qualified_name=qname, file=rel_path,
                           line_start=n_start.start_point[0] + 1, line_end=_end_line(n_end), is_test=is_test,
-                          signature=sig))
+                          signature=sig, doc=_doc_for(n_start)))
         edges.append(Edge(source=parent_id, target=nid, type=EdgeType.DEFINES))
         return nid
 

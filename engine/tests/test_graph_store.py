@@ -144,3 +144,21 @@ def test_stats_and_lookup(store):
     assert n.file == "lib/a.dart" and n.language == "dart" and n.line_end == 20
     assert store.file_record("lib/a.dart").sha256 == "a" * 64
     assert [x.id for x in store.all_nodes({NodeKind.FILE})] == ["lib/a.dart#file"]
+
+
+def test_fts_rows_follow_nodes(store):
+    run = store.begin_run()
+    store.add_file(run, file_rec())
+    store.add_nodes([
+        Node(id=".#repository", kind=NodeKind.REPOSITORY, label="demo", qualified_name="."),
+        Node(id="lib/a.dart#file", kind=NodeKind.FILE, label="a.dart", qualified_name="lib/a.dart", file="lib/a.dart"),
+        cls("lib/a.dart::LoginScreen#class", "LoginScreen", 1, 20),
+        Node(id="lib/a.dart::A.m#method", kind=NodeKind.METHOD, label="m", qualified_name="A.m", file="lib/a.dart",
+             line_start=3, line_end=5, signature="void m()", doc="Làm gì đó"),
+    ])
+    fts = lambda: store.conn.execute("SELECT count(*) FROM nut_fts").fetchone()[0]  # noqa: E731
+    assert fts() == 3  # không có dòng cho repository
+    hit = store.conn.execute("SELECT rowid FROM nut_fts WHERE nut_fts MATCH 'screen'").fetchall()
+    assert len(hit) == 1  # tách camelCase: LoginScreen -> login screen
+    store.clear_graph()
+    assert fts() == 0
