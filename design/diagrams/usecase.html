@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Use case NexGraph</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600&display=swap");
+body{margin:0;background:#fff;font-family:"Be Vietnam Pro",sans-serif}
+.b{fill:#fff;stroke:#1b2a3a;stroke-width:1.4}
+.t{font-size:15px;font-weight:600;fill:#1b2a3a}
+.u{font-size:13px;fill:#1b2a3a}
+.e{stroke:#1b2a3a;stroke-width:1.1;fill:none}
+</style></head><body>
+<svg width="1100" height="760" viewBox="0 0 1100 760">
+<rect x="230" y="20" width="640" height="720" rx="12" fill="#f6f7f9" stroke="#1b2a3a" stroke-width="1.5"/>
+<text class="t" x="250" y="48">Hệ thống NexGraph</text>
+<g id="actors">
+  <g transform="translate(110,330)"><circle cy="-50" r="16" class="b"/><path class="e" d="M0 -34v40M-24 -18h48M0 6l-20 30M0 6l20 30"/><text class="t" y="64" text-anchor="middle">Lập trình viên</text></g>
+  <g transform="translate(990,250)"><circle cy="-50" r="16" class="b"/><path class="e" d="M0 -34v40M-24 -18h48M0 6l-20 30M0 6l20 30"/><text class="t" y="64" text-anchor="middle">Agent cục bộ /</text><text class="t" y="84" text-anchor="middle">Nhà cung cấp AI</text></g>
+  <g transform="translate(990,560)"><circle cy="-50" r="16" class="b"/><path class="e" d="M0 -34v40M-24 -18h48M0 6l-20 30M0 6l20 30"/><text class="t" y="64" text-anchor="middle">AI agent</text><text class="t" y="84" text-anchor="middle">bên ngoài</text></g>
+</g>
+<script>
+const uc=[["UC01","Mở dự án và index"],["UC02","Xem bản đồ kiến trúc"],["UC03","Khám phá graph"],["UC04","Tìm kiếm"],["UC05","Xem code của node"],["UC06","Xem vùng ảnh hưởng khi sửa code"],["UC07","Hỏi đáp với AI"],["UC08","Cấu hình kết nối AI"],["UC09","Tham quan dự án (guided tour)"],["UC10","Truy vấn graph qua MCP"],["UC11","Xuất sơ đồ / báo cáo"]];
+const svg=document.querySelector('svg'),NS='http://www.w3.org/2000/svg';
+const mk=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e};
+uc.forEach(([id,name],i)=>{const y=90+i*60,cx=550;
+  if(id!=="UC10") mk('path',{class:'e',d:`M140 300 L${cx-200} ${y}`});
+  if(id==="UC07") mk('path',{class:'e',d:`M${cx+200} ${y} L960 240`});
+  if(id==="UC10") mk('path',{class:'e',d:`M${cx+200} ${y} L960 550`});
+  mk('ellipse',{class:'b',cx,cy:y,rx:200,ry:24});
+  const t=mk('text',{class:'u',x:cx,y:y+5,'text-anchor':'middle'});t.textContent=`${id}. ${name}`;});
+</script>
+</svg></body></html>

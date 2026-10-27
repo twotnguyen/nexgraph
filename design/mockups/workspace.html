@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NexGraph — Workspace</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  .win { height: 100vh; display: grid; grid-template-rows: 36px 1fr 26px; }
+  .body { display: grid; grid-template-columns: 48px 290px 1fr 360px; min-height: 0; }
+  body.nochat .body { grid-template-columns: 48px 290px 1fr; }
+  body.nochat .chat { display: none; }
+
+  /* Activity bar */
+  .activity { background: #dfe5ec; border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding-top: 8px; gap: 4px; }
+  .activity button { width: 38px; height: 38px; border: 0; background: transparent; border-radius: 8px; display: grid; place-items: center; color: var(--muted); position: relative; }
+  .activity button svg { width: 20px; height: 20px; }
+  .activity button[aria-pressed="true"] { color: var(--accent); background: var(--surface); }
+  .activity .badge { position: absolute; top: 4px; right: 4px; background: var(--impact); color: #fff; font-size: 9.5px; font-weight: 700; border-radius: 99px; padding: 0 4px; line-height: 14px; }
+
+  /* Sidebar */
+  .side { background: var(--panel); border-right: 1px solid var(--line); overflow: auto; min-height: 0; }
+  .side > section { display: none; padding: 12px 12px 20px; }
+  .side > section.on { display: block; }
+  .side h3 { font-size: 12.5px; margin: 6px 4px 10px; color: var(--muted); font-weight: 600; }
+  .tree { list-style: none; margin: 0; padding: 0; }
+  .tree li { padding: 3px 6px; border-radius: 5px; display: flex; gap: 7px; align-items: center; white-space: nowrap; }
+  .tree li:hover { background: #e6ebf1; }
+  .tree li.sel { background: var(--accent-soft); color: var(--accent); }
+  .tree .k { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .tree .cnt { margin-left: auto; color: var(--muted); font-size: 11px; }
+  .search { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; font: inherit; background: var(--surface); }
+  .res { padding: 7px 8px; border-radius: 6px; }
+  .res:hover { background: #e6ebf1; }
+  .res b { font-weight: 600; } .res mark { background: #fde8a8; color: inherit; border-radius: 2px; }
+  .res small { display: block; color: var(--muted); font-family: var(--mono); font-size: 11px; margin-top: 2px; }
+  .grp { margin: 12px 4px 4px; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+  .chg { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+  .chg h4 { margin: 0 0 6px; font-size: 12.5px; }
+  .item { display: flex; align-items: baseline; gap: 8px; padding: 4px 0; border-top: 1px dashed #e3e8ee; }
+  .item:first-of-type { border-top: 0; }
+  .item .s { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--impact); }
+  .item small { color: var(--muted); font-size: 11px; display: block; }
+  .item > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+  .item .s { flex: none; }
+  .tour li { margin-bottom: 10px; }
+  .tour .st { display: grid; grid-template-columns: 24px 1fr; gap: 8px; padding: 8px; border-radius: 6px; }
+  .tour .st.cur { background: var(--surface); border: 1px solid var(--accent); }
+  .tour .n { width: 22px; height: 22px; border-radius: 50%; background: #dfe5ec; display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+  .tour .cur .n { background: var(--accent); color: #fff; }
+  .tour .st p { margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+  /* Center */
+  .center { display: grid; grid-template-rows: 36px 1fr; min-width: 0; min-height: 0; background: var(--surface); }
+  .tabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); background: var(--panel); }
+  .tabs button { border: 0; border-right: 1px solid var(--line); background: transparent; padding: 0 16px; color: var(--muted); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: inset 0 2px 0 var(--accent); }
+  .tabs .file { font-family: var(--mono); font-size: 12px; }
+  .view { display: none; position: relative; min-height: 0; overflow: hidden; }
+  .view.on { display: block; }
+  .toolbar { position: absolute; top: 12px; left: 16px; right: 16px; display: flex; gap: 10px; align-items: center; z-index: 2; }
+  .crumb { font-weight: 600; } .crumb span { color: var(--muted); font-weight: 400; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+  .seg button { border: 0; background: transparent; padding: 4px 10px; font-size: 12px; color: var(--muted); }
+  .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .legend { margin-left: auto; color: var(--muted); font-size: 11.5px; display: flex; gap: 14px; align-items: center; }
+  svg.canvas { width: 100%; height: 100%; display: block; }
+  [data-viewpanel="graph"] svg.canvas { width: calc(100% - 330px); }
+  body.noinsp .inspector { display: none; }
+  body.noinsp [data-viewpanel="graph"] svg.canvas { width: 100%; }
+  .inspector dd.mono { white-space: nowrap; font-size: 11.5px; }
+  .blk rect { fill: var(--surface); stroke: #b8c4d1; stroke-width: 1.2; }
+  .blk text { font-family: var(--font); fill: var(--ink); }
+  .blk .t { font-size: 14px; font-weight: 600; }
+  .blk .d { font-size: 11.5px; fill: var(--muted); }
+  .edge path { fill: none; stroke: #7f8fa3; stroke-width: 1.6; }
+  .edge.sel path { stroke: var(--accent); stroke-width: 2.6; }
+  .edge .lab rect { fill: var(--surface); stroke: #c8d1dc; }
+  .edge.sel .lab rect { fill: var(--accent); stroke: var(--accent); }
+  .edge .lab text { font-family: var(--font); font-size: 11.5px; font-weight: 600; fill: #3d4b5c; }
+  .edge.sel .lab text { fill: #fff; }
+  .pop { position: absolute; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(27,42,58,.12); padding: 12px 14px; width: 400px; z-index: 3; }
+  .pop h4 { margin: 0 0 2px; font-size: 13px; }
+  .pop .sub { color: var(--muted); font-size: 11.5px; margin-bottom: 8px; }
+  .site { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 5px 0; border-top: 1px dashed #e3e8ee; font-size: 12px; }
+  .site code { color: var(--accent); }
+  .site span { color: var(--muted); font-family: var(--mono); font-size: 11px; }
+
+  .gnode rect { stroke-width: 1.3; }
+  .gnode text { font-family: var(--mono); font-size: 11.5px; fill: var(--ink); }
+  .gnode .kd { font-family: var(--font); font-size: 10px; fill: var(--muted); }
+  .gedge { fill: none; stroke: #9aa8b8; stroke-width: 1.3; }
+  .gedge.flow { stroke: var(--accent); stroke-width: 2.6; }
+  .gedge.test { stroke: var(--test); stroke-dasharray: 4 3; }
+  .gedge.nav { stroke: var(--k-route); }
+  .elab { font-family: var(--font); font-size: 10px; fill: var(--muted); }
+  .chips { display: flex; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 3px 9px; font-size: 11.5px; color: var(--muted); }
+  .chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .inspector { position: absolute; right: 16px; top: 56px; width: 300px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 28px rgba(27,42,58,.14); padding: 14px 16px; z-index: 3; }
+  .inspector h4 { margin: 0; font-family: var(--mono); font-size: 13px; }
+  .inspector dl { display: grid; grid-template-columns: 96px 1fr; gap: 5px 8px; margin: 10px 0 12px; font-size: 12px; }
+  .inspector dt { color: var(--muted); } .inspector dd { margin: 0; }
+  .inspector .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .inspector .acts .btn { padding: 5px 10px; font-size: 12px; }
+
+  .fl { padding: 60px 28px 28px; overflow: auto; height: 100%; display: grid; grid-template-columns: 1.25fr 1fr; gap: 24px; align-content: start; }
+  .fl h3 { margin: 0 0 12px; font-size: 14px; }
+  .fl .box { border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .wt { list-style: none; margin: 0; padding-left: 16px; border-left: 1px dashed #c3ccd7; font-family: var(--mono); font-size: 12px; }
+  .wt li { position: relative; padding: 3px 0 3px 6px; }
+  .wt li::before { content: ""; position: absolute; left: -16px; top: 12px; width: 14px; border-top: 1px dashed #c3ccd7; }
+  .wt .own { color: var(--k-widget); font-weight: 600; }
+  .wt small { color: var(--muted); font-family: var(--font); }
+  table.dep { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.dep td, table.dep th { text-align: left; padding: 6px 4px; border-top: 1px solid #e6ebf1; }
+  table.dep th { color: var(--muted); font-weight: 600; font-size: 11.5px; }
+
+  .code { font-family: var(--mono); font-size: 12.5px; line-height: 1.75; overflow: auto; height: 100%; padding: 12px 0; }
+  .ln { display: grid; grid-template-columns: 56px 1fr; }
+  .ln > span:last-child { white-space: pre; }
+  .ln > span:first-child { text-align: right; padding-right: 16px; color: #9aa6b4; user-select: none; }
+  .ln.hl { background: #eaf1fc; box-shadow: inset 3px 0 0 var(--accent); }
+  .lens { grid-column: 2; color: var(--muted); font-family: var(--font); font-size: 11px; }
+  .lens a { color: var(--accent); text-decoration: none; }
+  .kw { color: #7a3e9d; } .ty { color: #0f7c78; } .sx { color: #a3521c; } .cm { color: #8a96a3; } .fn { color: #1f5fbf; }
+
+  /* Chat */
+  .chat { border-left: 1px solid var(--line); background: var(--panel); display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+  .chat header { padding: 10px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+  .chat header b { font-size: 13.5px; }
+  .agent { margin-left: auto; font-size: 11.5px; border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 3px 8px; color: var(--muted); }
+  .msgs { overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+  .me { align-self: flex-end; background: var(--accent); color: #fff; border-radius: 12px 12px 2px 12px; padding: 8px 12px; max-width: 85%; }
+  .ai { background: var(--surface); border: 1px solid var(--line); border-radius: 2px 12px 12px 12px; padding: 12px 14px; line-height: 1.6; }
+  .ai ol { margin: 6px 0; padding-left: 18px; } .ai li { margin-bottom: 6px; }
+  .cite { display: inline-flex; align-items: center; gap: 4px; font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); border: 1px solid #c4d6f3; cursor: pointer; white-space: nowrap; }
+  .cite.bad { background: var(--danger-soft); color: var(--danger); border-color: #f1c2be; text-decoration: line-through; }
+  .ai .foot { margin-top: 10px; padding-top: 8px; border-top: 1px dashed #e3e8ee; color: var(--muted); font-size: 11.5px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .ai .foot a { color: var(--accent); text-decoration: none; }
+  .compose { padding: 12px 14px; border-top: 1px solid var(--line); }
+  .compose textarea { width: 100%; resize: none; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; font: inherit; height: 64px; background: var(--surface); }
+  .compose .row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; color: var(--muted); font-size: 11.5px; }
+
+  /* Status */
+  .status { background: #1f5fbf; color: #e8f0fc; display: flex; align-items: center; font-size: 11.5px; }
+  .status span { padding: 0 12px; border-right: 1px solid rgba(255,255,255,.22); height: 100%; display: flex; align-items: center; gap: 6px; }
+  .status .r { margin-left: auto; border-left: 1px solid rgba(255,255,255,.22); }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><div class="title">bookstore_app — NexGraph</div><button class="btn ghost" style="padding:2px 8px" onclick="toggleChat()" title="Ctrl/Cmd+L">Trợ lý AI</button></div>
+
+  <div class="body">
+    <nav class="activity" aria-label="Thanh chức năng">
+      <button data-side="explorer" title="Cây thư mục"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h6l2 2h8v12H4z"/></svg></button>
+      <button data-side="search" title="Tìm kiếm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg></button>
+      <button data-side="changes" title="Thay đổi & vùng ảnh hưởng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M6 8.5v7M8.3 7.2 15.7 11M8.3 16.8l7.4-3.8"/></svg><i class="badge">1</i></button>
+      <button data-side="tour" title="Tham quan dự án"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V5l6-2 4 2 6-2v15l-6 2-4-2z"/><path d="M10 3v15M14 5v15"/></svg></button>
+    </nav>
+
+    <aside class="side">
+      <section data-panel="explorer">
+        <h3>bookstore_app</h3>
+        <ul class="tree">
+          <li>▾ lib</li>
+          <li style="padding-left:18px">main.dart</li>
+          <li style="padding-left:18px">routes.dart <span class="cnt">9 route</span></li>
+          <li style="padding-left:18px">▾ screens</li>
+          <li class="sel" style="padding-left:32px"><i class="k" style="background:var(--k-screen)"></i>login_screen.dart</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-screen)"></i>home_screen.dart</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-screen)"></i>book_detail_screen.dart</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-screen)"></i>cart_screen.dart</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-screen)"></i>profile_screen.dart</li>
+          <li style="padding-left:18px">▾ services</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-service)"></i>auth_service.dart</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-service)"></i>api_client.dart</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-service)"></i>cart_service.dart</li>
+          <li style="padding-left:32px"><i class="k" style="background:var(--k-service)"></i>session_store.dart</li>
+          <li style="padding-left:18px">▸ widgets <span class="cnt">12</span></li>
+          <li style="padding-left:18px">▸ models <span class="cnt">7</span></li>
+          <li>▾ test</li>
+          <li style="padding-left:18px"><i class="k" style="background:var(--test)"></i>auth_service_test.dart</li>
+          <li style="padding-left:18px"><i class="k" style="background:var(--test)"></i>cart_service_test.dart</li>
+          <li>pubspec.yaml</li>
+        </ul>
+      </section>
+
+      <section data-panel="search">
+        <input class="search" value="login" aria-label="Tìm kiếm">
+        <div class="grp">Ký hiệu (5)</div>
+        <div class="res"><b>AuthService.<mark>login</mark></b> <span class="pill" style="font-size:10.5px">method</span><small>lib/services/auth_service.dart:28</small></div>
+        <div class="res"><b><mark>Login</mark>Screen</b> <span class="pill" style="font-size:10.5px">screen</span><small>lib/screens/login_screen.dart:12</small></div>
+        <div class="res"><b>_<mark>Login</mark>ScreenState._onSubmit</b> <span class="pill" style="font-size:10.5px">method</span><small>lib/screens/login_screen.dart:42</small></div>
+        <div class="res"><b><mark>Login</mark>Request</b> <span class="pill" style="font-size:10.5px">class</span><small>lib/models/login_request.dart:3</small></div>
+        <div class="res"><b>/<mark>login</mark></b> <span class="pill" style="font-size:10.5px">route</span><small>lib/routes.dart:18</small></div>
+        <div class="grp">Tệp (2)</div>
+        <div class="res"><b><mark>login</mark>_screen.dart</b><small>lib/screens/</small></div>
+        <div class="res"><b>auth_service_test.dart</b> <span style="color:var(--muted)">có “<mark>login</mark>” 4 lần</span><small>test/</small></div>
+      </section>
+
+      <section data-panel="changes">
+        <h3>So với HEAD a1b2c3d (nhánh main)</h3>
+        <div class="chg"><h4>Tệp đã sửa (1)</h4>
+          <div class="item"><span class="mono" style="font-size:11.5px">services/auth_service.dart</span><span class="s" style="color:var(--muted)">+6 −2</span></div></div>
+        <div class="chg"><h4>Ký hiệu bị sửa</h4>
+          <div class="item"><span><b class="mono">AuthService.login</b><small>dòng 30–41</small></span></div></div>
+        <div class="chg" style="border-color:#f1d3a6"><h4 style="color:var(--impact)">Vùng ảnh hưởng (5)</h4>
+          <div class="item"><span>_LoginScreenState._onSubmit<small>gọi trực tiếp · 1 bước</small></span><span class="s">0.60</span></div>
+          <div class="item"><span>SplashScreen.checkSession<small>gọi trực tiếp · 1 bước</small></span><span class="s">0.60</span></div>
+          <div class="item"><span>LoginScreen<small>chứa _onSubmit · 2 bước</small></span><span class="s">0.36</span></div>
+          <div class="item"><span>ProfileScreen.reLogin<small>gọi trực tiếp · 1 bước</small></span><span class="s">0.60</span></div>
+          <div class="item"><span>AppRouter.redirect<small>gọi checkSession · 2 bước</small></span><span class="s">0.36</span></div></div>
+        <div class="chg" style="border-color:#bfe2cc"><h4 style="color:var(--test)">Test liên quan (2)</h4>
+          <div class="item"><span>login trả về token khi đúng mật khẩu<small>test/auth_service_test.dart:14</small></span></div>
+          <div class="item"><span>login báo lỗi khi sai mật khẩu<small>test/auth_service_test.dart:27</small></span></div></div>
+        <div class="chg" style="border-color:#f1c2be"><h4 style="color:var(--danger)">Chưa có test (1)</h4>
+          <div class="item"><span>ProfileScreen.reLogin<small>lib/screens/profile_screen.dart:63</small></span></div></div>
+      </section>
+
+      <section data-panel="tour">
+        <h3>Tham quan bookstore_app · 7 bước</h3>
+        <ol class="tour" style="list-style:none;padding:0;margin:0">
+          <li class="st"><span class="n">1</span><div><b>Điểm khởi động</b><p>main.dart gọi runApp với BookstoreApp.</p></div></li>
+          <li class="st"><span class="n">2</span><div><b>Bản đồ màn hình</b><p>9 route được khai báo trong routes.dart bằng GoRouter.</p></div></li>
+          <li class="st cur"><span class="n">3</span><div><b>Đăng nhập</b><p>LoginScreen gửi thông tin tới AuthService. Đây là nơi có nhiều lời gọi đến nhất trong nhóm dịch vụ.</p><div style="margin-top:8px;display:flex;gap:6px"><button class="btn" style="padding:3px 10px;font-size:12px">Bước trước</button><button class="btn primary" style="padding:3px 10px;font-size:12px">Bước tiếp</button></div></div></li>
+          <li class="st"><span class="n">4</span><div><b>Gọi API</b><p>ApiClient bọc gói http, mọi dịch vụ đều đi qua đây.</p></div></li>
+          <li class="st"><span class="n">5</span><div><b>Giỏ hàng</b></div></li>
+          <li class="st"><span class="n">6</span><div><b>Mô hình dữ liệu</b></div></li>
+          <li class="st"><span class="n">7</span><div><b>Kiểm thử</b></div></li>
+        </ol>
+      </section>
+    </aside>
+
+    <div class="center">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-view="arch">Kiến trúc</button>
+        <button role="tab" data-view="graph">Graph</button>
+        <button role="tab" data-view="flutter">Flutter</button>
+        <button role="tab" data-view="code" class="file">login_screen.dart</button>
+      </div>
+
+      <!-- KIẾN TRÚC -->
+      <div class="view" data-viewpanel="arch">
+        <div class="toolbar">
+          <span class="crumb">bookstore_app <span>/ lib</span></span>
+          <div class="seg"><button class="on">Theo thư mục</button><button>Theo cụm liên kết</button></div>
+          <div class="legend"><span>Mũi tên = quan hệ có thật trong code</span><span>Số trên mũi tên = số bằng chứng</span></div>
+        </div>
+        <svg class="canvas" viewBox="20 95 880 485" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#7f8fa3"/></marker>
+          <marker id="ars" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#1f5fbf"/></marker></defs>
+          <!-- edges -->
+          <g class="edge"><path d="M480 128 V188" marker-end="url(#ar)"/><g class="lab"><rect x="436" y="146" width="88" height="22" rx="11"/><text x="480" y="161" text-anchor="middle">9 điều hướng</text></g></g>
+          <g class="edge"><path d="M580 248 H676" marker-end="url(#ar)"/><g class="lab"><rect x="590" y="226" width="76" height="22" rx="11"/><text x="628" y="241" text-anchor="middle">23 widget</text></g></g>
+          <g class="edge sel"><path d="M430 290 V368" marker-end="url(#ars)"/><g class="lab"><rect x="372" y="318" width="92" height="22" rx="11"/><text x="418" y="333" text-anchor="middle">14 lời gọi</text></g></g>
+          <g class="edge"><path d="M540 290 Q620 330 690 384" marker-end="url(#ar)"/><g class="lab"><rect x="586" y="306" width="90" height="22" rx="11"/><text x="631" y="321" text-anchor="middle">6 tham chiếu</text></g></g>
+          <g class="edge"><path d="M540 418 H676" marker-end="url(#ar)"/><g class="lab"><rect x="566" y="396" width="84" height="22" rx="11"/><text x="608" y="411" text-anchor="middle">11 lời gọi</text></g></g>
+          <g class="edge"><path d="M430 470 V528" marker-end="url(#ar)"/><g class="lab"><rect x="388" y="488" width="84" height="22" rx="11"/><text x="430" y="503" text-anchor="middle">5 lời gọi</text></g></g>
+          <g class="edge"><path d="M330 92 Q200 92 200 300 Q200 560 318 560" marker-end="url(#ar)"/><g class="lab"><rect x="160" y="292" width="80" height="22" rx="11"/><text x="200" y="307" text-anchor="middle">go_router</text></g></g>
+          <!-- blocks -->
+          <g class="blk"><rect x="330" y="56" width="300" height="72" rx="10"/><text class="t" x="350" y="86">Khởi động và điều hướng</text><text class="d" x="350" y="108">main.dart, app.dart, routes.dart</text></g>
+          <g class="blk"><rect x="330" y="188" width="250" height="102" rx="10" style="stroke:var(--k-screen);stroke-width:2"/><text class="t" x="350" y="218">Màn hình</text><text class="d" x="350" y="240">9 màn hình · 31 hàm</text><text class="d" x="350" y="260">Login, Home, Cart, Profile…</text></g>
+          <g class="blk"><rect x="680" y="198" width="230" height="84" rx="10" style="stroke:var(--k-widget)"/><text class="t" x="700" y="228">Widget dùng chung</text><text class="d" x="700" y="250">12 widget · BookCard, PrimaryButton…</text></g>
+          <g class="blk"><rect x="330" y="370" width="210" height="100" rx="10" style="stroke:var(--k-service);stroke-width:2"/><text class="t" x="350" y="400">Dịch vụ</text><text class="d" x="350" y="422">5 class · 22 hàm</text><text class="d" x="350" y="442">Auth, Cart, Book, Api…</text></g>
+          <g class="blk"><rect x="680" y="372" width="230" height="84" rx="10" style="stroke:var(--k-model)"/><text class="t" x="700" y="402">Mô hình dữ liệu</text><text class="d" x="700" y="424">7 class · Book, User, CartItem…</text></g>
+          <g class="blk"><rect x="320" y="530" width="230" height="62" rx="10" style="stroke-dasharray:5 4"/><text class="t" x="340" y="558">Thư viện ngoài</text><text class="d" x="340" y="578">http, go_router, provider</text></g>
+        </svg>
+        <div class="pop" style="right:20px;bottom:20px">
+          <h4>Màn hình → Dịch vụ</h4>
+          <div class="sub">14 lời gọi tìm thấy trong code. Bấm để mở đúng dòng.</div>
+          <div class="site"><code>AuthService.login()</code><span>login_screen.dart:47</span></div>
+          <div class="site"><code>AuthService.restore()</code><span>splash_screen.dart:22</span></div>
+          <div class="site"><code>CartService.checkout()</code><span>cart_screen.dart:88</span></div>
+          <div class="site"><code>BookService.fetchDetail()</code><span>book_detail_screen.dart:31</span></div>
+          <div class="site" style="color:var(--muted)"><span style="font-family:var(--font)">và 10 lời gọi khác</span><span></span></div>
+        </div>
+      </div>
+
+      <!-- GRAPH -->
+      <div class="view" data-viewpanel="graph">
+        <div class="toolbar">
+          <span class="crumb">Lân cận của <span class="mono" style="color:var(--ink)">AuthService.login</span> <span>· 2 bước</span></span>
+          <div class="chips"><span class="chip on">gọi hàm</span><span class="chip on">điều hướng</span><span class="chip on">kiểm thử</span><span class="chip">import</span><span class="chip">chứa</span></div>
+          <div class="legend"><span><i class="dot" style="background:var(--accent)"></i> luồng đang tô từ câu trả lời AI</span></div>
+        </div>
+        <svg class="canvas" viewBox="0 0 960 620" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="g1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10z" fill="#9aa8b8"/></marker>
+          <marker id="g2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10z" fill="#1f5fbf"/></marker>
+          <marker id="g3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10z" fill="#2e7d4f"/></marker>
+          <marker id="g4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 10 5 0 10z" fill="#b3407a"/></marker></defs>
+          <path class="gedge flow" d="M196 150 V200" marker-end="url(#g2)"/>
+          <path class="gedge flow" d="M196 250 C 250 300, 330 300, 386 300" marker-end="url(#g2)"/>
+          <path class="gedge flow" d="M560 300 H620" marker-end="url(#g2)"/>
+          <path class="gedge flow" d="M760 320 V398" marker-end="url(#g2)"/>
+          <path class="gedge" d="M472 324 V398" marker-end="url(#g1)"/>
+          <path class="gedge" d="M120 520 C 180 440, 300 330, 386 312" marker-end="url(#g1)"/><text class="elab" x="196" y="430">gọi</text>
+          <path class="gedge test" d="M560 520 C 520 450, 500 380, 486 326" marker-end="url(#g3)"/><text class="elab" x="540" y="460" style="fill:var(--test)">kiểm thử</text>
+          <path class="gedge test" d="M780 520 C 700 440, 560 360, 520 326" marker-end="url(#g3)"/>
+          <path class="gedge nav" d="M282 226 H372" marker-end="url(#g4)"/><text class="elab" x="296" y="218" style="fill:var(--k-route)">điều hướng</text>
+          <g class="gnode"><rect x="96" y="104" width="200" height="46" rx="8" fill="#e3ecfa" stroke="#1f5fbf"/><text x="112" y="124">LoginScreen</text><text class="kd" x="112" y="140">màn hình · login_screen.dart</text></g>
+          <g class="gnode"><rect x="96" y="204" width="186" height="46" rx="8" fill="#e3ecfa" stroke="#1f5fbf"/><text x="112" y="224">_onSubmit()</text><text class="kd" x="112" y="240">method · dòng 42–58</text></g>
+          <g class="gnode"><rect x="376" y="204" width="160" height="46" rx="8" fill="#fff" stroke="#b3407a"/><text x="392" y="224">HomeScreen</text><text class="kd" x="392" y="240">màn hình · /home</text></g>
+          <g class="gnode"><rect x="386" y="278" width="174" height="46" rx="8" fill="#1f5fbf" stroke="#1f5fbf"/><text x="402" y="298" style="fill:#fff;font-weight:600">AuthService.login()</text><text class="kd" x="402" y="314" style="fill:#d6e3f8">method · đang chọn</text></g>
+          <g class="gnode"><rect x="624" y="278" width="190" height="46" rx="8" fill="#e3ecfa" stroke="#1f5fbf"/><text x="640" y="298">ApiClient.post()</text><text class="kd" x="640" y="314">method · api_client.dart</text></g>
+          <g class="gnode"><rect x="682" y="402" width="160" height="46" rx="8" fill="#e3ecfa" stroke="#1f5fbf" stroke-dasharray="5 4"/><text x="698" y="422">http.post</text><text class="kd" x="698" y="438">thư viện ngoài</text></g>
+          <g class="gnode"><rect x="386" y="402" width="174" height="46" rx="8" fill="#fff" stroke="#0f7c78"/><text x="402" y="422">SessionStore.save()</text><text class="kd" x="402" y="438">method · session_store.dart</text></g>
+          <g class="gnode"><rect x="30" y="520" width="190" height="46" rx="8" fill="#fff" stroke="#9aa8b8"/><text x="46" y="540">SplashScreen.checkSession</text><text class="kd" x="46" y="556">method</text></g>
+          <g class="gnode"><rect x="470" y="520" width="190" height="46" rx="8" fill="#e2f3e8" stroke="#2e7d4f"/><text x="486" y="540">login trả về token…</text><text class="kd" x="486" y="556">test · auth_service_test.dart</text></g>
+          <g class="gnode"><rect x="690" y="520" width="190" height="46" rx="8" fill="#e2f3e8" stroke="#2e7d4f"/><text x="706" y="540">login báo lỗi khi sai…</text><text class="kd" x="706" y="556">test · auth_service_test.dart</text></g>
+        </svg>
+        <div class="inspector">
+          <div style="display:flex;justify-content:space-between;align-items:center"><h4>AuthService.login</h4><span class="pill">method</span></div>
+          <dl>
+            <dt>Vị trí</dt><dd class="mono">auth_service.dart:28–52</dd>
+            <dt>Được gọi bởi</dt><dd>3 hàm</dd>
+            <dt>Gọi tới</dt><dd>ApiClient.post, SessionStore.save</dd>
+            <dt>Kiểm thử</dt><dd><span class="pill ok">2 test</span></dd>
+            <dt>Thuộc nhóm</dt><dd>Dịch vụ</dd>
+          </dl>
+          <div class="acts"><button class="btn primary" onclick="show('code')">Mở code</button><button class="btn">Xem vùng ảnh hưởng</button><button class="btn">Hỏi AI</button></div>
+        </div>
+      </div>
+
+      <!-- FLUTTER -->
+      <div class="view" data-viewpanel="flutter">
+        <div class="toolbar"><span class="crumb">Flutter <span>/ bookstore_app</span></span><div class="seg"><button class="on">Màn hình &amp; widget</button><button>Thư viện (pubspec)</button></div></div>
+        <div class="fl">
+          <div class="box" style="grid-column:1/-1">
+            <h3>Bản đồ màn hình (9 route, khai báo bằng GoRouter)</h3>
+            <svg viewBox="0 0 1000 150" style="width:100%;height:auto">
+              <defs><marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#b3407a"/></marker></defs>
+              <g font-family="JetBrains Mono, monospace" font-size="12">
+                <g><rect x="10" y="20" width="120" height="44" rx="8" fill="#fff" stroke="#b3407a"/><text x="24" y="40">/splash</text><text x="24" y="56" font-size="10.5" fill="#5b6b7d">SplashScreen</text></g>
+                <g><rect x="180" y="20" width="120" height="44" rx="8" fill="#e3ecfa" stroke="#1f5fbf" stroke-width="2"/><text x="194" y="40">/login</text><text x="194" y="56" font-size="10.5" fill="#5b6b7d">LoginScreen</text></g>
+                <g><rect x="350" y="20" width="120" height="44" rx="8" fill="#fff" stroke="#b3407a"/><text x="364" y="40">/home</text><text x="364" y="56" font-size="10.5" fill="#5b6b7d">HomeScreen</text></g>
+                <g><rect x="520" y="20" width="140" height="44" rx="8" fill="#fff" stroke="#b3407a"/><text x="534" y="40">/book/:id</text><text x="534" y="56" font-size="10.5" fill="#5b6b7d">BookDetailScreen</text></g>
+                <g><rect x="710" y="20" width="110" height="44" rx="8" fill="#fff" stroke="#b3407a"/><text x="724" y="40">/cart</text><text x="724" y="56" font-size="10.5" fill="#5b6b7d">CartScreen</text></g>
+                <g><rect x="870" y="20" width="120" height="44" rx="8" fill="#fff" stroke="#b3407a"/><text x="884" y="40">/checkout</text><text x="884" y="56" font-size="10.5" fill="#5b6b7d">CheckoutScreen</text></g>
+                <g><rect x="350" y="96" width="120" height="44" rx="8" fill="#fff" stroke="#b3407a"/><text x="364" y="116">/profile</text><text x="364" y="132" font-size="10.5" fill="#5b6b7d">ProfileScreen</text></g>
+                <g><rect x="520" y="96" width="140" height="44" rx="8" fill="#fff" stroke="#b3407a"/><text x="534" y="116">/search</text><text x="534" y="132" font-size="10.5" fill="#5b6b7d">SearchScreen</text></g>
+              </g>
+              <g stroke="#b3407a" stroke-width="1.5" fill="none">
+                <path d="M130 42 H178" marker-end="url(#r)"/><path d="M300 42 H348" marker-end="url(#r)"/><path d="M470 42 H518" marker-end="url(#r)"/><path d="M660 42 H708" marker-end="url(#r)"/><path d="M820 42 H868" marker-end="url(#r)"/>
+                <path d="M410 64 V94" marker-end="url(#r)"/><path d="M470 52 C 500 60, 520 90, 560 95" marker-end="url(#r)"/>
+              </g>
+            </svg>
+          </div>
+          <div class="box">
+            <h3>Cây widget của LoginScreen</h3>
+            <ul class="wt" style="border-left:0;padding-left:0">
+              <li class="own">LoginScreen <small>màn hình, StatefulWidget</small>
+                <ul class="wt"><li>Scaffold
+                  <ul class="wt"><li>AppBar <small>tiêu đề “Đăng nhập”</small></li>
+                    <li>Padding
+                      <ul class="wt"><li>Form
+                        <ul class="wt"><li>Column
+                          <ul class="wt"><li class="own">EmailField <small>widget của dự án</small></li>
+                            <li class="own">PasswordField <small>widget của dự án</small></li>
+                            <li class="own">PrimaryButton <small>gọi _onSubmit</small></li>
+                            <li>TextButton <small>đi tới /forgot-password</small></li></ul></li></ul></li></ul></li></ul></li></ul></li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3>Thư viện trong pubspec.yaml</h3>
+            <table class="dep"><thead><tr><th>Gói</th><th>Phiên bản</th><th>Được dùng ở</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">go_router</td><td class="mono">^14.2.0</td><td>routes.dart</td></tr>
+                <tr><td class="mono">http</td><td class="mono">^1.2.1</td><td>api_client.dart</td></tr>
+                <tr><td class="mono">provider</td><td class="mono">^6.1.2</td><td>4 tệp</td></tr>
+                <tr><td class="mono">shared_preferences</td><td class="mono">^2.2.3</td><td>session_store.dart</td></tr>
+                <tr><td class="mono">intl</td><td class="mono">^0.19.0</td><td style="color:var(--impact)">không thấy dùng</td></tr>
+              </tbody></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CODE -->
+      <div class="view" data-viewpanel="code">
+        <div class="code" id="code"></div>
+      </div>
+    </div>
+
+    <aside class="chat" aria-label="Trợ lý AI">
+      <header><b>Trợ lý AI</b><span class="agent">OpenCode 2.0.32 · chỉ đọc ▾</span></header>
+      <div class="msgs">
+        <div class="me">Luồng đăng nhập trong app này chạy thế nào?</div>
+        <div class="ai">
+          Luồng đăng nhập đi qua 4 bước:
+          <ol>
+            <li>Người dùng bấm nút trên <b>LoginScreen</b>, hàm <code>_onSubmit</code> kiểm tra form rồi gọi dịch vụ. <span class="cite" onclick="show('code')">login_screen.dart:42–58</span></li>
+            <li><code>AuthService.login</code> gửi email và mật khẩu qua <code>ApiClient.post</code> tới <code>/auth/login</code>. <span class="cite">auth_service.dart:28–52</span></li>
+            <li>Khi thành công, token được lưu bằng <code>SessionStore.save</code>. <span class="cite">session_store.dart:15–24</span></li>
+            <li>Cuối cùng app chuyển sang <code>/home</code>. <span class="cite">login_screen.dart:55</span></li>
+          </ol>
+          Token được làm mới tự động khi hết hạn. <span class="cite bad" title="Dòng 80–95 không tồn tại trong tệp">auth_service.dart:80–95</span>
+          <div class="foot"><span>4/5 trích dẫn đã xác minh</span><a href="#" onclick="show('graph');return false">Tô luồng trên graph</a><span>Đã gửi 3 đoạn code tới OpenCode</span></div>
+        </div>
+      </div>
+      <div class="compose"><textarea placeholder="Hỏi về dự án, ví dụ: màn hình giỏ hàng lấy dữ liệu từ đâu?"></textarea>
+        <div class="row"><span>Ctrl+L để ẩn/hiện</span><button class="btn primary" style="padding:5px 14px">Gửi</button></div></div>
+    </aside>
+  </div>
+
+  <footer class="status">
+    <span>✓ Đã index 100%</span><span>412 node, 1.036 cạnh</span><span>main, HEAD a1b2c3d</span>
+    <span class="r">OpenCode 2.0.32, chỉ đọc</span><span>MCP đang chạy</span><span>Tiếng Việt</span>
+  </footer>
+</div>
+
+<script>
+const codeLines = [
+  ['<span class="kw">import</span> <span class="sx">\'package:flutter/material.dart\'</span>;'],
+  ['<span class="kw">import</span> <span class="sx">\'package:go_router/go_router.dart\'</span>;'],
+  ['<span class="kw">import</span> <span class="sx">\'../services/auth_service.dart\'</span>;'],
+  [''],
+  ['<span class="cm">// …</span>'],
+];
+const body = [
+  [40, '  <span class="kw">final</span> _formKey = <span class="ty">GlobalKey</span>&lt;<span class="ty">FormState</span>&gt;();'],
+  [41, ''],
+  [42, '  <span class="ty">Future</span>&lt;<span class="kw">void</span>&gt; <span class="fn">_onSubmit</span>() <span class="kw">async</span> {', 'lens'],
+  [43, '    <span class="kw">if</span> (!_formKey.currentState!.<span class="fn">validate</span>()) <span class="kw">return</span>;'],
+  [44, '    <span class="fn">setState</span>(() =&gt; _loading = <span class="kw">true</span>);'],
+  [45, '    <span class="kw">try</span> {'],
+  [46, '      <span class="kw">final</span> auth = context.<span class="fn">read</span>&lt;<span class="ty">AuthService</span>&gt;();'],
+  [47, '      <span class="kw">await</span> auth.<span class="fn">login</span>(_email.text, _password.text);'],
+  [48, '      <span class="kw">if</span> (!mounted) <span class="kw">return</span>;'],
+  [49, '      context.<span class="fn">go</span>(<span class="sx">\'/home\'</span>);'],
+  [50, '    } <span class="kw">on</span> <span class="ty">AuthException</span> <span class="kw">catch</span> (e) {'],
+  [51, '      _showError(e.message);'],
+  [52, '    } <span class="kw">finally</span> {'],
+  [53, '      <span class="kw">if</span> (mounted) <span class="fn">setState</span>(() =&gt; _loading = <span class="kw">false</span>);'],
+  [54, '    }'],
+  [55, '  }'],
+  [56, ''],
+  [57, '  <span class="kw">@override</span>'],
+  [58, '  <span class="ty">Widget</span> <span class="fn">build</span>(<span class="ty">BuildContext</span> context) {'],
+  [59, '    <span class="kw">return</span> <span class="ty">Scaffold</span>('],
+  [60, '      appBar: <span class="ty">AppBar</span>(title: <span class="kw">const</span> <span class="ty">Text</span>(<span class="sx">\'Đăng nhập\'</span>)),'],
+  [61, '      body: <span class="ty">Padding</span>('],
+  [62, '        padding: <span class="kw">const</span> <span class="ty">EdgeInsets</span>.<span class="fn">all</span>(24),'],
+  [63, '        child: <span class="ty">Form</span>(key: _formKey, child: <span class="ty">Column</span>(children: ['],
+];
+const el = document.getElementById('code');
+el.innerHTML = body.map(([n, src, lens]) => {
+  const hl = n >= 42 && n <= 55 ? ' hl' : '';
+  const l = lens ? `<div class="ln"><span></span><span class="lens">Được gọi bởi <a href="#">PrimaryButton.onPressed</a> · gọi tới <a href="#">AuthService.login</a> · 0 test trực tiếp</span></div>` : '';
+  return `${l}<div class="ln${hl}"><span>${n}</span><span>${src || '&nbsp;'}</span></div>`;
+}).join('');
+
+const state = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
+function show(v) {
+  document.querySelectorAll('[data-viewpanel]').forEach(p => p.classList.toggle('on', p.dataset.viewpanel === v));
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-selected', b.dataset.view === v));
+}
+function side(s) {
+  document.querySelectorAll('[data-panel]').forEach(p => p.classList.toggle('on', p.dataset.panel === s));
+  document.querySelectorAll('[data-side]').forEach(b => b.setAttribute('aria-pressed', b.dataset.side === s));
+}
+function toggleChat(force) { document.body.classList.toggle('nochat', force === undefined ? undefined : !force); }
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => show(b.dataset.view));
+document.querySelectorAll('[data-side]').forEach(b => b.onclick = () => side(b.dataset.side));
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') { e.preventDefault(); toggleChat(); } });
+show(state.view || 'arch'); side(state.side || 'explorer'); if (state.chat === '0') toggleChat(false); if (state.insp === '0') document.body.classList.add('noinsp');
+</script>
+</body>
+</html>

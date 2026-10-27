@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Use case chi tiết</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => {
+  const { el, text, init, arrowHead, wrap, done } = UML;
+  init(1180, 1010);
+  el('rect', { class: 'ln', x: 215, y: 15, width: 800, height: 980, rx: 14 });
+  text(235, 42, 'Hệ thống NexGraph', 't1');
+  const A = 125, B = 130;   // nửa rộng cột A (đậm) và B
+  const U = {};
+  const uc = (id, x, y, label, main) => { U[id] = { x, y, rx: main ? 135 : 140, ry: main ? 24 : 21 }; };
+  // Cột A: use case chính
+  uc('1', 400, 135, 'UC01. Mở dự án và lập chỉ mục', 1);
+  uc('2', 400, 235, 'UC02. Xem bản đồ kiến trúc', 1);
+  uc('11', 400, 330, 'UC11. Xuất sơ đồ / báo cáo', 1);
+  uc('3', 400, 425, 'UC03. Khám phá đồ thị', 1);
+  uc('4', 400, 500, 'UC04. Tìm kiếm', 1);
+  uc('6', 400, 580, 'UC06. Xem vùng ảnh hưởng', 1);
+  uc('7', 400, 690, 'UC07. Hỏi đáp với trợ lý AI', 1);
+  uc('8', 400, 810, 'UC08. Cấu hình kết nối AI', 1);
+  uc('9', 400, 895, 'UC09. Tham quan dự án', 1);
+  // Cột B: use case phụ
+  uc('b1', 820, 62, 'Chọn thư mục dự án');
+  uc('b2', 820, 116, 'Lập chỉ mục giai đoạn 1');
+  uc('b3', 820, 170, 'Lập chỉ mục giai đoạn 2 (nền)');
+  uc('b4', 820, 224, 'Hủy lập chỉ mục');
+  uc('b5', 820, 285, 'Xem bằng chứng của mũi tên');
+  uc('5', 820, 462, 'UC05. Xem mã của nút');
+  uc('b7', 820, 580, 'Xác định ca kiểm thử liên quan');
+  uc('b8', 820, 620, 'Xác nhận gửi dữ liệu (lần đầu)');
+  uc('b9', 820, 674, 'Gọi công cụ tra cứu đồ thị');
+  uc('b10', 820, 728, 'Kiểm chứng trích dẫn');
+  uc('b11', 820, 782, 'Tô sáng luồng trên đồ thị');
+  uc('10', 820, 880, 'UC10. Truy vấn đồ thị qua MCP', 1);
+  uc('b12', 820, 968, 'Đọc đồ thị ở chế độ chỉ đọc');
+  const names = { '1': 'UC01. Mở dự án và lập chỉ mục', '2': 'UC02. Xem bản đồ kiến trúc', '11': 'UC11. Xuất sơ đồ / báo cáo', '3': 'UC03. Khám phá đồ thị', '4': 'UC04. Tìm kiếm', '6': 'UC06. Xem vùng ảnh hưởng', '7': 'UC07. Hỏi đáp với trợ lý AI', '8': 'UC08. Cấu hình kết nối AI', '9': 'UC09. Tham quan dự án', 'b1': 'Chọn thư mục dự án', 'b2': 'Lập chỉ mục giai đoạn 1', 'b3': 'Lập chỉ mục giai đoạn 2 (nền)', 'b4': 'Hủy lập chỉ mục', 'b5': 'Xem bằng chứng của mũi tên', '5': 'UC05. Xem mã của nút', 'b7': 'Xác định ca kiểm thử liên quan', 'b8': 'Xác nhận gửi dữ liệu (lần đầu)', 'b9': 'Gọi công cụ tra cứu đồ thị', 'b10': 'Kiểm chứng trích dẫn', 'b11': 'Tô sáng luồng trên đồ thị', '10': 'UC10. Truy vấn đồ thị qua MCP', 'b12': 'Đọc đồ thị ở chế độ chỉ đọc' };
+  const edge = (c, px, py) => {           // giao điểm đoạn (px,py)->tâm với elip c
+    const dx = px - c.x, dy = py - c.y, k = 1 / Math.sqrt((dx / c.rx) ** 2 + (dy / c.ry) ** 2);
+    return [c.x + dx * k, c.y + dy * k];
+  };
+  const link = (a, b, kind, label, lo) => {  // a -> b ; kind: 'inc'|'ext'|'dep'|'asc'
+    const A_ = U[a], B_ = U[b];
+    const p1 = edge(A_, B_.x, B_.y), p2 = edge(B_, A_.x, A_.y);
+    el('polyline', { class: kind === 'asc' ? 'k' : 'kd', points: `${p1.join(',')} ${p2.join(',')}` });
+    if (kind !== 'asc') arrowHead(p2[0], p2[1], Math.atan2(p2[1] - p1[1], p2[0] - p1[0]), true);
+    if (label) text((p1[0] + p2[0]) / 2 + (lo ? lo[0] : 0), (p1[1] + p2[1]) / 2 - 5 + (lo ? lo[1] : 0), label, 'ti', 'middle', true);
+  };
+  // include: gốc -> phụ ; extend: phụ -> gốc
+  [['1', 'b1'], ['1', 'b2'], ['1', 'b3'], ['6', 'b7'], ['7', 'b9'], ['7', 'b10'], ['10', 'b12']].forEach(([a, b]) => link(a, b, 'inc', '«include»', [0, 0]));
+  [['b4', '1'], ['b5', '2'], ['5', '3'], ['5', '4'], ['b8', '7'], ['b11', '7'], ['11', '2'], ['11', '3']].forEach(([a, b]) => link(a, b, 'ext', '«extend»', [0, 0]));
+  link('7', '8', 'dep', 'cần kết nối', [48, 0]);
+  // Ellipses
+  Object.keys(U).forEach(k => {
+    const c = U[k];
+    el('ellipse', { class: 'bx', cx: c.x, cy: c.y, rx: c.rx, ry: c.ry });
+    const ls = wrap(names[k], c.rx * 1.7, '12.5px "Be Vietnam Pro"');
+    ls.forEach((s, i) => el('text', { class: 't2', x: c.x, y: c.y + 4.5 - (ls.length - 1) * 8 + i * 16, 'text-anchor': 'middle' }, undefined, s));
+  });
+  // Tác nhân
+  const actor = (x, y, lines) => {
+    el('circle', { class: 'bx', cx: x, cy: y - 36, r: 13 });
+    el('path', { class: 'k', d: `M${x} ${y - 23}v34M${x - 22} ${y - 10}h44M${x} ${y + 11}l-18 28M${x} ${y + 11}l18 28` });
+    lines.forEach((s, i) => text(x, y - 62 - (lines.length - 1 - i) * 16, s, 't1', 'middle'));
+  };
+  actor(100, 430, ['Lập trình viên']);
+  actor(100, 770, ['Trợ lý AI cục bộ /', 'Nhà cung cấp AI']);
+  actor(1105, 880, ['Trợ lý AI', 'bên ngoài']);
+  const line = (x1, y1, uid, right) => { const c = U[uid]; el('polyline', { class: 'k', points: `${x1},${y1} ${c.x + (right ? c.rx : -c.rx)},${c.y}` }); };
+  ['1', '2', '3', '4', '6', '7', '8', '9', '11'].forEach(k => line(122, 438, k));
+  line(122, 772, '7');
+  line(1083, 880, '10', true);
+  done();
+});
+</script></body></html>

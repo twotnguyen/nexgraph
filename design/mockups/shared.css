@@ -1,0 +1,48 @@
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  --bg: #e9edf2;          /* nền khung */
+  --surface: #ffffff;     /* vùng nội dung */
+  --panel: #f4f6f9;       /* sidebar, cột phụ */
+  --ink: #1b2a3a;         /* chữ chính */
+  --muted: #5b6b7d;       /* chữ phụ */
+  --line: #d5dce5;        /* đường viền */
+  --accent: #1f5fbf;      /* chọn, nút chính */
+  --accent-soft: #e3ecfa;
+  --impact: #b86e00;      /* vùng ảnh hưởng */
+  --impact-soft: #fff1dc;
+  --test: #2e7d4f;        /* test */
+  --test-soft: #e2f3e8;
+  --danger: #b3261e;      /* chưa xác minh, lỗi */
+  --danger-soft: #fbe5e3;
+  --k-screen: #1f5fbf; --k-widget: #6a4fb3; --k-service: #0f7c78; --k-model: #8a5a12; --k-route: #b3407a; --k-pkg: #5b6b7d;
+  --font: "Be Vietnam Pro", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { font-family: var(--font); font-size: 13px; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+code, .mono { font-family: var(--mono); font-size: 12px; }
+
+/* Thanh tiêu đề cửa sổ */
+.titlebar { height: 36px; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.lights { display: flex; gap: 7px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; background: #ec6a5e; }
+.lights i:nth-child(2) { background: #f4bf4f; } .lights i:nth-child(3) { background: #61c554; }
+.titlebar .title { flex: 1; text-align: center; color: var(--muted); font-weight: 500; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: -0.01em; }
+.brand svg { width: 18px; height: 18px; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 7px 14px; border-radius: 6px; font-weight: 500; }
+.btn:hover { border-color: #b5c0cd; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: #194f9f; }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; background: var(--panel); color: var(--muted); border: 1px solid var(--line); }
+.pill.flutter { color: #0b5cad; background: #e5f0fb; border-color: #c3dbf3; }
+.pill.ok { color: var(--test); background: var(--test-soft); border-color: #bfe2cc; }
+.pill.warn { color: var(--impact); background: var(--impact-soft); border-color: #f1d3a6; }
+.pill.bad { color: var(--danger); background: var(--danger-soft); border-color: #f1c2be; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }

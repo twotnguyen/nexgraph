@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NexGraph — Đang index</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  .win { height: 100vh; display: flex; flex-direction: column; }
+  main { flex: 1; background: var(--surface); display: grid; place-items: start center; padding: 56px 24px; overflow: auto; }
+  .card { width: min(760px, 100%); }
+  h1 { font-size: 24px; letter-spacing: -0.02em; margin: 0 0 4px; }
+  .path { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .phases { margin: 32px 0 8px; display: grid; gap: 22px; }
+  .phase { display: grid; grid-template-columns: 30px 1fr; gap: 14px; }
+  .icon { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+  .done .icon { background: var(--test-soft); color: var(--test); }
+  .run .icon { background: var(--accent-soft); color: var(--accent); }
+  .phase h3 { margin: 2px 0 4px; font-size: 14.5px; }
+  .phase p { margin: 0 0 10px; color: var(--muted); line-height: 1.5; }
+  .bar { height: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--accent); border-radius: 99px; }
+  .done .bar span { background: var(--test); }
+  .sub { display: flex; justify-content: space-between; margin-top: 6px; font-size: 12px; color: var(--muted); }
+  .current { font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 8px; margin: 28px 0; }
+  .stats div { padding: 14px 16px; border-left: 1px solid var(--line); }
+  .stats div:first-child { border-left: 0; }
+  .stats b { display: block; font-size: 20px; letter-spacing: -0.02em; }
+  .stats span { color: var(--muted); font-size: 12px; }
+  .log { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 12px 16px; line-height: 1.7; font-size: 12.5px; }
+  .log h4 { margin: 0 0 4px; font-size: 13px; }
+  .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 26px; }
+  .foot p { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 46ch; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><div class="title">bookstore_app — NexGraph</div><div style="width:50px"></div></div>
+  <main>
+    <div class="card">
+      <h1>Đang index bookstore_app</h1>
+      <div class="path">D:\Do an\mobile\bookstore_app · nhánh main · commit a1b2c3d</div>
+
+      <div class="phases">
+        <div class="phase done">
+          <div class="icon">✓</div>
+          <div><h3>Pha 1. Đọc cấu trúc</h3>
+            <p>Tìm các file, class, hàm, widget và câu lệnh import.</p>
+            <div class="bar"><span style="width:100%"></span></div>
+            <div class="sub"><span>128 / 128 file</span><span>Xong sau 6,4 giây</span></div></div>
+        </div>
+        <div class="phase run">
+          <div class="icon">2</div>
+          <div><h3>Pha 2. Nối các lời gọi và điều hướng</h3>
+            <p>Xác định hàm nào gọi hàm nào, màn hình nào chuyển sang màn hình nào, test nào kiểm tra hàm nào.</p>
+            <div class="bar"><span style="width:63%"></span></div>
+            <div class="sub"><span class="current">lib/screens/cart_screen.dart</span><span>81 / 128 file</span></div></div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div><b>128</b><span>file Dart</span></div>
+        <div><b>412</b><span>node</span></div>
+        <div><b>1.036</b><span>cạnh quan hệ</span></div>
+        <div><b>9</b><span>màn hình</span></div>
+      </div>
+
+      <div class="log">
+        <h4>Ghi chú</h4>
+        Bỏ qua 14 file sinh tự động (<code>*.g.dart</code>, <code>*.freezed.dart</code>) và thư mục <code>build/</code>, <code>.dart_tool/</code>.<br>
+        <span style="color:var(--impact)">2 file có cú pháp chưa đọc được hết:</span> <code>lib/utils/macros.dart</code>, <code>lib/gen/assets.gen.dart</code>. Các phần còn lại vẫn được đưa vào bản đồ.
+      </div>
+
+      <div class="foot">
+        <p>Pha 1 đã xong, bạn có thể bắt đầu khám phá. Bản đồ sẽ tự bổ sung khi pha 2 chạy xong.</p>
+        <div style="display:flex; gap:10px">
+          <button class="btn">Huỷ index</button>
+          <button class="btn primary" onclick="location.href='workspace.html'">Bắt đầu khám phá</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

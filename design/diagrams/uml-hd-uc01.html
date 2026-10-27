@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Hoạt động UC01</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.activity({
+  w: 1100, h: 1200,
+  lanes: [{ id: 'u', label: 'Lập trình viên' }, { id: 'a', label: 'Ứng dụng' }, { id: 'e', label: 'Engine' }],
+  nodes: [
+    { id: 's', lane: 'u', y: 80, type: 'start' },
+    { id: 'a1', lane: 'u', y: 140, text: 'Chọn thư mục dự án' },
+    { id: 'a2', lane: 'a', y: 140, text: 'Gửi yêu cầu mở dự án tới engine' },
+    { id: 'a3', lane: 'e', y: 140, text: 'Kiểm tra thư mục, đọc .gitignore, nhận biết Git' },
+    { id: 'd1', lane: 'e', y: 270, type: 'dec', text: 'Thư mục hợp lệ?' },
+    { id: 'a4', lane: 'a', y: 270, text: 'Báo lỗi, giữ nguyên màn hình' },
+    { id: 'x1', lane: 'a', y: 360, type: 'end' },
+    { id: 'a5', lane: 'e', y: 380, text: 'Chọn nơi lưu: .nexgraph/ nếu ghi được, nếu không thì thư mục ứng dụng' },
+    { id: 'd2', lane: 'e', y: 510, type: 'dec', text: 'Dự án quá lớn?' },
+    { id: 'a6', lane: 'a', y: 510, text: 'Cảnh báo, đề nghị tiếp tục, hủy hoặc chọn thư mục con' },
+    { id: 'd3', lane: 'a', y: 625, type: 'dec', text: 'Tiếp tục?' },
+    { id: 'x2', lane: 'u', y: 625, type: 'end' },
+    { id: 'm1', lane: 'e', y: 700, type: 'merge' },
+    { id: 'a7', lane: 'e', y: 780, text: 'Giai đoạn 1: phân tích cấu trúc (tệp, lớp, hàm, widget, import), ghi CSDL' },
+    { id: 'f1', lane: 'e', y: 875, type: 'bar', w: 260 },
+    { id: 'a8', lane: 'e', y: 960, text: 'Giai đoạn 2 (nền): phân giải lời gọi, điều hướng, kiểm thử, gom cộng đồng' },
+    { id: 'a9', lane: 'a', y: 960, text: 'Mở màn hình làm việc, hiển thị đồ thị giai đoạn 1' },
+    { id: 'a10', lane: 'u', y: 960, text: 'Khám phá đồ thị trong lúc giai đoạn 2 chạy' },
+    { id: 'x3', lane: 'u', y: 1050, type: 'end' },
+    { id: 'a11', lane: 'e', y: 1080, text: 'Ghi nhận lần lập chỉ mục hoàn tất, phát sự kiện' },
+    { id: 'a12', lane: 'a', y: 1080, text: 'Cập nhật giao diện theo đồ thị đầy đủ' },
+    { id: 'x4', lane: 'a', y: 1160, type: 'end' },
+  ],
+  edges: [
+    { from: 's', to: 'a1' }, { from: 'a1', to: 'a2', mode: 'hh' }, { from: 'a2', to: 'a3', mode: 'hh' },
+    { from: 'a3', to: 'd1' },
+    { from: 'd1', to: 'a4', mode: 'hh', label: 'không' }, { from: 'a4', to: 'x1' },
+    { from: 'd1', to: 'a5', label: 'có' }, { from: 'a5', to: 'd2' },
+    { from: 'd2', to: 'a6', mode: 'hh', label: 'có' }, { from: 'a6', to: 'd3' },
+    { from: 'd3', to: 'x2', mode: 'hh', label: 'không' },
+    { from: 'd2', to: 'm1', label: 'không' }, { from: 'd3', to: 'm1', mode: 'vh', label: 'có' },
+    { from: 'm1', to: 'a7' }, { from: 'a7', to: 'f1' },
+    { from: 'f1', to: 'a8' }, { from: 'f1', to: 'a9', ym: 920 },
+    { from: 'a9', to: 'a10', mode: 'hh' }, { from: 'a10', to: 'x3' },
+    { from: 'a8', to: 'a11' }, { from: 'a11', to: 'a12', mode: 'hh' }, { from: 'a12', to: 'x4' },
+  ],
+}
+));
+</script></body></html>

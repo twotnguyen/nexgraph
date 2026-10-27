@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>ERD dữ liệu cá nhân NexGraph</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600&display=swap");
+body{margin:0;background:#fff;font-family:"Be Vietnam Pro",sans-serif}
+.eb{fill:#fff;stroke:#1b2a3a;stroke-width:1.4}
+.eh{fill:#e8ecf1;stroke:#1b2a3a;stroke-width:1.4}
+.et{font-size:14px;font-weight:600;fill:#1b2a3a}
+.ea{font-size:12.5px;fill:#1b2a3a}
+.pk{text-decoration:underline;font-weight:600}
+.ab{fill:#fff;stroke:#1b2a3a;stroke-width:1.2}
+.an{font-size:12.5px;font-style:italic;fill:#1b2a3a}
+.l{stroke:#1b2a3a;stroke-width:1.1;fill:none}
+.c{font-size:12.5px;font-weight:600;fill:#1b2a3a}
+</style></head><body>
+<svg id="s" width="1100" height="700" viewBox="0 0 1100 700" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>
+const E=[
+ {id:'DU_AN_DA_MO',x:40,y:60,w:250,a:['*ma_du_an','duong_dan_tuyet_doi','ten','noi_luu','mo_lan_cuoi']},
+ {id:'KET_NOI_AI',x:40,y:440,w:250,a:['*ma_ket_noi','loai','ten_hien_thi','ten_agent','base_url','ten_model','muc_keychain','la_mac_dinh']},
+ {id:'PHIEN_CHAT',x:450,y:60,w:250,a:['*ma_phien','tieu_de','tao_luc','cap_nhat_luc']},
+ {id:'TIN_NHAN',x:860,y:60,w:230,a:['*ma_tin','thu_tu','vai_tro','noi_dung','tao_luc']},
+ {id:'TRICH_DAN',x:860,y:330,w:230,a:['*ma_trich_dan','duong_dan_tuong_doi','dong_bat_dau','dong_ket_thuc','trang_thai']},
+ {id:'DOAN_MA_DA_GUI',x:450,y:480,w:300,a:['*ma_doan','duong_dan_tuong_doi','dong_bat_dau','dong_ket_thuc','ma_bam']},
+];
+const A=[
+ {n:'có',x:370,y:122,l:[{e:'DU_AN_DA_MO',c:'(0,n)'},{e:'PHIEN_CHAT',c:'(1,1)'}]},
+ {n:'gồm',x:780,y:122,l:[{e:'PHIEN_CHAT',c:'(0,n)'},{e:'TIN_NHAN',c:'(1,1)'}]},
+ {n:'dẫn',x:975,y:267,l:[{e:'TIN_NHAN',c:'(0,n)'},{e:'TRICH_DAN',c:'(1,1)'}]},
+ {n:'gửi',x:760,y:340,l:[{e:'TIN_NHAN',c:'(0,n)'},{e:'DOAN_MA_DA_GUI',c:'(1,1)'}]},
+ {n:'dùng trong',x:440,y:330,l:[{e:'KET_NOI_AI',c:'(0,n)'},{e:'PHIEN_CHAT',c:'(0,1)'}]},
+ {n:'đồng ý với',x:165,y:320,props:['dong_y_luc'],l:[{e:'DU_AN_DA_MO',c:'(0,n)'},{e:'KET_NOI_AI',c:'(0,n)'}]},
+];
+</script>
+<script src="erd-render.js"></script>
+</body></html>

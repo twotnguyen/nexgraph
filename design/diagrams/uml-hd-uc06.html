@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Hoạt động UC06</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.activity({
+  w: 1100, h: 1280,
+  lanes: [{ id: 'u', label: 'Lập trình viên' }, { id: 'a', label: 'Ứng dụng' }, { id: 'e', label: 'Engine' }],
+  nodes: [
+    { id: 's', lane: 'u', y: 80, type: 'start' },
+    { id: 'a1', lane: 'u', y: 140, text: 'Sửa và lưu một hàm ở trình soạn thảo ngoài' },
+    { id: 'a2', lane: 'a', y: 140, text: 'Phát hiện tệp đổi, yêu cầu lập chỉ mục tăng dần' },
+    { id: 'a3', lane: 'e', y: 140, text: 'Phân tích lại tệp đổi (so mã băm), cập nhật đồ thị' },
+    { id: 'a4', lane: 'a', y: 260, text: 'Yêu cầu vùng ảnh hưởng (GET /changes)' },
+    { id: 'd1', lane: 'e', y: 380, type: 'dec', text: 'Dự án dùng Git?' },
+    { id: 'a5', lane: 'e', y: 500, dx: -85, w: 150, text: 'So với HEAD: lấy đoạn dòng bị sửa (chỉ đọc)' },
+    { id: 'a6', lane: 'e', y: 500, dx: 85, w: 150, text: 'So với lần lập chỉ mục trước (mã băm)' },
+    { id: 'm1', lane: 'e', y: 600, type: 'merge' },
+    { id: 'd2', lane: 'e', y: 700, type: 'dec', text: 'Có đoạn bị sửa?' },
+    { id: 'a12', lane: 'a', y: 700, text: 'Thông báo chưa có thay đổi' },
+    { id: 'x2', lane: 'a', y: 790, type: 'end' },
+    { id: 'a7', lane: 'e', y: 810, text: 'Ánh xạ đoạn dòng sang nút theo khoảng dòng' },
+    { id: 'a8', lane: 'e', y: 910, text: 'Lan truyền ngược theo trọng số cạnh, có suy giảm và giới hạn độ sâu' },
+    { id: 'a9', lane: 'e', y: 1020, text: 'Tìm ca kiểm thử liên quan, đánh dấu hàm chưa có kiểm thử' },
+    { id: 'a10', lane: 'a', y: 1130, text: 'Hiển thị vùng ảnh hưởng và test liên quan' },
+    { id: 'a11', lane: 'u', y: 1130, text: 'Xem kết quả, mở mã của hàm bị ảnh hưởng' },
+    { id: 'x1', lane: 'u', y: 1220, type: 'end' },
+  ],
+  edges: [
+    { from: 's', to: 'a1' }, { from: 'a1', to: 'a2', mode: 'hh' }, { from: 'a2', to: 'a3', mode: 'hh' },
+    { from: 'a3', to: 'a4', mode: 'vh' }, { from: 'a4', to: 'd1', ym: 320 },
+    { from: 'd1', to: 'a5', mode: 'h', side: 'left', label: 'có' }, { from: 'd1', to: 'a6', mode: 'h', side: 'right', label: 'không' },
+    { from: 'a5', to: 'm1', mode: 'vh' }, { from: 'a6', to: 'm1', mode: 'vh' },
+    { from: 'm1', to: 'd2' },
+    { from: 'd2', to: 'a12', mode: 'hh', label: 'không' }, { from: 'a12', to: 'x2' },
+    { from: 'd2', to: 'a7', label: 'có' }, { from: 'a7', to: 'a8' }, { from: 'a8', to: 'a9' },
+    { from: 'a9', to: 'a10', mode: 'vh' }, { from: 'a10', to: 'a11', mode: 'hh' }, { from: 'a11', to: 'x1' },
+  ],
+}
+));
+</script></body></html>

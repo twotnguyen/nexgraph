@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Tuần tự UC08</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.sequence({
+  w: 1000, mx: 85,
+  parts: [
+    { id: 'u', label: 'Lập trình viên', actor: true },
+    { id: 'ui', label: 'Giao diện' },
+    { id: 'm', label: 'Tiến trình\nchính' },
+    { id: 'kc', label: 'Kho khóa\nhệ điều hành' },
+    { id: 'adb', label: 'CSDL cá nhân\n(app.db)' },
+    { id: 'ai', label: 'Trợ lý AI /\ndịch vụ AI' },
+  ],
+  steps: [
+    { t: 'msg', from: 'u', to: 'ui', text: 'nhập thông tin kết nối' },
+    { t: 'msg', from: 'ui', to: 'm', text: 'saveConnection(thông tin)' },
+    { t: 'frag', kind: 'opt', cond: 'loại api_key', steps: [
+      { t: 'msg', from: 'm', to: 'kc', text: 'lưu khóa API' },
+      { t: 'msg', from: 'kc', to: 'm', kind: 'ret', text: 'tên mục' },
+    ] },
+    { t: 'msg', from: 'm', to: 'adb', text: 'ghi kết nối\n(chỉ tên mục kho khóa)' },
+    { t: 'msg', from: 'm', to: 'ai', text: 'kiểm tra kết nối\n(ACP initialize / GET /models)' },
+    { t: 'frag', kind: 'alt', cond: 'thành công', steps: [
+      { t: 'msg', from: 'ai', to: 'm', kind: 'ret', text: 'phiên bản, danh sách mô hình' },
+      { t: 'msg', from: 'm', to: 'ui', kind: 'ret', text: 'kết nối hoạt động' },
+    ], else: [{ cond: 'thất bại', steps: [
+      { t: 'msg', from: 'ai', to: 'm', kind: 'ret', text: 'lỗi' },
+      { t: 'msg', from: 'm', to: 'ui', kind: 'ret', text: 'báo lỗi và gợi ý;\nkết nối đã lưu vẫn giữ' },
+    ] }] },
+    { t: 'msg', from: 'ui', to: 'u', kind: 'ret', text: 'hiển thị kết quả kiểm tra' },
+  ],
+}
+));
+</script></body></html>

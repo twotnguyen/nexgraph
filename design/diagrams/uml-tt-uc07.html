@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Tuần tự UC07</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.sequence({
+  w: 1100, mx: 85,
+  parts: [
+    { id: 'u', label: 'Lập trình viên', actor: true },
+    { id: 'ui', label: 'Giao diện' },
+    { id: 'm', label: 'Tiến trình\nchính' },
+    { id: 'ai', label: 'Trợ lý AI\n(ACP hoặc\nkhóa API)' },
+    { id: 'e', label: 'Engine\n(MCP, HTTP)' },
+    { id: 'adb', label: 'CSDL cá nhân\n(app.db)' },
+  ],
+  steps: [
+    { t: 'msg', from: 'u', to: 'ui', text: 'nhập câu hỏi' },
+    { t: 'msg', from: 'ui', to: 'm', text: 'ask(câu hỏi, dự án)' },
+    { t: 'msg', from: 'm', to: 'adb', text: 'kiểm tra kết nối\nvà đồng ý gửi dữ liệu' },
+    { t: 'frag', kind: 'opt', cond: 'chưa đồng ý với kết nối này', steps: [
+      { t: 'msg', from: 'm', to: 'ui', text: 'yêu cầu xác nhận' },
+      { t: 'msg', from: 'ui', to: 'u', kind: 'ret', text: 'mã nguồn sẽ gửi tới kết nối nào?' },
+      { t: 'msg', from: 'u', to: 'ui', text: 'đồng ý (từ chối thì dừng)' },
+      { t: 'msg', from: 'ui', to: 'm', text: 'đã đồng ý' },
+      { t: 'msg', from: 'm', to: 'adb', text: 'ghi đồng ý' },
+    ] },
+    { t: 'frag', kind: 'alt', cond: 'kết nối ACP', steps: [
+      { t: 'msg', from: 'm', to: 'ai', text: 'chạy trợ lý cục bộ (chỉ đọc),\nsession/prompt + MCP của NexGraph' },
+    ], else: [{ cond: 'khóa API', steps: [
+      { t: 'msg', from: 'm', to: 'ai', text: 'HTTPS chat + định nghĩa công cụ' },
+    ] }] },
+    { t: 'frag', kind: 'loop', cond: 'tra cứu đồ thị', steps: [
+      { t: 'msg', from: 'ai', to: 'e', text: 'gọi công cụ: search, get_neighbors,\nread_code, trace_flow…' },
+      { t: 'msg', from: 'e', to: 'ai', kind: 'ret', text: 'kết quả (có giới hạn)' },
+    ] },
+    { t: 'frag', kind: 'opt', cond: 'trợ lý xin ghi tệp hoặc chạy lệnh', steps: [
+      { t: 'msg', from: 'ai', to: 'm', text: 'yêu cầu quyền' },
+      { t: 'msg', from: 'm', to: 'ai', kind: 'ret', text: 'từ chối' },
+    ] },
+    { t: 'note', over: ['ai', 'e'], text: 'Với khóa API, tiến trình chính chạy vòng gọi công cụ và gọi engine hộ trợ lý.' },
+    { t: 'msg', from: 'ai', to: 'm', kind: 'ret', text: 'câu trả lời kèm trích dẫn\npath:dòng đầu–dòng cuối' },
+    { t: 'frag', kind: 'loop', cond: 'mỗi trích dẫn', steps: [
+      { t: 'msg', from: 'm', to: 'e', text: 'GET /code (tệp có tồn tại,\nkhoảng dòng hợp lệ?)' },
+      { t: 'msg', from: 'e', to: 'm', kind: 'ret', text: 'hợp lệ / không' },
+    ] },
+    { t: 'msg', from: 'm', to: 'e', text: 'POST /paths {node_ids}\n(chỉ qua cạnh thật)' },
+    { t: 'msg', from: 'e', to: 'm', kind: 'ret', text: '{nodes, edges, unconnected}' },
+    { t: 'msg', from: 'm', to: 'adb', text: 'lưu phiên, tin nhắn, trích dẫn,\nđoạn mã đã gửi' },
+    { t: 'msg', from: 'm', to: 'ui', kind: 'ret', text: 'câu trả lời, chip trích dẫn,\nđường tô sáng' },
+    { t: 'msg', from: 'ui', to: 'u', kind: 'ret', text: 'hiển thị' },
+  ],
+}
+));
+</script></body></html>

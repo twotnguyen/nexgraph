@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>ERD đồ thị NexGraph</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600&display=swap");
+body{margin:0;background:#fff;font-family:"Be Vietnam Pro",sans-serif}
+.eb{fill:#fff;stroke:#1b2a3a;stroke-width:1.4}
+.eh{fill:#e8ecf1;stroke:#1b2a3a;stroke-width:1.4}
+.et{font-size:14px;font-weight:600;fill:#1b2a3a}
+.ea{font-size:12.5px;fill:#1b2a3a}
+.pk{text-decoration:underline;font-weight:600}
+.ab{fill:#fff;stroke:#1b2a3a;stroke-width:1.2}
+.an{font-size:12.5px;font-style:italic;fill:#1b2a3a}
+.l{stroke:#1b2a3a;stroke-width:1.1;fill:none}
+.c{font-size:12.5px;font-weight:600;fill:#1b2a3a}
+</style></head><body>
+<svg id="s" width="1100" height="1020" viewBox="0 0 1100 1020" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>
+const E=[
+ {id:'DU_AN',x:30,y:40,w:200,a:['*ma_du_an','ten','co_git','phien_ban_schema','tao_luc']},
+ {id:'LAN_LAP_CHI_MUC',x:380,y:40,w:270,a:['*ma_lan','loai','trang_thai','bat_dau_luc','ket_thuc_luc','commit_sha']},
+ {id:'TEP',x:810,y:40,w:270,a:['*ma_tep','duong_dan_tuong_doi','ngon_ngu','ma_bam','la_kiem_thu','la_tep_sinh_tu_dong']},
+ {id:'LOI_PHAN_TICH',x:810,y:330,w:270,a:['*ma_loi','loai','chi_tiet']},
+ {id:'KHOI_KIEN_TRUC',x:10,y:420,w:170,a:['*ma_khoi','ten','do_gan_ket','nguon_mo_ta']},
+ {id:'NUT',x:370,y:420,w:290,a:['*ma_nut','id_nut','loai_nut','nhan','ten_day_du','dong_bat_dau','dong_ket_thuc','nguon_goc','chu_ky']},
+ {id:'THAM_CHIEU_CHUA_PHAN_GIAI',x:840,y:560,w:250,a:['*ma_tc','ten_tham_chieu','loai_tham_chieu','dong','cot','trang_thai']},
+ {id:'CANH',x:370,y:770,w:290,a:['*ma_canh','loai_canh','loai_con','muc_tin_cay','diem_tin_cay','nguon_goc','dong_bang_chung','cot_bang_chung']},
+];
+const A=[
+ {n:'có',x:305,y:110,l:[{e:'DU_AN',c:'(0,n)'},{e:'LAN_LAP_CHI_MUC',c:'(1,1)'}]},
+ {n:'xử lý',x:730,y:110,l:[{e:'LAN_LAP_CHI_MUC',c:'(0,n)'},{e:'TEP',c:'(1,1)'}]},
+ {n:'gặp',x:945,y:267,l:[{e:'TEP',c:'(0,n)'},{e:'LOI_PHAN_TICH',c:'(1,1)'}]},
+ {n:'chứa',x:720,y:320,l:[{e:'TEP',c:'(0,n)'},{e:'NUT',c:'(0,1)'}]},
+ {n:'gồm',x:275,y:480,l:[{e:'KHOI_KIEN_TRUC',c:'(0,n)'},{e:'NUT',c:'(0,1)'}]},
+ {n:'có cha',x:95,y:345,l:[{e:'KHOI_KIEN_TRUC',c:'con (0,1)',p:[40,420],d:[0,-1]},{e:'KHOI_KIEN_TRUC',c:'cha (0,n)',p:[140,420],d:[0,-1]}]},
+ {n:'xuất phát',x:750,y:585,l:[{e:'NUT',c:'(0,n)'},{e:'THAM_CHIEU_CHUA_PHAN_GIAI',c:'(1,1)'}]},
+ {n:'là nguồn của',x:430,y:710,l:[{e:'NUT',c:'(0,n)'},{e:'CANH',c:'(1,1)'}]},
+ {n:'là đích của',x:610,y:710,l:[{e:'NUT',c:'(0,n)'},{e:'CANH',c:'(1,1)'}]},
+];
+</script>
+<script src="erd-render.js"></script>
+</body></html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Tuần tự UC01</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.sequence({
+  w: 1100,
+  parts: [
+    { id: 'u', label: 'Lập trình viên', actor: true },
+    { id: 'ui', label: 'Giao diện\n(Renderer)' },
+    { id: 'm', label: 'Tiến trình\nchính' },
+    { id: 'e', label: 'Engine' },
+    { id: 'db', label: 'graph.db\n(.nexgraph/)' },
+    { id: 'fs', label: 'Thư mục\ndự án' },
+  ],
+  steps: [
+    { t: 'msg', from: 'u', to: 'ui', text: 'chọn "Mở thư mục"' },
+    { t: 'msg', from: 'ui', to: 'm', text: 'openProject(đường dẫn)' },
+    { t: 'msg', from: 'm', to: 'e', text: 'POST /v1/projects {path}' },
+    { t: 'msg', from: 'e', to: 'fs', text: 'kiểm tra thư mục, đọc .gitignore,\nnhận biết Git' },
+    { t: 'frag', kind: 'alt', cond: 'thư mục dự án ghi được', steps: [
+      { t: 'msg', from: 'e', to: 'db', text: 'tạo .nexgraph/, .nexgraph/.gitignore ("*"), graph.db' },
+    ], else: [{ cond: 'không ghi được', steps: [
+      { t: 'msg', from: 'e', to: 'db', text: 'tạo graph.db trong thư mục dữ liệu của ứng dụng' },
+    ] }] },
+    { t: 'msg', from: 'e', to: 'm', kind: 'ret', text: '{project_id, path, is_git}' },
+    { t: 'msg', from: 'm', to: 'e', text: 'POST /v1/projects/{pid}/index' },
+    { t: 'msg', from: 'e', to: 'm', kind: 'ret', text: '{job_id}' },
+    { t: 'frag', kind: 'loop', cond: 'giai đoạn 1: mỗi tệp', steps: [
+      { t: 'msg', from: 'e', to: 'fs', text: 'đọc tệp (chỉ đọc)' },
+      { t: 'msg', from: 'e', to: 'db', text: 'ghi tệp, nút, cạnh cấu trúc' },
+    ] },
+    { t: 'msg', from: 'e', to: 'm', kind: 'async', text: 'SSE job_progress (structure)' },
+    { t: 'msg', from: 'm', to: 'ui', kind: 'async', text: 'tiến độ' },
+    { t: 'note', over: ['ui', 'u'], text: 'Sau giai đoạn 1 người dùng đã khám phá được.' },
+    { t: 'self', at: 'e', text: 'giai đoạn 2 (nền): phân giải lời gọi,\nđiều hướng, kiểm thử, gom cộng đồng' },
+    { t: 'msg', from: 'e', to: 'db', text: 'ghi cạnh suy luận, khối kiến trúc' },
+    { t: 'msg', from: 'e', to: 'm', kind: 'async', text: 'SSE graph_updated' },
+    { t: 'msg', from: 'm', to: 'ui', kind: 'async', text: 'làm mới' },
+    { t: 'msg', from: 'ui', to: 'u', kind: 'ret', text: 'hiển thị bản đồ kiến trúc' },
+    { t: 'frag', kind: 'opt', cond: 'người dùng hủy', steps: [
+      { t: 'msg', from: 'ui', to: 'm', text: 'hủy' },
+      { t: 'msg', from: 'm', to: 'e', text: 'DELETE /v1/jobs/{id}' },
+    ] },
+  ],
+}));
+</script></body></html>

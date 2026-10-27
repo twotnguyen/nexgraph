@@ -1,0 +1,19 @@
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600&display=swap");
+body{margin:0;background:#fff;font-family:"Be Vietnam Pro",sans-serif}
+svg{display:block}
+.k{stroke:#1b2a3a;stroke-width:1.3;fill:none}
+.kd{stroke:#1b2a3a;stroke-width:1.2;fill:none;stroke-dasharray:6 4}
+.kl{stroke:#9aa5b4;stroke-width:1;fill:none;stroke-dasharray:5 5}
+.bx{fill:#fff;stroke:#1b2a3a;stroke-width:1.4}
+.hd{fill:#e8ecf1;stroke:#1b2a3a;stroke-width:1.4}
+.ln{fill:#f6f7f9;stroke:#1b2a3a;stroke-width:1.2}
+.nt{fill:#fbf7e6;stroke:#1b2a3a;stroke-width:1}
+.fr{fill:none;stroke:#1b2a3a;stroke-width:1.2}
+.fl{fill:#e8ecf1;stroke:#1b2a3a;stroke-width:1.2}
+.bk{fill:#1b2a3a;stroke:#1b2a3a;stroke-width:1.2}
+.t1{font-size:14px;font-weight:600;fill:#1b2a3a}
+.t2{font-size:12.5px;fill:#1b2a3a}
+.t3{font-size:12px;fill:#3d4b5c}
+.ti{font-size:12px;font-style:italic;fill:#1b2a3a}
+.tb{font-size:12px;font-weight:600;fill:#1b2a3a}
+.halo{stroke:#fff;stroke-width:4;paint-order:stroke}

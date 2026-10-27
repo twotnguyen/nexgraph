@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NexGraph — Dự án</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+  .win { height: 100vh; display: flex; flex-direction: column; }
+  main { flex: 1; display: grid; grid-template-columns: minmax(420px, 1fr) 380px; gap: 0; background: var(--surface); }
+  .left { padding: 48px 56px; overflow: auto; }
+  h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 6px; }
+  .lead { color: var(--muted); margin: 0 0 28px; font-size: 14px; max-width: 60ch; }
+  .actions { display: flex; gap: 10px; margin-bottom: 36px; }
+  .actions .btn { padding: 10px 18px; font-size: 14px; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .list { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 1fr auto; gap: 16px; padding: 14px 18px; border-top: 1px solid var(--line); align-items: center; }
+  .row:first-child { border-top: 0; }
+  .row:hover { background: var(--panel); }
+  .row .name { font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .row .path { color: var(--muted); font-family: var(--mono); font-size: 11.5px; margin-top: 3px; }
+  .row .meta { display: flex; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+  .row .when { text-align: right; color: var(--muted); font-size: 12px; }
+  .right { background: var(--panel); border-left: 1px solid var(--line); padding: 48px 32px; }
+  .drop { border: 1.5px dashed #a9b6c6; border-radius: 10px; padding: 28px 22px; text-align: center; color: var(--muted); background: var(--surface); }
+  .drop strong { display: block; color: var(--ink); font-size: 14px; margin: 10px 0 4px; }
+  .steps { margin: 28px 0 0; padding: 0; list-style: none; counter-reset: s; }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 10px; margin-bottom: 16px; line-height: 1.5; }
+  .steps li::before { content: counter(s); width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 600; display: grid; place-items: center; font-size: 12px; }
+  .note { margin-top: 24px; font-size: 12px; color: var(--muted); line-height: 1.55; border-top: 1px solid var(--line); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="win">
+  <div class="titlebar"><div class="lights"><i></i><i></i><i></i></div><div class="title">NexGraph</div><div style="width:50px"></div></div>
+  <main>
+    <section class="left">
+      <span class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="#1f5fbf" stroke-width="2"><circle cx="5" cy="6" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M7.2 7.2 10.6 16M16.8 7.2 13.4 16M7.5 6h9"/></svg>NexGraph</span>
+      <h1 style="margin-top:18px">Hiểu một dự án lạ trong vài phút</h1>
+      <p class="lead">Chọn thư mục mã nguồn trên máy. NexGraph dựng bản đồ các thành phần và quan hệ giữa chúng, mọi thứ chạy ngay trên máy của bạn.</p>
+      <div class="actions">
+        <button class="btn primary" onclick="location.href='indexing.html'">Mở thư mục…</button>
+        <button class="btn">Mở lại dự án gần nhất</button>
+      </div>
+      <h2>Dự án gần đây</h2>
+      <div class="list">
+        <div class="row" onclick="location.href='workspace.html'">
+          <div><div class="name">bookstore_app <span class="pill flutter">Flutter</span></div>
+            <div class="path">D:\Do an\mobile\bookstore_app</div>
+            <div class="meta"><span class="pill">128 file Dart</span><span class="pill">412 node</span><span class="pill ok">Đã cập nhật</span></div></div>
+          <div class="when">Hôm nay, 09:42<br>commit a1b2c3d</div>
+        </div>
+        <div class="row">
+          <div><div class="name">weather_now <span class="pill flutter">Flutter</span></div>
+            <div class="path">D:\Do an\mobile\weather_now</div>
+            <div class="meta"><span class="pill">57 file Dart</span><span class="pill">188 node</span><span class="pill warn">Có 6 file thay đổi từ lần index trước</span></div></div>
+          <div class="when">Hôm qua<br>commit 9f04e1b</div>
+        </div>
+        <div class="row">
+          <div><div class="name">quan-ly-thu-vien <span class="pill">Python</span></div>
+            <div class="path">D:\Do an\python\quan-ly-thu-vien</div>
+            <div class="meta"><span class="pill">43 file Python</span><span class="pill">236 node</span><span class="pill">Không phải Git repo</span></div></div>
+          <div class="when">12/10/2026</div>
+        </div>
+      </div>
+    </section>
+    <aside class="right">
+      <div class="drop">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#5b6b7d" stroke-width="1.6"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></svg>
+        <strong>Kéo thư mục dự án vào đây</strong>
+        hoặc dùng nút Mở thư mục
+      </div>
+      <ol class="steps">
+        <li><span><b>Mở thư mục</b> chứa mã nguồn, ví dụ một project Flutter.</span></li>
+        <li><span><b>Chờ index</b>. Sau pha cấu trúc là đã xem được bản đồ.</span></li>
+        <li><span><b>Khám phá</b> kiến trúc, tìm kiếm, hoặc hỏi AI về luồng xử lý.</span></li>
+      </ol>
+      <p class="note">NexGraph không ghi gì vào thư mục dự án của bạn. Dữ liệu index được lưu trong thư mục riêng của ứng dụng.</p>
+    </aside>
+  </main>
+</div>
+</body>
+</html>

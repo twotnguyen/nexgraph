@@ -234,6 +234,7 @@ Học từ gitdiagram và diagram-design (06, 07):
   - Lớp 1: khi spawn `opencode acp`, truyền config qua biến môi trường `OPENCODE_CONFIG_CONTENT` (có trong binary OpenCode v2.0.32 trên máy nhóm). Config này định nghĩa một agent cấm `edit`/`write`/`bash`. File config của người dùng không bị sửa.
   - Lớp 2: từ chối mọi yêu cầu ghi/chạy lệnh đến qua ACP.
   - **Spike ở tuần 2** để xác minh thứ tự ưu tiên khi gộp config của OpenCode. Nếu không đảm bảo được chỉ đọc: OpenCode được ghi rõ là "chế độ hạn chế yếu" trong UI, và **adapter B trở thành đường chính** cho F5.
+  - **Kết quả spike (2026-10-27): không đảm bảo được.** Xem ADR 0004 và `docs/spikes/2026-10-acp-opencode-readonly.md`; OpenCode ở "chế độ hạn chế yếu", adapter B là đường chính, ghim OpenCode 2.1.4.
 - Provider/model (gồm cả provider tuỳ chỉnh như 9router) do người dùng cấu hình trong OpenCode. NexGraph không quản lý.
 
 **Adapter B: API key tương thích OpenAI**

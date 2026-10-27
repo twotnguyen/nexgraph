@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Lớp thực thể</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.classes({
+  w: 1200, h: 1270,
+  groups: [
+    { x: 10, y: 15, w: 1180, h: 740, label: 'CSDL đồ thị (.nexgraph/graph.db)' },
+    { x: 10, y: 780, w: 1180, h: 470, label: 'CSDL cá nhân (thư mục dữ liệu của ứng dụng)' },
+  ],
+  classes: [
+    { id: 'da', x: 30, y: 70, w: 200, name: 'DuAn', attrs: ['ma_du_an : char(36)', 'ten : string', 'co_git : bool', 'phien_ban_schema : int'] },
+    { id: 'lan', x: 310, y: 70, w: 230, name: 'LanLapChiMuc', attrs: ['ma_lan : int', 'loai : string', 'trang_thai : string', 'bat_dau_luc : datetime', 'ket_thuc_luc : datetime [0..1]'] },
+    { id: 'tep', x: 620, y: 70, w: 260, name: 'Tep', attrs: ['ma_tep : int', 'duong_dan_tuong_doi : string', 'ngon_ngu : string', 'ma_bam : char(64)', 'la_kiem_thu : bool'] },
+    { id: 'loi', x: 950, y: 70, w: 220, name: 'LoiPhanTich', attrs: ['ma_loi : int', 'loai : string', 'chi_tiet : string [0..1]'] },
+    { id: 'khoi', x: 30, y: 300, w: 200, name: 'KhoiKienTruc', attrs: ['ma_khoi : int', 'ten : string', 'do_gan_ket : float [0..1]', 'nguon_mo_ta : string [0..1]'] },
+    { id: 'nut', x: 360, y: 300, w: 270, name: 'Nut', attrs: ['ma_nut : int', 'id_nut : string', 'loai_nut : string', 'nhan : string', 'ten_day_du : string', 'dong_bat_dau : int [0..1]', 'dong_ket_thuc : int [0..1]', 'nguon_goc : string'] },
+    { id: 'tc', x: 880, y: 300, w: 270, name: 'ThamChieuChuaPhanGiai', attrs: ['ma_tc : int', 'ten_tham_chieu : string', 'loai_tham_chieu : string', 'dong : int', 'cot : int', 'trang_thai : string'] },
+    { id: 'canh', x: 360, y: 560, w: 270, name: 'Canh', attrs: ['ma_canh : int', 'loai_canh : string', 'muc_tin_cay : string', 'diem_tin_cay : float', 'dong_bang_chung : int [0..1]', 'cot_bang_chung : int [0..1]'] },
+
+    { id: 'kn', x: 30, y: 840, w: 240, name: 'KetNoiAi', attrs: ['ma_ket_noi : int', 'loai : string', 'ten_hien_thi : string', 'ten_agent : string [0..1]', 'base_url : string [0..1]', 'ten_model : string [0..1]', 'muc_keychain : string [0..1]', 'la_mac_dinh : bool'] },
+    { id: 'pc', x: 360, y: 840, w: 240, name: 'PhienChat', attrs: ['ma_phien : int', 'tieu_de : string', 'tao_luc : datetime', 'cap_nhat_luc : datetime'] },
+    { id: 'tn', x: 700, y: 840, w: 220, name: 'TinNhan', attrs: ['ma_tin : int', 'thu_tu : int', 'vai_tro : string', 'noi_dung : text', 'tao_luc : datetime'] },
+    { id: 'td', x: 970, y: 840, w: 200, name: 'TrichDan', attrs: ['ma_trich_dan : int', 'duong_dan_tuong_doi : string', 'dong_bat_dau : int', 'dong_ket_thuc : int', 'trang_thai : string'] },
+    { id: 'dm', x: 30, y: 1110, w: 240, name: 'DuAnDaMo', attrs: ['ma_du_an : char(36)', 'duong_dan_tuyet_doi : string', 'ten : string', 'noi_luu : string', 'mo_lan_cuoi : datetime'] },
+    { id: 'dy', x: 350, y: 1030, w: 200, name: 'DongYGuiDuLieu', attrs: ['dong_y_luc : datetime'] },
+    { id: 'dg', x: 700, y: 1060, w: 250, name: 'DoanMaDaGui', attrs: ['ma_doan : int', 'duong_dan_tuong_doi : string', 'dong_bat_dau : int', 'dong_ket_thuc : int', 'ma_bam : char(64)'] },
+  ],
+  rels: [
+    { from: 'da', to: 'lan', type: 'assoc', m1: '1', m2: '0..*' },
+    { from: 'lan', to: 'tep', type: 'assoc', m1: '1', m2: '0..*' },
+    { from: 'tep', to: 'loi', type: 'comp', m1: '1', m2: '0..*' },
+    { from: 'tep', to: 'nut', type: 'comp', m1: '0..1', m2: '0..*' },
+    { from: 'khoi', to: 'nut', type: 'assoc', m1: '0..1', m2: '0..*' },
+    { from: 'khoi', to: 'khoi', type: 'assoc', via: [[70, 258], [190, 258]], m1: 'con 0..1', m2: 'cha 0..*', label: 'có cha', ly: -4 },
+    { from: 'nut', to: 'canh', type: 'assoc', fa: [410, 470], ta: [410, 560], m1: '1', m2: '0..*', label: 'nguồn', lx: -30 },
+    { from: 'nut', to: 'canh', type: 'assoc', fa: [580, 470], ta: [580, 560], m1: '1', m2: '0..*', label: 'đích', lx: 28 },
+    { from: 'nut', to: 'tc', type: 'assoc', m1: '1', m2: '0..*' },
+
+    { from: 'kn', to: 'pc', type: 'assoc', m1: '0..1', m2: '0..*' },
+    { from: 'dm', to: 'pc', type: 'assoc', m1: '1', m2: '0..*' },
+    { from: 'pc', to: 'tn', type: 'comp', m1: '1', m2: '0..*' },
+    { from: 'tn', to: 'td', type: 'comp', m1: '1', m2: '0..*' },
+    { from: 'tn', to: 'dg', type: 'comp', m1: '1', m2: '0..*' },
+    { from: 'dm', to: 'kn', type: 'assoc', fa: [150, 1110], ta: [150, 1010], m1: '0..*', m2: '0..*', label: 'đồng ý', lx: 52, ly: 30 },
+    { from: 'dy', to: 'dy', type: 'dash', fa: [350, 1075], ta: [150, 1060] },
+  ],
+}
+));
+</script></body></html>

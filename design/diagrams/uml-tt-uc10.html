@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Tuần tự UC10</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.sequence({
+  w: 900, mx: 100,
+  parts: [
+    { id: 'ag', label: 'Trợ lý AI\nbên ngoài' },
+    { id: 'e', label: 'Engine\n(nexgraph-engine mcp)' },
+    { id: 'db', label: 'graph.db\n(chỉ đọc)' },
+    { id: 'fs', label: 'Thư mục\ndự án' },
+  ],
+  steps: [
+    { t: 'msg', from: 'ag', to: 'e', text: 'chạy mcp --project <đường dẫn>\n(đầu vào/đầu ra chuẩn)' },
+    { t: 'msg', from: 'e', to: 'db', text: 'mở chế độ chỉ đọc (WAL)' },
+    { t: 'msg', from: 'ag', to: 'e', text: 'initialize, tools/list' },
+    { t: 'msg', from: 'e', to: 'ag', kind: 'ret', text: '7 công cụ chỉ đọc' },
+    { t: 'frag', kind: 'alt', cond: 'dự án đã lập chỉ mục', steps: [
+      { t: 'msg', from: 'ag', to: 'e', text: 'tools/call search {q}' },
+      { t: 'msg', from: 'e', to: 'db', text: 'truy vấn FTS5' },
+      { t: 'msg', from: 'db', to: 'e', kind: 'ret', text: 'các nút' },
+      { t: 'msg', from: 'e', to: 'ag', kind: 'ret', text: 'kết quả, cờ truncated' },
+      { t: 'msg', from: 'ag', to: 'e', text: 'tools/call read_code\n{file, start, end}' },
+      { t: 'msg', from: 'e', to: 'fs', text: 'đọc đoạn mã (chỉ đọc)' },
+      { t: 'msg', from: 'e', to: 'ag', kind: 'ret', text: 'đoạn mã' },
+    ], else: [{ cond: 'chưa lập chỉ mục', steps: [
+      { t: 'msg', from: 'e', to: 'ag', kind: 'ret', text: 'phản hồi thành công kèm\nhướng dẫn lập chỉ mục' },
+    ] }] },
+    { t: 'note', over: ['ag', 'e'], text: 'Không có công cụ ghi; đường dẫn ngoài dự án bị từ chối.' },
+  ],
+}
+));
+</script></body></html>

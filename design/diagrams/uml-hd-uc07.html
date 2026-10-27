@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Hoạt động UC07</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.activity({
+  w: 1200, h: 1520,
+  lanes: [{ id: 'u', label: 'Lập trình viên' }, { id: 'a', label: 'Ứng dụng' }, { id: 'i', label: 'Trợ lý AI' }],
+  nodes: [
+    { id: 's', lane: 'u', y: 80, type: 'start' },
+    { id: 'a1', lane: 'u', y: 140, text: 'Nhập câu hỏi về dự án' },
+    { id: 'd1', lane: 'a', y: 250, type: 'dec', text: 'Có kết nối AI?' },
+    { id: 'a3', lane: 'a', y: 345, dx: -125, w: 135, text: 'Hiển thị hướng dẫn cấu hình (UC08)' },
+    { id: 'x1', lane: 'a', y: 440, dx: -125, type: 'end' },
+    { id: 'd2', lane: 'a', y: 500, type: 'dec', text: 'Đã đồng ý gửi dữ liệu?' },
+    { id: 'a4', lane: 'u', y: 500, text: 'Đọc thông báo: mã nguồn sẽ gửi tới kết nối nào' },
+    { id: 'd3', lane: 'u', y: 610, type: 'dec', text: 'Đồng ý?' },
+    { id: 'x2', lane: 'u', y: 700, type: 'end' },
+    { id: 'm1', lane: 'a', y: 700, type: 'merge' },
+    { id: 'a6', lane: 'a', y: 790, text: 'Gửi câu hỏi và bộ công cụ tra cứu đồ thị tới trợ lý' },
+    { id: 'a7', lane: 'i', y: 790, text: 'Tra cứu đồ thị bằng công cụ; yêu cầu ghi hoặc chạy lệnh bị từ chối' },
+    { id: 'a8', lane: 'i', y: 905, text: 'Soạn câu trả lời kèm trích dẫn path:dòng–dòng' },
+    { id: 'a9', lane: 'a', y: 905, text: 'Kiểm tra từng trích dẫn: tệp tồn tại, khoảng dòng hợp lệ' },
+    { id: 'd4', lane: 'a', y: 1015, type: 'dec', text: 'Trích dẫn hợp lệ?' },
+    { id: 'a11', lane: 'a', y: 1115, dx: -125, w: 135, text: 'Gạch bỏ, gắn nhãn "chưa xác minh"' },
+    { id: 'a10', lane: 'a', y: 1115, dx: 125, w: 135, text: 'Hiển thị chip trích dẫn chọn được' },
+    { id: 'm2', lane: 'a', y: 1200, type: 'merge' },
+    { id: 'a12', lane: 'a', y: 1275, text: 'Tìm đường nối các nút chỉ qua cạnh thật, tô sáng trên đồ thị' },
+    { id: 'a14', lane: 'a', y: 1370, text: 'Lưu phiên, tin nhắn, trích dẫn, đoạn mã đã gửi' },
+    { id: 'a13', lane: 'u', y: 1370, text: 'Xem câu trả lời, mở mã đúng dòng' },
+    { id: 'x3', lane: 'u', y: 1460, type: 'end' },
+  ],
+  edges: [
+    { from: 's', to: 'a1' }, { from: 'a1', to: 'd1' },
+    { from: 'd1', to: 'a3', mode: 'h', side: 'left', label: 'không' }, { from: 'a3', to: 'x1' },
+    { from: 'd1', to: 'd2', label: 'có' },
+    { from: 'd2', to: 'a4', mode: 'hh', label: 'chưa' }, { from: 'a4', to: 'd3' },
+    { from: 'd3', to: 'x2', label: 'không (dừng)' },
+    { from: 'd3', to: 'm1', mode: 'h', side: 'right', label: 'có (ghi nhận)' },
+    { from: 'd2', to: 'm1', label: 'rồi' },
+    { from: 'm1', to: 'a6' }, { from: 'a6', to: 'a7', mode: 'hh' }, { from: 'a7', to: 'a8' },
+    { from: 'a8', to: 'a9', mode: 'hh' }, { from: 'a9', to: 'd4' },
+    { from: 'd4', to: 'a11', mode: 'h', side: 'left', label: 'không' }, { from: 'd4', to: 'a10', mode: 'h', side: 'right', label: 'có' },
+    { from: 'a11', to: 'm2', mode: 'vh' }, { from: 'a10', to: 'm2', mode: 'vh' },
+    { from: 'm2', to: 'a12' }, { from: 'a12', to: 'a14' }, { from: 'a14', to: 'a13', mode: 'hh' }, { from: 'a13', to: 'x3' },
+  ],
+}
+));
+</script></body></html>

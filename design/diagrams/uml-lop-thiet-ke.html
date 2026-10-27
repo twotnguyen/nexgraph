@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Lớp thiết kế</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.classes({
+  w: 1200, h: 1290,
+  groups: [
+    { x: 10, y: 15, w: 1180, h: 690, label: 'Engine (Python, sidecar)' },
+    { x: 10, y: 730, w: 1180, h: 540, label: 'Tiến trình chính (Electron, Node)' },
+  ],
+  classes: [
+    { id: 'mcp', x: 40, y: 60, w: 210, name: 'McpServer', ops: ['tools() : Tool[]', 'serveStdio(project) : void'] },
+    { id: 'api', x: 40, y: 190, w: 210, name: 'ApiServer', ops: ['serve(port, token) : void', 'routes /v1/* : Response'] },
+    { id: 'job', x: 40, y: 340, w: 210, name: 'IndexJob', attrs: ['state : string', 'files_done : int', 'files_total : int'], ops: ['run() : void', 'cancel() : void'] },
+    { id: 'gqs', x: 340, y: 130, w: 260, name: 'GraphQueryService', stereo: 'facade', ops: ['search(q, kinds)', 'neighbors(node, types, depth)', 'impact(changes)', 'architecture(parent)', 'paths(nodeIds, maxHops)', 'tour()'] },
+    { id: 'gs', x: 340, y: 380, w: 260, name: 'GraphStore', ops: ['writeFile(file, nodes, edges)', 'neighbors(node, types, depth)', 'search(q)', 'openReadOnly()'] },
+    { id: 'imp', x: 700, y: 50, w: 230, name: 'ImpactAnalyzer', ops: ['mapHunks(diff) : Node[]', 'propagate(nodes) : Score[]', 'relatedTests(nodes) : Test[]'] },
+    { id: 'pf', x: 700, y: 170, w: 230, name: 'PathFinder', ops: ['findPaths(nodeIds, maxHops)'] },
+    { id: 'ab', x: 700, y: 270, w: 230, name: 'ArchitectureBuilder', ops: ['blocks(parent) : Block[]', 'evidence(from, to) : Evidence[]'] },
+    { id: 'tb', x: 700, y: 450, w: 230, name: 'TourBuilder', ops: ['steps() : TourStep[]'] },
+    { id: 'git', x: 990, y: 50, w: 190, name: 'GitDiffReader', ops: ['diffHead() : Hunk[]', 'baselineDiff() : Hunk[]'] },
+    { id: 'ex', x: 300, y: 570, w: 240, name: 'Extractor', stereo: 'interface', abs: true, ops: ['extract(file) : ExtractResult'] },
+    { id: 'dex', x: 40, y: 570, w: 210, name: 'DartExtractor', ops: ['extract(file) : ExtractResult'] },
+    { id: 'gex', x: 590, y: 570, w: 240, name: 'GenericExtractor', ops: ['extract(file) : ExtractResult'] },
+
+    { id: 'ec', x: 40, y: 790, w: 220, name: 'EngineClient', ops: ['get(path) : Response', 'post(path, body) : Response', 'events() : Stream'] },
+    { id: 'el', x: 40, y: 960, w: 220, name: 'EngineLauncher', ops: ['start() : void', 'health() : Status', 'stop() : void'] },
+    { id: 'pw', x: 330, y: 790, w: 230, name: 'ProjectWatcher', ops: ['watch(path) : void', 'onChange(files) : void'] },
+    { id: 'cs', x: 330, y: 960, w: 250, name: 'ChatService', ops: ['ask(question, projectId)', 'saveSession(session)'] },
+    { id: 'as', x: 330, y: 1130, w: 250, name: 'AppStore', ops: ['saveConnection(c)', 'saveSession(s)', 'recordConsent(p, c)'] },
+    { id: 'ai', x: 680, y: 790, w: 240, name: 'AiAdapter', stereo: 'interface', abs: true, ops: ['send(question, tools) : Answer'] },
+    { id: 'acp', x: 640, y: 960, w: 200, name: 'AcpAdapter', ops: ['send(question, tools)', 'spawnAgent(config)'] },
+    { id: 'key', x: 880, y: 960, w: 200, name: 'ApiKeyAdapter', ops: ['send(question, tools)', 'toolLoop()'] },
+    { id: 'pp', x: 640, y: 1130, w: 200, name: 'PermissionPolicy', ops: ['allow(request) : bool'] },
+    { id: 'kc', x: 880, y: 1130, w: 200, name: 'Keychain', ops: ['save(name, secret)', 'read(name) : string'] },
+    { id: 'cv', x: 40, y: 1130, w: 220, name: 'CitationVerifier', ops: ['verify(citation) : Status'] },
+  ],
+  rels: [
+    { from: 'mcp', to: 'gqs', type: 'dep' },
+    { from: 'api', to: 'gqs', type: 'dep' },
+    { from: 'api', to: 'job', type: 'dep' },
+    { from: 'job', to: 'gs', type: 'dep' },
+    { from: 'job', to: 'ex', type: 'dep' },
+    { from: 'dex', to: 'ex', type: 'real' },
+    { from: 'gex', to: 'ex', type: 'real' },
+    { from: 'gqs', to: 'gs', type: 'dep' },
+    { from: 'gqs', to: 'imp', type: 'agg' },
+    { from: 'gqs', to: 'pf', type: 'agg' },
+    { from: 'gqs', to: 'ab', type: 'agg' },
+    { from: 'gqs', to: 'tb', type: 'agg' },
+    { from: 'imp', to: 'git', type: 'dep' },
+
+    { from: 'ec', to: 'api', type: 'dep', via: [[24, 835], [24, 235]], label: 'HTTP 127.0.0.1 + token', lx: 126, ly: 190 },
+    { from: 'el', to: 'ec', type: 'dep' },
+    { from: 'pw', to: 'ec', type: 'dep' },
+    { from: 'cs', to: 'ec', type: 'dep' },
+    { from: 'cs', to: 'ai', type: 'dep' },
+    { from: 'cs', to: 'cv', type: 'dep' },
+    { from: 'cs', to: 'as', type: 'dep' },
+    { from: 'acp', to: 'ai', type: 'real' },
+    { from: 'key', to: 'ai', type: 'real' },
+    { from: 'acp', to: 'pp', type: 'dep' },
+    { from: 'key', to: 'kc', type: 'dep' },
+  ],
+}
+));
+</script></body></html>

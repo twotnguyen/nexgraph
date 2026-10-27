@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Tuần tự UC06</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.sequence({
+  w: 1100, mx: 80,
+  parts: [
+    { id: 'u', label: 'Lập trình viên', actor: true },
+    { id: 'fs', label: 'Thư mục\ndự án' },
+    { id: 'ui', label: 'Giao diện' },
+    { id: 'm', label: 'Tiến trình\nchính' },
+    { id: 'e', label: 'Engine' },
+    { id: 'db', label: 'graph.db' },
+    { id: 'g', label: 'Git' },
+  ],
+  steps: [
+    { t: 'msg', from: 'u', to: 'fs', text: 'lưu tệp ở trình\nsoạn thảo ngoài' },
+    { t: 'msg', from: 'fs', to: 'm', kind: 'async', text: 'sự kiện đổi tệp\n(gộp sau khoảng chờ)' },
+    { t: 'msg', from: 'm', to: 'e', text: 'lập chỉ mục tăng dần\n(tệp đã đổi)' },
+    { t: 'msg', from: 'e', to: 'fs', text: 'đọc tệp đổi' },
+    { t: 'msg', from: 'e', to: 'db', text: 'so mã băm,\nghi lại nút, cạnh' },
+    { t: 'msg', from: 'e', to: 'm', kind: 'async', text: 'SSE changes_updated' },
+    { t: 'msg', from: 'm', to: 'ui', kind: 'async', text: 'làm mới' },
+    { t: 'msg', from: 'ui', to: 'm', text: 'getChanges()' },
+    { t: 'msg', from: 'm', to: 'e', text: 'GET /v1/projects/{pid}/changes' },
+    { t: 'frag', kind: 'alt', cond: 'dự án dùng Git', steps: [
+      { t: 'msg', from: 'e', to: 'g', text: 'git diff HEAD\n(chỉ đọc)' },
+      { t: 'msg', from: 'g', to: 'e', kind: 'ret', text: 'các đoạn dòng bị sửa' },
+    ], else: [{ cond: 'không dùng Git', steps: [
+      { t: 'msg', from: 'e', to: 'db', text: 'so mã băm với lần\nlập chỉ mục trước' },
+      { t: 'msg', from: 'db', to: 'e', kind: 'ret', text: 'tệp và đoạn đã đổi' },
+    ] }] },
+    { t: 'msg', from: 'e', to: 'db', text: 'ánh xạ đoạn dòng → nút;\nlan truyền ngược theo trọng số cạnh;\ntìm test liên quan, test gap' },
+    { t: 'msg', from: 'db', to: 'e', kind: 'ret', text: 'nút bị ảnh hưởng, điểm,\nsố bước, ca kiểm thử' },
+    { t: 'msg', from: 'e', to: 'm', kind: 'ret', text: '{base, changed_nodes, impacted,\ntests, test_gaps}' },
+    { t: 'msg', from: 'm', to: 'ui', kind: 'ret', text: 'kết quả' },
+    { t: 'msg', from: 'ui', to: 'u', kind: 'ret', text: 'hiển thị vùng ảnh hưởng và test liên quan' },
+  ],
+}
+));
+</script></body></html>

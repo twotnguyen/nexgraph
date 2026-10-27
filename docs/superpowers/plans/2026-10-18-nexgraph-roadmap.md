@@ -82,10 +82,10 @@ Cố định từ đây. Spec §5.3 giao việc chốt tên cho builder.
 | # | Sprint | Kế hoạch con | Người | Kết quả kiểm chứng (từ spec §8.2) |
 |---|---|---|---|---|
 | 1 | Tuần 2 (19–25/10) | **Nền tảng**: repo, engine sidecar + Graphify vendored, Electron shell, CI + bản cài 2 OS, mockup, spike Dart, spike ACP, khung SRS | Cả nhóm | Bản cài từ CI mở được trên Mac + Win, gọi được engine; 2 báo cáo spike |
-| 2 | Tuần 3 (26/10–1/11) | **Index & schema**: schema/enum, đa cạnh, SQLite store, extractor Dart Tree-sitter (cấu trúc), job index 2 pha + SSE, projects/nodes/neighbors/code · **Graph explorer v0** | P1 · P2 | Index 1 project Flutter của lớp, xem graph lân cận |
+| 2 | Tuần 3 (26/10–1/11) | **Index & schema** (grammar Dart: `tree-sitter-dart==0.1.0` theo spike 2026-10-27): schema/enum, đa cạnh, SQLite store, extractor Dart Tree-sitter (cấu trúc), job index 2 pha + SSE, projects/nodes/neighbors/code · **Graph explorer v0** | P1 · P2 | Index 1 project Flutter của lớp, xem graph lân cận |
 | 3 | Tuần 4 (2–8/11) | **Search & kiến trúc**: FTS5, architecture + evidence, `.gitignore`/generated, cache, huỷ job · UI Search + tab Kiến trúc + Projects/Indexing | P1 · P2 | Tầng S < 60 s trên project của lớp |
 | 4 | Tuần 5 (9–15/11) | **Thay đổi & ảnh hưởng**: watcher, diff→node, impact có trọng số, TESTED_BY, test gap, chế độ không Git · UI Changes + code viewer | P1 · P2 | Bước 4 của demo chạy |
-| 5 | Tuần 6 (16–22/11) | **AI**: MCP (trong app + stdio), adapter ACP OpenCode chỉ đọc (theo kết luận spike) + adapter API key, keychain, chat có trích dẫn + kiểm tra, `/paths` | P3 (+P1 cho `/paths`) · P2 (UI chat) | Bước 3 của demo chạy |
+| 5 | Tuần 6 (16–22/11) | **AI** (theo spike 2026-10-27: adapter API key là đường chính, adapter ACP/OpenCode ghi "hạn chế yếu" và phải cứng hoá môi trường, ghim OpenCode 2.1.4): MCP (trong app + stdio), adapter ACP OpenCode chỉ đọc (theo kết luận spike) + adapter API key, keychain, chat có trích dẫn + kiểm tra, `/paths` | P3 (+P1 cho `/paths`) · P2 (UI chat) | Bước 3 của demo chạy |
 | 6 | Tuần 7 (23–29/11) | **Flutter & tour**: COMPOSES, NAVIGATES_TO, pubspec, tab Flutter, guided tour, i18n hoàn chỉnh. **Alpha** | P1 · P2 | Toàn bộ kịch bản demo chạy |
 | 7 | Tuần 8 (30/11–6/12) | **Đánh giá & ổn định**: nhãn tay, so với regex của Graphify, đo tầng S/L (open-design), khảo sát, sửa lỗi, video dự phòng | P3 chủ trì, cả nhóm | Số liệu chương 3; **GVHD đánh giá %** |
 | — | Tuần 9–10 (7–20/12) | Báo cáo, UML, slide, tập demo (không có kế hoạch code) | Cả nhóm | Nộp LMS 21–27/12 |
