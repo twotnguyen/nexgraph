@@ -1,4 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
+import type { EngineHandle } from './engine/launcher'
+import { subscribeEvents } from './engine/events'
+import { registerIpc } from './ipc'
 import { join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
 import { getHealth } from './engine/client'
@@ -12,10 +15,30 @@ const dataDir = process.env.NEXGRAPH_DATA_DIR ?? join(app.getPath('userData'), '
 // apps/desktop -> gốc repo (chỉ dùng lúc dev)
 const repoRoot = join(app.getAppPath(), '..', '..')
 
+// Chuyển sự kiện SSE của engine lên renderer; tự mở lại luồng khi engine khởi động lại hoặc luồng đứt.
+let stopEvents: (() => void) | null = null
+let retry: NodeJS.Timeout | null = null
+function followEvents(handle: EngineHandle | null): void {
+  stopEvents?.()
+  stopEvents = null
+  if (retry) clearTimeout(retry)
+  if (!handle) return
+  stopEvents = subscribeEvents(
+    handle,
+    (e) => mainWindow?.webContents.send('engine:event', e),
+    () => {
+      retry = setTimeout(() => followEvents(supervisor.getHandle()), 1000)
+    }
+  )
+}
+
 const supervisor = new EngineSupervisor(
   () => resolveEngineCommand({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, repoRoot }),
   dataDir,
-  (status) => mainWindow?.webContents.send('engine:status-changed', status)
+  (status) => {
+    mainWindow?.webContents.send('engine:status-changed', status)
+    followEvents(status.state === 'ready' ? supervisor.getHandle() : null)
+  }
 )
 
 function createWindow(): void {
@@ -38,6 +61,7 @@ function createWindow(): void {
   else void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+registerIpc(() => supervisor.getHandle(), () => mainWindow)
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 

@@ -24,6 +24,11 @@ export class EngineSupervisor {
     return this.status
   }
 
+  /** Engine đang chạy, hoặc null khi chưa sẵn sàng / đã lỗi. */
+  getHandle(): EngineHandle | null {
+    return this.status.state === 'ready' ? this.handle : null
+  }
+
   async startEngine(): Promise<void> {
     const gen = ++this.generation
     this.set({ state: 'starting' })
