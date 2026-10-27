@@ -69,6 +69,15 @@ class GraphStore:
         self.conn.execute(f"UPDATE lan_lap_chi_muc SET {', '.join(sets)} WHERE ma_lan = ?", (*args, run_id))
         self.conn.commit()
 
+    def abort_stale_runs(self) -> int:
+        """Đánh dấu lỗi các lần còn ở trạng thái đang chạy (engine từng thoát giữa chừng), để không chặn RB19."""
+        cur = self.conn.execute(
+            "UPDATE lan_lap_chi_muc SET trang_thai = 'loi', ket_thuc_luc = max(bat_dau_luc, ?),"
+            " thong_bao_loi = 'Bị gián đoạn: engine thoát trước khi lập chỉ mục xong'"
+            " WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai')", (int(time.time()),))
+        self.conn.commit()
+        return cur.rowcount
+
     def last_completed_run(self) -> tuple[int, str | None] | None:
         row = self.conn.execute(
             "SELECT ket_thuc_luc, commit_sha FROM lan_lap_chi_muc WHERE trang_thai = 'hoan_tat'"
