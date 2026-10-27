@@ -377,3 +377,13 @@ Scan       = {files, by_language: {...}, large: bool, threshold: 5000, top_dirs:
 - [ ] Cập nhật mục "Kế hoạch con 4" của roadmap: thêm cache/tăng dần (cần lưu mọi tham chiếu, quyết định có đổi `graph.sql` lên phiên bản 2 hay không, và nếu đổi thì sửa báo cáo CSDL tuần 2 tương ứng).
 - [ ] Sprint review: ghi dòng **Tuần 4** vào phiếu theo dõi tiến độ theo nhiệm vụ GVHD giao (hiện chưa có; nội dung nội bộ: "Tìm kiếm toàn văn, bản đồ kiến trúc có bằng chứng, giao diện tìm kiếm và kiến trúc").
 - [ ] Viết kế hoạch con 4 (tuần 5) chi tiết theo cùng mẫu.
+
+## Ghi chú thực thi (2026-10-27, lệch so với kế hoạch)
+
+- **Task 2:** route trả `400 bad_param` khi chuỗi không có từ nào tìm được (hàm `search()` trả `[]`); sửa lại dòng Review Focus mâu thuẫn. `"dang"`/`"nhap"` không khớp `"Đăng"`/`"nhập"` do tokenizer `unicode61` (ghi ở UC04); chỉ đảm bảo khi gõ có dấu.
+- **Task 4:** quy tắc đặt tên khối tinh chỉnh: cộng đồng chỉ là một phần của một thư mục (thư mục còn tệp khác) thì đặt tên "Cụm quanh <tệp trung tâm>"; nếu không thì dùng đoạn cuối của tiền tố thư mục chung. Lý do: dùng tiền tố cho thư mục phẳng làm cả ba cộng đồng cùng tên `lib`.
+- **Task 5:** gốc của `bookstore_app` ra hai khối `lib` và `test`, **không** thu gọn `lib` (quy tắc thu gọn chỉ áp dụng khi có đúng một mục); test đã sửa theo (mũi tên `test → lib` là bằng chứng test phủ code).
+- **Task 6:** thêm `GraphStore.row_to_edge` dùng chung với `neighbors`; bằng chứng lấy bằng `json_each` để không vướng giới hạn số biến của SQLite.
+- **Task 8:** `GraphCanvas` nhận `focusNodeId`; `WorkspaceScreen.openNodeId` lấy chi tiết nút bằng `graph.node` để thẻ thông tin có nội dung khi mở từ khối tệp hoặc bằng chứng.
+- **Task 9:** thêm danh sách "Quan hệ giữa các khối" dạng nút bấm (React Flow trong jsdom không dựng cạnh nên không kiểm thử được việc bấm mũi tên; cũng là lối thao tác bằng bàn phím). Việc bấm mũi tên trên canvas được kiểm trên ứng dụng thật. Thêm `AutoFit`: `fitView` của React Flow chạy khi khung chưa có kích thước và nút chưa đo nên kẹt ở độ phóng tối đa; `useNodesInitialized` không bao giờ thành `true` với nút dựng sẵn kích thước, nên căn lại khi khung có kích thước và mọi nút `measured` (cùng sửa cho thẻ Graph).
+- **Task 11:** thêm chế độ `--synthetic` cho script đo; kiểm Windows chưa làm.

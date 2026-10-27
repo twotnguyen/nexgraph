@@ -23,3 +23,7 @@ Bản cài của NexGraph **chưa ký số**, nên macOS (Gatekeeper) và Window
 ## Kế hoạch con 2: kiểm tra trên Windows (chưa làm)
 
 Việc của P3 (kế hoạch con 2, Task 13 Step 4): chạy `uv run pytest` trong `engine/` và `pnpm --filter @nexgraph/desktop test`; mở `engine/tests/fixtures/bookstore_app` ở đường dẫn có dấu tiếng Việt và khoảng trắng, lập chỉ mục xong, mở thẻ Graph. Ghi kết quả vào bảng ở đầu tệp. Hai test dùng symlink (`test_symlink_*`) và một test quyền chỉ đọc tự bỏ qua trên Windows. Chưa có kết quả.
+
+## Kế hoạch con 3: kiểm tra trên Windows (chưa làm)
+
+Việc của P3 (kế hoạch con 3, Task 11 Step 5): chạy `uv run pytest` trong `engine/` và `pnpm --filter @nexgraph/desktop test`; mở `engine/tests/fixtures/bookstore_app` ở đường dẫn có dấu tiếng Việt và khoảng trắng, thử tìm kiếm (gõ có dấu và không dấu), thẻ Kiến trúc, bấm mũi tên xem bằng chứng, và thử một project lớn (tạo bằng `uv run python scripts/bench_search_arch.py --synthetic 6000` rồi mở thư mục sinh ra) để xem cảnh báo và chọn thư mục con. Ghi kết quả vào bảng ở đầu tệp. Chưa có kết quả.
