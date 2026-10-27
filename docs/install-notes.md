@@ -27,3 +27,8 @@ Việc của P3 (kế hoạch con 2, Task 13 Step 4): chạy `uv run pytest` tro
 ## Kế hoạch con 3: kiểm tra trên Windows (chưa làm)
 
 Việc của P3 (kế hoạch con 3, Task 11 Step 5): chạy `uv run pytest` trong `engine/` và `pnpm --filter @nexgraph/desktop test`; mở `engine/tests/fixtures/bookstore_app` ở đường dẫn có dấu tiếng Việt và khoảng trắng, thử tìm kiếm (gõ có dấu và không dấu), thẻ Kiến trúc, bấm mũi tên xem bằng chứng, và thử một project lớn (tạo bằng `uv run python scripts/bench_search_arch.py --synthetic 6000` rồi mở thư mục sinh ra) để xem cảnh báo và chọn thư mục con. Ghi kết quả vào bảng ở đầu tệp. Chưa có kết quả.
+
+
+## Kế hoạch con 4: kiểm trên Windows (P3, chưa làm)
+
+Chưa kiểm trên Windows. Cần: `uv run pytest` ở `engine/` (cần `git` trong `PATH`; các test Git tự bỏ qua nếu thiếu), `pnpm --filter @nexgraph/desktop test`, mở `bookstore_app` ở đường dẫn có dấu và khoảng trắng, bật theo dõi và sửa tệp bằng trình soạn thảo thật (VS Code, Notepad), xem panel "Thay đổi", thử `git checkout` đổi nhánh (bão sự kiện), thử project không phải Git. Điểm có rủi ro riêng: `fs.watch` đệ quy trên NTFS, đường dẫn dùng `\` ở sự kiện (đã chuẩn hoá trong `shouldIgnore`), và `core.autocrlf` làm Git báo cả tệp là đã đổi.

@@ -387,3 +387,16 @@ SSE: {"type": "changes_updated", "project_id": str}               # sau mỗi re
 - [ ] Cập nhật mục "Kế hoạch con 5" của roadmap theo kết luận spike ACP (adapter API key là đường chính).
 - [ ] Sprint review: ghi dòng **Tuần 5** vào phiếu theo dõi tiến độ theo nhiệm vụ GVHD giao (hiện chưa có; nội dung nội bộ: "Theo dõi thay đổi tệp, lập chỉ mục tăng dần, vùng ảnh hưởng và test liên quan, trình xem mã").
 - [ ] Viết kế hoạch con 5 (tuần 6: AI) chi tiết theo cùng mẫu.
+
+---
+
+## Lệch so với kế hoạch (ghi sau khi thực thi, 2026-10-27)
+
+Người dùng đã chấp thuận quyết định lược đồ v2 trước Task 1.
+
+1. **Task 4: thêm tập "phụ thuộc" (không có trong kế hoạch).** Cạnh đã phân giải không lưu lại tên tham chiếu gốc, nên chỉ phân giải lại tham chiếu `that_bai` là chưa đủ để bằng lập chỉ mục đầy đủ (xoá `user.dart` rồi tạo lại thì cạnh từ tệp không đổi không trở lại; thêm bản trùng của một hàm thì cạnh cũ phải biến mất vì nay mơ hồ). `refresh_project` nay trích xuất lại các tệp không đổi có cạnh phụ thuộc tới nút vừa biến mất, hoặc tới tên (lớp/hàm) vừa có thêm bản trùng, hoặc có cạnh `IMPORTS` tới tệp có `export`/`part` vừa đổi. Sửa thân hàm (không đổi tập nút) không kích hoạt. Hai test `test_incremental_equals_full_index` và `test_ambiguity_after_new_duplicate_symbol` đỏ khi tắt tập này (đã kiểm). Thêm `GraphStore.touch_file`, `requeue_failed_refs`, `import_edges`, `files_with_edges_into`, `files_with_edges_to_names`, `has_export_edges`, `node_ids_of_file`, `remove_node`, `has_outgoing`; `resolve_references` đọc cạnh `IMPORTS` có sẵn để tính tầm nhìn của tệp.
+2. **Task 3: `derive_tested_by` đồng bộ theo hiệu (thêm cái thiếu, bỏ cái thừa) thay vì xoá hết rồi sinh lại**, để `ma_canh` ổn định giữa các lần refresh; trả về tổng số cạnh `TESTED_BY`.
+3. **Task 5:** một lần `git diff -U0` cho mọi tệp (tách khối theo dòng `diff --git a/<p> b/<p>`) thay vì mỗi tệp một lần gọi; thêm `--relative` để project nằm trong thư mục con của repo vẫn đúng; thêm `git_changes_or_reason` để `read_changes` ghi đúng lý do ("Repo Git chưa có commit", "Không có Git (không tìm thấy lệnh git)"). Đổi tên tệp luôn có `ranges = None`.
+4. **Task 6:** `propagate` trả `(kết quả, bị cắt)`. Nút tệp của tệp đổi chỉ làm hạt giống khi tệp có ký hiệu bị đổi (sửa chú thích ngoài mọi ký hiệu không làm tệp import nó bị coi là ảnh hưởng; phát hiện ở lần kiểm tay trên app thật). Nút tệp bị ảnh hưởng (qua `IMPORTS`) xuất hiện trong `impacted` với nhãn là đường dẫn tệp.
+5. **Task 7:** thêm `ProjectLocks` dùng chung giữa `JobManager` và `RefreshService` (lập chỉ mục chờ refresh đang chạy, không bao giờ ghi đồng thời) và lý do `not_indexed` cho `Refresh` (chưa có lần lập chỉ mục đầy đủ nào). Task 1 Step 5 (bản đóng gói) được gộp vào Task 7 Step 5: build PyInstaller một lần, chạy engine đóng gói trên repo Git tạm với đường dẫn có dấu, `git` gọi được từ tiến trình đóng gói.
+6. **Task 11:** chưa kiểm Windows (P3) và **chưa đo thời gian đầu cuối** "lưu tệp đến khi giao diện cập nhật"; số liệu ở `docs/benchmarks/2026-10-refresh-changes.md` chỉ là phần engine. Dải "Tệp đã thay đổi" của trình xem mã đã có test đơn vị nhưng chưa được xem trên app thật.
