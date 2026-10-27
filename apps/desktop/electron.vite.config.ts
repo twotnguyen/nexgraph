@@ -11,6 +11,7 @@ export default defineConfig({
   },
   renderer: {
     resolve: { alias: { '@shared': resolve('src/shared') } },
-    plugins: [react()]
+    plugins: [react()],
+    worker: { format: 'es' }
   }
 })

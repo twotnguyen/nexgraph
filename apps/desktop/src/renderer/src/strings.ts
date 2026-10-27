@@ -22,7 +22,12 @@ export const vi = {
     error: (message: string) => `Lỗi: ${message}`
   },
   workspace: {
-    graphTab: 'Graph',
-    placeholder: 'Đang xây dựng'
+    graphTab: 'Graph'
+  },
+  graph: {
+    backToRoot: 'Về gốc',
+    nothingSelected: 'Chọn một nút để xem chi tiết',
+    truncated: 'Đã cắt bớt, thu hẹp bằng cách chọn nút khác',
+    isTest: 'Mã kiểm thử'
   }
 }

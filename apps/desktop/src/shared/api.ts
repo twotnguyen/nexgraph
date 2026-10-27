@@ -3,7 +3,7 @@ import type {
   CodeSlice, EngineEvent, GraphNode, GraphStats, NeighborQuery, Neighborhood, ProjectSummary
 } from './graph-types'
 
-/** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là Error có thuộc tính `code`. */
+/** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
 export interface NexGraphApi {
   engine: {
     status(): Promise<EngineStatus>
