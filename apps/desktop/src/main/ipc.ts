@@ -3,6 +3,14 @@ import type { NeighborQuery } from '../shared/graph-types'
 import { EngineApi } from './engine/api'
 import type { EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
+import { ProjectWatcher } from './watch/project-watcher'
+
+const watchers = new Map<string, ProjectWatcher>()
+
+export function stopAllWatchers(): void {
+  for (const w of watchers.values()) w.stop()
+  watchers.clear()
+}
 
 /** Đăng ký các kênh IPC của dự án và đồ thị. `handle()` trả engine hiện tại hoặc null khi chưa sẵn sàng. */
 export function registerIpc(getHandle: () => EngineHandle | null, getWindow: () => BrowserWindow | null): void {
@@ -25,6 +33,22 @@ export function registerIpc(getHandle: () => EngineHandle | null, getWindow: () 
   on('index:scan', (pid: string) => api().scan(pid))
   on('index:start', async (pid: string, opts?: { subdir?: string }) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
   on('index:cancel', async (jobId: string) => void (await api().cancelJob(jobId)))
+  on('index:refresh', (pid: string) => api().refresh(pid))
+  on('graph:changes', (pid: string, opts?: { refresh?: boolean }) => api().changes(pid, opts))
+  on('watch:start', async (pid: string, path: string) => {
+    watchers.get(pid)?.stop()
+    const w = new ProjectWatcher({
+      root: path,
+      onFlush: async () => void (await api().refresh(pid)),
+      onError: (e) => console.warn(`[watch] ${pid}: ${e.message}`)
+    })
+    w.start()
+    watchers.set(pid, w)
+  })
+  on('watch:stop', async (pid: string) => {
+    watchers.get(pid)?.stop()
+    watchers.delete(pid)
+  })
   on('graph:stats', (pid: string) => api().stats(pid))
   on('graph:neighbors', (pid: string, q: NeighborQuery) => api().neighbors(pid, q))
   on('graph:node', (pid: string, id: string) => api().getNode(pid, id))

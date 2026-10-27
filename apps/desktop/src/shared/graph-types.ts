@@ -131,4 +131,43 @@ export interface ScanInfo {
   top_dirs: { path: string; files: number }[]
 }
 
-export type EngineEvent = ({ type: 'job_progress' } & Job) | { type: 'graph_updated'; project_id: string }
+export type ChangeStatus = 'M' | 'A' | 'D' | 'R'
+
+export interface ChangedFile {
+  path: string
+  status: ChangeStatus
+  old_path: string | null
+}
+
+export interface ImpactedNode {
+  node: GraphNode
+  score: number
+  hops: number
+}
+
+/** Kết quả `GET /changes`: vùng đổi, vùng ảnh hưởng, test liên quan và test gap (xem roadmap). */
+export interface Changes {
+  base: 'git_head' | 'last_index'
+  base_commit: string | null
+  note: string | null
+  changed_files: ChangedFile[]
+  changed_nodes: GraphNode[]
+  impacted: ImpactedNode[]
+  tests: GraphNode[]
+  test_gaps: GraphNode[]
+  truncated: boolean
+}
+
+export interface RefreshResult {
+  status: 'ok' | 'skipped'
+  reason: 'index_running' | 'refresh_running' | 'not_indexed' | null
+  added: number
+  changed: number
+  removed: number
+  seconds: number
+}
+
+export type EngineEvent =
+  | ({ type: 'job_progress' } & Job)
+  | { type: 'graph_updated'; project_id: string }
+  | { type: 'changes_updated'; project_id: string }

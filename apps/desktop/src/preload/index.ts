@@ -33,6 +33,7 @@ const api: NexGraphApi = {
     scan: (projectId) => call('index:scan', projectId),
     start: (projectId, opts) => call('index:start', projectId, opts),
     cancel: (jobId) => call('index:cancel', jobId),
+    refresh: (projectId) => call('index:refresh', projectId),
     onEvent: (cb) => subscribe<EngineEvent>('engine:event', cb)
   },
   graph: {
@@ -42,7 +43,12 @@ const api: NexGraphApi = {
     code: (pid, file, start, end) => call('graph:code', pid, file, start, end),
     search: (pid, q, opts) => call('graph:search', pid, q, opts),
     architecture: (pid, parent) => call('graph:architecture', pid, parent),
-    archEvidence: (pid, from, to, limit) => call('graph:arch-evidence', pid, from, to, limit)
+    archEvidence: (pid, from, to, limit) => call('graph:arch-evidence', pid, from, to, limit),
+    changes: (pid, opts) => call('graph:changes', pid, opts)
+  },
+  watch: {
+    start: (pid, path) => call('watch:start', pid, path),
+    stop: (pid) => call('watch:stop', pid)
   }
 }
 

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
-import { registerIpc } from './ipc'
+import { registerIpc, stopAllWatchers } from './ipc'
 import { join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
 import { getHealth } from './engine/client'
@@ -108,5 +108,6 @@ app.on('before-quit', (e) => {
   if (quitting) return
   e.preventDefault()
   quitting = true
+  stopAllWatchers()
   void supervisor.stop().finally(() => app.quit())
 })

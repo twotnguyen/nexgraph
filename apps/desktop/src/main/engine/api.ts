@@ -1,6 +1,6 @@
 import type {
-  ArchEvidence, ArchView, CodeSlice, GraphNode, GraphStats, Job, NeighborQuery, Neighborhood, ProjectSummary, ScanInfo,
-  SearchHit
+  ArchEvidence, ArchView, Changes, CodeSlice, GraphNode, GraphStats, Job, NeighborQuery, Neighborhood, ProjectSummary, RefreshResult,
+  ScanInfo, SearchHit
 } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
 
@@ -70,6 +70,13 @@ export class EngineApi {
     const p = new URLSearchParams({ from, to })
     if (limit !== undefined) p.set('limit', String(limit))
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/architecture/evidence?${p}`)
+  }
+  refresh(pid: string): Promise<RefreshResult> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/refresh`)
+  }
+  changes(pid: string, o?: { refresh?: boolean }): Promise<Changes> {
+    const qs = o?.refresh === false ? '?refresh=false' : ''
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/changes${qs}`)
   }
   getJob(id: string): Promise<Job> {
     return this.request('GET', `/v1/jobs/${encodeURIComponent(id)}`)

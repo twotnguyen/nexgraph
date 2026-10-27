@@ -203,3 +203,13 @@ def test_non_git_file_level_changes(g):
     report = analyze(g.conn, cs)
     assert [n.label for n in report.changed_nodes] == ["a"]
     assert scores(report)["b"] == (1.0, 1)
+
+
+def test_edit_outside_any_symbol_does_not_impact_importers(g):
+    g.fn("a", lines=(1, 3))
+    g.fn("b")
+    g.edge("b", "a", EdgeType.IMPORTS, file_level=True)
+    path = g.ids["a"].split("::")[0]
+    cs = ChangeSet("git_head", None, [FileChange(path, "M", None, [(50, 50)])])
+    report = analyze(g.conn, cs)
+    assert report.changed_nodes == [] and report.impacted == []

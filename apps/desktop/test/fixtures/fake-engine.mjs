@@ -12,6 +12,7 @@ if (mode === 'never-ready') {
 } else {
   console.log('warming up…')
   const sseClients = new Set()
+  let refreshCount = 0
   const server = http.createServer((req, res) => {
     const json = (status, body) => {
       res.writeHead(status, { 'content-type': 'application/json' })
@@ -37,7 +38,10 @@ if (mode === 'never-ready') {
         // sự kiện bị cắt đôi giữa hai gói TCP
         const second = 'data: ' + JSON.stringify({ type: 'graph_updated', project_id: 'p1' }) + '\n\n'
         res.write(second.slice(0, 10))
-        setTimeout(() => res.write(second.slice(10)), 20)
+        setTimeout(() => {
+          res.write(second.slice(10))
+          res.write('data: ' + JSON.stringify({ type: 'changes_updated', project_id: 'p1' }) + '\n\n')
+        }, 20)
       }, 50)
       return
     }
@@ -84,6 +88,17 @@ if (mode === 'never-ready') {
       return json(200, { files: 12345, by_language: { dart: 12000 }, large: true, threshold: 5000,
         top_dirs: [{ path: 'lib', files: 9000 }, { path: 'lib/Đồ án', files: 3000 }] })
     }
+    if (url.pathname === '/v1/projects/p1/refresh' && req.method === 'POST') {
+      refreshCount += 1
+      return json(200, { status: 'ok', reason: null, added: 0, changed: 1, removed: 0, seconds: 0.01, received_count: refreshCount })
+    }
+    if (url.pathname === '/v1/projects/p1/changes') {
+      return json(200, { base: 'git_head', base_commit: 'a'.repeat(40), note: null,
+        changed_files: [{ path: 'lib/a.dart', status: 'M', old_path: null }],
+        changed_nodes: [node('lib/a.dart::f#function')], impacted: [{ node: node('lib/b.dart::g#function'), score: 1, hops: 1 }],
+        tests: [], test_gaps: [], truncated: false, query: Object.fromEntries(url.searchParams) })
+    }
+    if (url.pathname === '/v1/projects/unknown/changes' || url.pathname === '/v1/projects/nope/changes') return json(404, { error: { code: 'unknown_project', message: 'x' } })
     if (url.pathname === '/v1/jobs/j1' && req.method === 'DELETE') return json(200, { cancelled: true })
     if (url.pathname === '/v1/projects/p1/neighbors') {
       const id = url.searchParams.get('node')

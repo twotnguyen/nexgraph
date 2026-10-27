@@ -62,7 +62,7 @@ describe('EngineApi', () => {
     const stop = subscribeEvents(h, (e) => got.push(e), () => (closed = true))
     await new Promise((r) => setTimeout(r, 400))
     stop()
-    expect(got.map((e) => e.type)).toEqual(['job_progress', 'graph_updated'])
+    expect(got.map((e) => e.type)).toEqual(['job_progress', 'graph_updated', 'changes_updated'])
     await new Promise((r) => setTimeout(r, 50))
     expect(closed).toBe(false) // huỷ chủ động không gọi onClose
   })
@@ -115,6 +115,23 @@ describe('EngineApi: search, architecture, scan', () => {
   it('startIndex sends a JSON body only when a subdir is given', async () => {
     expect(await api.startIndex('p1')).toMatchObject({ job_id: 'j1', received_body: null })
     expect(await api.startIndex('p1', { subdir: 'lib/Đồ án' })).toMatchObject({ received_body: { subdir: 'lib/Đồ án' } })
+  })
+})
+
+describe('EngineApi: refresh and changes', () => {
+  it('refresh posts to the project and returns the engine summary', async () => {
+    expect(await api.refresh('p1')).toMatchObject({ status: 'ok', changed: 1 })
+    expect(await api.refresh('p1')).toMatchObject({ received_count: 2 })
+  })
+
+  it('changes sends refresh=false only when asked and returns the report', async () => {
+    const a = (await api.changes('p1')) as unknown as { base: string; query: Record<string, string> }
+    expect(a.base).toBe('git_head')
+    expect(a.query).toEqual({})
+    const b = (await api.changes('p1', { refresh: false })) as unknown as { query: Record<string, string> }
+    expect(b.query).toEqual({ refresh: 'false' })
+    const err = await api.changes('nope').catch((e) => e)
+    expect(err.code).toBe('unknown_project')
   })
 })
 

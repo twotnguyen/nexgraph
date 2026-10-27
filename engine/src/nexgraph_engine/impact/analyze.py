@@ -153,7 +153,9 @@ def tests_for(conn: sqlite3.Connection, node_id: str) -> list[Node]:
 def analyze(conn: sqlite3.Connection, changes: ChangeSet) -> ImpactReport:
     changed = map_to_nodes(conn, changes)
     truncated = len(changed) >= params.MAX_CHANGED_NODES
-    file_seeds = [f"{f.path}#file" for f in changes.files if f.status != "D"]
+    # Nút tệp chỉ làm hạt giống khi có ký hiệu bị đổi: sửa chú thích/khoảng trắng ngoài mọi ký hiệu không ảnh hưởng ai.
+    touched_files = {n.file for n in changed}
+    file_seeds = [f"{p}#file" for p in sorted(f for f in touched_files if f)]
     seeds = [n.id for n in changed] + file_seeds
     propagated, cut = propagate(conn, seeds) if seeds else ([], False)
     truncated |= cut
