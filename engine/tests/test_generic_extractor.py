@@ -1,0 +1,71 @@
+from pathlib import Path
+
+from nexgraph_engine.index.generic import extract_generic
+from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind
+
+ROOT = Path(__file__).parent / "fixtures" / "py_mini"
+
+
+def run(rel="main.py", **kw):
+    return extract_generic(ROOT, rel, "python", is_test=kw.get("is_test", False))
+
+
+def by_q(x):
+    return {n.qualified_name: n for n in x.nodes}
+
+
+def test_python_kinds_and_ids():
+    x = run()
+    n = by_q(x)
+    assert n["App"].kind == NodeKind.CLASS and n["App.run"].kind == NodeKind.METHOD
+    assert n["local"].kind == NodeKind.FUNCTION and n["start"].kind == NodeKind.FUNCTION
+    assert n["App.run"].id == "main.py::App.run#method"
+    assert {v.kind for v in x.nodes} <= {NodeKind.CLASS, NodeKind.FUNCTION, NodeKind.METHOD}
+    assert all(v.file == "main.py" and v.line_start >= 1 for v in x.nodes)
+
+
+def test_defines_edges():
+    x = run()
+    pairs = {(e.source, e.target) for e in x.edges if e.type == EdgeType.DEFINES}
+    assert ("main.py#file", "main.py::App#class") in pairs
+    assert ("main.py::App#class", "main.py::App.run#method") in pairs
+    assert ("main.py#file", "main.py::local#function") in pairs
+
+
+def test_line_end_estimate_contains_evidence():
+    x = run()
+    by = {n.id: n for n in x.nodes}
+    calls = [e for e in x.edges if e.type == EdgeType.CALLS]
+    assert calls
+    for e in calls:
+        src = by[e.source]
+        assert src.line_start <= e.line <= src.line_end
+    app = by_q(x)["App"]
+    assert app.line_end >= by_q(x)["App.step"].line_start  # lớp bao các phương thức
+
+
+def test_imports_become_refs():
+    x = run()
+    got = {(r.type, r.name) for r in x.refs}
+    assert (EdgeType.IMPORTS, "os") in got and (EdgeType.IMPORTS, "util") in got
+    assert all(r.source == "main.py#file" for r in x.refs if r.type == EdgeType.IMPORTS)
+
+
+def test_intra_file_call_edge_and_unresolved_ref():
+    x = run()
+    calls = {(e.source, e.target) for e in x.edges if e.type == EdgeType.CALLS}
+    assert ("main.py::local#function", "main.py::other#function") in calls
+    assert ("main.py::App.run#method", "main.py::App.step#method") in calls
+    assert ("main.py::start#function", "main.py::App#class") in calls  # dựng đối tượng
+    assert any(r.type == EdgeType.CALLS and r.name == "os" for r in x.refs)  # đích ngoài tệp
+    assert all(e.confidence in (Confidence.EXTRACTED, Confidence.INFERRED) for e in x.edges)
+
+
+def test_test_file_flags():
+    x = extract_generic(ROOT, "test_util.py", "python", is_test=True)
+    assert x.nodes and all(n.is_test for n in x.nodes)
+
+
+def test_unsupported_or_missing_file_returns_error_not_exception():
+    x = extract_generic(ROOT, "does_not_exist.py", "python", is_test=False)
+    assert x.nodes == [] and x.errors and x.errors[0][0] in ("read", "extract")
