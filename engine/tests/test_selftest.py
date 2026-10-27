@@ -13,3 +13,8 @@ def test_selftest_route():
     c = TestClient(create_app("t" * 40, {"testserver"}))
     r = c.get("/v1/selftest", headers={"Authorization": "Bearer " + "t" * 40})
     assert r.status_code == 200 and r.json()["ok"] is True
+
+
+def test_selftest_reports_supported_sqlite():
+    r = run_selftest()
+    assert tuple(int(x) for x in r["sqlite"].split(".")[:3]) >= (3, 43, 0)
