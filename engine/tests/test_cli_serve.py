@@ -27,7 +27,11 @@ def test_serve_prints_ready_and_serves_health(tmp_path):
     p = start(tmp_path / "data")
     try:
         ready = read_ready(p)
-        assert ready["pid"] == p.pid
+        if sys.platform == "win32":
+            # python.exe của venv là launcher: Popen.pid là launcher, ready.pid là Python thật (process con)
+            assert isinstance(ready["pid"], int) and ready["pid"] > 0
+        else:
+            assert ready["pid"] == p.pid
         req = urllib.request.Request(f"http://127.0.0.1:{ready['port']}/v1/health",
                                      headers={"Authorization": f"Bearer {TOKEN}"})
         assert json.load(urllib.request.urlopen(req, timeout=5))["status"] == "ok"
