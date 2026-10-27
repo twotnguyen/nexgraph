@@ -21,6 +21,16 @@ export const vi = {
     done: 'Hoàn tất',
     error: (message: string) => `Lỗi: ${message}`
   },
+  large: {
+    scanning: 'Đang kiểm tra kích thước dự án…',
+    message: (files: number, threshold: number) =>
+      `Dự án có ${files.toLocaleString('vi-VN')} tệp mã, vượt ngưỡng ${threshold.toLocaleString('vi-VN')}. Lập chỉ mục toàn bộ có thể mất nhiều thời gian và bộ nhớ.`,
+    hint: 'Chọn một thư mục con để lập chỉ mục, hoặc lập chỉ mục toàn bộ:',
+    files: (n: number) => `${n.toLocaleString('vi-VN')} tệp`,
+    all: 'Lập chỉ mục toàn bộ',
+    cancel: 'Hủy',
+    subdir: (path: string) => `Thư mục con: ${path}`
+  },
   workspace: {
     archTab: 'Kiến trúc',
     graphTab: 'Graph'

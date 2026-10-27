@@ -13,6 +13,15 @@ const setup = (over = {}) => {
 }
 const emit = (h: ReturnType<typeof installNexgraph>, e: ReturnType<typeof progress>) => act(() => h.emit(e))
 
+describe('IndexingScreen subdir', () => {
+  it('starts the index for the subdirectory and says so', async () => {
+    const h = installNexgraph()
+    render(<IndexingScreen project={project()} subdir="lib/features" onExplore={() => {}} />)
+    expect(screen.getByText('Thư mục con: lib/features')).toBeInTheDocument()
+    await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1', { subdir: 'lib/features' }))
+  })
+})
+
 describe('IndexingScreen', () => {
   it('starts the index once for the project', async () => {
     const h = setup()

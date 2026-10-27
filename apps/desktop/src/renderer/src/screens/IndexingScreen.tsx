@@ -4,6 +4,7 @@ import { vi } from '../strings'
 
 interface Props {
   project: ProjectSummary
+  subdir?: string | null
   onExplore: () => void
 }
 
@@ -21,8 +22,8 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
   )
 }
 
-export function IndexingScreen({ project, onExplore }: Props) {
-  const { job, error, cancel } = useIndexJob(project.project_id)
+export function IndexingScreen({ project, subdir, onExplore }: Props) {
+  const { job, error, cancel } = useIndexJob(project.project_id, subdir)
   const state = job?.state
   const phase1Done = state === 'resolve' || state === 'done'
   const running = state === 'queued' || state === 'structure' || state === 'resolve'
@@ -31,6 +32,7 @@ export function IndexingScreen({ project, onExplore }: Props) {
   return (
     <main className="screen">
       <h1>{vi.indexing.title(project.name)}</h1>
+      {subdir && <p className="muted">{vi.large.subdir(subdir)}</p>}
       {!job && !error && <p className="muted">{vi.indexing.preparing}</p>}
       {job && (
         <>
