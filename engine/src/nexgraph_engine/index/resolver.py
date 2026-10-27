@@ -76,6 +76,8 @@ def resolve_references(store: GraphStore, *, package_name: str | None) -> tuple[
     resolved: list[int] = []
     new_edges: list[Edge] = []
     imports: dict[str, list[tuple[str, str | None]]] = defaultdict(list)  # tệp -> [(tệp đích, subtype)]
+    for src_file, dst_file, st in store.import_edges():  # import đã phân giải ở lần trước (cập nhật tăng dần)
+        imports[src_file].append((dst_file, st))
 
     def edge(ref: UnresolvedRef, target: Node, type_: EdgeType, score: float, subtype: str | None = None,
              exact: bool = False) -> None:

@@ -18,7 +18,7 @@ _CHUNK = 400
 _END_STATES = ("hoan_tat", "loi", "huy")
 
 
-def _chunks(items: list[int], size: int = _CHUNK) -> Iterator[list[int]]:
+def _chunks(items: list, size: int = _CHUNK) -> Iterator[list]:
     for i in range(0, len(items), size):
         yield items[i:i + size]
 
@@ -155,16 +155,21 @@ class GraphStore:
             cur = self.conn.execute(
                 "INSERT INTO nut (id_nut, loai_nut, nhan, ten_day_du, dong_bat_dau, dong_ket_thuc, la_kiem_thu,"
                 " nguon_goc, chu_ky, tai_lieu, ma_tep) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (n.id, n.kind.value, n.label[:255] or "?", n.qualified_name[:1024] or "?", n.line_start,
-                 n.line_end, int(n.is_test), n.origin.value, (n.signature or None) and n.signature[:2000],
-                 n.doc, self._file(n.file) if n.file else None),
-            )
+                self._node_values(n))
             self._node_pk[n.id] = int(cur.lastrowid)
-            if n.kind != NodeKind.REPOSITORY:  # nút gốc không phải thứ để tìm
-                self.conn.execute(
-                    "INSERT INTO nut_fts (rowid, nhan, ten_day_du, chu_ky, tai_lieu, tu_khoa) VALUES (?, ?, ?, ?, ?, ?)",
-                    (cur.lastrowid, n.label[:255], n.qualified_name[:1024], n.signature and n.signature[:2000], n.doc,
-                     search_keywords(n.label[:255], n.qualified_name[:1024])))
+            self._index_fts(int(cur.lastrowid), n)
+
+    def _node_values(self, n: Node) -> tuple:
+        return (n.id, n.kind.value, n.label[:255] or "?", n.qualified_name[:1024] or "?", n.line_start,
+                n.line_end, int(n.is_test), n.origin.value, (n.signature or None) and n.signature[:2000],
+                n.doc, self._file(n.file) if n.file else None)
+
+    def _index_fts(self, pk: int, n: Node) -> None:
+        if n.kind != NodeKind.REPOSITORY:  # nút gốc không phải thứ để tìm
+            self.conn.execute(
+                "INSERT INTO nut_fts (rowid, nhan, ten_day_du, chu_ky, tai_lieu, tu_khoa) VALUES (?, ?, ?, ?, ?, ?)",
+                (pk, n.label[:255], n.qualified_name[:1024], n.signature and n.signature[:2000], n.doc,
+                 search_keywords(n.label[:255], n.qualified_name[:1024])))
 
     def add_edges(self, edges: Iterable[Edge]) -> int:
         added = 0
@@ -236,6 +241,132 @@ class GraphStore:
             "SELECT n.ma_khoi FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
             " WHERE t.duong_dan_tuong_doi = ? AND n.loai_nut = 'file'", (rel_path,)).fetchone()
         return row["ma_khoi"] if row else None
+
+    # --- cập nhật tăng dần (kế hoạch con 4) -------------------------------------------------
+    def file_records(self) -> dict[str, FileRec]:
+        return {r["duong_dan_tuong_doi"]: FileRec(r["duong_dan_tuong_doi"], r["ngon_ngu"], r["kich_thuoc"], r["mtime"],
+                                                  r["ma_bam"], bool(r["la_kiem_thu"]))
+                for r in self.conn.execute("SELECT * FROM tep")}
+
+    def touch_file(self, rec: FileRec) -> None:
+        """Nội dung không đổi (cùng mã băm) nhưng kích thước/mtime khác: chỉ làm mới dấu vết để lần sau khỏi băm lại."""
+        self.conn.execute("UPDATE tep SET kich_thuoc = ?, mtime = ? WHERE duong_dan_tuong_doi = ?",
+                          (rec.size, rec.mtime, rec.rel_path))
+
+    def file_graph_signature(self) -> tuple[int, int]:
+        """(số cặp tệp có cạnh IMPORTS/CALLS, tổng số cạnh): dùng để biết khi nào cần chia lại cộng đồng."""
+        row = self.conn.execute(
+            "SELECT count(DISTINCT ns.ma_tep || '>' || nd.ma_tep), count(*) FROM canh c"
+            " JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon JOIN nut nd ON nd.ma_nut = c.ma_nut_dich"
+            " WHERE c.loai_canh IN ('IMPORTS', 'CALLS') AND ns.ma_tep <> nd.ma_tep").fetchone()
+        return (row[0], row[1])
+
+    def node_ids_of_file(self, rel_path: str) -> dict[str, int]:
+        return {r["id_nut"]: r["ma_nut"] for r in self.conn.execute(
+            "SELECT n.id_nut, n.ma_nut FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
+            " WHERE t.duong_dan_tuong_doi = ?", (rel_path,))}
+
+    def replace_file(self, run_id: int, rec: FileRec, nodes: list[Node], edges: list[Edge],
+                     refs: list[UnresolvedRef], bindings: dict[str, dict[str, str]],
+                     errors: list[tuple[str, str]]) -> None:
+        """Thay nội dung một tệp đã có tại chỗ: nút còn giữ nguyên `id_nut` (cạnh đi vào còn nguyên)."""
+        c = self.conn
+        c.execute("UPDATE tep SET ngon_ngu = ?, kich_thuoc = ?, mtime = ?, ma_bam = ?, la_kiem_thu = ?, ma_lan = ?"
+                  " WHERE duong_dan_tuong_doi = ?",
+                  (rec.language, rec.size, rec.mtime, rec.sha256, int(rec.is_test), run_id, rec.rel_path))
+        file_pk = self._file(rec.rel_path)
+        old = self.node_ids_of_file(rec.rel_path)
+        for chunk in _chunks(list(old.values())):
+            marks = ",".join("?" * len(chunk))
+            c.execute(f"DELETE FROM canh WHERE ma_nut_nguon IN ({marks})", chunk)
+            c.execute(f"DELETE FROM tham_chieu_chua_phan_giai WHERE ma_nut_nguon IN ({marks})", chunk)
+            c.execute(f"DELETE FROM kieu_bien WHERE ma_nut IN ({marks})", chunk)
+        c.execute("DELETE FROM loi_phan_tich WHERE ma_tep = ?", (file_pk,))
+        new_ids = {n.id for n in nodes}
+        gone = [pk for nid, pk in old.items() if nid not in new_ids]
+        for chunk in _chunks(gone):
+            c.execute(f"DELETE FROM nut WHERE ma_nut IN ({','.join('?' * len(chunk))})", chunk)
+        for nid in old:
+            if nid not in new_ids:
+                self._node_pk.pop(nid, None)
+        for n in nodes:
+            pk = old.get(n.id)
+            if pk is None:
+                self.add_nodes([n])
+                continue
+            v = self._node_values(n)
+            c.execute("UPDATE nut SET loai_nut = ?, nhan = ?, ten_day_du = ?, dong_bat_dau = ?, dong_ket_thuc = ?,"
+                      " la_kiem_thu = ?, nguon_goc = ?, chu_ky = ?, tai_lieu = ?, ma_tep = ? WHERE ma_nut = ?",
+                      (*v[1:], pk))
+            c.execute("DELETE FROM nut_fts WHERE rowid = ?", (pk,))
+            self._index_fts(pk, n)
+        self.add_edges(edges)
+        self.add_unresolved(refs)
+        self.add_bindings(bindings)
+        for kind, detail in errors:
+            self.add_file_error(rec.rel_path, kind, detail)
+
+    def remove_file(self, rel_path: str) -> None:
+        """Xoá tệp cùng nút, cạnh, tham chiếu, kiểu biến, lỗi của nó (khoá ngoại ON DELETE CASCADE)."""
+        for nid in self.node_ids_of_file(rel_path):
+            self._node_pk.pop(nid, None)
+        self.conn.execute("DELETE FROM tep WHERE duong_dan_tuong_doi = ?", (rel_path,))
+        self._file_pk.pop(rel_path, None)
+
+    def remove_node(self, node_id: str) -> None:
+        self.conn.execute("DELETE FROM nut WHERE id_nut = ?", (node_id,))
+        self._node_pk.pop(node_id, None)
+
+    def has_outgoing(self, node_id: str, type_: EdgeType) -> bool:
+        return self.conn.execute(
+            "SELECT 1 FROM canh c JOIN nut n ON n.ma_nut = c.ma_nut_nguon WHERE n.id_nut = ? AND c.loai_canh = ?"
+            " LIMIT 1", (node_id, type_.value)).fetchone() is not None
+
+    def requeue_failed_refs(self) -> int:
+        """Đưa mọi tham chiếu thất bại về hàng đợi để phân giải lại khi có ký hiệu mới."""
+        cur = self.conn.execute("UPDATE tham_chieu_chua_phan_giai SET trang_thai = 'cho' WHERE trang_thai = 'that_bai'")
+        return cur.rowcount
+
+    def import_edges(self) -> list[tuple[str, str, str | None]]:
+        """(tệp nguồn, tệp đích, loai_con) của các cạnh IMPORTS đã phân giải giữa hai nút tệp."""
+        return [(r[0], r[1], r[2]) for r in self.conn.execute(
+            "SELECT ts.duong_dan_tuong_doi, td.duong_dan_tuong_doi, c.loai_con FROM canh c"
+            " JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon JOIN nut nd ON nd.ma_nut = c.ma_nut_dich"
+            " JOIN tep ts ON ts.ma_tep = ns.ma_tep JOIN tep td ON td.ma_tep = nd.ma_tep"
+            " WHERE c.loai_canh = 'IMPORTS' AND ns.loai_nut = 'file' AND nd.loai_nut = 'file'")]
+
+    _DEP_TYPES = "('CONTAINS', 'DEFINES', 'TESTED_BY')"
+
+    def files_with_edges_into(self, node_pks: list[int]) -> set[str]:
+        """Tệp có cạnh phụ thuộc (không phải CONTAINS/DEFINES/TESTED_BY) tới một trong các nút."""
+        out: set[str] = set()
+        for chunk in _chunks(node_pks):
+            for r in self.conn.execute(
+                    "SELECT DISTINCT t.duong_dan_tuong_doi FROM canh c JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon"
+                    " JOIN tep t ON t.ma_tep = ns.ma_tep"
+                    f" WHERE c.ma_nut_dich IN ({','.join('?' * len(chunk))}) AND c.loai_canh NOT IN {self._DEP_TYPES}",
+                    chunk):
+                out.add(r[0])
+        return out
+
+    def files_with_edges_to_names(self, names: list[str], kinds: list[str]) -> set[str]:
+        """Tệp có cạnh phụ thuộc tới nút loại `kinds` có `ten_day_du` thuộc `names` (nguồn gốc của mơ hồ mới)."""
+        out: set[str] = set()
+        kind_marks = ",".join("?" * len(kinds))
+        for chunk in _chunks(names):  # type: ignore[arg-type]
+            for r in self.conn.execute(
+                    "SELECT DISTINCT t.duong_dan_tuong_doi FROM canh c JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon"
+                    " JOIN tep t ON t.ma_tep = ns.ma_tep JOIN nut nd ON nd.ma_nut = c.ma_nut_dich"
+                    f" WHERE nd.ten_day_du IN ({','.join('?' * len(chunk))}) AND nd.loai_nut IN ({kind_marks})"
+                    f" AND c.loai_canh NOT IN {self._DEP_TYPES}", [*chunk, *kinds]):
+                out.add(r[0])
+        return out
+
+    def has_export_edges(self, rel_path: str) -> bool:
+        return self.conn.execute(
+            "SELECT 1 FROM canh c JOIN nut n ON n.ma_nut = c.ma_nut_nguon JOIN tep t ON t.ma_tep = n.ma_tep"
+            " WHERE t.duong_dan_tuong_doi = ? AND c.loai_canh = 'IMPORTS' AND c.loai_con IN ('export', 'part')"
+            " LIMIT 1", (rel_path,)).fetchone() is not None
 
     # --- đọc --------------------------------------------------------------------------
     def get_node(self, node_id: str) -> Node | None:

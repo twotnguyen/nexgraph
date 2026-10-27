@@ -18,7 +18,7 @@ from nexgraph_engine.index.generic import extract_generic
 from nexgraph_engine.index.resolver import _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Edge, FileRec, Node, RunState
+from nexgraph_engine.store.models import Edge, FileRec, Node, RunState, UnresolvedRef
 
 COMMIT_EVERY = 100
 
@@ -50,6 +50,41 @@ def _git_head(root: Path) -> str | None:
         return sha if out.returncode == 0 and 40 <= len(sha) <= 64 else None
     except (OSError, subprocess.SubprocessError):
         return None
+
+
+@dataclass(frozen=True)
+class ExtractedFile:
+    """Kết quả đọc và trích xuất một tệp; `nodes[0]` luôn là nút tệp."""
+    rec: FileRec
+    nodes: list[Node]
+    edges: list[Edge]
+    refs: list[UnresolvedRef]
+    bindings: dict[str, dict[str, str]]
+    errors: list[tuple[str, str]]
+
+
+def extract_file(root: Path, f: DiscoveredFile) -> ExtractedFile:
+    """Đọc và trích xuất một tệp (dùng chung cho lập chỉ mục đầy đủ và cập nhật tăng dần). Không ghi CSDL."""
+    path = Path(root) / f.rel_path
+    try:
+        sha = sha256_file(path)
+        source = None if f.oversized else path.read_bytes()
+        read_error = None
+    except OSError as exc:
+        sha, source, read_error = "0" * 64, None, f"Không đọc được tệp: {exc}"
+    rec = FileRec(f.rel_path, f.language, f.size, f.mtime, sha, f.is_test)
+    file_node = Node(id=file_node_id(f.rel_path), kind=NodeKind.FILE, label=f.rel_path.rsplit("/", 1)[-1],
+                     qualified_name=f.rel_path, file=f.rel_path, is_test=f.is_test)
+    if f.oversized:
+        return ExtractedFile(rec, [file_node], [], [], {}, [("oversized", f"{f.size} byte vượt giới hạn")])
+    if read_error or source is None:
+        return ExtractedFile(rec, [file_node], [], [], {}, [("read", read_error or "Không đọc được tệp")])
+    try:
+        x: FileExtraction = (extract_dart(f.rel_path, source, is_test=f.is_test) if f.language == "dart"
+                             else extract_generic(root, f.rel_path, f.language, is_test=f.is_test))
+    except Exception as exc:  # lỗi trích xuất một tệp không được dừng cả job
+        return ExtractedFile(rec, [file_node], [], [], {}, [("extract", f"{type(exc).__name__}: {exc}")])
+    return ExtractedFile(rec, [file_node, *x.nodes], list(x.edges), list(x.refs), dict(x.bindings), list(x.errors))
 
 
 class Indexer:
@@ -136,28 +171,9 @@ class Indexer:
         return bindings
 
     def _index_file(self, run_id: int, f: DiscoveredFile, bindings: dict[str, dict[str, str]]) -> None:
-        store, path = self.store, self.root / f.rel_path
-        try:
-            sha = sha256_file(path)
-            source = None if f.oversized else path.read_bytes()
-            read_error = None
-        except OSError as exc:
-            sha, source, read_error = "0" * 64, None, f"Không đọc được tệp: {exc}"
-        store.add_file(run_id, FileRec(f.rel_path, f.language, f.size, f.mtime, sha, f.is_test))
-        store.add_nodes([Node(id=file_node_id(f.rel_path), kind=NodeKind.FILE, label=f.rel_path.rsplit("/", 1)[-1],
-                              qualified_name=f.rel_path, file=f.rel_path, is_test=f.is_test)])
-        if f.oversized:
-            store.add_file_error(f.rel_path, "oversized", f"{f.size} byte vượt giới hạn")
-            return
-        if read_error or source is None:
-            store.add_file_error(f.rel_path, "read", read_error)
-            return
-        try:
-            x: FileExtraction = (extract_dart(f.rel_path, source, is_test=f.is_test) if f.language == "dart"
-                                 else extract_generic(self.root, f.rel_path, f.language, is_test=f.is_test))
-        except Exception as exc:  # lỗi trích xuất một tệp không được dừng cả job
-            store.add_file_error(f.rel_path, "extract", f"{type(exc).__name__}: {exc}")
-            return
+        store = self.store
+        x = extract_file(self.root, f)
+        store.add_file(run_id, x.rec)
         store.add_nodes(x.nodes)
         store.add_edges(x.edges)
         store.add_unresolved(x.refs)
