@@ -12,17 +12,22 @@ const LIMIT = 2000 // không bao giờ vẽ quá ~2.000 nút (spec §5.9)
 interface Props {
   projectId: string
   startNodeId: string
+  /** Khi đổi sang một id khác null thì chuyển tâm sang nút đó (dùng khi mở kết quả tìm kiếm). */
+  focusNodeId?: string | null
   onSelect?: (node: GraphNode) => void
 }
 
 interface View { nodes: Node[]; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean }
 
-export function GraphCanvas({ projectId, startNodeId, onSelect }: Props) {
-  const [center, setCenter] = useState(startNodeId)
+export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect }: Props) {
+  const [center, setCenter] = useState(focusNodeId ?? startNodeId)
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => setCenter(startNodeId), [startNodeId, projectId])
+  useEffect(() => setCenter(focusNodeId ?? startNodeId), [startNodeId, projectId])
+  useEffect(() => {
+    if (focusNodeId) setCenter(focusNodeId)
+  }, [focusNodeId])
 
   useEffect(() => {
     let alive = true

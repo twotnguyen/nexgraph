@@ -22,7 +22,17 @@ export const vi = {
     error: (message: string) => `Lỗi: ${message}`
   },
   workspace: {
-    graphTab: 'Graph'
+    archTab: 'Kiến trúc',
+    graphTab: 'Graph',
+    archPlaceholder: 'Đang xây dựng'
+  },
+  activity: {
+    search: 'Tìm kiếm'
+  },
+  search: {
+    label: 'Tìm kiếm',
+    placeholder: 'Tìm hàm, lớp, tệp…',
+    empty: 'Không có kết quả'
   },
   graph: {
     backToRoot: 'Về gốc',
