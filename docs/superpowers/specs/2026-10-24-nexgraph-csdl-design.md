@@ -2,28 +2,28 @@
 
 > Trạng thái: **bản nháp chờ người dùng duyệt**, chưa phải quyết định. Cập nhật 2026-10-24.
 > Phục vụ báo cáo tuần 2 (phân tích chức năng UML + thiết kế CSDL theo môn PTTK CSDL). Nơi lưu dữ liệu: spec §5.10, ADR 0005.
-> Tên các repo tham khảo chỉ dùng trong tài liệu nội bộ này; **không đưa vào báo cáo nộp**.
 
-## 1. Nguyên tắc chọn từ các repo tham khảo
+## 1. Nguyên tắc thiết kế
 
-Đối chiếu trực tiếp với schema trong mã nguồn (không chỉ báo cáo phân tích):
+Các điểm thiết kế chính:
 
-| Điểm thiết kế | Cách các repo làm | Áp dụng cho NexGraph |
-|---|---|---|
-| Phạm vi một CSDL | code-review-graph, codegraph: mỗi project một file, bảng không có cột `project`. codebase-memory-mcp: nhiều project dùng chung bảng, mọi bảng có cột `project` | Mỗi project một file → **không có cột `project` ở các bảng đồ thị**, gọn hơn và dễ đạt dạng chuẩn |
-| Đầu mút của cạnh | codegraph: id văn bản + khóa ngoại `ON DELETE CASCADE`. codebase-memory-mcp: id số + khóa ngoại. code-review-graph: chuỗi qualified name, **không có khóa ngoại** (cạnh có thể trỏ tên chưa phân giải, thêm cột `target_resolution` để phân biệt) | Khóa ngoại số tới NÚT. Tham chiếu chưa phân giải tách sang bảng riêng như codegraph, không để cạnh treo |
-| Định danh duy nhất của cạnh | codegraph: `UNIQUE(source,target,kind,IFNULL(line,-1),IFNULL(col,-1))`, ghi chú trong schema nói thiếu ràng buộc này từng làm cạnh trùng, đếm sai (`schema.sql:174-183`). codebase-memory-mcp: `UNIQUE(source,target,type,local_name)` | Thêm cột `cot_bang_chung` và ràng buộc duy nhất tương tự; spec chỉ có `evidence {file, line}` nên cần bổ sung `cot` để hai lời gọi cùng dòng không bị gộp |
-| Đường dẫn trong khóa | code-review-graph lưu **đường dẫn tuyệt đối** trong `qualified_name` (`docs/schema.md:19, 118`) → index không mang đi được. codebase-memory-mcp lưu `root_path` tuyệt đối trong bảng `projects` | Chỉ đường dẫn tương đối (đúng id của spec); không lưu đường dẫn gốc trong CSDL đồ thị |
-| Ghi chú độ phủ | codebase-memory-mcp: bảng `index_coverage(rel_path, kind, detail)` **tách khỏi đồ thị**; codegraph: cột `files.errors` là mảng JSON | Bảng LỖI PHÂN TÍCH riêng (một tệp có nhiều lỗi → không để mảng trong một cột, giữ dạng chuẩn 1) |
-| Tham chiếu chưa phân giải | codegraph: bảng `unresolved_refs` với trạng thái `pending/failed`, xóa theo nút nguồn | Dùng cho lập chỉ mục hai giai đoạn |
-| Tìm kiếm | cả ba dùng FTS5; đều xử lý riêng việc camelCase bị coi là một từ (`name_tokens`, `name_segment_vocab`, `cbm_camel_split`) | Bảng ảo FTS5 kiểu external-content + trigger (codegraph) và một cột từ khóa đã tách camelCase |
-| Dữ liệu suy ra | code-review-graph lưu thêm `risk_index`, `flow_snapshots`, `community_summaries` | **Không lưu** vùng ảnh hưởng, rủi ro, bước tham quan (tính khi cần, spec §5.6, §5.9). Chỉ lưu kết quả cụm hóa vì tốn thời gian tính |
-| Phiên bản schema | code-review-graph: bảng `metadata`+migration v13; codegraph: `schema_versions`; codebase-memory-mcp: `PRAGMA user_version` | `PRAGMA user_version` + cột trong DỰ ÁN; không dùng bảng khóa–giá trị |
-| Chat | open-design: `projects → conversations → messages`, `position`, `UNIQUE`-theo thứ tự, `ON DELETE CASCADE`; nhiều cột JSON | Giữ khung 1–n–n và `thu_tu`; thay JSON bằng bảng TRÍCH DẪN |
+| Điểm thiết kế | Quyết định cho NexGraph |
+|---|---|
+| Phạm vi một CSDL | Mỗi project một file → **không có cột `project` ở các bảng đồ thị**, gọn hơn và dễ đạt dạng chuẩn |
+| Đầu mút của cạnh | Khóa ngoại số tới NÚT với `ON DELETE CASCADE`. Tham chiếu chưa phân giải tách sang bảng riêng, không để cạnh treo |
+| Định danh duy nhất của cạnh | Thêm cột `cot_bang_chung` và ràng buộc duy nhất `(nguồn, đích, loại, dòng, cột)` với giá trị rỗng so như −1; spec chỉ có `evidence {file, line}` nên cần bổ sung cột để hai lời gọi cùng dòng không bị gộp |
+| Đường dẫn trong khóa | Chỉ đường dẫn tương đối (đúng id của spec); không lưu đường dẫn gốc trong CSDL đồ thị, để index mang đi được |
+| Ghi chú độ phủ | Bảng LỖI PHÂN TÍCH riêng (một tệp có nhiều lỗi → không để mảng trong một cột, giữ dạng chuẩn 1) |
+| Tham chiếu chưa phân giải | Bảng riêng với trạng thái `cho/that_bai`, xóa theo nút nguồn; dùng cho lập chỉ mục hai giai đoạn |
+| Tìm kiếm | Bảng ảo FTS5 và một cột từ khóa đã tách camelCase (camelCase thường bị coi là một từ) |
+| Dữ liệu suy ra | **Không lưu** vùng ảnh hưởng, rủi ro, bước tham quan (tính khi cần, spec §5.6, §5.9). Chỉ lưu kết quả cụm hóa vì tốn thời gian tính |
+| Phiên bản schema | `PRAGMA user_version` + cột trong DỰ ÁN; không dùng bảng khóa–giá trị |
+| Chat | Khung 1–n–n (dự án → hội thoại → tin nhắn) và `thu_tu`; thay cột JSON bằng bảng TRÍCH DẪN |
+
 
 ## 2. CSDL đồ thị (`.nexgraph/graph.db`)
 
-Kiểu dữ liệu dùng tên logic của môn học; ghi chú kiểu SQLite khi cài đặt: số nguyên → INTEGER, thời điểm → INTEGER (epoch ms, theo codegraph), văn bản → TEXT, logic → INTEGER 0/1 có CHECK.
+Kiểu dữ liệu dùng tên logic của môn học; ghi chú kiểu SQLite khi cài đặt: số nguyên → INTEGER, thời điểm → INTEGER (epoch), văn bản → TEXT, logic → INTEGER 0/1 có CHECK.
 
 | Thực thể | Thuộc tính (khóa chính gạch dưới) | Ghi chú |
 |---|---|---|
@@ -75,7 +75,7 @@ Cấu hình chung (ngôn ngữ, giao diện) là một bảng một dòng, khôn
 ## 5. Các quyết định đã chốt (người dùng, 2026-10-24)
 
 1. Có bảng ĐOẠN MÃ ĐÃ GỬI (tin nhắn, đường dẫn, dòng), không chép nguyên văn code.
-2. Không lưu phiên ACP ở MVP (open-design có bảng `agent_sessions`; thêm sau nếu cần tiếp tục hội thoại với agent).
+2. Không lưu phiên ACP ở MVP (thêm sau nếu cần tiếp tục hội thoại với agent).
 3. Không lưu bước tham quan và vùng ảnh hưởng (tính khi cần).
 
 Tân từ và sơ đồ thực thể kết hợp: `2026-10-24-nexgraph-csdl-tan-tu.md`, `design/diagrams/erd-do-thi.html`, `design/diagrams/erd-ca-nhan.html`.

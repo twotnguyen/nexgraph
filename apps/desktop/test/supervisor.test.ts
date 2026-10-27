@@ -4,7 +4,7 @@ import { EngineStartError } from '../src/main/engine/launcher'
 import { EngineSupervisor } from '../src/main/engine/supervisor'
 import type { EngineStatus } from '../src/shared/engine-status'
 
-const health = { status: 'ok', api_version: '1', engine_version: '9.9.9', graphify_commit: 'abc' }
+const health = { status: 'ok', api_version: '1', engine_version: '9.9.9', vendor_commit: 'abc' }
 
 function fakeHandle() {
   let exitCb: ((c: number | null, s: NodeJS.Signals | null) => void) | undefined
@@ -31,7 +31,7 @@ describe('EngineSupervisor', () => {
     const { sup, seen } = setup(vi.fn(async () => handle))
     await sup.startEngine()
     expect(seen.map((s) => s.state)).toEqual(['starting', 'ready'])
-    expect(sup.getStatus()).toEqual({ state: 'ready', engineVersion: '9.9.9', graphifyCommit: 'abc' })
+    expect(sup.getStatus()).toEqual({ state: 'ready', engineVersion: '9.9.9', vendorCommit: 'abc' })
   })
 
   it('reports error when engine exits after ready', async () => {

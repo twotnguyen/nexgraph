@@ -8,7 +8,7 @@
 
 | Thư mục | Nội dung |
 |---|---|
-| `engine/` | Engine phân tích bằng Python 3.12 (FastAPI, SQLite, Graphify đã vendor) |
+| `engine/` | Engine phân tích bằng Python 3.12 (FastAPI, SQLite, mã bên thứ ba đã vendor, xem `NOTICE`) |
 | `apps/desktop/` | Ứng dụng Electron + React + TypeScript (chưa tạo) |
 | `docs/` | Spec, kế hoạch, SRS, báo cáo spike |
 
@@ -26,4 +26,4 @@ Engine in một dòng JSON `{"event":"ready","port":...,"pid":...}` rồi nghe t
 
 ## Giấy phép
 
-Apache-2.0. Xem `LICENSE`, `NOTICE`, `THIRD_PARTY_LICENSES.md`.
+Apache-2.0. Xem `LICENSE` và `NOTICE`.

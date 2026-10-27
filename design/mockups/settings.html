@@ -46,17 +46,17 @@
         <label><input type="radio" name="m" checked> Dùng agent đã cài trên máy</label>
         <p>Dùng gói đăng ký bạn đang có thông qua chính ứng dụng của nhà cung cấp. NexGraph điều khiển agent qua giao thức ACP.</p>
         <div class="agents">
-          <div class="ag"><input type="radio" name="a" checked><b>OpenCode</b><small>2.0.32 · đã đăng nhập · đã kiểm tra chế độ chỉ đọc</small><span class="pill ok">Sẵn sàng</span></div>
-          <div class="ag"><input type="radio" name="a"><b>Gemini CLI</b><small>Không tìm thấy trong PATH</small><button class="btn" style="padding:3px 10px;font-size:12px">Hướng dẫn cài</button></div>
-          <div class="ag"><input type="radio" name="a"><b>Claude Code</b><small>Hỗ trợ ở phiên bản sau</small><span class="pill">Sắp có</span></div>
+          <div class="ag"><input type="radio" name="a" checked><b>Agent cục bộ</b><small>2.0.32 · đã đăng nhập · đã kiểm tra chế độ chỉ đọc</small><span class="pill ok">Sẵn sàng</span></div>
+          <div class="ag"><input type="radio" name="a"><b>Agent cục bộ khác</b><small>Không tìm thấy trong PATH</small><button class="btn" style="padding:3px 10px;font-size:12px">Hướng dẫn cài</button></div>
+          <div class="ag"><input type="radio" name="a"><b>Agent cục bộ thứ ba</b><small>Hỗ trợ ở phiên bản sau</small><span class="pill">Sắp có</span></div>
         </div>
       </div>
 
       <div class="opt">
         <label><input type="radio" name="m"> Dùng API key</label>
-        <p>Dùng một endpoint tương thích OpenAI, ví dụ OpenRouter, Groq, Gemini hoặc Ollama trên máy. Key được lưu trong keychain của hệ điều hành.</p>
+        <p>Dùng một endpoint tương thích OpenAI, dịch vụ đám mây hoặc mô hình chạy trên máy. Key được lưu trong keychain của hệ điều hành.</p>
         <div class="form">
-          <span>Địa chỉ API</span><input class="mono" value="https://openrouter.ai/api/v1">
+          <span>Địa chỉ API</span><input class="mono" value="https://api.example.com/v1">
           <span>API key</span><input class="mono" value="sk-or-••••••••••••••••3f9a" type="text">
           <span>Model</span><select><option>meta-llama/llama-4-scout:free</option></select>
           <span></span><div style="display:flex;gap:8px"><button class="btn">Kiểm tra kết nối</button><span class="pill ok" style="align-self:center">Kết nối được, 420 ms</span></div>
@@ -71,7 +71,7 @@
 
       <div class="sect">
         <h2>Cho agent khác dùng bản đồ của NexGraph</h2>
-        <p class="lead" style="margin-bottom:6px">Dán đoạn cấu hình này vào Claude Code, Cursor hoặc OpenCode để agent đó tra cứu dự án qua MCP, kể cả khi NexGraph đang đóng.</p>
+        <p class="lead" style="margin-bottom:6px">Dán đoạn cấu hình này vào một agent hỗ trợ MCP để agent đó tra cứu dự án qua MCP, kể cả khi NexGraph đang đóng.</p>
 <pre>{
   "mcpServers": {
     "nexgraph": {

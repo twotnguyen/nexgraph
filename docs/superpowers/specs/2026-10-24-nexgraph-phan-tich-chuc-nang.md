@@ -86,7 +86,7 @@ Mỗi use case được đặc tả theo: tác nhân, mô tả, tiền điều k
 
 ### UC08 – Cấu hình kết nối AI (F5)
 - **Tác nhân:** Lập trình viên.
-- **Luồng chính:** (1) Người dùng mở Cài đặt, chọn loại kết nối: trợ lý cục bộ (OpenCode) hoặc khóa API. (2) Nhập thông tin (tên trợ lý; hoặc địa chỉ dịch vụ, tên mô hình, khóa). (3) Tiến trình chính lưu khóa vào kho khóa hệ điều hành và ghi KẾT NỐI AI với tên mục kho khóa. (4) Ứng dụng kiểm tra kết nối (khởi tạo ACP hoặc gọi liệt kê mô hình). (5) Hiển thị kết quả và phiên bản trợ lý.
+- **Luồng chính:** (1) Người dùng mở Cài đặt, chọn loại kết nối: trợ lý cục bộ (agent chạy qua ACP) hoặc khóa API. (2) Nhập thông tin (tên trợ lý; hoặc địa chỉ dịch vụ, tên mô hình, khóa). (3) Tiến trình chính lưu khóa vào kho khóa hệ điều hành và ghi KẾT NỐI AI với tên mục kho khóa. (4) Ứng dụng kiểm tra kết nối (khởi tạo ACP hoặc gọi liệt kê mô hình). (5) Hiển thị kết quả và phiên bản trợ lý.
 - **Ngoại lệ:** Kiểm tra lỗi → báo lỗi và gợi ý (sai khóa, sai địa chỉ, chưa cài trợ lý), vẫn cho lưu. Đặt làm mặc định khi đã có mặc định → chuyển cờ mặc định (RB26).
 - **Dữ liệu:** ket_noi_ai; khóa API chỉ ở kho khóa.
 

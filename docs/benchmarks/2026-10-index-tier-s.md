@@ -13,13 +13,13 @@ Ngày đo: 2026-10-27. Công cụ: `engine/scripts/bench_index.py <thư-mục> -
 
 ## Kết quả
 
-Corpus lấy từ spike Dart (`spikes/dart-treesitter/corpus.md`).
+Corpus: một project Flutter cá nhân và một bộ mã mẫu công khai (đa ngôn ngữ), ghim commit khi đo.
 
 | Project | Tệp | Nút | Cạnh | Giai đoạn 1 | Giai đoạn 2 | Tổng | RAM đỉnh | `graph.db` | Mở lại (chỉ đọc + thống kê) |
 |---|---|---|---|---|---|---|---|---|---|
-| `flutter-music-app` (project cá nhân) | 98 | 649 | 1.478 | 0,29 s | 0,04 s | 0,33 s | 72 MB | 1,0 MB | 1 ms |
-| `flutter-samples/compass_app` | 150 | 797 | 1.796 | 0,24 s | 0,03 s | 0,27 s | 73 MB | 0,9 MB | 1 ms |
-| toàn bộ `flutter-samples` (đa ngôn ngữ: 419 Dart, 5 TS, 3 JS, 1 Python) | 428 | 4.320 | 6.781 | 1,16 s | 0,12 s | 1,28 s | 140 MB | 3,8 MB | 2 ms |
+| Project Flutter cá nhân | 98 | 649 | 1.478 | 0,29 s | 0,04 s | 0,33 s | 72 MB | 1,0 MB | 1 ms |
+| App mẫu công khai (1 app) | 150 | 797 | 1.796 | 0,24 s | 0,03 s | 0,27 s | 73 MB | 0,9 MB | 1 ms |
+| toàn bộ bộ mã mẫu công khai (đa ngôn ngữ: 419 Dart, 5 TS, 3 JS, 1 Python) | 428 | 4.320 | 6.781 | 1,16 s | 0,12 s | 1,28 s | 140 MB | 3,8 MB | 2 ms |
 
 Lần chạy thứ hai ngay sau đó cho thời gian tương đương (0,31 s, 0,19 s, 1,18 s), tức chưa có lợi ích cache vì chưa làm cache.
 
@@ -36,5 +36,5 @@ Không đo tầng L (5.000–15.000 tệp); để tuần 8.
 
 - Thời gian nằm gần như hết ở giai đoạn 1 (parse Tree-sitter, ghi SQLite); giai đoạn 2 chiếm khoảng 10%.
 - **Tham chiếu chưa phân giải rất nhiều** (3.568 / 1.937 / 10.248): phần lớn là lời gọi API Flutter/Dart và gói ngoài (`Text`, `Scaffold`, `package:flutter/...`), đúng nguyên tắc không đoán. Cần phân tích theo nhóm trước khi nói về độ chính xác; việc này thuộc chương đánh giá (nhãn tay), chưa làm.
-- Tệp TypeScript/JavaScript/Python đi qua bộ chuyển đổi Graphify nên chỉ có đồ thị chung (xem kế hoạch con 2). Graphify in cảnh báo "yielded no symbols" cho vài tệp `.spec.ts` rỗng; không ảnh hưởng kết quả.
-- RAM đỉnh 140 MB ở 428 tệp là của cả tiến trình đo (gồm Graphify và các grammar nạp sẵn), không phải mức tăng theo kích thước project.
+- Tệp TypeScript/JavaScript/Python đi qua bộ chuyển đổi đa ngôn ngữ nên chỉ có đồ thị chung (xem kế hoạch con 2). Bộ trích xuất in cảnh báo "yielded no symbols" cho vài tệp `.spec.ts` rỗng; không ảnh hưởng kết quả.
+- RAM đỉnh 140 MB ở 428 tệp là của cả tiến trình đo (gồm bộ trích xuất đa ngôn ngữ và các grammar nạp sẵn), không phải mức tăng theo kích thước project.

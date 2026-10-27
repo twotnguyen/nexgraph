@@ -6,7 +6,7 @@
 | Sản phẩm | **NexGraph**: ứng dụng desktop (macOS + Windows) |
 | Nhóm | Nguyễn Ngọc Tình (P1), Nguyễn Hoàng Tùng (P2), Võ Thành Đông (P3) |
 | Ngày | 2026-10-18 |
-| Nguồn quyết định | 4 vòng hỏi đáp với nhóm (2026-10-17 → 18), các báo cáo `repo-reference/docs/00`–`07` |
+| Nguồn quyết định | 4 vòng hỏi đáp với nhóm (2026-10-17 → 18) |
 | Trạng thái | Chờ nhóm duyệt (đã qua 1 vòng review của builder) |
 
 Quy ước: **[Nhóm]** là điều nhóm đã quyết. **[Đề xuất]** là lựa chọn của người viết spec, nhóm chưa xác nhận riêng và có thể đổi. Mục không gắn nhãn là hệ quả trực tiếp của các quyết định của nhóm.
@@ -15,7 +15,7 @@ Quy ước: **[Nhóm]** là điều nhóm đã quyết. **[Đề xuất]** là l
 
 ## 1. Ý định
 
-Lập trình viên khi vào một dự án lạ mất nhiều thời gian để hiểu: code nằm ở đâu, các phần nối với nhau thế nào, sửa chỗ này thì ảnh hưởng chỗ nào. Các công cụ hiện có (Graphify, code-review-graph, codegraph, Understand-Anything…) mỗi cái giải một phần. Đa số là plugin cho AI agent hoặc CLI, không phải một ứng dụng để con người ngồi khám phá. Nhóm cũng phát hiện các điểm yếu cụ thể của chúng: phân tích Dart của Graphify dùng regex, nhận định do LLM sinh không kèm bằng chứng, sơ đồ có mũi tên không được code ủng hộ.
+Lập trình viên khi vào một dự án lạ mất nhiều thời gian để hiểu: code nằm ở đâu, các phần nối với nhau thế nào, sửa chỗ này thì ảnh hưởng chỗ nào. Các công cụ hiện có mỗi cái giải một phần. Đa số là plugin cho AI agent hoặc CLI, không phải một ứng dụng để con người ngồi khám phá. Nhóm cũng phát hiện các điểm yếu cụ thể của chúng: phân tích Dart dùng regex, nhận định do LLM sinh không kèm bằng chứng, sơ đồ có mũi tên không được code ủng hộ.
 
 NexGraph là **một ứng dụng desktop local-first** biến một thư mục mã nguồn thành knowledge graph. Người dùng có thể nhìn kiến trúc, khám phá, tìm kiếm, thấy vùng ảnh hưởng khi sửa code, và hỏi AI. Mọi câu trả lời của AI đều có trích dẫn kiểm chứng được. Điểm nhấn riêng: **hiểu sâu dự án Flutter/Dart**.
 
@@ -47,11 +47,11 @@ Kịch bản demo 5 phút chạy trọn vẹn trên một project Flutter hội 
 - Không có: video thuyết minh, cross-repo/cross-service linking, GitHub Action/PR comment, state management Flutter (Provider/Riverpod/BLoC). Có thể để hướng phát triển.
 
 ### 1.4 Thất bại dù "chạy được" (anti-goals)
-- **Dùng subscription của người dùng bằng cách mượn OAuth client ID hoặc giả mạo app khác** (kiểu oh-my-pi) [Nhóm]. Lý do: vi phạm điều khoản nhà cung cấp, rủi ro khoá tài khoản người dùng, dễ hỏng giữa demo, bị hội đồng chất vấn.
+- **Dùng subscription của người dùng bằng cách mượn OAuth client ID hoặc giả mạo app khác** [Nhóm]. Lý do: vi phạm điều khoản nhà cung cấp, rủi ro khoá tài khoản người dùng, dễ hỏng giữa demo, bị hội đồng chất vấn.
 - AI trả lời mà không có trích dẫn, hoặc trích dẫn sai vẫn hiển thị như đúng.
 - Mũi tên trên sơ đồ kiến trúc không có cạnh thật trong graph đứng sau.
 - Gửi code lên cloud mà người dùng không biết.
-- Telemetry ngầm (lỗi mà codegraph mắc).
+- Telemetry ngầm.
 - Báo cáo có trên 20% nội dung sao chép. Theo quy định khoa là 0 điểm.
 
 ---
@@ -65,7 +65,7 @@ Kịch bản demo 5 phút chạy trọn vẹn trên một project Flutter hội 
 | Máy | P1 có Mac + Win; hai người còn lại dùng Win [Nhóm] |
 | Hệ điều hành mục tiêu | macOS và Windows, cả hai bắt buộc [Nhóm] |
 | Ngôn ngữ phân tích | **Dart/Flutter ưu tiên 1 (MVP, demo)**. Ưu tiên 2: TypeScript/JavaScript (NestJS, React), C# (ASP.NET Core MVC + Razor), Python. Ưu tiên 3: HTML/CSS. Làm sau khi MVP ổn định; mỗi ngôn ngữ kiểm thử trên một dự án thật của nhóm (xem báo cáo tuần 1, Bảng 1.2) [Nhóm, cập nhật 2026-10-18] |
-| AI | Agent có sẵn trên máy (ưu tiên **OpenCode**) + API key tương thích OpenAI. Mọi tính năng lõi chạy không cần AI [Nhóm] |
+| AI | Agent có sẵn trên máy (chạy qua ACP) + API key tương thích OpenAI. Mọi tính năng lõi chạy không cần AI [Nhóm] |
 | Báo cáo | 40–50 trang không kể phụ lục. Chương 3 (thực nghiệm) chỉ 3–10 trang nhưng phải có hồ sơ thiết kế UML. Times New Roman 13, giãn dòng 1.5 (theo `[4] Huong dan viet DACN`) |
 | Tiến độ | Phiếu theo dõi có 12 dòng tuần, GVHD ký mỗi tuần. Tuần 8 (30/11–6/12) GVHD đánh giá % hoàn thành và quyết định có được tiếp tục |
 | License | Repo public từ đầu, **Apache-2.0** [Nhóm] |
@@ -136,9 +136,9 @@ flowchart LR
   subgraph App[NexGraph.app / NexGraph.exe]
     R[Renderer<br/>React + React Flow/ELK]
     M[Electron main · Node<br/>agent adapters ACP · API-key adapter<br/>keychain · watcher điều phối]
-    E[Engine Python sidecar<br/>fork Graphify · index · search · impact<br/>MCP server · HTTP API]
+    E[Engine Python sidecar<br/>mã trích xuất đa ngôn ngữ đã vendor · index · search · impact<br/>MCP server · HTTP API]
   end
-  OC[OpenCode / agent cục bộ<br/>tiến trình con qua ACP]
+  OC[Agent cục bộ<br/>tiến trình con qua ACP]
   P[Nhà cung cấp AI<br/>OpenAI-compatible]
   FS[(Thư mục project<br/>mã nguồn chỉ đọc)]
   NG[(.nexgraph/ trong project<br/>SQLite đồ thị + cache)]
@@ -159,14 +159,13 @@ flowchart LR
 - **Engine** (Python, đóng gói kèm app thành binary sidecar): parse, index, lưu trữ, search, impact, kiến trúc, MCP server. Đây là nơi duy nhất cài thuật toán. Mọi client (UI, MCP, chat) gọi cùng engine.
 - Giao tiếp main ↔ engine: HTTP trên `127.0.0.1`, cổng ngẫu nhiên, token sinh mỗi lần khởi động [Nhóm].
 
-### 5.2 Engine: fork Graphify
-- Fork Graphify, **ghim một commit**, không đồng bộ upstream (upstream đổi rất nhanh, 02 §11).
+### 5.2 Engine: mã trích xuất đa ngôn ngữ đã vendor
+- Mã trích xuất đa ngôn ngữ được chép nguyên vào repo (vendor), **ghim một commit**, không đồng bộ với nguồn gốc (nguồn gốc đổi rất nhanh). Giấy phép và thông báo ở `NOTICE`.
 - Giữ: `detect → extract → build → cluster → analyze`, cache AST, resolver registry.
-- Bỏ/tạm hoãn: 16 bản skill/installer, video/transcribe, Neo4j/FalkorDB, Google Workspace, phần lớn backend LLM của Graphify. Phần LLM của NexGraph nằm ở Electron main, không dùng `llm.py` (02 §12.1).
+- Bỏ/tạm hoãn: 16 bản skill/installer, video/transcribe, Neo4j/FalkorDB, Google Workspace, phần lớn backend LLM của mã vendor. Phần LLM của NexGraph nằm ở Electron main, không dùng `llm.py`.
 - Tách engine truy vấn khỏi `serve.py` thành module riêng. Output là JSON có cấu trúc (node id, điểm, hop, lý do).
 
 ### 5.3 Schema dữ liệu
-Theo `repo-reference/docs/00-tong-quan.md` §6:
 
 **Node**:
 - `id` có cấu trúc, tương đối với root: `{rel_path}::{Qualified.Name}#{kind}`
@@ -175,7 +174,7 @@ Theo `repo-reference/docs/00-tong-quan.md` §6:
 - `language`, `is_test`, `community`, `origin ∈ {ast, resolver, llm}`
 
 **Edge**:
-- **Cho phép nhiều cạnh giữa cùng cặp node** (sửa giới hạn `nx.Graph` của Graphify)
+- **Cho phép nhiều cạnh giữa cùng cặp node** (không dùng `nx.Graph` vì nó chỉ cho một cạnh giữa mỗi cặp node)
 - `type` thuộc enum lõi khoảng 12 loại (`CONTAINS, DEFINES, CALLS, IMPORTS, INHERITS, IMPLEMENTS, REFERENCES, USES_TYPE, TESTED_BY, DOCUMENTS, DEPENDS_ON, SEMANTIC_RELATED`); `subtype` giữ relation gốc
 - `confidence` + `confidence_score`, `origin`
 - `evidence {file, line}`
@@ -192,14 +191,14 @@ Tên chính xác của các enum này để builder chốt.
 - `graph.json` chỉ còn là định dạng xuất [Nhóm: Q8, Q7b].
 
 ### 5.4 Phân tích Dart/Flutter [Nhóm]
-- **Thay extractor Dart dạng regex của Graphify** (`graphify/extractors/dart.py`) bằng Tree-sitter. Grammar Dart có trong `tree-sitter-language-pack`, đã được code-review-graph dùng.
+- **Dùng Tree-sitter thay extractor Dart dạng regex.** Grammar Dart: `tree-sitter-dart` (đã kiểm khả thi, ghim 0.1.0; xem ADR 0006).
 - Trích: class/mixin/enum/extension, hàm/method, import/export/part, lời gọi.
 - **Đặc thù Flutter**:
   1. **Cây widget**: widget nào tạo widget nào trong `build()`.
   2. **Route**: định nghĩa route (`MaterialApp.routes`, `onGenerateRoute`, `GoRouter`…) và lời gọi điều hướng (`Navigator.push*`, `context.go/push`…) → cạnh màn hình → màn hình. Các API router được hỗ trợ cụ thể chốt sau khi xem bộ project test.
   3. **`pubspec.yaml`**: node package + cạnh dependency.
 - Test Dart: file trong `test/`, `integration_test/` → `is_test`, sinh `TESTED_BY`.
-- Python: dùng extractor có sẵn của Graphify, bổ sung `kind/line_end/is_test`.
+- Python: dùng extractor có sẵn của mã vendor, bổ sung `kind/line_end/is_test`.
 
 ### 5.5 Index
 - **Hai pha**:
@@ -211,14 +210,13 @@ Tên chính xác của các enum này để builder chốt.
 
 ### 5.6 Theo dõi thay đổi & vùng ảnh hưởng (F6)
 - Watcher file → re-index tăng dần file đổi.
-- `git diff` working tree so với `HEAD` → hunk → node theo `line_start/line_end` (ý tưởng `changes.py` của code-review-graph, MIT).
-- Lan truyền có trọng số theo loại cạnh, có hướng, có decay và giới hạn độ sâu/số node. Lấy tham số ban đầu từ code-review-graph (`CALLS 1.0, INHERITS 0.9, TESTED_BY 0.7, IMPORTS 0.5`, decay 0.6, depth 2) và tinh chỉnh trên bộ dev.
+- `git diff` working tree so với `HEAD` → hunk → node theo `line_start/line_end` .
+- Lan truyền có trọng số theo loại cạnh, có hướng, có decay và giới hạn độ sâu/số node. Tham số ban đầu: `CALLS 1.0, INHERITS 0.9, TESTED_BY 0.7, IMPORTS 0.5`, decay 0.6, depth 2), tinh chỉnh trên bộ dev.
 - Test liên quan: `TESTED_BY` trực tiếp + test của caller trong ≤2 hop. Hàm đổi mà không có test nào thì đánh dấu "test gap".
 - Chỉ đọc Git, không bao giờ ghi.
 - **Project không phải Git repo** (ví dụ file zip) [Đề xuất]: vẫn mở được. F6 chuyển sang so với **trạng thái của lần index gần nhất** (dựa trên hash nội dung file), UI ghi rõ "không có Git: so với lần index trước".
 
 ### 5.7 Bản đồ kiến trúc (F2)
-Học từ gitdiagram và diagram-design (06, 07):
 - Gộp graph theo thư mục/module/community thành các khối ≤ khoảng 9–12 khối mỗi màn. Bấm khối để đi sâu.
 - Mũi tên giữa khối = tổng hợp cạnh IMPORTS/CALLS thật. **Không có cạnh thật thì không vẽ.** Bấm mũi tên → danh sách call site (file:dòng).
 - Không cần AI. Khi có AI, AI chỉ đặt tên khối và viết mô tả, không quyết định mũi tên.
@@ -226,19 +224,19 @@ Học từ gitdiagram và diagram-design (06, 07):
 ### 5.8 Tích hợp AI [Nhóm]
 
 **Adapter A: agent cục bộ qua ACP**
-- Một adapter ACP duy nhất. **OpenCode trước** (`opencode acp`). Gemini CLI, Claude Code, Codex (qua adapter ACP) làm sau nếu kịp.
-- **Ghim và kiểm thử với một phiên bản OpenCode cụ thể**, ghi vào tài liệu cài đặt. CLI flag thay đổi giữa các phiên bản: open-design gọi `--dangerously-skip-permissions`/`--dir`, còn OpenCode v2.0.32 trên máy nhóm chỉ còn `--auto`. Đó là lý do chọn ACP thay vì gọi CLI với flag.
+- Một adapter ACP duy nhất. Hỗ trợ **một agent cục bộ trước** (chạy ở chế độ ACP); các agent ACP khác làm sau nếu kịp.
+- **Ghim và kiểm thử với một phiên bản agent cụ thể**, ghi vào tài liệu cài đặt. Cờ dòng lệnh thay đổi giữa các phiên bản, đó là lý do chọn ACP thay vì gọi CLI với cờ.
 - Truyền MCP server của NexGraph vào phiên ACP khi tạo session. Không sửa config của người dùng.
-- **Chính sách quyền chỉ đọc**: NexGraph trả lời mọi yêu cầu cấp quyền của agent. Từ chối ghi file, sửa file, chạy lệnh shell. Cho phép đọc file trong project và gọi tool MCP của NexGraph. Không bao giờ bật chế độ tự duyệt kiểu open-design.
-- **Ép chỉ đọc ở hai lớp** [Đề xuất]: OpenCode có thể tự duyệt một số thao tác theo config riêng của người dùng, nên không thể chỉ dựa vào việc trả lời yêu cầu ACP.
-  - Lớp 1: khi spawn `opencode acp`, truyền config qua biến môi trường `OPENCODE_CONFIG_CONTENT` (có trong binary OpenCode v2.0.32 trên máy nhóm). Config này định nghĩa một agent cấm `edit`/`write`/`bash`. File config của người dùng không bị sửa.
+- **Chính sách quyền chỉ đọc**: NexGraph trả lời mọi yêu cầu cấp quyền của agent. Từ chối ghi file, sửa file, chạy lệnh shell. Cho phép đọc file trong project và gọi tool MCP của NexGraph. Không bao giờ bật chế độ tự duyệt.
+- **Ép chỉ đọc ở hai lớp** [Đề xuất]: Agent có thể tự duyệt một số thao tác theo config riêng của người dùng, nên không thể chỉ dựa vào việc trả lời yêu cầu ACP.
+  - Lớp 1: khi spawn agent ở chế độ ACP, truyền config qua biến môi trường cấu hình của agent. Config này định nghĩa một agent cấm `edit`/`write`/`bash`. File config của người dùng không bị sửa.
   - Lớp 2: từ chối mọi yêu cầu ghi/chạy lệnh đến qua ACP.
-  - **Spike ở tuần 2** để xác minh thứ tự ưu tiên khi gộp config của OpenCode. Nếu không đảm bảo được chỉ đọc: OpenCode được ghi rõ là "chế độ hạn chế yếu" trong UI, và **adapter B trở thành đường chính** cho F5.
-  - **Kết quả spike (2026-10-27): không đảm bảo được.** Xem ADR 0004 và `docs/spikes/2026-10-acp-opencode-readonly.md`; OpenCode ở "chế độ hạn chế yếu", adapter B là đường chính, ghim OpenCode 2.1.4.
-- Provider/model (gồm cả provider tuỳ chỉnh như 9router) do người dùng cấu hình trong OpenCode. NexGraph không quản lý.
+  - **Spike ở tuần 2** để xác minh thứ tự ưu tiên khi gộp config của agent. Nếu không đảm bảo được chỉ đọc: agent được ghi rõ là "chế độ hạn chế yếu" trong UI, và **adapter B trở thành đường chính** cho F5.
+  - **Kết quả spike (2026-10-27): không đảm bảo được.** Xem ADR 0004; agent cục bộ ở "chế độ hạn chế yếu", adapter B là đường chính, ghim phiên bản agent đã kiểm thử.
+- Provider/model (gồm cả provider tuỳ chỉnh) do người dùng cấu hình trong agent. NexGraph không quản lý.
 
 **Adapter B: API key tương thích OpenAI**
-- Cấu hình base URL + API key + model. Phủ được 9router, OpenRouter, Groq, Gemini (endpoint OpenAI-compat), Ollama.
+- Cấu hình base URL + API key + model. Phủ được các dịch vụ đám mây và mô hình chạy trên máy có endpoint tương thích.
 - NexGraph tự chạy vòng tool-calling với **cùng bộ tool** như MCP.
 - Key lưu trong keychain hệ điều hành.
 
@@ -251,17 +249,17 @@ Học từ gitdiagram và diagram-design (06, 07):
   1. **Trong app**: dùng cho agent mà NexGraph tự điều khiển. Truyền qua ACP lúc tạo session.
   2. **Độc lập qua stdio** cho agent bên ngoài (UC10), chạy được cả khi app đóng: `nexgraph-engine mcp --project <đường dẫn>`. Cùng binary engine, đọc SQLite của project đã index ở chế độ chỉ đọc (WAL cho phép app ghi song song).
   
-  Settings có nút **"Sao chép cấu hình MCP"** cho OpenCode / Claude Code / Cursor. Hệ quả: binary engine phải chạy được như CLI riêng. Sơ đồ tuần tự "agent ngoài gọi MCP" vẽ theo đường stdio.
+  Settings có nút **"Sao chép cấu hình MCP"** cho agent bên ngoài hỗ trợ MCP. Hệ quả: binary engine phải chạy được như CLI riêng. Sơ đồ tuần tự "agent ngoài gọi MCP" vẽ theo đường stdio.
 - **Tô sáng luồng trên graph (bước 3 của demo)** [Đề xuất]: app không vẽ theo lời AI.
   - Trích dẫn hợp lệ → ánh xạ sang node theo file + khoảng dòng.
   - App tìm đường nối các node đó **chỉ qua cạnh thật** (`CALLS`, `NAVIGATES_TO`, `COMPOSES`, tối đa ~4 hop giữa hai node liên tiếp).
   - Có đường → tô node + cạnh. Không có đường → chỉ tô node, không vẽ mũi tên, ghi chú "không tìm thấy liên kết trực tiếp trong graph".
   - AI được khuyến khích gọi tool truy vết luồng để câu trả lời bám theo đường có thật ngay từ đầu.
-- Có thể port định nghĩa agent và parser stream của open-design (Apache-2.0, giữ attribution). **Không** port phần OAuth của oh-my-pi.
+- Không dùng mã đăng nhập OAuth của bên thứ ba.
 
 ### 5.9 Giao diện [Nhóm]
 
-Bố cục kiểu VS Code/Cursor:
+Bố cục kiểu trình soạn thảo mã:
 
 ```
 ┌──┬──────────────┬──────────────────────────────┬─────────────┐
@@ -271,7 +269,7 @@ Bố cục kiểu VS Code/Cursor:
 │To│ / Tour       │     vùng hiển thị chính      │  chip trích │
 │  │              │     + inspector nổi          │  dẫn        │
 ├──┴──────────────┴──────────────────────────────┴─────────────┤
-│ status: index 100% · OpenCode v2.0.32 · HEAD a1b2c3d         │
+│ status: index 100% · agent cục bộ · HEAD a1b2c3d         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -282,7 +280,7 @@ Màn hình:
 4. **Settings**: chọn agent/API key, kiểm tra kết nối, ngôn ngữ.
 
 Quy tắc:
-- Graph render bằng **React Flow + ELK**, port từ dashboard Understand-Anything (MIT) ở mức hợp lý.
+- Graph render bằng **React Flow + ELK**, (tự dựng, dùng thư viện mã nguồn mở).
 - **Không bao giờ vẽ cả graph.** Tab Graph hiện vùng lân cận node đang chọn, tối đa khoảng 2.000 node; vượt thì gộp.
 - Song ngữ Việt/Anh, **mặc định tiếng Việt**. Thuật ngữ kỹ thuật giữ tiếng Anh [Nhóm].
 - **Việc đầu tiên trước khi code UI: dựng mockup HTML bấm thử được** để nhóm chốt [Nhóm].
@@ -307,7 +305,7 @@ Dữ liệu chia theo tính chất (đổi ngày 2026-10-24, xem ADR 0005):
 | Tầng | Ví dụ | Mục tiêu | Cam kết |
 |---|---|---|---|
 | **S** (≤1.000 file) | Project Flutter của lớp | Index lần đầu < 60 s; mở lại < 3 s | **Bắt buộc**; demo trên tầng này |
-| **L** (5.000–15.000 file) | open-design (5.029 file, ~1,8 triệu dòng), oh-my-pi, hermes-agent | Index lần đầu ≤ 10 phút; mở lại < 5 s; cập nhật sau khi lưu file < 2 s; RAM < 2 GB | **Đo và báo cáo trung thực ở tuần 8**, không cam kết đạt |
+| **L** (5.000–15.000 file) | một project mã nguồn mở lớn (khoảng 5.000–15.000 file) chọn và ghim commit khi đo | Index lần đầu ≤ 10 phút; mở lại < 5 s; cập nhật sau khi lưu file < 2 s; RAM < 2 GB | **Đo và báo cáo trung thực ở tuần 8**, không cam kết đạt |
 
 Chung:
 - UI mượt với ≤ khoảng 2.000 node hiển thị.
@@ -333,8 +331,8 @@ Cả 5 kịch bản đều có test case trong test plan.
 ---
 
 ## 7. Đánh giá (chương thực nghiệm) [Nhóm]
-1. **Độ chính xác graph Dart/Flutter**: gán nhãn tay trên 2–3 project (class, hàm, lời gọi, route, quan hệ widget). Đo precision/recall của NexGraph **so với extractor regex gốc của Graphify**.
-2. **Hiệu năng** theo hai tầng §6.1, trong đó open-design là project kiểm tra tải nặng.
+1. **Độ chính xác graph Dart/Flutter**: gán nhãn tay trên 2–3 project (class, hàm, lời gọi, route, quan hệ widget). Đo precision/recall của NexGraph **so với extractor regex gốc của mã vendor**.
+2. **Hiệu năng** theo hai tầng §6.1, trong đó một project mã nguồn mở lớn là project kiểm tra tải nặng.
 3. **Khảo sát 5–10 bạn cùng lớp**: thời gian và độ chính xác khi trả lời vài câu hỏi về một project lạ, có và không có NexGraph. Kèm thang đo mức hữu ích.
 4. **Bộ project** [Nhóm]: 2–3 project Flutter của lớp môn mobile (nhóm sẽ xin) + 1–2 app Flutter open-source cỡ vừa. Mỗi project ghim một commit. Project demo là project hội đồng chưa thấy.
 
@@ -349,9 +347,9 @@ Cả 5 kịch bản đều có test case trong test plan.
 ### 8.1 Phân vai [Nhóm]
 | Người | Phụ trách |
 |---|---|
-| **P1 (Tình)** | Engine Python: fork Graphify, extractor Dart/Flutter Tree-sitter, schema + SQLite, index, impact. Build/CI macOS |
+| **P1 (Tình)** | Engine Python: mã trích xuất đã vendor, extractor Dart/Flutter Tree-sitter, schema + SQLite, index, impact. Build/CI macOS |
 | **P2 (Tùng)** [Đề xuất; nhóm giao người viết spec chọn] | Frontend: Electron shell, React Flow/ELK, Workspace, Kiến trúc, Changes, Tour, i18n |
-| **P3 (Đông)** [Đề xuất; nhóm giao người viết spec chọn] | AI & chất lượng: adapter ACP (OpenCode) + API key, MCP server, chat có trích dẫn; QA Windows, test plan, đo đánh giá |
+| **P3 (Đông)** [Đề xuất; nhóm giao người viết spec chọn] | AI & chất lượng: adapter ACP (agent cục bộ) + API key, MCP server, chat có trích dẫn; QA Windows, test plan, đo đánh giá |
 
 Báo cáo: mỗi người viết phần mình làm (thiết kế, UC, kiểm thử tương ứng).
 
@@ -359,11 +357,11 @@ Báo cáo: mỗi người viết phần mình làm (thiết kế, UC, kiểm th�
 | Tuần | Ngày (giả định) | Mục tiêu | Kết quả kiểm chứng |
 |---|---|---|---|
 | 1 | 12–18/10 | Chọn đề tài; mô tả đề tài, đặc tả chức năng, mockup giao diện (báo cáo tuần 1) | Báo cáo tuần 1 nộp LMS |
-| 2 | 19–25/10 | Repo + CI; fork Graphify, ghim commit; bản nháp SRS; **mockup UI**; khung Electron gọi được engine sidecar; spike Tree-sitter Dart; **spike OpenCode ACP chỉ đọc** (§5.8) | App rỗng mở được trên Mac + Win, gọi được engine; kết luận spike ACP |
+| 2 | 19–25/10 | Repo + CI; vendor mã trích xuất, ghim commit; bản nháp SRS; **mockup UI**; khung Electron gọi được engine sidecar; spike Tree-sitter Dart; **spike ACP chỉ đọc** (§5.8) | App rỗng mở được trên Mac + Win, gọi được engine; kết luận spike ACP |
 | 3 | 26/10–1/11 | Extractor Dart + schema mới; graph explorer cơ bản | Index một project Flutter của lớp, xem được graph |
 | 4 | 2–8/11 | SQLite + tìm kiếm; bản đồ kiến trúc; CI build bản cài 2 OS | Bản cài tải từ CI chạy trên máy Win của P2/P3 |
 | 5 | 9–15/11 | Watcher + diff → vùng ảnh hưởng + test liên quan; code viewer | Bước 4 của kịch bản demo chạy |
-| 6 | 16–22/11 | Adapter ACP/OpenCode + API key; MCP; chat có trích dẫn | Bước 3 của kịch bản demo chạy |
+| 6 | 16–22/11 | Adapter ACP + API key; MCP; chat có trích dẫn | Bước 3 của kịch bản demo chạy |
 | 7 | 23–29/11 | Flutter: widget, route, pubspec; guided tour. **Bản alpha** | Toàn bộ kịch bản demo chạy |
 | 8 | 30/11–6/12 | **GVHD đánh giá %**. Đo đánh giá (§7), khảo sát, đo tầng L; sửa lỗi | Số liệu chương thực nghiệm |
 | 9 | 7–13/12 | Viết báo cáo, vẽ UML; hoàn thiện UI | Bản nháp báo cáo đủ 4 chương |
@@ -390,22 +388,16 @@ Bộ chuẩn [Nhóm giả định; sẽ đối chiếu nếu khoa có mẫu riê
 | 4. Kết luận | 1–2 tr | Kết quả, hạn chế, hướng phát triển |
 | Phụ lục | — | SRS đầy đủ, đặc tả UC, test plan/kết quả |
 
-**Đạo văn**: các báo cáo trong `repo-reference/docs/` chỉ là tư liệu nội bộ. Báo cáo nộp phải tự viết, trích dẫn nguồn theo quy ước của khoa.
+**Đạo văn**: báo cáo nộp phải tự viết, trích dẫn nguồn theo quy ước của khoa.
 
-Hình vẽ cho báo cáo có thể dùng skill diagram-design (khổ A4). Phải kiểm tra font tiếng Việt có dấu trước (07).
+Hình vẽ cho báo cáo dùng khổ A4. Phải kiểm tra font tiếng Việt có dấu trước.
 
 ---
 
 ## 10. License & ghi công [Nhóm]
-- NexGraph: **Apache-2.0**. Giữ `LICENSE`, `LICENSE-MIT`, `NOTICE` của Graphify. Ghi chú "đã sửa đổi" trên file Graphify bị sửa. Không dùng tên "Graphify" làm thương hiệu.
-- `THIRD_PARTY_LICENSES` liệt kê phần port từ:
-  - Understand-Anything (MIT)
-  - code-review-graph (MIT)
-  - codegraph (MIT)
-  - open-design (Apache-2.0)
-  - gitdiagram (MIT)
-  - diagram-design (MIT)
-- Không dùng mã đăng nhập OAuth của oh-my-pi.
+- NexGraph: **Apache-2.0**. Giữ `LICENSE`, `NOTICE` và các tệp giấy phép của mã bên thứ ba đã vendor (`engine/third_party/`). Ghi chú "đã sửa đổi" trên file vendor bị sửa. Không dùng tên của mã vendor làm thương hiệu.
+- Khi port mã từ bên thứ ba, ghi công trong `NOTICE` cùng PR.
+- Không dùng mã đăng nhập OAuth của bên thứ ba.
 
 ---
 
@@ -424,9 +416,9 @@ Các lựa chọn sau không đổi những gì được xây, nên builder tự
 ## 12. Rủi ro và phương án dự phòng
 | Rủi ro | Phương án |
 |---|---|
-| Đổi `nx.Graph` → đa cạnh làm vỡ nhiều chỗ trong Graphify (02 §12.1) | Giữ phần cũ của Graphify; dựng graph đa cạnh **riêng cho NexGraph** từ dữ liệu extraction trước bước gộp cạnh. Ghi vào SQLite |
+| Đổi `nx.Graph` → đa cạnh làm vỡ nhiều chỗ trong mã vendor | Giữ phần cũ của mã vendor; dựng graph đa cạnh **riêng cho NexGraph** từ dữ liệu extraction trước bước gộp cạnh. Ghi vào SQLite |
 | Đóng gói Python sidecar trên Windows (antivirus, SmartScreen) và macOS (Gatekeeper) khi chưa ký số | Kiểm tra bản cài trên máy Win thật từ tuần 4; tài liệu hướng dẫn mở app chưa ký; demo trên máy nhóm |
-| Giao thức ACP/OpenCode thay đổi | Ghim phiên bản; adapter API key làm đường dự phòng cho F5 |
+| Giao thức ACP hoặc agent cục bộ thay đổi | Ghim phiên bản; adapter API key làm đường dự phòng cho F5 |
 | Tầng L quá chậm | Không cam kết; báo cáo nút thắt + hướng cải thiện |
 | Grammar Dart Tree-sitter thiếu cú pháp mới | Test sớm ở tuần 2 trên project của lớp; ghi lại cú pháp không hỗ trợ |
 | Thiếu project Flutter của lớp để test | Dùng app Flutter open-source thay thế |

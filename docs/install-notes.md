@@ -18,7 +18,6 @@ Bản cài của NexGraph **chưa ký số**, nên macOS (Gatekeeper) và Window
 
 1. Tạo remote GitHub `nexgraph` (công khai), đẩy `main` và mở một PR để CI (`.github/workflows/ci.yml`) chạy trên macOS và Windows. Workflow chưa từng chạy.
 2. P3 cài `.exe` trên Windows thật; P1 cài `.dmg` từ artifact CI; cập nhật bảng trên.
-3. Bỏ `continue-on-error` của job `graphify-upstream` khi baseline `KNOWN_FAILURES.txt` đã khớp trên Linux.
 
 ## Kế hoạch con 2: kiểm tra trên Windows (chưa làm)
 

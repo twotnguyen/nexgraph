@@ -11,7 +11,7 @@ ENGINE_DIR = os.path.abspath(os.path.join(SPECPATH, ".."))
 
 datas, binaries, hiddenimports = [], [], []
 
-# graphify được chép nguyên vào src/graphify; nexgraph_engine là code của nhóm.
+# Mã bên thứ ba được chép nguyên vào src/ (xem NOTICE); nexgraph_engine là code của nhóm.
 for pkg in ("graphify", "nexgraph_engine"):
     d, b, h = collect_all(pkg)
     datas += d

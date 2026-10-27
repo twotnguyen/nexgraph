@@ -5,13 +5,13 @@
 **Goal:** Mở một thư mục project Flutter, lập chỉ mục hai giai đoạn vào SQLite (`.nexgraph/graph.db`) với đồ thị đa cạnh có bằng chứng, rồi xem được lân cận của một nút trên màn hình Graph của ứng dụng.
 
 **Architecture:**
-- Engine thêm các lớp: `schema/` (enum + hai tệp SQL + mở CSDL), `store/` (ghi/đọc đồ thị, đăng ký project), `index/` (quét tệp, chạy hai giai đoạn, công việc nền + sự kiện), `dart/` (extractor Tree-sitter), `api/` (route `/v1`). Graphify chỉ còn dùng cho các ngôn ngữ ngoài Dart qua một bộ chuyển đổi.
+- Engine thêm các lớp: `schema/` (enum + hai tệp SQL + mở CSDL), `store/` (ghi/đọc đồ thị, đăng ký project), `index/` (quét tệp, chạy hai giai đoạn, công việc nền + sự kiện), `dart/` (extractor Tree-sitter), `api/` (route `/v1`). Mã trích xuất đa ngôn ngữ đã vendor chỉ còn dùng cho các ngôn ngữ ngoài Dart qua một bộ chuyển đổi.
 - Giai đoạn 1 ghi tệp, nút, cạnh cấu trúc và các **tham chiếu chưa phân giải**; giai đoạn 2 phân giải import, kế thừa và lời gọi thành cạnh có bằng chứng (tệp:dòng). Mỗi lần index đầy đủ xoá đồ thị cũ rồi ghi lại (tăng dần ở kế hoạch con 3–4).
 - Electron main giữ client gọi engine và chuyển sự kiện SSE lên renderer qua IPC; renderer có màn hình Dự án, Đang lập chỉ mục và thẻ Graph (React Flow + ELK trong Web Worker).
 
 **Tech Stack:** Python 3.12 + uv + FastAPI + sqlite3 (≥ 3.43, FTS5) + `tree-sitter-dart==0.1.0` + `pathspec` + pytest · Electron 44 + React 19 + `@xyflow/react` 12 + `elkjs` 0.12 + vitest + Testing Library · pnpm.
 
-**Spec:** `docs/superpowers/specs/2026-10-18-nexgraph-desktop-design.md` (§5.3, 5.4, 5.5, 5.10, 6.1, 6.3) · **CSDL:** `docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md`, `design/database/graph.sql`, `design/database/app.sql` · **Phân tích UC:** `docs/superpowers/specs/2026-10-24-nexgraph-phan-tich-chuc-nang.md` (UC01, UC03, UC05) · **Kế hoạch tổng:** `docs/superpowers/plans/2026-10-18-nexgraph-roadmap.md` (hợp đồng API v1, enum) · **Spike Dart:** `docs/spikes/2026-10-dart-treesitter.md`.
+**Spec:** `docs/superpowers/specs/2026-10-18-nexgraph-desktop-design.md` (§5.3, 5.4, 5.5, 5.10, 6.1, 6.3) · **CSDL:** `docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md`, `design/database/graph.sql`, `design/database/app.sql` · **Phân tích UC:** `docs/superpowers/specs/2026-10-24-nexgraph-phan-tich-chuc-nang.md` (UC01, UC03, UC05) · **Kế hoạch tổng:** `docs/superpowers/plans/2026-10-18-nexgraph-roadmap.md` (hợp đồng API v1, enum).
 
 ## Global Constraints
 
@@ -36,7 +36,7 @@
 - **Giá trị cạnh phân giải:** `confidence` = `INFERRED`, `origin` = `resolver`; điểm 0,9 (cùng lớp hoặc cùng tệp), 0,8 (tệp đã import), 0,5 (duy nhất trong project). Nhiều ứng viên ở cùng mức thì **không tạo cạnh** (tham chiếu giữ `that_bai`), không đoán.
 - **Mixin, `implements`, `on`:** `with M` → `INHERITS` subtype `mixin`; `implements I` → `IMPLEMENTS`; `mixin M on B` → `INHERITS` subtype `on`; `import` → `IMPORTS`, `export` → `IMPORTS` subtype `export`, `part` → `IMPORTS` subtype `part`.
 - **Widget:** lớp có `extends` một trong `StatelessWidget, StatefulWidget, ConsumerWidget, ConsumerStatefulWidget, HookWidget, HookConsumerWidget` được gán `NodeKind.widget`; các lớp khác là `class`. `screen`/`route`/`COMPOSES`/`NAVIGATES_TO`/`pubspec` thuộc kế hoạch con 6.
-- **Ngôn ngữ ngoài Dart** chỉ ở mức "graph chung" (spec §6.3 mục 3): nút tệp/lớp/hàm/phương thức, `DEFINES`, cạnh `CALLS` trong cùng tệp, `IMPORTS` chưa phân giải. Graphify không cho dòng kết thúc, nên `line_end` của các nút này là dòng lớn nhất trong bằng chứng các cạnh xuất phát từ nút (tối thiểu bằng `line_start`); ghi rõ là ước lượng.
+- **Ngôn ngữ ngoài Dart** chỉ ở mức "graph chung" (spec §6.3 mục 3): nút tệp/lớp/hàm/phương thức, `DEFINES`, cạnh `CALLS` trong cùng tệp, `IMPORTS` chưa phân giải. Bộ trích xuất này không cho dòng kết thúc, nên `line_end` của các nút này là dòng lớn nhất trong bằng chứng các cạnh xuất phát từ nút (tối thiểu bằng `line_start`); ghi rõ là ước lượng.
 - **Parse tuần tự** ở kế hoạch này (đo được ~900 tệp/giây); parse song song và cache theo mã băm ở kế hoạch con 3.
 - **Hoãn sang kế hoạch con 3:** cảnh báo project quá lớn và chọn thư mục con/package (ngoại lệ b của UC01), cache theo mã băm, parse song song, FTS5 và `GET /search`, khối kiến trúc/cộng đồng.
 - Hợp đồng gốc ghi "huỷ job" ở kế hoạch con 3; kế hoạch này làm luôn huỷ cộng tác giữa các tệp vì route `DELETE /v1/jobs/{id}` thuộc kế hoạch con 2.
@@ -214,7 +214,7 @@ Job   = {job_id, project_id, state: "queued"|"structure"|"resolve"|"done"|"error
   - `@dataclass(frozen=True) FileExtraction(nodes: list[Node], edges: list[Edge], refs: list[UnresolvedRef], bindings: dict[str, dict[str, str]], errors: list[tuple[str, str]])`: `edges` chỉ chứa cạnh trong cùng tệp (`DEFINES`); `refs` chứa mọi import, kế thừa và lời gọi; `bindings[node_id]` ánh xạ tên biến → tên kiểu khai báo (trường của lớp, tham số và biến cục bộ của hàm) để Task 7 phân giải `receiver.method()`; `errors` là cặp `(loai, chi_tiet)` theo RB4.
   - `extract_dart(rel_path: str, source: bytes, *, is_test: bool) -> FileExtraction`
 
-**Quy tắc trích xuất** (tên node theo spike: `class_definition`, `mixin_declaration`, `enum_declaration`, `extension_declaration`, `function_signature` + `function_body` anh em, `method_signature` + `function_body`, `library_import`, `library_export`, `part_directive`; lời gọi là chuỗi `identifier` + `selector`… + `selector(argument_part)`, xem `callee_chain` trong `spikes/dart-treesitter/spike.py`):
+**Quy tắc trích xuất** (tên node theo grammar: `class_definition`, `mixin_declaration`, `enum_declaration`, `extension_declaration`, `function_signature` + `function_body` anh em, `method_signature` + `function_body`, `library_import`, `library_export`, `part_directive`; lời gọi là chuỗi `identifier` + `selector`… + `selector(argument_part)`):
 - Lớp/mixin/enum/extension → nút cùng tên loại (lớp thành `widget` theo quyết định ở trên; `extension on String` không tên có `label` `"extension on String"`). Hàm cấp cao → `function`; hàm trong lớp/mixin/enum/extension → `method` với `qualified_name` `"Lớp.tên"`; getter `"Lớp.tên"`, setter `"Lớp.tên="`. `line_start` là dòng khai báo (1-based), `line_end` là dòng cuối của thân hàm hoặc `}` của lớp; `signature` là dòng khai báo cắt còn tối đa 200 ký tự. Constructor bỏ qua ở kế hoạch này.
 - Tệp `is_test`: `la_kiem_thu` bật cho mọi nút trong tệp; mỗi lời gọi `test(...)`/`testWidgets(...)` có chuỗi mô tả thành nút `test` (`qualified_name` = mô tả, thêm `@<dòng>` nếu trùng id trong tệp).
 - `refs`: mỗi `import/export/part` → `UnresolvedRef(source=file_node_id, name=<chuỗi uri>, type=IMPORTS, …)` kèm subtype ghi trong `name` bằng tiền tố `export:` / `part:` (import không tiền tố); `extends X` → `INHERITS`; `with M` → `INHERITS` tên `mixin:M`; `implements I` → `IMPLEMENTS`; `on B` → `INHERITS` tên `on:B`; mỗi lời gọi trong thân hàm/method → `CALLS` với `name` = chuỗi gọi (`helper`, `this.other`, `auth.login`, `Foo`, `Foo.named`), nguồn là nút hàm/method bao quanh.
@@ -242,7 +242,7 @@ Job   = {job_id, project_id, state: "queued"|"structure"|"resolve"|"done"|"error
 
 ---
 
-### Task 6: Bộ chuyển đổi Graphify cho ngôn ngữ khác
+### Task 6: Bộ chuyển đổi cho ngôn ngữ khác
 
 **Người:** P1
 
@@ -256,15 +256,15 @@ Job   = {job_id, project_id, state: "queued"|"structure"|"resolve"|"done"|"error
 - Produces: `extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) -> FileExtraction`
 
 - [ ] **Step 1: Viết test (đang fail)** trên `py_mini`:
-  - `test_python_kinds_and_ids`: lớp → `class`, hàm → `function`, phương thức (nhãn Graphify bắt đầu bằng `.`) → `method` với `qualified_name` `"Lớp.tên"`; id dùng `node_id` của Task 5; không nút nào thuộc loại khác.
+  - `test_python_kinds_and_ids`: lớp → `class`, hàm → `function`, phương thức (nhãn của bộ trích xuất bắt đầu bằng `.`) → `method` với `qualified_name` `"Lớp.tên"`; id dùng `node_id` của Task 5; không nút nào thuộc loại khác.
   - `test_line_end_estimate_contains_evidence`: mọi cạnh `CALLS` có `line` nằm trong `[line_start, line_end]` của nút nguồn (RB22).
   - `test_imports_become_refs`: import sinh `UnresolvedRef` loại `IMPORTS`.
   - `test_intra_file_call_edge`: lời gọi tới hàm cùng tệp ra một `Edge` (trong `edges`), lời gọi tới tên không có trong tệp ra `UnresolvedRef`.
-  - `test_unsupported_language_returns_error`: ngôn ngữ Graphify không đọc được trả `errors` có `("extract", …)`, không ném lỗi.
+  - `test_unsupported_language_returns_error`: ngôn ngữ bộ trích xuất không đọc được trả `errors` có `("extract", …)`, không ném lỗi.
 - [ ] **Step 2: Chạy** `uv run pytest tests/test_generic_extractor.py -v`. Kỳ vọng: FAIL.
-- [ ] **Step 3: Cài đặt** `extract_generic`: gọi `graphify.extract.extract([root/rel_path], cache_root=<thư mục tạm>, root=root, parallel=False)` **cho từng tệp** (id của Graphify không đảm bảo duy nhất giữa các thư mục), ánh xạ nút/cạnh theo bảng: `contains` và `method` → `DEFINES`; `imports` → `UnresolvedRef(IMPORTS)`; `calls` → `CALLS` (`Edge` nếu đích cùng tệp, ngược lại `UnresolvedRef`); `confidence` giữ nguyên, `origin` = `ast`. Không sửa mã trong `engine/src/graphify/`.
+- [ ] **Step 3: Cài đặt** `extract_generic`: gọi `graphify.extract.extract([root/rel_path], cache_root=<thư mục tạm>, root=root, parallel=False)` **cho từng tệp** (id của bộ trích xuất không đảm bảo duy nhất giữa các thư mục), ánh xạ nút/cạnh theo bảng: `contains` và `method` → `DEFINES`; `imports` → `UnresolvedRef(IMPORTS)`; `calls` → `CALLS` (`Edge` nếu đích cùng tệp, ngược lại `UnresolvedRef`); `confidence` giữ nguyên, `origin` = `ast`. Không sửa mã trong `engine/src/graphify/`.
 - [ ] **Step 4: Chạy** `uv run pytest -v`. Kỳ vọng: PASS.
-- [ ] **Step 5: Commit** `feat(engine): graphify adapter for non-dart languages (generic graph)`.
+- [ ] **Step 5: Commit** `feat(engine): adapter for non-dart languages (generic graph)`.
 
 ---
 
@@ -473,7 +473,7 @@ Job   = {job_id, project_id, state: "queued"|"structure"|"resolve"|"done"|"error
 
 - [ ] **Step 1: Viết `test_e2e_bookstore.py`**: qua `TestClient` mở bản sao `bookstore_app` ở đường dẫn có dấu, index, chờ `done`, kiểm các sự thật của kịch bản demo bước 2–3 ở mức dữ liệu: có cạnh `IMPORTS` từ `login_screen.dart` tới `auth_service.dart`; có đường `LoginScreen.build → AuthService.login → ApiClient.post` chỉ qua cạnh `CALLS` (duyệt bằng `neighbors`, `depth=3`); mọi cạnh `CALLS/IMPORTS` có bằng chứng; index lần hai ra cùng số nút; mở lại CSDL chỉ đọc đọc được ngay.
 - [ ] **Step 2: Chạy** `uv run pytest tests/test_e2e_bookstore.py -v`. Kỳ vọng: PASS (nếu FAIL do dữ liệu, sửa extractor/resolver ở task tương ứng và thêm test hồi quy ở đó).
-- [ ] **Step 3: Đo** `bench_index.py` trên: `spikes/dart-treesitter/corpus/flutter-music-app` (98 tệp), `…/corpus/flutter-samples/compass_app` (project vừa), toàn bộ `…/flutter-samples` (484 tệp). Ghi vào `docs/benchmarks/2026-10-index-tier-s.md`: cấu hình máy, số liệu, so với mục tiêu tầng S (< 60 s lần đầu, < 3 s mở lại), cảnh báo nếu vượt. **Không cam kết** số liệu khi chưa đạt, ghi nút thắt đo được.
+- [ ] **Step 3: Đo** `bench_index.py` trên: một project Flutter cá nhân (98 tệp), một app mẫu công khai (project vừa) và toàn bộ bộ mã mẫu công khai đó (484 tệp). Ghi vào `docs/benchmarks/2026-10-index-tier-s.md`: cấu hình máy, số liệu, so với mục tiêu tầng S (< 60 s lần đầu, < 3 s mở lại), cảnh báo nếu vượt. **Không cam kết** số liệu khi chưa đạt, ghi nút thắt đo được.
 - [ ] **Step 4: Kiểm trên Windows** (P3): `uv run pytest` trong `engine/`, mở `bookstore_app` ở đường dẫn có dấu và khoảng trắng, index xong, xem thẻ Graph. Ghi kết quả vào `docs/install-notes.md`; thất bại ghi rõ lỗi và mở issue.
 - [ ] **Step 5: Đồng bộ tài liệu:** cập nhật UC01/UC03/UC05 cho khớp tên route và trường thực tế; thêm vào roadmap hình dạng JSON v1 nếu chưa; cập nhật `docs/project/tong-quan.md` và `nhat-ky.md` ở workspace đồ án.
 - [ ] **Step 6: Commit** `test(engine): e2e index of bookstore fixture; docs: tier S benchmark`.

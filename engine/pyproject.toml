@@ -7,7 +7,7 @@ license = "Apache-2.0"
 dependencies = [
     "fastapi",
     "uvicorn",
-    # Phụ thuộc bắt buộc của Graphify @ 86c57be, giữ nguyên ràng buộc phiên bản upstream
+    # Phụ thuộc bắt buộc của mã bên thứ ba đã vendor (xem NOTICE), giữ nguyên ràng buộc phiên bản gốc
     "networkx>=3.4",
     "numpy>=1.21",
     "rapidfuzz>=3.0",

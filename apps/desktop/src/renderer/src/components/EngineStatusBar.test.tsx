@@ -13,7 +13,7 @@ describe('EngineStatusBar', () => {
   it('shows ready with version', () => {
     render(
       <EngineStatusBar
-        status={{ state: 'ready', engineVersion: '0.1.0', graphifyCommit: '86c57be' }}
+        status={{ state: 'ready', engineVersion: '0.1.0', vendorCommit: '86c57be' }}
         onRestart={() => {}}
       />
     )

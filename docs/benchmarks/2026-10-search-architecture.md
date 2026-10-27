@@ -17,9 +17,9 @@ Ngày đo: 2026-10-27. Công cụ: `engine/scripts/bench_search_arch.py` (thêm 
 
 | Project | Tệp | Nút | Cạnh | Cộng đồng | Lập chỉ mục (gồm FTS5 + cộng đồng) | Tìm kiếm p50 / p95 | Màn gốc kiến trúc | Màn chậm nhất | Số màn đã duyệt | Khối tối đa/màn | `graph.db` |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| `flutter-music-app` | 98 | 649 | 1.478 | 7 | 0,39 s | 0,1 / 0,8 ms | 1,3 ms (2 khối, 1 mũi tên) | 1,4 ms | 16 | 12 | 1,0 MB |
-| `flutter-samples/compass_app` | 150 | 797 | 1.796 | 8 | 0,24 s | 0,2 / 0,5 ms | 1,8 ms (2 khối, 0 mũi tên) | 1,9 ms | 97 | 9 | 1,0 MB |
-| toàn bộ `flutter-samples` (đa ngôn ngữ) | 428 | 4.320 | 6.781 | 23 | 1,29 s | 0,3 / 1,4 ms | 3,7 ms (12 khối, 5 mũi tên) | 4,5 ms | 235 | 12 | 4,4 MB |
+| Project Flutter cá nhân | 98 | 649 | 1.478 | 7 | 0,39 s | 0,1 / 0,8 ms | 1,3 ms (2 khối, 1 mũi tên) | 1,4 ms | 16 | 12 | 1,0 MB |
+| App mẫu công khai (1 app) | 150 | 797 | 1.796 | 8 | 0,24 s | 0,2 / 0,5 ms | 1,8 ms (2 khối, 0 mũi tên) | 1,9 ms | 97 | 9 | 1,0 MB |
+| toàn bộ bộ mã mẫu công khai (đa ngôn ngữ) | 428 | 4.320 | 6.781 | 23 | 1,29 s | 0,3 / 1,4 ms | 3,7 ms (12 khối, 5 mũi tên) | 4,5 ms | 235 | 12 | 4,4 MB |
 | **dự án giả 6.000 tệp** (dữ liệu sinh, không phải project thật) | 6.000 | 24.122 | 31.215 | 65 | 2,06 s | 0,4 / 1,1 ms | 25,6 ms (12 khối, 60 mũi tên) | 40,3 ms | 227 | 12 | 11,4 MB |
 
 Quét sơ bộ (`scan_project`): 0,01 s (98 tệp), 0,15 s (428 tệp), 0,03 s (6.000 tệp giả); dự án giả bật `large = true`.
@@ -31,7 +31,7 @@ Quét sơ bộ (`scan_project`): 0,01 s (98 tệp), 0,15 s (428 tệp), 0,03 s (
 | Số khối mỗi màn ≤ 12 (`MAX_BLOCKS`) | Đạt ở cả 4 dự án (tối đa 12) |
 | Tổng `size` các khối = số tệp trong phạm vi | 0 lệch trên mọi màn |
 | `count` của mũi tên = số mục bằng chứng (mẫu 3 mũi tên/màn: 23, 64, 151, 590 mũi tên) | 0 lệch |
-| Cạnh `IMPORTS`/`CALLS` liên tệp bị mất khi gộp ở màn gốc | 0 (ví dụ `flutter-samples`: 1.439 cạnh liên tệp = 14 liên khối đếm đủ trên mũi tên + 1.425 trong cùng khối) |
+| Cạnh `IMPORTS`/`CALLS` liên tệp bị mất khi gộp ở màn gốc | 0 (ví dụ bộ mã mẫu công khai: 1.439 cạnh liên tệp = 14 liên khối đếm đủ trên mũi tên + 1.425 trong cùng khối) |
 
 ## So với mục tiêu tầng S (spec §6.1)
 

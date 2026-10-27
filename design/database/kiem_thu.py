@@ -287,7 +287,7 @@ def kiem_thu_ca_nhan():
     ma_da = str(uuid.uuid4())
     chen(con, "du_an_da_mo", ma_du_an=ma_da, duong_dan_tuyet_doi="/Users/tinh/bookstore_app", ten="bookstore_app",
          noi_luu="trong_du_an", mo_lan_cuoi=1)
-    k_acp = chen(con, "ket_noi_ai", loai="acp", ten_hien_thi="OpenCode", ten_agent="opencode", la_mac_dinh=1)
+    k_acp = chen(con, "ket_noi_ai", loai="acp", ten_hien_thi="Agent cục bộ", ten_agent="agent-cuc-bo", la_mac_dinh=1)
     k_api = chen(con, "ket_noi_ai", loai="api_key", ten_hien_thi="Dịch vụ OpenAI-compatible", base_url="https://x/v1",
                  ten_model="m", muc_keychain="nexgraph/2")
     p1 = chen(con, "phien_chat", ma_du_an=ma_da, ma_ket_noi=k_acp, tieu_de="Luồng đăng nhập", tao_luc=1, cap_nhat_luc=1)

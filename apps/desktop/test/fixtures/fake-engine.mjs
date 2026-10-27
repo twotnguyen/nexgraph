@@ -23,7 +23,7 @@ if (mode === 'never-ready') {
     const node = (id) => ({ id, kind: 'file', label: id, qualified_name: id, language: 'dart', file: id, line_start: null,
       line_end: null, is_test: false, origin: 'ast', signature: null, community: null })
     if (url.pathname === '/v1/health') {
-      return json(200, { status: 'ok', api_version: '1', engine_version: '0.0.0-fake', graphify_commit: 'fake', argv: process.argv })
+      return json(200, { status: 'ok', api_version: '1', engine_version: '0.0.0-fake', vendor_commit: 'fake', argv: process.argv })
     }
     if (url.pathname === '/v1/selftest') {
       return process.env.FAKE_SELFTEST === 'fail' ? json(200, { ok: false, nodes: 0 }) : json(200, { ok: true, nodes: 2 })

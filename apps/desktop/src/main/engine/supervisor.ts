@@ -46,7 +46,7 @@ export class EngineSupervisor {
       })
       const health = await getHealth(h)
       if (gen === this.generation && this.handle === h) {
-        this.set({ state: 'ready', engineVersion: health.engine_version, graphifyCommit: health.graphify_commit })
+        this.set({ state: 'ready', engineVersion: health.engine_version, vendorCommit: health.vendor_commit })
       }
     } catch (err) {
       if (gen !== this.generation) return

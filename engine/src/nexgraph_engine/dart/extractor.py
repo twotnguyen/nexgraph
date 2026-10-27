@@ -1,7 +1,7 @@
 """Trích xuất cấu trúc, import, kế thừa và lời gọi từ một tệp Dart bằng Tree-sitter.
 
 Grammar Dart không có `call_expression`: lời gọi là chuỗi anh em `identifier` + `selector`... + `selector`
-chứa `argument_part` (xem docs/spikes/2026-10-dart-treesitter.md). Hàm này chỉ trích xuất; việc nối tham chiếu
+chứa `argument_part`. Hàm này chỉ trích xuất; việc nối tham chiếu
 thành cạnh nằm ở index/resolver.py.
 """
 from __future__ import annotations

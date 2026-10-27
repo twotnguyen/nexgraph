@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from nexgraph_engine import GRAPHIFY_COMMIT, __version__
+from nexgraph_engine import VENDOR_COMMIT, __version__
 from nexgraph_engine.api import routes_arch, routes_changes, routes_events, routes_graph, routes_projects
 from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.api.services import Services
@@ -61,7 +61,7 @@ def create_app(token: str, allowed_hosts: set[str], *, data_dir: Path | None = N
     @app.get("/v1/health")
     def health():
         return {"status": "ok", "api_version": "1", "engine_version": __version__,
-                "graphify_commit": GRAPHIFY_COMMIT}
+                "vendor_commit": VENDOR_COMMIT}
 
     @app.get("/v1/selftest")
     def selftest():

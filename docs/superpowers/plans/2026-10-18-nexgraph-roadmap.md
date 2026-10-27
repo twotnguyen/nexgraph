@@ -5,8 +5,8 @@
 ## Vì sao chia thành nhiều kế hoạch con
 
 Spec gồm ba hệ thống con phát triển song song bởi ba người: engine Python, ứng dụng desktop, tích hợp AI. Chi tiết của nhiều phần phụ thuộc vào kết quả spike tuần 2:
-- Grammar Dart có chạy cùng phiên bản tree-sitter của Graphify không.
-- OpenCode có ép được chỉ đọc không.
+- Grammar Dart có chạy cùng phiên bản tree-sitter của engine không.
+- Agent cục bộ qua ACP có ép được chỉ đọc không.
 
 Viết sẵn từng hàm cho 9 tuần bây giờ thì sẽ phải viết lại. Vì vậy:
 - **Tài liệu này** cố định những gì cả nhóm phải thống nhất trước để làm song song: cấu trúc repo, **hợp đồng API engine v1**, enum schema, các kế hoạch con và mốc kiểm chứng.
@@ -22,19 +22,18 @@ Viết sẵn từng hàm cho 9 tuần bây giờ thì sẽ phải viết lại. 
 nexgraph/
 ├── engine/                      # Python 3.12, uv — P1 (và P3 cho mcp/)
 │   ├── src/nexgraph_engine/     # code NexGraph: api/, index/, store/, schema/, dart/, impact/, arch/, mcp/
-│   ├── src/graphify/            # Graphify vendored @ 86c57be (Apache-2.0)
+│   ├── src/graphify/            # mã trích xuất vendored @ 86c57be (Apache-2.0)
 │   ├── third_party/graphify/    # LICENSE, LICENSE-MIT, NOTICE, UPSTREAM.md
-│   ├── tests/                   # pytest; tests/graphify_upstream/ = test gốc của Graphify
+│   ├── tests/                   # pytest
 │   └── packaging/               # PyInstaller spec
 ├── apps/desktop/                # Electron + React + TS (electron-vite) — P2 (và P3 cho src/main/ai/)
 │   ├── src/main/                # engine launcher, IPC, ai/ (ACP, API key), keychain
 │   ├── src/preload/
 │   └── src/renderer/            # React, React Flow + ELK, i18n vi/en
 ├── design/mockups/              # mockup HTML (tuần 1, đã xong)
-├── spikes/                      # code bỏ đi của các spike
-├── docs/                        # spec, plans, srs/, spikes/, test-plan/, report/
+├── docs/                        # spec, plans, srs/, test-plan/, report/
 ├── .github/workflows/ci.yml
-├── LICENSE  NOTICE  THIRD_PARTY_LICENSES.md
+├── LICENSE  NOTICE
 ```
 
 ## Hợp đồng API engine v1
@@ -47,7 +46,7 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 
 | Method & path | Kế hoạch con | Trả về (rút gọn) |
 |---|---|---|
-| `GET /v1/health` | 1 | `{status:"ok", api_version:"1", engine_version, graphify_commit}` |
+| `GET /v1/health` | 1 | `{status:"ok", api_version:"1", engine_version, vendor_commit}` |
 | `GET /v1/selftest` | 1 | `{ok:bool, nodes:int}`: extract fixture đóng gói sẵn, kiểm bản đóng gói |
 | `POST /v1/projects` `{path}` | 2 | `{project_id, path, is_git:bool}` |
 | `GET /v1/projects` | 2 | `[{project_id, path, last_indexed_at, last_index_commit}]` |
@@ -134,13 +133,13 @@ Cố định từ đây. Spec §5.3 giao việc chốt tên cho builder.
 
 | # | Sprint | Kế hoạch con | Người | Kết quả kiểm chứng (từ spec §8.2) |
 |---|---|---|---|---|
-| 1 | Tuần 2 (19–25/10) | **Nền tảng**: repo, engine sidecar + Graphify vendored, Electron shell, CI + bản cài 2 OS, mockup, spike Dart, spike ACP, khung SRS | Cả nhóm | Bản cài từ CI mở được trên Mac + Win, gọi được engine; 2 báo cáo spike |
+| 1 | Tuần 2 (19–25/10) | **Nền tảng**: repo, engine sidecar + mã trích xuất vendored, Electron shell, CI + bản cài 2 OS, mockup, spike Dart, spike ACP, khung SRS | Cả nhóm | Bản cài từ CI mở được trên Mac + Win, gọi được engine; 2 báo cáo spike |
 | 2 | Tuần 3 (26/10–1/11) | *(chi tiết: `2026-10-27-nexgraph-p2-index-schema.md`)* **Index & schema** (grammar Dart: `tree-sitter-dart==0.1.0` theo spike 2026-10-27): schema/enum, đa cạnh, SQLite store, extractor Dart Tree-sitter (cấu trúc), job index 2 pha + SSE, projects/nodes/neighbors/code · **Graph explorer v0** | P1 · P2 | Index 1 project Flutter của lớp, xem graph lân cận |
 | 3 | Tuần 4 (2–8/11) | *(chi tiết: `2026-10-27-nexgraph-p3-search-architecture.md`; cache và parse song song chuyển sang kế hoạch con 4 và tuần 8)* **Search & kiến trúc**: FTS5, architecture + evidence, `.gitignore`/generated, cache, huỷ job · UI Search + tab Kiến trúc + Projects/Indexing | P1 · P2 | Tầng S < 60 s trên project của lớp |
 | 4 | Tuần 5 (9–15/11) | *(chi tiết: `2026-10-27-nexgraph-p4-changes-impact.md`; đề xuất `graph.sql` v2 cộng thêm 2 bảng + 1 cột, chờ người dùng xác nhận)* **Thay đổi & ảnh hưởng** (kèm cache theo mã băm và lập chỉ mục tăng dần: cần lưu mọi tham chiếu, kể cả đã phân giải, nên phải quyết định có đổi `graph.sql` lên phiên bản 2 hay không): watcher, diff→node, impact có trọng số, TESTED_BY, test gap, chế độ không Git · UI Changes + code viewer | P1 · P2 | Bước 4 của demo chạy |
-| 5 | Tuần 6 (16–22/11) | **AI** (theo spike 2026-10-27: adapter API key là đường chính, adapter ACP/OpenCode ghi "hạn chế yếu" và phải cứng hoá môi trường, ghim OpenCode 2.1.4): MCP (trong app + stdio), adapter ACP OpenCode chỉ đọc (theo kết luận spike) + adapter API key, keychain, chat có trích dẫn + kiểm tra, `/paths` | P3 (+P1 cho `/paths`) · P2 (UI chat) | Bước 3 của demo chạy |
+| 5 | Tuần 6 (16–22/11) | **AI** (theo spike 2026-10-27: adapter API key là đường chính, adapter ACP ghi "hạn chế yếu" và phải cứng hoá môi trường, ghim phiên bản agent đã kiểm thử): MCP (trong app + stdio), adapter ACP chỉ đọc (theo kết luận spike) + adapter API key, keychain, chat có trích dẫn + kiểm tra, `/paths` | P3 (+P1 cho `/paths`) · P2 (UI chat) | Bước 3 của demo chạy |
 | 6 | Tuần 7 (23–29/11) | **Flutter & tour**: COMPOSES, NAVIGATES_TO, pubspec, tab Flutter, guided tour, i18n hoàn chỉnh. **Alpha** | P1 · P2 | Toàn bộ kịch bản demo chạy |
-| 7 | Tuần 8 (30/11–6/12) | **Đánh giá & ổn định**: nhãn tay, so với regex của Graphify, đo tầng S/L (open-design), khảo sát, sửa lỗi, video dự phòng | P3 chủ trì, cả nhóm | Số liệu chương 3; **GVHD đánh giá %** |
+| 7 | Tuần 8 (30/11–6/12) | **Đánh giá & ổn định**: nhãn tay, so với extractor regex gốc, đo tầng S/L, khảo sát, sửa lỗi, video dự phòng | P3 chủ trì, cả nhóm | Số liệu chương 3; **GVHD đánh giá %** |
 | — | Tuần 9–10 (7–20/12) | Báo cáo, UML, slide, tập demo (không có kế hoạch code) | Cả nhóm | Nộp LMS 21–27/12 |
 
 **Việc không phải code chạy song song** (người phụ trách):

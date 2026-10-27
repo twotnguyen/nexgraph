@@ -25,20 +25,6 @@ jobs:
       - run: uv run pytest tests -v
         working-directory: engine
 
-  graphify-upstream:
-    # Test gốc của Graphify. Baseline KNOWN_FAILURES.txt lập trên macOS; lần chạy đầu trên Linux có thể
-    # lộ thêm lỗi riêng của Linux, nên chưa chặn merge (bỏ continue-on-error khi baseline đã ổn định).
-    name: graphify upstream tests
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv sync
-        working-directory: engine
-      - run: PYTHONPATH=. uv run --project ../.. pytest tests -q -p no:cacheprovider -p conftest_known
-        working-directory: engine/third_party/graphify
-
   desktop:
     name: desktop (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

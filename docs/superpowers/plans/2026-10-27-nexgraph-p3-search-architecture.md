@@ -9,7 +9,7 @@
 - Mũi tên giữa hai khối là tổng hợp **cạnh `IMPORTS` và `CALLS` thật** giữa các tệp thuộc hai khối; không có cạnh thì không có mũi tên. Mỗi mũi tên mở ra danh sách `tệp:dòng`.
 - Desktop thêm thanh hoạt động + panel Tìm kiếm, thẻ Kiến trúc (React Flow + ELK Worker có sẵn), hộp thoại project lớn. Không có AI trong kế hoạch này.
 
-**Tech Stack:** Python 3.12 + sqlite3 FTS5 + `networkx` (Louvain, đã là phụ thuộc của Graphify) + FastAPI + pytest · Electron 44 + React 19 + `@xyflow/react` + `elkjs` + vitest + Testing Library.
+**Tech Stack:** Python 3.12 + sqlite3 FTS5 + `networkx` (Louvain, đã là phụ thuộc của engine) + FastAPI + pytest · Electron 44 + React 19 + `@xyflow/react` + `elkjs` + vitest + Testing Library.
 
 **Spec:** `docs/superpowers/specs/2026-10-18-nexgraph-desktop-design.md` (§5.5, §5.7, §5.9, §6.1, §6.3) · **CSDL:** `design/database/graph.sql` (`nut_fts`, `khoi_kien_truc`, `nut.ma_khoi`) · **UC:** `docs/srs/use-cases/UC01.md`, `UC02.md`, `UC04.md` · **Kế hoạch tổng:** `docs/superpowers/plans/2026-10-18-nexgraph-roadmap.md` (hợp đồng API, JSON v1) · **Kế hoạch con 2:** `2026-10-27-nexgraph-p2-index-schema.md`.
 
@@ -240,7 +240,7 @@ Scan       = {files, by_language: {...}, large: bool, threshold: 5000, top_dirs:
 - [ ] **Step 2: Chạy** `uv run pytest tests/test_arch_evidence.py tests/test_api_arch.py -q`. Kỳ vọng: FAIL.
 - [ ] **Step 3: Cài đặt** `evidence.py` và `routes_arch.py`; `Evidence.file` là tệp của nút nguồn (cũng là `StoredEdge.file`), `line` là `dong_bang_chung`. Cập nhật roadmap.
 - [ ] **Step 4: Chạy** `uv run pytest -q`. Kỳ vọng: PASS.
-- [ ] **Step 5: Kiểm bản đóng gói:** build lại PyInstaller (`networkx` đã gói theo Graphify), chạy `serve`, mở `tests/fixtures/bookstore_app`, index, `GET /architecture`. Kỳ vọng: có khối `services` và `screens`.
+- [ ] **Step 5: Kiểm bản đóng gói:** build lại PyInstaller (`networkx` đã được gói sẵn), chạy `serve`, mở `tests/fixtures/bookstore_app`, index, `GET /architecture`. Kỳ vọng: có khối `services` và `screens`.
 - [ ] **Step 6: Commit** `feat(engine): architecture and evidence routes`.
 
 ---
@@ -361,7 +361,7 @@ Scan       = {files, by_language: {...}, large: bool, threshold: 5000, top_dirs:
 
 - [ ] **Step 1: Viết `test_e2e_search_arch.py`** (qua `api`, dự án `bookstore_app` đặt ở đường dẫn có dấu): tìm `login` ra `AuthService.login` và `LoginScreen`; đi gốc → `screens` → bằng chứng của mũi tên `screens → services` có `login_screen.dart` và dòng khớp với tệp thật; khối `file:` mở được nút bằng `GET /nodes/{id}`; index lại không đổi `stats`; index với `subdir` rồi tìm kiếm chỉ ra nút trong thư mục đó; `GET /scan` đúng.
 - [ ] **Step 2: Chạy** `uv run pytest tests/test_e2e_search_arch.py -v`. Kỳ vọng: PASS (nếu FAIL do dữ liệu thì sửa task tương ứng và thêm test hồi quy ở đó).
-- [ ] **Step 3: Đo** trên `flutter-music-app` (98 tệp), `flutter-samples/compass_app` (150 tệp), toàn bộ `flutter-samples` (428 tệp) ở `spikes/dart-treesitter/corpus/`; ghi cấu hình máy, số liệu và so với **mục tiêu tầng S (< 60 s lần đầu, mở lại < 3 s)** vào `docs/benchmarks/2026-10-search-architecture.md`, kèm: số khối mỗi màn có luôn ≤ 12 không, tỉ lệ cạnh `IMPORTS`/`CALLS` bị mất khi gộp (phải bằng 0 trong phạm vi), và so sánh thời gian lập chỉ mục với số liệu kế hoạch con 2 (FTS5 và cộng đồng làm chậm bao nhiêu). **Không cam kết** số chưa đo; nếu một mục vượt mục tiêu thì ghi nút thắt.
+- [ ] **Step 3: Đo** trên một project Flutter cá nhân (98 tệp), một app mẫu công khai (150 tệp) và toàn bộ bộ mã mẫu đó (428 tệp); ghi cấu hình máy, số liệu và so với **mục tiêu tầng S (< 60 s lần đầu, mở lại < 3 s)** vào `docs/benchmarks/2026-10-search-architecture.md`, kèm: số khối mỗi màn có luôn ≤ 12 không, tỉ lệ cạnh `IMPORTS`/`CALLS` bị mất khi gộp (phải bằng 0 trong phạm vi), và so sánh thời gian lập chỉ mục với số liệu kế hoạch con 2 (FTS5 và cộng đồng làm chậm bao nhiêu). **Không cam kết** số chưa đo; nếu một mục vượt mục tiêu thì ghi nút thắt.
 - [ ] **Step 4: Tạo project giả cỡ lớn** (sinh 6.000 tệp Dart nhỏ trong thư mục tạm bằng một đoạn script trong `bench_search_arch.py --synthetic 6000`) để kiểm `scan.large == true` và thời gian quét; ghi vào tài liệu đo, nêu rõ đây là dữ liệu sinh, không phải project thật.
 - [ ] **Step 5: Kiểm trên Windows** (P3): `uv run pytest` ở `engine/`, `pnpm --filter @nexgraph/desktop test`, mở `bookstore_app` ở đường dẫn có dấu và khoảng trắng, thử tìm kiếm, thẻ Kiến trúc và bấm mũi tên. Ghi kết quả vào `docs/install-notes.md`; lỗi thì ghi rõ và mở issue.
 - [ ] **Step 6: Đồng bộ tài liệu:** UC01 (chọn thư mục con), UC02 (khối, mũi tên, bằng chứng theo cài đặt thực), UC04 (tìm kiếm, ưu tiên trùng tên); roadmap: đánh dấu cache/parse song song chuyển sang kế hoạch con 4 và tuần 8; cập nhật `docs/project/tong-quan.md` và `nhat-ky.md` ở workspace đồ án.

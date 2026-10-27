@@ -10,7 +10,7 @@ from nexgraph_engine.schema.db import load_sql
 
 
 def run_selftest() -> dict:
-    """Extract một file mẫu đóng gói sẵn bằng Graphify để kiểm tra bản đóng gói."""
+    """Extract một file mẫu đóng gói sẵn bằng bộ trích xuất đa ngôn ngữ để kiểm tra bản đóng gói."""
     src = resources.files("nexgraph_engine.resources.selftest").joinpath("hello.py")
     with tempfile.TemporaryDirectory(prefix="ng-selftest-") as tmp:
         # Chép ra thư mục tạm vì package có thể nằm trong bản đóng gói chỉ đọc.

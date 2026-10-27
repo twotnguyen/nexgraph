@@ -4,7 +4,7 @@ export interface Health {
   status: 'ok'
   api_version: '1'
   engine_version: string
-  graphify_commit: string
+  vendor_commit: string
 }
 
 type Target = Pick<EngineHandle, 'baseUrl' | 'token'>

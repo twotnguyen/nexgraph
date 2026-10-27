@@ -1,7 +1,7 @@
-"""Bộ chuyển đổi Graphify cho các ngôn ngữ ngoài Dart (đồ thị chung, spec §6.3 mục 3).
+"""Bộ chuyển đổi cho các ngôn ngữ ngoài Dart (đồ thị chung, spec §6.3 mục 3).
 
-Gọi Graphify cho từng tệp một vì id của Graphify (dựa trên tên tệp không kèm thư mục) có thể trùng giữa các thư mục.
-Graphify chỉ cho dòng bắt đầu nên `line_end` là ước lượng: dòng lớn nhất trong bằng chứng của các cạnh xuất phát từ nút.
+Gọi bộ trích xuất đa ngôn ngữ cho từng tệp một vì id của nó (dựa trên tên tệp không kèm thư mục) có thể trùng giữa các thư mục.
+Bộ trích xuất này chỉ cho dòng bắt đầu nên `line_end` là ước lượng: dòng lớn nhất trong bằng chứng của các cạnh xuất phát từ nút.
 """
 from __future__ import annotations
 
@@ -21,10 +21,10 @@ _cache_dir: tempfile.TemporaryDirectory | None = None
 
 
 def _cache_root() -> Path:
-    # Một thư mục cache duy nhất cho cả tiến trình (Graphify cảnh báo khi đổi cache root giữa các lần gọi).
+    # Một thư mục cache duy nhất cho cả tiến trình (bộ trích xuất cảnh báo khi đổi cache root giữa các lần gọi).
     global _cache_dir
     if _cache_dir is None:
-        _cache_dir = tempfile.TemporaryDirectory(prefix="nexgraph-graphify-")
+        _cache_dir = tempfile.TemporaryDirectory(prefix="nexgraph-extract-")
         atexit.register(_cache_dir.cleanup)
     return Path(_cache_dir.name)
 
@@ -40,10 +40,10 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         return FileExtraction(errors=[("read", f"Không đọc được {rel_path}")])
     try:
         result = extract([path], cache_root=_cache_root(), root=Path(root), parallel=False)
-    except Exception as exc:  # Graphify có thể ném lỗi trên cú pháp lạ; không để job dừng
-        return FileExtraction(errors=[("extract", f"Graphify lỗi: {exc}")])
+    except Exception as exc:  # bộ trích xuất có thể ném lỗi trên cú pháp lạ; không để job dừng
+        return FileExtraction(errors=[("extract", f"Bộ trích xuất lỗi: {exc}")])
     if result.get("failed_sources"):
-        return FileExtraction(errors=[("extract", f"Graphify không đọc được {rel_path} ({language})")])
+        return FileExtraction(errors=[("extract", f"Bộ trích xuất không đọc được {rel_path} ({language})")])
 
     fid = file_node_id(rel_path)
     base = path.name

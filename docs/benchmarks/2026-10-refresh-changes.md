@@ -15,8 +15,8 @@ Ngày đo: 2026-10-27. Công cụ: `engine/scripts/bench_refresh.py` (chép proj
 
 | Project | Tệp | Lập chỉ mục đầy đủ | Refresh không đổi | Sửa 1 tệp (trung vị / tối đa) | Sửa 50 tệp | Thêm 1 tệp | Xoá 1 tệp | Đọc thay đổi + vùng ảnh hưởng* | Mở lại |
 |---|---|---|---|---|---|---|---|---|---|
-| `flutter-music-app` | 98 | 0,33 s | 2 ms | 35 / 43 ms | 206 / 261 ms | 33 ms | 34 ms | 65 ms | 1 ms |
-| toàn bộ `flutter-samples` (đa ngôn ngữ) | 428 | 1,46 s | 88 ms | 176 / 182 ms | 277 / 287 ms | 173 ms | 199 ms | 140 ms | 2 ms |
+| Project Flutter cá nhân | 98 | 0,33 s | 2 ms | 35 / 43 ms | 206 / 261 ms | 33 ms | 34 ms | 65 ms | 1 ms |
+| toàn bộ bộ mã mẫu công khai (đa ngôn ngữ) | 428 | 1,46 s | 88 ms | 176 / 182 ms | 277 / 287 ms | 173 ms | 199 ms | 140 ms | 2 ms |
 | **dự án giả 6.000 tệp** (dữ liệu sinh, không phải project thật) | 6.000 | 2,23 s | 40 ms | 160 / 177 ms | 189 / 204 ms | 180 ms | 189 ms | 93 ms | 6 ms |
 
 \* Đo sau khi đã sửa 150 tệp chưa commit (đủ để có hàng trăm nút đổi), nên lớn hơn trường hợp thật khi chỉ sửa một hàm; số cột này chỉ cho biết cỡ.

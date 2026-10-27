@@ -1,1 +1,0 @@
-language_pack: 18/20 cú pháp OK; lỗi: ['object pattern có generic', 'dot shorthand (Dart 3.10)']

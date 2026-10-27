@@ -22,9 +22,5 @@ Thumbs.db
 # Dữ liệu NexGraph sinh ra khi thử trên chính repo này
 .nexgraph/
 
-# Corpus spike (clone ngoài, không commit)
-spikes/*/corpus/
-
 # Scratch của công cụ làm việc
 .superpowers/
-engine/third_party/graphify/tests/fixtures/graphify-out/cache/stat-index.json

@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from nexgraph_engine import GRAPHIFY_COMMIT, __version__
+from nexgraph_engine import VENDOR_COMMIT, __version__
 from nexgraph_engine.api.app import create_app
 
 TOKEN = "t" * 40
@@ -13,7 +13,7 @@ def test_health_ok_with_token():
     r = client().get("/v1/health", headers={"Authorization": f"Bearer {TOKEN}"})
     assert r.status_code == 200
     assert r.json() == {"status": "ok", "api_version": "1",
-                        "engine_version": __version__, "graphify_commit": GRAPHIFY_COMMIT}
+                        "engine_version": __version__, "vendor_commit": VENDOR_COMMIT}
 
 
 def test_rejects_missing_or_wrong_token():
