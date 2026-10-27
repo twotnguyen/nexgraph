@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+# pnpm 11 chặn script postinstall mặc định; electron cần nó để tải binary.
+allowBuilds:
+  electron: true
+  esbuild: true
+onlyBuiltDependencies:
+  - electron
+  - esbuild

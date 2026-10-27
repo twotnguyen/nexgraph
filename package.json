@@ -1,0 +1,12 @@
+{
+  "name": "nexgraph",
+  "private": true,
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "pnpm --filter @nexgraph/desktop dev",
+    "test": "pnpm --filter @nexgraph/desktop test",
+    "typecheck": "pnpm --filter @nexgraph/desktop typecheck"
+  }
+}
