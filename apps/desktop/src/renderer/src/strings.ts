@@ -23,8 +23,20 @@ export const vi = {
   },
   workspace: {
     archTab: 'Kiến trúc',
-    graphTab: 'Graph',
-    archPlaceholder: 'Đang xây dựng'
+    graphTab: 'Graph'
+  },
+  arch: {
+    root: 'Dự án',
+    breadcrumb: 'Đường dẫn khối',
+    legendArrow: 'Mũi tên = quan hệ có thật trong code',
+    legendCount: 'Số trên mũi tên = số bằng chứng',
+    relations: 'Quan hệ giữa các khối',
+    empty: 'Chưa có dữ liệu, hãy lập chỉ mục',
+    evidence: 'Bằng chứng',
+    close: 'Đóng',
+    loading: 'Đang tải…',
+    noEvidence: 'Không có bằng chứng',
+    files: (n: number) => `${n} tệp`
   },
   activity: {
     search: 'Tìm kiếm'

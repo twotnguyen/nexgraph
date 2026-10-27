@@ -20,7 +20,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       onEvent: vi.fn((cb: (e: EngineEvent) => void) => { handlers.add(cb); return () => handlers.delete(cb) }),
       ...over.index
     },
-    graph: { stats: vi.fn(), neighbors: vi.fn(), node: vi.fn(), code: vi.fn(), search: vi.fn(async () => []),
+    graph: { stats: vi.fn(), neighbors: vi.fn(), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
+      language: null, file: null, line_start: null, line_end: null, is_test: false, origin: 'ast', signature: null, community: null })), code: vi.fn(), search: vi.fn(async () => []),
       architecture: vi.fn(async () => ({ parent: null, blocks: [], links: [] })), archEvidence: vi.fn(async () => []), ...over.graph }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api

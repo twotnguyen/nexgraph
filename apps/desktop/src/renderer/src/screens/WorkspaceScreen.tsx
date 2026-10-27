@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { GraphNode, ProjectSummary } from '@shared/graph-types'
+import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanvas'
 import { ActivityBar } from '../components/layout/ActivityBar'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
 import { NodeInspector } from '../components/graph/NodeInspector'
@@ -25,6 +26,13 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
     setSelected(node)
     setFocus(node.id)
     setTab('graph')
+  }
+  // Mở theo id (từ khối tệp hoặc bằng chứng của mũi tên): lấy chi tiết nút để thẻ thông tin có nội dung.
+  const openNodeId = (id: string) => {
+    setFocus(id)
+    setTab('graph')
+    setSelected(null)
+    window.nexgraph.graph.node(project.project_id, id).then(setSelected).catch(() => {})
   }
 
   return (
@@ -52,7 +60,7 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
           ))}
         </div>
         <div className="canvas-wrap">
-          {tab === 'arch' && <p className="muted placeholder">{vi.workspace.archPlaceholder}</p>}
+          {tab === 'arch' && <ArchitectureCanvas projectId={project.project_id} onOpenNode={openNodeId} />}
           {tab === 'graph' && (
             <>
               <GraphCanvas projectId={project.project_id} startNodeId=".#repository" focusNodeId={focus} onSelect={setSelected} />

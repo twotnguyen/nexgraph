@@ -297,3 +297,106 @@ button:disabled {
 .placeholder {
   padding: 24px;
 }
+
+.arch-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.breadcrumb {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  left: 10px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 2px 6px;
+}
+
+.breadcrumb button {
+  border: none;
+  padding: 2px 4px;
+  background: transparent;
+  color: var(--color-map-blue);
+}
+
+.breadcrumb button:disabled {
+  color: var(--color-text);
+  opacity: 1;
+  cursor: default;
+}
+
+.legend {
+  position: absolute;
+  z-index: 5;
+  bottom: 10px;
+  left: 62px;
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  background: #fffc;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.relations {
+  position: absolute;
+  z-index: 5;
+  top: 52px;
+  left: 10px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  max-height: 40%;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.relations button {
+  width: 100%;
+  text-align: left;
+  padding: 2px 8px;
+}
+
+.evidence-popover {
+  position: absolute;
+  z-index: 8;
+  top: 16px;
+  right: 16px;
+  width: 420px;
+  max-height: 70%;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.evidence-popover header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.evidence-popover ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 4px;
+}
+
+.evidence-popover li button {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+}

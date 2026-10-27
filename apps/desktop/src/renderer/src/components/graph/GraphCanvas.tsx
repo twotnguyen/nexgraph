@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { GraphNode } from '@shared/graph-types'
 import { layoutGraph } from '../../services/elkLayoutService'
 import { vi } from '../../strings'
+import { AutoFit } from '../common/AutoFit'
 import { kindStyle } from './kindStyle'
 
 const W = 180
@@ -77,9 +78,10 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect }: P
       {error && <p role="alert" className="error">{error}</p>}
       {view?.truncated && <p role="status" className="muted">{vi.graph.truncated}</p>}
       {view && (
-        <ReactFlow key={center} nodes={view.nodes} edges={view.edges} onNodeClick={onNodeClick} fitView nodesDraggable={false} proOptions={{ hideAttribution: true }}>
+        <ReactFlow key={center} nodes={view.nodes} edges={view.edges} onNodeClick={onNodeClick} nodesDraggable={false} proOptions={{ hideAttribution: true }}>
           <Background />
           <Controls showInteractive={false} />
+          <AutoFit />
         </ReactFlow>
       )}
     </div>
