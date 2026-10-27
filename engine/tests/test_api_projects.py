@@ -72,3 +72,36 @@ def test_all_routes_require_token_and_host(api, copy_fixture):
         assert api.client.get(u).status_code == 401, u
         assert api.client.get(u, headers={**api.headers, "Host": "evil.com"}).status_code == 403, u
     assert api.client.post("/v1/projects", json={"path": "/"}).status_code == 401
+
+
+def test_index_with_subdir(api, copy_fixture):
+    p = api.open(copy_fixture("bookstore_app"))
+    pid = p["project_id"]
+    r = api.post(f"/v1/projects/{pid}/index", json={"subdir": "lib/services"})
+    assert r.status_code == 202
+    for _ in range(300):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error", "cancelled"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done" and job["files_total"] == 2
+    stats = api.get(f"/v1/projects/{pid}/stats").json()
+    assert stats["files"] == 2
+    node = api.get(f"/v1/projects/{pid}/nodes/lib%2Fservices%2Fauth_service.dart%23file")
+    assert node.status_code == 200
+
+
+def test_index_bad_subdir_is_400_and_creates_no_job(api, copy_fixture):
+    pid = api.open(copy_fixture("bookstore_app"))["project_id"]
+    for bad in ("../x", "/etc", "nope", "lib/main.dart"):
+        r = api.post(f"/v1/projects/{pid}/index", json={"subdir": bad})
+        assert r.status_code == 400 and r.json()["error"]["code"] == "bad_path", bad
+    assert api.index(pid)["state"] == "done"  # không có job nào bị kẹt
+
+
+def test_scan_route(api, copy_fixture):
+    pid = api.open(copy_fixture("bookstore_app"))["project_id"]
+    body = api.get(f"/v1/projects/{pid}/scan").json()
+    assert body["files"] == 9 and body["large"] is False and body["threshold"] == 5000
+    assert body["by_language"] == {"dart": 9} and body["top_dirs"][0] == {"path": "lib", "files": 8}
+    assert api.get("/v1/projects/nope/scan").status_code == 404

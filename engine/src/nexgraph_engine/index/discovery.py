@@ -72,9 +72,15 @@ def _ignored(rel: str, rules: list[tuple[str, pathspec.PathSpec]]) -> bool:
     return False
 
 
-def discover(root: Path, *, max_file_bytes: int = 2_000_000) -> Iterator[DiscoveredFile]:
+def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None = None) -> Iterator[DiscoveredFile]:
     root = Path(root)
     found: list[DiscoveredFile] = []
+
+    def inside(rel_dir: str) -> bool:
+        return subdir is None or rel_dir == subdir or rel_dir.startswith(subdir + "/")
+
+    def on_path_to_subdir(rel_dir: str) -> bool:
+        return subdir is not None and subdir.startswith(rel_dir + "/")
 
     def walk(directory: Path, rel_dir: str, rules: list[tuple[str, pathspec.PathSpec]]) -> None:
         spec = _load_ignore(directory)
@@ -91,10 +97,11 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000) -> Iterator[Discove
             if entry.is_dir(follow_symlinks=False):
                 if entry.name in SKIP_DIRS or _ignored(rel + "/", rules):
                     continue
-                walk(Path(entry.path), rel, rules)
+                if inside(rel) or on_path_to_subdir(rel):  # chỉ đi xuống nhánh dẫn tới thư mục con
+                    walk(Path(entry.path), rel, rules)
             elif entry.is_file(follow_symlinks=False):
                 language = language_of(entry.name)
-                if language is None or entry.name.endswith(GENERATED_SUFFIXES) or _ignored(rel, rules):
+                if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES) or _ignored(rel, rules):
                     continue
                 st = entry.stat(follow_symlinks=False)
                 found.append(DiscoveredFile(rel, language, st.st_size, int(st.st_mtime),

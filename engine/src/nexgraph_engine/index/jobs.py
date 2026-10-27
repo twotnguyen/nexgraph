@@ -6,6 +6,7 @@ import uuid
 
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.index.scan import resolve_subdir
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectRegistry
@@ -29,10 +30,12 @@ class JobManager:
         self._threads: list[threading.Thread] = []
         self._lock = threading.Lock()
 
-    def start_index(self, project_id: str) -> str:
+    def start_index(self, project_id: str, *, subdir: str | None = None) -> str:
         info = self._registry.get(project_id)
         if info is None:
             raise UnknownProject(project_id)
+        if subdir is not None:
+            subdir = resolve_subdir(info.path, subdir)  # ném ProjectPathError nếu không hợp lệ
         with self._lock:
             if any(j["project_id"] == project_id and j["state"] in ACTIVE for j in self._jobs.values()):
                 raise IndexAlreadyRunning(project_id)
@@ -40,7 +43,7 @@ class JobManager:
             self._jobs[job_id] = {"job_id": job_id, "project_id": project_id, "state": "queued",
                                   "files_done": 0, "files_total": 0, "message": None}
             cancel = self._cancels[job_id] = threading.Event()
-            thread = threading.Thread(target=self._run, args=(job_id, info, cancel), daemon=True,
+            thread = threading.Thread(target=self._run, args=(job_id, info, cancel, subdir), daemon=True,
                                       name=f"index-{job_id[:8]}")
             self._threads.append(thread)
         self._bus.publish({"type": "job_progress", **self._jobs[job_id]})
@@ -80,13 +83,14 @@ class JobManager:
         if e.state in ("resolve", "done"):  # giai đoạn 1 xong rồi giai đoạn 2 xong: giao diện nạp lại đồ thị
             self._bus.publish({"type": "graph_updated", "project_id": snapshot["project_id"]})
 
-    def _run(self, job_id: str, info, cancel: threading.Event) -> None:
+    def _run(self, job_id: str, info, cancel: threading.Event, subdir: str | None) -> None:
         conn = None
         try:
             conn = open_graph_db(info.graph_db)
             store = GraphStore(conn)
             store.abort_stale_runs()  # lần chạy dở do engine từng chết giữa chừng
-            self._indexer_cls(store, info.path, on_progress=lambda e: self._update(job_id, e), cancel=cancel).run()
+            self._indexer_cls(store, info.path, on_progress=lambda e: self._update(job_id, e), cancel=cancel,
+                              subdir=subdir).run()
         except Exception as exc:
             self._update(job_id, ProgressEvent("error", 0, 0, f"{type(exc).__name__}: {exc}"))
         finally:

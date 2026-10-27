@@ -108,3 +108,21 @@ def test_is_test_path(rel, expected):
 def test_sha256(tmp_path):
     write(tmp_path, "a.dart", "hello")
     assert sha256_file(tmp_path / "a.dart") == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+
+def test_subdir_keeps_rel_paths_from_root(tmp_path):
+    write(tmp_path, "lib/a.dart")
+    write(tmp_path, "lib/sub/b.dart")
+    write(tmp_path, "test/t_test.dart")
+    write(tmp_path, "main.dart")
+    assert rels(tmp_path, subdir="lib") == ["lib/a.dart", "lib/sub/b.dart"]
+    assert rels(tmp_path, subdir="lib/sub") == ["lib/sub/b.dart"]
+    assert rels(tmp_path, subdir="nope") == []
+
+
+def test_parent_gitignore_applies_to_subdir(tmp_path):
+    write(tmp_path, ".gitignore", "lib/generated/\n*.skip.dart\n")
+    write(tmp_path, "lib/generated/g.dart")
+    write(tmp_path, "lib/x.skip.dart")
+    write(tmp_path, "lib/keep.dart")
+    assert rels(tmp_path, subdir="lib") == ["lib/keep.dart"]

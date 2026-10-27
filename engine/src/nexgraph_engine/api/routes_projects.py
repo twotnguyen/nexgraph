@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
+from nexgraph_engine.index import scan as scan_module
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectPathError
@@ -12,6 +13,10 @@ router = APIRouter(prefix="/v1")
 
 class OpenBody(BaseModel):
     path: str
+
+
+class IndexBody(BaseModel):
+    subdir: str | None = None
 
 
 def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
@@ -51,9 +56,11 @@ def list_projects(request: Request) -> list[dict]:
 
 
 @router.post("/projects/{project_id}/index", status_code=202)
-def start_index(project_id: str, request: Request) -> dict:
+def start_index(project_id: str, request: Request, body: IndexBody | None = None) -> dict:
     try:
-        return {"job_id": request.app.state.services.jobs.start_index(project_id)}
+        return {"job_id": request.app.state.services.jobs.start_index(project_id, subdir=body.subdir if body else None)}
+    except ProjectPathError as exc:
+        raise ApiError(400, "bad_path", str(exc)) from exc
     except UnknownProject as exc:
         raise ApiError(404, "unknown_project", f"Không có dự án {project_id}") from exc
     except IndexAlreadyRunning as exc:
@@ -74,3 +81,14 @@ def cancel_job(job_id: str, request: Request) -> dict:
     if jobs.get(job_id) is None:
         raise ApiError(404, "unknown_job", f"Không có công việc {job_id}")
     return {"cancelled": jobs.cancel(job_id)}
+
+
+@router.get("/projects/{project_id}/scan")
+def scan_project(project_id: str, request: Request) -> dict:
+    info = request.app.state.services.registry.get(project_id)
+    if info is None:
+        raise ApiError(404, "unknown_project", f"Không có dự án {project_id}")
+    result = scan_module.scan_project(info.path)
+    return {"files": result.files, "by_language": result.by_language, "large": result.large,
+            "threshold": scan_module.LARGE_FILE_COUNT,
+            "top_dirs": [{"path": p, "files": n} for p, n in result.top_dirs]}

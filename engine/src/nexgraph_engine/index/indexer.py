@@ -52,15 +52,16 @@ def _git_head(root: Path) -> str | None:
 
 class Indexer:
     def __init__(self, store: GraphStore, root: Path, *, on_progress: Callable[[ProgressEvent], None],
-                 cancel: threading.Event) -> None:
+                 cancel: threading.Event, subdir: str | None = None) -> None:
         self.store, self.root, self.on_progress, self.cancel = store, Path(root), on_progress, cancel
+        self.subdir = subdir
 
     def run(self) -> RunResult:
         t0 = time.time()
         store = self.store
         run_id = store.begin_run(commit_sha=_git_head(self.root))
         try:
-            files = list(discover(self.root))
+            files = list(discover(self.root, subdir=self.subdir))
             total = len(files)
             store.set_run_state(run_id, "cau_truc", files_done=0, files_total=total)
             store.clear_graph()
