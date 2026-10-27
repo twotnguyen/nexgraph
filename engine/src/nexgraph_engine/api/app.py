@@ -6,7 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from nexgraph_engine import GRAPHIFY_COMMIT, __version__
-from nexgraph_engine.api import routes_events, routes_graph, routes_projects
+from nexgraph_engine.api import routes_arch, routes_events, routes_graph, routes_projects
 from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.api.services import Services
 from nexgraph_engine.selftest import run_selftest
@@ -69,6 +69,7 @@ def create_app(token: str, allowed_hosts: set[str], *, data_dir: Path | None = N
 
     app.include_router(routes_projects.router)
     app.include_router(routes_graph.router)
+    app.include_router(routes_arch.router)
     app.include_router(routes_events.router)
     app.add_middleware(Guard, token=token, allowed_hosts=allowed_hosts)
     return app

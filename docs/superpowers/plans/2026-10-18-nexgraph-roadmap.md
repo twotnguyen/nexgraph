@@ -87,6 +87,22 @@ Job   = {job_id, project_id, state: "queued"|"structure"|"resolve"|"done"|"error
 - `GET .../stats` → `{files, nodes_by_kind, edges_by_type, languages, unresolved}`.
 - Nút gốc có id `.#repository`; thư mục `{rel_path}#directory`; tệp `{rel_path}#file`.
 
+## Hình dạng JSON bổ sung (chốt ở kế hoạch con 3, 2026-10-27)
+
+```
+SearchHit = {node: Node, score: float}                      # GET .../search?q&kinds&limit(1–100) → [SearchHit], giảm dần theo score
+Block     = {id, label, kind: "directory"|"community"|"file"|"group", size, symbols, drillable}
+Link      = {from, to, count, types: {"CALLS": n, "IMPORTS": m}}
+ArchView  = {parent: {id, label} | null, blocks: [Block], links: [Link]}   # GET .../architecture?parent=
+Evidence  = {edge: Edge, file, line}                        # GET .../architecture/evidence?from&to&limit(1–200) → [Evidence]
+Scan      = {files, by_language, large, threshold: 5000, top_dirs: [{path, files}]}   # GET .../scan
+```
+
+- Id khối tự mô tả: `dir:<rel_path>`, `file:<rel_path>`, `com:<ma_khoi>`, `more:<id khối cha hoặc rỗng>`. `size` là số tệp, `symbols` là số nút ký hiệu trong các tệp đó. Mỗi màn tối đa 12 khối; phần dư gộp vào một khối `group` "Khác (N mục)".
+- Mũi tên chỉ tổng hợp cạnh `IMPORTS` và `CALLS` giữa hai tệp khác nhau; `count` bằng đúng số mục `Evidence` (khi `limit` đủ lớn). Lỗi: `404 unknown_block`, `400 bad_param`.
+- `GET .../search`: `400 bad_param` khi chuỗi không có từ nào tìm được; từ khoá nằm trong ngoặc kép nên toán tử FTS5 trong dữ liệu người dùng không có nghĩa.
+- `POST .../index` nhận thân tuỳ chọn `{"subdir": "lib/features"}`; `400 bad_path` khi thư mục con không hợp lệ.
+
 ## Enum schema
 
 Cố định từ đây. Spec §5.3 giao việc chốt tên cho builder.

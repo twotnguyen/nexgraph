@@ -248,10 +248,7 @@ class GraphStore:
                 break
         nodes = self._nodes_by_pk(included)
         edges = [
-            StoredEdge(id=r["ma_canh"], file=r["ev_file"], edge=Edge(
-                source=r["src_id"], target=r["dst_id"], type=EdgeType(r["loai_canh"]), subtype=r["loai_con"],
-                confidence=Confidence(r["muc_tin_cay"]), confidence_score=r["diem_tin_cay"],
-                origin=Origin(r["nguon_goc"]), line=r["dong_bang_chung"], col=r["cot_bang_chung"]))
+            self._stored_edge(r)
             for _, r in sorted(edge_rows.items())
             if r["ma_nut_nguon"] in seen and r["ma_nut_dich"] in seen
         ]
@@ -314,6 +311,16 @@ class GraphStore:
                 f"{self._NODE_SQL} WHERE n.ma_nut IN ({','.join('?' * len(chunk))})", chunk).fetchall()
             by_pk.update({r["ma_nut"]: self._node(r) for r in rows})
         return [by_pk[pk] for pk in pks]
+
+    @staticmethod
+    def _stored_edge(r: sqlite3.Row) -> StoredEdge:
+        """Hàng gồm cột của `canh` kèm `src_id`, `dst_id`, `ev_file` (xem `_edge_rows`)."""
+        return StoredEdge(id=r["ma_canh"], file=r["ev_file"], edge=Edge(
+            source=r["src_id"], target=r["dst_id"], type=EdgeType(r["loai_canh"]), subtype=r["loai_con"],
+            confidence=Confidence(r["muc_tin_cay"]), confidence_score=r["diem_tin_cay"],
+            origin=Origin(r["nguon_goc"]), line=r["dong_bang_chung"], col=r["cot_bang_chung"]))
+
+    row_to_edge = _stored_edge
 
     @staticmethod
     def _node(r: sqlite3.Row) -> Node:
