@@ -4,6 +4,7 @@ import multiprocessing
 import os
 import socket
 import sys
+import threading
 from pathlib import Path
 
 import uvicorn
@@ -19,10 +20,23 @@ def _build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="Chạy HTTP API nội bộ tại 127.0.0.1")
     serve.add_argument("--data-dir", required=True, type=Path)
     serve.add_argument("--port", type=int, default=0)
+    serve.add_argument(
+        "--exit-on-stdin-close",
+        action="store_true",
+        help="Tự thoát khi stdin đóng (tiến trình cha chết), để không để lại engine mồ côi",
+    )
     return parser
 
 
-def _serve(data_dir: Path, port: int) -> int:
+def _exit_when_stdin_closes(server: uvicorn.Server) -> None:
+    """Chặn đến khi stdin gặp EOF (tiến trình cha thoát hoặc bị kill), rồi tắt server."""
+    try:
+        sys.stdin.buffer.read()
+    finally:
+        server.should_exit = True
+
+
+def _serve(data_dir: Path, port: int, exit_on_stdin_close: bool) -> int:
     token = os.environ.get("NEXGRAPH_TOKEN", "")
     if len(token) < MIN_TOKEN_LEN:
         print("NEXGRAPH_TOKEN is required (>=32 chars)", file=sys.stderr)
@@ -36,7 +50,10 @@ def _serve(data_dir: Path, port: int) -> int:
     app = create_app(token, {f"127.0.0.1:{real_port}", f"localhost:{real_port}"})
 
     print(json.dumps({"event": "ready", "port": real_port, "pid": os.getpid()}), flush=True)
-    uvicorn.Server(uvicorn.Config(app, log_level="warning")).run(sockets=[sock])
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
+    if exit_on_stdin_close:
+        threading.Thread(target=_exit_when_stdin_closes, args=(server,), daemon=True).start()
+    server.run(sockets=[sock])
     return 0
 
 
@@ -44,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     multiprocessing.freeze_support()
     args = _build_parser().parse_args(argv)
     if args.command == "serve":
-        return _serve(args.data_dir, args.port)
+        return _serve(args.data_dir, args.port, args.exit_on_stdin_close)
     return 2
 
 

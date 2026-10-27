@@ -1,7 +1,10 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
+import { getHealth } from './engine/client'
+import { startEngine } from './engine/launcher'
 import { EngineSupervisor } from './engine/supervisor'
+import { runSmoke } from './smoke'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -38,7 +41,34 @@ function createWindow(): void {
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
+// NEXGRAPH_SMOKE=1: không mở cửa sổ; khởi động engine, chạy selftest, in kết quả rồi thoát (kiểm tra bản đóng gói).
+async function smoke(): Promise<void> {
+  const watchdog = setTimeout(() => {
+    console.log('SMOKE FAIL timeout 90s')
+    app.exit(1)
+  }, 90_000)
+  try {
+    const command = resolveEngineCommand({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, repoRoot })
+    const handle = await startEngine(command, { dataDir })
+    try {
+      await getHealth(handle)
+      console.log(await runSmoke(handle))
+    } finally {
+      await handle.stop()
+    }
+    clearTimeout(watchdog)
+    app.exit(0)
+  } catch (err) {
+    console.log(`SMOKE FAIL ${err instanceof Error ? err.message : String(err)}`)
+    app.exit(1)
+  }
+}
+
 app.whenReady().then(() => {
+  if (process.env.NEXGRAPH_SMOKE === '1') {
+    void smoke()
+    return
+  }
   createWindow()
   void supervisor.startEngine()
   app.on('activate', () => {

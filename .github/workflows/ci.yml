@@ -1,0 +1,94 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: engine (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+        working-directory: engine
+      - run: uv run pytest tests -v
+        working-directory: engine
+
+  graphify-upstream:
+    # Test gốc của Graphify. Baseline KNOWN_FAILURES.txt lập trên macOS; lần chạy đầu trên Linux có thể
+    # lộ thêm lỗi riêng của Linux, nên chưa chặn merge (bỏ continue-on-error khi baseline đã ổn định).
+    name: graphify upstream tests
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+        working-directory: engine
+      - run: PYTHONPATH=. uv run --project ../.. pytest tests -q -p no:cacheprovider -p conftest_known
+        working-directory: engine/third_party/graphify
+
+  desktop:
+    name: desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @nexgraph/desktop typecheck
+      - run: pnpm --filter @nexgraph/desktop test
+
+  package:
+    name: package (${{ matrix.os }})
+    needs: [engine, desktop]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Đóng gói engine (PyInstaller)
+        run: |
+          uv sync
+          uv run pyinstaller packaging/nexgraph-engine.spec --noconfirm
+        working-directory: engine
+      - run: pnpm install --frozen-lockfile
+      - name: Đóng gói ứng dụng (electron-builder)
+        run: pnpm --filter @nexgraph/desktop run package
+      - name: Smoke test bản đóng gói
+        run: node apps/desktop/scripts/smoke-packaged.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexgraph-${{ matrix.os }}
+          path: |
+            apps/desktop/dist/*.dmg
+            apps/desktop/dist/*.exe
+          if-no-files-found: error

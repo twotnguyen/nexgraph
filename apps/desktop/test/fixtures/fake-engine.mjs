@@ -20,6 +20,9 @@ if (mode === 'never-ready') {
     if (req.url === '/v1/health') {
       return json(200, { status: 'ok', api_version: '1', engine_version: '0.0.0-fake', graphify_commit: 'fake', argv: process.argv })
     }
+    if (req.url === '/v1/selftest') {
+      return process.env.FAKE_SELFTEST === 'fail' ? json(200, { ok: false, nodes: 0 }) : json(200, { ok: true, nodes: 2 })
+    }
     return json(404, { error: { code: 'not_found', message: req.url } })
   })
   server.listen(0, '127.0.0.1', () => {

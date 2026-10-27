@@ -37,14 +37,15 @@ export function startEngine(
 ): Promise<EngineHandle> {
   const token = randomBytes(32).toString('hex')
   const isWin = process.platform === 'win32'
-  const child = spawn(cmd.command, [...cmd.args, 'serve', '--data-dir', opts.dataDir, '--port', '0'], {
+  const child = spawn(cmd.command, [...cmd.args, 'serve', '--data-dir', opts.dataDir, '--port', '0', '--exit-on-stdin-close'], {
     cwd: cmd.cwd,
     // Token chỉ đi qua biến môi trường, không bao giờ qua argv.
     env: { ...(opts.env ?? process.env), NEXGRAPH_TOKEN: token, PYTHONUTF8: '1' },
     windowsHide: true,
     // Nơi khác Windows: tạo nhóm tiến trình riêng để diệt được cả cây (ví dụ `uv run` -> python).
     detached: !isWin,
-    stdio: ['ignore', 'pipe', 'pipe']
+    // stdin là sợi dây sống: cha chết thì pipe đóng, engine thấy EOF và tự thoát.
+    stdio: ['pipe', 'pipe', 'pipe']
   })
   const pid = child.pid ?? -1
 

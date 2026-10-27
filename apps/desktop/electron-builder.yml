@@ -1,0 +1,20 @@
+appId: io.github.nexgraph.desktop
+productName: NexGraph
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+# Engine đã đóng gói bằng PyInstaller (engine/dist/nexgraph-engine) được chép vào resources/engine/.
+extraResources:
+  - from: ../../engine/dist/nexgraph-engine
+    to: engine
+mac:
+  target: dmg
+  identity: null # không ký số (xem README: cảnh báo Gatekeeper)
+  category: public.app-category.developer-tools
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
