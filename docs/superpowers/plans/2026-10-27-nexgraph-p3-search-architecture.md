@@ -48,7 +48,7 @@ Scan       = {files, by_language: {...}, large: bool, threshold: 5000, top_dirs:
 
 ## Review Focus
 
-1. **Chuỗi tìm kiếm có ký tự đặc biệt** (`"`, `*`, `-`, `(`, `AND`, `OR`, `NEAR`, dấu `:`), chuỗi chỉ gồm dấu, rất dài, có dấu tiếng Việt và `đ`: không bao giờ ném lỗi cú pháp FTS5; trả mảng (có thể rỗng) với `200`; chuỗi rỗng hoặc chỉ khoảng trắng trả `400 bad_param`. *Test: Task 2 `test_special_characters_never_break_query`, `test_blank_query_is_400`, `test_vietnamese_diacritics`.*
+1. **Chuỗi tìm kiếm có ký tự đặc biệt** (`"`, `*`, `-`, `(`, `AND`, `OR`, `NEAR`, dấu `:`), chuỗi chỉ gồm dấu, rất dài, có dấu tiếng Việt và `đ`: không bao giờ ném lỗi cú pháp FTS5; hàm `search()` trả mảng (có thể rỗng); route trả `200` với mảng, trừ khi chuỗi **không có từ nào tìm được** (rỗng, chỉ khoảng trắng hoặc chỉ dấu) thì `400 bad_param`. *Test: Task 2 `test_special_characters_never_break_query`, `test_blank_query_is_400`, `test_vietnamese_diacritics`.*
 2. **Thư mục phẳng 30 tệp rời** và **thư mục có 20 thư mục con**: khối ≤ 12, **không mất tệp nào** (tổng `size` bằng số tệp trong phạm vi), có khối `group` "Khác (N mục)" đi sâu được. *Test: Task 5 `test_flat_directory_uses_communities_and_stays_under_limit`, `test_many_subdirs_merge_into_group`, `test_sizes_are_conserved`.*
 3. **Mũi tên chỉ khi có cạnh thật**: hai khối không có cạnh nào nối thì không có `Link`; `count` bằng đúng số mục bằng chứng; hai chiều là hai `Link` riêng; không có mũi tên từ khối vào chính nó. *Test: Task 5 `test_links_only_where_real_edges_exist`, Task 6 `test_link_count_equals_evidence_total`.*
 4. **Thư mục con để lập chỉ mục không hợp lệ**: `..`, đường dẫn tuyệt đối, symlink trỏ ra ngoài, thư mục không tồn tại, là tệp; `.gitignore` của thư mục cha vẫn áp dụng cho thư mục con. *Test: Task 3 `test_subdir_rejects_escape_and_missing`, `test_parent_gitignore_applies_to_subdir`.*
@@ -104,7 +104,7 @@ Scan       = {files, by_language: {...}, large: bool, threshold: 5000, top_dirs:
   - `test_prefix_and_camel_parts`: `"authserv"` tìm thấy `AuthService`; `"login"` tìm thấy `AuthService.login`, `LoginScreen`, `login_screen.dart`; `"auth service"` (hai từ) tìm thấy `AuthService`.
   - `test_kinds_filter_and_limit`: `kinds={METHOD}` chỉ ra phương thức; `limit=2` trả tối đa 2; `repository` không bao giờ có trong kết quả.
   - `test_search_in_doc_comments_and_signature`: từ chỉ có trong `///` hoặc trong chữ ký vẫn tìm thấy.
-  - `test_vietnamese_diacritics`: nút có chú thích `/// Đăng nhập` tìm được bằng `"đăng"` và `"đang"` (tokenizer `unicode61` bỏ dấu `ă` nhưng **không** gập `đ` thành `d`, nên `"dang"` không bắt buộc khớp; ghi rõ giới hạn này ở UC04).
+  - `test_vietnamese_diacritics`: nút có chú thích `/// Đăng nhập` tìm được bằng `"đăng"` và `"đang"` (tokenizer `unicode61` mặc định bỏ dấu `ă` nhưng **không** gập `đ` thành `d` và không gập hết dấu chồng như `ậ`, nên `"dang"`, `"nhap"` không bắt buộc khớp; ghi rõ giới hạn này ở UC04).
   - `test_special_characters_never_break_query`: `'"'`, `'"unclosed'`, `"*"`, `"-login"`, `"login AND"`, `"a OR"`, `"NEAR(a b)"`, `"login:"`, `"((("`, `"\\"`, chuỗi 5.000 ký tự: không ném ngoại lệ, kết quả là `list`.
   - `test_api_search.py`: `200` với `[{node, score}]` đúng khoá, giảm dần theo `score`; `test_blank_query_is_400` (`q=`, `q=%20%20`, `q=%22%22`); `kinds=nope` → `400`; `limit=0`/`101` → `400`; cần token và Host như mọi route.
 - [ ] **Step 2: Chạy** `uv run pytest tests/test_search.py tests/test_api_search.py -q`. Kỳ vọng: FAIL.

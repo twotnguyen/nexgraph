@@ -292,3 +292,5 @@ class GraphStore:
                     language=r["language"], file=r["file"], line_start=r["dong_bat_dau"], line_end=r["dong_ket_thuc"],
                     is_test=bool(r["la_kiem_thu"]), origin=Origin(r["nguon_goc"]), signature=r["chu_ky"],
                     doc=r["tai_lieu"])
+
+    row_to_node = _node  # dùng cho store/search.py (hàng có thêm cột `file`, `language`)

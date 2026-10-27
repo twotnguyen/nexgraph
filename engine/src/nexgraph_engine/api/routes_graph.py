@@ -9,9 +9,10 @@ from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.serialize import edge_json, node_json
 from nexgraph_engine.index.discovery import language_of, sha256_file
 from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.schema.enums import EdgeType
+from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo
+from nexgraph_engine.store.search import build_match_query, search
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
 MAX_CODE_LINES = 2000
@@ -91,3 +92,17 @@ def code(project_id: str, request: Request, file: str = Query(...), start: int |
     last = min(len(lines), end if end is not None else first + MAX_CODE_LINES - 1)
     return {"file": file, "start": first, "end": last, "text": "\n".join(lines[first - 1:last]),
             "language": language_of(file), "stale": sha256_file(path) != record.sha256}
+
+
+@router.get("/search")
+def search_nodes(project_id: str, request: Request, q: str = Query(...), kinds: str | None = None,
+                 limit: int = Query(20, ge=1, le=100)) -> list[dict]:
+    if build_match_query(q) is None:
+        raise ApiError(400, "bad_param", "Cần ít nhất một từ để tìm kiếm")
+    try:
+        wanted = {NodeKind(k) for k in kinds.split(",") if k} if kinds else None
+    except ValueError as exc:
+        raise ApiError(400, "bad_param", f"Loại nút không hợp lệ: {exc}") from exc
+    with open_store(request, project_id) as (store, _):
+        hits = search(store.conn, q, kinds=wanted, limit=limit)
+    return [{"node": node_json(n), "score": score} for n, score in hits]
