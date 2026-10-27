@@ -1,0 +1,79 @@
+# grammar=language_pack tree-sitter=? abi=15
+files=518 generated_skipped=64
+[Q4] parse 518 file, 5.26 MB trong 0.662s -> 782 file/s, 7.9 MB/s
+[Q2] file có ERROR/MISSING: 13/518 = 2.51%
+        8x  'case Error<ItineraryConfig>():'  e.g. activities_viewmodel.dart:50
+        6x  'case Ok<ItineraryConfig>():'  e.g. activities_viewmodel.dart:53
+        4x  'case Ok<void>():'  e.g. booking_create_use_case.dart:86
+        4x  'case Error<void>():'  e.g. booking_create_use_case.dart:88
+        3x  'case Ok():'  e.g. activities_viewmodel.dart:68
+[Q3] khai báo:
+   class_definition: 1098
+        ('app_theme.dart', 'AppSpacing', 4, 11)
+        ('app_theme.dart', 'AppRadius', 13, 19)
+        ('app_theme.dart', 'AppTheme', 21, 108)
+        ('guest_guard.dart', 'GuestGuard', 7, 25)
+        ('local_recent_search_helper.dart', 'LocalRecentSearchHelper', 4, 77)
+        ('lyrics_parser.dart', 'LyricsParser', 3, 76)
+        ('main.dart', 'MyApp', 39, 51)
+        ('album.dart', 'Album', 1, 35)
+        ('artist.dart', 'Artist', 1, 47)
+        ('collection_item.dart', 'CollectionItem', 11, 68)
+   mixin_declaration: 0
+   enum_declaration: 25
+        ('collection_item.dart', 'CollectionType', 4, 8)
+        ('home_providers.dart', 'HomeFilter', 10, 10)
+        ('library_providers.dart', 'LibraryFilter', 70, 70)
+   extension_declaration: 5
+        ('app_ui_utils.dart', 'AppUIExtension', 8, 109)
+        ('player_utils.dart', 'PlayerNavigation', 7, 22)
+        ('mocks.dart', 'HttpMethodMocks', 21, 60)
+   function_or_method: 8951
+        ('app_theme.dart', 'darkTheme', 32, 107)
+        ('app_ui_utils.dart', 'showSuccess', 9, 16)
+        ('app_ui_utils.dart', 'showError', 18, 25)
+        ('app_ui_utils.dart', 'showInfo', 27, 34)
+        ('app_ui_utils.dart', 'showWarning', 36, 43)
+        ('app_ui_utils.dart', '_showSnackBar', 45, 93)
+        ('app_ui_utils.dart', 'isSmallScreen', 96, 96)
+        ('app_ui_utils.dart', 'isTablet', 97, 97)
+        ('app_ui_utils.dart', 'pushSafe', 100, 108)
+        ('guest_guard.dart', 'ensureAuthenticated', 9, 24)
+   library_import: 2307
+        ('app_theme.dart', "import 'package:flutter/material.dart';", 1, 1)
+        ('app_theme.dart', "import 'package:google_fonts/google_fonts.dart';", 2, 2)
+        ('app_ui_utils.dart', "import 'package:flutter/material.dart';", 1, 1)
+        ('app_ui_utils.dart', "import 'package:lucide_icons/lucide_icons.dart';", 2, 2)
+        ('app_ui_utils.dart', "import 'package:go_router/go_router.dart';", 3, 3)
+        ('app_ui_utils.dart', "import 'app_theme.dart';", 4, 4)
+        ('guest_guard.dart', "import 'package:flutter/material.dart';", 1, 1)
+        ('guest_guard.dart', "import 'package:go_router/go_router.dart';", 2, 2)
+        ('guest_guard.dart', "import '../providers/auth_provider.dart';", 3, 3)
+        ('guest_guard.dart', "import '../core/app_ui_utils.dart';", 5, 5)
+   library_export: 25
+        ('basics.dart', "export 'animated_builder.dart';", 1, 1)
+        ('basics.dart', "export 'animated_container.dart';", 2, 2)
+        ('basics.dart', "export 'animation_controller.dart';", 3, 3)
+   part_directive: 64
+        ('booking_api_model.dart', "part 'booking_api_model.freezed.dart';", 7, 7)
+        ('booking_api_model.dart', "part 'booking_api_model.g.dart';", 8, 8)
+        ('login_request.dart', "part 'login_request.freezed.dart';", 7, 7)
+   widget tạo trong build(): 3093 lần, 368 tên khác nhau, top: [('Text', 358), ('Column', 166), ('Padding', 158), ('Center', 110), ('Container', 108), ('Row', 90), ('Scaffold', 90), ('Icon', 80), ('IconButton', 78), ('TextStyle', 71)]
+   lời gọi điều hướng/router/test:
+   CupertinoApp: 3  e.g. [('main.dart', 'Cupertino Gallery', 68), ('main.dart', None, 30), ('main.dart', 'App Clip', 38)]
+   GoRoute: 48  e.g. [('router.dart', '/login', 33), ('router.dart', '/register', 37), ('router.dart', '/forgot-password', 41)]
+   GoRouter: 7  e.g. [('router.dart', '/', 28), ('main.dart', '/', 133), ('router.dart', ':id', 28)]
+   MaterialApp: 36  e.g. [('cell.dart', None, 80), ('main.dart', 'Flutter Module Title', 72), ('widget_test.dart', None, 30)]
+   MaterialApp.router: 9  e.g. [('main.dart', 'Flutter Music App', 44), ('main.dart', 'Animation Samples', 159), ('main.dart', None, 26)]
+   Navigator.pop: 53  e.g. [('forgot_password_screen.dart', None, 64), ('otp_verification_screen.dart', None, 64), ('register_screen.dart', None, 82)]
+   Navigator.push: 4  e.g. [('lyrics_preview_card.dart', None, 172), ('main.dart', None, 161), ('main.dart', None, 172)]
+   context.go: 24  e.g. [('login_screen.dart', '/', 46), ('register_screen.dart', '/', 62), ('reset_password_screen.dart', '/login', 52)]
+   context.push: 23  e.g. [('guest_guard.dart', '/login', 18), ('forgot_password_screen.dart', '/verify-otp', 44), ('login_screen.dart', '/forgot-password', 124)]
+   context.pushReplacement: 1  e.g. [('otp_verification_screen.dart', '/reset-password', 44)]
+   expect: 502  e.g. [('widget_test.dart', '0', 19), ('widget_test.dart', '1', 20), ('widget_test.dart', '0', 27)]
+   group: 54  e.g. [('animated_builder_test.dart', 'AnimatedBuilder Tests', 13), ('animated_list_test.dart', 'Animated List Tests', 13), ('animated_positioned_test.dart', 'AnimatedPositioned Tests', 13)]
+   setUp: 20  e.g. [('activity_repository_remote_test.dart', None, 18), ('auth_repository_remote_test.dart', None, 20), ('booking_repository_remote_test.dart', None, 19)]
+   test: 71  e.g. [('activity_repository_local_test.dart', 'should get by destination ref', 21), ('activity_repository_remote_test.dart', 'should get activities for destination', 23), ('activity_repository_remote_test.dart', 'should get destinations from cache', 37)]
+   testWidgets: 114  e.g. [('widget_test.dart', 'Counter increments smoke test', 14), ('widget_test.dart', 'MiniView smoke test', 27), ('widget_test.dart', 'MiniView smoke test', 14)]
+   MaterialApp(routes: {...}) trong 4 file: ['main.dart', 'main.dart', 'main.dart', 'main.dart']
+[Q5] file test nhận diện theo đường dẫn: 80; số lời gọi test()/testWidgets(): 185
