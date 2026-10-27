@@ -15,11 +15,13 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     project: { pickFolder: vi.fn(async () => '/Đồ án/demo'), open: vi.fn(async () => project()),
       list: vi.fn(async () => []), ...over.project },
     index: {
+      scan: vi.fn(async () => ({ files: 10, by_language: {}, large: false, threshold: 5000, top_dirs: [] })),
       start: vi.fn(async () => ({ jobId: 'j1' })), cancel: vi.fn(async () => {}),
       onEvent: vi.fn((cb: (e: EngineEvent) => void) => { handlers.add(cb); return () => handlers.delete(cb) }),
       ...over.index
     },
-    graph: { stats: vi.fn(), neighbors: vi.fn(), node: vi.fn(), code: vi.fn(), ...over.graph }
+    graph: { stats: vi.fn(), neighbors: vi.fn(), node: vi.fn(), code: vi.fn(), search: vi.fn(async () => []),
+      architecture: vi.fn(async () => ({ parent: null, blocks: [], links: [] })), archEvidence: vi.fn(async () => []), ...over.graph }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)) }

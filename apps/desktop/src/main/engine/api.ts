@@ -1,5 +1,6 @@
 import type {
-  CodeSlice, GraphNode, GraphStats, Job, NeighborQuery, Neighborhood, ProjectSummary
+  ArchEvidence, ArchView, CodeSlice, GraphNode, GraphStats, Job, NeighborQuery, Neighborhood, ProjectSummary, ScanInfo,
+  SearchHit
 } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
 
@@ -49,8 +50,26 @@ export class EngineApi {
   listProjects(): Promise<ProjectSummary[]> {
     return this.request('GET', '/v1/projects')
   }
-  startIndex(pid: string): Promise<{ job_id: string }> {
-    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`)
+  startIndex(pid: string, o?: { subdir?: string }): Promise<{ job_id: string }> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, o?.subdir ? { subdir: o.subdir } : undefined)
+  }
+  scan(pid: string): Promise<ScanInfo> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/scan`)
+  }
+  search(pid: string, q: string, o?: { kinds?: string[]; limit?: number }): Promise<SearchHit[]> {
+    const p = new URLSearchParams({ q })
+    if (o?.kinds?.length) p.set('kinds', o.kinds.join(','))
+    if (o?.limit !== undefined) p.set('limit', String(o.limit))
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/search?${p}`)
+  }
+  architecture(pid: string, parent?: string): Promise<ArchView> {
+    const qs = parent ? `?${new URLSearchParams({ parent })}` : ''
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/architecture${qs}`)
+  }
+  archEvidence(pid: string, from: string, to: string, limit?: number): Promise<ArchEvidence[]> {
+    const p = new URLSearchParams({ from, to })
+    if (limit !== undefined) p.set('limit', String(limit))
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/architecture/evidence?${p}`)
   }
   getJob(id: string): Promise<Job> {
     return this.request('GET', `/v1/jobs/${encodeURIComponent(id)}`)

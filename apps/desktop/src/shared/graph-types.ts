@@ -88,4 +88,47 @@ export interface GraphStats {
   unresolved: number
 }
 
+export interface SearchHit {
+  node: GraphNode
+  score: number
+}
+
+export type BlockKind = 'directory' | 'community' | 'file' | 'group'
+
+export interface ArchBlock {
+  id: string
+  label: string
+  kind: BlockKind
+  size: number
+  symbols: number
+  drillable: boolean
+}
+
+export interface ArchLink {
+  from: string
+  to: string
+  count: number
+  types: Record<string, number>
+}
+
+export interface ArchView {
+  parent: { id: string; label: string } | null
+  blocks: ArchBlock[]
+  links: ArchLink[]
+}
+
+export interface ArchEvidence {
+  edge: GraphEdge
+  file: string
+  line: number
+}
+
+export interface ScanInfo {
+  files: number
+  by_language: Record<string, number>
+  large: boolean
+  threshold: number
+  top_dirs: { path: string; files: number }[]
+}
+
 export type EngineEvent = ({ type: 'job_progress' } & Job) | { type: 'graph_updated'; project_id: string }

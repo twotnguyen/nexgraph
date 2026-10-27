@@ -52,7 +52,38 @@ if (mode === 'never-ready') {
       return
     }
     if (url.pathname === '/v1/projects') return json(200, [{ project_id: 'p1', path: '/demo', name: 'demo', is_git: false, storage: 'in_project', last_indexed_at: null, last_index_commit: null }])
-    if (url.pathname === '/v1/projects/p1/index' && req.method === 'POST') return json(202, { job_id: 'j1' })
+    if (url.pathname === '/v1/projects/p1/index' && req.method === 'POST') {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => json(202, { job_id: 'j1', received_body: body ? JSON.parse(body) : null }))
+      return
+    }
+    if (url.pathname === '/v1/projects/p1/search') {
+      const q = url.searchParams.get('q') ?? ''
+      if (q === '"') return json(400, { error: { code: 'bad_param', message: 'Cần ít nhất một từ để tìm kiếm' } })
+      if (q === 'nope') return json(200, [])
+      return json(200, [{ node: node('lib/a.dart#file'), score: 2.5 }, { node: node('lib/b.dart#file'), score: 1.2 }].map((h) => ({ ...h, query: Object.fromEntries(url.searchParams) })))
+    }
+    if (url.pathname === '/v1/projects/p1/architecture') {
+      const parent = url.searchParams.get('parent')
+      if (parent === 'dir:nope') return json(404, { error: { code: 'unknown_block', message: 'Không có khối dir:nope' } })
+      return json(200, {
+        parent: parent ? { id: parent, label: parent.split('/').pop() } : null,
+        blocks: [{ id: 'dir:lib', label: 'lib', kind: 'directory', size: 8, symbols: 30, drillable: true },
+                 { id: 'file:lib/main.dart', label: 'main.dart', kind: 'file', size: 1, symbols: 2, drillable: false }],
+        links: [{ from: 'dir:lib', to: 'file:lib/main.dart', count: 3, types: { CALLS: 2, IMPORTS: 1 } }],
+        received_parent: parent
+      })
+    }
+    if (url.pathname === '/v1/projects/p1/architecture/evidence') {
+      const edge = { id: 1, source: 'a', target: 'b', type: 'CALLS', subtype: null, confidence: 'INFERRED', confidence_score: 0.9, origin: 'resolver', evidence: { file: 'lib/a.dart', line: 12, col: 4 } }
+      if (url.searchParams.get('from') === 'dir:nope') return json(404, { error: { code: 'unknown_block', message: 'x' } })
+      return json(200, [{ edge, file: url.search, line: 12 }])
+    }
+    if (url.pathname === '/v1/projects/p1/scan') {
+      return json(200, { files: 12345, by_language: { dart: 12000 }, large: true, threshold: 5000,
+        top_dirs: [{ path: 'lib', files: 9000 }, { path: 'lib/Đồ án', files: 3000 }] })
+    }
     if (url.pathname === '/v1/jobs/j1' && req.method === 'DELETE') return json(200, { cancelled: true })
     if (url.pathname === '/v1/projects/p1/neighbors') {
       const id = url.searchParams.get('node')

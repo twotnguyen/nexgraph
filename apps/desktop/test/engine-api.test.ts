@@ -31,7 +31,7 @@ describe('EngineApi', () => {
 
   it('lists projects and starts/cancels jobs', async () => {
     expect((await api.listProjects())[0].name).toBe('demo')
-    expect(await api.startIndex('p1')).toEqual({ job_id: 'j1' })
+    expect(await api.startIndex('p1')).toMatchObject({ job_id: 'j1' })
     expect(await api.cancelJob('j1')).toEqual({ cancelled: true })
   })
 
@@ -65,6 +65,56 @@ describe('EngineApi', () => {
     expect(got.map((e) => e.type)).toEqual(['job_progress', 'graph_updated'])
     await new Promise((r) => setTimeout(r, 50))
     expect(closed).toBe(false) // huỷ chủ động không gọi onClose
+  })
+})
+
+describe('EngineApi: search, architecture, scan', () => {
+  it('search encodes unicode and spaces, joins kinds, sends limit', async () => {
+    const hits = (await api.search('p1', 'đăng nhập LoginScreen', { kinds: ['method', 'class'], limit: 30 })) as unknown as {
+      score: number
+      query: Record<string, string>
+    }[]
+    expect(hits).toHaveLength(2)
+    expect(hits[0].score).toBeGreaterThan(hits[1].score)
+    expect(hits[0].query).toEqual({ q: 'đăng nhập LoginScreen', kinds: 'method,class', limit: '30' })
+    expect(await api.search('p1', 'nope')).toEqual([])
+  })
+
+  it('search surfaces bad_param from the engine', async () => {
+    const err = await api.search('p1', '"').catch((e) => e)
+    expect(err).toBeInstanceOf(EngineApiError)
+    expect(err.code).toBe('bad_param')
+  })
+
+  it('architecture omits parent at the root and encodes it otherwise', async () => {
+    const root = (await api.architecture('p1')) as unknown as { parent: unknown; received_parent: string | null }
+    expect(root.parent).toBeNull()
+    expect(root.received_parent).toBeNull()
+    const sub = (await api.architecture('p1', 'dir:lib/màn hình')) as unknown as { parent: { id: string }; received_parent: string }
+    expect(sub.received_parent).toBe('dir:lib/màn hình')
+    expect(sub.parent.id).toBe('dir:lib/màn hình')
+    const err = await api.architecture('p1', 'dir:nope').catch((e) => e)
+    expect(err.code).toBe('unknown_block')
+  })
+
+  it('archEvidence sends from, to and limit', async () => {
+    const ev = await api.archEvidence('p1', 'dir:lib/screens', 'dir:lib/services', 20)
+    expect(ev[0].line).toBe(12)
+    const sent = new URLSearchParams(ev[0].file)
+    expect(Object.fromEntries(sent)).toEqual({ from: 'dir:lib/screens', to: 'dir:lib/services', limit: '20' })
+    const err = await api.archEvidence('p1', 'dir:nope', 'dir:lib').catch((e) => e)
+    expect(err.code).toBe('unknown_block')
+  })
+
+  it('scan returns top_dirs', async () => {
+    const s = await api.scan('p1')
+    expect(s.large).toBe(true)
+    expect(s.top_dirs[1]).toEqual({ path: 'lib/Đồ án', files: 3000 })
+  })
+
+  it('startIndex sends a JSON body only when a subdir is given', async () => {
+    expect(await api.startIndex('p1')).toMatchObject({ job_id: 'j1', received_body: null })
+    expect(await api.startIndex('p1', { subdir: 'lib/Đồ án' })).toMatchObject({ received_body: { subdir: 'lib/Đồ án' } })
   })
 })
 
