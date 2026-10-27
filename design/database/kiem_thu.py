@@ -266,6 +266,17 @@ def kiem_thu_do_thi():
         ("RB18 tham chiếu trùng", dict(ten_tham_chieu="Navigator.push", loai_tham_chieu="NAVIGATES_TO", dong=50, cot=8), UNIQUE),
     ]:
         s, p = tc_sql(**doi); am(G, ten, con, s, p, mong)
+
+    # v2: kieu_bien, moc_tep, lan_lap_chi_muc.thu_muc_con
+    duong(G, "v2 ghi kiểu biến", con.execute("insert into kieu_bien (ma_nut, ten, kieu) values (?, '_auth', 'AuthService')", (n_build,)).rowcount == 1)
+    am(G, "v2 kieu_bien trùng khóa (nút, tên)", con, "insert into kieu_bien (ma_nut, ten, kieu) values (?, '_auth', 'X')", (n_build,), UNIQUE)
+    am(G, "v2 kieu_bien kiểu rỗng", con, "insert into kieu_bien (ma_nut, ten, kieu) values (?, 'x', '')", (n_build,), CHECK)
+    am(G, "v2 kieu_bien nút không tồn tại", con, "insert into kieu_bien (ma_nut, ten, kieu) values (999999, 'x', 'T')", (), FK)
+    duong(G, "v2 ghi mốc tệp", con.execute("insert into moc_tep values ('lib/a.dart', ?)", (sha("a"),)).rowcount == 1)
+    am(G, "v2 moc_tep mã băm không phải hex thường", con, "insert into moc_tep values ('lib/b.dart', ?)", ("G" * 64,), CHECK)
+    am(G, "v2 moc_tep đường dẫn tuyệt đối", con, "insert into moc_tep values ('/b.dart', ?)", (sha("b"),), CHECK)
+    am(G, "v2 moc_tep đường dẫn có dấu gạch ngược", con, "insert into moc_tep values (char(108, 92, 98), ?)", (sha("b"),), CHECK)
+    am(G, "v2 thu_muc_con rỗng", con, "update lan_lap_chi_muc set thu_muc_con = '' where ma_lan = ?", (lan,), CHECK)
     con.close()
 
 

@@ -2,7 +2,7 @@
 -- Lược đồ theo docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md. Số RBn là mã ràng buộc toàn vẹn ở tài liệu đó.
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;  (SQLite tắt mặc định, không lưu trong tệp)
 
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 
 -- 1. DU_AN ---------------------------------------------------------------
 CREATE TABLE du_an (
@@ -31,6 +31,7 @@ CREATE TABLE lan_lap_chi_muc (
     so_tep_tong   INTEGER NOT NULL DEFAULT 0,
     commit_sha    TEXT    CHECK (commit_sha IS NULL OR length(commit_sha) BETWEEN 40 AND 64),
     thong_bao_loi TEXT,
+    thu_muc_con   TEXT    CHECK (thu_muc_con IS NULL OR length(thu_muc_con) BETWEEN 1 AND 1024),
     CHECK (so_tep_xu_ly <= so_tep_tong),                                                -- RB9
     CHECK (ket_thuc_luc IS NULL OR ket_thuc_luc >= bat_dau_luc),                        -- RB9
     CHECK ((trang_thai IN ('hoan_tat', 'loi', 'huy')) = (ket_thuc_luc IS NOT NULL)),    -- RB9
@@ -201,6 +202,25 @@ CREATE TABLE tham_chieu_chua_phan_giai (
 CREATE INDEX idx_tc_duoi_ten ON tham_chieu_chua_phan_giai (
     substr(ten_tham_chieu, length(rtrim(ten_tham_chieu, replace(ten_tham_chieu, '.', ''))) + 1))
     WHERE trang_thai = 'that_bai';
+
+-- 9. KIEU_BIEN (v2) ------------------------------------------------------
+-- Kiểu khai báo của biến/tham số/trường theo nút khai báo, để nối lại tham chiếu khi cập nhật tăng dần.
+CREATE TABLE kieu_bien (
+    ma_nut INTEGER NOT NULL REFERENCES nut (ma_nut) ON DELETE CASCADE,
+    ten    TEXT    NOT NULL CHECK (length(ten) BETWEEN 1 AND 255),
+    kieu   TEXT    NOT NULL CHECK (length(kieu) BETWEEN 1 AND 255),
+    PRIMARY KEY (ma_nut, ten)
+);
+
+-- 10. MOC_TEP (v2) -------------------------------------------------------
+-- Mã băm từng tệp tại lần lập chỉ mục đầy đủ gần nhất; mốc so sánh khi dự án không có Git.
+CREATE TABLE moc_tep (
+    duong_dan_tuong_doi TEXT NOT NULL PRIMARY KEY
+                          CHECK (length(duong_dan_tuong_doi) BETWEEN 1 AND 1024
+                                 AND duong_dan_tuong_doi NOT LIKE '/%'
+                                 AND instr(duong_dan_tuong_doi, char(92)) = 0),
+    ma_bam              TEXT NOT NULL CHECK (length(ma_bam) = 64 AND ma_bam NOT GLOB '*[^0-9a-f]*')
+);
 
 -- Khung nhìn thay cho dữ liệu suy ra ------------------------------------
 -- Cấp của khối (cột cap đã bỏ khi chuẩn hóa).

@@ -8,7 +8,7 @@ from collections.abc import Iterable, Iterator
 from typing import Literal
 
 from nexgraph_engine.index.keywords import search_keywords
-from nexgraph_engine.schema.db import SCHEMA_VERSION
+from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.models import (
     Edge, FileRec, Neighborhood, Node, RunState, StoredEdge, UnresolvedRef,
@@ -37,7 +37,7 @@ class GraphStore:
         pid = project_id or str(uuid.uuid4())
         self.conn.execute(
             "INSERT INTO du_an (ma_du_an, ten, co_git, phien_ban_schema, tao_luc) VALUES (?, ?, ?, ?, ?)",
-            (pid, name[:255] or "project", int(has_git), SCHEMA_VERSION, int(time.time())),
+            (pid, name[:255] or "project", int(has_git), GRAPH_SCHEMA_VERSION, int(time.time())),
         )
         self.conn.commit()
         return pid

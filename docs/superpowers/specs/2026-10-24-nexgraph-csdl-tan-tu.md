@@ -104,3 +104,13 @@ Quy ước: khóa chính gạch dưới (ở đây viết **đậm**); khóa ngo
 3. Ràng buộc toàn vẹn (RBTV) có bối cảnh một và nhiều quan hệ; phụ thuộc hàm, khóa, chuẩn hóa BCNF.
 4. Script SQL (SQLite) và kiểm thử bằng dữ liệu mẫu.
 5. Phân tích chức năng: các sơ đồ UML (hoạt động, tuần tự, lớp) cho UC01–UC11.
+
+---
+
+## Phụ lục: lược đồ phiên bản 2 (2026-10-27, kế hoạch con 4)
+
+Cộng thêm, không sửa các quan hệ ở trên:
+
+16. **KIEU_BIEN(<u>ma_nut (FK)</u>, <u>ten</u>, kieu)** — kiểu khai báo của biến/tham số/trường theo nút khai báo. Mỗi bộ mô tả một tên khai báo trong phạm vi một nút; (`ma_nut`, `ten`) là khóa; xóa nút thì xóa các bộ này. Dùng để nối lại tham chiếu chưa phân giải khi cập nhật tăng dần.
+17. **MOC_TEP(<u>duong_dan_tuong_doi</u>, ma_bam)** — mã băm SHA-256 của từng tệp tại lần lập chỉ mục đầy đủ gần nhất; mốc so sánh khi dự án không có Git. Không có khóa ngoại để mốc sống độc lập với `TEP` (tệp bị xóa ở lần cập nhật tăng dần vẫn còn trong mốc).
+- Thuộc tính mới của LAN_LAP_CHI_MUC: `thu_muc_con` (có thể rỗng) — thư mục con của dự án mà lần lập chỉ mục bị giới hạn.

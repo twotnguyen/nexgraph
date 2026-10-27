@@ -391,3 +391,17 @@ Script: `design/database/graph.sql` (CSDL đồ thị), `design/database/app.sql
 1. Khối kiến trúc chỉ lưu cộng đồng (hiệu chỉnh 1): mô tả AI viết chỉ áp cho khối cộng đồng.
 2. `id_nut` và hàm nạp chồng (§1.5): quyết định ở kế hoạch con 2.
 3. `loai_con` → `loai_canh` (§1.4): chưa kết luận, kiểm khi cài bộ phân tích.
+
+---
+
+## Phụ lục: lược đồ phiên bản 2 (2026-10-27, kế hoạch con 4)
+
+| Quan hệ | Khóa | Phụ thuộc hàm | Dạng chuẩn |
+|---|---|---|---|
+| KIEU_BIEN | (ma_nut, ten) | (ma_nut, ten) → kieu | BCNF |
+| MOC_TEP | duong_dan_tuong_doi | duong_dan_tuong_doi → ma_bam | BCNF |
+| LAN_LAP_CHI_MUC (thêm `thu_muc_con`) | ma_lan | ma_lan → thu_muc_con; không thêm phụ thuộc nào khác | BCNF (giữ nguyên) |
+
+Ràng buộc mới: RB35 (KIEU_BIEN): `ten`, `kieu` dài 1–255; KIEU_BIEN[ma_nut] ⊆ NUT[ma_nut], xóa NUT thì xóa các bộ của nút. RB36 (MOC_TEP): `duong_dan_tuong_doi` giống RB3 (tương đối, dùng `/`, tối đa 1.024 ký tự); `ma_bam` gồm đúng 64 ký tự hex thường. RB37 (LAN_LAP_CHI_MUC): `thu_muc_con` rỗng hoặc dài 1–1.024 ký tự.
+
+Nâng cấp từ v1: `migrate_1_to_2.sql` (một giao dịch) tạo hai bảng, thêm cột, đặt `du_an.phien_ban_schema = 2` và `PRAGMA user_version = 2`. Sơ đồ ERD ở báo cáo tuần 2 cần thêm hai thực thể này ở đợt báo cáo cuối.
