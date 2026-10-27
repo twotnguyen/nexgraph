@@ -138,6 +138,23 @@ class GraphStore:
                 (self._pk(r.source), r.name[:500], r.type.value, r.line, r.col),
             )
 
+    def pending_refs(self) -> list[tuple[int, UnresolvedRef]]:
+        rows = self.conn.execute(
+            "SELECT t.ma_tc, n.id_nut, t.ten_tham_chieu, t.loai_tham_chieu, t.dong, t.cot"
+            " FROM tham_chieu_chua_phan_giai t JOIN nut n ON n.ma_nut = t.ma_nut_nguon"
+            " WHERE t.trang_thai = 'cho' ORDER BY t.ma_tc").fetchall()
+        return [(r["ma_tc"], UnresolvedRef(source=r["id_nut"], name=r["ten_tham_chieu"],
+                                           type=EdgeType(r["loai_tham_chieu"]), line=r["dong"], col=r["cot"]))
+                for r in rows]
+
+    def delete_refs(self, ref_ids: list[int]) -> None:
+        for chunk in _chunks(ref_ids):
+            self.conn.execute(f"DELETE FROM tham_chieu_chua_phan_giai WHERE ma_tc IN ({','.join('?' * len(chunk))})", chunk)
+
+    def fail_pending_refs(self) -> int:
+        cur = self.conn.execute("UPDATE tham_chieu_chua_phan_giai SET trang_thai = 'that_bai' WHERE trang_thai = 'cho'")
+        return cur.rowcount
+
     # --- đọc --------------------------------------------------------------------------
     def get_node(self, node_id: str) -> Node | None:
         row = self.conn.execute(self._NODE_SQL + " WHERE n.id_nut = ?", (node_id,)).fetchone()
