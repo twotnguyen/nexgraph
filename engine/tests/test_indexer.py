@@ -137,3 +137,16 @@ def test_python_project_generic(copy_fixture, index_project):
     assert result.state == "hoan_tat"
     assert store.get_node("main.py::App.run#method") is not None
     assert store.stats()["languages"] == {"python": 3}
+
+
+def test_full_index_persists_bindings_and_baseline(copy_fixture, index_project):
+    root = copy_fixture("bookstore_app")
+    store, result, _ = index_project(root)
+    assert result.state == "hoan_tat"
+    b = store.bindings()
+    assert b["lib/screens/login_screen.dart::_LoginScreenState#class"]["_auth"] == "AuthService"
+    assert len(store.baseline()) == store.stats()["files"] == 9
+    assert store.last_scope() is None
+    from nexgraph_engine.index.indexer import Indexer
+    Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event(), subdir="lib/services").run()
+    assert store.last_scope() == "lib/services"

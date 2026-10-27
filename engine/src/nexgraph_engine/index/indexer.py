@@ -60,7 +60,7 @@ class Indexer:
     def run(self) -> RunResult:
         t0 = time.time()
         store = self.store
-        run_id = store.begin_run(commit_sha=_git_head(self.root))
+        run_id = store.begin_run(commit_sha=_git_head(self.root), subdir=self.subdir)
         try:
             files = list(discover(self.root, subdir=self.subdir))
             total = len(files)
@@ -76,12 +76,14 @@ class Indexer:
                 return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", total, total))
             pubspec = self.root / "pubspec.yaml"
             name = _package_name(pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None)
-            resolve_references(store, package_name=name, bindings=bindings)
+            store.add_bindings(bindings)
+            resolve_references(store, package_name=name)
             try:
                 detect_communities(store)
             except Exception as exc:  # khối cộng đồng chỉ là phần phụ: lỗi ở đây không làm hỏng lần lập chỉ mục
                 store.conn.rollback()
                 self.on_progress(ProgressEvent("resolve", total, total, f"Không phát hiện được cụm: {exc}"))
+            store.snapshot_baseline()
             store.set_run_state(run_id, "hoan_tat", files_done=total)
             self.on_progress(ProgressEvent("done", total, total))
             return self._result(run_id, "hoan_tat", t0)

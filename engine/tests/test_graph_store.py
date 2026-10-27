@@ -162,3 +162,41 @@ def test_fts_rows_follow_nodes(store):
     assert len(hit) == 1  # tách camelCase: LoginScreen -> login screen
     store.clear_graph()
     assert fts() == 0
+
+
+def test_bindings_roundtrip_and_cascade(store):
+    seed_two_classes(store)
+    a, b = "lib/a.dart::A#class", "lib/a.dart::B#class"
+    store.add_bindings({a: {"_x": "B", "y": "int"}, b: {"z": "A"}})
+    assert store.bindings() == {a: {"_x": "B", "y": "int"}, b: {"z": "A"}}
+    store.add_bindings({a: {"_x": "C"}})  # ghi đè theo (nút, tên)
+    assert store.bindings()[a]["_x"] == "C"
+    store.delete_bindings_of_file("lib/a.dart")
+    assert store.bindings() == {}
+    store.add_bindings({a: {"_x": "B"}})
+    store.conn.execute("DELETE FROM nut WHERE id_nut = ?", (a,))
+    assert store.bindings() == {}
+
+
+def test_baseline_snapshot_matches_files(store):
+    run = store.begin_run()
+    store.add_file(run, file_rec("lib/a.dart"))
+    store.add_file(run, FileRec("lib/b.dart", "dart", 1, 1, "b" * 64))
+    store.snapshot_baseline()
+    assert store.baseline() == {"lib/a.dart": "a" * 64, "lib/b.dart": "b" * 64}
+    store.conn.execute("DELETE FROM tep WHERE duong_dan_tuong_doi = 'lib/b.dart'")
+    store.snapshot_baseline()
+    assert store.baseline() == {"lib/a.dart": "a" * 64}
+
+
+def test_begin_run_records_subdir_and_kind(store):
+    assert store.last_scope() is None
+    r1 = store.begin_run(subdir="lib/services")
+    assert store.last_scope() == "lib/services"
+    store.set_run_state(r1, "hoan_tat")
+    assert store.last_scope() == "lib/services"
+    r2 = store.begin_run(kind="tang_dan", subdir="other")  # lần tăng dần không đổi phạm vi
+    store.set_run_state(r2, "hoan_tat")
+    assert store.last_scope() == "lib/services"
+    row = store.conn.execute("SELECT loai, thu_muc_con FROM lan_lap_chi_muc WHERE ma_lan = ?", (r2,)).fetchone()
+    assert (row["loai"], row["thu_muc_con"]) == ("tang_dan", "other")

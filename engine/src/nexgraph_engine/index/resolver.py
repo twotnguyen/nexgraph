@@ -69,9 +69,8 @@ def _levels(levels: list[tuple[list[Node], float]]) -> _Hit | None:
     return None
 
 
-def resolve_references(store: GraphStore, *, package_name: str | None,
-                       bindings: dict[str, dict[str, str]] | None = None) -> tuple[int, int]:
-    bindings = bindings or {}
+def resolve_references(store: GraphStore, *, package_name: str | None) -> tuple[int, int]:
+    bindings = store.bindings()
     idx = _Index(list(store.all_nodes()))
     pending = store.pending_refs()
     resolved: list[int] = []

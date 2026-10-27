@@ -46,15 +46,53 @@ class GraphStore:
         row = self.conn.execute("SELECT ma_du_an FROM du_an").fetchone()
         return row["ma_du_an"] if row else None
 
-    def begin_run(self, files_total: int = 0, commit_sha: str | None = None) -> int:
+    def begin_run(self, files_total: int = 0, commit_sha: str | None = None, *,
+                  kind: Literal["day_du", "tang_dan"] = "day_du", subdir: str | None = None) -> int:
         pid = self.project_id()
         cur = self.conn.execute(
-            "INSERT INTO lan_lap_chi_muc (ma_du_an, loai, trang_thai, bat_dau_luc, so_tep_tong, commit_sha)"
-            " VALUES (?, 'day_du', 'cho', ?, ?, ?)",
-            (pid, int(time.time()), files_total, commit_sha),
+            "INSERT INTO lan_lap_chi_muc (ma_du_an, loai, trang_thai, bat_dau_luc, so_tep_tong, commit_sha, thu_muc_con)"
+            " VALUES (?, ?, 'cho', ?, ?, ?, ?)",
+            (pid, kind, int(time.time()), files_total, commit_sha, subdir),
         )
         self.conn.commit()
         return int(cur.lastrowid)
+
+    def last_scope(self) -> str | None:
+        """Thư mục con của lần lập chỉ mục đầy đủ gần nhất (đã xong hoặc đang chạy); None = cả project."""
+        row = self.conn.execute(
+            "SELECT thu_muc_con FROM lan_lap_chi_muc WHERE loai = 'day_du'"
+            " AND trang_thai IN ('cho', 'cau_truc', 'phan_giai', 'hoan_tat') ORDER BY ma_lan DESC LIMIT 1").fetchone()
+        return row["thu_muc_con"] if row else None
+
+    # --- kiểu biến và mốc tệp (lược đồ v2) -------------------------------------------------
+    def add_bindings(self, bindings: dict[str, dict[str, str]]) -> None:
+        for node_id, names in bindings.items():
+            pk = self._pk(node_id)
+            for name, typ in names.items():
+                if not name or not typ:
+                    continue
+                self.conn.execute(
+                    "INSERT INTO kieu_bien (ma_nut, ten, kieu) VALUES (?, ?, ?)"
+                    " ON CONFLICT (ma_nut, ten) DO UPDATE SET kieu = excluded.kieu",
+                    (pk, name[:255], typ[:255]))
+
+    def bindings(self) -> dict[str, dict[str, str]]:
+        out: dict[str, dict[str, str]] = {}
+        for r in self.conn.execute("SELECT n.id_nut, k.ten, k.kieu FROM kieu_bien k JOIN nut n ON n.ma_nut = k.ma_nut"):
+            out.setdefault(r["id_nut"], {})[r["ten"]] = r["kieu"]
+        return out
+
+    def delete_bindings_of_file(self, rel_path: str) -> None:
+        self.conn.execute(
+            "DELETE FROM kieu_bien WHERE ma_nut IN (SELECT n.ma_nut FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
+            " WHERE t.duong_dan_tuong_doi = ?)", (rel_path,))
+
+    def snapshot_baseline(self) -> None:
+        self.conn.execute("DELETE FROM moc_tep")
+        self.conn.execute("INSERT INTO moc_tep (duong_dan_tuong_doi, ma_bam) SELECT duong_dan_tuong_doi, ma_bam FROM tep")
+
+    def baseline(self) -> dict[str, str]:
+        return {r[0]: r[1] for r in self.conn.execute("SELECT duong_dan_tuong_doi, ma_bam FROM moc_tep")}
 
     def set_run_state(self, run_id: int, state: RunState, *, files_done: int | None = None,
                       files_total: int | None = None, error: str | None = None) -> None:
