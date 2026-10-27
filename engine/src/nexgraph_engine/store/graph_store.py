@@ -170,6 +170,35 @@ class GraphStore:
         cur = self.conn.execute("UPDATE tham_chieu_chua_phan_giai SET trang_thai = 'that_bai' WHERE trang_thai = 'cho'")
         return cur.rowcount
 
+    def clear_communities(self) -> None:
+        self.conn.execute("UPDATE nut SET ma_khoi = NULL")
+        self.conn.execute("DELETE FROM khoi_kien_truc")
+
+    def add_community(self, name: str, cohesion: float, files: list[str]) -> int:
+        cur = self.conn.execute("INSERT INTO khoi_kien_truc (ten, do_gan_ket) VALUES (?, ?)",
+                                (name[:200] or "Cụm", max(0.0, min(1.0, cohesion))))
+        block_id = int(cur.lastrowid)
+        for chunk in _chunks(list(files)):
+            self.conn.execute(
+                "UPDATE nut SET ma_khoi = ? WHERE ma_tep IN (SELECT ma_tep FROM tep WHERE duong_dan_tuong_doi IN"
+                f" ({','.join('?' * len(chunk))}))", [block_id, *chunk])
+        return block_id
+
+    def communities(self) -> list[dict]:
+        out = []
+        for k in self.conn.execute("SELECT ma_khoi, ten, do_gan_ket FROM khoi_kien_truc ORDER BY ma_khoi"):
+            files = [r[0] for r in self.conn.execute(
+                "SELECT t.duong_dan_tuong_doi FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
+                " WHERE n.ma_khoi = ? AND n.loai_nut = 'file' ORDER BY t.duong_dan_tuong_doi", (k["ma_khoi"],))]
+            out.append({"id": k["ma_khoi"], "name": k["ten"], "cohesion": k["do_gan_ket"], "files": files})
+        return out
+
+    def file_community(self, rel_path: str) -> int | None:
+        row = self.conn.execute(
+            "SELECT n.ma_khoi FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
+            " WHERE t.duong_dan_tuong_doi = ? AND n.loai_nut = 'file'", (rel_path,)).fetchone()
+        return row["ma_khoi"] if row else None
+
     # --- đọc --------------------------------------------------------------------------
     def get_node(self, node_id: str) -> Node | None:
         row = self.conn.execute(self._NODE_SQL + " WHERE n.id_nut = ?", (node_id,)).fetchone()

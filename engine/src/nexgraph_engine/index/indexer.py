@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
@@ -76,6 +77,11 @@ class Indexer:
             pubspec = self.root / "pubspec.yaml"
             name = _package_name(pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None)
             resolve_references(store, package_name=name, bindings=bindings)
+            try:
+                detect_communities(store)
+            except Exception as exc:  # khối cộng đồng chỉ là phần phụ: lỗi ở đây không làm hỏng lần lập chỉ mục
+                store.conn.rollback()
+                self.on_progress(ProgressEvent("resolve", total, total, f"Không phát hiện được cụm: {exc}"))
             store.set_run_state(run_id, "hoan_tat", files_done=total)
             self.on_progress(ProgressEvent("done", total, total))
             return self._result(run_id, "hoan_tat", t0)
