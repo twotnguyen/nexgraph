@@ -1,0 +1,11 @@
+NexGraph
+Copyright 2026 Nguyễn Ngọc Tình, Nguyễn Hoàng Tùng, Võ Thành Đông.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software developed by the Graphify contributors
+(Copyright 2026 Safi Shamsi and the Graphify contributors), vendored under
+engine/src/graphify/ and licensed under the Apache License, Version 2.0.
+See engine/third_party/graphify/NOTICE for its notice and
+engine/third_party/graphify/LICENSE-MIT for the MIT terms that apply to
+portions contributed before relicensing.

@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+engine/dist/
+engine/build/
+*.egg-info/
+
+# Node / Electron
+node_modules/
+out/
+dist/
+apps/desktop/dist/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Dữ liệu NexGraph sinh ra khi thử trên chính repo này
+.nexgraph/
+
+# Corpus spike (clone ngoài, không commit)
+spikes/*/corpus/
+
+# Scratch của công cụ làm việc
+.superpowers/

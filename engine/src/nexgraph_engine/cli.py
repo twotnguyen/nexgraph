@@ -1,0 +1,52 @@
+import argparse
+import json
+import multiprocessing
+import os
+import socket
+import sys
+from pathlib import Path
+
+import uvicorn
+
+from nexgraph_engine.api.app import create_app
+
+MIN_TOKEN_LEN = 32
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="nexgraph-engine")
+    sub = parser.add_subparsers(dest="command", required=True)
+    serve = sub.add_parser("serve", help="Chạy HTTP API nội bộ tại 127.0.0.1")
+    serve.add_argument("--data-dir", required=True, type=Path)
+    serve.add_argument("--port", type=int, default=0)
+    return parser
+
+
+def _serve(data_dir: Path, port: int) -> int:
+    token = os.environ.get("NEXGRAPH_TOKEN", "")
+    if len(token) < MIN_TOKEN_LEN:
+        print("NEXGRAPH_TOKEN is required (>=32 chars)", file=sys.stderr)
+        return 2
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", port))
+    sock.listen(128)  # nhận kết nối vào hàng đợi ngay cả trước khi uvicorn accept
+    real_port = sock.getsockname()[1]
+    app = create_app(token, {f"127.0.0.1:{real_port}", f"localhost:{real_port}"})
+
+    print(json.dumps({"event": "ready", "port": real_port, "pid": os.getpid()}), flush=True)
+    uvicorn.Server(uvicorn.Config(app, log_level="warning")).run(sockets=[sock])
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    multiprocessing.freeze_support()
+    args = _build_parser().parse_args(argv)
+    if args.command == "serve":
+        return _serve(args.data_dir, args.port)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
