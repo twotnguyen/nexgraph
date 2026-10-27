@@ -69,3 +69,16 @@ def test_test_file_flags():
 def test_unsupported_or_missing_file_returns_error_not_exception():
     x = extract_generic(ROOT, "does_not_exist.py", "python", is_test=False)
     assert x.nodes == [] and x.errors and x.errors[0][0] in ("read", "extract")
+
+
+def test_same_name_nested_functions_get_unique_ids(tmp_path):
+    (tmp_path / "dup.py").write_text(
+        "def a():\n    def mutate(x):\n        return x\n    return mutate\n\n"
+        "def b():\n    def mutate(x):\n        return x + 1\n    return mutate\n\n"
+        "def c():\n    def mutate(x):\n        return x + 2\n    return mutate\n")
+    x = extract_generic(tmp_path, "dup.py", "python", is_test=False)
+    ids = [n.id for n in x.nodes]
+    assert len(ids) == len(set(ids))
+    assert len([n for n in x.nodes if n.label == "mutate"]) == 3
+    assert "dup.py::mutate#function" in ids
+    assert sorted(i for i in ids if "mutate@" in i) == ["dup.py::mutate@12#function", "dup.py::mutate@7#function"]

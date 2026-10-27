@@ -60,7 +60,15 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
             qnames[gid] = (f"{_plain_name(raw, parent_class[gid])}.{name}", NodeKind.METHOD)
         else:
             qnames[gid] = (name, NodeKind.FUNCTION)
-    ids = {gid: node_id(rel_path, q, k) for gid, (q, k) in qnames.items()}
+    ids: dict[str, str] = {}
+    used: set[str] = set()
+    for gid in sorted(qnames, key=lambda g: _line(raw[g].get("source_location")) or 1):
+        q, k = qnames[gid]
+        nid = node_id(rel_path, q, k)
+        if nid in used:  # hàm lồng cùng tên, hoặc khai báo lặp: cùng quy ước `@dòng` với Dart
+            nid = node_id(rel_path, f"{q}@{_line(raw[gid].get('source_location')) or 1}", k)
+        used.add(nid)
+        ids[gid] = nid
 
     # line_end ước lượng: dòng lớn nhất trong bằng chứng các cạnh đi ra; lớp bao luôn các phương thức của nó.
     end: dict[str, int] = {gid: _line(raw[gid].get("source_location")) or 1 for gid in raw}
