@@ -52,6 +52,16 @@ export const vi = {
     search: 'Tìm kiếm',
     changes: 'Thay đổi'
   },
+  code: {
+    close: 'Đóng',
+    missing: 'Tệp không còn tồn tại hoặc chưa được lập chỉ mục',
+    outside: 'Tệp nằm ngoài thư mục project',
+    failed: 'Không đọc được mã nguồn',
+    stale: 'Tệp đã thay đổi so với lần lập chỉ mục',
+    capped: 'Chỉ hiện tối đa 2.000 dòng',
+    open: 'Mở mã',
+    viewNode: 'Xem nút'
+  },
   changes: {
     title: 'Thay đổi',
     reload: 'Làm mới',

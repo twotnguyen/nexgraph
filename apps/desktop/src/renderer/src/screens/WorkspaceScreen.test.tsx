@@ -90,3 +90,50 @@ describe('WorkspaceScreen: changes', () => {
     expect(await screen.findByText('ảnh hưởng')).toBeInTheDocument()
   })
 })
+
+describe('WorkspaceScreen: code viewer tabs', () => {
+  const slice = { file: 'lib/a.dart', start: 1, end: 3, text: 'one\ntwo\nthree', language: 'dart', stale: false }
+
+  async function openFromSearch() {
+    const code = vi.fn(async () => slice)
+    const neighbors = vi.fn(async (_p: string, q: { node: string }) => hood(q.node))
+    const search = vi.fn(async () => [{ node: gnode('lib/a.dart::AuthService.login#method', 'login'), score: 2 }])
+    const { api } = installNexgraph({ graph: { code, neighbors, search } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'login')
+    await userEvent.click(await screen.findByText('login'))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
+    return { api, code }
+  }
+
+  it('opens a file tab from the inspector, once per file, and closes back to the previous tab', async () => {
+    const { code } = await openFromSearch()
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    expect(code).toHaveBeenCalledWith('p1', 'lib/a.dart', 1)
+    await screen.findByText('two')
+    await userEvent.click(screen.getByRole('tab', { name: 'Graph' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
+    expect(screen.getAllByRole('tab', { name: 'a.dart' })).toHaveLength(1)
+    await userEvent.click(screen.getByRole('button', { name: 'Đóng a.dart' }))
+    expect(screen.queryByRole('tab', { name: 'a.dart' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
+  })
+
+  it('opens code at the evidence line from the architecture arrow list', async () => {
+    const evidence = [{ file: 'lib/a.dart', line: 2, edge: { id: 1, source: 'lib/a.dart::A.run#method', target: 'lib/b.dart::B.go#method', type: 'CALLS',
+      subtype: null, confidence: 'INFERRED' as const, confidence_score: 0.9, origin: 'resolver', evidence: { file: 'lib/a.dart', line: 2, col: 0 } } }]
+    const code = vi.fn(async () => slice)
+    installNexgraph({ graph: {
+      code,
+      architecture: vi.fn(async () => ({ parent: null, links: [{ from: 'dir:lib', to: 'dir:test', count: 1, types: { CALLS: 1 } }],
+        blocks: [{ id: 'dir:lib', label: 'lib', kind: 'directory' as const, size: 1, symbols: 1, drillable: true },
+                 { id: 'dir:test', label: 'test', kind: 'directory' as const, size: 1, symbols: 1, drillable: true }] })),
+      archEvidence: vi.fn(async () => evidence)
+    } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.click(await screen.findByRole('button', { name: /lib → test/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /lib\/a\.dart:2/ }))
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('[data-line="2"][data-highlight="true"]')).toBeTruthy())
+  })
+})

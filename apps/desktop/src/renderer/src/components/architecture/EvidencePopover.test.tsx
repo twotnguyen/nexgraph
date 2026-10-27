@@ -48,3 +48,16 @@ describe('EvidencePopover', () => {
     expect(screen.getByText('Không có bằng chứng')).toBeInTheDocument()
   })
 })
+
+describe('EvidencePopover with code viewer', () => {
+  it('opens the code at file:line and keeps a separate button for the node', async () => {
+    const onOpenCode = vi.fn()
+    const onOpenNode = vi.fn()
+    render(<EvidencePopover {...props} onOpenNode={onOpenNode} onOpenCode={onOpenCode} items={[item()]} />)
+    await userEvent.click(screen.getByRole('button', { name: /lib\/a\.dart:12/ }))
+    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 12)
+    expect(onOpenNode).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Xem nút' }))
+    expect(onOpenNode).toHaveBeenCalledWith('lib/a.dart::A.run#method')
+  })
+})

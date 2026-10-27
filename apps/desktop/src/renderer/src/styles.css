@@ -469,3 +469,71 @@ button:disabled {
   font-weight: 700;
   text-transform: uppercase;
 }
+
+.code-viewer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+}
+
+.code-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.code-body {
+  flex: 1;
+  overflow: auto;
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.code-line {
+  display: flex;
+  white-space: pre;
+}
+
+.code-line.hit {
+  background: #fff1d6;
+}
+
+.code-line .ln {
+  flex: none;
+  width: 56px;
+  padding-right: 12px;
+  text-align: right;
+  color: #8896a6;
+  user-select: none;
+}
+
+.stale-banner {
+  margin: 0;
+  padding: 6px 12px;
+  background: #fff1d6;
+  color: #7a4a00;
+}
+
+.tab-close {
+  border: none;
+  background: transparent;
+  padding: 0 6px;
+}
+
+.file-tab {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+}
+
+.file-tab .tab-name {
+  border: none;
+  background: transparent;
+  padding: 8px 4px;
+  font: inherit;
+}

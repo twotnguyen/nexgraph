@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { GraphNode, ProjectSummary } from '@shared/graph-types'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
+import { CodeViewer } from '../components/code/CodeViewer'
 import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanvas'
 import { ActivityBar } from '../components/layout/ActivityBar'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
@@ -10,7 +11,9 @@ import { SearchPanel } from '../components/search/SearchPanel'
 import { useChanges } from '../state/useChanges'
 import { vi } from '../strings'
 
-type Tab = 'arch' | 'graph'
+type Tab = 'arch' | 'graph' | `file:${string}`
+interface OpenFile { file: string; line: number; lineEnd?: number }
+const baseName = (p: string): string => p.split('/').pop() as string
 
 const SearchIcon = (
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -51,7 +54,18 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
   const [tab, setTab] = useState<Tab>('arch')
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
+  const [files, setFiles] = useState<OpenFile[]>([])
 
+  const openCode = (file: string, line = 1, lineEnd?: number) => {
+    setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd } : f)) : [...cur, { file, line, lineEnd }]))
+    setTab(`file:${file}`)
+  }
+  const closeFile = (file: string) => {
+    const order: Tab[] = ['arch', 'graph', ...files.map((f) => `file:${f.file}` as Tab)]
+    const at = order.indexOf(`file:${file}`)
+    setFiles((cur) => cur.filter((f) => f.file !== file))
+    setTab((cur) => (cur === `file:${file}` ? order[Math.max(0, at - 1)] : cur))
+  }
   const openNode = (node: GraphNode) => {
     setSelected(node)
     setFocus(node.id)
@@ -82,7 +96,7 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
       )}
       {panel === 'changes' && (
         <aside className="sidebar wide">
-          <ChangesPanel changes={changes} loading={loading} error={error} onReload={reload} onOpenNode={openNodeId} />
+          <ChangesPanel changes={changes} loading={loading} error={error} onReload={reload} onOpenNode={openNodeId} onOpenCode={openCode} />
         </aside>
       )}
       <section className="center">
@@ -96,14 +110,27 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
               {t === 'arch' ? vi.workspace.archTab : vi.workspace.graphTab}
             </button>
           ))}
+          {files.map((f) => (
+            <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`}>
+              <button type="button" role="tab" aria-selected={tab === `file:${f.file}`} title={f.file} className="tab-name" onClick={() => setTab(`file:${f.file}`)}>
+                {baseName(f.file)}
+              </button>
+              <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}>×</button>
+            </span>
+          ))}
         </div>
         <div className="canvas-wrap">
-          {tab === 'arch' && <ArchitectureCanvas projectId={project.project_id} onOpenNode={openNodeId} />}
+          {tab === 'arch' && <ArchitectureCanvas projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'graph' && (
             <>
               <GraphCanvas projectId={project.project_id} startNodeId=".#repository" focusNodeId={focus} onSelect={setSelected} highlights={highlights} />
-              <NodeInspector node={selected} />
+              <NodeInspector node={selected} onOpenCode={openCode} />
             </>
+          )}
+          {files.map((f) =>
+            tab === `file:${f.file}` ? (
+              <CodeViewer key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} onClose={() => closeFile(f.file)} />
+            ) : null
           )}
         </div>
       </section>

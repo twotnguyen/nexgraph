@@ -12,11 +12,11 @@ const H = 56
 const EVIDENCE_LIMIT = 50
 
 interface Crumb { id: string | null; label: string }
-interface Props { projectId: string; onOpenNode: (nodeId: string) => void }
+interface Props { projectId: string; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void }
 interface Laid { nodes: Node[]; edges: Edge[]; view: ArchView }
 interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
 
-export function ArchitectureCanvas({ projectId, onOpenNode }: Props) {
+export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode }: Props) {
   const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.arch.root }])
   const [laid, setLaid] = useState<Laid | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -118,6 +118,7 @@ export function ArchitectureCanvas({ projectId, onOpenNode }: Props) {
           loading={evidence.loading}
           error={evidence.error}
           onOpenNode={onOpenNode}
+          onOpenCode={onOpenCode}
           onClose={() => setEvidence(null)}
         />
       )}
