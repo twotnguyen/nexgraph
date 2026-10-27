@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react'
 import type { EngineStatus } from '@shared/engine-status'
+import type { ProjectSummary } from '@shared/graph-types'
 import { EngineStatusBar } from './components/EngineStatusBar'
+import { IndexingScreen } from './screens/IndexingScreen'
+import { ProjectsScreen } from './screens/ProjectsScreen'
+import { vi } from './strings'
+
+type Screen =
+  | { name: 'projects' }
+  | { name: 'indexing'; project: ProjectSummary }
+  | { name: 'workspace'; project: ProjectSummary }
 
 export default function App() {
   const [status, setStatus] = useState<EngineStatus>({ state: 'starting' })
+  const [screen, setScreen] = useState<Screen>({ name: 'projects' })
 
   useEffect(() => {
     let alive = true
@@ -17,10 +27,18 @@ export default function App() {
 
   return (
     <div className="app">
-      <main className="app-main">
-        <h1>NexGraph</h1>
-        <p>Kết nối mã nguồn. Khám phá tri thức.</p>
-      </main>
+      {screen.name === 'projects' && (
+        <ProjectsScreen engineReady={status.state === 'ready'} onOpened={(project) => setScreen({ name: 'indexing', project })} />
+      )}
+      {screen.name === 'indexing' && (
+        <IndexingScreen project={screen.project} onExplore={() => setScreen({ name: 'workspace', project: screen.project })} />
+      )}
+      {screen.name === 'workspace' && (
+        <main className="screen">
+          <h1>{screen.project.name}</h1>
+          <p className="muted">{vi.workspace.placeholder}</p>
+        </main>
+      )}
       <EngineStatusBar status={status} onRestart={() => void window.nexgraph.engine.restart()} />
     </div>
   )
