@@ -49,6 +49,10 @@ dependencies = [
     "openpyxl>=3.1",
 ]
 
+[project.optional-dependencies]
+# Chép lời audio/video khi chạy engine từ mã nguồn; không đóng gói vào bản cài (spec F10 §4.5).
+media = ["faster-whisper>=1.0"]
+
 [project.scripts]
 nexgraph-engine = "nexgraph_engine.cli:main"
 

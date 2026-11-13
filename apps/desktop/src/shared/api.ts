@@ -10,6 +10,8 @@ export interface NexGraphApi {
   engine: {
     status(): Promise<EngineStatus>
     restart(): Promise<void>
+    /** Công cụ ngoài có trên máy: `{ ffmpeg, faster_whisper, git, gh, yt_dlp }`. */
+    tools(): Promise<Record<string, boolean>>
     /** Trả về hàm huỷ đăng ký. */
     onStatus(cb: (s: EngineStatus) => void): () => void
   }

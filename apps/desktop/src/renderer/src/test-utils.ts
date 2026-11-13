@@ -16,7 +16,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
   const handlers = new Set<(e: EngineEvent) => void>()
   const api = {
     engine: { status: vi.fn(async () => ({ state: 'ready' as const, engineVersion: '0.1.0', vendorCommit: 'x' })),
-      restart: vi.fn(async () => {}), onStatus: vi.fn(() => () => {}), ...over.engine },
+      restart: vi.fn(async () => {}),
+      tools: vi.fn(async () => ({ ffmpeg: true, faster_whisper: true, git: true, gh: true, yt_dlp: true })), onStatus: vi.fn(() => () => {}), ...over.engine },
     project: { pickFolder: vi.fn(async () => '/Đồ án/demo'), open: vi.fn(async () => project()),
       list: vi.fn(async () => []), ...over.project },
     index: {

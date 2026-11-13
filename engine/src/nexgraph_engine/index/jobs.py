@@ -102,7 +102,8 @@ class JobManager:
             store.abort_stale_runs()  # lần chạy dở do engine từng chết giữa chừng
             self._indexer_cls(store, info.path, on_progress=lambda e: self._update(job_id, e), cancel=cancel,
                               subdir=subdir, exclude=exclude, include_docs=include_docs,
-                              include_media=include_media).run()
+                              include_media=include_media,
+                              transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id).run()
         except Exception as exc:
             self._update(job_id, ProgressEvent("error", 0, 0, f"{type(exc).__name__}: {exc}"))
         finally:

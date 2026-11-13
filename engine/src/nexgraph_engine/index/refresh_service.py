@@ -74,7 +74,8 @@ class RefreshService:
                 store = GraphStore(conn)
                 if store.last_completed_run() is None:
                     return self._skipped("not_indexed")
-                result = refresh_project(store, info.path)
+                result = refresh_project(store, info.path,
+                                         transcript_dir=self._registry.app_data_dir / "transcripts" / project_id)
             finally:
                 conn.close()
         finally:

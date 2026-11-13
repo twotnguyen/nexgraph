@@ -49,7 +49,7 @@ def _ancestors(rel_path: str) -> list[str]:
     return out  # từ sâu nhất lên gốc
 
 
-def refresh_project(store: GraphStore, root: Path) -> RefreshResult:
+def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | None = None) -> RefreshResult:
     t0 = time.time()
     root = Path(root)
     scope = store.last_scope()
@@ -86,10 +86,10 @@ def refresh_project(store: GraphStore, root: Path) -> RefreshResult:
     try:
         store.set_run_state(run_id, "cau_truc")
         sig_before = store.file_graph_signature()
-        extracted: dict[str, ExtractedFile] = {p: extract_file(root, disk[p]) for p in (*added, *modified)}
+        extracted: dict[str, ExtractedFile] = {p: extract_file(root, disk[p], transcript_dir=transcript_dir) for p in (*added, *modified)}
         dependents = _dependents(store, added, removed, modified, extracted, disk)
         for p in dependents:
-            extracted[p] = extract_file(root, disk[p])
+            extracted[p] = extract_file(root, disk[p], transcript_dir=transcript_dir)
 
         for p in removed:
             store.remove_file(p)

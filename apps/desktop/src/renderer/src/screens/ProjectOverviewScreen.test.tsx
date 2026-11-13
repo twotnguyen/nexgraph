@@ -59,6 +59,14 @@ describe('ProjectOverviewScreen', () => {
     expect(props.onReindex).toHaveBeenCalledWith({ exclude: [], includeDocs: true, includeMedia: false })
   })
 
+  it('thiếu faster-whisper thì khoá ô audio/video và nói cần cài', async () => {
+    renderOverview({ engine: { tools: vi.fn(async () => ({ ffmpeg: true, faster_whisper: false, git: true, gh: false, yt_dlp: false })) } })
+    await userEvent.click(screen.getByRole('button', { name: /^Tuỳ chọn index/ }))
+    await userEvent.click(screen.getByLabelText(/Gồm tài liệu/))
+    expect(await screen.findByText('Cần cài faster-whisper')).toBeInTheDocument()
+    expect(screen.getByLabelText(/Gồm audio\/video/)).toBeDisabled()
+  })
+
   it('index lại không có mẫu bỏ qua', async () => {
     const { props } = renderOverview()
     await userEvent.click(screen.getByRole('button', { name: /^Index lại/ }))

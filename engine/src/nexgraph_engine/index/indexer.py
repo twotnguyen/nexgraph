@@ -12,6 +12,7 @@ from typing import Literal
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
+from nexgraph_engine.docs import media
 from nexgraph_engine.docs.extract import extract_document
 from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, DiscoveredFile, discover, sha256_file
@@ -65,7 +66,7 @@ class ExtractedFile:
     errors: list[tuple[str, str]]
 
 
-def extract_file(root: Path, f: DiscoveredFile) -> ExtractedFile:
+def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None = None) -> ExtractedFile:
     """Đọc và trích xuất một tệp (dùng chung cho lập chỉ mục đầy đủ và cập nhật tăng dần). Không ghi CSDL."""
     path = Path(root) / f.rel_path
     try:
@@ -83,8 +84,13 @@ def extract_file(root: Path, f: DiscoveredFile) -> ExtractedFile:
         return ExtractedFile(rec, [file_node], [], [], {}, [("read", read_error or "Không đọc được tệp")])
     try:
         if f.language in DOC_LANGUAGES:
-            x: FileExtraction = (FileExtraction() if f.language == "media"
-                                 else extract_document(f.rel_path, doc_text(path, f.language), file_id=file_node.id))
+            if f.language == "media":
+                if transcript_dir is None or not media.has_whisper():
+                    return ExtractedFile(rec, [file_node], [], [], {}, [("extract", media.MISSING_WHISPER)])
+                text = media.transcript_for(path, sha, transcript_dir)
+            else:
+                text = doc_text(path, f.language)
+            x: FileExtraction = extract_document(f.rel_path, text, file_id=file_node.id)
         elif f.language == "dart":
             x = extract_dart(f.rel_path, source, is_test=f.is_test)
         else:
@@ -183,7 +189,7 @@ class Indexer:
 
     def _index_file(self, run_id: int, f: DiscoveredFile, bindings: dict[str, dict[str, str]]) -> None:
         store = self.store
-        x = extract_file(self.root, f)
+        x = extract_file(self.root, f, transcript_dir=self.transcript_dir)
         store.add_file(run_id, x.rec)
         store.add_nodes(x.nodes)
         store.add_edges(x.edges)

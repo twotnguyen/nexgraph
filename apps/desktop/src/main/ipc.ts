@@ -108,6 +108,7 @@ export function registerIpc(
   on('graph:search', (pid: string, q: string, opts?: { kinds?: string[]; limit?: number }) => api().search(pid, q, opts))
   on('graph:architecture', (pid: string, parent?: string) => api().architecture(pid, parent))
   on('graph:arch-evidence', (pid: string, from: string, to: string, limit?: number) => api().archEvidence(pid, from, to, limit))
+  on('engine:tools', () => api().tools())
   on('graph:report', (pid: string) => api().report(pid))
   on('graph:paths', (pid: string, ids: string[], o?: { maxHops?: number; directed?: boolean }) => api().paths(pid, ids, o))
   on('graph:impact-of', (pid: string, nodeId: string) => api().impactOf(pid, nodeId))

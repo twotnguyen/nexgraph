@@ -178,6 +178,10 @@ describe('EngineApi: F10 wave 1 routes', () => {
     expect(await echo(api.recluster('p1'))).toMatchObject({ method: 'POST', path: '/v1/projects/p1/communities' })
   })
 
+  it('tools reads which external tools are installed', async () => {
+    expect(await api.tools()).toEqual({ ffmpeg: true, faster_whisper: false, git: true, gh: false, yt_dlp: false })
+  })
+
   it('startIndex sends document and media flags', async () => {
     expect(await api.startIndex('p1', { includeDocs: true })).toMatchObject({ received_body: { include_docs: true } })
     expect(await api.startIndex('p1', { includeDocs: true, includeMedia: true })).toMatchObject({ received_body: { include_docs: true, include_media: true } })

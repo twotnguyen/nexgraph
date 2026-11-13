@@ -22,6 +22,7 @@ const api: NexGraphApi = {
   engine: {
     status: () => ipcRenderer.invoke('engine:status'),
     restart: () => ipcRenderer.invoke('engine:restart'),
+    tools: () => call('engine:tools'),
     onStatus: (cb) => subscribe<EngineStatus>('engine:status-changed', cb)
   },
   project: {

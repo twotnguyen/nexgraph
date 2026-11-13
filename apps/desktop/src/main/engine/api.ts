@@ -109,6 +109,10 @@ export class EngineApi {
     if (end !== undefined) p.set('end', String(end))
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/code?${p}`)
   }
+  /** Công cụ ngoài có trên máy (ffmpeg, faster-whisper, git, gh, yt-dlp). */
+  tools(): Promise<Record<string, boolean>> {
+    return this.request('GET', '/v1/tools')
+  }
   report(pid: string): Promise<GraphReport> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/report`)
   }

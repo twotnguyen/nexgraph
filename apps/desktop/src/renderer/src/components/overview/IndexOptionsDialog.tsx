@@ -11,6 +11,13 @@ export function IndexOptionsDialog({ onSubmit, onClose }: Props) {
   const [text, setText] = useState('')
   const [includeDocs, setDocs] = useState(false)
   const [includeMedia, setMedia] = useState(false)
+  const [whisperMissing, setWhisperMissing] = useState(false)
+  useEffect(() => {
+    let live = true
+    // Lỗi khi dò công cụ không chặn: engine vẫn báo thiếu công cụ theo từng tệp khi index.
+    window.nexgraph.engine.tools().then((t) => live && setWhisperMissing(t.faster_whisper === false)).catch(() => {})
+    return () => { live = false }
+  }, [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -36,8 +43,9 @@ export function IndexOptionsDialog({ onSubmit, onClose }: Props) {
         <label className="muted"><input type="checkbox" disabled /> {vi.overview.workersSoon}</label>
         <label><input type="checkbox" checked={includeDocs}
           onChange={(e) => { setDocs(e.target.checked); if (!e.target.checked) setMedia(false) }} /> {vi.overview.includeDocs}</label>
-        <label className={includeDocs ? undefined : 'muted'}><input type="checkbox" checked={includeMedia} disabled={!includeDocs}
-          onChange={(e) => setMedia(e.target.checked)} /> {vi.overview.includeMedia}</label>
+        <label className={includeDocs && !whisperMissing ? undefined : 'muted'}><input type="checkbox" checked={includeMedia}
+          disabled={!includeDocs || whisperMissing} onChange={(e) => setMedia(e.target.checked)} /> {vi.overview.includeMedia}</label>
+        {whisperMissing && <small className="muted">{vi.overview.needWhisper}</small>}
         <footer>
           <button type="button" onClick={onClose}>{vi.overview.cancel}</button>
           <button type="button" className="primary" onClick={() => onSubmit({ exclude, includeDocs, includeMedia })}>{vi.overview.reindexWithOptions}</button>

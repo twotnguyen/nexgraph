@@ -81,6 +81,7 @@ export const vi = {
     excludeHint: 'Mỗi dòng một mẫu, cú pháp .gitignore. Áp dụng cho cả các lần cập nhật sau.',
     workersSoon: 'Số tiến trình — sắp có',
     includeDocs: 'Gồm tài liệu (Markdown, txt, Word, Excel, PDF)',
+    needWhisper: 'Cần cài faster-whisper',
     includeMedia: 'Gồm audio/video (chép lời trên máy, cần faster-whisper; lần đầu tải model)',
     cancel: 'Huỷ',
     reindexWithOptions: 'Index lại với tuỳ chọn này'
