@@ -1,0 +1,67 @@
+{
+  "2_large_scan": {
+    "files": 17260,
+    "large": true,
+    "threshold": 5000,
+    "top_dirs": [
+      {
+        "path": "tests",
+        "files": 8104
+      },
+      {
+        "path": "apps",
+        "files": 4814
+      },
+      {
+        "path": "apps/desktop",
+        "files": 4726
+      },
+      {
+        "path": "tests/gateway",
+        "files": 1994
+      },
+      {
+        "path": "tests/hermes_cli",
+        "files": 1965
+      }
+    ]
+  },
+  "2_large_subdir": {
+    "subdir": "scripts",
+    "state": "done",
+    "seconds": 6.9,
+    "files": 192,
+    "nodes": 2072
+  },
+  "3_go": {
+    "state": "done",
+    "seconds": 0.4,
+    "files": 35,
+    "languages": {
+      "go": 35
+    },
+    "nodes": 220,
+    "edges": 380
+  },
+  "3_java": {
+    "state": "done",
+    "seconds": 0.1,
+    "files": 11,
+    "languages": {
+      "java": 11
+    },
+    "nodes": 108,
+    "edges": 113
+  },
+  "5_no_git": {
+    "index_state": "done",
+    "base": "last_index",
+    "note": "Không có Git: so với lần lập chỉ mục trước",
+    "changed_files": [
+      "src/common/utils/string-util/string-util.service.ts"
+    ],
+    "impacted": 44,
+    "tests": 3,
+    "stale": false
+  }
+}

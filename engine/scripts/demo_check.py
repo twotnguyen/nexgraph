@@ -59,7 +59,7 @@ def one_run(src: Path) -> dict:
         res["map_nodes"] = len(get(f"{base}/map", params={"detail": 400})["nodes"])
         res["step2_s"] = round(time.perf_counter() - t, 3)
         t = time.perf_counter()  # bước 3: luồng đăng nhập
-        flows = get(f"{base}/flows", params={"limit": 500})["flows"]
+        flows = get(f"{base}/flows", params={"limit": 200})["flows"]
         sign_in = next(f for f in flows if f["name"] == "signIn")
         steps = get(f"{base}/flows/{sign_in['id']}")["steps"]
         res["signin_flow"] = [s["node"]["id"].split("#")[0] for s in steps]

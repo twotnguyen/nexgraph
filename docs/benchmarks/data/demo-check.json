@@ -1,0 +1,144 @@
+{
+  "runs": [
+    {
+      "index_s": 1.13,
+      "architecture_blocks": [
+        "src",
+        "commitlint.config.mjs",
+        "eslint.config.mjs",
+        "test"
+      ],
+      "map_nodes": 268,
+      "step2_s": 0.021,
+      "signin_flow": [
+        "src/apps/auth/auth.controller.ts::AuthController.signIn",
+        "src/apps/auth/auth.service.ts::AuthService.signIn",
+        "src/apps/users/users.service.ts::UsersService.getUser",
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService.compare",
+        "src/apps/auth/auth.service.ts::AuthService.getUserRoleType",
+        "src/apps/auth/auth.service.ts::AuthService.getUserPermissions",
+        "src/apps/auth/auth.service.ts::AuthService.createToken",
+        "src/apps/users/users.service.ts::UsersService.getUserRoleType"
+      ],
+      "context_items": 24,
+      "step3_s": 0.014,
+      "changed_nodes": [
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService",
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService.compare"
+      ],
+      "impacted": [
+        "src/apps/auth/auth.module.ts",
+        "src/apps/auth/auth.service.ts::AuthService.signIn",
+        "src/apps/orders/orders.module.ts",
+        "src/apps/product-variants/product-variants.module.ts",
+        "src/apps/products/products.module.ts",
+        "src/apps/users/users.module.ts",
+        "src/apps/vendors/vendors.module.ts",
+        "src/common/utils/file-util/file-util.module.ts",
+        "src/common/utils/string-util/string-util.module.ts",
+        "src/apps/auth/auth.controller.ts::AuthController.signIn"
+      ],
+      "tests": [
+        "src/apps/orders/order.service.spec.ts",
+        "src/apps/users/users.service.spec.ts",
+        "src/common/utils/string-util/string-util.service.spec.ts"
+      ],
+      "step4_s": 0.101,
+      "stale_after_edit": false
+    },
+    {
+      "index_s": 1.15,
+      "architecture_blocks": [
+        "src",
+        "commitlint.config.mjs",
+        "eslint.config.mjs",
+        "test"
+      ],
+      "map_nodes": 268,
+      "step2_s": 0.021,
+      "signin_flow": [
+        "src/apps/auth/auth.controller.ts::AuthController.signIn",
+        "src/apps/auth/auth.service.ts::AuthService.signIn",
+        "src/apps/users/users.service.ts::UsersService.getUser",
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService.compare",
+        "src/apps/auth/auth.service.ts::AuthService.getUserRoleType",
+        "src/apps/auth/auth.service.ts::AuthService.getUserPermissions",
+        "src/apps/auth/auth.service.ts::AuthService.createToken",
+        "src/apps/users/users.service.ts::UsersService.getUserRoleType"
+      ],
+      "context_items": 24,
+      "step3_s": 0.014,
+      "changed_nodes": [
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService",
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService.compare"
+      ],
+      "impacted": [
+        "src/apps/auth/auth.module.ts",
+        "src/apps/auth/auth.service.ts::AuthService.signIn",
+        "src/apps/orders/orders.module.ts",
+        "src/apps/product-variants/product-variants.module.ts",
+        "src/apps/products/products.module.ts",
+        "src/apps/users/users.module.ts",
+        "src/apps/vendors/vendors.module.ts",
+        "src/common/utils/file-util/file-util.module.ts",
+        "src/common/utils/string-util/string-util.module.ts",
+        "src/apps/auth/auth.controller.ts::AuthController.signIn"
+      ],
+      "tests": [
+        "src/apps/orders/order.service.spec.ts",
+        "src/apps/users/users.service.spec.ts",
+        "src/common/utils/string-util/string-util.service.spec.ts"
+      ],
+      "step4_s": 0.09,
+      "stale_after_edit": false
+    },
+    {
+      "index_s": 1.18,
+      "architecture_blocks": [
+        "src",
+        "commitlint.config.mjs",
+        "eslint.config.mjs",
+        "test"
+      ],
+      "map_nodes": 268,
+      "step2_s": 0.022,
+      "signin_flow": [
+        "src/apps/auth/auth.controller.ts::AuthController.signIn",
+        "src/apps/auth/auth.service.ts::AuthService.signIn",
+        "src/apps/users/users.service.ts::UsersService.getUser",
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService.compare",
+        "src/apps/auth/auth.service.ts::AuthService.getUserRoleType",
+        "src/apps/auth/auth.service.ts::AuthService.getUserPermissions",
+        "src/apps/auth/auth.service.ts::AuthService.createToken",
+        "src/apps/users/users.service.ts::UsersService.getUserRoleType"
+      ],
+      "context_items": 24,
+      "step3_s": 0.014,
+      "changed_nodes": [
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService",
+        "src/common/utils/string-util/string-util.service.ts::StringUtilService.compare"
+      ],
+      "impacted": [
+        "src/apps/auth/auth.module.ts",
+        "src/apps/auth/auth.service.ts::AuthService.signIn",
+        "src/apps/orders/orders.module.ts",
+        "src/apps/product-variants/product-variants.module.ts",
+        "src/apps/products/products.module.ts",
+        "src/apps/users/users.module.ts",
+        "src/apps/vendors/vendors.module.ts",
+        "src/common/utils/file-util/file-util.module.ts",
+        "src/common/utils/string-util/string-util.module.ts",
+        "src/apps/auth/auth.controller.ts::AuthController.signIn"
+      ],
+      "tests": [
+        "src/apps/orders/order.service.spec.ts",
+        "src/apps/users/users.service.spec.ts",
+        "src/common/utils/string-util/string-util.service.spec.ts"
+      ],
+      "step4_s": 0.093,
+      "stale_after_edit": false
+    }
+  ],
+  "total_median_s": 1.27,
+  "total_max_s": 1.31
+}

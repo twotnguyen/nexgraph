@@ -50,6 +50,15 @@ def test_stale_after_edit_and_after_new_commit(git_project):
     assert f["stale"] is False and f["head_commit"] == f["index_commit"]
 
 
+def test_uncommitted_edit_that_the_graph_already_has_is_not_stale(git_project):
+    store, root = git_project
+    (root / "util.py").write_text("def helper(x):\n    return x + 7\n")
+    assert freshness(store, root)["stale"] is True
+    refresh_project(store, root)  # app tự refresh khi mở thẻ Thay đổi; Git vẫn báo tệp đổi so với HEAD
+    f = freshness(store, root)
+    assert f["stale"] is False and f["changed_files"] == 0
+
+
 def test_commit_without_indexable_changes_clears_stale_after_refresh(git_project):
     store, root = git_project
     (root / "NOTES.txt").write_text("x\n")
