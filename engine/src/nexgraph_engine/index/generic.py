@@ -37,7 +37,8 @@ def _line(loc: str | None) -> int | None:
 
 
 def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) -> FileExtraction:
-    path = Path(root) / rel_path
+    root = Path(root).resolve()  # gốc là symlink thì kết quả lấy từ cache của bộ trích xuất mang id theo đường dẫn khác
+    path = root / rel_path
     if not path.is_file():
         return FileExtraction(errors=[("read", f"Không đọc được {rel_path}")])
     try:

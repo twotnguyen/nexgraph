@@ -9,6 +9,7 @@ import posixpath
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import PurePosixPath
 
 from graphify.extract import _file_node_id
@@ -32,6 +33,12 @@ def _package_name(pubspec_text: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+@lru_cache(maxsize=200_000)
+def _gid(rel_path: str) -> str:
+    """Id tệp theo bộ trích xuất đa ngôn ngữ; hàm thuần của đường dẫn nên nhớ lại giữa các lần refresh."""
+    return _file_node_id(PurePosixPath(rel_path))
+
+
 class _Index:
     def __init__(self, nodes: list[Node]) -> None:
         self.by_id = {n.id: n for n in nodes}
@@ -40,7 +47,7 @@ class _Index:
         by_gid: dict[str, list[str]] = defaultdict(list)
         for f in self.files:
             if not f.endswith(".dart"):
-                by_gid[_file_node_id(PurePosixPath(f))].append(f)
+                by_gid[_gid(f)].append(f)
         self.file_by_gid = {g: fs[0] for g, fs in by_gid.items() if len(fs) == 1}  # trùng id thì không đoán
         self.types: dict[str, dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
         self.funcs: dict[str, dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
@@ -78,10 +85,41 @@ def _levels(levels: list[tuple[list[Node], float]]) -> _Hit | None:
     return None
 
 
-def resolve_references(store: GraphStore, *, package_name: str | None) -> tuple[int, int]:
+SUBSET_MAX_REFS = 20_000  # nhiều tham chiếu hơn mức này (lập chỉ mục đầy đủ) thì nạp cả đồ thị rẻ hơn
+
+
+def _candidate_nodes(store: GraphStore, pending: list[tuple[int, UnresolvedRef]],
+                     bindings: dict[str, dict[str, str]]):
+    """Các nút mà lần phân giải này có thể chạm tới.
+
+    Mọi tra cứu trong `_Index` đều theo khoá chính xác (tên đầy đủ của kiểu/hàm, nhãn của phương thức, id nút nguồn),
+    và mọi khoá đều rút ra từ tên tham chiếu, kiểu biến đã ghi hoặc lớp chứa nút nguồn. Nạp đúng các nút mang những
+    tên đó cho cùng kết quả với nạp cả đồ thị, mà không phải dựng 215.000 đối tượng mỗi lần cập nhật một tệp.
+    """
+    if len(pending) > SUBSET_MAX_REFS:
+        return store.all_nodes()
+    names: set[str] = set()
+    for _, ref in pending:
+        names.add(ref.source)
+        raw = ref.name
+        for prefix in ("mixin:", "on:"):
+            if raw.startswith(prefix):
+                raw = raw[len(prefix):]
+        for form in (raw, raw.replace("()", ""), raw.replace("::", ".")):
+            names.add(form)
+            names.update(form.split("."))
+    for owner in store.pending_ref_owners():
+        names.add(owner)
+        names.add(owner.rsplit(".", 1)[0])
+    for table in bindings.values():
+        names.update(table.values())
+    return store.nodes_for_names(names)
+
+
+def resolve_references(store: GraphStore, *, package_name: str | None, created_out: list[Edge] | None = None) -> tuple[int, int]:
     bindings = store.bindings()
-    idx = _Index(list(store.all_nodes()))
     pending = store.pending_refs()
+    idx = _Index(list(_candidate_nodes(store, pending, bindings)))
     resolved: list[int] = []
     new_edges: list[Edge] = []
     imports: dict[str, list[tuple[str, str | None]]] = defaultdict(list)  # tệp -> [(tệp đích, subtype)]
@@ -212,6 +250,8 @@ def resolve_references(store: GraphStore, *, package_name: str | None) -> tuple[
             resolved.append(ref_id)
 
     created = store.add_edges(new_edges)
+    if created_out is not None:
+        created_out.extend(new_edges)
     store.delete_refs(resolved)
     remaining = store.fail_pending_refs()
     store.commit()

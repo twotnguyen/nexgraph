@@ -249,3 +249,91 @@ def test_refresh_requeues_only_refs_that_new_names_can_satisfy(tmp_path, index_p
     assert state["missing_two"] == "that_bai"
     touched = store.conn.execute("SELECT count(*) FROM canh WHERE loai_canh='CALLS'").fetchone()[0]
     assert touched == 1
+
+
+FLOW_EDITS = [
+    # (tệp, hàm sửa nội dung) lần lượt: thêm lời gọi ở giữa luồng, thêm điểm vào, đổi decorator, bỏ một bước,
+    # thêm test cho một bước (đổi điểm test gap), xoá tệp có bước của mọi luồng.
+    ("service.py", lambda s: s.replace("    return save_session(user)", "    audit(user)\n    return save_session(user)")
+     + "\n\ndef audit(user):\n    return hash_password(user)\n"),
+    ("app.py", lambda s: s + '\n\n@app.get("/health")\ndef health():\n    return books()\n'),
+    ("app.py", lambda s: s.replace('@app.post("/auth/login")', '@app.put("/auth/login")')),
+    ("service.py", lambda s: s.replace("    check_password(user, body)\n", "")),
+    ("test_service.py", lambda s: s + "\n\ndef test_audit():\n    from service import audit\n    assert audit(1) == 1\n"),
+    ("repo.py", None),
+]
+
+
+@pytest.mark.parametrize("max_flows", [2000, 2, 1])  # 2 và 1: bảng luồng đầy, ứng viên bị cắt không được lưu
+def test_flows_after_each_refresh_equal_a_full_rebuild(copy_fixture, index_project, monkeypatch, max_flows):
+    from nexgraph_engine.flows import build
+    monkeypatch.setattr(build, "MAX_FLOWS", max_flows)
+    errors: list[Exception] = []
+    real = refresh_mod.update_flows
+
+    def strict(*a, **k):  # refresh nuốt lỗi của phần luồng; test thì không
+        try:
+            return real(*a, **k)
+        except Exception as exc:
+            errors.append(exc)
+            raise
+
+    monkeypatch.setattr(refresh_mod, "update_flows", strict)
+    root = copy_fixture("flow_app")
+    store, _, _ = index_project(root)
+    for i, (rel, edit) in enumerate(FLOW_EDITS):
+        if edit is None:
+            (root / rel).unlink()
+        else:
+            write(root, rel, edit((root / rel).read_text(encoding="utf-8")))
+        refresh_project(store, root)
+        assert not errors, errors
+        assert_same_as_full_index(store, root, index_project, step=f"sửa {i} ({rel}), MAX_FLOWS={max_flows}")
+
+
+def test_small_edit_updates_flows_without_a_full_rebuild(copy_fixture, index_project, monkeypatch):
+    from nexgraph_engine.flows import build
+    root = copy_fixture("flow_app")
+    store, _, _ = index_project(root)
+    kept = dict(store.conn.execute("SELECT ten, ma_luong FROM luong"))
+    monkeypatch.setattr(build, "rebuild_flows", lambda *a, **k: pytest.fail("dựng lại toàn bộ luồng"))
+    write(root, "service.py", (root / "service.py").read_text().replace("def list_books():\n    return all_books()",
+                                                                        "def list_books():\n    x = all_books()\n    return x"))
+    refresh_project(store, root)
+    after = dict(store.conn.execute("SELECT ten, ma_luong FROM luong"))
+    assert after.keys() == kept.keys()
+    assert after["login"] != kept["login"] or after["books"] != kept["books"]  # luồng qua service.py được tính lại
+
+
+def _capped_project(tmp_path, index_project, monkeypatch):
+    """Ba điểm vào ở ba tệp; MAX_FLOWS = 2 nên z_entry (điểm thấp nhất) là ứng viên bị cắt, không được lưu."""
+    from nexgraph_engine.flows import build
+    monkeypatch.setattr(build, "MAX_FLOWS", 2)
+    write(tmp_path, "lib.py", "def leaf():\n    return 1\n\n\ndef mid():\n    return leaf()\n")
+    write(tmp_path, "lib2.py", "def leaf2():\n    return 1\n")
+    write(tmp_path, "x.py", "from lib import mid\n\n\ndef x_entry():\n    return mid()\n")
+    write(tmp_path, "y.py", "from lib import mid\n\n\ndef y_entry():\n    return mid()\n")
+    write(tmp_path, "z.py", "from lib2 import leaf2\n\n\ndef z_entry():\n    return leaf2()\n")
+    store, _, _ = index_project(tmp_path)
+    assert {r[0] for r in store.conn.execute("SELECT ten FROM luong")} == {"x_entry", "y_entry"}
+    return store
+
+
+def test_capped_flows_stored_flow_falling_below_an_unstored_candidate(tmp_path, index_project, monkeypatch):
+    store = _capped_project(tmp_path, index_project, monkeypatch)
+    write(tmp_path, "y.py", "def y_entry():\n    return y_local()\n\n\ndef y_local():\n    return 1\n")
+    refresh_project(store, tmp_path)
+    assert {r[0] for r in store.conn.execute("SELECT ten FROM luong")} == {"x_entry", "z_entry"}
+    assert_same_as_full_index(store, tmp_path, index_project)
+
+
+def test_capped_flows_unstored_candidate_rising_through_a_changed_callee(tmp_path, index_project, monkeypatch):
+    from nexgraph_engine.flows import build
+    store = _capped_project(tmp_path, index_project, monkeypatch)
+    monkeypatch.setattr(build, "rebuild_flows", lambda *a, **k: pytest.fail("phải cập nhật cục bộ được"))
+    write(tmp_path, "lib2.py", "def leaf2():\n    return l2()\n\n\ndef l2():\n    return l3()\n\n\ndef l3():\n    return 1\n")
+    refresh_project(store, tmp_path)
+    assert {r[0] for r in store.conn.execute("SELECT ten FROM luong")} == {"z_entry", "x_entry"}
+    monkeypatch.undo()
+    monkeypatch.setattr(build, "MAX_FLOWS", 2)
+    assert_same_as_full_index(store, tmp_path, index_project)

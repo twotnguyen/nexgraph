@@ -424,6 +424,28 @@ class GraphStore:
         for row in self.conn.execute(sql + " ORDER BY n.ma_nut", args):
             yield self._node(row)
 
+    def nodes_for_names(self, names: Iterable[str]) -> Iterator[Node]:
+        """Mọi nút tệp, cùng các nút có id, nhãn hoặc tên đầy đủ nằm trong `names` (theo thứ tự `ma_nut` như all_nodes)."""
+        c = self.conn
+        c.execute("DROP TABLE IF EXISTS temp._names")
+        c.execute("CREATE TEMP TABLE _names (v TEXT PRIMARY KEY) WITHOUT ROWID")
+        c.executemany("INSERT OR IGNORE INTO temp._names VALUES (?)", ((n,) for n in names))
+        try:
+            rows = c.execute(
+                self._NODE_SQL + " WHERE n.loai_nut = 'file' OR n.nhan IN (SELECT v FROM temp._names)"
+                " OR n.ten_day_du IN (SELECT v FROM temp._names) OR n.id_nut IN (SELECT v FROM temp._names)"
+                " ORDER BY n.ma_nut").fetchall()
+        finally:
+            c.execute("DROP TABLE temp._names")
+        for row in rows:
+            yield self._node(row)
+
+    def pending_ref_owners(self) -> list[str]:
+        """Tên đầy đủ của các nút đang có tham chiếu chờ phân giải."""
+        return [r[0] for r in self.conn.execute(
+            "SELECT DISTINCT n.ten_day_du FROM tham_chieu_chua_phan_giai t JOIN nut n ON n.ma_nut = t.ma_nut_nguon"
+            " WHERE t.trang_thai = 'cho'")]
+
     def file_record(self, rel_path: str) -> FileRec | None:
         r = self.conn.execute(
             "SELECT * FROM tep WHERE duong_dan_tuong_doi = ?", (rel_path,)).fetchone()

@@ -332,3 +332,28 @@ def test_index_workers_policy(monkeypatch):
     assert indexer.index_workers(5000, False) == 8
     monkeypatch.setattr(indexer.os, "cpu_count", lambda: 2)
     assert indexer.index_workers(5000, False) == 1
+
+
+def test_extracting_twice_through_a_symlinked_root_gives_the_same_references(tmp_path):
+    """Kết quả lấy từ cache của bộ trích xuất mang id import theo đường dẫn đã resolve; gốc là symlink (ví dụ /tmp trên
+    macOS) thì lần trích xuất thứ hai trong cùng tiến trình mất import nội bộ."""
+    import os
+    import pytest
+    from nexgraph_engine.index.generic import extract_generic
+    real = tmp_path / "real"
+    (real / "pkg").mkdir(parents=True)
+    (real / "pkg" / "util.py").write_text("def helper():\n    return 1\n")
+    (real / "pkg" / "main.py").write_text("from pkg.util import helper\n\n\ndef run():\n    return helper()\n")
+    link = tmp_path / "link"
+    try:
+        os.symlink(real, link, target_is_directory=True)
+    except OSError:
+        pytest.skip("không tạo được symlink")
+
+    def refs():
+        x = extract_generic(link, "pkg/main.py", "python", is_test=False)
+        return sorted((r.type.value, r.name, r.line) for r in x.refs)
+
+    first = refs()
+    assert ("IMPORTS", "pkg_util", 1) in first
+    assert refs() == first

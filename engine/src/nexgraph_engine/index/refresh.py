@@ -14,7 +14,7 @@ from pathlib import Path
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
-from nexgraph_engine.flows.build import rebuild_flows
+from nexgraph_engine.flows.build import flows_before, update_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
 from nexgraph_engine.index.indexer import ExtractedFile, _git_head, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
@@ -95,6 +95,7 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         for p in dependents:
             extracted[p] = extract_file(root, disk[p], transcript_dir=transcript_dir)
 
+        before_flows = flows_before(store, [*removed, *modified, *dependents])
         for p in removed:
             store.remove_file(p)
         for p in (*modified, *dependents):
@@ -116,12 +117,13 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         new_labels = {n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels
         store.requeue_failed_refs(tails=new_labels, imports=bool(added))
         pubspec = root / "pubspec.yaml"
+        resolved_edges: list[Edge] = []
         resolve_references(store, package_name=_package_name(
-            pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None))
+            pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None), created_out=resolved_edges)
         derive_tested_by(store)
         try:
-            # shortcut: dựng lại toàn bộ luồng sau mỗi refresh; nếu > 1 s trên tầng L thì chỉ dựng lại luồng chạm tệp đổi
-            rebuild_flows(store, root)
+            new_calls = [(store._pk(e.source), store._pk(e.target)) for e in resolved_edges if e.type == EdgeType.CALLS]
+            update_flows(store, root, before_flows, [*added, *modified, *dependents], new_calls)
         except Exception:
             store.conn.rollback()
         if store.file_graph_signature() != sig_before:

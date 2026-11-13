@@ -53,5 +53,7 @@ def test_demo_data_flow_over_api(api, copy_fixture):
 
     # lập chỉ mục lại cho cùng kết quả; mở lại chỉ đọc đọc được ngay
     assert api.index(pid)["state"] == "done"
-    assert api.get(f"/v1/projects/{pid}/stats").json() == first_stats
+    again = api.get(f"/v1/projects/{pid}/stats").json()
+    # indexed_at tính theo giây: hai lần lập chỉ mục vắt qua một giây thì khác nhau (test từng trượt ngẫu nhiên)
+    assert {**again, "indexed_at": None} == {**first_stats, "indexed_at": None}
     assert tree_hashes(root) == before  # không sửa tệp nguồn nào

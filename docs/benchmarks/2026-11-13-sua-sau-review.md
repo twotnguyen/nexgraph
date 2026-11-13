@@ -79,3 +79,29 @@ Kết quả: engine **458 passed**; desktop typecheck sạch, **44 tệp / 280 t
 - Cập nhật 1 tệp trên bản sao hermes-agent (17.260 tệp): **5,18 s → 4,21 s** nhờ tính cờ từ khoá bảo mật một lần cho mỗi nút khi chấm điểm luồng (2.000 luồng, tổng điểm không đổi: 1347,606). **Vẫn chưa đạt 2 s.** Phần còn lại: dựng luồng 1,5 s, phân giải tham chiếu 1,2 s (nạp cả 215.000 nút mỗi lần), quét đĩa khoảng 0,7 s, chữ ký đồ thị 0,35 s. Muốn dưới 2 s phải dựng lại luồng cục bộ và lập chỉ mục phân giải theo yêu cầu; chưa làm.
 
 Sau các sửa này: engine 458 passed; desktop typecheck sạch, 44 tệp / 280 test.
+
+## Tối ưu refresh cho dự án lớn
+
+Đo trên bản sao hermes-agent (17.260 tệp, 215.000 nút, 684.000 cạnh, 2.000 luồng lưu / 11.140 ứng viên), macOS arm64, một tiến trình, sửa một tệp bằng cách chèn một hàm vào giữa tệp.
+
+| Khâu | Trước | Sau | Cách làm |
+|---|---|---|---|
+| Quét đĩa | 0,65 s | 0,28 s | Gộp mọi mẫu của mỗi `.gitignore` thành một regex; không khớp regex gộp thì chắc chắn không bị bỏ qua, có khớp mới hỏi `pathspec` (giữ đúng mẫu phủ định). Danh sách tệp trùng khớp 17.260/17.260. |
+| Phân giải tham chiếu | 1,18 s | 0,42 s | Dưới 20.000 tham chiếu chờ thì chỉ nạp nút tệp và các nút mang tên xuất hiện trong tham chiếu, kiểu biến, lớp chứa nút nguồn, thay vì cả 215.000 nút. |
+| Luồng | 1,5–2,1 s | 0,01–0,19 s | Cập nhật cục bộ (`update_flows`): chỉ dò lại luồng đi qua nút của tệp đổi hoặc nút vừa đổi trạng thái có/không test, và xét lại đích lời gọi của chúng với tư cách điểm vào. Rơi về dựng lại toàn bộ khi tập bị chạm quá 4.000 nút, hoặc khi bảng đầy 2.000 luồng mà luồng xếp cuối mới tệ hơn luồng xếp cuối cũ. |
+| **Tổng một lần refresh** | **4,2–5,2 s** | **1,4–1,75 s** | |
+
+Số "Sau" theo từng tệp (sửa / hoàn nguyên / sửa lại, giây): `batch_runner.py` 1,44 / 1,42 / 1,39; `tools/registry.py` 1,62 / 1,49 / 1,53; `tests/agent/test_credential_pool.py` 1,49 / 1,43 / 1,40; `apps/desktop/src/api/client.ts` 1,62 / 1,48 / 1,51; `agent/credential_pool.py` 3,61 / 1,74 / 1,68; `gateway/session_authority.py` 3,70 / 2,21 / 1,75; `cli.py` 3,30 / 1,61 / 1,47. Ba tệp cuối chậm ở lần đầu vì CSDL thử được dựng bằng mã cũ: trích xuất lại bằng mã hiện tại làm đổi số cạnh giữa các tệp nên phải gom cụm lại (1,7 s). Gom cụm lại vẫn xảy ra mỗi khi một lần sửa thật sự thêm/bớt quan hệ giữa hai tệp.
+
+Kiểm đúng:
+- Sau mỗi lần refresh ở trên, bảng luồng (điểm vào, điểm, từng bước, dòng gọi) **trùng khớp** với `rebuild_flows` chạy ngay sau đó.
+- Bộ phân giải mới so với cách nạp cả đồ thị: ép 402 tệp phân giải lại, hai tiến trình riêng, **683.985 cạnh trùng khớp**.
+- Test mới: sáu lần sửa liên tiếp trên `flow_app` với `MAX_FLOWS` 2000 / 2 / 1 so với lập chỉ mục đầy đủ; hai tình huống bảng đầy (luồng đã lưu tụt xuống dưới ứng viên chưa lưu; ứng viên chưa lưu vượt lên qua hàm được gọi vừa đổi). Đã thử phá từng nhánh của mã và test bắt được.
+
+Còn lại trong 1,4 s: phân giải 0,42 s, chữ ký đồ thị 0,35 s, quét đĩa 0,28 s, đồng bộ `TESTED_BY` 0,23 s, trích xuất 0,11 s. Lệnh `refresh` của git hook chạy tiến trình mới nên cộng thêm thời gian khởi động và khoảng 0,25 s tính id tệp (không có bộ nhớ đệm).
+
+Lỗi tìm thấy khi đo:
+- **Gốc dự án là symlink** (ví dụ `/tmp/...` trên macOS): lần trích xuất thứ hai của cùng một tệp trong cùng tiến trình lấy kết quả từ cache của bộ trích xuất với id import theo đường dẫn đã resolve, nên mất import nội bộ và các lời gọi tụt từ mức "tệp đã import" xuống "duy nhất trong dự án" hoặc mất. App không dính vì đường dẫn dự án được resolve lúc mở; `extract_generic` nay tự resolve gốc, có test.
+- Test `test_demo_data_flow_over_api` trượt ngẫu nhiên khi hai lần lập chỉ mục vắt qua một giây (`indexed_at` tính theo giây): nay so sánh bỏ trường đó.
+
+Sau các sửa này: engine **465 passed**; desktop 44 tệp / 280 test; kịch bản demo trên NestJS qua engine thật cho cùng kết quả (luồng 8 bước, 10 nút ảnh hưởng, 3 test liên quan).

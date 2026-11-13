@@ -46,8 +46,8 @@ def decorators_above(lines: list[str], line_start: int) -> list[str]:
     return out
 
 
-def detect_entry_points(conn: sqlite3.Connection, root: Path) -> list[EntryPoint]:
-    """Dò các điểm vào từ đồ thị và tệp nguồn, sắp theo node_id."""
+def detect_entry_points(conn: sqlite3.Connection, root: Path, *, only_temp_pks: bool = False) -> list[EntryPoint]:
+    """Dò các điểm vào từ đồ thị và tệp nguồn, sắp theo node_id. `only_temp_pks`: chỉ xét các nút có khoá trong temp._pks."""
     sql = """
     SELECT n.ma_nut, n.id_nut, n.nhan, n.ten_day_du, n.dong_bat_dau, t.duong_dan_tuong_doi AS file,
            EXISTS (
@@ -72,6 +72,8 @@ def detect_entry_points(conn: sqlite3.Connection, root: Path) -> list[EntryPoint
             AND nd.la_kiem_thu = 0
       )
     """
+    if only_temp_pks:
+        sql += " AND n.ma_nut IN (SELECT pk FROM temp._pks)"
     candidates = conn.execute(sql).fetchall()
 
     # Gom theo tệp để chỉ đọc mỗi tệp một lần
