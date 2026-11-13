@@ -240,7 +240,8 @@ def run_http(project: Path, data_dir: Path | None, port: int, key: str) -> int:
     sock.listen(128)
     print(json.dumps({"event": "ready", "port": sock.getsockname()[1], "pid": os.getpid()}), flush=True)
     app = ApiKeyMiddleware(mcp.streamable_http_app(), key)
-    uvicorn.Server(uvicorn.Config(app, log_level="warning")).run(sockets=[sock])
+    # Client AI giữ luồng SSE mở: không giới hạn thì tắt server (và thoát app) có thể treo mãi.
+    uvicorn.Server(uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=2)).run(sockets=[sock])
     return 0
 
 

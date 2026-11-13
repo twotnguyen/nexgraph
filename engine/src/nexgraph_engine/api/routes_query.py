@@ -27,7 +27,7 @@ class AskBody(BaseModel):
 @router.post("/paths")
 def paths(project_id: str, request: Request, body: PathsBody) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store)
+        require_indexed(store, request, project_id)
         try:
             return find_paths(store, body.node_ids, body.max_hops, body.directed)
         except KeyError as exc:
@@ -37,7 +37,7 @@ def paths(project_id: str, request: Request, body: PathsBody) -> dict:
 @router.get("/impact")
 def impact(project_id: str, request: Request, node: str = Query(...)) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store)
+        require_indexed(store, request, project_id)
         try:
             return impact_of(store, node)
         except KeyError as exc:
@@ -47,7 +47,7 @@ def impact(project_id: str, request: Request, node: str = Query(...)) -> dict:
 @router.post("/ask")
 def ask(project_id: str, request: Request, body: AskBody) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store)
+        require_indexed(store, request, project_id)
         try:
             return ask_graph(store, body.question, body.depth, body.budget, body.mode)
         except ValueError as exc:

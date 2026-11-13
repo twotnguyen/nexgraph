@@ -33,9 +33,14 @@ def open_store(request: Request, project_id: str) -> Iterator[tuple[GraphStore, 
         conn.close()
 
 
-def require_indexed(store: GraphStore) -> None:
-    """Báo cáo, export, truy vấn trên CSDL rỗng sẽ cho kết quả rỗng gây hiểu nhầm: báo lỗi rõ thay vào đó."""
-    if store.last_completed_run() is None:
+def require_indexed(store: GraphStore, request: Request, project_id: str) -> None:
+    """Báo cáo, export, truy vấn trên CSDL rỗng hoặc dở dang sẽ cho kết quả gây hiểu nhầm: báo lỗi rõ thay vào đó.
+    Index lại đầy đủ xoá đồ thị trước khi dựng, nên đang chạy hoặc lần gần nhất bị huỷ/lỗi đều không dùng được."""
+    if request.app.state.services.jobs.is_active(project_id):
+        raise ApiError(409, "index_running", "Dự án đang được lập chỉ mục, thử lại khi xong")
+    last_full = store.conn.execute(
+        "SELECT trang_thai FROM lan_lap_chi_muc WHERE loai = 'day_du' ORDER BY ma_lan DESC LIMIT 1").fetchone()
+    if last_full is None or last_full[0] != "hoan_tat":
         raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục xong")
 
 

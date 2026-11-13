@@ -62,7 +62,15 @@ def report_markdown(store: GraphStore, project_name: str) -> str:
     from graphify.report import generate
     bg = build_nx(store)
     stats = store.stats()
-    return generate(bg.G, bg.communities, bg.cohesion, bg.labels, god_nodes(bg.G), surprising_connections(bg.G, bg.communities),
-                    {"total_files": stats["files"], "total_words": bg.G.number_of_nodes() * 50},
-                    {"input": 0, "output": 0}, project_name,
-                    suggested_questions=suggest_questions(bg.G, bg.communities, bg.labels))
+    md = generate(bg.G, bg.communities, bg.cohesion, bg.labels, god_nodes(bg.G), surprising_connections(bg.G, bg.communities),
+                  {"total_files": stats["files"], "total_words": 0}, {"input": 0, "output": 0}, project_name,
+                  suggested_questions=suggest_questions(bg.G, bg.communities, bg.labels))
+    # NexGraph không đếm từ và không gọi LLM: bỏ hai số mà Graphify sẽ in ra như thật.
+    lines = []
+    for line in md.splitlines():
+        if line.startswith("- Token cost:"):
+            continue
+        if line.startswith(f"- {stats['files']} files · ~"):
+            line = f"- {stats['files']} files"
+        lines.append(line)
+    return "\n".join(lines) + ("\n" if md.endswith("\n") else "")

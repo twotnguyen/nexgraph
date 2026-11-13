@@ -54,7 +54,7 @@ def _scope(body: ScopeBody) -> Scope:
 def export(project_id: str, request: Request, body: ExportBody) -> dict:
     out_dir = _writable_dir(body.out_dir)
     with open_store(request, project_id) as (store, info):
-        require_indexed(store)
+        require_indexed(store, request, project_id)
         try:
             r = export_graph(store, body.format, _scope(body.scope), out_dir, info.name)
         except KeyError as exc:
@@ -67,7 +67,7 @@ def export(project_id: str, request: Request, body: ExportBody) -> dict:
 @router.post("/export/push")
 def push(project_id: str, request: Request, body: PushBody) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store)
+        require_indexed(store, request, project_id)
         try:
             return push_graph(store, body.target, body.uri, body.user, body.password, _scope(body.scope))
         except KeyError as exc:

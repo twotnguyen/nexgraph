@@ -9,5 +9,5 @@ router = APIRouter(prefix="/v1/projects/{project_id}")
 @router.get("/report")
 def report(project_id: str, request: Request) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store)
+        require_indexed(store, request, project_id)
         return report_json(store)
