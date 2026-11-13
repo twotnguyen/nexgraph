@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { GraphStats, ProjectSummary } from '@shared/graph-types'
+import type { GraphStats, IndexOptions, ProjectSummary } from '@shared/graph-types'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { IndexOptionsDialog } from '../components/overview/IndexOptionsDialog'
 import { McpCard } from '../components/overview/McpCard'
@@ -10,7 +10,7 @@ export type WorkspaceTab = 'arch' | 'graph' | 'tree' | 'report'
 interface Props {
   project: ProjectSummary
   onOpenWorkspace: (tab?: WorkspaceTab) => void
-  onReindex: (opts: { exclude: string[] }) => void
+  onReindex: (opts: IndexOptions) => void
   onBack: () => void
 }
 

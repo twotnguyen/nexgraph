@@ -1,7 +1,7 @@
 import type { EngineStatus } from './engine-status'
 import type {
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope, GraphNode, GraphReport,
-  GraphStats, NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo,
+  GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo,
   SearchHit
 } from './graph-types'
 
@@ -21,7 +21,7 @@ export interface NexGraphApi {
   }
   index: {
     scan(projectId: string): Promise<ScanInfo>
-    start(projectId: string, opts?: { subdir?: string; exclude?: string[] }): Promise<{ jobId: string }>
+    start(projectId: string, opts?: IndexOptions): Promise<{ jobId: string }>
     cancel(jobId: string): Promise<void>
     /** Lập chỉ mục tăng dần; `status: 'skipped'` khi đang lập chỉ mục đầy đủ hoặc đang refresh. */
     refresh(projectId: string): Promise<RefreshResult>

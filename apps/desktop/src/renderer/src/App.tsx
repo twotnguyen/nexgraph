@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { vi } from './strings'
 import type { EngineStatus } from '@shared/engine-status'
-import type { ProjectSummary, ScanInfo } from '@shared/graph-types'
+import type { IndexOptions, ProjectSummary, ScanInfo } from '@shared/graph-types'
 import { EngineStatusBar } from './components/EngineStatusBar'
 import { LargeProjectScreen } from './screens/LargeProjectScreen'
 import { IndexingScreen } from './screens/IndexingScreen'
@@ -13,7 +13,7 @@ type Screen =
   | { name: 'projects' }
   | { name: 'scan'; project: ProjectSummary }
   | { name: 'large'; project: ProjectSummary; scan: ScanInfo }
-  | { name: 'indexing'; project: ProjectSummary; subdir: string | null; exclude?: string[] }
+  | { name: 'indexing'; project: ProjectSummary; subdir: string | null; options?: IndexOptions }
   | { name: 'overview'; project: ProjectSummary }
   | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab }
 
@@ -73,7 +73,7 @@ export default function App() {
         />
       )}
       {screen.name === 'indexing' && (
-        <IndexingScreen project={screen.project} subdir={screen.subdir} exclude={screen.exclude}
+        <IndexingScreen project={screen.project} subdir={screen.subdir} options={screen.options}
           onExplore={() => setScreen({ name: 'workspace', project: screen.project })} />
       )}
       {screen.name === 'overview' && (
@@ -81,7 +81,7 @@ export default function App() {
           project={screen.project}
           onBack={() => setScreen({ name: 'projects' })}
           onOpenWorkspace={(tab) => setScreen({ name: 'workspace', project: screen.project, tab })}
-          onReindex={({ exclude }) => setScreen({ name: 'indexing', project: screen.project, subdir: null, exclude })}
+          onReindex={(options) => setScreen({ name: 'indexing', project: screen.project, subdir: null, options })}
         />
       )}
       {screen.name === 'workspace' && (

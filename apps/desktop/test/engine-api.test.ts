@@ -178,6 +178,12 @@ describe('EngineApi: F10 wave 1 routes', () => {
     expect(await echo(api.recluster('p1'))).toMatchObject({ method: 'POST', path: '/v1/projects/p1/communities' })
   })
 
+  it('startIndex sends document and media flags', async () => {
+    expect(await api.startIndex('p1', { includeDocs: true })).toMatchObject({ received_body: { include_docs: true } })
+    expect(await api.startIndex('p1', { includeDocs: true, includeMedia: true })).toMatchObject({ received_body: { include_docs: true, include_media: true } })
+    expect((await api.startIndex('p1', { exclude: ['a/'] }) as unknown as { received_body: object }).received_body).toEqual({ exclude: ['a/'] })
+  })
+
   it('startIndex sends exclude patterns', async () => {
     expect(await api.startIndex('p1', { exclude: ['vendor/', '*.g.dart'] })).toMatchObject({ received_body: { exclude: ['vendor/', '*.g.dart'] } })
     expect(await api.startIndex('p1', { subdir: 'lib', exclude: [] })).toMatchObject({ received_body: { subdir: 'lib' } })

@@ -111,3 +111,11 @@ describe('GraphCanvas highlights', () => {
     expect(document.querySelectorAll('.tag')).toHaveLength(0)
   })
 })
+
+describe('kindStyle cho tài liệu', () => {
+  it('nút document và concept có màu riêng', async () => {
+    const { kindStyle } = await import('./kindStyle')
+    expect(kindStyle('document').color).toBe('#8a6d1f')
+    expect(kindStyle('concept').color).toBe('#8a6d1f')
+  })
+})

@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ExportFormat, ExportScope, NeighborQuery, PushRequest } from '../shared/graph-types'
+import type { ExportFormat, ExportScope, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
@@ -83,7 +83,7 @@ export function registerIpc(
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
   on('index:scan', (pid: string) => api().scan(pid))
-  on('index:start', async (pid: string, opts?: { subdir?: string; exclude?: string[] }) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
+  on('index:start', async (pid: string, opts?: IndexOptions) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
   on('index:cancel', async (jobId: string) => void (await api().cancelJob(jobId)))
   on('index:refresh', (pid: string) => api().refresh(pid))
   on('graph:changes', (pid: string, opts?: { refresh?: boolean }) => api().changes(pid, opts))

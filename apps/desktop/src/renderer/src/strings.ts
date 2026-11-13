@@ -80,7 +80,8 @@ export const vi = {
     excludeLabel: 'Mẫu bỏ qua',
     excludeHint: 'Mỗi dòng một mẫu, cú pháp .gitignore. Áp dụng cho cả các lần cập nhật sau.',
     workersSoon: 'Số tiến trình — sắp có',
-    docsSoon: 'Gồm tài liệu — đợt 2',
+    includeDocs: 'Gồm tài liệu (Markdown, txt, Word, Excel, PDF)',
+    includeMedia: 'Gồm audio/video (chép lời trên máy, cần faster-whisper; lần đầu tải model)',
     cancel: 'Huỷ',
     reindexWithOptions: 'Index lại với tuỳ chọn này'
   },

@@ -1,11 +1,11 @@
-import type { ProjectSummary } from '@shared/graph-types'
+import type { IndexOptions, ProjectSummary } from '@shared/graph-types'
 import { useIndexJob } from '../state/useIndexJob'
 import { vi } from '../strings'
 
 interface Props {
   project: ProjectSummary
   subdir?: string | null
-  exclude?: string[]
+  options?: IndexOptions
   onExplore: () => void
 }
 
@@ -23,8 +23,8 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
   )
 }
 
-export function IndexingScreen({ project, subdir, exclude, onExplore }: Props) {
-  const { job, error, cancel } = useIndexJob(project.project_id, subdir, exclude)
+export function IndexingScreen({ project, subdir, options, onExplore }: Props) {
+  const { job, error, cancel } = useIndexJob(project.project_id, subdir, options)
   const state = job?.state
   const phase1Done = state === 'resolve' || state === 'done'
   const running = state === 'queued' || state === 'structure' || state === 'resolve'

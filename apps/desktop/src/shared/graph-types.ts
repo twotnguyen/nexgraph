@@ -233,3 +233,11 @@ export interface PushResult {
   edges: number
   truncated: boolean
 }
+
+/** Tuỳ chọn lập chỉ mục đầy đủ (F10): mẫu bỏ qua, gồm tài liệu, gồm audio/video. */
+export interface IndexOptions {
+  subdir?: string
+  exclude?: string[]
+  includeDocs?: boolean
+  includeMedia?: boolean
+}

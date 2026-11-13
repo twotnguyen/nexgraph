@@ -45,7 +45,18 @@ describe('ProjectOverviewScreen', () => {
     await userEvent.type(screen.getByLabelText('Mẫu bỏ qua'), 'gen/{Enter}vendor/{Enter}{Enter}')
     expect(screen.getByLabelText(/Số tiến trình/)).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
-    expect(props.onReindex).toHaveBeenCalledWith({ exclude: ['gen/', 'vendor/'] })
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: ['gen/', 'vendor/'], includeDocs: false, includeMedia: false })
+  })
+
+  it('tuỳ chọn index gồm tài liệu, audio/video chỉ bật được sau khi bật tài liệu', async () => {
+    const { props } = renderOverview()
+    await userEvent.click(screen.getByRole('button', { name: /^Tuỳ chọn index/ }))
+    const media = screen.getByLabelText(/Gồm audio\/video/)
+    expect(media).toBeDisabled()
+    await userEvent.click(screen.getByLabelText(/Gồm tài liệu/))
+    expect(media).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: [], includeDocs: true, includeMedia: false })
   })
 
   it('index lại không có mẫu bỏ qua', async () => {

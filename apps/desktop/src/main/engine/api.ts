@@ -1,4 +1,5 @@
 import type {
+  IndexOptions,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope, GraphNode, GraphReport, GraphStats, Job,
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from '../../shared/graph-types'
@@ -50,8 +51,11 @@ export class EngineApi {
   listProjects(): Promise<ProjectSummary[]> {
     return this.request('GET', '/v1/projects')
   }
-  startIndex(pid: string, o?: { subdir?: string; exclude?: string[] }): Promise<{ job_id: string }> {
-    const body = { ...(o?.subdir ? { subdir: o.subdir } : {}), ...(o?.exclude?.length ? { exclude: o.exclude } : {}) }
+  startIndex(pid: string, o?: IndexOptions): Promise<{ job_id: string }> {
+    const body = {
+      ...(o?.subdir ? { subdir: o.subdir } : {}), ...(o?.exclude?.length ? { exclude: o.exclude } : {}),
+      ...(o?.includeDocs ? { include_docs: true } : {}), ...(o?.includeMedia ? { include_media: true } : {})
+    }
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, Object.keys(body).length ? body : undefined)
   }
   scan(pid: string): Promise<ScanInfo> {
