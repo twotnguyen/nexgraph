@@ -40,6 +40,7 @@ export interface Neighborhood {
   nodes: GraphNode[]
   edges: GraphEdge[]
   truncated: boolean
+  total?: number | null
 }
 
 export interface NeighborQuery {

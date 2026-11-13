@@ -241,6 +241,7 @@ export const vi = {
     backToRoot: 'Về gốc',
     nothingSelected: 'Chọn một nút để xem chi tiết',
     truncated: 'Đã cắt bớt, thu hẹp bằng cách chọn nút khác',
+    truncatedOf: (shown: number, total: number) => `Đang hiện ${shown}/${total} nút láng giềng. Dùng Tìm kiếm hoặc Cây để tới nút cần xem.`,
     isTest: 'Mã kiểm thử'
   }
 }

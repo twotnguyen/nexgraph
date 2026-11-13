@@ -51,6 +51,9 @@ def search(conn: sqlite3.Connection, q: str, *, kinds: set[NodeKind] | None = No
         node = GraphStore.row_to_node(row)
         label = node.label.casefold()
         tier = 2.0 if label == needle else 1.0 if label.startswith(needle) else 0.0
-        scored.append((node, tier + 1.0 / (1 + rank)))
+        score = tier + 1.0 / (1 + rank)
+        if node.is_test:
+            score *= 0.5
+        scored.append((node, score))
     scored.sort(key=lambda p: -p[1])
     return scored[:limit]

@@ -200,3 +200,26 @@ def test_begin_run_records_subdir_and_kind(store):
     assert store.last_scope() == "lib/services"
     row = store.conn.execute("SELECT loai, thu_muc_con FROM lan_lap_chi_muc WHERE ma_lan = ?", (r2,)).fetchone()
     assert (row["loai"], row["thu_muc_con"]) == ("tang_dan", "other")
+
+
+@pytest.fixture
+def store_with_star(store):
+    run = store.begin_run()
+    store.add_file(run, FileRec("c.py", "python", 100, 1, "c" * 64, False))
+    hub = Node(id="c.py::hub#function", kind=NodeKind.FUNCTION, label="hub", qualified_name="hub", file="c.py", line_start=1, line_end=100)
+    leaves = [
+        Node(id=f"c.py::leaf{i}#function", kind=NodeKind.FUNCTION, label=f"leaf{i}", qualified_name=f"leaf{i}", file="c.py", line_start=1, line_end=100)
+        for i in range(30)
+    ]
+    store.add_nodes([hub, *leaves])
+    store.add_edges([
+        Edge(source="c.py::hub#function", target=f"c.py::leaf{i}#function", type=EdgeType.CALLS, line=10)
+        for i in range(30)
+    ])
+    return store
+
+
+def test_neighbors_reports_total_when_truncated(store_with_star):
+    hood = store_with_star.neighbors("c.py::hub#function", limit=10)
+    assert hood.truncated is True and hood.total == 30 and len(hood.nodes) == 10
+    assert store_with_star.neighbors("c.py::hub#function", depth=2, limit=10).total is None

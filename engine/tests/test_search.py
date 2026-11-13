@@ -77,3 +77,11 @@ def test_build_match_query():
     assert build_match_query("a b") == '"a"* AND "b"*'
     assert build_match_query(" ".join(["abc"] * 20)).count("AND") == 7  # tối đa 8 từ
     assert build_match_query("login AND") == '"login"* AND "and"*'  # toán tử FTS trong dữ liệu chỉ là chữ thường
+
+
+def test_search_ranks_production_symbol_above_same_named_test_double(tmp_path, index_project):
+    (tmp_path / "db.py").write_text("class SessionDB:\n    def get(self):\n        return 1\n")
+    (tmp_path / "test_db.py").write_text("class SessionDB:\n    def get(self):\n        return 2\n")
+    store, _, _ = index_project(tmp_path)
+    hits = search(store.conn, "SessionDB")
+    assert [n.file for n, _ in hits[:2]] == ["db.py", "test_db.py"]

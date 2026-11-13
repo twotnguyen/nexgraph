@@ -89,7 +89,7 @@ def neighbors_json(store: GraphStore, node: str, types: set[EdgeType] | None, di
     except KeyError as exc:
         raise ApiError(404, "unknown_node", f"Không có nút {node}") from exc
     return {"nodes": [node_json(n) for n in hood.nodes], "edges": [edge_json(e) for e in hood.edges],
-            "truncated": hood.truncated}
+            "truncated": hood.truncated, "total": hood.total}
 
 
 def _safe_file(root: Path, file: str) -> Path:

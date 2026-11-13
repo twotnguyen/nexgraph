@@ -68,3 +68,4 @@ class Neighborhood:
     nodes: list[Node]
     edges: list[StoredEdge]
     truncated: bool
+    total: int | None = None

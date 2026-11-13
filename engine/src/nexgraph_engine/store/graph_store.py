@@ -339,10 +339,29 @@ class GraphStore:
             "SELECT 1 FROM canh c JOIN nut n ON n.ma_nut = c.ma_nut_nguon WHERE n.id_nut = ? AND c.loai_canh = ?"
             " LIMIT 1", (node_id, type_.value)).fetchone() is not None
 
-    def requeue_failed_refs(self) -> int:
-        """Đưa mọi tham chiếu thất bại về hàng đợi để phân giải lại khi có ký hiệu mới."""
-        cur = self.conn.execute("UPDATE tham_chieu_chua_phan_giai SET trang_thai = 'cho' WHERE trang_thai = 'that_bai'")
-        return cur.rowcount
+    def requeue_failed_refs(self, tails: Iterable[str] | None = None, *, imports: bool = False) -> int:
+        """Đưa tham chiếu thất bại về hàng đợi để phân giải lại khi có ký hiệu mới."""
+        if tails is None:
+            cur = self.conn.execute("UPDATE tham_chieu_chua_phan_giai SET trang_thai = 'cho' WHERE trang_thai = 'that_bai'")
+            return cur.rowcount
+        total = 0
+        tails_list = list(tails)
+        expr = "substr(ten_tham_chieu, length(rtrim(ten_tham_chieu, replace(ten_tham_chieu, '.', ''))) + 1)"
+        for chunk in _chunks(tails_list, 400):
+            if not chunk:
+                continue
+            placeholders = ",".join("?" for _ in chunk)
+            cur = self.conn.execute(
+                f"UPDATE tham_chieu_chua_phan_giai SET trang_thai = 'cho' WHERE trang_thai = 'that_bai' AND {expr} IN ({placeholders})",
+                chunk,
+            )
+            total += cur.rowcount
+        if imports:
+            cur = self.conn.execute(
+                "UPDATE tham_chieu_chua_phan_giai SET trang_thai = 'cho' WHERE trang_thai = 'that_bai' AND loai_tham_chieu = 'IMPORTS'"
+            )
+            total += cur.rowcount
+        return total
 
     def import_edges(self) -> list[tuple[str, str, str | None]]:
         """(tệp nguồn, tệp đích, loai_con) của các cạnh IMPORTS đã phân giải giữa hai nút tệp."""
@@ -438,7 +457,30 @@ class GraphStore:
             for _, r in sorted(edge_rows.items())
             if r["ma_nut_nguon"] in seen and r["ma_nut_dich"] in seen
         ]
-        return Neighborhood(nodes=nodes, edges=edges, truncated=truncated)
+        total: int | None = None
+        if depth == 1:
+            type_cond = ""
+            params: list = []
+            if types:
+                ph = ",".join("?" for _ in types)
+                type_cond = f" AND loai_canh IN ({ph})"
+                params.extend([t.value for t in types])
+
+            if direction == "out":
+                sql = f"SELECT count(DISTINCT ma_nut_dich) FROM canh WHERE ma_nut_nguon = ?{type_cond} AND ma_nut_dich != ?"
+                total = self.conn.execute(sql, [start, *params, start]).fetchone()[0]
+            elif direction == "in":
+                sql = f"SELECT count(DISTINCT ma_nut_nguon) FROM canh WHERE ma_nut_dich = ?{type_cond} AND ma_nut_nguon != ?"
+                total = self.conn.execute(sql, [start, *params, start]).fetchone()[0]
+            else:
+                sql = (
+                    f"SELECT count(DISTINCT CASE WHEN ma_nut_nguon = ? THEN ma_nut_dich ELSE ma_nut_nguon END)"
+                    f" FROM canh WHERE (ma_nut_nguon = ? OR ma_nut_dich = ?){type_cond}"
+                    f" AND CASE WHEN ma_nut_nguon = ? THEN ma_nut_dich ELSE ma_nut_nguon END != ?"
+                )
+                total = self.conn.execute(sql, [start, start, start, *params, start, start]).fetchone()[0]
+
+        return Neighborhood(nodes=nodes, edges=edges, truncated=truncated, total=total)
 
     def stats(self) -> dict:
         q = self.conn.execute

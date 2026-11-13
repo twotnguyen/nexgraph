@@ -56,6 +56,10 @@ describe('GraphCanvas', () => {
     renderCanvas(vi.fn(async () => hood(['.#repository', 'a'], true)))
     expect(await screen.findByRole('status')).toHaveTextContent('Đã cắt bớt')
   })
+  it('shows total count when truncated with total', async () => {
+    renderCanvas(vi.fn(async () => ({ ...hood(['.#repository', 'a'], true), total: 12345 })))
+    expect(await screen.findByRole('status')).toHaveTextContent('12345')
+  })
 
   it('shows a message instead of a blank screen when the node is unknown', async () => {
     renderCanvas(vi.fn(async () => { throw Object.assign(new Error('Không có nút'), { code: 'unknown_node' }) }))

@@ -1,6 +1,6 @@
 import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
-import type { GraphEdge, GraphNode } from '@shared/graph-types'
+import type { GraphEdge, GraphNode, Neighborhood } from '@shared/graph-types'
 import { layoutGraph } from '../../services/elkLayoutService'
 import { vi } from '../../strings'
 import { AutoFit } from '../common/AutoFit'
@@ -31,7 +31,7 @@ const toFlowEdges = (edges: GraphEdge[], strong: boolean): Edge[] =>
     ...(strong ? { animated: true, style: { stroke: 'var(--color-map-blue)', strokeWidth: 2.5 } } : {})
   }))
 
-interface View { pos: Record<string, { x: number; y: number }>; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean }
+interface View { pos: Record<string, { x: number; y: number }>; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean; total?: number | null }
 
 export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, highlights, onNodeContextMenu, overlay, onClearOverlay }: Props) {
   const [center, setCenter] = useState(focusNodeId ?? startNodeId)
@@ -56,6 +56,7 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
       setView({
         raw: new Map(hood.nodes.map((n) => [n.id, n])),
         truncated: 'truncated' in hood && hood.truncated === true,
+        total: 'total' in hood ? (hood as Neighborhood).total : undefined,
         pos,
         edges: toFlowEdges(hood.edges, overlay != null)
       })
@@ -117,7 +118,11 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
     <div className="graph-canvas">
       {toolbar}
       {error && <p role="alert" className="error">{error}</p>}
-      {view?.truncated && <p role="status" className="muted">{vi.graph.truncated}</p>}
+      {view?.truncated && (
+        <p role="status" className="muted">
+          {view.total != null ? vi.graph.truncatedOf(view.raw.size, view.total) : vi.graph.truncated}
+        </p>
+      )}
       {view && (
         <ReactFlow key={overlay ? 'overlay' : center} nodes={nodes} edges={view.edges} onNodeClick={onNodeClick} onNodeContextMenu={onContextMenu}
           nodesDraggable={false} proOptions={{ hideAttribution: true }}>
