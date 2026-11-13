@@ -290,3 +290,11 @@ export interface IndexOptions {
   includeDocs?: boolean
   includeMedia?: boolean
 }
+
+export interface AiSettings { baseUrl: string; model: string; hasKey: boolean }
+export interface Citation { raw: string; file: string; start: number; end: number; valid: boolean; reason: null | 'file_not_found' | 'out_of_range' }
+export interface AiToolCall { name: string; args: string; ms: number }
+export interface ChatAnswer { text: string; citations: Citation[]; toolCalls: AiToolCall[] }
+export type ChatMessage = { role: 'user' | 'assistant'; content: string }
+export interface ContextItem { node: GraphNode; score: number; reasons: string[]; code: { file: string; start: number; end: number; text: string } | null }
+export interface ContextPack { items: ContextItem[]; flows: FlowSummary[]; tokens: number; truncated: boolean }

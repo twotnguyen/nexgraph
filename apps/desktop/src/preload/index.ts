@@ -53,6 +53,8 @@ const api: NexGraphApi = {
     recluster: (pid) => call('graph:recluster', pid),
     flows: (pid, opts) => call('graph:flows', pid, opts),
     flow: (pid, flowId) => call('graph:flow', pid, flowId),
+    locate: (pid, file, line) => call('graph:locate', pid, file, line),
+    context: (pid, q, budget) => call('graph:context', pid, q, budget),
     map: (pid, opts) => call('graph:map', pid, opts),
     cycles: (pid, limit) => call('graph:cycles', pid, limit)
   },

@@ -116,6 +116,8 @@ export function registerIpc(
   on('graph:recluster', (pid: string) => api().recluster(pid))
   on('graph:flows', (pid: string, opts?: FlowQuery) => api().flows(pid, opts))
   on('graph:flow', (pid: string, flowId: number) => api().flow(pid, flowId))
+  on('graph:locate', (pid: string, file: string, line: number) => api().locate(pid, file, line))
+  on('graph:context', (pid: string, q: string, budget?: number) => api().context(pid, q, budget))
   on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
 

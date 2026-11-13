@@ -1,7 +1,7 @@
 import type {
   IndexOptions,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope,
-  FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
+  ContextPack, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   GraphNode, GraphReport, GraphStats, Job,
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from '../../shared/graph-types'
@@ -148,6 +148,12 @@ export class EngineApi {
   }
   flow(pid: string, flowId: number): Promise<FlowDetail> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/flows/${flowId}`)
+  }
+  locate(pid: string, file: string, line: number): Promise<{ node: GraphNode }> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/locate?${new URLSearchParams({ file, line: String(line) })}`)
+  }
+  context(pid: string, question: string, budget?: number): Promise<ContextPack> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/context`, { question, ...(budget != null ? { budget } : {}) })
   }
   map(pid: string, o?: { parent?: string; detail?: number }): Promise<ProjectMap> {
     const params = new URLSearchParams()
