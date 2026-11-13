@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, Request
 
 from nexgraph_engine.api.routes_graph import open_store, require_indexed
 from nexgraph_engine.flows.query import flow_json, list_flows_json
+from nexgraph_engine.tour.build import build_tour
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
 
@@ -29,3 +30,10 @@ def get_flow(project_id: str, flow_id: int, request: Request) -> dict:
     with open_store(request, project_id) as (store, _):
         require_indexed(store, request, project_id)
         return flow_json(store, flow_id)
+
+
+@router.get("/tour")
+def get_tour(project_id: str, request: Request) -> dict:
+    with open_store(request, project_id) as (store, _):
+        require_indexed(store, request, project_id)
+        return build_tour(store)
