@@ -50,7 +50,7 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 | `GET /v1/selftest` | 1 | `{ok:bool, nodes:int}`: extract fixture đóng gói sẵn, kiểm bản đóng gói |
 | `POST /v1/projects` `{path}` | 2 | `{project_id, path, name, is_git:bool, storage, last_indexed_at, last_index_commit}` (hai trường cuối thêm ở F10 để app mở dự án đã index vào trang Tổng quan) |
 | `GET /v1/projects` | 2 | `[{project_id, path, last_indexed_at, last_index_commit}]` |
-| `POST /v1/projects/{pid}/index` `{subdir?, exclude?, include_docs=false, include_media=false}` | 2 (thân mở rộng F10-1, F10-6a) | `{job_id}`; ba tuỳ chọn cuối lưu theo lần index, refresh dùng lại |
+| `POST /v1/projects/{pid}/index` `{subdir?, exclude?, include_docs?, include_media?}` | 2 (thân mở rộng F10-1, F10-6a) | `{job_id}`; ba tuỳ chọn cuối lưu theo lần index, refresh dùng lại; bỏ trống `include_*` = giữ giá trị lần index trước |
 | `GET /v1/jobs/{job_id}` · `DELETE` (huỷ) | 2 | `{state:"queued"\|"structure"\|"resolve"\|"done"\|"error"\|"cancelled", files_done, files_total, message?}` |
 | `GET /v1/events` (SSE) | 2 | `job_progress`, `graph_updated {pid}`, `changes_updated {pid}` |
 | `GET /v1/projects/{pid}/stats` | 2 | đếm node/edge theo kind/type, ngôn ngữ |
@@ -69,7 +69,7 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 | `POST /v1/projects/{pid}/export` `{format, scope:{kind:"all"\|"community"\|"node", value?}, out_dir}` | F10-1 | `{files, truncated}`; `format` ∈ html, callflow_html, obsidian, wiki, svg, graphml, cypher, json, markdown; tối đa 5.000 node; `400 bad_path`, `500 export_failed` |
 | `POST /v1/projects/{pid}/export/push` `{target:"neo4j"\|"falkordb", uri, user?, password?, scope}` | F10-1 | `{nodes, edges, truncated}`; `502 push_failed`; mật khẩu không lưu |
 | `POST /v1/projects/{pid}/communities` | F10-1 | `{communities:int}` (gom cụm lại) |
-| `GET /v1/tools` | F10-6a | `{ffmpeg, faster_whisper, git, gh, yt_dlp}` (bool; công cụ ngoài có trên máy) |
+| `GET /v1/tools` | F10-6a | `{ffmpeg, faster_whisper, git, gh, yt_dlp}` (bool; công cụ ngoài có trên máy). `GET /code` trên tệp audio/video trả bản chép lời, chưa có thì `404 no_text` |
 
 Lỗi chung của các route F10-1: `409 not_indexed` khi dự án chưa lập chỉ mục xong.
 | `GET /v1/projects/{pid}/tour` | 6 | `[{step, title, node_ids, file, start, end, text}]` |
