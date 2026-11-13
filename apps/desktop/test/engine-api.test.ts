@@ -185,6 +185,7 @@ describe('EngineApi: F10 wave 1 routes', () => {
   it('startIndex sends document and media flags', async () => {
     expect(await api.startIndex('p1', { includeDocs: true })).toMatchObject({ received_body: { include_docs: true } })
     expect(await api.startIndex('p1', { includeDocs: true, includeMedia: true })).toMatchObject({ received_body: { include_docs: true, include_media: true } })
+    expect(await api.startIndex('p1', { includeDocs: false, includeMedia: false })).toMatchObject({ received_body: { include_docs: false, include_media: false } })
     expect((await api.startIndex('p1', { exclude: ['a/'] }) as unknown as { received_body: object }).received_body).toEqual({ exclude: ['a/'] })
   })
 

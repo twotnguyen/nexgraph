@@ -63,7 +63,7 @@ describe('ProjectOverviewScreen', () => {
     renderOverview({ engine: { tools: vi.fn(async () => ({ ffmpeg: true, faster_whisper: false, git: true, gh: false, yt_dlp: false })) } })
     await userEvent.click(screen.getByRole('button', { name: /^Tuỳ chọn index/ }))
     await userEvent.click(screen.getByLabelText(/Gồm tài liệu/))
-    expect(await screen.findByText('Cần cài faster-whisper')).toBeInTheDocument()
+    expect(await screen.findByText(/Cần faster-whisper: chạy engine từ mã nguồn/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Gồm audio\/video/)).toBeDisabled()
   })
 

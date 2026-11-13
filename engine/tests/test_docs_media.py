@@ -65,3 +65,91 @@ def test_tools_route(api):
     body = api.get("/v1/tools").json()
     assert set(body) == {"ffmpeg", "faster_whisper", "git", "gh", "yt_dlp"}
     assert all(isinstance(v, bool) for v in body.values())
+
+
+def _index_api(api, root, body):
+    import time
+    pid = api.open(root)["project_id"]
+    r = api.post(f"/v1/projects/{pid}/index", json=body)
+    for _ in range(300):
+        if api.get(f"/v1/jobs/{r.json()['job_id']}").json()["state"] in ("done", "error", "cancelled"):
+            break
+        time.sleep(0.05)
+    return pid
+
+
+def test_code_on_media_serves_transcript(api, docs_root, fake_whisper):
+    (docs_root / "talk.mp3").write_bytes(b"ID3" + b"\xff" * 100)
+    pid = _index_api(api, docs_root, {"include_docs": True, "include_media": True})
+    body = api.get(f"/v1/projects/{pid}/code", params={"file": "talk.mp3"}).json()
+    assert "AuthService.login" in body["text"] and body["language"] == "media"
+
+
+def test_code_on_media_without_transcript_is_404(api, docs_root, monkeypatch):
+    monkeypatch.setattr(media, "find_spec", lambda name: None)
+    (docs_root / "talk.mp3").write_bytes(b"ID3" + b"\xff" * 100)
+    pid = _index_api(api, docs_root, {"include_docs": True, "include_media": True})
+    r = api.get(f"/v1/projects/{pid}/code", params={"file": "talk.mp3"})
+    assert r.status_code == 404 and r.json()["error"]["code"] == "no_text"
+
+
+def test_media_bytes_not_loaded(docs_root, tmp_path, fake_whisper, monkeypatch):
+    from pathlib import Path
+    real = Path.read_bytes
+    read: list[str] = []
+    monkeypatch.setattr(Path, "read_bytes", lambda self: (read.append(self.name), real(self))[1])
+    (docs_root / "talk.mp3").write_bytes(b"ID3")
+    run_index(docs_root, tmp_path / "g.db", include_docs=True, include_media=True, transcript_dir=tmp_path / "tr")
+    assert "talk.mp3" not in read
+
+
+def test_transcription_cancel_mid_file(tmp_path, monkeypatch):
+    import threading
+    cancel = threading.Event()
+
+    class Model:
+        def __init__(self, *a, **k):
+            pass
+
+        def transcribe(self, path, beam_size, initial_prompt=None):
+            def gen():
+                yield SimpleNamespace(text="một")
+                cancel.set()
+                yield SimpleNamespace(text="hai")
+            return gen(), SimpleNamespace(language="vi")
+
+    monkeypatch.setattr(gt, "_get_whisper", lambda: Model)
+    audio = tmp_path / "talk.mp3"
+    audio.write_bytes(b"ID3")
+    out = tmp_path / "tr"
+    with pytest.raises(media.TranscriptCancelled):
+        media.transcript_for(audio, "b" * 64, out, cancel=cancel)
+    assert not (out / f"{'b' * 64}.txt").exists()
+
+
+def test_cancel_during_transcription_stops_index(docs_root, tmp_path, monkeypatch):
+    import threading
+    from nexgraph_engine.index.indexer import Indexer
+    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.store.graph_store import GraphStore
+    cancel = threading.Event()
+
+    class Model:
+        def __init__(self, *a, **k):
+            pass
+
+        def transcribe(self, path, beam_size, initial_prompt=None):
+            def gen():
+                cancel.set()
+                yield SimpleNamespace(text="x")
+            return gen(), SimpleNamespace(language="vi")
+
+    monkeypatch.setattr(gt, "_get_whisper", lambda: Model)
+    monkeypatch.setattr(media, "find_spec", lambda name: object())
+    (docs_root / "a_talk.mp3").write_bytes(b"ID3")
+    store = GraphStore(open_graph_db(tmp_path / "g.db"))
+    store.init_project("p", has_git=False)
+    r = Indexer(store, docs_root, on_progress=lambda e: None, cancel=cancel, include_docs=True, include_media=True,
+                transcript_dir=tmp_path / "tr").run()
+    assert r.state == "huy"
+    assert not list((tmp_path / "tr").glob("*.txt"))

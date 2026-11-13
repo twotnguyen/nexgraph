@@ -33,7 +33,7 @@ class JobManager:
         self._lock = threading.Lock()
 
     def start_index(self, project_id: str, *, subdir: str | None = None, exclude: list[str] | None = None,
-                    include_docs: bool = False, include_media: bool = False) -> str:
+                    include_docs: bool | None = None, include_media: bool | None = None) -> str:
         info = self._registry.get(project_id)
         if info is None:
             raise UnknownProject(project_id)
@@ -91,7 +91,8 @@ class JobManager:
             self._bus.publish({"type": "graph_updated", "project_id": snapshot["project_id"]})
 
     def _run(self, job_id: str, info, cancel: threading.Event, subdir: str | None,
-             exclude: list[str] | None = None, include_docs: bool = False, include_media: bool = False) -> None:
+             exclude: list[str] | None = None, include_docs: bool | None = None,
+             include_media: bool | None = None) -> None:
         conn = None
         lock = self._locks.get(info.project_id) if self._locks else None
         if lock is not None:
@@ -100,6 +101,9 @@ class JobManager:
             conn = open_graph_db(info.graph_db)
             store = GraphStore(conn)
             store.abort_stale_runs()  # lần chạy dở do engine từng chết giữa chừng
+            last_docs, last_media = store.last_doc_flags()
+            include_docs = last_docs if include_docs is None else include_docs
+            include_media = last_media if include_media is None else include_media
             self._indexer_cls(store, info.path, on_progress=lambda e: self._update(job_id, e), cancel=cancel,
                               subdir=subdir, exclude=exclude, include_docs=include_docs,
                               include_media=include_media,

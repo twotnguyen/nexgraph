@@ -106,10 +106,12 @@ def _safe_file(root: Path, file: str) -> Path:
 def code(project_id: str, request: Request, file: str = Query(...), start: int | None = None,
          end: int | None = None) -> dict:
     with open_store(request, project_id) as (store, info):
-        return read_code(store, info.path, file, start, end)
+        return read_code(store, info.path, file, start, end,
+                         transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id)
 
 
-def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None) -> dict:
+def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None, *,
+              transcript_dir: Path | None = None) -> dict:
     """Dùng chung cho route HTTP và tool MCP."""
     path = _safe_file(root, file)
     record = store.file_record(file)
@@ -120,7 +122,12 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
     first = 1 if start is None else start
     if first < 1 or (end is not None and (end < first or end - first + 1 > MAX_CODE_LINES)):
         raise ApiError(400, "bad_param", f"start >= 1, end >= start, tối đa {MAX_CODE_LINES} dòng mỗi lần")
-    if record.language in CONVERTED_LANGUAGES:  # docx/xlsx/PDF: chuyển lại sang chữ, cùng hàm lúc index nên dòng khớp
+    if record.language == "media":  # audio/video: phục vụ bản chép lời đã lưu, không đọc tệp nhị phân
+        cached = transcript_dir / f"{record.sha256}.txt" if transcript_dir else None
+        if cached is None or not cached.is_file():
+            raise ApiError(404, "no_text", f"Chưa có bản chép lời cho {file}")
+        lines = cached.read_text(encoding="utf-8").splitlines()
+    elif record.language in CONVERTED_LANGUAGES:  # docx/xlsx/PDF: chuyển lại sang chữ, cùng hàm lúc index nên dòng khớp
         lines = doc_text(path, record.language).splitlines()
     else:
         lines = path.read_bytes().decode("utf-8", errors="replace").splitlines()

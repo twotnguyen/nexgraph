@@ -15,7 +15,8 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
     })
     const opts: IndexOptions = {
       ...(subdir ? { subdir } : {}), ...(options?.exclude?.length ? { exclude: options.exclude } : {}),
-      ...(options?.includeDocs ? { includeDocs: true } : {}), ...(options?.includeMedia ? { includeMedia: true } : {})
+      ...(options?.includeDocs !== undefined ? { includeDocs: options.includeDocs } : {}),
+      ...(options?.includeMedia !== undefined ? { includeMedia: options.includeMedia } : {})
     }
     const started = Object.keys(opts).length ? window.nexgraph.index.start(projectId, opts) : window.nexgraph.index.start(projectId)
     started

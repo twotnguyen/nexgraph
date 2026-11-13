@@ -78,3 +78,21 @@ def test_index_route_accepts_doc_flags(api, copy_fixture):
         time.sleep(0.05)
     assert job["state"] == "done"
     assert api.get(f"/v1/projects/{pid}/stats").json()["files"] == 4
+
+
+def test_reindex_without_flags_keeps_last_doc_flags(api, copy_fixture):
+    root = copy_fixture("py_mini")
+    (root / "README.md").write_text("# Mini\n")
+    pid = api.open(root)["project_id"]
+
+    def index(body):
+        r = api.post(f"/v1/projects/{pid}/index", json=body)
+        for _ in range(300):
+            if api.get(f"/v1/jobs/{r.json()['job_id']}").json()["state"] in ("done", "error"):
+                break
+            time.sleep(0.05)
+        return api.get(f"/v1/projects/{pid}/stats").json()["files"]
+
+    assert index({"include_docs": True}) == 4
+    assert index({}) == 4                      # nút "Index lại" không gửi cờ: giữ tuỳ chọn lần trước
+    assert index({"include_docs": False}) == 3  # hộp thoại gửi cờ tường minh

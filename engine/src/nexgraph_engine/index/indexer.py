@@ -66,12 +66,14 @@ class ExtractedFile:
     errors: list[tuple[str, str]]
 
 
-def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None = None) -> ExtractedFile:
+def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None = None,
+                 cancel: threading.Event | None = None) -> ExtractedFile:
     """Đọc và trích xuất một tệp (dùng chung cho lập chỉ mục đầy đủ và cập nhật tăng dần). Không ghi CSDL."""
     path = Path(root) / f.rel_path
     try:
         sha = sha256_file(path)
-        source = None if f.oversized else path.read_bytes()
+        # Media chỉ cần mã băm (đã đọc theo luồng); không nạp tệp tới 500 MB vào RAM.
+        source = None if f.oversized or f.language == "media" else path.read_bytes()
         read_error = None
     except OSError as exc:
         sha, source, read_error = "0" * 64, None, f"Không đọc được tệp: {exc}"
@@ -80,14 +82,14 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
                      qualified_name=f.rel_path, file=f.rel_path, is_test=f.is_test)
     if f.oversized:
         return ExtractedFile(rec, [file_node], [], [], {}, [("oversized", f"{f.size} byte vượt giới hạn")])
-    if read_error or source is None:
+    if read_error or (source is None and f.language != "media"):
         return ExtractedFile(rec, [file_node], [], [], {}, [("read", read_error or "Không đọc được tệp")])
     try:
         if f.language in DOC_LANGUAGES:
             if f.language == "media":
                 if transcript_dir is None or not media.has_whisper():
                     return ExtractedFile(rec, [file_node], [], [], {}, [("extract", media.MISSING_WHISPER)])
-                text = media.transcript_for(path, sha, transcript_dir)
+                text = media.transcript_for(path, sha, transcript_dir, cancel=cancel)
             else:
                 text = doc_text(path, f.language)
             x: FileExtraction = extract_document(f.rel_path, text, file_id=file_node.id)
@@ -189,7 +191,7 @@ class Indexer:
 
     def _index_file(self, run_id: int, f: DiscoveredFile, bindings: dict[str, dict[str, str]]) -> None:
         store = self.store
-        x = extract_file(self.root, f, transcript_dir=self.transcript_dir)
+        x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
         store.add_file(run_id, x.rec)
         store.add_nodes(x.nodes)
         store.add_edges(x.edges)

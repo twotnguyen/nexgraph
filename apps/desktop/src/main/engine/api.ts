@@ -54,7 +54,9 @@ export class EngineApi {
   startIndex(pid: string, o?: IndexOptions): Promise<{ job_id: string }> {
     const body = {
       ...(o?.subdir ? { subdir: o.subdir } : {}), ...(o?.exclude?.length ? { exclude: o.exclude } : {}),
-      ...(o?.includeDocs ? { include_docs: true } : {}), ...(o?.includeMedia ? { include_media: true } : {})
+      // Không gửi cờ = engine giữ tuỳ chọn lần trước; false là tắt tường minh.
+      ...(o?.includeDocs !== undefined ? { include_docs: o.includeDocs } : {}),
+      ...(o?.includeMedia !== undefined ? { include_media: o.includeMedia } : {})
     }
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, Object.keys(body).length ? body : undefined)
   }

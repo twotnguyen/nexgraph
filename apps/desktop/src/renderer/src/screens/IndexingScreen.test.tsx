@@ -23,6 +23,12 @@ describe('IndexingScreen subdir', () => {
 })
 
 describe('IndexingScreen', () => {
+  it('passes explicit document flags through, including false', async () => {
+    const h = installNexgraph()
+    render(<IndexingScreen project={project()} options={{ exclude: [], includeDocs: false, includeMedia: false }} onExplore={() => {}} />)
+    await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1', { includeDocs: false, includeMedia: false }))
+  })
+
   it('starts the index once for the project', async () => {
     const h = setup()
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1'))
