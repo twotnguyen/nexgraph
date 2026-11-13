@@ -43,7 +43,7 @@ const ChangesIcon = (
   </svg>
 )
 
-export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
+export function WorkspaceScreen({ project, initialTab, onBack }: { project: ProjectSummary; initialTab?: Tab; onBack?: () => void }) {
   const [panel, setPanel] = useState<string | null>('search')
   const live = useChanges(project.project_id)
   const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
@@ -65,8 +65,8 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
     for (const n of changes.test_gaps) h[n.id] = 'gap'
     return h
   }, [changes])
-  const [tab, setTab] = useState<Tab>('arch')
-  const [lastMain, setLastMain] = useState<Tab>('arch')
+  const [tab, setTab] = useState<Tab>(initialTab ?? 'arch')
+  const [lastMain, setLastMain] = useState<Tab>(initialTab ?? 'arch')
   useEffect(() => {
     if (!tab.startsWith('file:')) setLastMain(tab)
   }, [tab])
@@ -180,6 +180,7 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
       )}
       <section className="center">
         <header className="ws-head">
+          {onBack && <button type="button" className="link" onClick={onBack}>{vi.workspace.back}</button>}
           <b>{project.name}</b>
           <span className="muted mono">{project.path}</span>
           <span className="ws-actions">

@@ -48,7 +48,7 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 |---|---|---|
 | `GET /v1/health` | 1 | `{status:"ok", api_version:"1", engine_version, vendor_commit}` |
 | `GET /v1/selftest` | 1 | `{ok:bool, nodes:int}`: extract fixture đóng gói sẵn, kiểm bản đóng gói |
-| `POST /v1/projects` `{path}` | 2 | `{project_id, path, is_git:bool}` |
+| `POST /v1/projects` `{path}` | 2 | `{project_id, path, name, is_git:bool, storage, last_indexed_at, last_index_commit}` (hai trường cuối thêm ở F10 để app mở dự án đã index vào trang Tổng quan) |
 | `GET /v1/projects` | 2 | `[{project_id, path, last_indexed_at, last_index_commit}]` |
 | `POST /v1/projects/{pid}/index` | 2 | `{job_id}` |
 | `GET /v1/jobs/{job_id}` · `DELETE` (huỷ) | 2 | `{state:"queued"\|"structure"\|"resolve"\|"done"\|"error"\|"cancelled", files_done, files_total, message?}` |

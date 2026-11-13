@@ -42,9 +42,11 @@ def _summary(info: ProjectInfo) -> dict:
 @router.post("/projects")
 def open_project(body: OpenBody, request: Request) -> dict:
     try:
-        return _summary(request.app.state.services.registry.open_project(body.path))
+        info = request.app.state.services.registry.open_project(body.path)
     except ProjectPathError as exc:
         raise ApiError(400, "bad_path", str(exc)) from exc
+    at, commit = _last_run(info)
+    return {**_summary(info), "last_indexed_at": at, "last_index_commit": commit}
 
 
 @router.get("/projects")

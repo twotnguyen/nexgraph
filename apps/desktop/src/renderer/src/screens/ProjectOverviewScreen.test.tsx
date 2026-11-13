@@ -1,0 +1,83 @@
+// @vitest-environment jsdom
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+import { emptyChanges, installNexgraph, project } from '../test-utils'
+import { ProjectOverviewScreen } from './ProjectOverviewScreen'
+
+const stats = { files: 12, nodes_by_kind: { file: 12, function: 30 }, edges_by_type: { CALLS: 40, IMPORTS: 8 }, languages: { dart: 12 }, unresolved: 0 }
+const indexed = project({ last_indexed_at: 1_700_000_000 })
+
+const renderOverview = (over: Parameters<typeof installNexgraph>[0] = {}) => {
+  const h = installNexgraph({ ...over, graph: { stats: vi.fn(async () => stats), ...over.graph } })
+  const props = { onOpenWorkspace: vi.fn(), onReindex: vi.fn(), onBack: vi.fn() }
+  render(<ProjectOverviewScreen project={indexed} {...props} />)
+  return { ...h, props }
+}
+
+describe('ProjectOverviewScreen', () => {
+  it('hiện số liệu graph và huy hiệu khi graph cũ hơn mã nguồn', async () => {
+    renderOverview({ graph: { changes: vi.fn(async () => emptyChanges({ changed_files: [{ path: 'lib/a.dart', status: 'M', old_path: null }] })) } })
+    expect(await screen.findByText(/12 tệp/)).toBeInTheDocument()
+    expect(screen.getByText(/42 node/)).toBeInTheDocument()
+    expect(screen.getByText(/48 cạnh/)).toBeInTheDocument()
+    expect(await screen.findByText('Graph cũ hơn mã nguồn')).toBeInTheDocument()
+  })
+
+  it('thẻ Xem mở workspace đúng tab', async () => {
+    const { props } = renderOverview()
+    await userEvent.click(screen.getByRole('button', { name: /^Báo cáo/ }))
+    expect(props.onOpenWorkspace).toHaveBeenCalledWith('report')
+    await userEvent.click(screen.getByRole('button', { name: /^Cây/ }))
+    expect(props.onOpenWorkspace).toHaveBeenCalledWith('tree')
+  })
+
+  it('gom cụm lại hiện số cụm', async () => {
+    const { api } = renderOverview({ graph: { recluster: vi.fn(async () => ({ communities: 4 })) } })
+    await userEvent.click(screen.getByRole('button', { name: /^Gom cụm lại/ }))
+    expect(api.graph.recluster).toHaveBeenCalledWith('p1')
+    expect(await screen.findByText('Đã chia 4 cụm')).toBeInTheDocument()
+  })
+
+  it('tuỳ chọn index gửi mẫu bỏ qua', async () => {
+    const { props } = renderOverview()
+    await userEvent.click(screen.getByRole('button', { name: /^Tuỳ chọn index/ }))
+    await userEvent.type(screen.getByLabelText('Mẫu bỏ qua'), 'gen/{Enter}vendor/{Enter}{Enter}')
+    expect(screen.getByLabelText(/Số tiến trình/)).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: ['gen/', 'vendor/'] })
+  })
+
+  it('index lại không có mẫu bỏ qua', async () => {
+    const { props } = renderOverview()
+    await userEvent.click(screen.getByRole('button', { name: /^Index lại/ }))
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: [] })
+  })
+
+  it('sao chép cấu hình MCP', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const { api } = renderOverview({ mcp: { config: vi.fn(async () => ({ stdio: '{"mcpServers":{}}' })) } })
+    await userEvent.click(screen.getByRole('button', { name: 'Sao chép cấu hình MCP' }))
+    expect(api.mcp.config).toHaveBeenCalledWith('/Đồ án/demo')
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('{"mcpServers":{}}'))
+    expect(await screen.findByText('Đã sao chép')).toBeInTheDocument()
+  })
+
+  it('bật MCP qua HTTP hiện URL, key ẩn tới khi bấm hiện', async () => {
+    const { api } = renderOverview({ mcp: { startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:5555/mcp', key: 'abc123' })) } })
+    await userEvent.click(await screen.findByRole('switch', { name: 'MCP qua HTTP' }))
+    expect(api.mcp.startHttp).toHaveBeenCalledWith('p1', '/Đồ án/demo')
+    expect(await screen.findByText('http://127.0.0.1:5555/mcp')).toBeInTheDocument()
+    expect(screen.queryByText('abc123')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Hiện key' }))
+    expect(screen.getByText('abc123')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('switch', { name: 'MCP qua HTTP' }))
+    expect(api.mcp.stopHttp).toHaveBeenCalledWith('p1')
+  })
+
+  it('thẻ AI đợt 2 bị tắt', () => {
+    renderOverview()
+    expect(screen.getByRole('button', { name: /Phân tích ngữ nghĩa bằng AI/ })).toBeDisabled()
+  })
+})

@@ -26,7 +26,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       onEvent: vi.fn((cb: (e: EngineEvent) => void) => { handlers.add(cb); return () => handlers.delete(cb) }),
       ...over.index
     },
-    graph: { stats: vi.fn(), neighbors: vi.fn(), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
+    graph: { stats: vi.fn(async () => ({ files: 0, nodes_by_kind: {}, edges_by_type: {}, languages: {}, unresolved: 0 })), neighbors: vi.fn(), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
       language: null, file: null, line_start: null, line_end: null, is_test: false, origin: 'ast', signature: null, community: null })), code: vi.fn(), search: vi.fn(async () => []),
       architecture: vi.fn(async () => ({ parent: null, blocks: [], links: [] })), archEvidence: vi.fn(async () => []),
       changes: vi.fn(async () => emptyChanges()), report: vi.fn(), paths: vi.fn(), impactOf: vi.fn(), ask: vi.fn(),

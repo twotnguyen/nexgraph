@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ScanInfo } from '@shared/graph-types'
-import { installNexgraph } from './test-utils'
+import { installNexgraph, project } from './test-utils'
 import App from './App'
 
 const small: ScanInfo = { files: 120, by_language: { dart: 120 }, large: false, threshold: 5000, top_dirs: [] }
@@ -56,6 +56,20 @@ describe('App flow after opening a project', () => {
 
   it('a failing scan does not block indexing', async () => {
     const h = await openProject(async () => { throw new Error('boom') })
+    expect(await screen.findByText('Đang lập chỉ mục: demo')).toBeInTheDocument()
+    await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1'))
+  })
+
+  it('mở dự án đã index thì vào Tổng quan, thẻ Báo cáo mở workspace ở tab Báo cáo, có nút về Tổng quan', async () => {
+    const h = installNexgraph({ project: { open: vi.fn(async () => project({ last_indexed_at: 1_700_000_000 })) },
+      graph: { report: vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], questions: [], benchmark: null, truncated: false })) } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở thư mục…' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Báo cáo/ }))
+    expect(await screen.findByRole('tab', { name: 'Báo cáo', selected: true })).toBeInTheDocument()
+    expect(h.api.index.start).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: '← Tổng quan' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Index lại/ }))
     expect(await screen.findByText('Đang lập chỉ mục: demo')).toBeInTheDocument()
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1'))
   })

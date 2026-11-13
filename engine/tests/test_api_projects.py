@@ -17,7 +17,8 @@ class Blocking(Indexer):
 def test_open_project_and_list(api, copy_fixture):
     root = copy_fixture("bookstore_app")
     p = api.open(root)
-    assert set(p) == {"project_id", "path", "name", "is_git", "storage"}
+    assert set(p) == {"project_id", "path", "name", "is_git", "storage", "last_indexed_at", "last_index_commit"}
+    assert p["last_indexed_at"] is None
     assert p["storage"] == "in_project" and p["is_git"] is False and p["name"] == "bookstore_app app"
     (listed,) = api.get("/v1/projects").json()
     assert listed["project_id"] == p["project_id"] and listed["last_indexed_at"] is None
@@ -38,6 +39,7 @@ def test_index_then_stats_nonzero(api, copy_fixture):
     assert stats["files"] == 9 and stats["nodes_by_kind"]["widget"] == 3 and stats["edges_by_type"]["CALLS"] > 5
     (listed,) = api.get("/v1/projects").json()
     assert isinstance(listed["last_indexed_at"], int)
+    assert api.open(listed["path"])["last_indexed_at"] == listed["last_indexed_at"]  # mở lại: app biết đã index
 
 
 def test_index_twice_409_while_running(api, copy_fixture):

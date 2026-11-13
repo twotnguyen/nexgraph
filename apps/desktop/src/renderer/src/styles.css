@@ -843,3 +843,140 @@ button.link.back {
 .tree-more {
   margin: 2px 0;
 }
+
+/* --- Tổng quan dự án (F10) --- */
+.overview {
+  max-width: 1040px;
+}
+
+.overview h1 {
+  margin: 8px 0 0;
+}
+
+.overview h2 {
+  font-size: 15px;
+  margin: 24px 0 8px;
+  color: #5b6b7d;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.graph-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  margin-top: 12px;
+}
+
+.badge {
+  background: #fff4d6;
+  color: #7a5200;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.card {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: #fff;
+  font-size: 13px;
+}
+
+button.card:hover:not(:disabled) {
+  border-color: var(--color-map-blue);
+  background: #f6f9fe;
+}
+
+.card b {
+  font-size: 14px;
+}
+
+.card-status {
+  color: var(--color-map-blue);
+}
+
+.mcp-card {
+  grid-column: span 2;
+}
+
+.mcp-card .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ok {
+  color: #1e7d34;
+}
+
+.switch {
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--color-border);
+  border: 0;
+  position: relative;
+}
+
+.switch span {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.switch.on {
+  background: var(--color-map-blue);
+}
+
+.switch.on span {
+  transform: translateX(16px);
+}
+
+.mcp-http {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  word-break: break-all;
+}
+
+.mcp-http dd {
+  margin: 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field textarea {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
