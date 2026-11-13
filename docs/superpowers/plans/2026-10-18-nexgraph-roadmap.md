@@ -50,7 +50,7 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 | `GET /v1/selftest` | 1 | `{ok:bool, nodes:int}`: extract fixture đóng gói sẵn, kiểm bản đóng gói |
 | `POST /v1/projects` `{path}` | 2 | `{project_id, path, name, is_git:bool, storage, last_indexed_at, last_index_commit}` (hai trường cuối thêm ở F10 để app mở dự án đã index vào trang Tổng quan) |
 | `GET /v1/projects` | 2 | `[{project_id, path, last_indexed_at, last_index_commit}]` |
-| `POST /v1/projects/{pid}/index` | 2 | `{job_id}` |
+| `POST /v1/projects/{pid}/index` `{subdir?, exclude?, include_docs=false, include_media=false}` | 2 (thân mở rộng F10-1, F10-6a) | `{job_id}`; ba tuỳ chọn cuối lưu theo lần index, refresh dùng lại |
 | `GET /v1/jobs/{job_id}` · `DELETE` (huỷ) | 2 | `{state:"queued"\|"structure"\|"resolve"\|"done"\|"error"\|"cancelled", files_done, files_total, message?}` |
 | `GET /v1/events` (SSE) | 2 | `job_progress`, `graph_updated {pid}`, `changes_updated {pid}` |
 | `GET /v1/projects/{pid}/stats` | 2 | đếm node/edge theo kind/type, ngôn ngữ |
@@ -69,6 +69,7 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 | `POST /v1/projects/{pid}/export` `{format, scope:{kind:"all"\|"community"\|"node", value?}, out_dir}` | F10-1 | `{files, truncated}`; `format` ∈ html, callflow_html, obsidian, wiki, svg, graphml, cypher, json, markdown; tối đa 5.000 node; `400 bad_path`, `500 export_failed` |
 | `POST /v1/projects/{pid}/export/push` `{target:"neo4j"\|"falkordb", uri, user?, password?, scope}` | F10-1 | `{nodes, edges, truncated}`; `502 push_failed`; mật khẩu không lưu |
 | `POST /v1/projects/{pid}/communities` | F10-1 | `{communities:int}` (gom cụm lại) |
+| `GET /v1/tools` | F10-6a | `{ffmpeg, faster_whisper, git, gh, yt_dlp}` (bool; công cụ ngoài có trên máy) |
 
 Lỗi chung của các route F10-1: `409 not_indexed` khi dự án chưa lập chỉ mục xong.
 | `GET /v1/projects/{pid}/tour` | 6 | `[{step, title, node_ids, file, start, end, text}]` |
@@ -149,6 +150,7 @@ Cố định từ đây. Spec §5.3 giao việc chốt tên cho builder.
 | 2 | Tuần 3 (26/10–1/11) | *(chi tiết: `2026-10-27-nexgraph-p2-index-schema.md`)* **Index & schema** (grammar Dart: `tree-sitter-dart==0.1.0` theo spike 2026-10-27): schema/enum, đa cạnh, SQLite store, extractor Dart Tree-sitter (cấu trúc), job index 2 pha + SSE, projects/nodes/neighbors/code · **Graph explorer v0** | P1 · P2 | Index 1 project Flutter của lớp, xem graph lân cận |
 | 3 | Tuần 4 (2–8/11) | *(chi tiết: `2026-10-27-nexgraph-p3-search-architecture.md`; cache và parse song song chuyển sang kế hoạch con 4 và tuần 8)* **Search & kiến trúc**: FTS5, architecture + evidence, `.gitignore`/generated, cache, huỷ job · UI Search + tab Kiến trúc + Projects/Indexing | P1 · P2 | Tầng S < 60 s trên project của lớp |
 | 4 | Tuần 5 (9–15/11) | *(chi tiết: `2026-10-27-nexgraph-p4-changes-impact.md`; đề xuất `graph.sql` v2 cộng thêm 2 bảng + 1 cột, chờ người dùng xác nhận)* **Thay đổi & ảnh hưởng** (kèm cache theo mã băm và lập chỉ mục tăng dần: cần lưu mọi tham chiếu, kể cả đã phân giải, nên phải quyết định có đổi `graph.sql` lên phiên bản 2 hay không): watcher, diff→node, impact có trọng số, TESTED_BY, test gap, chế độ không Git · UI Changes + code viewer | P1 · P2 | Bước 4 của demo chạy |
+| F10-6a | 13/11 (đợt 2, ADR 0010) | **Tài liệu và media cục bộ**: tuỳ chọn Gồm tài liệu (Markdown, txt, docx, xlsx, PDF → nút `document` theo heading, nhắc tên symbol → cạnh `DOCUMENTS`), Gồm audio/video (chép lời bằng faster-whisper nếu có trên máy), schema đồ thị v4, `GET /v1/tools` (kế hoạch `2026-11-13-nexgraph-f10-6-tai-lieu.md`, tổng quan đợt 2 `2026-11-13-nexgraph-f10-dot-2-tong-quan.md`) | P1 (engine) · P2 (UI) | Xong mã 2026-11-13 trên nhánh `feat/f10-6-tai-lieu`; chưa merge |
 | 5 | Tuần 6 (16–22/11) | **AI** (theo spike 2026-10-27: adapter API key là đường chính, adapter ACP ghi "hạn chế yếu" và phải cứng hoá môi trường, ghim phiên bản agent đã kiểm thử): MCP (trong app + stdio), adapter ACP chỉ đọc (theo kết luận spike) + adapter API key, keychain, chat có trích dẫn + kiểm tra, `/paths` | P3 (+P1 cho `/paths`) · P2 (UI chat) | Bước 3 của demo chạy |
 | 6 | Tuần 7 (23–29/11) | **Flutter & tour**: COMPOSES, NAVIGATES_TO, pubspec, tab Flutter, guided tour, i18n hoàn chỉnh. **Alpha** | P1 · P2 | Toàn bộ kịch bản demo chạy |
 | 7 | Tuần 8 (30/11–6/12) | **Đánh giá & ổn định**: nhãn tay, so với extractor regex gốc, đo tầng S/L, khảo sát, sửa lỗi, video dự phòng | P3 chủ trì, cả nhóm | Số liệu chương 3; **GVHD đánh giá %** |
