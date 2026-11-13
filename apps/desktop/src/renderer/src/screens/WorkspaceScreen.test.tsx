@@ -207,4 +207,20 @@ describe('WorkspaceScreen: code viewer tabs', () => {
     expect(await screen.findByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
     expect(await within(await flowEl()).findByText('run')).toBeInTheDocument()
   })
+
+  it('câu hỏi gợi ý lỗi hoặc không khớp vẫn báo trên tab Graph', async () => {
+    const ask = vi.fn().mockRejectedValueOnce({ code: 'bad_param', message: 'Câu hỏi không có từ nào tìm được' })
+      .mockResolvedValueOnce({ seeds: [], nodes: [], edges: [], truncated: false })
+    const report = vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], benchmark: null, truncated: false,
+      questions: [{ question: 'q1?', why: '' }] }))
+    installNexgraph({ graph: { ask, report, neighbors: vi.fn(async () => ({ nodes: [], edges: [], truncated: false })) } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.click(screen.getByRole('tab', { name: 'Báo cáo' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'q1?' }))
+    expect(await screen.findByText('Câu hỏi không có từ nào tìm được')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Báo cáo' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'q1?' }))
+    expect(await screen.findByText('Không tìm thấy node nào khớp câu hỏi')).toBeInTheDocument()
+  })
 })

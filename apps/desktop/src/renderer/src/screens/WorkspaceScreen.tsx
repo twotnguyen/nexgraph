@@ -108,12 +108,12 @@ export function WorkspaceScreen({ project, initialTab, onBack }: { project: Proj
   const askOnGraph = async (question: string) => {
     try {
       const r = await window.nexgraph.graph.ask(project.project_id, question)
-      setOverlay({ nodes: r.nodes, edges: r.edges })
-      setNotice(r.truncated ? vi.search.askTruncated : null)
-      setTab('graph')
+      setOverlay(r.nodes.length ? { nodes: r.nodes, edges: r.edges } : null)
+      setNotice(!r.nodes.length ? vi.search.askNone : r.truncated ? vi.search.askTruncated : null)
     } catch (e) {
       setNotice((e as { message?: string }).message ?? String(e))
     }
+    setTab('graph') // thông báo chỉ hiện ở tab Graph
   }
   const openExport = (scope: ExportScope, format: ExportFormat = 'html') => {
     setExportFormat(format)

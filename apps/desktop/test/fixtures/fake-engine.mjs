@@ -7,11 +7,14 @@ const token = process.env.NEXGRAPH_TOKEN
 // `mcp --http`: in dòng ready rồi trả lại key nhận qua biến môi trường (test McpHttpManager).
 if (process.argv.includes('mcp') && process.argv.includes('--http')) {
   const key = process.env.NEXGRAPH_MCP_KEY ?? ''
+  if (process.env.FAKE_MCP_IGNORE_TERM === '1') process.on('SIGTERM', () => {}) // như uvicorn chờ luồng SSE mãi
+  const wanted = Number(process.argv[process.argv.indexOf('--port') + 1])
   const server = http.createServer((req, res) => {
     res.writeHead(req.headers['x-api-key'] === key ? 200 : 401, { 'content-type': 'application/json' })
     res.end(JSON.stringify({ argv: process.argv.slice(2) }))
   })
-  server.listen(0, '127.0.0.1', () => console.log(JSON.stringify({ event: 'ready', port: server.address().port, pid: process.pid })))
+  server.on('error', () => process.exit(1)) // cổng đã bị chiếm
+  server.listen(wanted, '127.0.0.1', () => console.log(JSON.stringify({ event: 'ready', port: server.address().port, pid: process.pid })))
 } else
 
 if (mode === 'never-ready') {

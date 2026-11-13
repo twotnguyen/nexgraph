@@ -19,12 +19,16 @@ interface Props {
   onClose: () => void
 }
 
+// Hai khung hình: React bỏ hộp thoại khỏi DOM rồi trình duyệt vẽ lại, sau đó mới chụp.
+const nextFrame = () => new Promise<void>((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => r()) : setTimeout(r, 16)))
+
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
 
 export function ExportDialog({ projectId, projectName, scope: initialScope, initialFormat = 'html', onClose }: Props) {
   const [choice, setChoice] = useState<Choice>(initialFormat)
   const [scope, setScope] = useState<ExportScope>(initialScope)
   const [busy, setBusy] = useState(false)
+  const [capturing, setCapturing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<Done | null>(null)
   const [uri, setUri] = useState(DEFAULT_URI.neo4j)
@@ -68,8 +72,17 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
     })
   const savePng = () =>
     run(async () => {
-      const path = await window.nexgraph.exporter.png()
-      return path ? { kind: 'files', files: [path], truncated: false } : null
+      setCapturing(true)
+      try {
+        await nextFrame()
+        await nextFrame()
+        const r = document.querySelector('.canvas-wrap')?.getBoundingClientRect()
+        const rect = r ? { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } : undefined
+        const path = await window.nexgraph.exporter.png(rect)
+        return path ? { kind: 'files', files: [path], truncated: false } : null
+      } finally {
+        setCapturing(false)
+      }
     })
   const push = () =>
     run(async () => {
@@ -84,6 +97,7 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
   const scopeLabel = initialScope.kind === 'node' ? vi.export.scopeNode(initialScope.value)
     : initialScope.kind === 'community' ? vi.export.scopeCommunity(initialScope.value) : null
 
+  if (capturing) return null
   return (
     <div className="modal-backdrop">
       <div role="dialog" aria-modal="true" aria-label={vi.export.title(projectName)} className="modal export-dialog">

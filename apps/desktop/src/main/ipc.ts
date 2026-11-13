@@ -6,7 +6,7 @@ import type { ExportFormat, ExportScope, NeighborQuery, PushRequest } from '../s
 import { EngineApi } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
-import { McpHttpManager, mcpStdioConfig, type McpKeyStore } from './mcp-http'
+import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
 
 const watchers = new Map<string, ProjectWatcher>()
@@ -23,6 +23,12 @@ function readJson(file: string): Record<string, string> {
 }
 
 const prefsFile = (): string => join(app.getPath('userData'), 'prefs.json')
+
+/** Cổng MCP HTTP lần trước theo project (không bí mật) trong prefs.json. */
+const prefsPortStore = (): McpPortStore => ({
+  load: (pid) => Number(readJson(prefsFile())[`mcpPort:${pid}`]) || null,
+  save: (pid, port) => writeFileSync(prefsFile(), JSON.stringify({ ...readJson(prefsFile()), [`mcpPort:${pid}`]: String(port) }))
+})
 
 /** Key MCP HTTP theo project, mã hoá bằng safeStorage (Keychain/DPAPI) trong userData/mcp-keys.json. */
 function safeKeyStore(): McpKeyStore {
@@ -58,7 +64,7 @@ export function registerIpc(
   getCommand: () => EngineCommand,
   dataDir: string
 ): void {
-  mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore())
+  mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
   const api = (): EngineApi => {
     const h = getHandle()
@@ -123,10 +129,10 @@ export function registerIpc(
   })
   on('export:run', (pid: string, format: ExportFormat, scope: ExportScope, outDir: string) => api().exportGraph(pid, format, scope, outDir))
   on('export:push', (pid: string, req: PushRequest) => api().pushGraph(pid, req))
-  on('export:png', async () => {
+  on('export:png', async (rect?: { x: number; y: number; width: number; height: number }) => {
     const win = getWindow()
     if (!win) return null
-    const image = await win.webContents.capturePage()
+    const image = await (rect && rect.width > 0 && rect.height > 0 ? win.webContents.capturePage(rect) : win.webContents.capturePage())
     const prefs = readJson(prefsFile())
     const r = await dialog.showSaveDialog(win, {
       title: 'Lưu ảnh đồ thị',

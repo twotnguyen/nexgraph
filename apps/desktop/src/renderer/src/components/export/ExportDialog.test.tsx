@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../../test-utils'
@@ -43,13 +43,24 @@ describe('ExportDialog', () => {
     expect(api.exporter.run).toHaveBeenCalledWith('p1', 'html', { kind: 'all' }, '/Đồ án/xuất')
   })
 
-  it('PNG chụp vùng đang xem', async () => {
-    const { api } = installNexgraph({ exporter: { png: vi.fn(async () => '/tmp/nexgraph.png') } })
+  it('PNG chụp vùng đang xem, không chụp chính hộp thoại', async () => {
+    let dialogShown: boolean | null = null
+    const png = vi.fn(async () => {
+      dialogShown = screen.queryByRole('dialog') !== null
+      return '/tmp/nexgraph.png'
+    })
+    const { api } = installNexgraph({ exporter: { png } })
+    const canvas = document.createElement('div')
+    canvas.className = 'canvas-wrap'
+    canvas.getBoundingClientRect = () => ({ x: 10.4, y: 80, width: 600.6, height: 400, top: 80, left: 10.4, right: 611, bottom: 480, toJSON: () => ({}) })
+    document.body.appendChild(canvas)
     render(<ExportDialog {...props} />)
     await userEvent.click(screen.getByLabelText('Ảnh PNG vùng đang xem'))
     await userEvent.click(screen.getByRole('button', { name: 'Lưu ảnh PNG' }))
-    expect(api.exporter.png).toHaveBeenCalled()
+    await waitFor(() => expect(api.exporter.png).toHaveBeenCalledWith({ x: 10, y: 80, width: 601, height: 400 }))
+    expect(dialogShown).toBe(false)
     expect(await screen.findByText('/tmp/nexgraph.png')).toBeInTheDocument()
+    canvas.remove()
   })
 
   it('đẩy lên Neo4j với mật khẩu không lưu và hiện lỗi engine', async () => {

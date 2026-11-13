@@ -208,7 +208,8 @@ export const vi = {
     seeds: 'Điểm bắt đầu',
     askNodes: (n: number, e: number) => `${n} node, ${e} cạnh liên quan`,
     showOnGraph: 'Xem trên graph',
-    askTruncated: 'Đã cắt theo ngân sách 2.000 token'
+    askTruncated: 'Đã cắt theo ngân sách 2.000 token',
+    askNone: 'Không tìm thấy node nào khớp câu hỏi'
   },
   nodeMenu: {
     findPath: 'Tìm đường tới…',

@@ -49,8 +49,8 @@ export interface NexGraphApi {
     pickDir(): Promise<string | null>
     run(projectId: string, format: ExportFormat, scope: ExportScope, outDir: string): Promise<ExportResult>
     push(projectId: string, req: PushRequest): Promise<PushResult>
-    /** Chụp cửa sổ và lưu PNG; `null` khi huỷ. */
-    png(): Promise<string | null>
+    /** Chụp vùng `rect` của cửa sổ (toạ độ CSS; vắng thì cả cửa sổ) và lưu PNG; `null` khi huỷ. */
+    png(rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>
     reveal(path: string): Promise<void>
   }
   mcp: {

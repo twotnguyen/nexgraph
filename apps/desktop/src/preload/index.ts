@@ -55,7 +55,7 @@ const api: NexGraphApi = {
     pickDir: () => call('export:pick-dir'),
     run: (pid, format, scope, outDir) => call('export:run', pid, format, scope, outDir),
     push: (pid, req) => call('export:push', pid, req),
-    png: () => call('export:png'),
+    png: (rect) => call('export:png', rect),
     reveal: (path) => call('export:reveal', path)
   },
   mcp: {

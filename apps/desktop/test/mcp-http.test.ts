@@ -32,6 +32,32 @@ describe('McpHttpManager', () => {
   })
 })
 
+describe('McpHttpManager: port and shutdown', () => {
+  it('keeps the same URL across restarts and falls back when the port is taken', async () => {
+    mgr = new McpHttpManager(() => fake, '/data')
+    const first = await mgr.start('p1', '/x')
+    await mgr.stop('p1')
+    expect((await mgr.start('p1', '/x')).url).toBe(first.url)
+    const other = new McpHttpManager(() => fake, '/data', undefined, { load: () => Number(new URL(first.url).port), save: () => {} })
+    const taken = await other.start('p2', '/y') // cổng đang bị p1 giữ: lấy cổng khác
+    expect(taken.url).not.toBe(first.url)
+    await other.stopAll()
+  })
+
+  it('kills a server that ignores SIGTERM so quitting never hangs', async () => {
+    process.env.FAKE_MCP_IGNORE_TERM = '1'
+    try {
+      mgr = new McpHttpManager(() => fake, '/data', undefined, undefined, 300)
+      await mgr.start('p1', '/x')
+      const t = Date.now()
+      await mgr.stop('p1')
+      expect(Date.now() - t).toBeLessThan(3000)
+    } finally {
+      delete process.env.FAKE_MCP_IGNORE_TERM
+    }
+  })
+})
+
 describe('mcpStdioConfig', () => {
   it('builds an mcpServers JSON block for the engine command', () => {
     const cfg = JSON.parse(mcpStdioConfig({ command: 'uv', args: ['run', 'nexgraph-engine'] }, '/Đồ án/demo', '/data'))
