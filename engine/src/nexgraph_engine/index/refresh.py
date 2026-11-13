@@ -16,7 +16,7 @@ from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import rebuild_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
-from nexgraph_engine.index.indexer import ExtractedFile, extract_file
+from nexgraph_engine.index.indexer import ExtractedFile, _git_head, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
@@ -80,10 +80,12 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         store.touch_file(known[f.rel_path].__class__(f.rel_path, f.language, f.size, f.mtime,
                                                      known[f.rel_path].sha256, f.is_test))
     if not (added or removed or modified):
+        store.set_last_run_commit(_git_head(root))
         store.commit()
         return RefreshResult(0, 0, 0, len(disk), time.time() - t0)
 
-    run_id = store.begin_run(files_total=len(added) + len(removed) + len(modified), kind="tang_dan", subdir=scope)
+    run_id = store.begin_run(files_total=len(added) + len(removed) + len(modified), commit_sha=_git_head(root),
+                             kind="tang_dan", subdir=scope)
     try:
         store.set_run_state(run_id, "cau_truc")
         known_labels = {r[0] for r in store.conn.execute("SELECT DISTINCT nhan FROM nut")}

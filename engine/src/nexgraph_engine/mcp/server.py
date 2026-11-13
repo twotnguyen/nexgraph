@@ -32,7 +32,7 @@ from nexgraph_engine import __version__
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.routes_arch import architecture_json, evidence_json
 from nexgraph_engine.api.routes_changes import changes_json
-from nexgraph_engine.api.routes_graph import get_node_json, neighbors_json, parse_edge_types, search_json
+from nexgraph_engine.api.routes_graph import get_node_json, neighbors_json, parse_edge_types, search_json, stats_json
 from nexgraph_engine.api.routes_graph import read_code as read_code_json
 from nexgraph_engine.api.serialize import node_json
 from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
@@ -62,6 +62,8 @@ SERVER_INSTRUCTIONS = (
     "- nút trung tâm, số liệu tổng, một cộng đồng -> god_nodes, graph_stats, get_community\n"
     "- một tính năng chạy qua những bước nào, luồng xử lý một route/lệnh -> list_flows rồi trace_flow\n"
     "- từ một hàm bất kỳ gọi tiếp tới đâu -> trace_flow entry=<id nút>\n"
+    "Trước khi tin kết quả, gọi graph_stats một lần: stale=true nghĩa là mã nguồn đã đổi sau lần lập chỉ mục, "
+    "hãy đọc lại tệp bằng read_code để xác nhận.\n"
     "Khi trả lời, trích dẫn dạng tệp:dòng lấy từ kết quả tool; không bịa đường đi không có trong đồ thị. "
     "Mọi tool chỉ đọc."
 )
@@ -190,8 +192,9 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
 
     @mcp.tool(annotations=READ_ONLY)
     async def graph_stats() -> dict:
-        """Số tệp, số nút theo loại, số cạnh theo loại, ngôn ngữ, số tham chiếu chưa phân giải."""
-        return await run("graph_stats", lambda s: s.stats())
+        """Số tệp, số nút theo loại, số cạnh theo loại, ngôn ngữ, số tham chiếu chưa phân giải, và độ mới của graph
+        (indexed_at, index_commit, head_commit, changed_files, stale)."""
+        return await run("graph_stats", lambda s: stats_json(s, root))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_community(community_id: str, limit: int = 200) -> dict:

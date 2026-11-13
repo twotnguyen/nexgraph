@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { emptyChanges, installNexgraph, project } from '../test-utils'
+import { installNexgraph, project } from '../test-utils'
 import { ProjectOverviewScreen } from './ProjectOverviewScreen'
 
 const stats = { files: 12, nodes_by_kind: { file: 12, function: 30 }, edges_by_type: { CALLS: 40, IMPORTS: 8 }, languages: { dart: 12 }, unresolved: 0 }
@@ -17,7 +17,7 @@ const renderOverview = (over: Parameters<typeof installNexgraph>[0] = {}) => {
 
 describe('ProjectOverviewScreen', () => {
   it('hiện số liệu graph và huy hiệu khi graph cũ hơn mã nguồn', async () => {
-    renderOverview({ graph: { changes: vi.fn(async () => emptyChanges({ changed_files: [{ path: 'lib/a.dart', status: 'M', old_path: null }] })) } })
+    renderOverview({ graph: { stats: vi.fn(async () => ({ ...stats, stale: true, changed_files: 1 })) } })
     expect(await screen.findByText(/12 tệp/)).toBeInTheDocument()
     expect(screen.getByText(/42 node/)).toBeInTheDocument()
     expect(screen.getByText(/48 cạnh/)).toBeInTheDocument()

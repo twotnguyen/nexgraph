@@ -214,3 +214,8 @@ def test_flow_tools(indexed_flow):
 def test_get_context_tool(indexed_flow):
     server = build_server(*indexed_flow)
     assert payload(call(server, "get_context", {"question": "login"}))["items"]
+
+
+def test_graph_stats_reports_freshness(indexed):
+    stats = payload(call(build_server(*indexed), "graph_stats", {}))
+    assert {"indexed_at", "index_commit", "head_commit", "changed_files", "stale"} <= set(stats)

@@ -49,6 +49,7 @@ export const vi = {
     stats: (files: string, nodes: string, edges: string) => `${files} tệp · ${nodes} node · ${edges} cạnh`,
     lastIndexed: (when: string) => `Index lần cuối: ${when}`,
     stale: 'Graph cũ hơn mã nguồn',
+    staleHint: 'Trợ lý AI nối qua MCP cũng được báo graph cũ.',
     build: 'Dựng graph',
     reindex: 'Index lại',
     reindexDesc: 'Đọc lại toàn bộ mã nguồn và dựng graph mới.',

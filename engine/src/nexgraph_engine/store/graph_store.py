@@ -140,6 +140,13 @@ class GraphStore:
             " ORDER BY ma_lan DESC LIMIT 1").fetchone()
         return (row["ket_thuc_luc"], row["commit_sha"]) if row else None
 
+    def set_last_run_commit(self, sha: str | None) -> None:
+        """Ghi lại commit mà đồ thị hiện khớp (lần refresh không có gì đổi nhưng HEAD đã dịch)."""
+        if sha:
+            self.conn.execute(
+                "UPDATE lan_lap_chi_muc SET commit_sha = ? WHERE ma_lan = (SELECT max(ma_lan) FROM lan_lap_chi_muc"
+                " WHERE trang_thai = 'hoan_tat')", (sha,))
+
     def commit(self) -> None:
         self.conn.commit()
 

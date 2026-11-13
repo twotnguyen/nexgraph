@@ -11,6 +11,7 @@ from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.index.discovery import language_of, sha256_file
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
+from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo
 from nexgraph_engine.store.search import build_match_query, search
@@ -48,8 +49,13 @@ def require_indexed(store: GraphStore, request: Request, project_id: str) -> Non
 
 @router.get("/stats")
 def stats(project_id: str, request: Request) -> dict:
-    with open_store(request, project_id) as (store, _):
-        return store.stats()
+    with open_store(request, project_id) as (store, info):
+        return stats_json(store, info.path)
+
+
+def stats_json(store: GraphStore, root: Path) -> dict:
+    """Dùng chung cho route HTTP và tool MCP: số liệu cộng thêm trạng thái "graph cũ"."""
+    return {**store.stats(), **freshness(store, root)}
 
 
 @router.get("/nodes/{node_id:path}")

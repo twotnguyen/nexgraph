@@ -31,7 +31,6 @@ function Card({ title, desc, status, onClick, disabled }: { title: string; desc:
 export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onBack, onOpenSettings }: Props) {
   const pid = project.project_id
   const [stats, setStats] = useState<GraphStats | null>(null)
-  const [stale, setStale] = useState(false)
   const [clusters, setClusters] = useState<string | null>(null)
   const [options, setOptions] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -39,9 +38,6 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
   useEffect(() => {
     let alive = true
     window.nexgraph.graph.stats(pid).then((s) => alive && setStats(s)).catch(() => {})
-    window.nexgraph.graph.changes(pid, { refresh: false })
-      .then((c) => alive && setStale(c.changed_files.length > 0))
-      .catch(() => {})
     return () => {
       alive = false
     }
@@ -69,7 +65,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
           <span>{vi.overview.stats(num(stats.files), num(sum(stats.nodes_by_kind)), num(sum(stats.edges_by_type)))}</span>
         ) : <span className="muted">{vi.overview.loading}</span>}
         {when && <span className="muted">{vi.overview.lastIndexed(when)}</span>}
-        {stale && <span className="badge">{vi.overview.stale}</span>}
+        {stats?.stale && <><span className="badge">{vi.overview.stale}</span> <small className="muted">{vi.overview.staleHint}</small></>}
       </section>
 
       <h2>{vi.overview.build}</h2>

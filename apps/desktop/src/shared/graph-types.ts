@@ -87,6 +87,11 @@ export interface GraphStats {
   edges_by_type: Record<string, number>
   languages: Record<string, number>
   unresolved: number
+  indexed_at?: number | null
+  index_commit?: string | null
+  head_commit?: string | null
+  changed_files?: number | null
+  stale?: boolean
 }
 
 export interface SearchHit {
