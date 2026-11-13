@@ -31,3 +31,15 @@ Việc của P3 (kế hoạch con 3, Task 11 Step 5): chạy `uv run pytest` tro
 ## Kế hoạch con 4: kiểm trên Windows (P3, chưa làm)
 
 Chưa kiểm trên Windows. Cần: `uv run pytest` ở `engine/` (cần `git` trong `PATH`; các test Git tự bỏ qua nếu thiếu), `pnpm --filter @nexgraph/desktop test`, mở `bookstore_app` ở đường dẫn có dấu và khoảng trắng, bật theo dõi và sửa tệp bằng trình soạn thảo thật (VS Code, Notepad), xem panel "Thay đổi", thử `git checkout` đổi nhánh (bão sự kiện), thử project không phải Git. Điểm có rủi ro riêng: `fs.watch` đệ quy trên NTFS, đường dẫn dùng `\` ở sự kiện (đã chuẩn hoá trong `shouldIgnore`), và `core.autocrlf` làm Git báo cả tệp là đã đổi.
+
+## Trợ lý AI (H4)
+
+Cài đặt → "Trợ lý AI": Base URL, model, API key (lưu bằng kho khoá của hệ điều hành, không bao giờ sang giao diện). Chỉ có adapter API key tương thích OpenAI (`POST <Base URL>/chat/completions` có `tools`).
+
+| Nhà cung cấp | Base URL | Ghi chú |
+|---|---|---|
+| OpenRouter | `https://openrouter.ai/api/v1` | model có hỗ trợ tool calling |
+| Ollama cục bộ | `http://localhost:11434/v1` | không cần key; model phải hỗ trợ tool calling (ví dụ `qwen2.5-coder`, `llama3.1`) |
+| Máy chủ thử | `node apps/desktop/scripts/fake-llm.mjs` | LLM giả để kiểm không cần key |
+
+Giới hạn: không streaming; lịch sử chat không lưu (mất khi rời màn Workspace); tối đa 8 vòng gọi tool mỗi câu hỏi. Lần gửi đầu cho mỗi cặp (dự án, máy chủ) có hộp thoại đồng ý. Kiểm đầu-cuối không cần key: `NEXGRAPH_E2E=1 pnpm --filter @nexgraph/desktop test ai-e2e` (engine Python thật + LLM giả).
