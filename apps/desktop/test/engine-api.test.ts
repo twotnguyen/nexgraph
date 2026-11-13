@@ -200,4 +200,15 @@ describe('EngineApi: F10 wave 1 routes', () => {
     const p = await echo(api.pushGraph('p1', { target: 'neo4j', uri: 'bolt://localhost:7687', user: 'neo4j', password: 'x', scope: { kind: 'all' } }))
     expect(p).toMatchObject({ path: '/v1/projects/p1/export/push', body: { target: 'neo4j', uri: 'bolt://localhost:7687' } })
   })
+
+  it('flows builds query string with unicode q, kind and limit', async () => {
+    const r = await echo(api.flows('p 1', { q: 'đăng nhập', kind: 'route', limit: 5 }))
+    expect(r.path).toBe('/v1/projects/p%201/flows')
+    expect(r.query).toEqual({ q: 'đăng nhập', kind: 'route', limit: '5' })
+  })
+
+  it('flow requests flow detail by id', async () => {
+    const r = await echo(api.flow('p1', 7))
+    expect(r.path).toBe('/v1/projects/p1/flows/7')
+  })
 })

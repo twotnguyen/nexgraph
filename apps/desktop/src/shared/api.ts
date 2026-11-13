@@ -1,8 +1,9 @@
 import type { EngineStatus } from './engine-status'
 import type {
-  ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope, GraphNode, GraphReport,
-  GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo,
-  SearchHit
+  ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
+  FlowDetail, FlowList, FlowQuery,
+  GraphNode, GraphReport, GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult,
+  ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from './graph-types'
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
@@ -45,6 +46,8 @@ export interface NexGraphApi {
     ask(projectId: string, question: string, opts?: { depth?: number; budget?: number; mode?: 'bfs' | 'dfs' }): Promise<AskResult>
     /** Tính lại cộng đồng (khối kiến trúc) trên đồ thị đã có. */
     recluster(projectId: string): Promise<{ communities: number }>
+    flows(projectId: string, opts?: FlowQuery): Promise<FlowList>
+    flow(projectId: string, flowId: number): Promise<FlowDetail>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích, nhớ lựa chọn lần trước; `null` khi huỷ. */

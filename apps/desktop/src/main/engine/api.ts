@@ -1,6 +1,8 @@
 import type {
   IndexOptions,
-  ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope, GraphNode, GraphReport, GraphStats, Job,
+  ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope,
+  FlowDetail, FlowList, FlowQuery,
+  GraphNode, GraphReport, GraphStats, Job,
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
@@ -133,6 +135,19 @@ export class EngineApi {
   }
   recluster(pid: string): Promise<{ communities: number }> {
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/communities`)
+  }
+  flows(pid: string, opts?: FlowQuery): Promise<FlowList> {
+    const params = new URLSearchParams()
+    if (opts?.q) params.set('q', opts.q)
+    if (opts?.kind) params.set('kind', opts.kind)
+    if (opts?.node) params.set('node', opts.node)
+    if (opts?.limit != null) params.set('limit', String(opts.limit))
+    if (opts?.offset != null) params.set('offset', String(opts.offset))
+    const q = params.toString()
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/flows${q ? `?${q}` : ''}`)
+  }
+  flow(pid: string, flowId: number): Promise<FlowDetail> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/flows/${flowId}`)
   }
   exportGraph(pid: string, format: ExportFormat, scope: ExportScope, outDir: string): Promise<ExportResult> {
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export`, { format, scope, out_dir: outDir })

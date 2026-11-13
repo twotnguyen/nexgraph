@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ExportFormat, ExportScope, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
+import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
@@ -114,6 +114,8 @@ export function registerIpc(
   on('graph:impact-of', (pid: string, nodeId: string) => api().impactOf(pid, nodeId))
   on('graph:ask', (pid: string, q: string, o?: { depth?: number; budget?: number; mode?: 'bfs' | 'dfs' }) => api().ask(pid, q, o))
   on('graph:recluster', (pid: string) => api().recluster(pid))
+  on('graph:flows', (pid: string, opts?: FlowQuery) => api().flows(pid, opts))
+  on('graph:flow', (pid: string, flowId: number) => api().flow(pid, flowId))
 
   on('export:pick-dir', async () => {
     const prefs = readJson(prefsFile())

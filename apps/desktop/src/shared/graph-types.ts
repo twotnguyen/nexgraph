@@ -209,7 +209,50 @@ export interface AskResult {
   seeds: GraphNode[]
   nodes: GraphNode[]
   edges: GraphEdge[]
+  flows?: FlowSummary[]
   truncated: boolean
+}
+
+export type FlowKind = 'main' | 'route' | 'cli' | 'event' | 'root'
+
+export interface FlowSummary {
+  id: number
+  name: string
+  kind: FlowKind
+  detail: string | null
+  entry: GraphNode
+  steps: number
+  files: number
+  depth: number
+  criticality: number
+  truncated: boolean
+}
+
+export interface FlowStep {
+  order: number
+  depth: number
+  node: GraphNode
+  caller: string | null
+  line: number | null
+}
+
+export interface FlowList {
+  flows: FlowSummary[]
+  total: number
+  truncated: boolean
+}
+
+export interface FlowDetail {
+  flow: FlowSummary
+  steps: FlowStep[]
+}
+
+export interface FlowQuery {
+  q?: string
+  kind?: FlowKind
+  node?: string
+  limit?: number
+  offset?: number
 }
 
 export type ExportFormat = 'html' | 'callflow_html' | 'obsidian' | 'wiki' | 'svg' | 'graphml' | 'cypher' | 'json' | 'markdown'

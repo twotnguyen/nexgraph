@@ -50,7 +50,9 @@ const api: NexGraphApi = {
     paths: (pid, nodeIds, opts) => call('graph:paths', pid, nodeIds, opts),
     impactOf: (pid, nodeId) => call('graph:impact-of', pid, nodeId),
     ask: (pid, question, opts) => call('graph:ask', pid, question, opts),
-    recluster: (pid) => call('graph:recluster', pid)
+    recluster: (pid) => call('graph:recluster', pid),
+    flows: (pid, opts) => call('graph:flows', pid, opts),
+    flow: (pid, flowId) => call('graph:flow', pid, flowId)
   },
   exporter: {
     pickDir: () => call('export:pick-dir'),
