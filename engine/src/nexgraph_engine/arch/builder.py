@@ -6,6 +6,7 @@ from __future__ import annotations
 import posixpath
 import sqlite3
 from collections import Counter, defaultdict
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
 MAX_BLOCKS = 12
@@ -161,6 +162,16 @@ def files_of_block(conn: sqlite3.Connection, block_id: str) -> list[str]:
     return files
 
 
+def file_pair_counts(conn: sqlite3.Connection) -> Iterator[tuple[str, str, str, int]]:
+    """(tệp nguồn, tệp đích, loại cạnh, số lượng) cho cạnh IMPORTS/CALLS giữa hai tệp khác nhau."""
+    yield from conn.execute(
+        "SELECT ts.duong_dan_tuong_doi, td.duong_dan_tuong_doi, c.loai_canh, count(*)"
+        " FROM canh c JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon JOIN nut nd ON nd.ma_nut = c.ma_nut_dich"
+        " JOIN tep ts ON ts.ma_tep = ns.ma_tep JOIN tep td ON td.ma_tep = nd.ma_tep"
+        f" WHERE c.loai_canh IN ({','.join('?' * len(LINK_TYPES))}) AND ns.ma_tep <> nd.ma_tep GROUP BY 1, 2, 3",
+        LINK_TYPES)
+
+
 def build_view(conn: sqlite3.Connection, parent: str | None = None) -> ArchView:
     ctx = _Ctx(conn)
     parent = parent or None
@@ -172,12 +183,7 @@ def build_view(conn: sqlite3.Connection, parent: str | None = None) -> ArchView:
     blocks = [Block(i.id, i.label, i.kind, len(i.files), sum(ctx.symbols[f] for f in i.files), i.kind != "file")
               for i in items]
     agg: dict[tuple[str, str], Counter[str]] = defaultdict(Counter)
-    for a, b, t, n in conn.execute(
-            "SELECT ts.duong_dan_tuong_doi, td.duong_dan_tuong_doi, c.loai_canh, count(*)"
-            " FROM canh c JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon JOIN nut nd ON nd.ma_nut = c.ma_nut_dich"
-            " JOIN tep ts ON ts.ma_tep = ns.ma_tep JOIN tep td ON td.ma_tep = nd.ma_tep"
-            f" WHERE c.loai_canh IN ({','.join('?' * len(LINK_TYPES))}) AND ns.ma_tep <> nd.ma_tep GROUP BY 1, 2, 3",
-            LINK_TYPES):
+    for a, b, t, n in file_pair_counts(conn):
         if a in scope and b in scope:
             src, dst = block_of.get(a), block_of.get(b)
             if src and dst and src != dst:
