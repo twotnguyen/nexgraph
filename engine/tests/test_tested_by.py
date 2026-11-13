@@ -94,3 +94,25 @@ def test_indexer_runs_it(copy_fixture, index_project):
         assert targets == {t}
     # không có cạnh ngược lại
     assert not store.neighbors(t, direction="out", types={EdgeType.TESTED_BY}).edges
+
+
+def test_derivation_scales_linearly_with_edge_count(tmp_path):
+    """Trước H6 mỗi lần đồng bộ quét cả bảng tạm cho từng cạnh (82 s với 62.000 cạnh ở hermes-agent)."""
+    import time
+    conn = open_graph_db(tmp_path / "big.db")
+    s = GraphStore(conn)
+    s.init_project("big", has_git=False)
+    run = s.begin_run()
+    s.add_file(run, FileRec(LIB, "dart", 1, 1, "a" * 64))
+    s.add_file(run, FileRec(TST, "dart", 1, 1, "b" * 64, is_test=True))
+    n = 30_000
+    nodes = [Node(f"{LIB}::f{i}#function", NodeKind.FUNCTION, f"f{i}", f"f{i}", file=LIB, line_start=1, line_end=2) for i in range(n)]
+    nodes += [Node(f"{TST}::t{i}#test", NodeKind.TEST, f"t{i}", f"t{i}", file=TST, line_start=1, line_end=2, is_test=True) for i in range(n)]
+    s.add_nodes(nodes)
+    s.add_edges([call(f"{TST}::t{i}#test", f"{LIB}::f{i}#function", 2) for i in range(n)])
+    assert derive_tested_by(s) == n
+    t = time.perf_counter()
+    assert derive_tested_by(s) == n  # lần đồng bộ thứ hai (refresh): đã có n cạnh TESTED_BY để so
+    elapsed = time.perf_counter() - t
+    conn.close()
+    assert elapsed < 5.0, f"derive_tested_by chậm bất thường: {elapsed:.1f}s cho {n} cạnh"

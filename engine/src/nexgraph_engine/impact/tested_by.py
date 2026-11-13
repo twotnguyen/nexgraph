@@ -19,6 +19,8 @@ def derive_tested_by(store: GraphStore) -> int:
     c = store.conn
     c.execute("DROP TABLE IF EXISTS temp._tb")
     c.execute(_DESIRED)
+    # Không có chỉ mục thì DELETE/UPDATE quét cả bảng tạm cho từng cạnh TESTED_BY hiện có: 41 s + 41 s ở 62.000 cạnh (hermes-agent, H6).
+    c.execute("CREATE UNIQUE INDEX temp._tb_key ON _tb (tested, test)")
     c.execute(
         "DELETE FROM canh WHERE loai_canh = 'TESTED_BY' AND NOT EXISTS ("
         " SELECT 1 FROM temp._tb t WHERE t.tested = canh.ma_nut_nguon AND t.test = canh.ma_nut_dich)")

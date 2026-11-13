@@ -1,0 +1,104 @@
+{
+  "project": "hermes-agent",
+  "project_commit": "cc8cc35e6074173d6a4afaeaa351d6cba250c0cc",
+  "nexgraph_commit": "292705a99b5111b4b122338d81be59516f62451d",
+  "machine": {
+    "cpu": "Apple M3 Pro",
+    "ncpu": 12,
+    "ram_gb": 18.0,
+    "os": "macOS 15.7.3",
+    "python": "3.12.16"
+  },
+  "date": "2026-11-13",
+  "repeat": 3,
+  "index_repeat": 1,
+  "metrics": {
+    "index_full_ms": {
+      "median": 120887.25,
+      "min": 120887.25,
+      "max": 120887.25,
+      "n": 1
+    },
+    "peak_rss_after_index_mb": 955,
+    "files": 17260,
+    "nodes": 215015,
+    "edges": 684003,
+    "unresolved": 840309,
+    "languages": {
+      "csharp": 2,
+      "javascript": 339,
+      "python": 11325,
+      "typescript": 5594
+    },
+    "graph_db_mb": 295.6,
+    "reopen_ms": {
+      "median": 148.26,
+      "min": 147.27,
+      "max": 149.2,
+      "n": 3
+    },
+    "search_build_ms": {
+      "median": 4.12,
+      "min": 3.94,
+      "max": 5.24,
+      "n": 3
+    },
+    "arch_root_ms": {
+      "median": 382.17,
+      "min": 381.04,
+      "max": 382.44,
+      "n": 3
+    },
+    "refresh_one_file_ms": {
+      "median": 84044.65,
+      "min": 83837.46,
+      "max": 85015.64,
+      "n": 3
+    },
+    "rebuild_flows_ms": {
+      "median": 2190.75,
+      "min": 2102.65,
+      "max": 2212.89,
+      "n": 3
+    },
+    "list_flows_auth_ms": {
+      "median": 48.3,
+      "min": 47.57,
+      "max": 48.37,
+      "n": 3
+    },
+    "build_map_400_ms": {
+      "median": 429.26,
+      "min": 429.03,
+      "max": 446.38,
+      "n": 3
+    },
+    "import_cycles_ms": {
+      "median": 112.73,
+      "min": 111.27,
+      "max": 122.93,
+      "n": 3
+    },
+    "build_tour_ms": {
+      "median": 405.35,
+      "min": 401.09,
+      "max": 408.7,
+      "n": 3
+    },
+    "build_context_question": "login",
+    "build_context_login_ms": {
+      "median": 5.03,
+      "min": 5.02,
+      "max": 5.22,
+      "n": 3
+    },
+    "top_degree_node": "tests/e2e/core/windows/_helpers.py::expect#function",
+    "neighbors_top_node_ms": {
+      "median": 136.29,
+      "min": 134.78,
+      "max": 164.23,
+      "n": 3
+    },
+    "peak_rss_total_mb": 955
+  }
+}
