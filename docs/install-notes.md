@@ -43,3 +43,11 @@ Cài đặt → "Trợ lý AI": Base URL, model, API key (lưu bằng kho khoá 
 | Máy chủ thử | `node apps/desktop/scripts/fake-llm.mjs` | LLM giả để kiểm không cần key |
 
 Giới hạn: không streaming; lịch sử chat không lưu (mất khi rời màn Workspace); tối đa 8 vòng gọi tool mỗi câu hỏi. Lần gửi đầu cho mỗi cặp (dự án, máy chủ) có hộp thoại đồng ý. Kiểm đầu-cuối không cần key: `NEXGRAPH_E2E=1 pnpm --filter @nexgraph/desktop test ai-e2e` (engine Python thật + LLM giả).
+
+## Git hook cập nhật sau commit (H5)
+
+Tổng quan dự án → "Cập nhật sau mỗi commit" ghi một khối vào `.git/hooks/post-commit` giữa hai dòng `# >>> nexgraph >>>` và `# <<< nexgraph <<<`, chạy `nexgraph-engine refresh` ở nền. **Gỡ bằng tay:** xoá đúng khối giữa hai dòng đó (nếu tệp chỉ còn `#!/bin/sh` thì xoá tệp). Không hỗ trợ `core.hooksPath` (husky…) và worktree (`.git` là tệp): thẻ báo "không phải kho Git".
+
+## Tích hợp trợ lý AI (H5)
+
+Ghi `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code), `opencode.json` (OpenCode) sau khi bạn xem trước và xác nhận. Chỉ thêm mục `nexgraph`; tệp không phải JSON hợp lệ (kể cả có chú thích `//`) thì không ghi, dùng nút "Sao chép cấu hình".
