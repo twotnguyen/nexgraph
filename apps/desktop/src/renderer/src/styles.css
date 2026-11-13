@@ -752,3 +752,94 @@ button:disabled {
 button.link.back {
   margin-bottom: 8px;
 }
+
+/* --- Tab Báo cáo và Cây (F10) --- */
+.report-view,
+.tree-view {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  padding: 16px 24px;
+  font-size: 14px;
+}
+
+.report-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.report-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.report-view section {
+  margin-top: 16px;
+}
+
+.report-view h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.report-view table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 900px;
+}
+
+.report-view th,
+.report-view td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.report-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.report-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: default;
+}
+
+.tree-row:focus-visible,
+.tree-row:hover {
+  background: #eef4fd;
+  outline: none;
+}
+
+.tree-row .twisty {
+  width: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: inline-block;
+  text-align: center;
+}
+
+.tree-label {
+  cursor: pointer;
+}
+
+.tree-more {
+  margin: 2px 0;
+}

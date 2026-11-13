@@ -34,7 +34,38 @@ export const vi = {
   workspace: {
     archTab: 'Kiến trúc',
     graphTab: 'Graph',
+    treeTab: 'Cây',
+    reportTab: 'Báo cáo',
     export: 'Xuất…'
+  },
+  report: {
+    title: 'Báo cáo đồ thị',
+    loading: 'Đang phân tích…',
+    exportMd: 'Xuất Markdown',
+    truncated: 'Dự án lớn: báo cáo tính trên 5.000 node quan trọng nhất.',
+    godNodes: 'Node trung tâm',
+    godNodesHint: 'Nhiều liên kết nhất (không tính tệp và test). Bấm để xem trên graph.',
+    colName: 'Tên',
+    colKind: 'Loại',
+    colFile: 'Vị trí',
+    colDegree: 'Liên kết',
+    colSize: 'Số node',
+    colCohesion: 'Độ gắn kết',
+    communities: (n: number) => `Cộng đồng (${n})`,
+    surprising: 'Kết nối bất ngờ',
+    questions: 'Câu hỏi gợi ý',
+    questionsHint: 'Bấm để hỏi graph với câu này.',
+    benchmark: 'Mức giảm token',
+    benchmarkText: (corpus: string, graph: string, ratio: string) =>
+      `Đọc toàn bộ mã: ~${corpus} token. Hỏi qua graph: ~${graph} token mỗi câu. Giảm ${ratio} lần.`
+  },
+  tree: {
+    label: 'Cây dự án',
+    loading: 'Đang tải…',
+    more: '… còn nữa, dùng Tìm kiếm',
+    expand: 'Mở',
+    collapse: 'Thu gọn',
+    openCode: 'Mở mã'
   },
   export: {
     title: (name: string) => `Xuất đồ thị: ${name}`,

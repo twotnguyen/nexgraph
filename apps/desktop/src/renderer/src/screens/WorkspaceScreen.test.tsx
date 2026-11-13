@@ -189,4 +189,22 @@ describe('WorkspaceScreen: code viewer tabs', () => {
     expect(await screen.findByText('Ảnh hưởng nếu sửa run')).toBeInTheDocument()
     await waitFor(() => expect(within(flow).getByText('ảnh hưởng')).toBeInTheDocument())
   })
+
+  it('tab Báo cáo: câu hỏi gợi ý chạy Hỏi graph và chuyển sang Graph; Xuất Markdown chọn sẵn markdown', async () => {
+    const a = gnode('lib/a.dart::A.run#method', 'run')
+    const ask = vi.fn(async () => ({ seeds: [a], nodes: [a], edges: [], truncated: false }))
+    const report = vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], benchmark: null, truncated: false,
+      questions: [{ question: 'run làm gì?', why: '' }] }))
+    installNexgraph({ graph: { ask, report, neighbors: vi.fn() } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Kiến trúc', 'Graph', 'Cây', 'Báo cáo'])
+    await userEvent.click(screen.getByRole('tab', { name: 'Báo cáo' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Xuất Markdown' }))
+    expect(screen.getByLabelText('Báo cáo Markdown')).toBeChecked()
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(await screen.findByRole('button', { name: 'run làm gì?' }))
+    expect(ask).toHaveBeenCalledWith('p1', 'run làm gì?')
+    expect(await screen.findByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
+    expect(await within(await flowEl()).findByText('run')).toBeInTheDocument()
+  })
 })

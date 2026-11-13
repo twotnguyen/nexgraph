@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Changes, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
+import type { Changes, ExportFormat, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { CodeViewer } from '../components/code/CodeViewer'
 import { ExportDialog } from '../components/export/ExportDialog'
@@ -9,11 +9,14 @@ import { GraphCanvas } from '../components/graph/GraphCanvas'
 import type { HighlightKind } from '../components/graph/kindStyle'
 import { NodeContextMenu } from '../components/graph/NodeContextMenu'
 import { NodeInspector } from '../components/graph/NodeInspector'
+import { ReportView } from '../components/report/ReportView'
+import { TreeView } from '../components/tree/TreeView'
 import { SearchPanel } from '../components/search/SearchPanel'
 import { useChanges } from '../state/useChanges'
 import { vi } from '../strings'
 
-type Tab = 'arch' | 'graph' | `file:${string}`
+type Tab = 'arch' | 'graph' | 'tree' | 'report' | `file:${string}`
+const MAIN_TABS = ['arch', 'graph', 'tree', 'report'] as const
 interface OpenFile { file: string; line: number; lineEnd?: number }
 const baseName = (p: string): string => p.split('/').pop() as string
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
@@ -63,10 +66,15 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
     return h
   }, [changes])
   const [tab, setTab] = useState<Tab>('arch')
+  const [lastMain, setLastMain] = useState<Tab>('arch')
+  useEffect(() => {
+    if (!tab.startsWith('file:')) setLastMain(tab)
+  }, [tab])
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [files, setFiles] = useState<OpenFile[]>([])
   const [exportScope, setExportScope] = useState<ExportScope | null>(null)
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('html')
   const [menu, setMenu] = useState<{ node: GraphNode; x: number; y: number } | null>(null)
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null)
   const [overlay, setOverlay] = useState<Overlay | null>(null)
@@ -97,6 +105,20 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
     }
     setTab('graph')
   }
+  const askOnGraph = async (question: string) => {
+    try {
+      const r = await window.nexgraph.graph.ask(project.project_id, question)
+      setOverlay({ nodes: r.nodes, edges: r.edges })
+      setNotice(r.truncated ? vi.search.askTruncated : null)
+      setTab('graph')
+    } catch (e) {
+      setNotice((e as { message?: string }).message ?? String(e))
+    }
+  }
+  const openExport = (scope: ExportScope, format: ExportFormat = 'html') => {
+    setExportFormat(format)
+    setExportScope(scope)
+  }
   const showImpact = async (node: GraphNode) => {
     try {
       setNodeImpact(await window.nexgraph.graph.impactOf(project.project_id, node.id))
@@ -111,7 +133,7 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
     setTab(`file:${file}`)
   }
   const closeFile = (file: string) => {
-    const order: Tab[] = ['arch', 'graph', ...files.map((f) => `file:${f.file}` as Tab)]
+    const order: Tab[] = [lastMain, ...files.map((f) => `file:${f.file}` as Tab)] // về tab chính dùng gần nhất
     const at = order.indexOf(`file:${file}`)
     setFiles((cur) => cur.filter((f) => f.file !== file))
     setTab((cur) => (cur === `file:${file}` ? order[Math.max(0, at - 1)] : cur))
@@ -161,13 +183,14 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
           <b>{project.name}</b>
           <span className="muted mono">{project.path}</span>
           <span className="ws-actions">
-            <button type="button" onClick={() => setExportScope(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })}>
+            <button type="button" onClick={() => openExport(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })}>
               {vi.workspace.export}
             </button>
           </span>
         </header>
         {exportScope && (
-          <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} onClose={() => setExportScope(null)} />
+          <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} initialFormat={exportFormat}
+            onClose={() => setExportScope(null)} />
         )}
         {pathFrom && (
           <div role="status" aria-label={vi.path.pickingLabel} className="pick-banner">
@@ -176,9 +199,9 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
           </div>
         )}
         <div className="tabs" role="tablist">
-          {(['arch', 'graph'] as const).map((t) => (
+          {MAIN_TABS.map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'arch' ? vi.workspace.archTab : vi.workspace.graphTab}
+              {{ arch: vi.workspace.archTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
             </button>
           ))}
           {files.map((f) => (
@@ -204,9 +227,14 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
                 <NodeContextMenu node={menu.node} x={menu.x} y={menu.y} onClose={() => setMenu(null)}
                   onFindPath={(n) => { clearOverlay(); setPathFrom(n) }}
                   onImpact={(n) => void showImpact(n)}
-                  onExport={(n) => setExportScope({ kind: 'node', value: n.id })} />
+                  onExport={(n) => openExport({ kind: 'node', value: n.id })} />
               )}
             </>
+          )}
+          {tab === 'tree' && <TreeView projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'report' && (
+            <ReportView projectId={project.project_id} onOpenNode={openNodeId} onAsk={(q) => void askOnGraph(q)}
+              onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
           )}
           {files.map((f) =>
             tab === `file:${f.file}` ? (

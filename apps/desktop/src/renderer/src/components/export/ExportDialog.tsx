@@ -14,13 +14,15 @@ interface Props {
   projectId: string
   projectName: string
   scope: ExportScope
+  /** Định dạng chọn sẵn khi mở (mặc định HTML). */
+  initialFormat?: ExportFormat
   onClose: () => void
 }
 
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
 
-export function ExportDialog({ projectId, projectName, scope: initialScope, onClose }: Props) {
-  const [choice, setChoice] = useState<Choice>('html')
+export function ExportDialog({ projectId, projectName, scope: initialScope, initialFormat = 'html', onClose }: Props) {
+  const [choice, setChoice] = useState<Choice>(initialFormat)
   const [scope, setScope] = useState<ExportScope>(initialScope)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
