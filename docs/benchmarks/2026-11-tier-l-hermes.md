@@ -57,3 +57,26 @@ Cải tiến then chốt: `requeue_failed_refs(tails=new_labels, imports=bool(ad
 - Kiểm tra ngẫu nhiên 5 cạnh `CALLS` từ resolver: **5/5 đúng** (lời gọi qua constructor injection và import module).
 - Kiểm tra ngẫu nhiên 5 cạnh `TESTED_BY`: **5/5 đúng** (từ các file `.spec.ts` tới các service/class được test).
 - Tỉ lệ chính xác mẫu kiểm: **10/10 (100%)** (vượt yêu cầu ≥ 9/10).
+
+---
+
+## 5. H2: luồng trên hermes-agent (đo 2026-11-13, cùng máy)
+
+| Chỉ số | Số đo | Mục tiêu |
+|---|---|---|
+| `rebuild_flows` trên đồ thị đã index | **2,15 s** | < 60 s |
+| Số luồng lưu | 2.000 (trần `MAX_FLOWS`): 1.882 `root`, 53 `route`, 38 `main`, 27 `event` | — |
+| Index đầy đủ gồm dựng luồng | 131,6 s | ≤ 300 s |
+
+`rebuild_flows` chạy lại sau mỗi refresh (2,15 s > 1 s): ghi nhận, shortcut đã chú thích trong `refresh.py` (chỉ dựng lại luồng chạm tệp đổi) chưa áp dụng. Nhận xét: gần như toàn bộ luồng của hermes-agent là loại `root` vì dự án Python này ít decorator route; trần 2.000 đang cắt bớt (`root` điểm thấp).
+
+## 6. H3: bản đồ toàn cảnh trên hermes-agent
+
+| Chỉ số | Số đo | Mục tiêu |
+|---|---|---|
+| `build_map(detail=400)` | **0,50 s** (400 nút, 3.239 cạnh) | < 2 s |
+| `build_map(detail=1500)` | **0,51 s** (1.500 nút, 5.000 cạnh, bị cắt) | < 2 s |
+| `build_map` phóng vào một thư mục | 0,45 s | — |
+| `import_cycles` | 0,14 s, 84 vòng (lớn nhất 562 tệp, rồi 38, 18, 17, 16) | — |
+
+Không cần bộ nhớ đệm (Task 2 Step 5 chỉ áp dụng khi > 2 s). Đo sigma trong trình duyệt: `docs/spikes/2026-11-sigma-map.md`.
