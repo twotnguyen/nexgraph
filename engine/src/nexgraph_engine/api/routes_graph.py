@@ -33,6 +33,12 @@ def open_store(request: Request, project_id: str) -> Iterator[tuple[GraphStore, 
         conn.close()
 
 
+def require_indexed(store: GraphStore) -> None:
+    """Báo cáo, export, truy vấn trên CSDL rỗng sẽ cho kết quả rỗng gây hiểu nhầm: báo lỗi rõ thay vào đó."""
+    if store.last_completed_run() is None:
+        raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục xong")
+
+
 @router.get("/stats")
 def stats(project_id: str, request: Request) -> dict:
     with open_store(request, project_id) as (store, _):
