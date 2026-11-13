@@ -2,10 +2,12 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
+import type { ChatMessage, ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
+import { runChat } from './ai/chat'
+import { AiSettingsStore, endpoint } from './ai/settings'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
 
@@ -120,6 +122,43 @@ export function registerIpc(
   on('graph:context', (pid: string, q: string, budget?: number) => api().context(pid, q, budget))
   on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
+
+  const ai = new AiSettingsStore(prefsFile(), join(app.getPath('userData'), 'ai-key.json'), {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (s) => safeStorage.encryptString(s).toString('base64'),
+    decrypt: (b64) => safeStorage.decryptString(Buffer.from(b64, 'base64'))
+  })
+  const chats = new Map<string, AbortController>()
+  on('ai:get-settings', async () => ai.get())
+  on('ai:save-settings', async (s: { baseUrl: string; model: string; apiKey?: string }) => ai.save(s))
+  on('ai:has-consent', async (pid: string) => ai.hasConsent(pid))
+  on('ai:grant-consent', async (pid: string) => ai.grantConsent(pid))
+  on('ai:test', async () => {
+    const cfg = ai.get()
+    const key = ai.key()
+    const t0 = Date.now()
+    try {
+      const r = await fetch(endpoint(cfg.baseUrl), {
+        method: 'POST', signal: AbortSignal.timeout(15_000),
+        headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+        body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 })
+      })
+      return { ok: r.ok, ms: Date.now() - t0, error: r.ok ? null : `HTTP ${r.status}` }
+    } catch (e) {
+      return { ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : String(e) }
+    }
+  })
+  on('ai:send', async (pid: string, chatId: string, messages: ChatMessage[]) => {
+    const ctl = new AbortController()
+    chats.set(chatId, ctl)
+    try {
+      return await runChat({ settings: ai, api: api(), fetch }, { projectId: pid, messages },
+        (name) => getWindow()?.webContents.send('ai:event', { chatId, type: 'tool', name }), ctl.signal)
+    } finally {
+      chats.delete(chatId)
+    }
+  })
+  on('ai:cancel', async (chatId: string) => { chats.get(chatId)?.abort() })
 
   on('export:pick-dir', async () => {
     const prefs = readJson(prefsFile())

@@ -1,5 +1,6 @@
 import type { EngineStatus } from './engine-status'
 import type {
+  AiSettings, ChatAnswer, ChatMessage,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
   ContextPack, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   GraphNode, GraphReport, GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult,
@@ -61,6 +62,16 @@ export interface NexGraphApi {
     /** Chụp vùng `rect` của cửa sổ (toạ độ CSS; vắng thì cả cửa sổ) và lưu PNG; `null` khi huỷ. */
     png(rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>
     reveal(path: string): Promise<void>
+  }
+  ai: {
+    getSettings(): Promise<AiSettings>
+    saveSettings(s: { baseUrl: string; model: string; apiKey?: string }): Promise<AiSettings>
+    test(): Promise<{ ok: boolean; ms: number; error: string | null }>
+    hasConsent(projectId: string): Promise<boolean>
+    grantConsent(projectId: string): Promise<void>
+    send(projectId: string, chatId: string, messages: ChatMessage[]): Promise<ChatAnswer>
+    cancel(chatId: string): Promise<void>
+    onEvent(cb: (e: { chatId: string; type: 'tool'; name: string }) => void): () => void
   }
   mcp: {
     /** JSON `mcpServers` cho trợ lý AI chạy MCP qua stdio. */

@@ -65,6 +65,16 @@ const api: NexGraphApi = {
     png: (rect) => call('export:png', rect),
     reveal: (path) => call('export:reveal', path)
   },
+  ai: {
+    getSettings: () => call('ai:get-settings'),
+    saveSettings: (s) => call('ai:save-settings', s),
+    test: () => call('ai:test'),
+    hasConsent: (pid) => call('ai:has-consent', pid),
+    grantConsent: (pid) => call('ai:grant-consent', pid),
+    send: (pid, chatId, messages) => call('ai:send', pid, chatId, messages),
+    cancel: (chatId) => call('ai:cancel', chatId),
+    onEvent: (cb) => subscribe('ai:event', cb)
+  },
   mcp: {
     config: (projectPath) => call('mcp:config', projectPath),
     startHttp: (pid, projectPath) => call('mcp:start-http', pid, projectPath),
