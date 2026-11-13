@@ -37,6 +37,7 @@ from nexgraph_engine.api.routes_graph import read_code as read_code_json
 from nexgraph_engine.api.serialize import node_json
 from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
 from nexgraph_engine.query.ask import ask_graph
+from nexgraph_engine.query.context import build_context
 from nexgraph_engine.query.common import nodes_by_pk
 from nexgraph_engine.query.paths import find_paths
 from nexgraph_engine.report.build import report_json
@@ -56,6 +57,7 @@ SERVER_INSTRUCTIONS = (
     "- sửa X thì ảnh hưởng đâu, test nào liên quan -> get_impact\n"
     "- đọc đoạn mã để trích dẫn -> read_code\n"
     "- câu hỏi tự do, lấy đồ thị con liên quan -> query_graph\n"
+    "- cần các đoạn mã liên quan nhất tới một câu hỏi, gọn trong ngân sách token -> get_context\n"
     "- đường đi giữa hai nút -> shortest_path\n"
     "- nút trung tâm, số liệu tổng, một cộng đồng -> god_nodes, graph_stats, get_community\n"
     "- một tính năng chạy qua những bước nào, luồng xử lý một route/lệnh -> list_flows rồi trace_flow\n"
@@ -195,6 +197,16 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     async def get_community(community_id: str, limit: int = 200) -> dict:
         """Một cộng đồng (khối kiến trúc) theo id dạng `com:<số>`: nhãn, kích thước, độ gắn kết và các nút."""
         return await run("get_community", lambda s: community_json(s, community_id, max(1, min(limit, 2000))))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_context(question: str, budget: int = 4000) -> dict:
+        """Gói các nút và đoạn mã liên quan nhất tới câu hỏi, xếp hạng hợp nhất và gọn trong ngân sách token (500–20000)."""
+        def body(s: GraphStore) -> dict:
+            try:
+                return build_context(s, root, question, max(500, min(budget, 20_000)))
+            except ValueError as exc:
+                raise ToolError(str(exc)) from exc
+        return await run("get_context", body)
 
     @mcp.tool(annotations=READ_ONLY)
     async def list_flows(query: str | None = None, kind: str | None = None, limit: int = 20) -> dict:

@@ -16,3 +16,8 @@ See engine/third_party/code-review-graph/LICENSE.
 
 THIRD_PARTY_LICENSES.md lists every third-party source, commit and the
 NexGraph files that use it.
+
+This product includes ideas and algorithms adapted from CodeRAG
+(Copyright 2026 CodeRAG contributors), licensed under the Apache License,
+Version 2.0. See engine/third_party/coderag/LICENSE and
+engine/third_party/coderag/NOTICE.

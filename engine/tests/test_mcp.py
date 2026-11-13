@@ -14,7 +14,7 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
 
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
-         "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow"}
+         "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context"}
 
 
 @pytest.fixture
@@ -209,3 +209,8 @@ def test_flow_tools(indexed_flow):
     live = payload(call(server, "trace_flow", {"entry": "service.py::login_user#function"}))
     assert live["flow"]["id"] == 0 and [s["node"]["label"] for s in live["steps"]][:2] == ["login_user", "find_user"]
     assert call(server, "trace_flow", {}).isError is True
+
+
+def test_get_context_tool(indexed_flow):
+    server = build_server(*indexed_flow)
+    assert payload(call(server, "get_context", {"question": "login"}))["items"]
