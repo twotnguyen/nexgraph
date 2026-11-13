@@ -2,11 +2,17 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { GraphNode, Neighborhood } from '@shared/graph-types'
+import type { ChatAnswer, GraphNode, Neighborhood } from '@shared/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
 
 vi.mock('../services/elkLayoutService', async () => ({
   layoutGraph: async (nodes: { id: string }[]) => Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }]))
+}))
+
+vi.mock('../components/map/MapView', () => ({
+  MapView: ({ onOpenArch }: { onOpenArch?: (blockId: string) => void }) => (
+    <button type="button" onClick={() => onOpenArch?.('dir:src')}>Mở kiến trúc từ bản đồ</button>
+  )
 }))
 
 import { WorkspaceScreen } from './WorkspaceScreen'
@@ -37,13 +43,38 @@ function setup() {
 }
 
 describe('WorkspaceScreen', () => {
-  it('Ctrl+L bật/tắt cột trợ lý AI', async () => {
-    setup()
-    expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).toBeNull()
-    await userEvent.keyboard('{Control>}l{/Control}')
-    expect(await screen.findByRole('complementary', { name: 'Trợ lý AI' })).toBeInTheDocument()
-    await userEvent.keyboard('{Control>}l{/Control}')
-    expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).toBeNull()
+  it('Ctrl+L ẩn panel trợ lý nhưng giữ bản nháp và lượt đang chạy', async () => {
+    const send = vi.fn(() => new Promise<ChatAnswer>(() => {}))
+    installNexgraph({ ai: {
+      getSettings: vi.fn(async () => ({ baseUrl: 'https://api.example.com/v1', model: 'm1', hasKey: true })),
+      hasConsent: vi.fn(async () => true),
+      send
+    } })
+    const view = render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    const toggle = screen.getByRole('button', { name: 'Ẩn/hiện trợ lý AI' })
+    await userEvent.click(toggle)
+    const box = await screen.findByPlaceholderText(/Hỏi về dự án/)
+    await userEvent.type(box, 'bản nháp')
+    await userEvent.click(toggle)
+    expect(box.closest('aside')).not.toBeVisible()
+    await userEvent.click(toggle)
+    expect(await screen.findByPlaceholderText(/Hỏi về dự án/)).toHaveValue('bản nháp')
+
+    await userEvent.type(box, '{Enter}')
+    expect(await screen.findByRole('button', { name: 'Dừng' })).toBeInTheDocument()
+    await userEvent.click(toggle)
+    await userEvent.click(toggle)
+    expect(await screen.findByRole('button', { name: 'Dừng' })).toBeInTheDocument()
+    view.unmount()
+  })
+
+  it('mở kiến trúc từ bản đồ giữ block đang chọn', async () => {
+    const architecture = vi.fn(async () => ({ parent: null, blocks: [], links: [] }))
+    installNexgraph({ graph: { architecture } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.click(screen.getByRole('tab', { name: 'Bản đồ' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mở kiến trúc từ bản đồ' }))
+    await waitFor(() => expect(architecture).toHaveBeenCalledWith('p1', 'dir:src'))
   })
 
   it('mục Tham quan của thanh hoạt động mở panel và nạp chuyến tham quan', async () => {

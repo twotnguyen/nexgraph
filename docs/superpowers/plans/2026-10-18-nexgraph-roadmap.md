@@ -1,5 +1,7 @@
 # NexGraph — Lộ trình triển khai (kế hoạch tổng)
 
+> **Hợp đồng H0–H6 hiện hành (2026-11-13):** adapter API key, không ACP; giao diện tiếng Việt; chat không streaming/không lưu ra đĩa, giữ state khi ẩn. `GET /flows` có `limit` và `offset`, UI có “Xem thêm”; `/neighbors` có `total` (null nếu depth > 1); `/tour` sinh tại lúc gọi. Tài liệu này chứa lịch sử kế hoạch; chưa được dùng test xanh để kết luận nghiệm thu toàn bộ. Kết quả kiểm chứng sau review: `docs/benchmarks/2026-11-13-sua-sau-review.md`.
+
 **Spec:** `docs/superpowers/specs/2026-10-18-nexgraph-desktop-design.md` (đã duyệt 2026-10-18)
 
 ## Vì sao chia thành nhiều kế hoạch con

@@ -33,6 +33,30 @@ describe('AiSettingsStore', () => {
     expect(s.get().hasKey).toBe(false)
   })
 
+  it('đổi nhà cung cấp thì xoá key cũ, nhưng giữ key khi cùng origin và nhận key thay thế', () => {
+    s.save({ baseUrl: 'https://api.example.com/v1', model: 'm', apiKey: 'old-key' })
+    s.save({ baseUrl: 'https://api.example.com/v2', model: 'm' })
+    expect(s.key()).toBe('old-key')
+
+    s.save({ baseUrl: 'http://api.example.com/v2', model: 'm' })
+    expect(s.key()).toBeNull()
+
+    s.save({ baseUrl: 'https://api.example.com/v1', model: 'm', apiKey: 'old-key' })
+    s.save({ baseUrl: 'https://api.example.com:8443/v1', model: 'm' })
+    expect(s.key()).toBeNull()
+
+    s.save({ baseUrl: 'https://other.example/v1', model: 'm', apiKey: 'new-key' })
+    expect(s.key()).toBe('new-key')
+  })
+
+  it('lỗi mã hoá key mới không đổi provider hoặc xoá key hiện có', () => {
+    s.save({ baseUrl: 'https://a.example/v1', model: 'm', apiKey: 'old-key' })
+    const broken = new AiSettingsStore(prefs, keys, { ...box, encrypt: () => { throw new Error('keychain failed') } })
+    expect(() => broken.save({ baseUrl: 'https://b.example/v1', model: 'm', apiKey: 'new-key' })).toThrow('keychain failed')
+    expect(s.get().baseUrl).toBe('https://a.example/v1')
+    expect(s.key()).toBe('old-key')
+  })
+
   it('đồng ý gắn với máy chủ: đổi baseUrl thì phải hỏi lại', () => {
     s.save({ baseUrl: 'https://a.example/v1', model: 'm' })
     s.grantConsent('p1')

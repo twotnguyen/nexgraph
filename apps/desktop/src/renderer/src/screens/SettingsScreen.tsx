@@ -29,7 +29,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     setStatus(null)
     setError(null)
     try {
-      const s = await window.nexgraph.ai.saveSettings({ baseUrl, model, ...(!hasKey || replacing ? (apiKey ? { apiKey } : {}) : {}) })
+      const s = await window.nexgraph.ai.saveSettings({ baseUrl, model, ...(!hasKey || replacing ? { apiKey } : {}) })
       setHasKey(s.hasKey)
       setReplacing(false)
       setApiKey('')

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { EvidencePopover } from '../architecture/EvidencePopover'
@@ -43,6 +43,7 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
   const [showCycles, setShowCycles] = useState(false)
   const [activeCycle, setActiveCycle] = useState<number | null>(null)
   const [evidence, setEvidence] = useState<EvidenceState | null>(null)
+  const evidenceRequest = useRef(0)
   const [unsupported, setUnsupported] = useState(false)
   const parent = crumbs[crumbs.length - 1].id
 
@@ -50,11 +51,15 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
     let alive = true
     setError(null)
     setSelected(null)
+    evidenceRequest.current += 1
     setEvidence(null)
     window.nexgraph.graph.map(projectId, { parent: parent ?? undefined, detail: DETAIL })
       .then((m) => alive && setData(m))
       .catch((e) => alive && setError(errMessage(e)))
-    return () => { alive = false }
+    return () => {
+      alive = false
+      evidenceRequest.current += 1
+    }
   }, [projectId, parent])
 
   useEffect(() => {
@@ -79,10 +84,11 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
   const onEdgeClick = useCallback((source: string, target: string) => {
     const label = (id: string) => data?.nodes.find((n) => n.id === id)?.label ?? id
     const weight = data?.edges.find((e) => e.source === source && e.target === target)?.weight ?? 0
+    const request = ++evidenceRequest.current
     setEvidence({ title: vi.map.edgeTitle(label(source), label(target), weight), items: [], loading: true, error: null })
     window.nexgraph.graph.archEvidence(projectId, source, target, EVIDENCE_LIMIT)
-      .then((items) => setEvidence((cur) => cur && { ...cur, items, loading: false }))
-      .catch((e) => setEvidence((cur) => cur && { ...cur, loading: false, error: errMessage(e) }))
+      .then((items) => request === evidenceRequest.current && setEvidence((cur) => cur && { ...cur, items, loading: false }))
+      .catch((e) => request === evidenceRequest.current && setEvidence((cur) => cur && { ...cur, loading: false, error: errMessage(e) }))
   }, [data, projectId])
 
   const onNodeClick = useCallback((id: string) => setSelected(data?.nodes.find((n) => n.id === id) ?? null), [data])
@@ -134,7 +140,7 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
       )}
       {evidence && (
         <EvidencePopover title={evidence.title} items={evidence.items} loading={evidence.loading} error={evidence.error}
-          onOpenNode={onOpenNode} onOpenCode={onOpenCode} onClose={() => setEvidence(null)} />
+          onOpenNode={onOpenNode} onOpenCode={onOpenCode} onClose={() => { evidenceRequest.current += 1; setEvidence(null) }} />
       )}
     </div>
   )

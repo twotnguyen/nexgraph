@@ -77,7 +77,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         used.add(nid)
         ids[gid] = nid
 
-    cross, type_table = _cross_file_calls(path, Path(root), raw, raw_edges, file_gid)
+    cross, type_table, scoped_types = _cross_file_calls(path, Path(root), raw, raw_edges, file_gid)
     # line_end ước lượng: dòng lớn nhất trong bằng chứng các cạnh đi ra; lớp bao luôn các phương thức của nó.
     end: dict[str, int] = {gid: _line(raw[gid].get("source_location")) or 1 for gid in raw}
     for e in raw_edges:
@@ -139,24 +139,26 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
                     if (ids[gid], name, rtype) not in have:
                         refs.append(UnresolvedRef(source=ids[gid], name=name, type=rtype, line=line, col=0))
     bindings = {fid: type_table} if type_table else {}
+    bindings.update({ids[gid]: types for gid, types in scoped_types.items() if gid in ids and types})
     return FileExtraction(nodes=nodes, edges=edges, refs=refs, bindings=bindings)
 
 
-def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], file_gid: str = "") -> tuple[list[tuple[str | None, str, int]], dict[str, str]]:
-    """Lời gọi `extract()` không nối được trong tệp → ([(id Graphify của nút gọi hoặc None nếu ở mức tệp, tên, dòng)], bảng kiểu TS)."""
+def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], file_gid: str = "") -> tuple[list[tuple[str | None, str, int]], dict[str, str], dict[str, dict[str, str]]]:
+    """Lời gọi chưa nối, bảng kiểu TS toàn tệp và các bảng kiểu theo callable."""
     extractor = _get_extractor(path)
     if extractor is None:
-        return [], {}
+        return [], {}, {}
     # shortcut: parse tệp lần hai (lập chỉ mục chậm ~60% với TS/Python, đo 2026-11-12), đổi sang chỉ dùng kết quả riêng tệp khi tầng S chạm 60 s.
     try:
         per_file = _safe_extract_with_xaml_root(extractor, path, root)
     except Exception:  # lỗi ở lần đọc thứ hai không được làm mất kết quả của lần đầu
-        return [], {}
+        return [], {}, {}
     # Id trong kết quả riêng tệp mang tiền tố đường dẫn tuyệt đối; id của extract() là đuôi của nó.
     by_suffix = sorted(raw, key=len, reverse=True)
     done = {(e["source"], _line(e.get("source_location")), _plain_name(raw, e["target"]))  # extract() đã nối
             for e in raw_edges if e["relation"] == "calls" and e["target"] in raw}
     out: list[tuple[str | None, str, int]] = []
+    scoped_types = _ts_scoped_types(path, raw) if path.suffix in _TS_SUFFIXES else {}
     per_file_fid = next((n["id"] for n in per_file.get("nodes", []) if n.get("label") == path.name), None)
     for rc in per_file.get("raw_calls") or []:
         caller_nid = rc.get("caller_nid") or ""
@@ -186,7 +188,90 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
         out.append((caller, name, line))
     tbl = per_file.get("ts_type_table", {}).get("table") or {}
     types = {str(k): str(v) for k, v in tbl.items() if isinstance(k, str) and isinstance(v, str)}
-    return out, types
+    scoped_names = {name for names in scoped_types.values() for name in names}
+    types = {name: type_name for name, type_name in types.items() if name not in scoped_names}
+    return out, types, scoped_types
+
+
+def _ts_scoped_types(path: Path, raw: dict) -> dict[str, dict[str, str]]:
+    """Đọc tham số và local `new` TS theo callable, không cho phép rò giữa các hàm."""
+    try:
+        from tree_sitter import Language, Parser
+        import tree_sitter_typescript
+
+        source = path.read_bytes()
+        language = tree_sitter_typescript.language_tsx if path.suffix.lower() == ".tsx" else tree_sitter_typescript.language_typescript
+        parser = Parser(Language(language()))
+        tree = parser.parse(source)
+    except Exception:
+        return {}
+    by_line: dict[int, list[str]] = {}
+    for gid, node in raw.items():
+        line = _line(node.get("source_location"))
+        if line:
+            by_line.setdefault(line, []).append(gid)
+    out: dict[str, dict[str, str]] = {}
+    callable_types = {"function_declaration", "generator_function_declaration", "method_definition",
+                      "function_expression", "generator_function", "arrow_function"}
+
+    def text(node) -> str:
+        return source[node.start_byte:node.end_byte].decode("utf-8")
+
+    def bare_type(annotation) -> str | None:
+        names = [child for child in annotation.children if child.type == "type_identifier"]
+        others = [child for child in annotation.children if child.is_named and child.type != "type_identifier"]
+        return text(names[0]) if len(names) == 1 and not others else None
+
+    def bindings_for(node) -> dict[str, str]:
+        types: dict[str, str] = {}
+        params = node.child_by_field_name("parameters")
+        for param in params.named_children if params is not None else ():
+            pattern, annotation = param.child_by_field_name("pattern"), param.child_by_field_name("type")
+            if pattern is not None and pattern.type == "identifier" and annotation is not None:
+                type_name = bare_type(annotation)
+                if type_name:
+                    types[text(pattern)] = type_name
+        stack = list(node.children)
+        while stack:
+            child = stack.pop()
+            if child is not node and child.type in callable_types:
+                continue
+            if child.type == "variable_declarator":
+                name, value = child.child_by_field_name("name"), child.child_by_field_name("value")
+                ctor = value.child_by_field_name("constructor") if value is not None and value.type == "new_expression" else None
+                if name is not None and name.type == "identifier" and ctor is not None and ctor.type in ("identifier", "type_identifier"):
+                    types[text(name)] = text(ctor)
+            stack.extend(child.children)
+        return types
+
+    stack = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        if node.type == "class_declaration":
+            name, body = node.child_by_field_name("name"), node.child_by_field_name("body")
+            gids = [gid for gid, raw_node in raw.items()
+                    if raw_node.get("_callable_class") and name is not None and _plain_name(raw, gid) == text(name)]
+            if len(gids) == 1 and body is not None:
+                fields: dict[str, str] = {}
+                for member in body.named_children:
+                    member_name = member.child_by_field_name("name")
+                    if member.type == "method_definition" and member_name is not None and text(member_name) == "constructor":
+                        params = member.child_by_field_name("parameters")
+                        for param in params.named_children if params is not None else ():
+                            pattern, annotation = param.child_by_field_name("pattern"), param.child_by_field_name("type")
+                            is_field = any(c.type in ("accessibility_modifier", "readonly") for c in param.children)
+                            type_name = bare_type(annotation) if annotation is not None else None
+                            if is_field and pattern is not None and pattern.type == "identifier" and type_name:
+                                fields[text(pattern)] = type_name
+                if fields:
+                    out[gids[0]] = fields
+        if node.type in callable_types:
+            gids = by_line.get(node.start_point[0] + 1, [])
+            types = bindings_for(node)
+            if len(gids) == 1 and types:
+                out[gids[0]] = types
+        stack.extend(node.children)
+    return out
 
 
 _TS_SUFFIXES = {".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"}

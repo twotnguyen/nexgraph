@@ -260,7 +260,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         </div>
         <div className="canvas-wrap">
           {tab === 'arch' && <ArchitectureCanvas key={archParent ?? 'root'} projectId={project.project_id} initialParent={archParent} onOpenNode={openNodeId} onOpenCode={openCode} />}
-          {tab === 'map' && <MapView projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={() => setTab('arch')} />}
+          {tab === 'map' && <MapView projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} initialFlowId={flowId} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (
             <>
@@ -290,7 +290,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
         </div>
       </section>
-      {chatOpen && <ChatPanel projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={onOpenSettings ?? (() => {})} />}
+      <ChatPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={onOpenSettings ?? (() => {})} />
     </div>
   )
 }

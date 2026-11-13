@@ -8,7 +8,7 @@ export type { AgentId, IntegrationPlan }
 
 type Json = Record<string, unknown>
 
-// Định dạng theo code-review-graph `skills.py` (MIT, commit 29d8bd94312a02dc85b2f4e3e6c97ebe7e768fb8): PLATFORMS, _build_server_entry.
+// Đối chiếu nguồn chính thức và giới hạn schema: docs/install-notes.md §Tích hợp trợ lý AI.
 const SPECS: Record<AgentId, { file: (root: string) => string; key: string; entry: (cmd: EngineCommand, args: string[]) => Json }> = {
   claude: { file: (r) => join(r, '.mcp.json'), key: 'mcpServers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a }) },
   cursor: { file: (r) => join(r, '.cursor', 'mcp.json'), key: 'mcpServers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a }) },

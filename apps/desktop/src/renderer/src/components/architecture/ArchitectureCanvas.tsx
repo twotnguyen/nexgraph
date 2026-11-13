@@ -17,7 +17,10 @@ interface Laid { nodes: Node[]; edges: Edge[]; view: ArchView }
 interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
 
 export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialParent }: Props) {
-  const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.arch.root }, ...(initialParent ? [{ id: initialParent, label: initialParent }] : [])])
+  const initialDirectory = initialParent?.startsWith('file:')
+    ? (initialParent.slice(5).includes('/') ? `dir:${initialParent.slice(5, initialParent.lastIndexOf('/'))}` : undefined)
+    : initialParent
+  const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.arch.root }, ...(initialDirectory ? [{ id: initialDirectory, label: initialDirectory }] : [])])
   const [laid, setLaid] = useState<Laid | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [evidence, setEvidence] = useState<EvidenceState | null>(null)
@@ -38,6 +41,7 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
         view,
         nodes: view.blocks.map((b) => ({
           id: b.id,
+          selected: b.id === initialParent,
           position: pos[b.id] ?? { x: 0, y: 0 },
           initialWidth: W,
           initialHeight: H,
@@ -54,7 +58,7 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
     return () => {
       alive = false
     }
-  }, [projectId, current])
+  }, [projectId, current, initialParent])
 
   const openEvidence = useCallback(
     (link: ArchLink) => {

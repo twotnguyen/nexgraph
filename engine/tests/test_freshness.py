@@ -76,6 +76,65 @@ def test_no_git_uses_baseline(copy_fixture, index_project):
     assert freshness(store, root)["stale"] is True
 
 
+def test_reverting_dirty_source_to_head_is_stale(git_project):
+    store, root = git_project
+    source = root / "util.py"
+    original = source.read_text()
+    source.write_text("def helper(x):\n    return x + 7\n")
+    refresh_project(store, root)
+    source.write_text(original)
+    assert freshness(store, root)["stale"] is True
+
+
+def test_recent_edit_with_unchanged_stat_is_still_hashed(copy_fixture, index_project):
+    """Cùng luật với refresh_project: stat không đổi thì tin, trừ khi mtime vừa mới đây (sửa hai lần trong một giây)."""
+    root = copy_fixture("py_mini")
+    source = root / "util.py"
+    source.touch()  # mtime = bây giờ, như tệp vừa lưu ngay trước khi lập chỉ mục
+    store, _, _ = index_project(root)
+    stat = source.stat()
+    original = source.read_text()
+    changed = original.replace("+ 1", "+ 2")
+    assert len(changed) == len(original)
+    source.write_text(changed)
+    os.utime(source, ns=(stat.st_atime_ns, stat.st_mtime_ns))
+    assert freshness(store, root)["changed_files"] == 1
+    assert refresh_project(store, root).changed == 1
+    assert freshness(store, root)["stale"] is False
+
+
+def test_freshness_only_counts_discovered_scope_and_excludes(tmp_path, index_project):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "main.py").write_text("def main():\n    return 1\n")
+    (tmp_path / "src" / "ignored.py").write_text("def ignored():\n    return 1\n")
+    (tmp_path / "outside.py").write_text("def outside():\n    return 1\n")
+    store, _, _ = index_project(tmp_path)
+    from nexgraph_engine.index.indexer import Indexer
+    import threading
+
+    Indexer(store, tmp_path, on_progress=lambda event: None, cancel=threading.Event(),
+            subdir="src", exclude=["src/ignored.py"]).run()
+    (tmp_path / "outside.py").write_text("def outside():\n    return 2\n")
+    (tmp_path / "src" / "ignored.py").write_text("def ignored():\n    return 2\n")
+    assert freshness(store, tmp_path)["stale"] is False
+    (tmp_path / "src" / "main.py").write_text("def main():\n    return 2\n")
+    assert freshness(store, tmp_path)["changed_files"] == 1
+
+
+def test_freshness_counts_indexed_documents_not_unindexed_media(tmp_path, index_project):
+    (tmp_path / "main.py").write_text("def main():\n    return 1\n")
+    (tmp_path / "notes.md").write_text("initial\n")
+    (tmp_path / "audio.mp3").write_bytes(b"initial")
+    store, _, _ = index_project(tmp_path)
+    from nexgraph_engine.index.indexer import Indexer
+    import threading
+
+    Indexer(store, tmp_path, on_progress=lambda event: None, cancel=threading.Event(), include_docs=True).run()
+    (tmp_path / "notes.md").write_text("changed\n")
+    (tmp_path / "audio.mp3").write_bytes(b"changed")
+    assert freshness(store, tmp_path)["changed_files"] == 1
+
+
 def test_stats_name_languages_with_generic_support_only(copy_fixture, index_project):
     from nexgraph_engine.api.routes_graph import stats_json
     root = copy_fixture("py_mini")

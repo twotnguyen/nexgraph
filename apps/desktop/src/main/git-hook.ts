@@ -1,14 +1,26 @@
 import { chmodSync, existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { EngineCommand } from './engine/launcher'
 
 export const BEGIN = '# >>> nexgraph >>>'
 export const END = '# <<< nexgraph <<<'
+const BLOCK_RE = new RegExp(`${BEGIN}\\n[\\s\\S]*?${END}\\n?`)
 export type HookStatus = 'no_git' | 'off' | 'on' | 'outdated'
 
 const fail = (code: string, message: string): Error => Object.assign(new Error(message), { code })
 const quote = (s: string): string => `'${s.replace(/\\/g, '/').replace(/'/g, `'\\''`)}'`
-const BLOCK_RE = new RegExp(`${BEGIN}[\\s\\S]*?${END}\\n?`)
+const SHELLS: Record<string, true> = { sh: true, bash: true, dash: true, ksh: true, zsh: true }
+
+function isShellHook(text: string): boolean {
+  const shebang = text.match(/^#!\s*(\S+)(?:\s+(.*))?(?:\r?\n|$)/)
+  if (!shebang) return false
+  const interpreter = basename(shebang[1])
+  if (Object.hasOwn(SHELLS, interpreter)) return true
+  if (interpreter !== 'env') return false
+  const parts = shebang[2]?.trim().split(/\s+/) ?? []
+  if (parts[0] === '-S') parts.shift()
+  return parts.length > 0 && Object.hasOwn(SHELLS, basename(parts[0]))
+}
 
 const hookPath = (projectPath: string): string => join(projectPath, '.git', 'hooks', 'post-commit')
 const isGitRepo = (projectPath: string): boolean => {
@@ -38,7 +50,13 @@ export function installHook(projectPath: string, cmd: EngineCommand, dataDir: st
   if (!isGitRepo(projectPath)) throw fail('no_git', 'Dự án không phải kho Git')
   const file = hookPath(projectPath)
   const block = hookBlock(cmd, projectPath, dataDir)
-  let text = existsSync(file) ? readFileSync(file, 'utf8') : '#!/bin/sh\n'
+  let text: string
+  if (existsSync(file)) {
+    text = readFileSync(file, 'utf8')
+    if (!isShellHook(text)) throw fail('unsupported_hook', 'Hook post-commit hiện có không dùng shell tương thích')
+  } else {
+    text = '#!/bin/sh\n'
+  }
   if (BLOCK_RE.test(text)) text = text.replace(BLOCK_RE, () => block)
   else text = `${text.endsWith('\n') ? text : `${text}\n`}${block}`
   writeFileSync(file, text)

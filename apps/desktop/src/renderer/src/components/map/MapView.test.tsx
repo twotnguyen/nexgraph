@@ -32,8 +32,9 @@ const rootMap: ProjectMap = {
 const setup = (graph: Record<string, unknown> = {}) => {
   const h = installNexgraph({ graph: { map: vi.fn(async () => rootMap), ...graph } })
   const onOpenNode = vi.fn()
-  render(<MapView projectId="p1" onOpenNode={onOpenNode} onOpenCode={vi.fn()} onOpenArch={vi.fn()} />)
-  return { ...h, onOpenNode }
+  const onOpenArch = vi.fn()
+  render(<MapView projectId="p1" onOpenNode={onOpenNode} onOpenCode={vi.fn()} onOpenArch={onOpenArch} />)
+  return { ...h, onOpenNode, onOpenArch }
 }
 
 describe('MapView', () => {
@@ -66,12 +67,36 @@ describe('MapView', () => {
     expect(onOpenNode).toHaveBeenLastCalledWith('setup.py#file')
   })
 
+  it('mở Kiến trúc với block đang chọn', async () => {
+    const { onOpenArch } = setup()
+    await userEvent.click(await screen.findByRole('button', { name: 'src' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mở ở Kiến trúc' }))
+    expect(onOpenArch).toHaveBeenCalledWith('dir:src')
+  })
+
   it('bấm cạnh thì lấy bằng chứng và hiện popover có tiêu đề', async () => {
     const archEvidence = vi.fn(async () => [])
     setup({ archEvidence })
     await userEvent.click((await screen.findAllByTestId('e'))[0])
     expect(archEvidence).toHaveBeenCalledWith('p1', 'dir:app', 'dir:src', 50)
     expect(await screen.findByText('app → src · 2 quan hệ')).toBeInTheDocument()
+  })
+
+  it('chỉ hiện bằng chứng của cạnh đang mở', async () => {
+    let resolveFirst: (value: []) => void = () => {}
+    let resolveSecond: (value: []) => void = () => {}
+    const archEvidence = vi.fn(() => archEvidence.mock.calls.length === 1
+      ? new Promise<[]>((resolve) => { resolveFirst = resolve })
+      : new Promise<[]>((resolve) => { resolveSecond = resolve }))
+    setup({ archEvidence })
+    const edges = await screen.findAllByTestId('e')
+    await userEvent.click(edges[0])
+    await userEvent.click(edges[1])
+    resolveFirst([])
+
+    await waitFor(() => expect(screen.getByText('Đang tải…')).toBeInTheDocument())
+    expect(screen.getByText('src → setup.py · 5 quan hệ')).toBeInTheDocument()
+    resolveSecond([])
   })
 
   it('tắt IMPORTS thì cạnh chỉ có IMPORTS biến mất; kéo trọng số tối thiểu lọc cạnh nhẹ', async () => {

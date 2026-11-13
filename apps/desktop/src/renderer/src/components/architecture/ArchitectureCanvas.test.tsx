@@ -42,6 +42,15 @@ function setup(over: Partial<NexGraphApi['graph']> = {}) {
 const nodeByText = (text: string) => screen.getByText(text, { selector: '.react-flow__node b' })
 
 describe('ArchitectureCanvas', () => {
+  it('mở tệp từ bản đồ tại thư mục chứa và chọn đúng khối tệp', async () => {
+    const architecture = vi.fn(async () => CHILD('dir:lib'))
+    installNexgraph({ graph: { architecture } })
+    render(<ArchitectureCanvas projectId="p1" initialParent="file:lib/x.dart" onOpenNode={() => {}} />)
+    await screen.findByText('x.dart', { selector: '.react-flow__node b' })
+    expect(architecture).toHaveBeenCalledWith('p1', 'dir:lib')
+    expect(nodeByText('x.dart').closest('.react-flow__node')).toHaveClass('selected')
+  })
+
   it('renders one node per block, the legend, and one relation per link with its count', async () => {
     setup()
     await waitFor(() => expect(document.querySelectorAll('.react-flow__node')).toHaveLength(4))

@@ -136,7 +136,7 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
       )}
       {view && (
         <ReactFlow key={overlay ? 'overlay' : center} nodes={nodes} edges={view.edges} onNodeClick={onNodeClick} onNodeContextMenu={onContextMenu}
-          nodesDraggable={false} proOptions={{ hideAttribution: true }}>
+          nodesDraggable={false} minZoom={0.2} proOptions={{ hideAttribution: true }}>
           <Background />
           <Controls showInteractive={false} />
           <AutoFit />

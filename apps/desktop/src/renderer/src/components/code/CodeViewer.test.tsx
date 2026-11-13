@@ -42,7 +42,7 @@ describe('CodeViewer', () => {
     await screen.findByText('void a() {}')
     const marked = [...document.querySelectorAll('[data-highlight="true"]')].map((e) => e.getAttribute('data-line'))
     expect(marked).toEqual(['2', '3'])
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalled()) // effect chạy sau lần vẽ; máy bận thì trễ
   })
 
   it('shows source text verbatim: markup characters, tabs and long lines', async () => {

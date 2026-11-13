@@ -1,4 +1,4 @@
-# Kết quả kiểm tay và chốt nền H0
+# Kết quả kiểm tự động và chốt nền H0
 
 **Ngày thực hiện:** 2026-11-13  
 **Môi trường:** macOS 15.7 (Darwin 24.6.0 arm64, Apple Silicon)  
@@ -46,24 +46,17 @@
 
 ---
 
-## 3. Kiểm tay trên app thật (F1–F10)
+## 3. Số liệu dự án F1–F10 — chưa có bằng chứng kiểm tay
 
-Thực hiện trên bản sao dự án `ecommerce-backend-nestjs` tại đường dẫn có dấu tiếng Việt và khoảng trắng: `/tmp/Đồ án/nestjs demo`.
+Đính chính sau rà soát: các số dưới đây là kết quả engine trên bản sao `ecommerce-backend-nestjs` tại `/tmp/Đồ án/nestjs demo`, không chứng minh đã thao tác trên cửa sổ Electron. Các nhận xét giao diện trước đây chưa có ảnh hay biên bản thao tác; không dùng để đóng nghiệm thu.
 
 - **Mở và index:**
   - Phát hiện 268 tệp (266 TypeScript, 2 JavaScript).
   - Tạo 1.190 nút (279 class, 116 directory, 268 file, 20 function, 506 method, 1 repository).
   - Tạo 2.122 cạnh (75 CALLS, 384 CONTAINS, 805 DEFINES, 858 IMPORTS).
   - Thời gian index: ~2.85 s.
-  - Đạt tiêu chuẩn phân giải bước đầu, ghi nhận cảnh báo các file `.spec.ts` không sinh symbol do vendor extractor chỉ trích xuất callable (được xử lý ở H1).
-- **Tổng quan dự án:**
-  - Hiển thị đầy đủ số liệu nút, cạnh, tệp, thư mục.
-  - Chức năng gom cụm kiến trúc hoạt động chính xác.
-- **Kiến trúc & Graph:**
-  - Cây thư mục 116 thư mục phân cấp rõ ràng.
-  - Mũi tên liên kết và popover bằng chứng hiển thị đúng định dạng.
-- **Xuất dữ liệu:**
-  - Hỗ trợ xuất đồ thị ra các định dạng chuẩn (JSON, CSV, GraphML, GEXF, Cypher, DOT, HTML, SVG, Markdown).
+  - Ghi nhận cảnh báo các file `.spec.ts` không sinh symbol do vendor extractor chỉ trích xuất callable (được xử lý ở H1).
+- **Chưa kiểm chứng trên Electron tại H0:** hiển thị Tổng quan, gom cụm kiến trúc, cây thư mục, popover bằng chứng và thao tác xuất dữ liệu. Các chức năng có implementation/test không đồng nghĩa đã kiểm tay.
 - **Số nền cho tầng L (`hermes-agent`):**
   - Dữ liệu từ `graph-fix.db`: 17.260 tệp, 215.015 nút, 599.653 cạnh.
   - Thời gian tải truy vấn kiểm chứng đạt ngưỡng kỳ vọng cho bộ dữ liệu lớn.

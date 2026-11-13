@@ -29,6 +29,14 @@ describe('SettingsScreen', () => {
     expect(api.ai.saveSettings).toHaveBeenCalledWith({ baseUrl: 'https://a/v1', model: 'm' })
   })
 
+  it('để trống key khi thay thế sẽ gửi yêu cầu xoá rõ ràng', async () => {
+    const { api } = installNexgraph({ ai: { ...configured, saveSettings: vi.fn(async (s) => ({ ...s, hasKey: false })) } })
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Thay' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }))
+    expect(api.ai.saveSettings).toHaveBeenCalledWith({ baseUrl: 'https://a/v1', model: 'm', apiKey: '' })
+  })
+
   it('kiểm tra kết nối hiện thời gian hoặc lỗi', async () => {
     const test = vi.fn().mockResolvedValueOnce({ ok: true, ms: 420, error: null }).mockResolvedValueOnce({ ok: false, ms: 5, error: 'x' })
     installNexgraph({ ai: { ...configured, test } })

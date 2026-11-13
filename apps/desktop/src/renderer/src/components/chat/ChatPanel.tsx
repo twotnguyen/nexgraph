@@ -6,6 +6,7 @@ import { ConsentDialog } from './ConsentDialog'
 
 interface Props {
   projectId: string
+  hidden?: boolean
   onOpenCode: (file: string, line: number, lineEnd?: number) => void
   onHighlight: (nodes: GraphNode[], edges: GraphEdge[], notice: string | null) => void
   onOpenSettings: () => void
@@ -16,7 +17,7 @@ type Msg = { role: 'user'; content: string } | { role: 'assistant'; content: str
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
-export function ChatPanel({ projectId, onOpenCode, onHighlight, onOpenSettings }: Props) {
+export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSettings }: Props) {
   const [cfg, setCfg] = useState<AiSettings | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
@@ -26,14 +27,23 @@ export function ChatPanel({ projectId, onOpenCode, onHighlight, onOpenSettings }
   const [consent, setConsent] = useState<string | null>(null) // câu hỏi đang chờ đồng ý
   const [openTools, setOpenTools] = useState<number | null>(null)
   const chatId = useRef<string | null>(null)
+  const mounted = useRef(true)
 
   useEffect(() => {
     let alive = true
+    mounted.current = true
     window.nexgraph.ai.getSettings().then((s) => alive && setCfg(s)).catch(() => {})
     const off = window.nexgraph.ai.onEvent((e) => {
-      if (e.chatId === chatId.current) setTool(e.name)
+      if (mounted.current && e.chatId === chatId.current) setTool(e.name)
     })
-    return () => { alive = false; off() }
+    return () => {
+      alive = false
+      mounted.current = false
+      const id = chatId.current
+      chatId.current = null
+      if (id) void window.nexgraph.ai.cancel(id)
+      off()
+    }
   }, [])
 
   const configured = !!cfg && cfg.baseUrl !== '' && cfg.model !== ''
@@ -49,13 +59,16 @@ export function ChatPanel({ projectId, onOpenCode, onHighlight, onOpenSettings }
     setTool(null)
     try {
       const answer = await window.nexgraph.ai.send(projectId, id, [...history, { role: 'user', content: question }])
+      if (!mounted.current || chatId.current !== id) return
       setMsgs((cur) => [...cur, { role: 'assistant', content: answer.text, answer }])
     } catch (e) {
+      if (!mounted.current || chatId.current !== id) return
       setMsgs((cur) => cur.slice(0, -1))
       setText(question)
       const code = errCode(e)
       setError((code && vi.chat.errors[code]) || errMessage(e))
     } finally {
+      if (!mounted.current || chatId.current !== id) return
       setBusy(false)
       setTool(null)
       chatId.current = null
@@ -96,7 +109,7 @@ export function ChatPanel({ projectId, onOpenCode, onHighlight, onOpenSettings }
   }
 
   return (
-    <aside className="chat" aria-label={vi.chat.title}>
+    <aside className="chat" aria-label={vi.chat.title} hidden={hidden}>
       <header>
         <b>{vi.chat.title}</b>
         <span className="muted mono"> {cfg?.model ? `${cfg.model} · ` : ''}{vi.chat.readOnly}</span>

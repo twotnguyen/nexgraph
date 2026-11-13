@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FlowDetail, FlowKind, FlowList as FlowListType, GraphEdge } from '@shared/graph-types'
 import type { HighlightKind } from '../graph/kindStyle'
 import { vi } from '../../strings'
@@ -19,6 +19,7 @@ const errMessage = (err: unknown): string =>
 
 export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: Props) {
   const [list, setList] = useState<FlowListType>({ flows: [], total: 0, truncated: false })
+  const [offset, setOffset] = useState(0)
   const [selectedId, setSelectedId] = useState<number | null>(initialFlowId ?? null)
   const [detail, setDetail] = useState<FlowDetail | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
@@ -26,31 +27,52 @@ export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: 
   const [query, setQuery] = useState('')
   const [kind, setKind] = useState<FlowKind | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
+  const listRequest = useRef(0)
+  const loadingMore = useRef(false)
+
+  const resetList = useCallback(() => {
+    listRequest.current += 1
+    loadingMore.current = false
+    setList({ flows: [], total: 0, truncated: false })
+    setOffset(0)
+  }, [])
+
+  useEffect(() => {
+    setSelectedId(initialFlowId ?? null)
+  }, [initialFlowId])
+
+  useEffect(() => {
+    resetList()
+  }, [projectId, resetList])
 
   // Tải danh sách luồng
   useEffect(() => {
     let alive = true
+    const request = ++listRequest.current
+    const opts = { q: query || undefined, kind, limit: 50, ...(offset > 0 ? { offset } : {}) }
     ;(async () => {
       try {
-        const res = await window.nexgraph.graph.flows(projectId, { q: query || undefined, kind, limit: 50 })
-        if (!alive) return
-        setList(res)
-        if (selectedId == null && initialFlowId == null && res.flows.length > 0) {
-          // Chưa chọn luồng nào: giữ nguyên để hiện lời nhắc
-        }
+        const res = await window.nexgraph.graph.flows(projectId, opts)
+        if (!alive || request !== listRequest.current) return
+        setList((current) => offset === 0
+          ? res
+          : { ...res, flows: [...current.flows, ...res.flows] })
       } catch (err) {
-        if (alive) setError(errMessage(err))
+        if (alive && request === listRequest.current) setError(errMessage(err))
+      } finally {
+        if (request === listRequest.current) loadingMore.current = false
       }
     })()
     return () => {
       alive = false
     }
-  }, [projectId, query, kind])
+  }, [projectId, query, kind, offset])
 
   // Tải chi tiết luồng khi chọn
   useEffect(() => {
+    setDetail(null)
+    setCodeSlice(null)
     if (selectedId == null) {
-      setDetail(null)
       return
     }
     let alive = true
@@ -138,6 +160,22 @@ export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: 
     setSelectedId(id)
   }, [])
 
+  const handleQueryChange = useCallback((value: string) => {
+    setQuery(value)
+    resetList()
+  }, [resetList])
+
+  const handleKindChange = useCallback((value?: FlowKind) => {
+    setKind(value)
+    resetList()
+  }, [resetList])
+
+  const loadMore = useCallback(() => {
+    if (!list.truncated || loadingMore.current) return
+    loadingMore.current = true
+    setOffset(list.flows.length)
+  }, [list])
+
   return (
     <div className="flows-view">
       {error && <p role="alert" className="error" style={{ gridColumn: '1 / -1', margin: 8 }}>{error}</p>}
@@ -147,10 +185,11 @@ export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: 
         selectedId={selectedId}
         onSelect={handleSelectFlow}
         query={query}
-        onQueryChange={setQuery}
+        onQueryChange={handleQueryChange}
         currentKind={kind}
-        onKindChange={setKind}
+        onKindChange={handleKindChange}
         truncated={list.truncated}
+        onLoadMore={loadMore}
       />
 
       <section className="canvas-col">

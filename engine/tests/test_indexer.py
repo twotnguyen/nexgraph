@@ -227,7 +227,6 @@ def test_nestjs_constructor_injection_call_resolved(tmp_path, index_project):
     assert e[0].edge.confidence_score == 0.8          # kiểu tìm thấy qua tệp đã import
     spec = {x.edge.target for x in out_edges(store, "auth.controller.spec.ts#file", EdgeType.CALLS)}
     assert "auth.controller.ts::AuthController.login#method" in spec   # c.login(), c: AuthController
-    assert store.bindings()["auth.controller.ts#file"] == {"userService": "UserService"}
 
 
 def test_type_table_does_not_leak_between_files(tmp_path, index_project):
@@ -238,6 +237,53 @@ def test_type_table_does_not_leak_between_files(tmp_path, index_project):
     store, _, _ = index_project(tmp_path)
     assert {e.edge.target for e in out_edges(store, "x.ts::X.run#method", EdgeType.CALLS)} == {"a.ts::A.go#method"}
     assert {e.edge.target for e in out_edges(store, "y.ts::Y.run#method", EdgeType.CALLS)} == {"b.ts::B.go#method"}
+
+
+def test_typescript_typed_receivers_are_scoped_to_their_function(tmp_path, index_project):
+    (tmp_path / "a.ts").write_text("export class A { run() { return 1 } }\n")
+    (tmp_path / "b.ts").write_text("export class B { run() { return 2 } }\n")
+    (tmp_path / "app.ts").write_text(
+        "import { A } from './a'\n"
+        "import { B } from './b'\n"
+        "export function f(svc: A) { return svc.run() }\n"
+        "export function g(svc: B) { return svc.run() }\n"
+    )
+    store, result, _ = index_project(tmp_path)
+    assert result.state == "hoan_tat"
+    assert {e.edge.target for e in out_edges(store, "app.ts::f#function", EdgeType.CALLS)} == {
+        "a.ts::A.run#method"
+    }
+    assert {e.edge.target for e in out_edges(store, "app.ts::g#function", EdgeType.CALLS)} == {
+        "b.ts::B.run#method"
+    }
+
+
+def test_typescript_di_field_does_not_conflict_with_another_function_parameter(tmp_path, index_project):
+    (tmp_path / "types.ts").write_text("export class A { go() {} }\nexport class B { go() {} }\n")
+    (tmp_path / "app.ts").write_text(
+        "import { A, B } from './types'\n"
+        "export class Controller {\n"
+        "  constructor(private svc: A) {}\n"
+        "  run() { return this.svc.go() }\n"
+        "}\n"
+        "export function other(svc: B) { return svc.go() }\n"
+    )
+    store, result, _ = index_project(tmp_path)
+    assert result.state == "hoan_tat"
+    assert {e.edge.target for e in out_edges(store, "app.ts::Controller.run#method", EdgeType.CALLS)} == {"types.ts::A.go#method"}
+    assert {e.edge.target for e in out_edges(store, "app.ts::other#function", EdgeType.CALLS)} == {"types.ts::B.go#method"}
+
+
+def test_typescript_parameter_binding_does_not_leak_to_untyped_function(tmp_path, index_project):
+    (tmp_path / "types.ts").write_text("export class A { run() {} }\n")
+    (tmp_path / "app.ts").write_text(
+        "import { A } from './types'\n"
+        "export function typed(svc: A) { return svc.run() }\n"
+        "export function untyped(svc: any) { return svc.run() }\n"
+    )
+    store, _, _ = index_project(tmp_path)
+    assert {e.edge.target for e in out_edges(store, "app.ts::typed#function", EdgeType.CALLS)} == {"types.ts::A.run#method"}
+    assert not out_edges(store, "app.ts::untyped#function", EdgeType.CALLS)
 
 
 def _many_py(tmp_path, n=40):

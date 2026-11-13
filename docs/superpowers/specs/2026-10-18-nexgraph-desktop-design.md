@@ -1,5 +1,7 @@
 # NexGraph Desktop — Tài liệu thiết kế
 
+> **Cập nhật phạm vi H0–H6, 2026-11-13:** bản này giữ thiết kế lịch sử; các mô tả ACP và song ngữ bên dưới không còn là hợp đồng bản bàn giao. Hiện chỉ adapter API key tương thích OpenAI, không streaming, không lưu lịch sử chat ra đĩa; ẩn chat giữ hội thoại/nháp, rời Workspace huỷ lượt đang chạy. Chỉ giao diện tiếng Việt, giữ thuật ngữ kỹ thuật tiếng Anh. Tour tất định, tính lúc gọi và không lưu. Nguồn sự thật là spec cùng tên trong workspace cha; kết quả kiểm chứng sau review ở `docs/benchmarks/2026-11-13-sua-sau-review.md`.
+
 | | |
 |---|---|
 | Đề tài | Xây dựng nền tảng thông minh hỗ trợ phân tích, tìm kiếm và khám phá mã nguồn phần mềm |

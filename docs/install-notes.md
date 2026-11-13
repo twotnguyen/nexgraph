@@ -42,12 +42,31 @@ Cài đặt → "Trợ lý AI": Base URL, model, API key (lưu bằng kho khoá 
 | Ollama cục bộ | `http://localhost:11434/v1` | không cần key; model phải hỗ trợ tool calling (ví dụ `qwen2.5-coder`, `llama3.1`) |
 | Máy chủ thử | `node apps/desktop/scripts/fake-llm.mjs` | LLM giả để kiểm không cần key |
 
-Giới hạn: không streaming; lịch sử chat không lưu (mất khi rời màn Workspace); tối đa 8 vòng gọi tool mỗi câu hỏi. Lần gửi đầu cho mỗi cặp (dự án, máy chủ) có hộp thoại đồng ý. Kiểm đầu-cuối không cần key: `NEXGRAPH_E2E=1 pnpm --filter @nexgraph/desktop test ai-e2e` (engine Python thật + LLM giả).
+Giới hạn: không streaming; lịch sử trong Workspace được gửi làm ngữ cảnh cho câu tiếp theo. Hội thoại và nháp giữ trong RAM khi ẩn/hiện chat, mất khi rời Workspace; lúc đó lượt đang chạy bị huỷ. Tối đa 8 vòng gọi tool mỗi câu hỏi. Lần gửi đầu cho mỗi cặp (dự án, máy chủ) có hộp thoại đồng ý. Kiểm đầu-cuối không cần key: `NEXGRAPH_E2E=1 pnpm --filter @nexgraph/desktop test ai-e2e` (engine Python thật + LLM giả).
+
+Chọn **Thay**, để key rỗng rồi **Lưu** là xoá key đã lưu. Đổi origin (scheme/hostname/port) tự xoá key cũ nếu không nhập key mới; đổi model/path trong cùng origin giữ key.
 
 ## Git hook cập nhật sau commit (H5)
 
 Tổng quan dự án → "Cập nhật sau mỗi commit" ghi một khối vào `.git/hooks/post-commit` giữa hai dòng `# >>> nexgraph >>>` và `# <<< nexgraph <<<`, chạy `nexgraph-engine refresh` ở nền. **Gỡ bằng tay:** xoá đúng khối giữa hai dòng đó (nếu tệp chỉ còn `#!/bin/sh` thì xoá tệp). Không hỗ trợ `core.hooksPath` (husky…) và worktree (`.git` là tệp): thẻ báo "không phải kho Git".
 
+Installer từ chối `post-commit` hiện có dùng Python/Node hoặc interpreter không xác định; không ghi/chmod tệp đó. Chỉ ghép vào hook có shebang shell tương thích (`sh`, `bash`, `dash`, `ksh`, `zsh`, trực tiếp hoặc qua `env`).
+
 ## Tích hợp trợ lý AI (H5)
 
 Ghi `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code), `opencode.json` (OpenCode) sau khi bạn xem trước và xác nhận. Chỉ thêm mục `nexgraph`; tệp không phải JSON hợp lệ (kể cả có chú thích `//`) thì không ghi, dùng nút "Sao chép cấu hình".
+
+### Đối chiếu nguồn chính thức (2026-11-13)
+
+| Client | Cấu hình được NexGraph ghi | Nguồn |
+|---|---|---|
+| Claude Code | `.mcp.json`, `mcpServers.nexgraph`, `type: stdio`, `command` và `args` | [Project scope và stdio](https://code.claude.com/docs/en/mcp) |
+| Cursor | `.cursor/mcp.json`, `mcpServers.nexgraph`, `type: stdio`, `command` và `args` | [MCP](https://cursor.com/docs/mcp), [vị trí tệp](https://cursor.com/help/customization/mcp) |
+| VS Code | `.vscode/mcp.json`, `servers.nexgraph`, `type: stdio`, `command` và `args` | [Editor-managed configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration#_editor-managed-configuration-for-local-harness-compatibility) |
+| OpenCode | `opencode.json` (hoặc `.jsonc` có sẵn), `mcp.nexgraph`, `type: local`, `command` là mảng | [JSON schema chính thức](https://opencode.ai/config.json), [MCP](https://opencode.ai/docs/mcp-servers/) |
+
+OpenCode hiện mô tả dạng mới `mcp.servers`; schema chính thức vẫn nhận dạng trực tiếp `mcp.<tên>` nhưng đánh dấu deprecated. NexGraph giữ dạng đang được schema nhận, không tự di chuyển server khác của người dùng. Đã kiểm binary có trên máy: `opencode v2.2.7`; không còn là 2.1.4 trong ghi chú spike cũ.
+
+VS Code đánh dấu Local harness/editor-managed là deprecated; `.vscode/mcp.json` vẫn là cấu hình hợp lệ của editor và có thể forward sang Copilot. Copilot native dùng `.mcp.json`/`mcpServers`; không đồng nhất hai schema. Chọn Claude Code trong NexGraph nếu cần xuất dạng workspace-root `.mcp.json` rồi đối chiếu hướng dẫn Copilot.
+
+Đây là đối chiếu schema, không phải bằng chứng đã kết nối bằng cả bốn client. JSONC có chú thích vẫn chỉ sao chép cấu hình để ghép tay: không ghi lại làm mất chú thích.

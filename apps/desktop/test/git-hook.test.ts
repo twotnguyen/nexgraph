@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -30,6 +30,27 @@ describe('git hook', () => {
     expect(readFileSync(hook, 'utf8')).toContain('npx husky run')
     uninstallHook(root)
     expect(readFileSync(hook, 'utf8')).toBe('#!/bin/sh\nnpx husky run\n')
+  })
+
+  it.each([
+    '#!/usr/bin/python3\nprint("hook")\n',
+    '#!/usr/bin/env python3\nprint("hook")\n',
+    '#!/usr/bin/node\nconsole.log("hook")\n',
+    '#!/usr/bin/env node\nconsole.log("hook")\n'
+  ])('từ chối hook không phải shell mà không thay đổi bytes hoặc mode', (original) => {
+    writeFileSync(hook, original, { mode: 0o640 })
+    chmodSync(hook, 0o640)
+    const mode = statSync(hook).mode & 0o777
+
+    expect(() => installHook(root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'unsupported_hook' }))
+    expect(readFileSync(hook, 'utf8')).toBe(original)
+    expect(statSync(hook).mode & 0o777).toBe(mode)
+  })
+
+  it('chấp nhận hook bash hiện có', () => {
+    writeFileSync(hook, '#!/usr/bin/env bash\necho existing\n', { mode: 0o755 })
+    installHook(root, cmd, dataDir)
+    expect(readFileSync(hook, 'utf8')).toContain(BEGIN)
   })
 
   it('gỡ khỏi tệp chỉ có khối nexgraph thì xoá tệp', () => {

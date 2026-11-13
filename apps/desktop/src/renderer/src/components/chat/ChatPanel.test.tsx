@@ -91,6 +91,15 @@ describe('ChatPanel', () => {
     expect(api.ai.cancel).toHaveBeenCalledWith((api.ai.send as ReturnType<typeof vi.fn>).mock.calls[0][1])
   })
 
+  it('hủy lượt chat đang chạy khi panel bị unmount', async () => {
+    const { api } = installNexgraph({ ai: { getSettings: configured, hasConsent: vi.fn(async () => true), send: vi.fn(() => new Promise<ChatAnswer>(() => {})) } })
+    const view = render(<ChatPanel {...props()} />)
+    await ask('hỏi')
+
+    view.unmount()
+    expect(api.ai.cancel).toHaveBeenCalledWith(expect.any(String))
+  })
+
   it('"Tô luồng trên graph": locate từng trích dẫn hợp lệ, gọi paths, trả overlay', async () => {
     const node = (id: string) => ({ id, kind: 'function' as const, label: id, qualified_name: id, language: null, file: null, line_start: 1, line_end: 2, is_test: false, origin: 'ast', signature: null, community: null })
     const two = { ...answer, citations: [{ raw: '[[a.py:1-2]]', file: 'a.py', start: 1, end: 2, valid: true, reason: null }, { raw: '[[b.py:3]]', file: 'b.py', start: 3, end: 3, valid: true, reason: null }], text: '[[a.py:1-2]] [[b.py:3]]' } as ChatAnswer

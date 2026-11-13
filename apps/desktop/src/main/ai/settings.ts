@@ -29,13 +29,24 @@ export class AiSettingsStore {
   save(s: { baseUrl: string; model: string; apiKey?: string }): AiSettings {
     if (!/^https?:\/\/[^\s/]+/i.test(s.baseUrl)) throw fail('bad_param', 'Base URL phải bắt đầu bằng http:// hoặc https://')
     if (s.apiKey && !this.box.available()) throw fail('no_keychain', 'Máy này không có kho khoá an toàn')
-    writeFileSync(this.prefsFile, JSON.stringify({ ...readJson(this.prefsFile), aiBaseUrl: s.baseUrl, aiModel: s.model }))
-    if (s.apiKey === '') {
+    const previousOrigin = this.origin(readJson(this.prefsFile).aiBaseUrl)
+    const nextOrigin = this.origin(s.baseUrl)
+    const encrypted = s.apiKey ? this.box.encrypt(s.apiKey) : null
+    if (s.apiKey === '' || previousOrigin !== nextOrigin) {
       if (existsSync(this.keyFile)) unlinkSync(this.keyFile)
-    } else if (s.apiKey) {
-      writeFileSync(this.keyFile, JSON.stringify({ key: this.box.encrypt(s.apiKey) }), { mode: 0o600 })
     }
+    writeFileSync(this.prefsFile, JSON.stringify({ ...readJson(this.prefsFile), aiBaseUrl: s.baseUrl, aiModel: s.model }))
+    if (encrypted) writeFileSync(this.keyFile, JSON.stringify({ key: encrypted }), { mode: 0o600 })
     return this.get()
+  }
+
+  private origin(baseUrl: unknown): string | null {
+    if (typeof baseUrl !== 'string') return null
+    try {
+      return new URL(baseUrl).origin
+    } catch {
+      return null
+    }
   }
 
   key(): string | null {

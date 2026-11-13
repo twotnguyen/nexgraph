@@ -984,7 +984,8 @@ button.card:hover:not(:disabled) {
 /* Flows View */
 .flows-view {
   display: grid;
-  grid-template-columns: 320px 1fr 340px;
+  /* minmax(0, …): cột giữa phải co được, nếu không cột Các bước tràn khỏi cửa sổ 1280px */
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -1019,8 +1020,12 @@ button.card:hover:not(:disabled) {
 
 .kind-filter {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
-  overflow-x: auto;
+}
+
+.kind-chip {
+  white-space: nowrap;
 }
 
 .kind-chip {
@@ -1142,13 +1147,31 @@ button.card:hover:not(:disabled) {
 }
 
 .player-bar, .flow-player {
-  height: 44px;
+  min-height: 44px;
   border-top: 1px solid var(--color-border);
   background: var(--color-surface);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  gap: 6px;
+  padding: 6px 12px;
+}
+
+.player-bar button {
+  padding: 4px 8px;
+}
+
+.player-speed .segmented {
+  display: flex;
+  gap: 8px;
+}
+
+.player-speed label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
 }
 
 .player-controls {
@@ -1411,6 +1434,10 @@ button.card:hover:not(:disabled) {
   min-height: 0;
   border-left: 1px solid var(--color-border);
   background: var(--color-surface, #fff);
+}
+
+.chat[hidden] {
+  display: none;
 }
 
 .chat > header {

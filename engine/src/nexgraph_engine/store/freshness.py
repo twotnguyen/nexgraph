@@ -1,41 +1,37 @@
-"""Graph có còn khớp mã nguồn không: để MCP và Tổng quan báo "graph cũ". Chỉ đọc Git."""
+"""Graph có còn khớp mã nguồn không: so sánh nội dung phạm vi đã lập chỉ mục."""
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from nexgraph_engine.changes.model import read_changes
-from nexgraph_engine.index.discovery import discover, language_of, sha256_file
+from nexgraph_engine.index.discovery import discover, sha256_file
+from nexgraph_engine.index.refresh import RACY_SECONDS
 from nexgraph_engine.store.graph_store import GraphStore
 
 
 def _disk_changes(store: GraphStore, root: Path) -> int:
-    """Không có Git: đếm tệp thêm/xoá/đổi nội dung so với đồ thị, chỉ đọc đĩa (không ghi gì)."""
+    """Đếm khác biệt giữa toàn bộ phạm vi đã lập chỉ mục và đồ thị hiện tại."""
     known = store.file_records()
-    disk = {f.rel_path: f for f in discover(root, subdir=store.last_scope(), exclude=store.last_exclude(),
-                                            include_docs=store.last_doc_flags()[0], include_media=store.last_doc_flags()[1])}
+    docs, media = store.last_doc_flags()
+    disk = {
+        f.rel_path: f
+        for f in discover(root, subdir=store.last_scope(), exclude=store.last_exclude(),
+                          include_docs=docs, include_media=media)
+    }
     changed = len(disk.keys() ^ known.keys())
-    for p, f in disk.items():
-        k = known.get(p)
-        if k and (f.size, f.mtime) != (k.size, k.mtime) and sha256_file(root / p) != k.sha256:
+    now = time.time()
+    for rel_path, f in disk.items():
+        record = known.get(rel_path)
+        if record is None:
+            continue
+        # Cùng điều kiện bỏ qua như refresh_project: báo "cũ" cho tệp mà refresh sẽ không đọc lại thì cũ mãi,
+        # và băm cả 17.000 tệp mỗi lần mở Tổng quan mất 3,7 s.
+        if f.size == record.size and f.mtime == record.mtime and abs(now - f.mtime) >= RACY_SECONDS:
+            continue
+        if sha256_file(root / rel_path) != record.sha256:
             changed += 1
     return changed
-
-
-def _git_changes_not_in_graph(store: GraphStore, root: Path, files: list) -> int:
-    """Trong số tệp Git báo đã đổi (so với HEAD), chỉ đếm tệp mà nội dung hiện tại khác nội dung đồ thị đã ghi."""
-    known = store.file_records()
-    n = 0
-    for f in files:
-        if f.old_path and f.old_path in known:
-            n += 1
-        rec, p = known.get(f.path), root / f.path
-        if f.status == "D" or not p.is_file():
-            n += rec is not None
-        elif rec is None:
-            n += language_of(f.path) is not None
-        else:
-            n += sha256_file(p) != rec.sha256
-    return n
 
 
 def freshness(store: GraphStore, root: Path) -> dict:
@@ -48,8 +44,7 @@ def freshness(store: GraphStore, root: Path) -> dict:
         return out
     out["head_commit"] = cs.base_commit
     try:
-        out["changed_files"] = (_disk_changes(store, root) if cs.base == "last_index"
-                                else _git_changes_not_in_graph(store, root, cs.files))
+        out["changed_files"] = _disk_changes(store, root)
     except OSError:
         return out
     moved = bool(out["head_commit"] and out["index_commit"] and out["head_commit"] != out["index_commit"])

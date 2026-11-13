@@ -14,9 +14,11 @@ export function AutoFit() {
       s.nodeLookup.size > 0 &&
       Array.from(s.nodeLookup.values()).every((n) => !!n.measured.width && !!n.measured.height)
   )
+  // Khung vẽ đổi cỡ sau lần vừa đầu (cột Các bước hiện ra, kéo cửa sổ) thì vừa lại, nếu không nút đầu bị cắt.
+  const size = useStore((s) => `${s.width}x${s.height}`)
   const { fitView } = useReactFlow()
   useEffect(() => {
     if (ready) void fitView({ padding: 0.15 })
-  }, [ready, fitView])
+  }, [ready, size, fitView])
   return null
 }
