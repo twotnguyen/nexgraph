@@ -70,6 +70,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
         {when && <span className="muted">{vi.overview.lastIndexed(when)}</span>}
         {stats?.stale && <><span className="badge">{vi.overview.stale}</span> <small className="muted">{vi.overview.staleHint}</small></>}
       </section>
+      {stats?.generic_languages?.length ? <p className="muted" role="note">{vi.overview.genericLanguages(stats.generic_languages.join(', '))}</p> : null}
 
       <h2>{vi.overview.build}</h2>
       <div className="cards">

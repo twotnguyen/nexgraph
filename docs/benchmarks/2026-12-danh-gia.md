@@ -86,10 +86,51 @@ Công cụ gốc: bản vendor v0.9.92, `python -m graphify update <bản sao> -
 
 <!--PERF-->
 
-<!--AGENT-->
+## 5. AI agent có và không có MCP của NexGraph (kết quả B, spec §7 mục 5)
 
-<!--SURVEY-->
+**Trạng thái: chưa chạy, chờ người dùng.** Kế hoạch cấm agent tự chạy bước này vì tốn token của người dùng và cần người dùng chọn agent, model và cấp quyền.
+
+Đã sẵn sàng:
+- `data/agent-questions.md`: 10 câu hỏi về `hermes-agent` (commit `cc8cc35e6074173d6a4afaeaa351d6cba250c0cc`) đúng phân bổ của kế hoạch (3 "ai gọi X", 2 luồng xử lý, 2 vùng ảnh hưởng và test, 2 định nghĩa trùng tên, 1 phụ thuộc thư mục), mỗi câu có đáp án là tập `tệp:dòng` hoặc tên symbol, lệnh xác minh và thang chấm 1 / 0,5 / 0. Đáp án do một agent AI lập bằng `grep`/đọc mã, không dùng NexGraph; tôi đã chạy lại 3 lệnh xác minh (Q1, Q8, Q9) và kết quả khớp. Chưa có ai khác kiểm lại 7 câu còn lại.
+- `data/agent-runs.csv`: bảng trống, cột `question,condition,tool_calls,tokens_in,tokens_out,seconds,score,notes`.
+- Cài MCP cho điều kiện (b): nút "Tích hợp trợ lý AI" ở Tổng quan (H5) hoặc sao chép cấu hình.
+
+Giao thức khi chạy: một agent, một model, cùng lời nhắc hệ thống; điều kiện (a) chỉ có công cụ đọc tệp/grep sẵn có, (b) thêm MCP của NexGraph; mỗi câu một phiên mới, mỗi điều kiện một lần (n = 1 mỗi ô; nên 3 lần nếu có thời gian). Dự án `hermes-agent` cần được lập chỉ mục trong NexGraph trước (120,9 s trên máy đo). Cần người dùng cho biết: agent nào (Claude Code, OpenCode…), model nào, và đồng ý chi phí token.
+
+Giới hạn dự kiến khi có số: 10 câu, một dự án, một model, n nhỏ; không suy rộng.
+
+## 6. Khảo sát người dùng (kết quả A và C, spec §7.3)
+
+**Trạng thái: chưa khảo sát, chờ người dùng.** Cần 5–10 bạn cùng lớp, khoảng 30 phút mỗi người, một máy có NexGraph với bản sao NestJS đã lập chỉ mục và một máy chỉ có trình soạn thảo.
+
+Đã sẵn sàng: `data/khao-sat-phieu.md` (năm câu hỏi có đáp án đúng/sai, bốn câu thang 1–5, đáp án, hướng dẫn người điều phối), `data/khao-sat-ket-qua.csv` (bảng trống: `nguoi,nhom,cau,dung,giay,de_dung,ban_do,luong,dung_lai`). Đáp án được lập từ mã nguồn (grep và đọc); câu 1 và 4 có phần chủ quan nên chấm theo mức "đúng đủ / một phần". Khi có dữ liệu: bảng tỉ lệ đúng và thời gian trung vị theo nhóm cho từng câu, trung bình thang đo, ghi rõ n và đây là khảo sát nhỏ không kiểm định thống kê.
+
+
+
 
 <!--SCENARIOS-->
 
-<!--LIMITS-->
+## 8. Hạn chế đã biết
+
+- **Chỉ adapter API key**; không đăng nhập theo gói thuê bao; **không streaming**; **lịch sử chat không lưu**; giao diện **chỉ tiếng Việt**.
+- **Chưa kiểm trên Electron thật** (cửa sổ, WebGL trong `file://`, bấm chuột): mọi kiểm giao diện là test jsdom và engine thật qua HTTP. Chưa chụp ảnh `docs/screenshots/h6/`.
+- **Chưa chạy trên Windows**; CI của `main` mới nhất chưa xác nhận xanh (chưa push; lần chạy gần nhất `43363591920` có 3 test đỏ trên `windows-latest`, đã sửa cục bộ ở H0 nhưng chưa có bằng chứng CI).
+- **Chưa chạy với nhà cung cấp AI thật**: chat mới được kiểm với máy chủ giả (`fake-llm.mjs`) và test đơn vị.
+- **Độ đúng** chấm trên 24 tệp của 2 dự án bằng nhãn nháp của một agent, đã sửa sau khi xem kết quả (§2.1). Python: `self.x.method()` với `x` gán trong `__init__`, `import` theo gốc `sys.path` khác gốc dự án và bí danh import chưa được nối; cùng cặp gọi nhiều lần trong một tệp chỉ giữ lần đầu (thừa hưởng). TypeScript: lớp cha là biểu thức bị bỏ; `TESTED_BY` mức lớp.
+- **Hook git** không hỗ trợ `core.hooksPath` (husky…) và worktree.
+- **Cấu hình tích hợp agent** (Claude Code, Cursor, VS Code, OpenCode) lấy theo mã của công cụ tham khảo, chưa đối chiếu tài liệu chính thức và chưa thử với chính các công cụ đó.
+- **Task bị cắt hoặc chưa làm trọn:** Task 3 bước 4 (đồng hồ bấm tay trên app), Task 4 (chạy agent), Task 5 (khảo sát), Task 6 bước 1 (ảnh trên app thật), bước 3 (3 lần liên tiếp trên app) và bước 4 (video), Task 7 bước 3–4 (Windows, gắn thẻ). Xem từng mục.
+
+## 9. Việc chưa kiểm (cần người dùng)
+
+| Việc | Cần gì |
+|---|---|
+| Duyệt nhãn tay ≥ 3 tệp mỗi dự án, ghi tỉ lệ sửa | người dùng, ~1 giờ |
+| Chạy 10 câu hỏi với agent có/không MCP | chọn agent, model, cấp quyền/token |
+| Khảo sát 5–10 bạn | 30 phút mỗi người |
+| Bấm thử `docs/demo-script.md` 3 lần trên app Electron, chụp ảnh | người dùng, cửa sổ thật |
+| Chạy `docs/windows-checklist.md` | P3, máy Windows |
+| Thử một nhà cung cấp AI thật | API key |
+| Push nhánh và xác nhận CI xanh cả 6 job | người dùng đồng ý push |
+| Gắn thẻ `v0.2.0-alpha` cục bộ | người dùng đồng ý (không push thẻ) |
+

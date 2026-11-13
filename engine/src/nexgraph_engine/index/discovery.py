@@ -20,7 +20,9 @@ LANGUAGE_BY_EXT = {
     ".ts": "typescript", ".tsx": "typescript", ".mts": "typescript", ".cts": "typescript",
     ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript",
     ".cs": "csharp", ".cshtml": "csharp", ".razor": "csharp",
+    ".go": "go", ".java": "java",  # mức chung (spec §6.3 kịch bản 3): cấu trúc và lời gọi cùng tệp của extractor gốc
 }
+FULL_SUPPORT = frozenset({"dart", "python", "typescript", "javascript", "csharp"})
 # Tài liệu và media chỉ vào graph khi người dùng bật trong Tuỳ chọn index (F10 mục 6a).
 DOC_LANGUAGE_BY_EXT = {".md": "markdown", ".mdx": "markdown", ".txt": "text", ".rst": "text",
                        ".docx": "docx", ".xlsx": "xlsx", ".pdf": "pdf"}

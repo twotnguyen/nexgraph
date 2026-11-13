@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, Request
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.serialize import edge_json, node_json
 from nexgraph_engine.docs.text import doc_text
-from nexgraph_engine.index.discovery import language_of, sha256_file
+from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.freshness import freshness
@@ -55,7 +55,9 @@ def stats(project_id: str, request: Request) -> dict:
 
 def stats_json(store: GraphStore, root: Path) -> dict:
     """Dùng chung cho route HTTP và tool MCP: số liệu cộng thêm trạng thái "graph cũ"."""
-    return {**store.stats(), **freshness(store, root)}
+    stats = store.stats()
+    generic = sorted(lang for lang in stats["languages"] if lang not in FULL_SUPPORT and lang not in DOC_LANGUAGES)
+    return {**stats, "generic_languages": generic, **freshness(store, root)}
 
 
 @router.get("/nodes/{node_id:path}")

@@ -64,3 +64,17 @@ def test_same_named_functions_on_one_line_get_distinct_ids(tmp_path, index_proje
     assert result.state == "hoan_tat", result
     ids = [r[0] for r in store.conn.execute("SELECT id_nut FROM nut WHERE loai_nut = 'function'")]
     assert len(ids) == len(set(ids))
+
+
+def test_go_and_java_are_indexed_at_generic_level(tmp_path, index_project):
+    """Spec §6.3 kịch bản 3: ngôn ngữ ngoài ưu tiên 1 vẫn lập chỉ mục được ở mức chung, không lỗi và không rỗng."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "main.go").write_text("package main\n\nfunc helper() int { return 1 }\n\nfunc main() { helper() }\n")
+    (root / "Greeter.java").write_text(
+        "public class Greeter {\n  public String greet(String n) { return hello(n); }\n  private String hello(String n) { return n; }\n}\n")
+    store, result, _ = index_project(root)
+    assert result.state == "hoan_tat"
+    assert store.stats()["languages"] == {"go": 1, "java": 1}
+    labels = {r[0] for r in store.conn.execute("SELECT nhan FROM nut WHERE ma_tep IS NOT NULL AND loai_nut NOT IN ('file')")}
+    assert {"helper", "main", "Greeter", "greet"} <= labels

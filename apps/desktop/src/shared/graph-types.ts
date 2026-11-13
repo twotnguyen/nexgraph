@@ -92,6 +92,7 @@ export interface GraphStats {
   head_commit?: string | null
   changed_files?: number | null
   stale?: boolean
+  generic_languages?: string[]
 }
 
 export interface SearchHit {

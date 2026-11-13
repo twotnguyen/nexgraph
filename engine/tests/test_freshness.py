@@ -65,3 +65,11 @@ def test_no_git_uses_baseline(copy_fixture, index_project):
     assert freshness(store, root) == {**freshness(store, root), "head_commit": None, "stale": False}
     (root / "util.py").write_text("def helper(x):\n    return 0\n")
     assert freshness(store, root)["stale"] is True
+
+
+def test_stats_name_languages_with_generic_support_only(copy_fixture, index_project):
+    from nexgraph_engine.api.routes_graph import stats_json
+    root = copy_fixture("py_mini")
+    (root / "main.go").write_text("package main\n\nfunc main() {}\n")
+    store, _, _ = index_project(root)
+    assert stats_json(store, root)["generic_languages"] == ["go"]
