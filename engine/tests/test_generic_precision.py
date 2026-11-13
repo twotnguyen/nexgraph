@@ -52,3 +52,15 @@ def test_typescript_extends_and_implements_across_files_are_linked(tmp_path, ind
     implements = _edges(store, EdgeType.IMPLEMENTS)
     assert ("child.ts::Child#class", "base.ts::Shape#class") in implements
     assert ("child.ts::Child#class", "base.ts::Named#class") in implements
+
+
+def test_same_named_functions_on_one_line_get_distinct_ids(tmp_path, index_project):
+    """Mã rút gọn (minified): nhiều hàm lồng cùng tên cùng dòng làm lập chỉ mục chết vì trùng id (open-design, H6)."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "m.min.js").write_text(
+        "function p1(){function l(){return 1}}function p2(){function l(){return 2}}function p3(){function l(){return 3}}\n")
+    store, result, _ = index_project(root)
+    assert result.state == "hoan_tat", result
+    ids = [r[0] for r in store.conn.execute("SELECT id_nut FROM nut WHERE loai_nut = 'function'")]
+    assert len(ids) == len(set(ids))

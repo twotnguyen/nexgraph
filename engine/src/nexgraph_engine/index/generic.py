@@ -69,7 +69,11 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         q, k = qnames[gid]
         nid = node_id(rel_path, q, k)
         if nid in used:  # hàm lồng cùng tên, hoặc khai báo lặp: cùng quy ước `@dòng` với Dart
-            nid = node_id(rel_path, f"{q}@{_line(raw[gid].get('source_location')) or 1}", k)
+            at = f"{q}@{_line(raw[gid].get('source_location')) or 1}"
+            nid, n = node_id(rel_path, at, k), 1
+            while nid in used:  # mã rút gọn: nhiều hàm cùng tên cùng dòng
+                n += 1
+                nid = node_id(rel_path, f"{at}.{n}", k)
         used.add(nid)
         ids[gid] = nid
 
