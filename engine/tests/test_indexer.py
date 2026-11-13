@@ -2,7 +2,7 @@ import hashlib
 import threading
 from pathlib import Path
 
-from nexgraph_engine.schema.enums import EdgeType, NodeKind
+from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind
 
 
 def tree_hashes(root: Path) -> dict[str, str]:
@@ -217,3 +217,24 @@ def test_typescript_spec_file_calls_come_from_file_node(tmp_path, index_project)
     assert all(e.edge.line in (5, 6) for e in calls)
     tested = {e.edge.target for e in out_edges(store, "auth.controller.ts::AuthController#class", EdgeType.TESTED_BY)}
     assert tested == {"auth.controller.spec.ts#file"}
+
+
+def test_nestjs_constructor_injection_call_resolved(tmp_path, index_project):
+    store, _, _ = index_project(_nest(tmp_path))
+    e = [x for x in out_edges(store, "auth.controller.ts::AuthController.login#method", EdgeType.CALLS)
+         if x.edge.target == "user.service.ts::UserService.findOne#method"]
+    assert len(e) == 1 and e[0].edge.line == 5 and e[0].edge.confidence == Confidence.INFERRED
+    assert e[0].edge.confidence_score == 0.8          # kiểu tìm thấy qua tệp đã import
+    spec = {x.edge.target for x in out_edges(store, "auth.controller.spec.ts#file", EdgeType.CALLS)}
+    assert "auth.controller.ts::AuthController.login#method" in spec   # c.login(), c: AuthController
+    assert store.bindings()["auth.controller.ts#file"] == {"userService": "UserService"}
+
+
+def test_type_table_does_not_leak_between_files(tmp_path, index_project):
+    (tmp_path / "a.ts").write_text("export class A { go() { return 1 } }\n")
+    (tmp_path / "b.ts").write_text("export class B { go() { return 2 } }\n")
+    (tmp_path / "x.ts").write_text("import { A } from './a'\nexport class X {\n  constructor(private svc: A) {}\n  run() { return this.svc.go() }\n}\n")
+    (tmp_path / "y.ts").write_text("import { B } from './b'\nexport class Y {\n  constructor(private svc: B) {}\n  run() { return this.svc.go() }\n}\n")
+    store, _, _ = index_project(tmp_path)
+    assert {e.edge.target for e in out_edges(store, "x.ts::X.run#method", EdgeType.CALLS)} == {"a.ts::A.go#method"}
+    assert {e.edge.target for e in out_edges(store, "y.ts::Y.run#method", EdgeType.CALLS)} == {"b.ts::B.go#method"}

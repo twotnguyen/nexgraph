@@ -73,7 +73,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         used.add(nid)
         ids[gid] = nid
 
-    cross = _cross_file_calls(path, Path(root), raw, raw_edges, file_gid)
+    cross, type_table = _cross_file_calls(path, Path(root), raw, raw_edges, file_gid)
     # line_end ước lượng: dòng lớn nhất trong bằng chứng các cạnh đi ra; lớp bao luôn các phương thức của nó.
     end: dict[str, int] = {gid: _line(raw[gid].get("source_location")) or 1 for gid in raw}
     for e in raw_edges:
@@ -114,19 +114,20 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         elif rel == "inherits" and src in ids and line:
             refs.append(UnresolvedRef(source=ids[src], name=dst, type=EdgeType.INHERITS, line=line, col=0))
     refs += [UnresolvedRef(source=fid if c is None else ids[c], name=name, type=EdgeType.CALLS, line=line, col=0) for c, name, line in cross]
-    return FileExtraction(nodes=nodes, edges=edges, refs=refs)
+    bindings = {fid: type_table} if type_table else {}
+    return FileExtraction(nodes=nodes, edges=edges, refs=refs, bindings=bindings)
 
 
-def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], file_gid: str = "") -> list[tuple[str | None, str, int]]:
-    """Lời gọi `extract()` không nối được trong tệp → [(id Graphify của nút gọi hoặc None nếu ở mức tệp, tên, dòng)] chờ phân giải xuyên tệp."""
+def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], file_gid: str = "") -> tuple[list[tuple[str | None, str, int]], dict[str, str]]:
+    """Lời gọi `extract()` không nối được trong tệp → ([(id Graphify của nút gọi hoặc None nếu ở mức tệp, tên, dòng)], bảng kiểu TS)."""
     extractor = _get_extractor(path)
     if extractor is None:
-        return []
+        return [], {}
     # shortcut: parse tệp lần hai (lập chỉ mục chậm ~60% với TS/Python, đo 2026-11-12), đổi sang chỉ dùng kết quả riêng tệp khi tầng S chạm 60 s.
     try:
         per_file = _safe_extract_with_xaml_root(extractor, path, root)
     except Exception:  # lỗi ở lần đọc thứ hai không được làm mất kết quả của lần đầu
-        return []
+        return [], {}
     # Id trong kết quả riêng tệp mang tiền tố đường dẫn tuyệt đối; id của extract() là đuôi của nó.
     by_suffix = sorted(raw, key=len, reverse=True)
     done = {(e["source"], _line(e.get("source_location")), _plain_name(raw, e["target"]))  # extract() đã nối
@@ -159,7 +160,9 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
         if (caller, line, callee) in done:
             continue
         out.append((caller, name, line))
-    return out
+    tbl = per_file.get("ts_type_table", {}).get("table") or {}
+    types = {str(k): str(v) for k, v in tbl.items() if isinstance(k, str) and isinstance(v, str)}
+    return out, types
 
 
 def _plain_name(raw: dict, gid: str) -> str:

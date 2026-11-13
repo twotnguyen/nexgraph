@@ -158,7 +158,9 @@ def resolve_references(store: GraphStore, *, package_name: str | None) -> tuple[
         owner = _Index.owner_of(src)
         owner_id = next((n.id for k in TYPE_KINDS for n in idx.types.get(src.file, {}).get(owner or "", [])
                          if n.kind == k), None) if owner else None
-        return bindings.get(src.id, {}).get(recv) or (bindings.get(owner_id, {}).get(recv) if owner_id else None)
+        return (bindings.get(src.id, {}).get(recv)
+                or (bindings.get(owner_id, {}).get(recv) if owner_id else None)
+                or bindings.get(f"{src.file}#file", {}).get(recv))
 
     for ref_id, ref in pending:
         if ref.type != EdgeType.CALLS:
