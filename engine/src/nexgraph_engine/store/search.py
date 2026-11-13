@@ -15,8 +15,9 @@ MAX_CANDIDATES = 500
 BM25_WEIGHTS = "10, 4, 3, 1, 5"
 
 
-def build_match_query(q: str) -> str | None:
-    """Biến chuỗi người dùng nhập thành truy vấn FTS5 an toàn: mọi từ nằm trong ngoặc kép nên toán tử không có nghĩa."""
+def build_match_query(q: str, any_terms: bool = False) -> str | None:
+    """Biến chuỗi người dùng nhập thành truy vấn FTS5 an toàn: mọi từ nằm trong ngoặc kép nên toán tử không có nghĩa.
+    any_terms=True (Hỏi graph): khớp từ nào cũng được, bm25 xếp nút khớp nhiều từ hiếm lên trước."""
     terms: list[str] = []
     for token in re.findall(r"\w+", q, re.UNICODE)[:MAX_TERMS]:
         parts = split_identifier(token)
@@ -27,12 +28,12 @@ def build_match_query(q: str) -> str | None:
             terms.append(f'"{low}"*')
         else:
             terms.append(f'("{low}"* OR ({" AND ".join(f"{chr(34)}{p}{chr(34)}" for p in parts)}))')
-    return " AND ".join(terms) or None
+    return (" OR " if any_terms else " AND ").join(terms) or None
 
 
 def search(conn: sqlite3.Connection, q: str, *, kinds: set[NodeKind] | None = None,
-           limit: int = 20) -> list[tuple[Node, float]]:
-    match = build_match_query(q)
+           limit: int = 20, any_terms: bool = False) -> list[tuple[Node, float]]:
+    match = build_match_query(q, any_terms)
     if match is None:
         return []
     where, args = "nut_fts MATCH ? AND n.loai_nut <> 'repository'", [match]

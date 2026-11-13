@@ -22,7 +22,7 @@ def ask_graph(store: GraphStore, question: str, depth: int = 2, budget: int = 20
               mode: Literal["bfs", "dfs"] = "bfs") -> dict:
     if build_match_query(question) is None:
         raise ValueError("Câu hỏi không có từ nào tìm được")
-    seeds = [n for n, _ in search(store.conn, question, limit=SEEDS)]
+    seeds = [n for n, _ in search(store.conn, question, limit=SEEDS, any_terms=True)]
     conn = store.conn
     marks_t = ",".join("?" * len(_TYPES))
     taken: list[int] = []
