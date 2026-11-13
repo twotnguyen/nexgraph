@@ -59,6 +59,8 @@ def export(project_id: str, request: Request, body: ExportBody) -> dict:
             r = export_graph(store, body.format, _scope(body.scope), out_dir, info.name)
         except KeyError as exc:
             raise ApiError(404, "unknown_scope", f"Không có phạm vi {body.scope.value}") from exc
+        except Exception as exc:  # lỗi trong exporter của Graphify: trả lỗi JSON thay vì 500 trần
+            raise ApiError(500, "export_failed", f"Xuất {body.format} thất bại: {type(exc).__name__}: {exc}") from exc
         return {"files": r.files, "truncated": r.truncated}
 
 

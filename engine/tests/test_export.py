@@ -67,3 +67,22 @@ def test_push_unreachable_server(api, copy_fixture):
                  json={"target": "neo4j", "uri": "bolt://127.0.0.1:1", "user": "neo4j", "password": "s3cret-pw", "scope": {"kind": "all"}})
     assert r.status_code == 502 and r.json()["error"]["code"] == "push_failed"
     assert "s3cret-pw" not in r.text  # mật khẩu không lộ trong thông điệp
+
+
+def test_svg_export_of_graph_over_500_nodes(index_project, tmp_path):
+    # networkx.spring_layout chuyển sang ma trận thưa (scipy) khi đồ thị >= 500 nút: lỗi thật trên dự án NestJS.
+    root = tmp_path / "big"
+    root.mkdir()
+    for f in range(3):
+        (root / f"m{f}.py").write_text("".join(f"def f{f}_{i}():\n    return f{f}_{(i + 1) % 200}()\n" for i in range(200)))
+    store, _, _ = index_project(root)
+    r = export_graph(store, "svg", Scope(), tmp_path, "big")
+    assert (tmp_path / "big-graph.svg").stat().st_size > 0 and r.files
+
+
+def test_export_route_unexpected_error_is_json(api, copy_fixture, tmp_path, monkeypatch):
+    pid = _indexed(api, copy_fixture)
+    import nexgraph_engine.api.routes_export as routes
+    monkeypatch.setattr(routes, "export_graph", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
+    r = api.post(f"/v1/projects/{pid}/export", json={"format": "svg", "scope": {"kind": "all"}, "out_dir": str(tmp_path)})
+    assert r.status_code == 500 and r.json()["error"]["code"] == "export_failed" and "boom" in r.json()["error"]["message"]

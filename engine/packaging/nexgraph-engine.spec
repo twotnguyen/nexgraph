@@ -33,7 +33,7 @@ for dist in md.distributions():
 
 hiddenimports += collect_submodules("uvicorn")
 # Graphify import các gói export trong thân hàm (F10): khai báo rõ để bản đóng gói có đủ.
-hiddenimports += ["matplotlib.backends.backend_agg", *collect_submodules("neo4j"), *collect_submodules("falkordb")]
+hiddenimports += ["matplotlib.backends.backend_agg", *collect_submodules("scipy.sparse"), *collect_submodules("neo4j"), *collect_submodules("falkordb")]
 
 a = Analysis(
     [os.path.join(ENGINE_DIR, "src", "nexgraph_engine", "cli.py")],
