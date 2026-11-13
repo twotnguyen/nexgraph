@@ -62,7 +62,15 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 | `GET /v1/projects/{pid}/architecture/evidence?from&to&limit=50` | 3 | `[{edge, file, line}]` |
 | `GET /v1/projects/{pid}/changes?refresh=true` | 4 | `Changes` (xem "Hình dạng JSON bổ sung (kế hoạch con 4)") |
 | `POST /v1/projects/{pid}/refresh` | 4 | `Refresh`: lập chỉ mục tăng dần; `status:"skipped"` khi đang lập chỉ mục đầy đủ (`index_running`), đang refresh (`refresh_running`) hoặc chưa lập chỉ mục (`not_indexed`) |
-| `POST /v1/projects/{pid}/paths` `{node_ids, max_hops=4}` | 5 | `{nodes, edges, unconnected:[node_id]}` (chỉ cạnh thật) |
+| `POST /v1/projects/{pid}/paths` `{node_ids(2–10), max_hops=4 (1–6), directed=true}` | F10-1 (thay 5) | `{nodes, edges, unconnected:[node_id]}` (chỉ cạnh thật: CALLS, IMPORTS, INHERITS, IMPLEMENTS, REFERENCES, USES_TYPE, COMPOSES, NAVIGATES_TO) |
+| `GET /v1/projects/{pid}/impact?node` | F10-1 | `{node, impacted:[{node, score, hops}], tests:[Node], truncated}` (vùng ảnh hưởng nếu sửa một nút) |
+| `POST /v1/projects/{pid}/ask` `{question, depth=2 (1–6), budget=2000, mode="bfs"\|"dfs"}` | F10-1 | `{seeds, nodes, edges, truncated}` (hỏi graph không cần AI) |
+| `GET /v1/projects/{pid}/report` | F10-1 | `{god_nodes:[{node, degree}], communities:[{id:"com:<n>", label, size, cohesion}], surprising:[{source, target, source_files, relation, why}], questions:[{question, why}], benchmark:{corpus_tokens, graph_tokens, reduction}\|null, truncated}` |
+| `POST /v1/projects/{pid}/export` `{format, scope:{kind:"all"\|"community"\|"node", value?}, out_dir}` | F10-1 | `{files, truncated}`; `format` ∈ html, callflow_html, obsidian, wiki, svg, graphml, cypher, json, markdown; tối đa 5.000 node |
+| `POST /v1/projects/{pid}/export/push` `{target:"neo4j"\|"falkordb", uri, user?, password?, scope}` | F10-1 | `{nodes, edges, truncated}`; `502 push_failed`; mật khẩu không lưu |
+| `POST /v1/projects/{pid}/communities` | F10-1 | `{communities:int}` (gom cụm lại) |
+
+Lỗi chung của các route F10-1: `409 not_indexed` khi dự án chưa lập chỉ mục xong.
 | `GET /v1/projects/{pid}/tour` | 6 | `[{step, title, node_ids, file, start, end, text}]` |
 | `GET /v1/projects/{pid}/flutter/widgets?root` · `/flutter/routes` | 6 | cây widget · `[{route, screen_node, navigations}]` |
 
