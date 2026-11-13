@@ -144,7 +144,7 @@ class GraphStore:
         self.conn.commit()
 
     def clear_graph(self) -> None:
-        for table in ("canh", "nut", "tep", "khoi_kien_truc"):
+        for table in ("canh", "nut", "tep", "khoi_kien_truc", "luong"):
             self.conn.execute(f"DELETE FROM {table}")
         self.conn.commit()
         self._file_pk.clear()

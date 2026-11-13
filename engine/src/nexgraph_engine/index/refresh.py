@@ -14,6 +14,7 @@ from pathlib import Path
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
+from nexgraph_engine.flows.build import rebuild_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
 from nexgraph_engine.index.indexer import ExtractedFile, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
@@ -116,6 +117,11 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         resolve_references(store, package_name=_package_name(
             pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None))
         derive_tested_by(store)
+        try:
+            # shortcut: dựng lại toàn bộ luồng sau mỗi refresh; nếu > 1 s trên tầng L thì chỉ dựng lại luồng chạm tệp đổi
+            rebuild_flows(store, root)
+        except Exception:
+            store.conn.rollback()
         if store.file_graph_signature() != sig_before:
             try:
                 detect_communities(store)

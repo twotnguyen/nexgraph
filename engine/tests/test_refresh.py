@@ -27,6 +27,11 @@ def graph_state(store) -> dict:
         "files": {tuple(r) for r in q("SELECT duong_dan_tuong_doi, ngon_ngu, kich_thuoc, ma_bam, la_kiem_thu FROM tep")},
         "errors": {tuple(r) for r in q(
             "SELECT t.duong_dan_tuong_doi, l.loai FROM loi_phan_tich l JOIN tep t ON t.ma_tep = l.ma_tep")},
+        "flows": {tuple(r) for r in q("SELECT ten, loai_vao, mo_ta_vao, so_buoc, so_tep, do_sau, diem, bi_cat FROM luong")},
+        "flow_steps": {tuple(r) for r in q(
+            "SELECT l.ten, b.thu_tu, n.id_nut, b.do_sau, ifnull(ng.id_nut, ''), ifnull(b.dong_bang_chung, -1)"
+            " FROM buoc_luong b JOIN luong l USING (ma_luong) JOIN nut n ON n.ma_nut = b.ma_nut"
+            " LEFT JOIN nut ng ON ng.ma_nut = b.ma_nut_goi")},
     }
 
 
