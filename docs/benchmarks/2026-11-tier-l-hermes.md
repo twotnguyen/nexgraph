@@ -80,3 +80,9 @@ Cải tiến then chốt: `requeue_failed_refs(tails=new_labels, imports=bool(ad
 | `import_cycles` | 0,14 s, 84 vòng (lớn nhất 562 tệp, rồi 38, 18, 17, 16) | — |
 
 Không cần bộ nhớ đệm (Task 2 Step 5 chỉ áp dụng khi > 2 s). Đo sigma trong trình duyệt: `docs/spikes/2026-11-sigma-map.md`.
+
+---
+
+## Đính chính (H6, 2026-11-13)
+
+Con số RAM đỉnh 939 MB ở các mục trên là `ru_maxrss` của **tiến trình cha**; các tiến trình con lập chỉ mục (8 worker) không được tính. Đo cả cây tiến trình (lấy mẫu RSS mỗi 0,5 s) cho đỉnh **4,8 GB** trên cùng dự án, nên mục tiêu "RAM ≤ 1,5 GB" và "< 2 GB" **không đạt**. Chi tiết và bảng theo số tiến trình con: `2026-12-danh-gia.md` §4.3. Mục 3 ở trên chỉ đo refresh trên NestJS; trên hermes-agent refresh 1 tệp từng mất 84 s (lỗi `TESTED_BY`, đã sửa) và nay 4,7 s (chưa đạt 2 s).

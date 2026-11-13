@@ -1,7 +1,7 @@
 {
   "project": "open-design",
   "project_commit": "b4ec310921f49ae512de1f0a1f3a4e7ce3d05f2f",
-  "nexgraph_commit": "6d30c9eaa81cf283e4f70f8462aab38f7c35a3ed",
+  "nexgraph_commit": "5237841541ca4949ca106c7f33827e8b59e3bdb7",
   "machine": {
     "cpu": "Apple M3 Pro",
     "ncpu": 12,
@@ -14,12 +14,14 @@
   "index_repeat": 1,
   "metrics": {
     "index_full_ms": {
-      "median": 192050.91,
-      "min": 192050.91,
-      "max": 192050.91,
+      "median": 193261.65,
+      "min": 193261.65,
+      "max": 193261.65,
       "n": 1
     },
-    "peak_rss_after_index_mb": 437,
+    "peak_rss_after_index_mb": 436,
+    "worker_peak_rss_mb": 232,
+    "index_workers": 8,
     "files": 5672,
     "nodes": 55343,
     "edges": 213417,
@@ -31,73 +33,73 @@
     },
     "graph_db_mb": 101.3,
     "reopen_ms": {
-      "median": 45.19,
-      "min": 45.14,
-      "max": 45.46,
+      "median": 45.28,
+      "min": 44.99,
+      "max": 45.89,
       "n": 3
     },
     "search_build_ms": {
-      "median": 1.7,
-      "min": 1.62,
-      "max": 2.11,
+      "median": 1.58,
+      "min": 1.53,
+      "max": 2.22,
       "n": 3
     },
     "arch_root_ms": {
-      "median": 125.84,
-      "min": 125.17,
-      "max": 132.94,
+      "median": 126.54,
+      "min": 125.49,
+      "max": 127.7,
       "n": 3
     },
     "refresh_one_file_ms": {
-      "median": 1240.06,
-      "min": 1211.7,
-      "max": 1324.52,
+      "median": 1226.46,
+      "min": 1215.47,
+      "max": 1242.96,
       "n": 3
     },
     "rebuild_flows_ms": {
-      "median": 549.83,
-      "min": 544.86,
-      "max": 561.7,
+      "median": 542.04,
+      "min": 540.75,
+      "max": 562.78,
       "n": 3
     },
     "list_flows_auth_ms": {
-      "median": 19.5,
-      "min": 19.43,
-      "max": 20.3,
+      "median": 20.44,
+      "min": 19.88,
+      "max": 21.2,
       "n": 3
     },
     "build_map_400_ms": {
-      "median": 147.19,
-      "min": 145.89,
-      "max": 154.96,
+      "median": 150.02,
+      "min": 148.23,
+      "max": 161.69,
       "n": 3
     },
     "import_cycles_ms": {
-      "median": 34.66,
-      "min": 34.15,
-      "max": 43.12,
+      "median": 36.78,
+      "min": 35.89,
+      "max": 45.92,
       "n": 3
     },
     "build_tour_ms": {
-      "median": 132.2,
-      "min": 131.37,
-      "max": 132.41,
+      "median": 133.82,
+      "min": 133.69,
+      "max": 135.69,
       "n": 3
     },
     "build_context_question": "login",
     "build_context_login_ms": {
-      "median": 4.35,
-      "min": 4.28,
-      "max": 4.35,
+      "median": 4.58,
+      "min": 4.34,
+      "max": 4.87,
       "n": 3
     },
     "top_degree_node": "plugins/_official/examples/open-design-homepage/assets/_next/static/chunks/8c2d1abc8462562b.js::it#function",
     "neighbors_top_node_ms": {
-      "median": 89.45,
-      "min": 87.2,
-      "max": 90.17,
+      "median": 96.59,
+      "min": 95.28,
+      "max": 109.26,
       "n": 3
     },
-    "peak_rss_total_mb": 437
+    "peak_rss_total_mb": 436
   }
 }

@@ -1,7 +1,7 @@
 {
   "project": "hermes-agent",
   "project_commit": "cc8cc35e6074173d6a4afaeaa351d6cba250c0cc",
-  "nexgraph_commit": "6d30c9eaa81cf283e4f70f8462aab38f7c35a3ed",
+  "nexgraph_commit": "5237841541ca4949ca106c7f33827e8b59e3bdb7",
   "machine": {
     "cpu": "Apple M3 Pro",
     "ncpu": 12,
@@ -14,12 +14,14 @@
   "index_repeat": 1,
   "metrics": {
     "index_full_ms": {
-      "median": 141371.83,
-      "min": 141371.83,
-      "max": 141371.83,
+      "median": 125747.11,
+      "min": 125747.11,
+      "max": 125747.11,
       "n": 1
     },
-    "peak_rss_after_index_mb": 940,
+    "peak_rss_after_index_mb": 965,
+    "worker_peak_rss_mb": 1008,
+    "index_workers": 8,
     "files": 17260,
     "nodes": 215015,
     "edges": 684003,
@@ -32,73 +34,73 @@
     },
     "graph_db_mb": 295.6,
     "reopen_ms": {
-      "median": 182.13,
-      "min": 150.2,
-      "max": 186.82,
+      "median": 149.42,
+      "min": 149.31,
+      "max": 150.71,
       "n": 3
     },
     "search_build_ms": {
-      "median": 4.24,
-      "min": 4.11,
-      "max": 9.01,
+      "median": 4.83,
+      "min": 4.78,
+      "max": 6.02,
       "n": 3
     },
     "arch_root_ms": {
-      "median": 406.53,
-      "min": 382.43,
-      "max": 413.51,
+      "median": 389.63,
+      "min": 384.9,
+      "max": 400.21,
       "n": 3
     },
     "refresh_one_file_ms": {
-      "median": 4941.37,
-      "min": 4902.71,
-      "max": 5471.26,
+      "median": 4729.29,
+      "min": 4645.98,
+      "max": 4883.14,
       "n": 3
     },
     "rebuild_flows_ms": {
-      "median": 2164.85,
-      "min": 2080.35,
-      "max": 2268.5,
+      "median": 2048.23,
+      "min": 2037.64,
+      "max": 2086.49,
       "n": 3
     },
     "list_flows_auth_ms": {
-      "median": 47.13,
-      "min": 45.99,
-      "max": 49.0,
+      "median": 46.75,
+      "min": 45.8,
+      "max": 48.77,
       "n": 3
     },
     "build_map_400_ms": {
-      "median": 445.13,
-      "min": 444.37,
-      "max": 449.42,
+      "median": 429.99,
+      "min": 426.55,
+      "max": 441.31,
       "n": 3
     },
     "import_cycles_ms": {
-      "median": 124.42,
-      "min": 124.14,
-      "max": 128.1,
+      "median": 121.49,
+      "min": 111.04,
+      "max": 123.11,
       "n": 3
     },
     "build_tour_ms": {
-      "median": 414.26,
-      "min": 413.22,
-      "max": 426.05,
+      "median": 384.97,
+      "min": 383.8,
+      "max": 397.36,
       "n": 3
     },
     "build_context_question": "login",
     "build_context_login_ms": {
-      "median": 5.1,
-      "min": 5.01,
-      "max": 5.2,
+      "median": 5.09,
+      "min": 5.0,
+      "max": 5.09,
       "n": 3
     },
     "top_degree_node": "tests/e2e/core/windows/_helpers.py::expect#function",
     "neighbors_top_node_ms": {
-      "median": 134.18,
-      "min": 133.71,
-      "max": 139.39,
+      "median": 129.66,
+      "min": 128.26,
+      "max": 143.95,
       "n": 3
     },
-    "peak_rss_total_mb": 940
+    "peak_rss_total_mb": 965
   }
 }

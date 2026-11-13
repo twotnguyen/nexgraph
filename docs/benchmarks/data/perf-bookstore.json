@@ -1,7 +1,7 @@
 {
   "project": "bookstore_app",
-  "project_commit": "6d30c9eaa81cf283e4f70f8462aab38f7c35a3ed",
-  "nexgraph_commit": "6d30c9eaa81cf283e4f70f8462aab38f7c35a3ed",
+  "project_commit": "5237841541ca4949ca106c7f33827e8b59e3bdb7",
+  "nexgraph_commit": "5237841541ca4949ca106c7f33827e8b59e3bdb7",
   "machine": {
     "cpu": "Apple M3 Pro",
     "ncpu": 12,
@@ -14,12 +14,14 @@
   "index_repeat": 3,
   "metrics": {
     "index_full_ms": {
-      "median": 7.84,
-      "min": 6.9,
-      "max": 8.29,
+      "median": 7.45,
+      "min": 7.4,
+      "max": 8.92,
       "n": 3
     },
-    "peak_rss_after_index_mb": 51,
+    "peak_rss_after_index_mb": 53,
+    "worker_peak_rss_mb": 5,
+    "index_workers": 1,
     "files": 9,
     "nodes": 35,
     "edges": 53,
@@ -29,9 +31,9 @@
     },
     "graph_db_mb": 0.2,
     "reopen_ms": {
-      "median": 0.43,
-      "min": 0.38,
-      "max": 0.51,
+      "median": 0.44,
+      "min": 0.37,
+      "max": 0.57,
       "n": 3
     },
     "search_build_ms": {
@@ -42,60 +44,60 @@
     },
     "arch_root_ms": {
       "median": 0.07,
-      "min": 0.05,
-      "max": 0.16,
+      "min": 0.06,
+      "max": 0.17,
       "n": 3
     },
     "refresh_one_file_ms": {
-      "median": 3.02,
-      "min": 3.0,
-      "max": 3.38,
+      "median": 3.19,
+      "min": 3.05,
+      "max": 3.45,
       "n": 3
     },
     "rebuild_flows_ms": {
-      "median": 0.36,
-      "min": 0.28,
-      "max": 0.48,
+      "median": 0.27,
+      "min": 0.25,
+      "max": 0.46,
       "n": 3
     },
     "list_flows_auth_ms": {
       "median": 0.05,
-      "min": 0.05,
-      "max": 0.2,
+      "min": 0.04,
+      "max": 0.12,
       "n": 3
     },
     "build_map_400_ms": {
       "median": 0.1,
-      "min": 0.09,
-      "max": 0.23,
+      "min": 0.08,
+      "max": 0.21,
       "n": 3
     },
     "import_cycles_ms": {
       "median": 0.03,
       "min": 0.02,
-      "max": 0.3,
+      "max": 0.23,
       "n": 3
     },
     "build_tour_ms": {
-      "median": 0.16,
+      "median": 0.15,
       "min": 0.14,
-      "max": 0.41,
+      "max": 0.36,
       "n": 3
     },
     "build_context_question": "login",
     "build_context_login_ms": {
-      "median": 1.2,
-      "min": 1.18,
-      "max": 1.24,
+      "median": 1.16,
+      "min": 1.16,
+      "max": 1.22,
       "n": 3
     },
     "top_degree_node": "lib#directory",
     "neighbors_top_node_ms": {
-      "median": 0.08,
-      "min": 0.07,
+      "median": 0.09,
+      "min": 0.08,
       "max": 0.16,
       "n": 3
     },
-    "peak_rss_total_mb": 69
+    "peak_rss_total_mb": 70
   }
 }

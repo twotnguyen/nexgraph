@@ -1,7 +1,7 @@
 {
   "project": "Bot_Albion_TNC",
   "project_commit": "b82be71177dc6ab0b96b566ea4ded8c029ed6712",
-  "nexgraph_commit": "6d30c9eaa81cf283e4f70f8462aab38f7c35a3ed",
+  "nexgraph_commit": "5237841541ca4949ca106c7f33827e8b59e3bdb7",
   "machine": {
     "cpu": "Apple M3 Pro",
     "ncpu": 12,
@@ -14,12 +14,14 @@
   "index_repeat": 3,
   "metrics": {
     "index_full_ms": {
-      "median": 1485.51,
-      "min": 1477.7,
-      "max": 1607.01,
+      "median": 1524.89,
+      "min": 1502.8,
+      "max": 1710.75,
       "n": 3
     },
-    "peak_rss_after_index_mb": 74,
+    "peak_rss_after_index_mb": 73,
+    "worker_peak_rss_mb": 83,
+    "index_workers": 8,
     "files": 258,
     "nodes": 2067,
     "edges": 3695,
@@ -31,70 +33,70 @@
     },
     "graph_db_mb": 2.8,
     "reopen_ms": {
-      "median": 1.02,
-      "min": 0.97,
-      "max": 1.25,
+      "median": 1.25,
+      "min": 1.25,
+      "max": 1.41,
       "n": 3
     },
     "search_build_ms": {
       "median": 0.19,
-      "min": 0.17,
-      "max": 0.38,
+      "min": 0.18,
+      "max": 0.4,
       "n": 3
     },
     "arch_root_ms": {
-      "median": 1.26,
-      "min": 1.24,
-      "max": 1.51,
+      "median": 1.32,
+      "min": 1.26,
+      "max": 1.57,
       "n": 3
     },
     "refresh_one_file_ms": {
-      "median": 62.96,
-      "min": 62.74,
-      "max": 80.25,
+      "median": 72.74,
+      "min": 71.87,
+      "max": 87.05,
       "n": 3
     },
     "rebuild_flows_ms": {
-      "median": 21.8,
-      "min": 21.56,
-      "max": 22.87,
+      "median": 23.86,
+      "min": 23.01,
+      "max": 24.64,
       "n": 3
     },
     "list_flows_auth_ms": {
-      "median": 0.93,
-      "min": 0.88,
-      "max": 1.12,
+      "median": 0.88,
+      "min": 0.86,
+      "max": 1.14,
       "n": 3
     },
     "build_map_400_ms": {
-      "median": 2.37,
+      "median": 2.42,
       "min": 2.36,
-      "max": 2.52,
+      "max": 2.57,
       "n": 3
     },
     "import_cycles_ms": {
-      "median": 0.41,
-      "min": 0.4,
-      "max": 0.7,
+      "median": 0.43,
+      "min": 0.39,
+      "max": 0.71,
       "n": 3
     },
     "build_tour_ms": {
-      "median": 2.11,
-      "min": 2.05,
-      "max": 2.3,
+      "median": 2.14,
+      "min": 2.08,
+      "max": 2.47,
       "n": 3
     },
     "build_context_question": "auth",
     "build_context_login_ms": {
-      "median": 1.33,
-      "min": 1.31,
-      "max": 1.36,
+      "median": 1.38,
+      "min": 1.32,
+      "max": 1.38,
       "n": 3
     },
     "top_degree_node": "bot/tests/test_discord_workflows.py#file",
     "neighbors_top_node_ms": {
-      "median": 0.45,
-      "min": 0.43,
+      "median": 0.43,
+      "min": 0.42,
       "max": 0.55,
       "n": 3
     },

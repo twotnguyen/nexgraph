@@ -34,6 +34,12 @@ def peak_rss_mb() -> float:
     return rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
 
 
+def peak_children_rss_mb() -> float:
+    """RSS lớn nhất của MỘT tiến trình con đã kết thúc (worker lập chỉ mục); tổng thật <= cha + số worker x giá trị này."""
+    rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+    return rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
+
+
 def stat(xs: list[float]) -> dict:
     return {"median": round(statistics.median(xs), 2), "min": round(min(xs), 2), "max": round(max(xs), 2), "n": len(xs)}
 
@@ -114,7 +120,10 @@ def main() -> None:
         store = stores[-1]
         db = tmp / f"graph{index_repeat - 1}.db"
         m["index_full_ms"] = stat(index_ms)
-        m["peak_rss_after_index_mb"] = round(peak_rss_mb())  # đỉnh tích luỹ của tiến trình; bao cả các lần lặp
+        m["peak_rss_after_index_mb"] = round(peak_rss_mb())  # tiến trình cha, tích luỹ qua các lần lặp; KHÔNG gồm worker
+        m["worker_peak_rss_mb"] = round(peak_children_rss_mb())  # worker lớn nhất (0 nếu không dùng pool)
+        from nexgraph_engine.index.indexer import index_workers
+        m["index_workers"] = index_workers(store.stats()["files"], False)
         conn = store.conn
         stats = store.stats()
         m["files"], m["nodes"] = stats["files"], sum(stats["nodes_by_kind"].values())
