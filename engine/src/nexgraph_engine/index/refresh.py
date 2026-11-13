@@ -53,7 +53,9 @@ def refresh_project(store: GraphStore, root: Path) -> RefreshResult:
     t0 = time.time()
     root = Path(root)
     scope = store.last_scope()
-    disk = {f.rel_path: f for f in discover(root, subdir=scope, exclude=store.last_exclude())}
+    docs, media = store.last_doc_flags()
+    disk = {f.rel_path: f for f in discover(root, subdir=scope, exclude=store.last_exclude(),
+                                            include_docs=docs, include_media=media)}
     known = store.file_records()
     now = time.time()
 

@@ -18,6 +18,8 @@ class OpenBody(BaseModel):
 class IndexBody(BaseModel):
     subdir: str | None = None
     exclude: list[str] = Field(default_factory=list, max_length=200)
+    include_docs: bool = False
+    include_media: bool = False
 
 
 def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
@@ -62,7 +64,9 @@ def list_projects(request: Request) -> list[dict]:
 def start_index(project_id: str, request: Request, body: IndexBody | None = None) -> dict:
     try:
         return {"job_id": request.app.state.services.jobs.start_index(project_id, subdir=body.subdir if body else None,
-                                                                       exclude=[e for e in body.exclude if e.strip()] if body else None)}
+                                                                       exclude=[e for e in body.exclude if e.strip()] if body else None,
+                                                                       include_docs=bool(body and body.include_docs),
+                                                                       include_media=bool(body and body.include_media))}
     except ProjectPathError as exc:
         raise ApiError(400, "bad_path", str(exc)) from exc
     except UnknownProject as exc:

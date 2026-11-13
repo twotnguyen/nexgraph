@@ -89,16 +89,20 @@ def extract_file(root: Path, f: DiscoveredFile) -> ExtractedFile:
 
 class Indexer:
     def __init__(self, store: GraphStore, root: Path, *, on_progress: Callable[[ProgressEvent], None],
-                 cancel: threading.Event, subdir: str | None = None, exclude: list[str] | None = None) -> None:
+                 cancel: threading.Event, subdir: str | None = None, exclude: list[str] | None = None,
+                 include_docs: bool = False, include_media: bool = False, transcript_dir: Path | None = None) -> None:
         self.store, self.root, self.on_progress, self.cancel = store, Path(root), on_progress, cancel
         self.subdir, self.exclude = subdir, exclude or []
+        self.include_docs, self.include_media, self.transcript_dir = include_docs, include_media, transcript_dir
 
     def run(self) -> RunResult:
         t0 = time.time()
         store = self.store
-        run_id = store.begin_run(commit_sha=_git_head(self.root), subdir=self.subdir, exclude=self.exclude)
+        run_id = store.begin_run(commit_sha=_git_head(self.root), subdir=self.subdir, exclude=self.exclude,
+                                 include_docs=self.include_docs, include_media=self.include_media)
         try:
-            files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude))
+            files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
+                                  include_docs=self.include_docs, include_media=self.include_media))
             total = len(files)
             store.set_run_state(run_id, "cau_truc", files_done=0, files_total=total)
             store.clear_graph()

@@ -21,6 +21,12 @@ LANGUAGE_BY_EXT = {
     ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript", ".cjs": "javascript",
     ".cs": "csharp", ".cshtml": "csharp", ".razor": "csharp",
 }
+# Tài liệu và media chỉ vào graph khi người dùng bật trong Tuỳ chọn index (F10 mục 6a).
+DOC_LANGUAGE_BY_EXT = {".md": "markdown", ".mdx": "markdown", ".txt": "text", ".rst": "text",
+                       ".docx": "docx", ".xlsx": "xlsx", ".pdf": "pdf"}
+MEDIA_EXTS = frozenset({".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mov", ".webm", ".mkv"})
+DOC_LANGUAGES = frozenset({*DOC_LANGUAGE_BY_EXT.values(), "media"})
+MAX_MEDIA_BYTES = 500_000_000
 _TEST_DIRS = frozenset({"test", "tests", "__tests__", "integration_test"})
 _TEST_SUFFIXES = ("_test.dart", "_test.py", ".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx",
                   ".test.js", ".spec.js")
@@ -72,8 +78,20 @@ def _ignored(rel: str, rules: list[tuple[str, pathspec.PathSpec]]) -> bool:
     return False
 
 
+def _language(name: str, include_docs: bool, include_media: bool) -> str | None:
+    ext = os.path.splitext(name)[1].lower()
+    if ext in LANGUAGE_BY_EXT:
+        return LANGUAGE_BY_EXT[ext]
+    if include_docs and ext in DOC_LANGUAGE_BY_EXT:
+        return DOC_LANGUAGE_BY_EXT[ext]
+    if include_media and ext in MEDIA_EXTS:
+        return "media"
+    return None
+
+
 def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None = None,
-             exclude: list[str] | None = None) -> Iterator[DiscoveredFile]:
+             exclude: list[str] | None = None, include_docs: bool = False,
+             include_media: bool = False) -> Iterator[DiscoveredFile]:
     root = Path(root)
     found: list[DiscoveredFile] = []
     # Mẫu người dùng chọn (kiểu .gitignore, tính từ gốc project) áp như một .gitignore ở gốc.
@@ -103,12 +121,14 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                 if inside(rel) or on_path_to_subdir(rel):  # chỉ đi xuống nhánh dẫn tới thư mục con
                     walk(Path(entry.path), rel, rules)
             elif entry.is_file(follow_symlinks=False):
-                language = language_of(entry.name)
+                language = _language(entry.name, include_docs, include_media)
                 if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES) or _ignored(rel, rules):
                     continue
                 st = entry.stat(follow_symlinks=False)
+                doc = language in DOC_LANGUAGES
+                cap = MAX_MEDIA_BYTES if language == "media" else max_file_bytes
                 found.append(DiscoveredFile(rel, language, st.st_size, int(st.st_mtime),
-                                            is_test_path(rel), st.st_size > max_file_bytes))
+                                            not doc and is_test_path(rel), st.st_size > cap))
 
     walk(root, "", base_rules)
     yield from sorted(found, key=lambda f: f.rel_path)

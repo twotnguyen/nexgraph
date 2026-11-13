@@ -43,7 +43,7 @@ def test_open_is_idempotent(tmp_path):
     p = tmp_path / "graph.db"
     open_graph_db(p).close()
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 4
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     conn.close()
@@ -124,14 +124,15 @@ def test_v1_database_is_upgraded(tmp_path):
     p = tmp_path / "graph.db"
     _make_v1(p)
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     assert conn.execute("SELECT count(*) FROM kieu_bien").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM moc_tep").fetchone()[0] == 0
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(lan_lap_chi_muc)")}
-    assert {"thu_muc_con", "mau_bo_qua"} <= cols
+    assert {"thu_muc_con", "mau_bo_qua", "gom_tai_lieu", "gom_media"} <= cols
+    assert conn.execute("SELECT gom_tai_lieu, gom_media FROM lan_lap_chi_muc").fetchone()[:] == (0, 0)
     assert conn.execute("SELECT count(*) FROM nut").fetchone()[0] == 2
     assert conn.execute("SELECT count(*) FROM canh").fetchone()[0] == 1
-    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 3
+    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 4
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.close()
     open_graph_db(p).close()  # lần hai không làm gì
@@ -144,9 +145,9 @@ def test_read_only_v1_is_rejected(tmp_path):
         open_graph_db(p, read_only=True)
 
 
-def test_new_database_is_v3(tmp_path):
+def test_new_database_is_v4(tmp_path):
     conn = open_graph_db(tmp_path / "graph.db")
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
     tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"kieu_bien", "moc_tep"} <= tables
 

@@ -2,7 +2,7 @@
 -- Lược đồ theo docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md. Số RBn là mã ràng buộc toàn vẹn ở tài liệu đó.
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;  (SQLite tắt mặc định, không lưu trong tệp)
 
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 
 -- 1. DU_AN ---------------------------------------------------------------
 CREATE TABLE du_an (
@@ -33,6 +33,8 @@ CREATE TABLE lan_lap_chi_muc (
     thong_bao_loi TEXT,
     thu_muc_con   TEXT    CHECK (thu_muc_con IS NULL OR length(thu_muc_con) BETWEEN 1 AND 1024),
     mau_bo_qua    TEXT    CHECK (mau_bo_qua IS NULL OR length(mau_bo_qua) BETWEEN 2 AND 20000),     -- mảng JSON mẫu .gitignore (F10)
+    gom_tai_lieu  INTEGER NOT NULL DEFAULT 0 CHECK (gom_tai_lieu IN (0, 1)),             -- tuỳ chọn index gồm tài liệu (F10 6a)
+    gom_media     INTEGER NOT NULL DEFAULT 0 CHECK (gom_media IN (0, 1)),                -- tuỳ chọn index gồm audio/video (F10 6a)
     CHECK (so_tep_xu_ly <= so_tep_tong),                                                -- RB9
     CHECK (ket_thuc_luc IS NULL OR ket_thuc_luc >= bat_dau_luc),                        -- RB9
     CHECK ((trang_thai IN ('hoan_tat', 'loi', 'huy')) = (ket_thuc_luc IS NOT NULL)),    -- RB9
