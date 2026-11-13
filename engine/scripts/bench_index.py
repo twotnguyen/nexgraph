@@ -12,7 +12,7 @@ import threading
 import time
 from pathlib import Path
 
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.index.indexer import Indexer, ProgressEvent, index_workers
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -26,7 +26,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("project", type=Path)
     ap.add_argument("--repeat", type=int, default=1, help="lập chỉ mục N lần (lần 2 trở đi là chạy lại, không cache)")
+    ap.add_argument("--tracemalloc", action="store_true", help="in top 10 dòng cấp phát bộ nhớ")
     args = ap.parse_args()
+    if args.tracemalloc:
+        import tracemalloc
+        tracemalloc.start()
     root = args.project.resolve()
 
     with tempfile.TemporaryDirectory(prefix="ng-bench-") as tmp:
@@ -56,12 +60,19 @@ def main() -> None:
         ro.close()
         size_mb = db.stat().st_size / 1e6
 
-    print(f"project: {root}  máy: {platform.machine()} / Python {platform.python_version()}")
+    workers = index_workers(stats["files"], False)
+    print(f"project: {root}  máy: {platform.machine()} / Python {platform.python_version()}  tiến trình={workers}")
     print(f"tệp={stats['files']} ngôn ngữ={stats['languages']}")
     print(f"nút={sum(stats['nodes_by_kind'].values())} {stats['nodes_by_kind']}")
     print(f"cạnh={sum(stats['edges_by_type'].values())} {stats['edges_by_type']}")
     print(f"tham chiếu chưa phân giải={stats['unresolved']}")
     print(f"RAM đỉnh={peak_rss_mb():.0f} MB  graph.db={size_mb:.1f} MB  mở lại (chỉ đọc + stats)={reopen * 1000:.0f} ms")
+    if args.tracemalloc:
+        snapshot = tracemalloc.take_snapshot()
+        top_stats = snapshot.statistics("lineno")
+        print("[tracemalloc top 10]")
+        for stat in top_stats[:10]:
+            print(" ", stat)
 
 
 if __name__ == "__main__":

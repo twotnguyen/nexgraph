@@ -66,13 +66,23 @@ def main() -> None:
     t = time.perf_counter()
     r = Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event()).run()
     full = time.perf_counter() - t
-    files = [f.rel_path for f in discover(root) if f.language == "dart" and not f.is_test]
-    print(f"[lập chỉ mục đầy đủ] {len(files)} tệp Dart (không test), nút={r.nodes} cạnh={r.edges}: {full:.2f} s")
+    discovered = [f for f in discover(root) if not f.is_test and f.language not in ("media", "document")]
+    files = [f.rel_path for f in discovered]
+    print(f"[lập chỉ mục đầy đủ] {len(files)} tệp mã (không test), nút={r.nodes} cạnh={r.edges}: {full:.2f} s")
 
     def edit(rels: list[str], tag: str) -> None:
         for rel in rels:
             p = root / rel
-            p.write_text(p.read_text(encoding="utf-8", errors="replace") + f"\n// {tag}\nvoid {tag}_fn() {{}}\n", encoding="utf-8")
+            ext = p.suffix.lower()
+            if ext == ".py":
+                snippet = f"\ndef {tag}_fn():\n    return 1\n"
+            elif ext in (".ts", ".tsx", ".js", ".jsx"):
+                snippet = f"\nexport function {tag}_fn() {{ return 1 }}\n"
+            elif ext == ".dart":
+                snippet = f"\n// {tag}\nvoid {tag}_fn() {{}}\n"
+            else:
+                continue
+            p.write_text(p.read_text(encoding="utf-8", errors="replace") + snippet, encoding="utf-8")
 
     _, idle = timed(lambda: refresh_project(store, root))
     idle_runs = [timed(lambda: refresh_project(store, root))[1] for _ in range(5)]
@@ -86,8 +96,19 @@ def main() -> None:
             res, ms = timed(lambda: refresh_project(store, root))
             times.append(ms)
         rows.append((label, statistics.median(times), max(times), res.changed))
-    new = root / "bench_new.dart"
-    new.write_text("class BenchNew { void go() {} }\n", encoding="utf-8")
+    from collections import Counter
+    lang_counts = Counter(f.language for f in discovered)
+    top_lang = lang_counts.most_common(1)[0][0] if lang_counts else "dart"
+    if top_lang == "python":
+        new = root / "bench_new.py"
+        new_content = "def bench_new(): return 1\n"
+    elif top_lang in ("typescript", "javascript"):
+        new = root / "bench_new.ts"
+        new_content = "export function bench_new() { return 1 }\n"
+    else:
+        new = root / "bench_new.dart"
+        new_content = "class BenchNew { void go() {} }\n"
+    new.write_text(new_content, encoding="utf-8")
     _, add_ms = timed(lambda: refresh_project(store, root))
     new.unlink()
     _, del_ms = timed(lambda: refresh_project(store, root))

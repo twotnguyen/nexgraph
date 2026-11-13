@@ -85,6 +85,7 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
     run_id = store.begin_run(files_total=len(added) + len(removed) + len(modified), kind="tang_dan", subdir=scope)
     try:
         store.set_run_state(run_id, "cau_truc")
+        known_labels = {r[0] for r in store.conn.execute("SELECT DISTINCT nhan FROM nut")}
         sig_before = store.file_graph_signature()
         extracted: dict[str, ExtractedFile] = {p: extract_file(root, disk[p], transcript_dir=transcript_dir) for p in (*added, *modified)}
         dependents = _dependents(store, added, removed, modified, extracted, disk)
@@ -109,7 +110,8 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         _prune_directories(store, removed)
 
         store.set_run_state(run_id, "phan_giai")
-        store.requeue_failed_refs()
+        new_labels = {n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels
+        store.requeue_failed_refs(tails=new_labels, imports=bool(added))
         pubspec = root / "pubspec.yaml"
         resolve_references(store, package_name=_package_name(
             pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None))

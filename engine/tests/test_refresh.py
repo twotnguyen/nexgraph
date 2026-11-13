@@ -231,3 +231,16 @@ def test_fts_follows_edits(project):
     refresh_project(store, root)
     assert not [h for h in search(store.conn, "login") if h[0].file == "lib/services/auth_service.dart"]
     assert any(h[0].label == "signin" for h in search(store.conn, "signin"))
+
+
+def test_refresh_requeues_only_refs_that_new_names_can_satisfy(tmp_path, index_project):
+    (tmp_path / "a.py").write_text("def a():\n    return missing_one() + missing_two()\n")
+    (tmp_path / "b.py").write_text("def b():\n    return 1\n")
+    store, _, _ = index_project(tmp_path)
+    (tmp_path / "b.py").write_text("def b():\n    return 1\n\ndef missing_one():\n    return 2\n")
+    refresh_project(store, tmp_path)
+    state = dict(store.conn.execute("SELECT ten_tham_chieu, trang_thai FROM tham_chieu_chua_phan_giai"))
+    assert "missing_one" not in state                # đã nối thành cạnh
+    assert state["missing_two"] == "that_bai"
+    touched = store.conn.execute("SELECT count(*) FROM canh WHERE loai_canh='CALLS'").fetchone()[0]
+    assert touched == 1
