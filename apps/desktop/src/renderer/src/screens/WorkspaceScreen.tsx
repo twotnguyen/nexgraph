@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { GraphNode, ProjectSummary } from '@shared/graph-types'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { CodeViewer } from '../components/code/CodeViewer'
+import { ExportDialog } from '../components/export/ExportDialog'
 import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanvas'
 import { ActivityBar } from '../components/layout/ActivityBar'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
@@ -55,6 +56,7 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [files, setFiles] = useState<OpenFile[]>([])
+  const [exporting, setExporting] = useState(false)
 
   const openCode = (file: string, line = 1, lineEnd?: number) => {
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd } : f)) : [...cur, { file, line, lineEnd }]))
@@ -103,7 +105,18 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
         <header className="ws-head">
           <b>{project.name}</b>
           <span className="muted mono">{project.path}</span>
+          <span className="ws-actions">
+            <button type="button" onClick={() => setExporting(true)}>{vi.workspace.export}</button>
+          </span>
         </header>
+        {exporting && (
+          <ExportDialog
+            projectId={project.project_id}
+            projectName={project.name}
+            scope={tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' }}
+            onClose={() => setExporting(false)}
+          />
+        )}
         <div className="tabs" role="tablist">
           {(['arch', 'graph'] as const).map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>

@@ -33,7 +33,43 @@ export const vi = {
   },
   workspace: {
     archTab: 'Kiến trúc',
-    graphTab: 'Graph'
+    graphTab: 'Graph',
+    export: 'Xuất…'
+  },
+  export: {
+    title: (name: string) => `Xuất đồ thị: ${name}`,
+    close: 'Đóng',
+    scope: 'Phạm vi',
+    scopeAll: 'Toàn bộ dự án',
+    scopeNode: (id: string) => `Quanh node đang chọn (${id})`,
+    scopeCommunity: (id: string) => `Cộng đồng ${id}`,
+    format: 'Định dạng',
+    formats: {
+      html: ['HTML tương tác', 'Mở bằng trình duyệt, kéo thả và tìm được'],
+      callflow_html: ['HTML luồng gọi', 'Sơ đồ luồng gọi hàm theo kiến trúc'],
+      obsidian: ['Obsidian vault', 'Mỗi node một ghi chú, liên kết [[…]]'],
+      wiki: ['Wiki Markdown', 'Mỗi cộng đồng một trang, có mục lục'],
+      svg: ['Ảnh SVG', 'Ảnh vector toàn đồ thị'],
+      graphml: ['GraphML', 'Mở bằng Gephi, yEd'],
+      cypher: ['Cypher', 'Tệp lệnh nạp vào Neo4j'],
+      json: ['JSON đồ thị', 'Định dạng node-link, dùng cho công cụ khác'],
+      markdown: ['Báo cáo Markdown', 'Node trung tâm, cộng đồng, câu hỏi gợi ý'],
+      png: ['Ảnh PNG vùng đang xem', 'Chụp đúng phần đang hiện trên màn hình'],
+      neo4j: ['Đẩy lên Neo4j', 'Ghi thẳng vào server Neo4j đang chạy'],
+      falkordb: ['Đẩy lên FalkorDB', 'Ghi thẳng vào server FalkorDB đang chạy']
+    } as Record<string, [string, string]>,
+    uri: 'URI',
+    user: 'Người dùng',
+    password: 'Mật khẩu',
+    passwordHint: 'Mật khẩu chỉ dùng cho lần đẩy này, không được lưu.',
+    run: 'Chọn thư mục và xuất',
+    png: 'Lưu ảnh PNG',
+    push: 'Đẩy lên server',
+    running: 'Đang xuất…',
+    saved: 'Đã lưu:',
+    reveal: 'Mở thư mục',
+    truncated: 'Dự án lớn: chỉ xuất 5.000 node quan trọng nhất.',
+    pushed: (nodes: number, edges: number) => `Đã đẩy ${nodes.toLocaleString('vi-VN')} node, ${edges.toLocaleString('vi-VN')} cạnh.`
   },
   arch: {
     root: 'Dự án',

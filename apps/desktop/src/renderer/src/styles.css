@@ -537,3 +537,111 @@ button:disabled {
   padding: 8px 4px;
   font: inherit;
 }
+
+/* --- Hộp thoại (F10) --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(29, 35, 48, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+
+.modal {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  padding: 16px 20px;
+  display: grid;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.modal header,
+.modal footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal footer {
+  justify-content: flex-end;
+}
+
+.modal fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.export-scope label {
+  display: block;
+  padding: 2px 0;
+}
+
+.export-formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 6px;
+}
+
+.export-formats label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.export-formats label.active {
+  border-color: var(--color-map-blue);
+  background: #eef4fd;
+}
+
+.export-formats span {
+  display: grid;
+  gap: 2px;
+}
+
+.export-push {
+  display: grid;
+  gap: 6px;
+}
+
+.export-push label {
+  display: grid;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.export-push input {
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.export-done ul {
+  margin: 4px 0 8px;
+  padding-left: 18px;
+  word-break: break-all;
+}
+
+.warn {
+  color: #7a5200;
+  background: #fff4d6;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.ws-head .ws-actions {
+  margin-left: auto;
+}

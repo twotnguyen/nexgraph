@@ -136,4 +136,13 @@ describe('WorkspaceScreen: code viewer tabs', () => {
     expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
     await waitFor(() => expect(document.querySelector('[data-line="2"][data-highlight="true"]')).toBeTruthy())
   })
+
+  it('opens the export dialog scoped to the whole project from the Kiến trúc tab', async () => {
+    setup()
+    await userEvent.click(screen.getByRole('button', { name: 'Xuất…' }))
+    expect(screen.getByRole('dialog', { name: 'Xuất đồ thị: demo' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Toàn bộ dự án')).toBeNull() // phạm vi đã là toàn bộ
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Xuất đồ thị: demo' })).toBeNull()
+  })
 })
