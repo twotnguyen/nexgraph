@@ -1401,3 +1401,103 @@ button.card:hover:not(:disabled) {
 .cycles-popover button[aria-pressed='true'] {
   border-color: var(--color-map-blue);
 }
+
+/* Chat */
+.chat {
+  width: 360px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface, #fff);
+}
+
+.chat > header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.chat .msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chat .me {
+  align-self: flex-end;
+  background: #f0f5fc;
+  border-radius: 10px;
+  padding: 6px 10px;
+  max-width: 85%;
+  white-space: pre-wrap;
+}
+
+.chat .ai {
+  align-self: stretch;
+  font-size: 13px;
+}
+
+.chat .foot {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  margin-top: 6px;
+}
+
+.chat .compose {
+  border-top: 1px solid var(--color-border);
+  padding: 8px 12px;
+  display: grid;
+  gap: 6px;
+}
+
+.chat .compose textarea {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  resize: none;
+}
+
+.chat .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-empty {
+  padding: 16px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.cite {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--color-map-blue);
+  background: #f0f5fc;
+  color: var(--color-map-blue);
+}
+
+.cite.bad {
+  text-decoration: line-through;
+  background: #fbe9e7;
+  border-color: var(--color-error-red);
+  color: var(--color-error-red);
+  cursor: not-allowed;
+}
+
+.tool-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 11px;
+}

@@ -5,9 +5,10 @@ import { vi } from '../strings'
 interface Props {
   engineReady: boolean
   onOpened: (p: ProjectSummary) => void
+  onOpenSettings?: () => void
 }
 
-export function ProjectsScreen({ engineReady, onOpened }: Props) {
+export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props) {
   const [recent, setRecent] = useState<ProjectSummary[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -38,6 +39,7 @@ export function ProjectsScreen({ engineReady, onOpened }: Props) {
       <button type="button" className="primary" disabled={!engineReady} onClick={async () => open(await window.nexgraph.project.pickFolder())}>
         {vi.projects.open}
       </button>
+      {onOpenSettings && <button type="button" className="link" onClick={onOpenSettings}>{vi.projects.settings}</button>}
       {!engineReady && <p className="muted">{vi.projects.engineWaiting}</p>}
       {error && <p role="alert" className="error">{error}</p>}
       <h2>{vi.projects.recent}</h2>

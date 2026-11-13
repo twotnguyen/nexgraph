@@ -12,6 +12,7 @@ interface Props {
   onOpenWorkspace: (tab?: WorkspaceTab) => void
   onReindex: (opts: IndexOptions) => void
   onBack: () => void
+  onOpenSettings?: () => void
 }
 
 const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0)
@@ -27,7 +28,7 @@ function Card({ title, desc, status, onClick, disabled }: { title: string; desc:
   )
 }
 
-export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onBack }: Props) {
+export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onBack, onOpenSettings }: Props) {
   const pid = project.project_id
   const [stats, setStats] = useState<GraphStats | null>(null)
   const [stale, setStale] = useState(false)
@@ -100,6 +101,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
 
       <h2>{vi.overview.ai}</h2>
       <div className="cards">
+        <Card title={vi.overview.aiSettings} desc={vi.overview.aiSettingsDesc} onClick={onOpenSettings} />
         <Card title={vi.overview.semantic} desc={vi.overview.semanticDesc} status={vi.overview.wave2} disabled />
       </div>
 

@@ -6,6 +6,7 @@ import { EngineStatusBar } from './components/EngineStatusBar'
 import { LargeProjectScreen } from './screens/LargeProjectScreen'
 import { IndexingScreen } from './screens/IndexingScreen'
 import { ProjectOverviewScreen, type WorkspaceTab } from './screens/ProjectOverviewScreen'
+import { SettingsScreen } from './screens/SettingsScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
 import { WorkspaceScreen } from './screens/WorkspaceScreen'
 
@@ -16,6 +17,7 @@ type Screen =
   | { name: 'indexing'; project: ProjectSummary; subdir: string | null; options?: IndexOptions }
   | { name: 'overview'; project: ProjectSummary }
   | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab }
+  | { name: 'settings'; back: Screen }
 
 /** Kiểm tra kích thước trước khi lập chỉ mục. Lỗi khi quét không chặn: coi như dự án không lớn. */
 function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan: ScanInfo | null) => void }) {
@@ -54,6 +56,7 @@ export default function App() {
     <div className="app">
       {screen.name === 'projects' && (
         <ProjectsScreen engineReady={status.state === 'ready'}
+          onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
           onOpened={(project) => setScreen(project.last_indexed_at ? { name: 'overview', project } : { name: 'scan', project })} />
       )}
       {screen.name === 'scan' && (
@@ -80,14 +83,17 @@ export default function App() {
         <ProjectOverviewScreen
           project={screen.project}
           onBack={() => setScreen({ name: 'projects' })}
+          onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
           onOpenWorkspace={(tab) => setScreen({ name: 'workspace', project: screen.project, tab })}
           onReindex={(options) => setScreen({ name: 'indexing', project: screen.project, subdir: null, options })}
         />
       )}
       {screen.name === 'workspace' && (
         <WorkspaceScreen key={screen.tab ?? 'arch'} project={screen.project} initialTab={screen.tab}
+          onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
           onBack={() => setScreen({ name: 'overview', project: { ...screen.project, last_indexed_at: screen.project.last_indexed_at ?? Math.floor(Date.now() / 1000) } })} />
       )}
+      {screen.name === 'settings' && <SettingsScreen onBack={() => setScreen(screen.back)} />}
       <EngineStatusBar status={status} onRestart={() => void window.nexgraph.engine.restart()} />
     </div>
   )

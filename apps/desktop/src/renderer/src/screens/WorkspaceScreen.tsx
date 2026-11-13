@@ -13,6 +13,7 @@ import { ReportView } from '../components/report/ReportView'
 import { TreeView } from '../components/tree/TreeView'
 import { SearchPanel } from '../components/search/SearchPanel'
 import { FlowsView } from '../components/flows/FlowsView'
+import { ChatPanel } from '../components/chat/ChatPanel'
 import { MapView } from '../components/map/MapView'
 import { useChanges } from '../state/useChanges'
 import { vi } from '../strings'
@@ -45,7 +46,18 @@ const ChangesIcon = (
   </svg>
 )
 
-export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack }: { project: ProjectSummary; initialTab?: Tab; initialFlowId?: number; onBack?: () => void }) {
+export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings }: { project: ProjectSummary; initialTab?: Tab; initialFlowId?: number; onBack?: () => void; onOpenSettings?: () => void }) {
+  const [chatOpen, setChatOpen] = useState(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault()
+        setChatOpen((v) => !v)
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
   const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
   const openFlow = (id: number) => {
     setFlowId(id)
@@ -122,6 +134,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack }: 
     }
     setTab('graph') // thông báo chỉ hiện ở tab Graph
   }
+  const highlightFromChat = (nodes: GraphNode[], edges: GraphEdge[], note: string | null) => {
+    setOverlay(nodes.length ? { nodes, edges } : null)
+    setNotice(note)
+    setTab('graph')
+  }
   const openExport = (scope: ExportScope, format: ExportFormat = 'html') => {
     setExportFormat(format)
     setExportScope(scope)
@@ -191,6 +208,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack }: 
           <b>{project.name}</b>
           <span className="muted mono">{project.path}</span>
           <span className="ws-actions">
+            <button type="button" aria-label={vi.chat.toggle} aria-pressed={chatOpen} onClick={() => setChatOpen((v) => !v)}>{vi.chat.title}</button>
             <button type="button" onClick={() => openExport(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })}>
               {vi.workspace.export}
             </button>
@@ -253,6 +271,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack }: 
           )}
         </div>
       </section>
+      {chatOpen && <ChatPanel projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={onOpenSettings ?? (() => {})} />}
     </div>
   )
 }

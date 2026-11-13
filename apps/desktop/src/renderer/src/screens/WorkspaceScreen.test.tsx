@@ -37,6 +37,15 @@ function setup() {
 }
 
 describe('WorkspaceScreen', () => {
+  it('Ctrl+L bật/tắt cột trợ lý AI', async () => {
+    setup()
+    expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).toBeNull()
+    await userEvent.keyboard('{Control>}l{/Control}')
+    expect(await screen.findByRole('complementary', { name: 'Trợ lý AI' })).toBeInTheDocument()
+    await userEvent.keyboard('{Control>}l{/Control}')
+    expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).toBeNull()
+  })
+
   it('starts on the Kiến trúc tab with the search panel open', () => {
     setup()
     expect(screen.getByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()

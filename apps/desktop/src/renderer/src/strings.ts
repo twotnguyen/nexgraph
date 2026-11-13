@@ -3,6 +3,7 @@ export const vi = {
   appTagline: 'Kết nối mã nguồn. Khám phá tri thức.',
   projects: {
     title: 'Dự án',
+    settings: 'Cài đặt',
     open: 'Mở thư mục…',
     recent: 'Dự án gần đây',
     noRecent: 'Chưa có dự án nào. Hãy mở một thư mục mã nguồn.',
@@ -60,6 +61,8 @@ export const vi = {
     view: 'Xem',
     archDesc: 'Bản đồ khối và mũi tên phụ thuộc.',
     flowsDesc: 'Các luồng thực thi từ điểm vào, phát từng bước.',
+    aiSettings: 'Cài đặt AI',
+    aiSettingsDesc: 'API key, model và kiểm tra kết nối cho trợ lý chỉ đọc.',
     mapDesc: 'Toàn cảnh cả dự án, phóng to tới từng tệp.',
     graphDesc: 'Node và cạnh quanh một điểm, tìm đường, vùng ảnh hưởng.',
     treeDesc: 'Thư mục → tệp → lớp → hàm.',
@@ -108,6 +111,43 @@ export const vi = {
     cycleItem: (size: number) => `${size} tệp import vòng`,
     empty: 'Dự án chưa có tệp nào được lập chỉ mục.',
     noWebgl: 'Máy này không bật được WebGL nên không vẽ được bản đồ. Dùng thẻ Kiến trúc thay thế.'
+  },
+  settings: {
+    title: 'Cài đặt', back: '← Dự án', aiTitle: 'Trợ lý AI',
+    aiLead: 'Dùng API key của một nhà cung cấp tương thích OpenAI (OpenRouter, Groq, Gemini, Ollama…). Trợ lý chỉ đọc đồ thị và mã, không sửa tệp, không chạy lệnh.',
+    baseUrl: 'Base URL', baseUrlHint: 'Ví dụ: https://openrouter.ai/api/v1 hoặc http://localhost:11434/v1',
+    model: 'Model', apiKey: 'API key', keySaved: 'Đã lưu key', keyReplace: 'Thay',
+    keyHint: 'Lưu trong kho khoá của hệ điều hành. Ollama cục bộ có thể để trống.',
+    save: 'Lưu', saved: 'Đã lưu', test: 'Kiểm tra kết nối',
+    testOk: (ms: number) => `Kết nối được, ${ms} ms`, testFail: (m: string) => `Không kết nối được: ${m}`,
+    noKeychain: 'Máy này không có kho khoá an toàn nên không lưu được API key.',
+    privacyTitle: 'Quyền riêng tư',
+    privacy1: 'Mã nguồn chỉ rời máy khi bạn dùng trợ lý AI, và chỉ tới nhà cung cấp bạn cấu hình ở trên.',
+    privacy2: 'NexGraph không thu thập dữ liệu sử dụng.'
+  },
+  chat: {
+    title: 'Trợ lý AI', readOnly: 'chỉ đọc',
+    placeholder: 'Hỏi về dự án, ví dụ: luồng đăng nhập chạy thế nào?',
+    send: 'Gửi', stop: 'Dừng', hint: 'Ctrl+L để ẩn/hiện', toggle: 'Ẩn/hiện trợ lý AI',
+    notConfigured: 'Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.',
+    openSettings: 'Mở Cài đặt',
+    thinking: 'Đang tra đồ thị…', usingTool: (name: string) => `Đang gọi ${name}…`,
+    verified: (ok: number, all: number) => `${ok}/${all} trích dẫn đã xác minh`,
+    noCitations: 'Câu trả lời không có trích dẫn nào',
+    unverified: 'chưa xác minh',
+    reason: { file_not_found: 'Tệp không có trong dự án đã lập chỉ mục', out_of_range: 'Khoảng dòng không tồn tại trong tệp' },
+    highlight: 'Tô luồng trên graph',
+    highlightNone: 'Cần ít nhất hai trích dẫn hợp lệ để tô luồng',
+    tools: (n: number) => `Đã gọi ${n} công cụ`,
+    consentTitle: 'Gửi dữ liệu tới nhà cung cấp AI',
+    consentBody: (host: string, model: string) =>
+      `Câu hỏi của bạn và các đoạn mã mà trợ lý đọc sẽ được gửi tới ${host} (model ${model}). NexGraph không gửi gì khác và không lưu nội dung này ở nơi nào ngoài máy bạn.`,
+    consentOk: 'Đồng ý và gửi', consentCancel: 'Huỷ',
+    errors: {
+      ai_not_configured: 'Chưa cấu hình trợ lý AI.', ai_unauthorized: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.',
+      ai_unreachable: 'Không kết nối được tới nhà cung cấp AI.', ai_bad_response: 'Nhà cung cấp AI trả về dữ liệu không hợp lệ.',
+      ai_too_many_rounds: 'Trợ lý gọi công cụ quá nhiều lần mà chưa trả lời. Hãy hỏi cụ thể hơn.', ai_cancelled: 'Đã dừng.'
+    } as Record<string, string>
   },
   flows: {
     search: 'Tìm luồng theo tên hàm, route, bước…',
