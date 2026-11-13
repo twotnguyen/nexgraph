@@ -645,3 +645,110 @@ button:disabled {
 .ws-head .ws-actions {
   margin-left: auto;
 }
+
+/* --- Menu chuột phải, chọn đích, Hỏi graph (F10) --- */
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 41;
+  min-width: 200px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  padding: 4px;
+  display: grid;
+}
+
+.context-menu button {
+  border: 0;
+  text-align: left;
+  border-radius: 4px;
+}
+
+.context-menu button:hover,
+.context-menu button:focus-visible {
+  background: #eef4fd;
+}
+
+.pick-banner {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: #eef4fd;
+  border-bottom: 1px solid var(--color-map-blue);
+  font-size: 13px;
+}
+
+.graph-canvas + .path-notice,
+.path-notice {
+  position: absolute;
+  z-index: 5;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.graph-toolbar {
+  display: flex;
+  gap: 6px;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+.segmented button.active {
+  background: var(--color-map-blue);
+  color: #fff;
+}
+
+.small {
+  font-size: 12px;
+  margin: 0;
+}
+
+.ask-result {
+  display: grid;
+  gap: 6px;
+}
+
+.ask-result h4,
+.explain h4 {
+  margin: 8px 0 2px;
+  font-size: 13px;
+}
+
+.explain details ul {
+  margin: 2px 0 4px;
+  padding-left: 16px;
+  font-size: 12px;
+}
+
+button.link.back {
+  margin-bottom: 8px;
+}

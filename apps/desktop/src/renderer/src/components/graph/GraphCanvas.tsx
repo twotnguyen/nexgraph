@@ -1,6 +1,6 @@
 import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { GraphNode } from '@shared/graph-types'
+import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react'
+import type { GraphEdge, GraphNode } from '@shared/graph-types'
 import { layoutGraph } from '../../services/elkLayoutService'
 import { vi } from '../../strings'
 import { AutoFit } from '../common/AutoFit'
@@ -18,11 +18,22 @@ interface Props {
   onSelect?: (node: GraphNode) => void
   /** Nút cần tô theo vùng ảnh hưởng (id -> loại); vắng mặt thì giao diện như cũ. */
   highlights?: Record<string, HighlightKind>
+  /** Chuột phải trên nút (toạ độ màn hình). */
+  onNodeContextMenu?: (node: GraphNode, x: number, y: number) => void
+  /** Vùng con cần vẽ thay cho láng giềng (đường đi, kết quả Hỏi graph); cạnh được tô nổi. */
+  overlay?: { nodes: GraphNode[]; edges: GraphEdge[] } | null
+  onClearOverlay?: () => void
 }
+
+const toFlowEdges = (edges: GraphEdge[], strong: boolean): Edge[] =>
+  edges.map((e) => ({
+    id: String(e.id), source: e.source, target: e.target, label: e.type,
+    ...(strong ? { animated: true, style: { stroke: 'var(--color-map-blue)', strokeWidth: 2.5 } } : {})
+  }))
 
 interface View { pos: Record<string, { x: number; y: number }>; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean }
 
-export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, highlights }: Props) {
+export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, highlights, onNodeContextMenu, overlay, onClearOverlay }: Props) {
   const [center, setCenter] = useState(focusNodeId ?? startNodeId)
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -36,7 +47,7 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
     let alive = true
     setError(null)
     ;(async () => {
-      const hood = await window.nexgraph.graph.neighbors(projectId, { node: center, depth: 1, limit: LIMIT })
+      const hood = overlay ?? (await window.nexgraph.graph.neighbors(projectId, { node: center, depth: 1, limit: LIMIT }))
       const pos = await layoutGraph(
         hood.nodes.map((n) => ({ id: n.id, width: W, height: H })),
         hood.edges.map((e) => ({ id: String(e.id), source: e.source, target: e.target }))
@@ -44,15 +55,15 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
       if (!alive) return
       setView({
         raw: new Map(hood.nodes.map((n) => [n.id, n])),
-        truncated: hood.truncated,
+        truncated: 'truncated' in hood && hood.truncated === true,
         pos,
-        edges: hood.edges.map((e) => ({ id: String(e.id), source: e.source, target: e.target, label: e.type }))
+        edges: toFlowEdges(hood.edges, overlay != null)
       })
     })().catch((err: Error) => alive && setError(err.message))
     return () => {
       alive = false
     }
-  }, [projectId, center])
+  }, [projectId, center, overlay])
 
   const onNodeClick = useCallback(
     (_: unknown, n: Node) => {
@@ -61,6 +72,15 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
       setCenter(n.id)
     },
     [view, onSelect]
+  )
+  const onContextMenu = useCallback(
+    (e: MouseEvent, n: Node) => {
+      const raw = view?.raw.get(n.id)
+      if (!raw || !onNodeContextMenu) return
+      e.preventDefault()
+      onNodeContextMenu(raw, e.clientX, e.clientY)
+    },
+    [view, onNodeContextMenu]
   )
   const nodes = useMemo<Node[]>(
     () =>
@@ -84,8 +104,13 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
     [view, highlights, center]
   )
   const toolbar = useMemo(
-    () => (<div className="graph-toolbar"><button type="button" onClick={() => setCenter(startNodeId)}>{vi.graph.backToRoot}</button></div>),
-    [startNodeId]
+    () => (
+      <div className="graph-toolbar">
+        <button type="button" onClick={() => { onClearOverlay?.(); setCenter(startNodeId) }}>{vi.graph.backToRoot}</button>
+        {overlay && onClearOverlay && <button type="button" onClick={onClearOverlay}>{vi.path.clear}</button>}
+      </div>
+    ),
+    [startNodeId, overlay, onClearOverlay]
   )
 
   return (
@@ -94,7 +119,8 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
       {error && <p role="alert" className="error">{error}</p>}
       {view?.truncated && <p role="status" className="muted">{vi.graph.truncated}</p>}
       {view && (
-        <ReactFlow key={center} nodes={nodes} edges={view.edges} onNodeClick={onNodeClick} nodesDraggable={false} proOptions={{ hideAttribution: true }}>
+        <ReactFlow key={overlay ? 'overlay' : center} nodes={nodes} edges={view.edges} onNodeClick={onNodeClick} onNodeContextMenu={onContextMenu}
+          nodesDraggable={false} proOptions={{ hideAttribution: true }}>
           <Background />
           <Controls showInteractive={false} />
           <AutoFit />

@@ -21,6 +21,11 @@ const gnode = (id: string, label = id): GraphNode => ({
   id, kind: 'method', label, qualified_name: id, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,
   is_test: false, origin: 'ast', signature: null, community: null
 })
+const flowEl = () => waitFor(() => {
+  const el = document.querySelector('.react-flow')
+  expect(el).not.toBeNull()
+  return el as HTMLElement
+})
 const hood = (center: string): Neighborhood => ({ nodes: [gnode(center, 'login')], edges: [], truncated: false })
 
 function setup() {
@@ -144,5 +149,44 @@ describe('WorkspaceScreen: code viewer tabs', () => {
     expect(screen.queryByLabelText('Toàn bộ dự án')).toBeNull() // phạm vi đã là toàn bộ
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('dialog', { name: 'Xuất đồ thị: demo' })).toBeNull()
+  })
+
+  it('tìm đường: không nối được thì báo và không vẽ cạnh', async () => {
+    const a = gnode('lib/a.dart::A.run#method', 'run')
+    const b = gnode('lib/b.dart::B.go#method', 'go')
+    const paths = vi.fn(async () => ({ nodes: [a, b], edges: [], unconnected: [b.id] }))
+    const search = vi.fn(async (_p: string, q: string) => [{ node: q.startsWith('go') ? b : a, score: 1 }])
+    installNexgraph({ graph: { neighbors: vi.fn(async (_p: string, q: { node: string }) => ({ nodes: [q.node === b.id ? b : a], edges: [], truncated: false })), search, paths } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'run')
+    fireEvent.click(await screen.findByRole('button', { name: /run/ }))
+    const nodeLabel = await within(await flowEl()).findByText('run')
+    fireEvent.contextMenu(nodeLabel)
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Tìm đường tới…' }))
+    expect(screen.getByRole('status', { name: 'Chế độ chọn đích' })).toHaveTextContent('Bấm node đích')
+    const box = screen.getByLabelText('Tìm kiếm', { selector: 'input' })
+    await userEvent.clear(box)
+    await userEvent.type(box, 'go')
+    fireEvent.click(await screen.findByRole('button', { name: /go/ }))
+    await waitFor(() => expect(paths).toHaveBeenCalledWith('p1', [a.id, b.id]))
+    expect(await screen.findByText('Không tìm thấy liên kết trực tiếp trong graph')).toBeInTheDocument()
+    expect(document.querySelectorAll('.react-flow__edge')).toHaveLength(0)
+  })
+
+  it('vùng ảnh hưởng tô node bị ảnh hưởng và mở panel ảnh hưởng', async () => {
+    const a = gnode('lib/a.dart::A.run#method', 'run')
+    const c = gnode('lib/c.dart::C.use#method', 'use')
+    const impactOf = vi.fn(async () => ({ node: a, impacted: [{ node: c, score: 1, hops: 1 }], tests: [], truncated: false }))
+    installNexgraph({ graph: { neighbors: vi.fn(async () => ({ nodes: [a, c], edges: [], truncated: false })),
+      search: vi.fn(async () => [{ node: a, score: 1 }]), impactOf } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'run')
+    fireEvent.click(await screen.findByRole('button', { name: /run/ }))
+    const flow = await flowEl()
+    fireEvent.contextMenu(await within(flow).findByText('run'))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Vùng ảnh hưởng nếu sửa' }))
+    expect(impactOf).toHaveBeenCalledWith('p1', a.id)
+    expect(await screen.findByText('Ảnh hưởng nếu sửa run')).toBeInTheDocument()
+    await waitFor(() => expect(within(flow).getByText('ảnh hưởng')).toBeInTheDocument())
   })
 })

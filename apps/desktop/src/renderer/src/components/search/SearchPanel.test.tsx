@@ -113,4 +113,21 @@ describe('SearchPanel', () => {
     await waitFor(() => expect(screen.queryByText('stale')).not.toBeInTheDocument())
     expect(screen.getByText('item')).toBeInTheDocument()
   })
+
+  it('hỏi graph gọi ask và hiện hạt giống, cho xem trên graph', async () => {
+    const seed = { id: 'lib/a.dart::login#function', kind: 'function' as const, label: 'login', qualified_name: 'login', language: 'dart',
+      file: 'lib/a.dart', line_start: 1, line_end: 2, is_test: false, origin: 'ast', signature: null, community: null }
+    const result = { seeds: [seed], nodes: [seed], edges: [], truncated: true }
+    const { api } = installNexgraph({ graph: { ask: vi.fn(async () => result) } })
+    const onShowSubgraph = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={vi.fn()} onShowSubgraph={onShowSubgraph} />)
+    await user.click(screen.getByRole('radio', { name: 'Hỏi graph' }))
+    await user.type(screen.getByLabelText('Câu hỏi cho graph'), 'login flow{Enter}')
+    expect(api.graph.ask).toHaveBeenCalledWith('p1', 'login flow')
+    expect(await screen.findByRole('button', { name: /login/ })).toBeInTheDocument()
+    expect(screen.getByText(/ngân sách 2\.000 token/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Xem trên graph' }))
+    expect(onShowSubgraph).toHaveBeenCalledWith({ nodes: [seed], edges: [] })
+  })
 })

@@ -121,7 +121,41 @@ export const vi = {
   search: {
     label: 'Tìm kiếm',
     placeholder: 'Tìm hàm, lớp, tệp…',
-    empty: 'Không có kết quả'
+    empty: 'Không có kết quả',
+    modeSymbol: 'Tìm symbol',
+    modeAsk: 'Hỏi graph',
+    askLabel: 'Câu hỏi cho graph',
+    askPlaceholder: 'Ví dụ: luồng đăng nhập đi qua đâu?',
+    askHint: 'Enter để hỏi. Trả về vùng graph liên quan, không gọi AI.',
+    asking: 'Đang tìm…',
+    seeds: 'Điểm bắt đầu',
+    askNodes: (n: number, e: number) => `${n} node, ${e} cạnh liên quan`,
+    showOnGraph: 'Xem trên graph',
+    askTruncated: 'Đã cắt theo ngân sách 2.000 token'
+  },
+  nodeMenu: {
+    findPath: 'Tìm đường tới…',
+    impact: 'Vùng ảnh hưởng nếu sửa',
+    export: 'Xuất vùng này…'
+  },
+  path: {
+    picking: (label: string) => `Tìm đường từ ${label}: Bấm node đích hoặc tìm trong ô Tìm kiếm · Esc để huỷ`,
+    pickingLabel: 'Chế độ chọn đích',
+    cancel: 'Huỷ',
+    noLink: 'Không tìm thấy liên kết trực tiếp trong graph',
+    found: (hops: number) => `Đường đi ${hops} bước`,
+    clear: 'Bỏ tô'
+  },
+  impact: {
+    title: (label: string) => `Ảnh hưởng nếu sửa ${label}`,
+    back: 'Về thay đổi chưa commit'
+  },
+  explain: {
+    title: 'Giải thích',
+    loading: 'Đang tải…',
+    none: 'Không có liên kết',
+    out: (type: string, n: number) => `${type} → (${n})`,
+    in: (type: string, n: number) => `← ${type} (${n})`
   },
   graph: {
     backToRoot: 'Về gốc',

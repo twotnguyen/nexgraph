@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { GraphNode, ProjectSummary } from '@shared/graph-types'
+import type { Changes, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { CodeViewer } from '../components/code/CodeViewer'
 import { ExportDialog } from '../components/export/ExportDialog'
@@ -7,6 +7,7 @@ import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanva
 import { ActivityBar } from '../components/layout/ActivityBar'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
 import type { HighlightKind } from '../components/graph/kindStyle'
+import { NodeContextMenu } from '../components/graph/NodeContextMenu'
 import { NodeInspector } from '../components/graph/NodeInspector'
 import { SearchPanel } from '../components/search/SearchPanel'
 import { useChanges } from '../state/useChanges'
@@ -15,6 +16,13 @@ import { vi } from '../strings'
 type Tab = 'arch' | 'graph' | `file:${string}`
 interface OpenFile { file: string; line: number; lineEnd?: number }
 const baseName = (p: string): string => p.split('/').pop() as string
+type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
+
+/** Ảnh hưởng của một nút hiển thị bằng chính ChangesPanel (nút nguồn đứng ở mục "đã đổi"). */
+const impactAsChanges = (i: NodeImpact): Changes => ({
+  base: 'last_index', base_commit: null, note: vi.impact.title(i.node.label), changed_files: [], changed_nodes: [i.node],
+  impacted: i.impacted, tests: i.tests, test_gaps: [], truncated: i.truncated
+})
 
 const SearchIcon = (
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
@@ -34,7 +42,9 @@ const ChangesIcon = (
 
 export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
   const [panel, setPanel] = useState<string | null>('search')
-  const { changes, loading, error, reload } = useChanges(project.project_id)
+  const live = useChanges(project.project_id)
+  const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
+  const changes = nodeImpact ? impactAsChanges(nodeImpact) : live.changes
 
   // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp.
   useEffect(() => {
@@ -56,7 +66,45 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [files, setFiles] = useState<OpenFile[]>([])
-  const [exporting, setExporting] = useState(false)
+  const [exportScope, setExportScope] = useState<ExportScope | null>(null)
+  const [menu, setMenu] = useState<{ node: GraphNode; x: number; y: number } | null>(null)
+  const [pathFrom, setPathFrom] = useState<GraphNode | null>(null)
+  const [overlay, setOverlay] = useState<Overlay | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!pathFrom) return
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setPathFrom(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [pathFrom])
+
+  const clearOverlay = () => {
+    setOverlay(null)
+    setNotice(null)
+  }
+  const findPath = async (from: GraphNode, to: GraphNode) => {
+    setPathFrom(null)
+    try {
+      const r = await window.nexgraph.graph.paths(project.project_id, [from.id, to.id])
+      // Không nối được: chỉ tô hai nút, không vẽ mũi tên (spec gốc §5.8).
+      setOverlay({ nodes: r.nodes, edges: r.unconnected.length ? [] : r.edges })
+      setNotice(r.unconnected.length ? vi.path.noLink : vi.path.found(r.edges.length))
+    } catch (e) {
+      setNotice((e as { message?: string }).message ?? String(e))
+    }
+    setTab('graph')
+  }
+  const showImpact = async (node: GraphNode) => {
+    try {
+      setNodeImpact(await window.nexgraph.graph.impactOf(project.project_id, node.id))
+      setPanel('changes')
+    } catch (e) {
+      setNotice((e as { message?: string }).message ?? String(e))
+    }
+  }
 
   const openCode = (file: string, line = 1, lineEnd?: number) => {
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd } : f)) : [...cur, { file, line, lineEnd }]))
@@ -69,12 +117,15 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
     setTab((cur) => (cur === `file:${file}` ? order[Math.max(0, at - 1)] : cur))
   }
   const openNode = (node: GraphNode) => {
+    if (pathFrom) return void findPath(pathFrom, node)
+    clearOverlay()
     setSelected(node)
     setFocus(node.id)
     setTab('graph')
   }
   // Mở theo id (từ khối tệp hoặc bằng chứng của mũi tên): lấy chi tiết nút để thẻ thông tin có nội dung.
   const openNodeId = (id: string) => {
+    clearOverlay()
     setFocus(id)
     setTab('graph')
     setSelected(null)
@@ -93,12 +144,16 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
       />
       {panel === 'search' && (
         <aside className="sidebar">
-          <SearchPanel projectId={project.project_id} onOpen={openNode} />
+          <SearchPanel projectId={project.project_id} onOpen={openNode} onShowSubgraph={(g) => { setOverlay(g); setNotice(null); setTab('graph') }} />
         </aside>
       )}
       {panel === 'changes' && (
         <aside className="sidebar wide">
-          <ChangesPanel changes={changes} loading={loading} error={error} onReload={reload} onOpenNode={openNodeId} onOpenCode={openCode} />
+          {nodeImpact && (
+            <button type="button" className="link back" onClick={() => setNodeImpact(null)}>{vi.impact.back}</button>
+          )}
+          <ChangesPanel changes={changes} loading={!nodeImpact && live.loading} error={nodeImpact ? null : live.error}
+            onReload={nodeImpact ? () => void showImpact(nodeImpact.node) : live.reload} onOpenNode={openNodeId} onOpenCode={openCode} />
         </aside>
       )}
       <section className="center">
@@ -106,16 +161,19 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
           <b>{project.name}</b>
           <span className="muted mono">{project.path}</span>
           <span className="ws-actions">
-            <button type="button" onClick={() => setExporting(true)}>{vi.workspace.export}</button>
+            <button type="button" onClick={() => setExportScope(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })}>
+              {vi.workspace.export}
+            </button>
           </span>
         </header>
-        {exporting && (
-          <ExportDialog
-            projectId={project.project_id}
-            projectName={project.name}
-            scope={tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' }}
-            onClose={() => setExporting(false)}
-          />
+        {exportScope && (
+          <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} onClose={() => setExportScope(null)} />
+        )}
+        {pathFrom && (
+          <div role="status" aria-label={vi.path.pickingLabel} className="pick-banner">
+            {vi.path.picking(pathFrom.label)}
+            <button type="button" onClick={() => setPathFrom(null)}>{vi.path.cancel}</button>
+          </div>
         )}
         <div className="tabs" role="tablist">
           {(['arch', 'graph'] as const).map((t) => (
@@ -136,8 +194,18 @@ export function WorkspaceScreen({ project }: { project: ProjectSummary }) {
           {tab === 'arch' && <ArchitectureCanvas projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'graph' && (
             <>
-              <GraphCanvas projectId={project.project_id} startNodeId=".#repository" focusNodeId={focus} onSelect={setSelected} highlights={highlights} />
-              <NodeInspector node={selected} onOpenCode={openCode} />
+              <GraphCanvas projectId={project.project_id} startNodeId=".#repository" focusNodeId={focus} highlights={highlights}
+                onSelect={(n) => (pathFrom ? void findPath(pathFrom, n) : setSelected(n))}
+                onNodeContextMenu={(node, x, y) => setMenu({ node, x, y })}
+                overlay={overlay} onClearOverlay={clearOverlay} />
+              {notice && <p role="status" className="path-notice">{notice}</p>}
+              <NodeInspector node={selected} onOpenCode={openCode} projectId={project.project_id} onOpenNode={openNode} />
+              {menu && (
+                <NodeContextMenu node={menu.node} x={menu.x} y={menu.y} onClose={() => setMenu(null)}
+                  onFindPath={(n) => { clearOverlay(); setPathFrom(n) }}
+                  onImpact={(n) => void showImpact(n)}
+                  onExport={(n) => setExportScope({ kind: 'node', value: n.id })} />
+              )}
             </>
           )}
           {files.map((f) =>
