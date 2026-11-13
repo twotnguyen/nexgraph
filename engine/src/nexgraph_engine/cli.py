@@ -25,6 +25,10 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Tự thoát khi stdin đóng (tiến trình cha chết), để không để lại engine mồ côi",
     )
+    mcp = sub.add_parser("mcp", help="Chạy MCP server chỉ đọc qua stdio cho trợ lý AI")
+    mcp.add_argument("--project", required=True, type=Path)
+    mcp.add_argument("--data-dir", type=Path, default=None,
+                     help="Thư mục dữ liệu của app, cần khi đồ thị không lưu trong <project>/.nexgraph")
     return parser
 
 
@@ -62,6 +66,13 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.command == "serve":
         return _serve(args.data_dir, args.port, args.exit_on_stdin_close)
+    if args.command == "mcp":
+        from nexgraph_engine.mcp.server import ProjectNotIndexed, run_stdio
+        try:
+            return run_stdio(args.project, args.data_dir)
+        except ProjectNotIndexed as exc:
+            print(str(exc), file=sys.stderr)  # stdout dành riêng cho giao thức MCP
+            return 3
     return 2
 
 

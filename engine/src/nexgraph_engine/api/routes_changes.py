@@ -26,8 +26,13 @@ def changes(project_id: str, request: Request, refresh: bool = Query(True)) -> d
         except UnknownProject as exc:
             raise ApiError(404, "unknown_project", f"Không có dự án {project_id}") from exc
     with open_store(request, project_id) as (store, info):
-        cs = read_changes(info.path, store)
-        report = analyze(store.conn, cs)
+        return changes_json(store, info.path)
+
+
+def changes_json(store, root) -> dict:
+    """Dùng chung cho route HTTP và tool MCP."""
+    cs = read_changes(root, store)
+    report = analyze(store.conn, cs)
     return {
         "base": cs.base, "base_commit": cs.base_commit, "note": cs.note,
         "changed_files": [{"path": f.path, "status": f.status, "old_path": f.old_path} for f in cs.files],

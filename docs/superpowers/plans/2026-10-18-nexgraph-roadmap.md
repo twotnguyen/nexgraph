@@ -68,6 +68,8 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 
 **Tool MCP** (kế hoạch con 5) dùng chung code với các route trên: `search`, `get_node`, `get_neighbors`, `get_impact`, `get_architecture`, `read_code`, `trace_flow`. Chạy được qua `nexgraph-engine mcp --project <path> --data-dir <dir>` (stdio). Từ 2026-10-24 (spec §5.10), CSDL đồ thị của project nằm ở `<path>/.nexgraph/`; `--data-dir` chỉ còn là thư mục dữ liệu cấp app và là nơi dự phòng khi `<path>` không ghi được. Kế hoạch con 2 chốt tham số cụ thể.
 
+**MCP stdio đã cài (2026-11-11, nhánh `feat/p5-mcp`)**: `engine/src/nexgraph_engine/mcp/server.py`, SDK `mcp>=1.10,<2` (FastMCP; bản 2.x đổi API nên ghim dưới 2). Bảy tool, đều khai báo `readOnlyHint`: `search(query, kinds?, limit)`, `get_node(node_id)`, `get_neighbors(node_id, types?, direction, depth, limit)`, `get_architecture(parent?)`, `get_evidence(from_block, to_block, limit)` (thêm so với danh sách trên, cần cho trích dẫn), `get_impact()`, `read_code(file, start?, end?)`. Kết quả cùng hình dạng JSON với route HTTP tương ứng (dùng chung hàm `*_json` trong `api/routes_*.py`). Lỗi nghiệp vụ trả về lỗi tool kèm thông điệp tiếng Việt. `--data-dir` tuỳ chọn; chỉ đọc CSDL đã có, dự án chưa lập chỉ mục thì thoát mã 3. `get_impact` **không** tự refresh (MCP không ghi). `trace_flow` chờ `/paths`. Biến `NEXGRAPH_MCP_TIMEOUT` (giây) giới hạn thời gian mỗi tool, mặc định không giới hạn.
+
 ## Hình dạng JSON v1 (chốt ở kế hoạch con 2, 2026-10-27)
 
 ```

@@ -9,3 +9,10 @@ engine/src/graphify/ and licensed under the Apache License, Version 2.0.
 See engine/third_party/graphify/NOTICE for its notice and
 engine/third_party/graphify/LICENSE-MIT for the MIT terms that apply to
 portions contributed before relicensing.
+
+This product includes code adapted from code-review-graph
+(Copyright (c) 2026 Tirth Kanani), licensed under the MIT License.
+See engine/third_party/code-review-graph/LICENSE.
+
+THIRD_PARTY_LICENSES.md lists every third-party source, commit and the
+NexGraph files that use it.

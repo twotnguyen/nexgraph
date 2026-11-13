@@ -42,7 +42,11 @@ def stats(project_id: str, request: Request) -> dict:
 @router.get("/nodes/{node_id:path}")
 def get_node(project_id: str, node_id: str, request: Request) -> dict:
     with open_store(request, project_id) as (store, _):
-        node = store.get_node(node_id)
+        return get_node_json(store, node_id)
+
+
+def get_node_json(store: GraphStore, node_id: str) -> dict:
+    node = store.get_node(node_id)
     if node is None:
         raise ApiError(404, "unknown_node", f"Không có nút {node_id}")
     return node_json(node)
@@ -52,15 +56,25 @@ def get_node(project_id: str, node_id: str, request: Request) -> dict:
 def neighbors(project_id: str, request: Request, node: str = Query(...), types: str | None = None,
               direction: str = Query("both", pattern="^(in|out|both)$"), depth: int = Query(1, ge=1, le=3),
               limit: int = Query(500, ge=1, le=2000)) -> dict:
+    wanted = parse_edge_types(types.split(",")) if types else None
+    with open_store(request, project_id) as (store, _):
+        return neighbors_json(store, node, wanted, direction, depth, limit)
+
+
+def parse_edge_types(names) -> set[EdgeType]:
     try:
-        wanted = {EdgeType(t) for t in types.split(",") if t} if types else None
+        return {EdgeType(t) for t in names if t}
     except ValueError as exc:
         raise ApiError(400, "bad_param", f"Loại cạnh không hợp lệ: {exc}") from exc
-    with open_store(request, project_id) as (store, _):
-        try:
-            hood = store.neighbors(node, types=wanted, direction=direction, depth=depth, limit=limit)  # type: ignore[arg-type]
-        except KeyError as exc:
-            raise ApiError(404, "unknown_node", f"Không có nút {node}") from exc
+
+
+def neighbors_json(store: GraphStore, node: str, types: set[EdgeType] | None, direction: str, depth: int,
+                   limit: int) -> dict:
+    """Dùng chung cho route HTTP và tool MCP."""
+    try:
+        hood = store.neighbors(node, types=types, direction=direction, depth=depth, limit=limit)  # type: ignore[arg-type]
+    except KeyError as exc:
+        raise ApiError(404, "unknown_node", f"Không có nút {node}") from exc
     return {"nodes": [node_json(n) for n in hood.nodes], "edges": [edge_json(e) for e in hood.edges],
             "truncated": hood.truncated}
 
@@ -79,8 +93,13 @@ def _safe_file(root: Path, file: str) -> Path:
 def code(project_id: str, request: Request, file: str = Query(...), start: int | None = None,
          end: int | None = None) -> dict:
     with open_store(request, project_id) as (store, info):
-        path = _safe_file(info.path, file)
-        record = store.file_record(file)
+        return read_code(store, info.path, file, start, end)
+
+
+def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None) -> dict:
+    """Dùng chung cho route HTTP và tool MCP."""
+    path = _safe_file(root, file)
+    record = store.file_record(file)
     if record is None:  # chỉ phục vụ tệp đã được lập chỉ mục (không đọc .git, .nexgraph, khóa bí mật...)
         raise ApiError(404, "file_not_found", f"Tệp chưa được lập chỉ mục: {file}")
     if not path.is_file():
@@ -97,12 +116,17 @@ def code(project_id: str, request: Request, file: str = Query(...), start: int |
 @router.get("/search")
 def search_nodes(project_id: str, request: Request, q: str = Query(...), kinds: str | None = None,
                  limit: int = Query(20, ge=1, le=100)) -> list[dict]:
+    with open_store(request, project_id) as (store, _):
+        return search_json(store, q, kinds.split(",") if kinds else None, limit)
+
+
+def search_json(store: GraphStore, q: str, kinds, limit: int) -> list[dict]:
+    """Dùng chung cho route HTTP và tool MCP."""
     if build_match_query(q) is None:
         raise ApiError(400, "bad_param", "Cần ít nhất một từ để tìm kiếm")
     try:
-        wanted = {NodeKind(k) for k in kinds.split(",") if k} if kinds else None
+        wanted = {NodeKind(k) for k in kinds if k} if kinds else None
     except ValueError as exc:
         raise ApiError(400, "bad_param", f"Loại nút không hợp lệ: {exc}") from exc
-    with open_store(request, project_id) as (store, _):
-        hits = search(store.conn, q, kinds=wanted, limit=limit)
+    hits = search(store.conn, q, kinds=wanted, limit=limit)
     return [{"node": node_json(n), "score": score} for n, score in hits]
