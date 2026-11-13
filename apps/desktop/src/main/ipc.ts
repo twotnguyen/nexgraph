@@ -8,6 +8,8 @@ import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
 import { runChat } from './ai/chat'
 import { AiSettingsStore, endpoint } from './ai/settings'
+import { applyIntegration, planIntegration } from './integrations'
+import type { AgentId } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
 
@@ -192,6 +194,8 @@ export function registerIpc(
   on('export:reveal', async (path: string) => shell.showItemInFolder(path))
 
   on('mcp:config', async (projectPath: string) => ({ stdio: mcpStdioConfig(getCommand(), projectPath, dataDir) }))
+  on('mcp:plan', async (agent: AgentId, projectPath: string) => planIntegration(agent, projectPath, getCommand(), dataDir))
+  on('mcp:apply', async (agent: AgentId, projectPath: string) => applyIntegration(agent, projectPath, getCommand(), dataDir))
   on('mcp:start-http', (pid: string, projectPath: string) => mcp.start(pid, projectPath))
   on('mcp:stop-http', (pid: string) => mcp.stop(pid))
   on('mcp:http-status', async (pid: string) => mcp.status(pid))

@@ -1,4 +1,5 @@
 import type { EngineStatus } from './engine-status'
+import type { AgentId, IntegrationPlan } from './integration-types'
 import type {
   AiSettings, ChatAnswer, ChatMessage,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
@@ -76,6 +77,8 @@ export interface NexGraphApi {
   mcp: {
     /** JSON `mcpServers` cho trợ lý AI chạy MCP qua stdio. */
     config(projectPath: string): Promise<{ stdio: string }>
+    plan(agent: AgentId, projectPath: string): Promise<IntegrationPlan>
+    apply(agent: AgentId, projectPath: string): Promise<IntegrationPlan>
     startHttp(projectId: string, projectPath: string): Promise<{ url: string; key: string }>
     stopHttp(projectId: string): Promise<void>
     httpStatus(projectId: string): Promise<{ url: string } | null>

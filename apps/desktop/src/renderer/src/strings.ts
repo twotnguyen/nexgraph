@@ -113,6 +113,30 @@ export const vi = {
     empty: 'Dự án chưa có tệp nào được lập chỉ mục.',
     noWebgl: 'Máy này không bật được WebGL nên không vẽ được bản đồ. Dùng thẻ Kiến trúc thay thế.'
   },
+  integrate: {
+    card: 'Tích hợp trợ lý AI', cardDesc: 'Nối Claude Code, Cursor, VS Code hoặc OpenCode vào đồ thị của dự án qua MCP.',
+    title: 'Tích hợp trợ lý AI',
+    agents: { claude: 'Claude Code', cursor: 'Cursor', vscode: 'VS Code (Copilot)', opencode: 'OpenCode' } as Record<string, string>,
+    agentLabel: 'Trợ lý', close: 'Đóng',
+    willWrite: 'Tệp sẽ ghi', existing: 'Tệp đã có, chỉ thêm mục nexgraph', fresh: 'Tệp mới',
+    write: 'Ghi tệp này', update: 'Cập nhật', copy: 'Sao chép cấu hình', copied: 'Đã sao chép',
+    written: (path: string) => `Đã ghi ${path}`,
+    upToDate: 'Đã cài, không cần ghi lại',
+    invalid: 'Tệp cấu hình hiện có không phải JSON hợp lệ nên NexGraph không sửa. Hãy sao chép cấu hình và dán thủ công.',
+    note: 'NexGraph chỉ thêm mục "nexgraph" và giữ nguyên phần còn lại của tệp. Mọi công cụ MCP đều chỉ đọc.'
+  },
+  hook: {
+    card: 'Cập nhật sau mỗi commit', cardDesc: 'Thêm git hook để đồ thị tự cập nhật sau mỗi lần commit.',
+    on: 'Đang bật', off: 'Chưa bật', noGit: 'Dự án không phải kho Git',
+    title: 'Cập nhật sau mỗi commit', preview: 'Sẽ thêm vào .git/hooks/post-commit',
+    install: 'Bật', uninstall: 'Tắt', outdated: 'Đường dẫn engine đã đổi, cần cài lại', close: 'Đóng'
+  },
+  tour: {
+    title: (name: string, n: number) => `Tham quan ${name} · ${n} bước`,
+    prev: 'Bước trước', next: 'Bước sau', restart: 'Xem lại từ đầu',
+    empty: 'Chưa đủ dữ liệu để dựng chuyến tham quan. Hãy lập chỉ mục dự án có lời gọi hàm.',
+    open: { flow: 'Mở luồng', node: 'Xem ở Graph', community: 'Mở ở Kiến trúc' }
+  },
   settings: {
     title: 'Cài đặt', back: '← Dự án', aiTitle: 'Trợ lý AI',
     aiLead: 'Dùng API key của một nhà cung cấp tương thích OpenAI (OpenRouter, Groq, Gemini, Ollama…). Trợ lý chỉ đọc đồ thị và mã, không sửa tệp, không chạy lệnh.',
@@ -254,6 +278,7 @@ export const vi = {
     files: (n: number) => `${n} tệp`
   },
   activity: {
+    tour: 'Tham quan',
     search: 'Tìm kiếm',
     changes: 'Thay đổi'
   },

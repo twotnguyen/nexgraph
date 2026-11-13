@@ -77,6 +77,8 @@ const api: NexGraphApi = {
   },
   mcp: {
     config: (projectPath) => call('mcp:config', projectPath),
+    plan: (agent, projectPath) => call('mcp:plan', agent, projectPath),
+    apply: (agent, projectPath) => call('mcp:apply', agent, projectPath),
     startHttp: (pid, projectPath) => call('mcp:start-http', pid, projectPath),
     stopHttp: (pid) => call('mcp:stop-http', pid),
     httpStatus: (pid) => call('mcp:http-status', pid)

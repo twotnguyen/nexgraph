@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { GraphStats, IndexOptions, ProjectSummary } from '@shared/graph-types'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { IndexOptionsDialog } from '../components/overview/IndexOptionsDialog'
+import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { McpCard } from '../components/overview/McpCard'
 import { vi } from '../strings'
 
@@ -34,6 +35,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
   const [clusters, setClusters] = useState<string | null>(null)
   const [options, setOptions] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [integrating, setIntegrating] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -93,6 +95,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       <h2>{vi.overview.integrate}</h2>
       <div className="cards">
         <McpCard project={project} />
+        <Card title={vi.integrate.card} desc={vi.integrate.cardDesc} onClick={() => setIntegrating(true)} />
       </div>
 
       <h2>{vi.overview.ai}</h2>
@@ -104,6 +107,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       {options && (
         <IndexOptionsDialog onClose={() => setOptions(false)} onSubmit={(o) => { setOptions(false); onReindex(o) }} />
       )}
+      {integrating && <IntegrationsDialog project={project} onClose={() => setIntegrating(false)} />}
       {exporting && <ExportDialog projectId={pid} projectName={project.name} scope={{ kind: 'all' }} onClose={() => setExporting(false)} />}
     </main>
   )
