@@ -82,3 +82,11 @@ def test_same_name_nested_functions_get_unique_ids(tmp_path):
     assert len([n for n in x.nodes if n.label == "mutate"]) == 3
     assert "dup.py::mutate#function" in ids
     assert sorted(i for i in ids if "mutate@" in i) == ["dup.py::mutate@12#function", "dup.py::mutate@7#function"]
+
+
+def test_typescript_symbol_imports_are_not_refs(tmp_path):
+    (tmp_path / "u.ts").write_text("export class U {}\nexport function f() {}\n")
+    (tmp_path / "a.ts").write_text("import { U, f } from './u'\nimport * as path from 'path'\nexport const x = f()\n")
+    x = extract_generic(tmp_path, "a.ts", "typescript", is_test=False)
+    imports = [r for r in x.refs if r.type == EdgeType.IMPORTS]
+    assert [(r.line, r.name.endswith("_u_ts") or r.name in ("u", "path", "ref_path")) for r in imports] == [(1, True), (2, True)]

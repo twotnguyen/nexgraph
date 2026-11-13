@@ -94,6 +94,8 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     ]
     edges: list[Edge] = []
     refs: list[UnresolvedRef] = []
+    from_lines = {_line(e.get("source_location")) for e in raw_edges if e.get("relation") == "imports_from"}
+    from_lines.discard(None)
     for e in raw_edges:
         rel, src, dst, line = e["relation"], e["source"], e["target"], _line(e.get("source_location"))
         conf = Confidence.INFERRED if e.get("confidence") == "INFERRED" else Confidence.EXTRACTED
@@ -103,6 +105,8 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
             if parent and dst in ids:
                 edges.append(Edge(source=parent, target=ids[dst], type=EdgeType.DEFINES))
         elif rel in ("imports", "imports_from") and line:
+            if rel == "imports" and line in from_lines:
+                continue
             refs.append(UnresolvedRef(source=fid, name=dst, type=EdgeType.IMPORTS, line=line, col=0))
         elif rel == "calls" and src in ids and line:
             if dst in ids:
