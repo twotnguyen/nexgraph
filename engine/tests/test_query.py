@@ -65,6 +65,11 @@ def test_ask_graph_matches_any_word_of_a_question(copy_fixture, index_project):
     assert r["seeds"] and r["seeds"][0]["label"] == "helper"
 
 
+def test_ask_graph_returns_flows(copy_fixture, index_project):
+    store, _, _ = index_project(copy_fixture("flow_app"))
+    r = ask_graph(store, "login")
+    assert r["flows"] and r["flows"][0]["name"] == "login"
+
 def _indexed(api, copy_fixture):
     pid = api.open(copy_fixture("py_mini"))["project_id"]
     assert api.index(pid)["state"] == "done"

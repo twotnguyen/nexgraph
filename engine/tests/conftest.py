@@ -96,3 +96,20 @@ def api(tmp_path):
     app = create_app(TOKEN, {"testserver"}, data_dir=tmp_path / "appdata", sse_ping_seconds=0.2)
     yield Api(TestClient(app), app)
     app.state.services.jobs.shutdown()
+
+
+@pytest.fixture
+def pid_flow(api, copy_fixture):
+    root = copy_fixture("flow_app")
+    p = api.open(root)
+    assert api.index(p["project_id"])["state"] == "done"
+    return p["project_id"]
+
+
+@pytest.fixture
+def indexed_flow(api, copy_fixture, tmp_path):
+    root = copy_fixture("flow_app")
+    app_dir = tmp_path / "appdata"
+    p = api.open(root)
+    assert api.index(p["project_id"])["state"] == "done"
+    return root, app_dir

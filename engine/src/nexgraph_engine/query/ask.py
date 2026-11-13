@@ -5,6 +5,7 @@ from collections import deque
 from typing import Literal
 
 from nexgraph_engine.api.serialize import edge_json, node_json
+from nexgraph_engine.flows.query import flows_for_nodes
 from nexgraph_engine.query.common import edges_between, nodes_by_pk
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.search import build_match_query, search
@@ -48,5 +49,8 @@ def ask_graph(store: GraphStore, question: str, depth: int = 2, budget: int = 20
             if r[0] not in seen:
                 seen.add(r[0])
                 queue.append((r[0], d + 1))
+    seed_pks = [store._pk(n.id) for n in seeds]
+    flows = flows_for_nodes(store, seed_pks, limit=3)
     return {"seeds": [node_json(n) for n in seeds], "nodes": [node_json(n) for n in nodes_by_pk(store, taken)],
-            "edges": [edge_json(e) for e in edges_between(store, taken, _TYPES)], "truncated": truncated}
+            "edges": [edge_json(e) for e in edges_between(store, taken, _TYPES)], "flows": flows,
+            "truncated": truncated}

@@ -14,7 +14,7 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
 
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
-         "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community"}
+         "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow"}
 
 
 @pytest.fixture
@@ -199,3 +199,13 @@ def test_http_without_key_exits_2(indexed):
     p = _start_http(indexed, None)
     assert p.wait(timeout=20) == 2
     assert "NEXGRAPH_MCP_KEY" in p.stderr.read()
+
+
+def test_flow_tools(indexed_flow):
+    server = build_server(*indexed_flow)
+    listed = payload(call(server, "list_flows", {"query": "login"}))
+    fid = listed["flows"][0]["id"]
+    assert payload(call(server, "trace_flow", {"flow_id": fid}))["steps"][1]["node"]["label"] == "login_user"
+    live = payload(call(server, "trace_flow", {"entry": "service.py::login_user#function"}))
+    assert live["flow"]["id"] == 0 and [s["node"]["label"] for s in live["steps"]][:2] == ["login_user", "find_user"]
+    assert call(server, "trace_flow", {}).isError is True

@@ -35,6 +35,7 @@ from nexgraph_engine.api.routes_changes import changes_json
 from nexgraph_engine.api.routes_graph import get_node_json, neighbors_json, parse_edge_types, search_json
 from nexgraph_engine.api.routes_graph import read_code as read_code_json
 from nexgraph_engine.api.serialize import node_json
+from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.common import nodes_by_pk
 from nexgraph_engine.query.paths import find_paths
@@ -57,6 +58,8 @@ SERVER_INSTRUCTIONS = (
     "- câu hỏi tự do, lấy đồ thị con liên quan -> query_graph\n"
     "- đường đi giữa hai nút -> shortest_path\n"
     "- nút trung tâm, số liệu tổng, một cộng đồng -> god_nodes, graph_stats, get_community\n"
+    "- một tính năng chạy qua những bước nào, luồng xử lý một route/lệnh -> list_flows rồi trace_flow\n"
+    "- từ một hàm bất kỳ gọi tiếp tới đâu -> trace_flow entry=<id nút>\n"
     "Khi trả lời, trích dẫn dạng tệp:dòng lấy từ kết quả tool; không bịa đường đi không có trong đồ thị. "
     "Mọi tool chỉ đọc."
 )
@@ -192,6 +195,20 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     async def get_community(community_id: str, limit: int = 200) -> dict:
         """Một cộng đồng (khối kiến trúc) theo id dạng `com:<số>`: nhãn, kích thước, độ gắn kết và các nút."""
         return await run("get_community", lambda s: community_json(s, community_id, max(1, min(limit, 2000))))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def list_flows(query: str | None = None, kind: str | None = None, limit: int = 20) -> dict:
+        """Danh sách các luồng thực thi (chức năng/route) từ các điểm vào của hệ thống."""
+        return await run("list_flows", lambda s: list_flows_json(s, q=query, kind=kind, limit=max(1, min(limit, 200))))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def trace_flow(flow_id: int | None = None, entry: str | None = None) -> dict:
+        """Truy vết chi tiết luồng thực thi: các bước từ điểm vào tới nơi kết thúc kèm tệp:dòng."""
+        if (flow_id is None and entry is None) or (flow_id is not None and entry is not None):
+            raise ToolError("Phải cung cấp đúng một trong hai tham số: flow_id hoặc entry")
+        if flow_id is not None:
+            return await run("trace_flow", lambda s: flow_json(s, flow_id))
+        return await run("trace_flow", lambda s: trace_from_json(s, entry))  # type: ignore[arg-type]
 
     return mcp
 
