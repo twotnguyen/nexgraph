@@ -1,7 +1,7 @@
 """Chọn mẫu tệp để gán nhãn tay (H6 Task 2). Có hạt giống: cùng --seed cho cùng danh sách.
 
 Chạy: uv run python scripts/eval_sample.py <graph.db> --files 12 --seed 7 --out sample.json
-Chọn ngẫu nhiên tệp mã không phải test có >= 3 symbol; chỉ ghi đường dẫn, không ghi cạnh (người gán nhãn không được nhìn kết quả).
+Chọn ngẫu nhiên tệp mã không phải test, không nằm trong thư mục ẩn, có >= 3 symbol; chỉ ghi đường dẫn, không ghi cạnh (người gán nhãn không được nhìn kết quả).
 """
 import argparse
 import json
@@ -22,7 +22,7 @@ def sample_files(db: Path, count: int, seed: int) -> list[str]:
         f" AND n.la_kiem_thu = 0 AND n.loai_nut IN ({marks}) GROUP BY t.ma_tep HAVING count(*) >= ? ORDER BY t.duong_dan_tuong_doi",
         (*SYMBOL_KINDS, MIN_SYMBOLS)).fetchall()
     conn.close()
-    names = [r[0] for r in rows]
+    names = [r[0] for r in rows if not any(part.startswith(".") for part in r[0].split("/"))]  # bỏ thư mục ẩn (.agents, .claude…): công cụ của agent, không phải mã dự án
     return sorted(random.Random(seed).sample(names, min(count, len(names))))
 
 

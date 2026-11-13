@@ -118,7 +118,10 @@ def score(labels: dict[str, set[Fact]], found: dict[str, set[Fact]], *, ignore_l
 
     result: dict[str, dict] = {}
     details: dict[str, dict] = {}
-    for k in KINDS:
+    # NexGraph nối TESTED_BY từ lớp tới tệp test, nhãn tay thường ở mức phương thức: báo thêm mức tệp (tệp nguồn, tệp test).
+    labels = {**labels, "test_file": {(f[0].split("::")[0], f[1]) for f in labels["test"]}}
+    found = {**found, "test_file": {(f[0].split("::")[0], f[1]) for f in found["test"]}}
+    for k in (*KINDS, "test_file"):
         lab, got = norm(k, labels[k]), norm(k, found[k])
         tp, fp, fn = len(lab & got), len(got - lab), len(lab - got)
         result[k] = {"tp": tp, "fp": fp, "fn": fn,

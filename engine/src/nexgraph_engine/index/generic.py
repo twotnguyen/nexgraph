@@ -94,6 +94,8 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     ]
     edges: list[Edge] = []
     refs: list[UnresolvedRef] = []
+    labels = {n["id"]: n["label"] for n in result["nodes"] if not n.get("source_file")}
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     from_lines = {_line(e.get("source_location")) for e in raw_edges if e.get("relation") == "imports_from"}
     from_lines.discard(None)
     for e in raw_edges:
@@ -109,14 +111,20 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
                 continue
             refs.append(UnresolvedRef(source=fid, name=dst, type=EdgeType.IMPORTS, line=line, col=0))
         elif rel == "calls" and src in ids and line:
-            if dst in ids:
+            foreign = _foreign_receiver(lines, line, qnames[dst][0].split(".")[-1]) if dst in ids else None
+            if foreign:  # extractor chỉ khớp theo tên: `bcrypt.compare()` không phải phương thức `compare` của lớp này
+                refs.append(UnresolvedRef(source=ids[src], name=f"{foreign}.{qnames[dst][0].split('.')[-1]}", type=EdgeType.CALLS,
+                                          line=line, col=0))
+            elif dst in ids:
                 edges.append(Edge(source=ids[src], target=ids[dst], type=EdgeType.CALLS, confidence=conf,
                                   confidence_score=score, line=line,
                                   subtype="construct" if qnames[dst][1] == NodeKind.CLASS else None))
             else:
                 refs.append(UnresolvedRef(source=ids[src], name=dst, type=EdgeType.CALLS, line=line, col=0))
         elif rel == "inherits" and src in ids and line:
-            refs.append(UnresolvedRef(source=ids[src], name=dst, type=EdgeType.INHERITS, line=line, col=0))
+            # lớp cha ở tệp khác là nút giữ chỗ id viết thường; tên thật nằm ở nhãn, dạng `mod.Base` lấy phần cuối
+            base = (labels.get(dst) or dst).split(".")[-1]
+            refs.append(UnresolvedRef(source=ids[src], name=base, type=EdgeType.INHERITS, line=line, col=0))
     refs += [UnresolvedRef(source=fid if c is None else ids[c], name=name, type=EdgeType.CALLS, line=line, col=0) for c, name, line in cross]
     bindings = {fid: type_table} if type_table else {}
     return FileExtraction(nodes=nodes, edges=edges, refs=refs, bindings=bindings)
@@ -167,6 +175,20 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
     tbl = per_file.get("ts_type_table", {}).get("table") or {}
     types = {str(k): str(v) for k, v in tbl.items() if isinstance(k, str) and isinstance(v, str)}
     return out, types
+
+
+_OWN_RECEIVERS = {"this", "self", "cls", "super"}
+
+
+def _foreign_receiver(lines: list[str], line: int, callee: str) -> str | None:
+    """`x.callee(` trên dòng `line` với x không phải this/self: trả x (đoạn cuối của chuỗi receiver), ngược lại None."""
+    if not 1 <= line <= len(lines):
+        return None
+    hit = re.search(rf"([\w$]+(?:\.[\w$]+)*)\.{re.escape(callee)}\s*\(", lines[line - 1])
+    if not hit:
+        return None
+    chain = hit.group(1).split(".")
+    return None if chain[-1] in _OWN_RECEIVERS else chain[-1]
 
 
 def _plain_name(raw: dict, gid: str) -> str:

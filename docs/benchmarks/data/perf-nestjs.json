@@ -1,0 +1,102 @@
+{
+  "project": "ecommerce-backend-nestjs",
+  "project_commit": "d11f4ef7d906ba514cf9e3c2234116ad49789ee7",
+  "nexgraph_commit": "ec683f55cfe26857aac0c6f09616f34461db1a83",
+  "machine": {
+    "cpu": "Apple M3 Pro",
+    "ncpu": 12,
+    "ram_gb": 18.0,
+    "os": "macOS 15.7.3",
+    "python": "3.12.16"
+  },
+  "date": "2026-11-13",
+  "repeat": 3,
+  "index_repeat": 3,
+  "metrics": {
+    "index_full_ms": {
+      "median": 976.53,
+      "min": 862.86,
+      "max": 1149.66,
+      "n": 3
+    },
+    "peak_rss_after_index_mb": 62,
+    "files": 268,
+    "nodes": 1190,
+    "edges": 2865,
+    "unresolved": 2813,
+    "languages": {
+      "javascript": 2,
+      "typescript": 266
+    },
+    "graph_db_mb": 1.5,
+    "reopen_ms": {
+      "median": 0.89,
+      "min": 0.83,
+      "max": 1.11,
+      "n": 3
+    },
+    "search_build_ms": {
+      "median": 0.05,
+      "min": 0.04,
+      "max": 0.21,
+      "n": 3
+    },
+    "arch_root_ms": {
+      "median": 2.18,
+      "min": 2.1,
+      "max": 2.44,
+      "n": 3
+    },
+    "refresh_one_file_ms": {
+      "median": 34.44,
+      "min": 34.35,
+      "max": 36.43,
+      "n": 3
+    },
+    "rebuild_flows_ms": {
+      "median": 8.53,
+      "min": 8.45,
+      "max": 10.34,
+      "n": 3
+    },
+    "list_flows_auth_ms": {
+      "median": 0.46,
+      "min": 0.43,
+      "max": 0.56,
+      "n": 3
+    },
+    "build_map_400_ms": {
+      "median": 4.0,
+      "min": 3.95,
+      "max": 4.37,
+      "n": 3
+    },
+    "import_cycles_ms": {
+      "median": 1.27,
+      "min": 1.27,
+      "max": 1.49,
+      "n": 3
+    },
+    "build_tour_ms": {
+      "median": 1.47,
+      "min": 1.41,
+      "max": 1.76,
+      "n": 3
+    },
+    "build_context_question": "auth",
+    "build_context_login_ms": {
+      "median": 1.1,
+      "min": 1.06,
+      "max": 1.14,
+      "n": 3
+    },
+    "top_degree_node": "src/apps/app.module.ts#file",
+    "neighbors_top_node_ms": {
+      "median": 0.67,
+      "min": 0.65,
+      "max": 0.86,
+      "n": 3
+    },
+    "peak_rss_total_mb": 77
+  }
+}

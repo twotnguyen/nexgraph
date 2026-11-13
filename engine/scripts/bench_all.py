@@ -169,7 +169,16 @@ def main() -> None:
             m["build_tour_ms"] = None
         try:
             from nexgraph_engine.query.context import build_context
-            measure("build_context_login_ms", r, lambda: build_context(store, root, "login"), m)
+            for question in ("login", "auth", "user"):  # dự án không có "login" thì thử từ khác; ghi lại từ đã dùng
+                try:
+                    build_context(store, root, question)
+                except ValueError:
+                    continue
+                m["build_context_question"] = question
+                measure("build_context_login_ms", r, lambda: build_context(store, root, question), m)
+                break
+            else:
+                m["build_context_login_ms"] = None
         except ImportError:
             m["build_context_login_ms"] = None
         hub = top_degree_node(conn)

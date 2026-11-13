@@ -1,0 +1,103 @@
+{
+  "project": "Bot_Albion_TNC",
+  "project_commit": "b82be71177dc6ab0b96b566ea4ded8c029ed6712",
+  "nexgraph_commit": "ec683f55cfe26857aac0c6f09616f34461db1a83",
+  "machine": {
+    "cpu": "Apple M3 Pro",
+    "ncpu": 12,
+    "ram_gb": 18.0,
+    "os": "macOS 15.7.3",
+    "python": "3.12.16"
+  },
+  "date": "2026-11-13",
+  "repeat": 3,
+  "index_repeat": 3,
+  "metrics": {
+    "index_full_ms": {
+      "median": 1580.49,
+      "min": 1496.51,
+      "max": 1712.73,
+      "n": 3
+    },
+    "peak_rss_after_index_mb": 73,
+    "files": 258,
+    "nodes": 2067,
+    "edges": 3714,
+    "unresolved": 10975,
+    "languages": {
+      "javascript": 5,
+      "python": 217,
+      "typescript": 36
+    },
+    "graph_db_mb": 2.8,
+    "reopen_ms": {
+      "median": 1.09,
+      "min": 1.02,
+      "max": 1.23,
+      "n": 3
+    },
+    "search_build_ms": {
+      "median": 0.19,
+      "min": 0.17,
+      "max": 0.38,
+      "n": 3
+    },
+    "arch_root_ms": {
+      "median": 1.33,
+      "min": 1.27,
+      "max": 1.57,
+      "n": 3
+    },
+    "refresh_one_file_ms": {
+      "median": 65.53,
+      "min": 64.69,
+      "max": 82.32,
+      "n": 3
+    },
+    "rebuild_flows_ms": {
+      "median": 23.76,
+      "min": 22.83,
+      "max": 32.25,
+      "n": 3
+    },
+    "list_flows_auth_ms": {
+      "median": 1.06,
+      "min": 0.99,
+      "max": 1.24,
+      "n": 3
+    },
+    "build_map_400_ms": {
+      "median": 2.41,
+      "min": 2.36,
+      "max": 2.59,
+      "n": 3
+    },
+    "import_cycles_ms": {
+      "median": 0.41,
+      "min": 0.39,
+      "max": 0.69,
+      "n": 3
+    },
+    "build_tour_ms": {
+      "median": 2.2,
+      "min": 2.13,
+      "max": 2.42,
+      "n": 3
+    },
+    "build_context_question": "auth",
+    "build_context_login_ms": {
+      "median": 1.33,
+      "min": 1.3,
+      "max": 1.34,
+      "n": 3
+    },
+    "top_degree_node": "bot/tests/test_discord_workflows.py#file",
+    "neighbors_top_node_ms": {
+      "median": 0.44,
+      "min": 0.43,
+      "max": 0.56,
+      "n": 3
+    },
+    "peak_rss_total_mb": 88
+  }
+}
