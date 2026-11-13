@@ -1427,7 +1427,7 @@ button.card:hover:not(:disabled) {
 
 /* Chat */
 .chat {
-  width: 360px;
+  width: clamp(280px, 24vw, 360px); /* 1280px: 307px, chừa chỗ cho thẻ Luồng ba cột */
   flex: none;
   display: flex;
   flex-direction: column;

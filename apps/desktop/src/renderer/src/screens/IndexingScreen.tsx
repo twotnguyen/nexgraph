@@ -32,7 +32,7 @@ export function IndexingScreen({ project, subdir, options, onExplore }: Props) {
 
   return (
     <main className="screen">
-      <h1>{vi.indexing.title(project.name)}</h1>
+      <h1>{state === 'done' ? vi.indexing.titleDone(project.name) : vi.indexing.title(project.name)}</h1>
       {subdir && <p className="muted">{vi.large.subdir(subdir)}</p>}
       {!job && !error && <p className="muted">{vi.indexing.preparing}</p>}
       {job && (

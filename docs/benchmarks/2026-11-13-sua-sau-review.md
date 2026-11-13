@@ -69,4 +69,13 @@ Chạy lại toàn bộ rồi bấm thử bản build trên cửa sổ Electron 
 
 Kết quả: engine **458 passed**; desktop typecheck sạch, **44 tệp / 280 test** (`NEXGRAPH_E2E=1`). Chưa build lại PyInstaller/DMG sau các sửa này.
 
-Còn thấy nhưng chưa sửa: hai luồng cùng tên ở hai controller (ví dụ `uploadProductImage`) không phân biệt được trong danh sách; panel Thay đổi liệt kê hai `signIn` (controller, service) giống hệt nhau; `compare` vừa có test liên quan vừa nằm ở "Chưa có test"; màn lập chỉ mục vẫn ghi "Đang lập chỉ mục" sau khi xong; mở chat cùng thẻ Luồng ở 1280 px thì chật.
+### Sửa nốt phần còn tồn
+
+- Thẻ luồng hiện thêm tên tệp của điểm vào, nên hai `uploadProductImage` (`product-images.controller.ts`, `vendor-product-images.controller.ts`) phân biệt được.
+- Panel Thay đổi hiện tên đầy đủ cho hàm/phương thức (`AuthService.signIn`, `AuthController.signIn`).
+- Màn lập chỉ mục đổi tiêu đề thành "Đã lập chỉ mục" khi xong.
+- Cột chat co theo cửa sổ (307 px ở 1280 px thay vì 360 px).
+- `compare` nằm ở "Chưa có test" là **đúng**: `string-util.service.spec.ts` chỉ kiểm `toBeDefined`, không gọi `compare`; tệp spec vào "Test liên quan" qua lớp chứa. Không sửa.
+- Cập nhật 1 tệp trên bản sao hermes-agent (17.260 tệp): **5,18 s → 4,21 s** nhờ tính cờ từ khoá bảo mật một lần cho mỗi nút khi chấm điểm luồng (2.000 luồng, tổng điểm không đổi: 1347,606). **Vẫn chưa đạt 2 s.** Phần còn lại: dựng luồng 1,5 s, phân giải tham chiếu 1,2 s (nạp cả 215.000 nút mỗi lần), quét đĩa khoảng 0,7 s, chữ ký đồ thị 0,35 s. Muốn dưới 2 s phải dựng lại luồng cục bộ và lập chỉ mục phân giải theo yêu cầu; chưa làm.
+
+Sau các sửa này: engine 458 passed; desktop typecheck sạch, 44 tệp / 280 test.

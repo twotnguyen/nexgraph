@@ -103,6 +103,9 @@ def rebuild_flows(store: GraphStore, root: Path) -> int:
         )
     }
 
+    # Tính một lần cho mỗi nút: cùng một nút nằm trong hàng nghìn luồng (6 triệu phép so chuỗi, 1,4 s ở hermes-agent).
+    sensitive = {pk: any(kw in m["ten_day_du"].lower() for kw in SECURITY_KEYWORDS) for pk, m in nodes_meta.items()}
+
     candidates = []
     for entry in entry_points:
         steps, cut = trace(adj, entry.pk)
@@ -117,11 +120,7 @@ def rebuild_flows(store: GraphStore, root: Path) -> int:
         file_spread = min((so_tep - 1) / 4.0, 1.0)
         depth_score = min(do_sau / 8.0, 1.0)
 
-        sec_hits = sum(
-            1
-            for s in steps
-            if s.pk in nodes_meta and any(kw in nodes_meta[s.pk]["ten_day_du"].lower() for kw in SECURITY_KEYWORDS)
-        )
+        sec_hits = sum(1 for s in steps if sensitive.get(s.pk))
         security = sec_hits / so_buoc
 
         test_hits = sum(1 for s in steps if s.pk in nodes_meta and nodes_meta[s.pk]["has_test"])

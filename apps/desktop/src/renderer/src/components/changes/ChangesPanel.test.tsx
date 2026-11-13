@@ -7,7 +7,7 @@ import { emptyChanges } from '../../test-utils'
 import { ChangesPanel } from './ChangesPanel'
 
 const gnode = (id: string, label: string, over: Partial<GraphNode> = {}): GraphNode => ({
-  id, kind: 'method', label, qualified_name: id, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,
+  id, kind: 'method', label, qualified_name: label, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,
   is_test: false, origin: 'ast', signature: null, community: null, ...over
 })
 
@@ -16,7 +16,7 @@ const full = emptyChanges({
   changed_nodes: [gnode('n:login', 'login')],
   impacted: [{ node: gnode('n:build', 'build'), score: 1, hops: 1 }, { node: gnode('n:screen', 'LoginScreen'), score: 0.36, hops: 2 }],
   tests: [gnode('n:t', 'login returns a user', { kind: 'test', is_test: true })],
-  test_gaps: [gnode('n:gap', 'logout')]
+  test_gaps: [{ ...gnode('n:gap', 'logout'), qualified_name: 'AuthService.logout' }]
 })
 
 const base = { loading: false, error: null, onReload: vi.fn(), onOpenNode: vi.fn() }
@@ -41,7 +41,7 @@ describe('ChangesPanel', () => {
     expect(within(impacted).getByText('2 bước')).toBeInTheDocument()
     expect(within(screen.getByRole('region', { name: 'Test liên quan' })).getByText('login returns a user')).toBeInTheDocument()
     const gaps = screen.getByRole('region', { name: 'Chưa có test' })
-    expect(within(gaps).getByText('logout')).toBeInTheDocument()
+    expect(within(gaps).getByText('AuthService.logout')).toBeInTheDocument() // tên lớp phân biệt hai phương thức cùng nhãn
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

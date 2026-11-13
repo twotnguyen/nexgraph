@@ -22,7 +22,7 @@ export function ChangesPanel({ changes, loading, error, onReload, onOpenNode, on
     ) : null
   const nodeRow = (node: GraphNode, extra?: React.ReactNode) => (
     <li key={node.id}>
-      <button type="button" className="entry" onClick={() => onOpenNode(node.id)}>{node.label}</button>
+      <button type="button" className="entry" onClick={() => onOpenNode(node.id)} title={node.file ?? undefined}>{((node.kind === 'method' || node.kind === 'function') && !node.is_test && node.qualified_name) || node.label}</button>
       {extra}
       {codeButton(node)}
     </li>

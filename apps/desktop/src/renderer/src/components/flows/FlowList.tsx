@@ -83,6 +83,8 @@ export function FlowList({
                   <span className="flow-card-kind">{f.kind}</span>
                 </div>
                 {f.detail && <div className="flow-card-detail">{f.detail}</div>}
+                {/* hai controller có thể cùng tên phương thức: tệp của điểm vào là thứ phân biệt chúng */}
+                {f.entry.file && <div className="flow-card-detail" title={f.entry.file}>{f.entry.file.split('/').pop()}</div>}
                 <div className="flow-card-meta">
                   <span>{vi.flows.meta(f.steps, f.files)}</span>
                   <div className="crit-bar" title={vi.flows.criticality(pct)}>

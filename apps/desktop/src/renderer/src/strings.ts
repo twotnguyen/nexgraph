@@ -12,6 +12,7 @@ export const vi = {
   },
   indexing: {
     title: (name: string) => `Đang lập chỉ mục: ${name}`,
+    titleDone: (name: string) => `Đã lập chỉ mục: ${name}`,
     preparing: 'Đang chuẩn bị…',
     phase1: 'Đọc cấu trúc',
     phase2: 'Nối quan hệ',
