@@ -20,7 +20,7 @@ Mỗi mục ghi nguồn, giấy phép, commit được dùng và phần nào c�
 
 ## CodeRAG
 
-- Nguồn: https://github.com/coderag (bản chép trong `repo-reference/coderag`)
+- Nguồn: https://github.com/galacticsurfer/coderag
 - Commit: `a3b13ceac38dfd0f420e0dd9e94447675e1a4a69`
 - Giấy phép: Apache-2.0. Bản đầy đủ và NOTICE ở `engine/third_party/coderag/`.
 - Dùng ở: `engine/src/nexgraph_engine/query/context.py` — port ý tưởng hợp nhất xếp hạng Reciprocal Rank Fusion (`retrieval/fusion.py`) và dựng ngữ cảnh theo ngân sách token (`context/builder.py`). Viết lại cho NexGraph, không chép nguyên mã.
