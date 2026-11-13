@@ -49,6 +49,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
 
     fid = file_node_id(rel_path)
     base = path.name
+    file_gid = next((n["id"] for n in result["nodes"] if n.get("label") == base), "")
     raw = {n["id"]: n for n in result["nodes"] if n.get("label") != base and n.get("_callable")}
     raw_edges = result["edges"]
 
@@ -72,15 +73,15 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         used.add(nid)
         ids[gid] = nid
 
-    cross = _cross_file_calls(path, Path(root), raw, raw_edges)
-
+    cross = _cross_file_calls(path, Path(root), raw, raw_edges, file_gid)
     # line_end ước lượng: dòng lớn nhất trong bằng chứng các cạnh đi ra; lớp bao luôn các phương thức của nó.
     end: dict[str, int] = {gid: _line(raw[gid].get("source_location")) or 1 for gid in raw}
     for e in raw_edges:
         if e["source"] in end and e["relation"] in ("calls", "imports", "imports_from"):
             end[e["source"]] = max(end[e["source"]], _line(e.get("source_location")) or 0)
     for caller, _, line in cross:
-        end[caller] = max(end[caller], line)
+        if caller is not None and caller in end:
+            end[caller] = max(end[caller], line)
     for child, cls in parent_class.items():
         if cls in end and child in end:
             end[cls] = max(end[cls], end[child])
@@ -112,12 +113,12 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
                 refs.append(UnresolvedRef(source=ids[src], name=dst, type=EdgeType.CALLS, line=line, col=0))
         elif rel == "inherits" and src in ids and line:
             refs.append(UnresolvedRef(source=ids[src], name=dst, type=EdgeType.INHERITS, line=line, col=0))
-    refs += [UnresolvedRef(source=ids[c], name=name, type=EdgeType.CALLS, line=line, col=0) for c, name, line in cross]
+    refs += [UnresolvedRef(source=fid if c is None else ids[c], name=name, type=EdgeType.CALLS, line=line, col=0) for c, name, line in cross]
     return FileExtraction(nodes=nodes, edges=edges, refs=refs)
 
 
-def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict]) -> list[tuple[str, str, int]]:
-    """Lời gọi `extract()` không nối được trong tệp → [(id Graphify của nút gọi, tên, dòng)] chờ phân giải xuyên tệp."""
+def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], file_gid: str = "") -> list[tuple[str | None, str, int]]:
+    """Lời gọi `extract()` không nối được trong tệp → [(id Graphify của nút gọi hoặc None nếu ở mức tệp, tên, dòng)] chờ phân giải xuyên tệp."""
     extractor = _get_extractor(path)
     if extractor is None:
         return []
@@ -130,11 +131,22 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict]) 
     by_suffix = sorted(raw, key=len, reverse=True)
     done = {(e["source"], _line(e.get("source_location")), _plain_name(raw, e["target"]))  # extract() đã nối
             for e in raw_edges if e["relation"] == "calls" and e["target"] in raw}
-    out: list[tuple[str, str, int]] = []
+    out: list[tuple[str | None, str, int]] = []
+    per_file_fid = next((n["id"] for n in per_file.get("nodes", []) if n.get("label") == path.name), None)
     for rc in per_file.get("raw_calls") or []:
-        caller = next((g for g in by_suffix if rc["caller_nid"] == g or rc["caller_nid"].endswith("_" + g)), None)
+        caller_nid = rc.get("caller_nid") or ""
+        if caller_nid == per_file_fid or (file_gid and (
+            caller_nid == file_gid
+            or caller_nid.endswith("_" + file_gid)
+            or caller_nid.endswith("_" + file_gid + "_" + path.suffix.lstrip("."))
+        )):
+            caller = None
+        else:
+            caller = next((g for g in by_suffix if caller_nid == g or caller_nid.endswith("_" + g)), None)
+            if caller is None:
+                continue
         line, callee, recv = _line(rc.get("source_location")), rc.get("callee"), rc.get("receiver")
-        if caller is None or not line or not callee:
+        if not line or not callee:
             continue
         if recv in ("self", "this"):
             name = f"this.{callee}"

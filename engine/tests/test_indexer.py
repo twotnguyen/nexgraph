@@ -188,3 +188,32 @@ def test_python_and_typescript_imports_become_file_edges(tmp_path, index_project
     assert result.state == "hoan_tat"
     assert {e.edge.target for e in out_edges(store, "app.py#file", EdgeType.IMPORTS)} == {"pkg/mod.py#file"}
     assert "web/util.ts#file" in {e.edge.target for e in out_edges(store, "web/svc.ts#file", EdgeType.IMPORTS)}
+
+def _nest(tmp_path):
+    (tmp_path / "user.service.ts").write_text(
+        "export class UserService {\n  findOne(id: string) { return id }\n}\n")
+    (tmp_path / "auth.controller.ts").write_text(
+        "import { UserService } from './user.service'\n"
+        "export class AuthController {\n"
+        "  constructor(private readonly userService: UserService) {}\n"
+        "  login(id: string) {\n    return this.userService.findOne(id)\n  }\n}\n")
+    (tmp_path / "auth.controller.spec.ts").write_text(
+        "import { AuthController } from './auth.controller'\n"
+        "import { UserService } from './user.service'\n"
+        "describe('AuthController', () => {\n"
+        "  it('logs in', () => {\n"
+        "    const c = new AuthController(new UserService())\n"
+        "    expect(c.login('1')).toBe('1')\n  })\n})\n")
+    return tmp_path
+
+
+def test_typescript_spec_file_calls_come_from_file_node(tmp_path, index_project):
+    store, result, _ = index_project(_nest(tmp_path))
+    assert result.state == "hoan_tat"
+    calls = out_edges(store, "auth.controller.spec.ts#file", EdgeType.CALLS)
+    assert {(e.edge.target, e.edge.subtype) for e in calls} >= {
+        ("auth.controller.ts::AuthController#class", "construct"),
+        ("user.service.ts::UserService#class", "construct")}
+    assert all(e.edge.line in (5, 6) for e in calls)
+    tested = {e.edge.target for e in out_edges(store, "auth.controller.ts::AuthController#class", EdgeType.TESTED_BY)}
+    assert tested == {"auth.controller.spec.ts#file"}
