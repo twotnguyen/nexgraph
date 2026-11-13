@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { GraphStats, IndexOptions, ProjectSummary } from '@shared/graph-types'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { IndexOptionsDialog } from '../components/overview/IndexOptionsDialog'
+import { HookCard } from '../components/overview/HookCard'
 import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { McpCard } from '../components/overview/McpCard'
 import { vi } from '../strings'
@@ -95,6 +96,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       <h2>{vi.overview.integrate}</h2>
       <div className="cards">
         <McpCard project={project} />
+        <HookCard project={project} />
         <Card title={vi.integrate.card} desc={vi.integrate.cardDesc} onClick={() => setIntegrating(true)} />
       </div>
 

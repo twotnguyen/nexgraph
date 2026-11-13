@@ -66,6 +66,12 @@ const api: NexGraphApi = {
     png: (rect) => call('export:png', rect),
     reveal: (path) => call('export:reveal', path)
   },
+  hook: {
+    status: (path) => call('hook:status', path),
+    preview: (path) => call('hook:preview', path),
+    install: (path) => call('hook:install', path),
+    uninstall: (path) => call('hook:uninstall', path)
+  },
   ai: {
     getSettings: () => call('ai:get-settings'),
     saveSettings: (s) => call('ai:save-settings', s),

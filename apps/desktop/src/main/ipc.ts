@@ -8,6 +8,7 @@ import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
 import { runChat } from './ai/chat'
 import { AiSettingsStore, endpoint } from './ai/settings'
+import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
 import { applyIntegration, planIntegration } from './integrations'
 import type { AgentId } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
@@ -195,6 +196,10 @@ export function registerIpc(
   on('export:reveal', async (path: string) => shell.showItemInFolder(path))
 
   on('mcp:config', async (projectPath: string) => ({ stdio: mcpStdioConfig(getCommand(), projectPath, dataDir) }))
+  on('hook:status', async (projectPath: string) => hookStatus(projectPath, getCommand(), dataDir))
+  on('hook:preview', async (projectPath: string) => hookBlock(getCommand(), projectPath, dataDir))
+  on('hook:install', async (projectPath: string) => installHook(projectPath, getCommand(), dataDir))
+  on('hook:uninstall', async (projectPath: string) => uninstallHook(projectPath))
   on('mcp:plan', async (agent: AgentId, projectPath: string) => planIntegration(agent, projectPath, getCommand(), dataDir))
   on('mcp:apply', async (agent: AgentId, projectPath: string) => applyIntegration(agent, projectPath, getCommand(), dataDir))
   on('mcp:start-http', (pid: string, projectPath: string) => mcp.start(pid, projectPath))

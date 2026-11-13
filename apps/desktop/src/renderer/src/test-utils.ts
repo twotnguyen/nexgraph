@@ -40,6 +40,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     exporter: { pickDir: vi.fn(async () => '/Đồ án/xuất'), run: vi.fn(async () => ({ files: [], truncated: false })),
       push: vi.fn(async () => ({ nodes: 0, edges: 0, truncated: false })), png: vi.fn(async () => null),
       reveal: vi.fn(async () => {}), ...over.exporter },
+    hook: { status: vi.fn(async () => 'off' as const), preview: vi.fn(async () => '# >>> nexgraph >>>'), install: vi.fn(async () => {}), uninstall: vi.fn(async () => {}), ...over.hook },
     ai: { getSettings: vi.fn(async () => ({ baseUrl: '', model: '', hasKey: false })), saveSettings: vi.fn(async (s: { baseUrl: string; model: string }) => ({ ...s, hasKey: false })),
       test: vi.fn(async () => ({ ok: true, ms: 1, error: null })), hasConsent: vi.fn(async () => false), grantConsent: vi.fn(async () => {}),
       send: vi.fn(), cancel: vi.fn(async () => {}), onEvent: vi.fn(() => () => {}), ...over.ai },

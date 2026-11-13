@@ -65,6 +65,12 @@ export interface NexGraphApi {
     png(rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>
     reveal(path: string): Promise<void>
   }
+  hook: {
+    status(projectPath: string): Promise<'no_git' | 'off' | 'on' | 'outdated'>
+    preview(projectPath: string): Promise<string>
+    install(projectPath: string): Promise<void>
+    uninstall(projectPath: string): Promise<void>
+  }
   ai: {
     getSettings(): Promise<AiSettings>
     saveSettings(s: { baseUrl: string; model: string; apiKey?: string }): Promise<AiSettings>
