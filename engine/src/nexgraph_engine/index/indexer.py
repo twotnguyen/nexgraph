@@ -1,10 +1,12 @@
 """Lập chỉ mục hai giai đoạn: cấu trúc (nhanh, dùng được ngay) rồi phân giải tham chiếu."""
 from __future__ import annotations
 
+import os
 import subprocess
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -42,6 +44,28 @@ class RunResult:
     edges: int
     unresolved: int
     seconds: float
+
+
+def index_workers(n_files: int, include_media: bool) -> int:
+    override = os.environ.get("NEXGRAPH_INDEX_WORKERS")
+    if override:
+        try:
+            val = int(override)
+            if val >= 1:
+                return val
+        except ValueError:
+            pass
+    if n_files < 200 or include_media:
+        return 1
+    cpus = os.cpu_count() or 1
+    if cpus <= 2:
+        return 1
+    return min(cpus - 1, 8)
+
+
+def _extract_worker(args: tuple[Path, DiscoveredFile, Path | None]) -> ExtractedFile:
+    root, f, transcript_dir = args
+    return extract_file(root, f, transcript_dir=transcript_dir, cancel=None)
 
 
 def _git_head(root: Path) -> str | None:
@@ -122,8 +146,7 @@ class Indexer:
             store.set_run_state(run_id, "cau_truc", files_done=0, files_total=total)
             store.clear_graph()
             self.on_progress(ProgressEvent("structure", 0, total))
-            bindings = self._structure(run_id, files)
-            if bindings is None:
+            if not self._structure(run_id, files):
                 return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", 0, total))
             store.set_run_state(run_id, "phan_giai", files_done=total)
             self.on_progress(ProgressEvent("resolve", total, total))
@@ -131,7 +154,6 @@ class Indexer:
                 return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", total, total))
             pubspec = self.root / "pubspec.yaml"
             name = _package_name(pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None)
-            store.add_bindings(bindings)
             resolve_references(store, package_name=name)
             derive_tested_by(store)
             try:
@@ -161,18 +183,25 @@ class Indexer:
         return RunResult(run_id, state, sum(s["nodes_by_kind"].values()), sum(s["edges_by_type"].values()),
                          s["unresolved"], time.time() - t0)
 
-    def _structure(self, run_id: int, files: list[DiscoveredFile]) -> dict[str, dict[str, str]] | None:
+    def _structure(self, run_id: int, files: list[DiscoveredFile]) -> bool:
         store, root = self.store, self.root
         total = len(files)
         store.add_nodes([Node(id=REPOSITORY_ID, kind=NodeKind.REPOSITORY, label=root.name or "project",
                               qualified_name=".")])
         dirs: set[str] = set()
         contains: list[tuple[str, str]] = []
-        bindings: dict[str, dict[str, str]] = {}
-        for i, f in enumerate(files, start=1):
-            if self.cancel.is_set():
-                return None
-            self._index_file(run_id, f, bindings)
+        workers = index_workers(total, self.include_media)
+
+        def _consume(i: int, f: DiscoveredFile, x: ExtractedFile) -> None:
+            store.add_file(run_id, x.rec)
+            store.add_nodes(x.nodes)
+            store.add_edges(x.edges)
+            store.add_unresolved(x.refs)
+            if x.bindings:
+                store.add_bindings(x.bindings)
+            for kind, detail in x.errors:
+                store.add_file_error(f.rel_path, kind, detail)
+
             parent = f.rel_path.rpartition("/")[0]
             contains.append((directory_node_id(parent) if parent else REPOSITORY_ID, file_node_id(f.rel_path)))
             while parent and parent not in dirs:
@@ -185,17 +214,25 @@ class Indexer:
             if i % COMMIT_EVERY == 0:
                 store.commit()
             self.on_progress(ProgressEvent("structure", i, total))
+
+        if workers == 1:
+            for i, f in enumerate(files, start=1):
+                if self.cancel.is_set():
+                    return False
+                x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
+                _consume(i, f, x)
+        else:
+            executor = ProcessPoolExecutor(max_workers=workers)
+            try:
+                tasks = [(self.root, f, self.transcript_dir) for f in files]
+                for i, (f, x) in enumerate(zip(files, executor.map(_extract_worker, tasks, chunksize=16)), start=1):
+                    if self.cancel.is_set():
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        return False
+                    _consume(i, f, x)
+            finally:
+                executor.shutdown(wait=False, cancel_futures=True)
+
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)
         store.commit()
-        return bindings
-
-    def _index_file(self, run_id: int, f: DiscoveredFile, bindings: dict[str, dict[str, str]]) -> None:
-        store = self.store
-        x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
-        store.add_file(run_id, x.rec)
-        store.add_nodes(x.nodes)
-        store.add_edges(x.edges)
-        store.add_unresolved(x.refs)
-        bindings.update(x.bindings)
-        for kind, detail in x.errors:
-            store.add_file_error(f.rel_path, kind, detail)
+        return True
