@@ -116,6 +116,8 @@ export function registerIpc(
   on('graph:recluster', (pid: string) => api().recluster(pid))
   on('graph:flows', (pid: string, opts?: FlowQuery) => api().flows(pid, opts))
   on('graph:flow', (pid: string, flowId: number) => api().flow(pid, flowId))
+  on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
+  on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
 
   on('export:pick-dir', async () => {
     const prefs = readJson(prefsFile())

@@ -1,7 +1,7 @@
 import type { EngineStatus } from './engine-status'
 import type {
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
-  FlowDetail, FlowList, FlowQuery,
+  FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   GraphNode, GraphReport, GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult,
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from './graph-types'
@@ -48,6 +48,8 @@ export interface NexGraphApi {
     recluster(projectId: string): Promise<{ communities: number }>
     flows(projectId: string, opts?: FlowQuery): Promise<FlowList>
     flow(projectId: string, flowId: number): Promise<FlowDetail>
+    map(projectId: string, opts?: { parent?: string; detail?: number }): Promise<ProjectMap>
+    cycles(projectId: string, limit?: number): Promise<ImportCycles>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích, nhớ lựa chọn lần trước; `null` khi huỷ. */

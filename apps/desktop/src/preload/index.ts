@@ -52,7 +52,9 @@ const api: NexGraphApi = {
     ask: (pid, question, opts) => call('graph:ask', pid, question, opts),
     recluster: (pid) => call('graph:recluster', pid),
     flows: (pid, opts) => call('graph:flows', pid, opts),
-    flow: (pid, flowId) => call('graph:flow', pid, flowId)
+    flow: (pid, flowId) => call('graph:flow', pid, flowId),
+    map: (pid, opts) => call('graph:map', pid, opts),
+    cycles: (pid, limit) => call('graph:cycles', pid, limit)
   },
   exporter: {
     pickDir: () => call('export:pick-dir'),

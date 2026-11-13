@@ -213,6 +213,11 @@ export interface AskResult {
   truncated: boolean
 }
 
+export interface MapNode { id: string; label: string; kind: 'directory' | 'file'; files: number; symbols: number; community: number | null; drillable: boolean }
+export interface MapEdge { source: string; target: string; weight: number; types: Record<string, number> }
+export interface ProjectMap { parent: { id: string; label: string } | null; nodes: MapNode[]; edges: MapEdge[]; truncated: boolean; totals: { files: number; nodes: number } }
+export interface ImportCycles { cycles: { files: string[]; size: number }[]; total: number }
+
 export type FlowKind = 'main' | 'route' | 'cli' | 'event' | 'root'
 
 export interface FlowSummary {

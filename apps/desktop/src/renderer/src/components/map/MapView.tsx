@@ -1,0 +1,141 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@shared/graph-types'
+import { vi } from '../../strings'
+import { EvidencePopover } from '../architecture/EvidencePopover'
+import { CyclesPopover } from './CyclesPopover'
+import { SigmaView } from './SigmaView'
+
+const DETAIL = 400
+const EVIDENCE_LIMIT = 50
+
+interface Props {
+  projectId: string
+  onOpenNode: (nodeId: string) => void
+  onOpenCode: (file: string, line: number) => void
+  onOpenArch?: (blockId: string) => void
+}
+
+interface Crumb { id: string | null; label: string }
+interface EvidenceState { title: string; items: ArchEvidence[]; loading: boolean; error: string | null }
+
+const errMessage = (err: unknown): string =>
+  err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
+
+/** `dir:src` -> `src#directory`, `file:a.py` -> `a.py#file` (id nút của thẻ Graph). */
+export const graphNodeId = (mapId: string): string => {
+  const [kind, ...rest] = mapId.split(':')
+  return `${rest.join(':')}#${kind === 'dir' ? 'directory' : 'file'}`
+}
+
+const inNode = (node: MapNode, file: string): boolean => {
+  const path = node.id.slice(node.id.indexOf(':') + 1)
+  return node.kind === 'file' ? file === path : file.startsWith(`${path}/`)
+}
+
+export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props) {
+  const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.map.root }])
+  const [data, setData] = useState<ProjectMap | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [selected, setSelected] = useState<MapNode | null>(null)
+  const [types, setTypes] = useState({ IMPORTS: true, CALLS: true })
+  const [minWeight, setMinWeight] = useState(1)
+  const [cycles, setCycles] = useState<ImportCycles | null>(null)
+  const [showCycles, setShowCycles] = useState(false)
+  const [activeCycle, setActiveCycle] = useState<number | null>(null)
+  const [evidence, setEvidence] = useState<EvidenceState | null>(null)
+  const [unsupported, setUnsupported] = useState(false)
+  const parent = crumbs[crumbs.length - 1].id
+
+  useEffect(() => {
+    let alive = true
+    setError(null)
+    setSelected(null)
+    setEvidence(null)
+    window.nexgraph.graph.map(projectId, { parent: parent ?? undefined, detail: DETAIL })
+      .then((m) => alive && setData(m))
+      .catch((e) => alive && setError(errMessage(e)))
+    return () => { alive = false }
+  }, [projectId, parent])
+
+  useEffect(() => {
+    let alive = true
+    window.nexgraph.graph.cycles(projectId, 20).then((c) => alive && setCycles(c)).catch(() => {})
+    return () => { alive = false }
+  }, [projectId])
+
+  const edges = useMemo(() => (data?.edges ?? []).filter((e) => {
+    const total = (Object.entries(e.types) as [string, number][])
+      .filter(([t]) => types[t as 'IMPORTS' | 'CALLS']).reduce((a, [, n]) => a + n, 0)
+    return total > 0 && total >= minWeight
+  }), [data, types, minWeight])
+  const maxWeight = useMemo(() => Math.max(1, ...(data?.edges ?? []).map((e) => e.weight)), [data])
+
+  const dimmed = useMemo(() => {
+    if (activeCycle == null || !cycles || !data) return undefined
+    const files = cycles.cycles[activeCycle].files
+    return new Set(data.nodes.filter((n) => !files.some((f) => inNode(n, f))).map((n) => n.id))
+  }, [activeCycle, cycles, data])
+
+  const onEdgeClick = useCallback((source: string, target: string) => {
+    const label = (id: string) => data?.nodes.find((n) => n.id === id)?.label ?? id
+    const weight = data?.edges.find((e) => e.source === source && e.target === target)?.weight ?? 0
+    setEvidence({ title: vi.map.edgeTitle(label(source), label(target), weight), items: [], loading: true, error: null })
+    window.nexgraph.graph.archEvidence(projectId, source, target, EVIDENCE_LIMIT)
+      .then((items) => setEvidence((cur) => cur && { ...cur, items, loading: false }))
+      .catch((e) => setEvidence((cur) => cur && { ...cur, loading: false, error: errMessage(e) }))
+  }, [data, projectId])
+
+  const onNodeClick = useCallback((id: string) => setSelected(data?.nodes.find((n) => n.id === id) ?? null), [data])
+  const drill = (n: MapNode) => setCrumbs((c) => [...c, { id: n.id, label: n.label }])
+
+  if (error) return <p role="alert" className="error">{error}</p>
+  if (!data) return null
+  return (
+    <div className="map-view">
+      <div className="map-toolbar">
+        <nav className="breadcrumb" aria-label={vi.map.breadcrumb}>
+          {crumbs.map((c, i) => (
+            <span key={`${c.id}-${i}`}>
+              {i > 0 && ' › '}
+              <button type="button" disabled={i === crumbs.length - 1} onClick={() => setCrumbs(crumbs.slice(0, i + 1))}>{c.label}</button>
+            </span>
+          ))}
+        </nav>
+        <fieldset className="map-types">
+          <legend>{vi.map.edgeTypes}</legend>
+          {(['IMPORTS', 'CALLS'] as const).map((t) => (
+            <label key={t}><input type="checkbox" checked={types[t]} onChange={(e) => setTypes({ ...types, [t]: e.target.checked })} /> {t}</label>
+          ))}
+        </fieldset>
+        <label className="map-weight">{vi.map.minWeight}
+          <input type="range" min={1} max={maxWeight} value={minWeight} onChange={(e) => setMinWeight(Number(e.target.value))} />
+        </label>
+        {cycles && cycles.total > 0 && (
+          <button type="button" className="badge" onClick={() => setShowCycles(!showCycles)}>{vi.map.cycles(cycles.total)}</button>
+        )}
+      </div>
+      {showCycles && cycles && <CyclesPopover data={cycles} active={activeCycle} onPick={setActiveCycle} />}
+      {data.nodes.length === 0 ? <p className="muted map-empty">{vi.map.empty}</p>
+        : unsupported ? <p role="alert" className="error map-empty">{vi.map.noWebgl}</p>
+        : <SigmaView nodes={data.nodes} edges={edges} dimmed={dimmed} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
+            onStageClick={() => setSelected(null)} onUnsupported={() => setUnsupported(true)} />}
+      <p role="status" className="map-status muted">
+        {vi.map.status(data.totals.nodes, data.totals.files)}{data.truncated ? ` · ${vi.map.truncated}` : ''}
+      </p>
+      {selected && (
+        <aside className="inspector" aria-label={selected.label}>
+          <h3>{selected.label}</h3>
+          <p>{vi.map.nodeMeta(selected.files, selected.symbols)}</p>
+          {selected.community != null && <p>{vi.map.community(selected.community)}</p>}
+          {selected.drillable && <button type="button" className="primary" onClick={() => drill(selected)}>{vi.map.drill}</button>}
+          <button type="button" onClick={() => onOpenNode(graphNodeId(selected.id))}>{vi.map.openGraph}</button>
+          {onOpenArch && <button type="button" onClick={() => onOpenArch(selected.id)}>{vi.map.openArch}</button>}
+        </aside>
+      )}
+      {evidence && (
+        <EvidencePopover title={evidence.title} items={evidence.items} loading={evidence.loading} error={evidence.error}
+          onOpenNode={onOpenNode} onOpenCode={onOpenCode} onClose={() => setEvidence(null)} />
+      )}
+    </div>
+  )
+}

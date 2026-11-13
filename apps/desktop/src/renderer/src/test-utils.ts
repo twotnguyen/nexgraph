@@ -33,6 +33,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       changes: vi.fn(async () => emptyChanges()), report: vi.fn(), paths: vi.fn(), impactOf: vi.fn(), ask: vi.fn(),
       recluster: vi.fn(async () => ({ communities: 3 })),
       flows: vi.fn(async () => ({ flows: [], total: 0, truncated: false })), flow: vi.fn(),
+      map: vi.fn(async () => ({ parent: null, nodes: [], edges: [], truncated: false, totals: { files: 0, nodes: 0 } })),
+      cycles: vi.fn(async () => ({ cycles: [], total: 0 })),
       ...over.graph },
     exporter: { pickDir: vi.fn(async () => '/Đồ án/xuất'), run: vi.fn(async () => ({ files: [], truncated: false })),
       push: vi.fn(async () => ({ nodes: 0, edges: 0, truncated: false })), png: vi.fn(async () => null),

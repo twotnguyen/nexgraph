@@ -1,7 +1,7 @@
 import type {
   IndexOptions,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope,
-  FlowDetail, FlowList, FlowQuery,
+  FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   GraphNode, GraphReport, GraphStats, Job,
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from '../../shared/graph-types'
@@ -148,6 +148,16 @@ export class EngineApi {
   }
   flow(pid: string, flowId: number): Promise<FlowDetail> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/flows/${flowId}`)
+  }
+  map(pid: string, o?: { parent?: string; detail?: number }): Promise<ProjectMap> {
+    const params = new URLSearchParams()
+    if (o?.parent) params.set('parent', o.parent)
+    if (o?.detail != null) params.set('detail', String(o.detail))
+    const q = params.toString()
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/map${q ? `?${q}` : ''}`)
+  }
+  cycles(pid: string, limit?: number): Promise<ImportCycles> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/cycles${limit != null ? `?limit=${limit}` : ''}`)
   }
   exportGraph(pid: string, format: ExportFormat, scope: ExportScope, outDir: string): Promise<ExportResult> {
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export`, { format, scope, out_dir: outDir })

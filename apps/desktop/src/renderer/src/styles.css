@@ -1292,3 +1292,112 @@ button.card:hover:not(:disabled) {
 .btn-action:hover {
   background: #e6ebf1;
 }
+
+/* Map View */
+.map-view {
+  position: absolute;
+  inset: 0;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.map-toolbar {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.map-toolbar > * {
+  pointer-events: auto;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.map-toolbar .breadcrumb {
+  position: static;
+}
+
+.map-types {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+}
+
+.map-types legend {
+  float: left;
+  margin-right: 8px;
+  padding: 0;
+}
+
+.map-weight {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.map-status {
+  position: absolute;
+  z-index: 5;
+  left: 10px;
+  bottom: 8px;
+  margin: 0;
+  background: #fffc;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.map-empty {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.map-view .inspector {
+  position: absolute;
+  z-index: 5;
+  right: 10px;
+  top: 52px;
+  width: 260px;
+}
+
+.cycles-popover {
+  position: absolute;
+  z-index: 6;
+  top: 48px;
+  right: 10px;
+  width: 340px;
+  max-height: 50%;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.cycles-popover ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cycles-popover button {
+  display: grid;
+  width: 100%;
+  text-align: left;
+  gap: 2px;
+}
+
+.cycles-popover button[aria-pressed='true'] {
+  border-color: var(--color-map-blue);
+}

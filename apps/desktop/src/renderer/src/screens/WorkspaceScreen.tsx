@@ -13,11 +13,12 @@ import { ReportView } from '../components/report/ReportView'
 import { TreeView } from '../components/tree/TreeView'
 import { SearchPanel } from '../components/search/SearchPanel'
 import { FlowsView } from '../components/flows/FlowsView'
+import { MapView } from '../components/map/MapView'
 import { useChanges } from '../state/useChanges'
 import { vi } from '../strings'
 
-type Tab = 'arch' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}`
-const MAIN_TABS = ['arch', 'flows', 'graph', 'tree', 'report'] as const
+type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}`
+const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
 interface OpenFile { file: string; line: number; lineEnd?: number }
 const baseName = (p: string): string => p.split('/').pop() as string
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
@@ -208,7 +209,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack }: 
         <div className="tabs" role="tablist">
           {MAIN_TABS.map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-              {{ arch: vi.workspace.archTab, flows: vi.workspace.flowsTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
+              {{ arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
             </button>
           ))}
           {files.map((f) => (
@@ -222,6 +223,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack }: 
         </div>
         <div className="canvas-wrap">
           {tab === 'arch' && <ArchitectureCanvas projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'map' && <MapView projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={() => setTab('arch')} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} initialFlowId={flowId} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (
             <>

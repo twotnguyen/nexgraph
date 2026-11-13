@@ -207,6 +207,13 @@ describe('EngineApi: F10 wave 1 routes', () => {
     expect(r.query).toEqual({ q: 'đăng nhập', kind: 'route', limit: '5' })
   })
 
+  it('map and cycles build their query strings', async () => {
+    const m = await echo(api.map('p1', { parent: 'dir:src', detail: 400 }))
+    expect(m.path).toBe('/v1/projects/p1/map')
+    expect(m.query).toEqual({ parent: 'dir:src', detail: '400' })
+    expect((await echo(api.cycles('p1', 20))).query).toEqual({ limit: '20' })
+  })
+
   it('flow requests flow detail by id', async () => {
     const r = await echo(api.flow('p1', 7))
     expect(r.path).toBe('/v1/projects/p1/flows/7')

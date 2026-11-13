@@ -34,6 +34,7 @@ export const vi = {
   workspace: {
     archTab: 'Kiến trúc',
     flowsTab: 'Luồng',
+    mapTab: 'Bản đồ',
     graphTab: 'Graph',
     treeTab: 'Cây',
     reportTab: 'Báo cáo',
@@ -59,6 +60,7 @@ export const vi = {
     view: 'Xem',
     archDesc: 'Bản đồ khối và mũi tên phụ thuộc.',
     flowsDesc: 'Các luồng thực thi từ điểm vào, phát từng bước.',
+    mapDesc: 'Toàn cảnh cả dự án, phóng to tới từng tệp.',
     graphDesc: 'Node và cạnh quanh một điểm, tìm đường, vùng ảnh hưởng.',
     treeDesc: 'Thư mục → tệp → lớp → hàm.',
     reportDesc: 'Node trung tâm, cộng đồng, kết nối bất ngờ, câu hỏi gợi ý.',
@@ -87,6 +89,25 @@ export const vi = {
     includeMedia: 'Gồm audio/video (chép lời trên máy, cần faster-whisper; lần đầu tải model)',
     cancel: 'Huỷ',
     reindexWithOptions: 'Index lại với tuỳ chọn này'
+  },
+  map: {
+    root: 'Gốc',
+    breadcrumb: 'Đường dẫn bản đồ',
+    status: (nodes: number, files: number) => `Hiện ${nodes.toLocaleString('vi-VN')} nút cho ${files.toLocaleString('vi-VN')} tệp`,
+    truncated: 'Đã lược bớt cạnh nhẹ nhất',
+    edgeTypes: 'Loại cạnh',
+    minWeight: 'Trọng số tối thiểu',
+    nodeMeta: (files: number, symbols: number) => `${files.toLocaleString('vi-VN')} tệp · ${symbols.toLocaleString('vi-VN')} symbol`,
+    community: (n: number) => `Cụm ${n}`,
+    drill: 'Phóng vào',
+    openGraph: 'Mở ở Graph',
+    openArch: 'Mở ở Kiến trúc',
+    edgeTitle: (from: string, to: string, n: number) => `${from} → ${to} · ${n} quan hệ`,
+    cycles: (n: number) => `${n} vòng phụ thuộc`,
+    noCycles: 'Không có vòng phụ thuộc giữa các tệp',
+    cycleItem: (size: number) => `${size} tệp import vòng`,
+    empty: 'Dự án chưa có tệp nào được lập chỉ mục.',
+    noWebgl: 'Máy này không bật được WebGL nên không vẽ được bản đồ. Dùng thẻ Kiến trúc thay thế.'
   },
   flows: {
     search: 'Tìm luồng theo tên hàm, route, bước…',

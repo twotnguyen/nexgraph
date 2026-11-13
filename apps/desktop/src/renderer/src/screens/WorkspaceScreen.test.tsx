@@ -197,7 +197,7 @@ describe('WorkspaceScreen: code viewer tabs', () => {
       questions: [{ question: 'run làm gì?', why: '' }] }))
     installNexgraph({ graph: { ask, report, neighbors: vi.fn() } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Kiến trúc', 'Luồng', 'Graph', 'Cây', 'Báo cáo'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Kiến trúc', 'Bản đồ', 'Luồng', 'Graph', 'Cây', 'Báo cáo'])
     await userEvent.click(screen.getByRole('tab', { name: 'Báo cáo' }))
     await userEvent.click(screen.getByRole('button', { name: 'Xuất Markdown' }))
     expect(screen.getByLabelText('Báo cáo Markdown')).toBeChecked()
