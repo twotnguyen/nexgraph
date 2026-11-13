@@ -126,6 +126,14 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
             base = (labels.get(dst) or dst).split(".")[-1]
             refs.append(UnresolvedRef(source=ids[src], name=base, type=EdgeType.INHERITS, line=line, col=0))
     refs += [UnresolvedRef(source=fid if c is None else ids[c], name=name, type=EdgeType.CALLS, line=line, col=0) for c, name, line in cross]
+    if path.suffix in _TS_SUFFIXES:
+        have = {(r.source, r.name, r.type) for r in refs}
+        for gid, (_, kind) in qnames.items():
+            if kind == NodeKind.CLASS:
+                line = _line(raw[gid].get("source_location")) or 1
+                for rtype, name in _ts_heritage(lines, line):
+                    if (ids[gid], name, rtype) not in have:
+                        refs.append(UnresolvedRef(source=ids[gid], name=name, type=rtype, line=line, col=0))
     bindings = {fid: type_table} if type_table else {}
     return FileExtraction(nodes=nodes, edges=edges, refs=refs, bindings=bindings)
 
@@ -175,6 +183,37 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
     tbl = per_file.get("ts_type_table", {}).get("table") or {}
     types = {str(k): str(v) for k, v in tbl.items() if isinstance(k, str) and isinstance(v, str)}
     return out, types
+
+
+_TS_SUFFIXES = {".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"}
+_HEADER_LINES = 8  # tiêu đề lớp (decorator, generic, danh sách implements) hiếm khi dài hơn thế
+# shortcut: tách tiêu đề lớp bằng regex trên văn bản; extractor gốc chỉ phát cạnh kế thừa khi lớp cha nằm cùng tập tệp.
+# Giới hạn: lớp cha là biểu thức (`extends mixin(A, B)`) bỏ qua. Nâng lên khi đọc cây cú pháp của extractor.
+_EXTENDS = re.compile(r"\bextends\s+([\w$.]+)")
+_IMPLEMENTS = re.compile(r"\bimplements\s+([^{]+)")
+
+
+def _strip_generics(text: str) -> str:
+    depth, out = 0, []
+    for ch in text:
+        depth += ch == "<"
+        if not depth:
+            out.append(ch)
+        depth -= ch == ">" and depth > 0
+    return "".join(out)
+
+
+def _ts_heritage(lines: list[str], line: int) -> list[tuple[EdgeType, str]]:
+    header = " ".join(lines[line - 1:line - 1 + _HEADER_LINES])
+    header = _strip_generics(header.split("{", 1)[0])
+    out: list[tuple[EdgeType, str]] = []
+    ext = _EXTENDS.search(header)
+    if ext:
+        out.append((EdgeType.INHERITS, ext.group(1).split(".")[-1]))
+    impl = _IMPLEMENTS.search(header)
+    if impl:
+        out += [(EdgeType.IMPLEMENTS, n.strip().split(".")[-1]) for n in impl.group(1).split(",") if n.strip()]
+    return out
 
 
 _OWN_RECEIVERS = {"this", "self", "cls", "super"}

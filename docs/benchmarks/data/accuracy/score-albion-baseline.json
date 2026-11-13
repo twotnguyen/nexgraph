@@ -1,0 +1,44 @@
+{
+  "symbol": {
+    "tp": 117,
+    "fp": 0,
+    "fn": 0,
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "call": {
+    "tp": 105,
+    "fp": 0,
+    "fn": 1,
+    "precision": 1.0,
+    "recall": 0.991
+  },
+  "import": {
+    "tp": 20,
+    "fp": 3,
+    "fn": 0,
+    "precision": 0.87,
+    "recall": 1.0
+  },
+  "inherit": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 0,
+    "precision": null,
+    "recall": null
+  },
+  "test": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 10,
+    "precision": null,
+    "recall": 0.0
+  },
+  "test_file": {
+    "tp": 0,
+    "fp": 0,
+    "fn": 3,
+    "precision": null,
+    "recall": 0.0
+  }
+}

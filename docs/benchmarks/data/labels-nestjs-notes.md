@@ -264,3 +264,4 @@
 
 ## Duyệt bổ sung (agent, 2026-11-13; người dùng vẫn cần duyệt lại ≥ 3 tệp)
 Bản nháp bỏ `constructor`, getter (`client`, `extended`) và `type` alias theo quy ước tự đặt. NexGraph coi chúng là symbol (phương thức/khai báo kiểu), và đó là cách đọc hợp lý của "mọi symbol", nên đã thêm 14 dòng `symbol` tương ứng trước khi chấm lần hai (8 constructor, 4 getter, 4 type alias).
+Sau khi đối chiếu với kết quả của công cụ trích xuất gốc: `ProductsService ... implements Options<Product>` (dòng 20) bị bản nháp bỏ sót; đã thêm một dòng `inherit` (implements tới interface trong dự án).

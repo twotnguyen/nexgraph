@@ -1,0 +1,166 @@
+{
+  "symbol": {
+    "fp": [],
+    "fn": []
+  },
+  "call": {
+    "fp": [],
+    "fn": [
+      [
+        "src/apps/products/products.service.ts::ProductsService.getProducts",
+        "src/common/utils/pagination-util/pagination-util.service.ts::PaginationUtilService.format",
+        null
+      ]
+    ]
+  },
+  "import": {
+    "fp": [
+      [
+        "src/apps/auth/dto/sign.dto.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/categories/categories.controller.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/order-promotions/order-promotions.controller.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/product-variants/product-variants.controller.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/products/products.service.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/role-permissions/dto/get-role-permission.dto.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/users/users.controller.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/apps/vendors/vendor-shop.controller.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/common/guards/access-control/access-control.guard.ts",
+        "package.json",
+        null
+      ],
+      [
+        "src/common/utils/date-util/date-util.service.ts",
+        "package.json",
+        null
+      ]
+    ],
+    "fn": []
+  },
+  "inherit": {
+    "fp": [],
+    "fn": []
+  },
+  "test": {
+    "fp": [],
+    "fn": [
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.createCartItem",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.deleteCartItem",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.onOrderCreated",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.updateCartItem",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.createProduct",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.deleteProduct",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.exportProducts",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.getProduct",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.getProducts",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.importProducts",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.updateProduct",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/common/guards/access-control/access-control.guard.ts::AccessControlGuard",
+        "src/common/guards/access-control/access-control.guard.spec.ts"
+      ],
+      [
+        "src/common/utils/date-util/date-util.service.ts::DateUtilService",
+        "src/common/utils/date-util/date-util.service.spec.ts"
+      ]
+    ]
+  },
+  "test_file": {
+    "fp": [],
+    "fn": [
+      [
+        "src/apps/cart-items/cart-items.service.ts",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/common/guards/access-control/access-control.guard.ts",
+        "src/common/guards/access-control/access-control.guard.spec.ts"
+      ],
+      [
+        "src/common/utils/date-util/date-util.service.ts",
+        "src/common/utils/date-util/date-util.service.spec.ts"
+      ]
+    ]
+  }
+}

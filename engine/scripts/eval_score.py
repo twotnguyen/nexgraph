@@ -84,23 +84,28 @@ def db_facts(db: Path, files: set[str]) -> dict[str, set[Fact]]:
 
 
 def baseline_facts(path: Path, files: set[str]) -> dict[str, set[Fact]]:
-    """Đồ thị trích xuất gốc (graph.json): nút theo (source_file, label), cạnh theo cặp nút, KHÔNG có dòng."""
+    """Đồ thị trích xuất gốc (graph.json): nút theo (source_file, nhãn), cạnh theo cặp nút, KHÔNG có dòng.
+
+    Chỉ nút gọi được (`_callable`: hàm, lớp, phương thức) tính là symbol; phương thức mang tên lớp (`Lớp.phương_thức`)
+    qua cạnh `method`. Đích không có tệp (thư viện ngoài) bị bỏ, giống nhãn tay không tính lời gọi ra ngoài.
+    """
     data = json.loads(path.read_text(encoding="utf-8"))
     nodes = {n["id"]: n for n in data["nodes"]}
     links = data.get("links") or data.get("edges") or []
+    owner = {e["target"]: e["source"] for e in links if e.get("relation") == "method"}
     out: dict[str, set[Fact]] = {k: set() for k in KINDS}
 
     def key(n: dict) -> str:
         label = re.sub(r"\(\)$", "", n["label"]).lstrip(".")
-        return f"{n['source_file']}::{label}"
+        cls = nodes.get(owner.get(n["id"], ""))
+        return f"{n['source_file']}::{re.sub(r'\(\)$', '', cls['label']).lstrip('.') + '.' if cls else ''}{label}"
 
     for n in nodes.values():
-        f = n.get("source_file")
-        if f in files and n["label"] != f and not n["label"].endswith((".py", ".ts", ".js", ".go", ".java", ".dart")):
+        if n.get("source_file") in files and n.get("_callable"):
             out["symbol"].add((key(n),))
     for e in links:
         a, b = nodes.get(e["source"]), nodes.get(e["target"])
-        if not a or not b or a.get("source_file") not in files:
+        if not a or not b or a.get("source_file") not in files or not b.get("source_file"):
             continue
         rel = e.get("relation", "")
         if rel == "calls":
@@ -137,12 +142,13 @@ def main() -> None:
     ap.add_argument("labels", type=Path)
     ap.add_argument("--baseline", type=Path, default=None, help="graph.json của công cụ trích xuất gốc; bỏ qua cột dòng khi chấm")
     ap.add_argument("--details", type=Path, default=None, help="ghi danh sách fp/fn để phân loại nguyên nhân")
+    ap.add_argument("--ignore-line", action="store_true", help="khớp cạnh theo cặp nút như đồ thị gốc (để so cùng điều kiện)")
     args = ap.parse_args()
     labels, files = read_labels(args.labels), label_files(args.labels)
     if args.baseline:
         result, details = score(labels, baseline_facts(args.baseline, files), ignore_line=True)
     else:
-        result, details = score(labels, db_facts(args.db, files))
+        result, details = score(labels, db_facts(args.db, files), ignore_line=args.ignore_line)
     print(json.dumps(result, indent=2))
     if args.details:
         args.details.write_text(json.dumps(details, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

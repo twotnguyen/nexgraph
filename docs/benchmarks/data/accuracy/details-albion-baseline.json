@@ -1,0 +1,102 @@
+{
+  "symbol": {
+    "fp": [],
+    "fn": []
+  },
+  "call": {
+    "fp": [],
+    "fn": [
+      [
+        "bot/main.py::TNCBot.setup_hook",
+        "bot/core/heartbeat.py::start",
+        null
+      ]
+    ]
+  },
+  "import": {
+    "fp": [
+      [
+        "web_dashboard/src/app/api/blacklist/route.ts",
+        "web_dashboard/package.json",
+        null
+      ],
+      [
+        "web_dashboard/src/components/MultiSearchableSelect.tsx",
+        "web_dashboard/package.json",
+        null
+      ],
+      [
+        "web_dashboard/src/components/SearchableSelect.tsx",
+        "web_dashboard/package.json",
+        null
+      ]
+    ],
+    "fn": []
+  },
+  "inherit": {
+    "fp": [],
+    "fn": []
+  },
+  "test": {
+    "fp": [],
+    "fn": [
+      [
+        "bot/cogs/alo_tts.py::AloTtsCog",
+        "bot/tests/test_config_concurrency.py"
+      ],
+      [
+        "bot/cogs/alo_tts.py::AloTtsCog",
+        "bot/tests/test_discord_workflows.py"
+      ],
+      [
+        "bot/cogs/alo_tts.py::AloTtsCog._tts_worker",
+        "bot/tests/test_discord_workflows.py"
+      ],
+      [
+        "bot/cogs/alo_tts.py::AloTtsCog.alo_cmd",
+        "bot/tests/test_discord_workflows.py"
+      ],
+      [
+        "bot/cogs/alo_tts.py::AloTtsCog.aloconfig_cmd",
+        "bot/tests/test_config_concurrency.py"
+      ],
+      [
+        "bot/cogs/alo_tts.py::AloTtsCog.alonametoggle_cmd",
+        "bot/tests/test_config_concurrency.py"
+      ],
+      [
+        "bot/cogs/alo_tts.py::AloTtsCog.on_voice_state_update",
+        "bot/tests/test_discord_workflows.py"
+      ],
+      [
+        "bot/cogs/update_translator.py::UpdateTranslatorCog",
+        "bot/tests/test_discord_workflows.py"
+      ],
+      [
+        "bot/cogs/update_translator.py::UpdateTranslatorCog._get_or_create_thread",
+        "bot/tests/test_discord_workflows.py"
+      ],
+      [
+        "bot/cogs/update_translator.py::UpdateTranslatorCog.utconfig_cmd",
+        "bot/tests/test_discord_workflows.py"
+      ]
+    ]
+  },
+  "test_file": {
+    "fp": [],
+    "fn": [
+      [
+        "bot/cogs/alo_tts.py",
+        "bot/tests/test_config_concurrency.py"
+      ],
+      [
+        "bot/cogs/alo_tts.py",
+        "bot/tests/test_discord_workflows.py"
+      ],
+      [
+        "bot/cogs/update_translator.py",
+        "bot/tests/test_discord_workflows.py"
+      ]
+    ]
+  }
+}

@@ -34,3 +34,21 @@ def test_call_on_foreign_receiver_is_not_linked_to_same_named_own_method(tmp_pat
     calls = _edges(store, EdgeType.CALLS)
     assert ("util.ts::StringUtil.compare#method", "util.ts::StringUtil.compare#method") not in calls
     assert ("util.ts::StringUtil.check#method", "util.ts::StringUtil.compare#method") in calls  # this.x() vẫn nối
+
+
+def test_typescript_extends_and_implements_across_files_are_linked(tmp_path, index_project):
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "base.ts").write_text("export class Base<T> {}\nexport interface Shape<T> {}\nexport interface Named {}\n")
+    (root / "child.ts").write_text(
+        "import { Base, Shape, Named } from './base';\n\n"
+        "@Injectable()\n"
+        "export class Child extends Base<'x'> implements Shape<number>,\n"
+        "  Named, Disposable {\n"
+        "  run() {}\n"
+        "}\n")
+    store, _, _ = index_project(root)
+    assert ("child.ts::Child#class", "base.ts::Base#class") in _edges(store, EdgeType.INHERITS)
+    implements = _edges(store, EdgeType.IMPLEMENTS)
+    assert ("child.ts::Child#class", "base.ts::Shape#class") in implements
+    assert ("child.ts::Child#class", "base.ts::Named#class") in implements

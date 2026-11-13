@@ -110,3 +110,4 @@ Khuyến nghị người đánh giá kiểm tra sâu ít nhất 3 tệp sau đâ
 
 ## Duyệt bổ sung (agent, 2026-11-13; người dùng vẫn cần duyệt lại ≥ 3 tệp)
 Bản nháp bỏ qua hàm lồng nhau và quy mọi lời gọi trong hàm lồng về hàm ngoài. Đọc lại mã thấy đó là sai ngữ nghĩa (lời gọi ở dòng 218–249 của `translate_albion_v1.py` nằm trong hàm lồng `_call`, khai báo dòng 208). Đã sửa nhãn trước khi chấm lần hai: 6 dòng `call` đổi nguồn từ `_run_batch` sang `_call`; thêm 3 dòng `call` (`_is_broken→_nlines` 187, `_run_batch→_call` 260, `main→_checkpoint` 364) và 15 dòng `symbol` (hàm lồng `_call`, `_checkpoint`, `_nlines`, `after_play`, `repl_channel`, `repl_mention`; TypeScript `Option`, `*Props`, `handleClickOutside`). Số liệu chấm lần một (trước sửa nhãn) lưu trong báo cáo để thấy tác động của quy ước.
+Sau khi đối chiếu với kết quả của công cụ trích xuất gốc: lời gọi `save_json` dòng 349 nằm trong hàm lồng `_checkpoint` (khai báo dòng 343), không phải `main`; đã sửa nhãn.

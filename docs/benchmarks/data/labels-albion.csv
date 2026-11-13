@@ -22,7 +22,7 @@ _backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.
 _backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.py::main,_backup_chatbot/build_albion_item_db.py::parse_items,305
 _backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.py::main,bot/core/storage.py::load_json,314
 _backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.py::main,_backup_chatbot/translate_albion_v1.py::_is_broken,329
-_backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.py::main,bot/core/storage.py::save_json,349
+_backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.py::_checkpoint,bot/core/storage.py::save_json,349
 _backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.py::main,_backup_chatbot/translate_albion_v1.py::_build_batch,357
 _backup_chatbot/translate_albion_v1.py,call,_backup_chatbot/translate_albion_v1.py::main,_backup_chatbot/translate_albion_v1.py::_run_batch,358
 bot/cogs/about.py,symbol,bot/cogs/about.py::AboutCog,,

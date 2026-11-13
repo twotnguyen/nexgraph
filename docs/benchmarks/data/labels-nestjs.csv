@@ -210,3 +210,4 @@ src/apps/role-permissions/dto/get-role-permission.dto.ts,symbol,src/apps/role-pe
 src/apps/role-permissions/dto/get-role-permission.dto.ts,symbol,src/apps/role-permissions/dto/get-role-permission.dto.ts::RolesImportCreate,,
 src/apps/role-permissions/dto/get-role-permission.dto.ts,symbol,src/apps/role-permissions/dto/get-role-permission.dto.ts::PermissionsData,,
 src/apps/role-permissions/dto/get-role-permission.dto.ts,symbol,src/apps/role-permissions/dto/get-role-permission.dto.ts::PermissionsImportCreate,,
+src/apps/products/products.service.ts,inherit,src/apps/products/products.service.ts::ProductsService,src/common/query/options.interface.ts::Options,20
