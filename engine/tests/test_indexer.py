@@ -150,3 +150,19 @@ def test_full_index_persists_bindings_and_baseline(copy_fixture, index_project):
     from nexgraph_engine.index.indexer import Indexer
     Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event(), subdir="lib/services").run()
     assert store.last_scope() == "lib/services"
+
+
+def test_python_and_typescript_imports_become_file_edges(tmp_path, index_project):
+    # Hồi quy: tên import từ bộ trích xuất đa ngôn ngữ là id tệp của nó (`pkg_mod`), không phải đường dẫn,
+    # nên resolver chỉ hiểu đường dẫn kiểu Dart từng cho 0 cạnh IMPORTS với Python/TS (đo trên repo 17k tệp).
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "__init__.py").write_text("")
+    (tmp_path / "pkg" / "mod.py").write_text("def f():\n    return 1\n")
+    (tmp_path / "app.py").write_text("import json\nfrom pkg.mod import f\n\n\ndef main():\n    return f()\n")
+    (tmp_path / "web").mkdir()
+    (tmp_path / "web" / "util.ts").write_text("export function hashPw(p: string) { return p; }\n")
+    (tmp_path / "web" / "svc.ts").write_text("import { hashPw } from './util';\nexport const x = hashPw('a');\n")
+    store, result, _ = index_project(tmp_path)
+    assert result.state == "hoan_tat"
+    assert {e.edge.target for e in out_edges(store, "app.py#file", EdgeType.IMPORTS)} == {"pkg/mod.py#file"}
+    assert "web/util.ts#file" in {e.edge.target for e in out_edges(store, "web/svc.ts#file", EdgeType.IMPORTS)}

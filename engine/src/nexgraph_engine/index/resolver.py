@@ -9,6 +9,9 @@ import posixpath
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from pathlib import PurePosixPath
+
+from graphify.extract import _file_node_id
 
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.graph_store import GraphStore
@@ -33,6 +36,12 @@ class _Index:
     def __init__(self, nodes: list[Node]) -> None:
         self.by_id = {n.id: n for n in nodes}
         self.files = {n.file for n in nodes if n.kind == NodeKind.FILE and n.file}
+        # Bộ trích xuất đa ngôn ngữ (generic.py) đặt tên import là id tệp của nó (`pkg/mod.py` -> `pkg_mod`).
+        by_gid: dict[str, list[str]] = defaultdict(list)
+        for f in self.files:
+            if not f.endswith(".dart"):
+                by_gid[_file_node_id(PurePosixPath(f))].append(f)
+        self.file_by_gid = {g: fs[0] for g, fs in by_gid.items() if len(fs) == 1}  # trùng id thì không đoán
         self.types: dict[str, dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
         self.funcs: dict[str, dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
         self.members: dict[tuple[str, str], dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
@@ -106,7 +115,9 @@ def resolve_references(store: GraphStore, *, package_name: str | None) -> tuple[
         elif ":" not in uri.split("/")[0]:
             joined = posixpath.normpath(posixpath.join(posixpath.dirname(src.file), uri))
             target_rel = joined if not joined.startswith("..") else None
-        if target_rel and target_rel in idx.files:
+        if (not target_rel or target_rel not in idx.files) and not src.file.endswith(".dart"):
+            target_rel = idx.file_by_gid.get(uri)
+        if target_rel and target_rel in idx.files and target_rel != src.file:
             edge(ref, idx.by_id[f"{target_rel}#file"], EdgeType.IMPORTS, 1.0, subtype, exact=True)
             imports[src.file].append((target_rel, subtype))
             resolved.append(ref_id)
