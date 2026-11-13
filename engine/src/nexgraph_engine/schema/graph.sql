@@ -2,7 +2,7 @@
 -- Lược đồ theo docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md. Số RBn là mã ràng buộc toàn vẹn ở tài liệu đó.
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;  (SQLite tắt mặc định, không lưu trong tệp)
 
-PRAGMA user_version = 4;
+PRAGMA user_version = 5;
 
 -- 1. DU_AN ---------------------------------------------------------------
 CREATE TABLE du_an (
@@ -224,6 +224,36 @@ CREATE TABLE moc_tep (
                                  AND instr(duong_dan_tuong_doi, char(92)) = 0),
     ma_bam              TEXT NOT NULL CHECK (length(ma_bam) = 64 AND ma_bam NOT GLOB '*[^0-9a-f]*')
 );
+
+-- 11. LUONG (v5) ---------------------------------------------------------
+-- Luồng thực thi từ các điểm vào (F11).
+CREATE TABLE luong (
+    ma_luong   INTEGER PRIMARY KEY,
+    ma_nut_vao INTEGER NOT NULL UNIQUE REFERENCES nut (ma_nut) ON DELETE CASCADE,
+    ten        TEXT    NOT NULL CHECK (length(ten) BETWEEN 1 AND 255),
+    loai_vao   TEXT    NOT NULL CHECK (loai_vao IN ('main', 'route', 'cli', 'event', 'root')),
+    mo_ta_vao  TEXT    CHECK (mo_ta_vao IS NULL OR length(mo_ta_vao) <= 200),
+    so_buoc    INTEGER NOT NULL CHECK (so_buoc >= 2),
+    so_tep     INTEGER NOT NULL CHECK (so_tep >= 1),
+    do_sau     INTEGER NOT NULL CHECK (do_sau >= 1),
+    diem       REAL    NOT NULL CHECK (diem BETWEEN 0 AND 1),
+    bi_cat     INTEGER NOT NULL DEFAULT 0 CHECK (bi_cat IN (0, 1))
+);
+CREATE INDEX idx_luong_diem ON luong (diem DESC, ma_luong);
+
+-- 12. BUOC_LUONG (v5) ----------------------------------------------------
+-- Các bước trong một luồng thực thi, sắp xếp theo thứ tự BFS.
+CREATE TABLE buoc_luong (
+    ma_luong INTEGER NOT NULL REFERENCES luong (ma_luong) ON DELETE CASCADE,
+    thu_tu   INTEGER NOT NULL CHECK (thu_tu >= 0),
+    ma_nut   INTEGER NOT NULL REFERENCES nut (ma_nut) ON DELETE CASCADE,
+    do_sau   INTEGER NOT NULL CHECK (do_sau >= 0),
+    ma_nut_goi      INTEGER REFERENCES nut (ma_nut) ON DELETE CASCADE,
+    dong_bang_chung INTEGER,
+    PRIMARY KEY (ma_luong, thu_tu),
+    UNIQUE (ma_luong, ma_nut)
+);
+CREATE INDEX idx_buoc_nut ON buoc_luong (ma_nut);
 
 -- Khung nhìn thay cho dữ liệu suy ra ------------------------------------
 -- Cấp của khối (cột cap đã bỏ khi chuẩn hóa).

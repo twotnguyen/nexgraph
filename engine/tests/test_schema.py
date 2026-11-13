@@ -43,7 +43,7 @@ def test_open_is_idempotent(tmp_path):
     p = tmp_path / "graph.db"
     open_graph_db(p).close()
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 4
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 5
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     conn.close()
@@ -124,7 +124,7 @@ def test_v1_database_is_upgraded(tmp_path):
     p = tmp_path / "graph.db"
     _make_v1(p)
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
     assert conn.execute("SELECT count(*) FROM kieu_bien").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM moc_tep").fetchone()[0] == 0
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(lan_lap_chi_muc)")}
@@ -132,7 +132,7 @@ def test_v1_database_is_upgraded(tmp_path):
     assert conn.execute("SELECT gom_tai_lieu, gom_media FROM lan_lap_chi_muc").fetchone()[:] == (0, 0)
     assert conn.execute("SELECT count(*) FROM nut").fetchone()[0] == 2
     assert conn.execute("SELECT count(*) FROM canh").fetchone()[0] == 1
-    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 4
+    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 5
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.close()
     open_graph_db(p).close()  # lần hai không làm gì
@@ -145,12 +145,11 @@ def test_read_only_v1_is_rejected(tmp_path):
         open_graph_db(p, read_only=True)
 
 
-def test_new_database_is_v4(tmp_path):
+def test_new_database_is_v5(tmp_path):
     conn = open_graph_db(tmp_path / "graph.db")
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
     tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"kieu_bien", "moc_tep"} <= tables
-
+    assert {"kieu_bien", "moc_tep", "luong", "buoc_luong"} <= tables
 
 def _node(conn):
     conn.execute(
@@ -188,7 +187,7 @@ def test_migrated_matches_fresh_schema(tmp_path):
 
     def shape(c):
         out = {}
-        for t in ("kieu_bien", "moc_tep", "lan_lap_chi_muc"):
+        for t in ("kieu_bien", "moc_tep", "lan_lap_chi_muc", "luong", "buoc_luong"):
             out[t] = [tuple(r)[1:] for r in c.execute(f"PRAGMA table_info({t})")]
         return out
 
@@ -200,3 +199,32 @@ def test_schema_sql_packaged():
     from importlib import resources
 
     assert resources.files("nexgraph_engine.schema").joinpath("migrate_1_to_2.sql").is_file()
+    assert resources.files("nexgraph_engine.schema").joinpath("migrate_4_to_5.sql").is_file()
+
+
+def test_v5_has_flow_tables_and_upgrades_v4(tmp_path):
+    conn = open_graph_db(tmp_path / "g.db")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(buoc_luong)")}
+    assert cols == {"ma_luong", "thu_tu", "ma_nut", "do_sau", "ma_nut_goi", "dong_bang_chung"}
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO luong (ma_nut_vao, ten, loai_vao, so_buoc, so_tep, do_sau, diem) VALUES (1,'x','khac',2,1,1,0.5)")
+
+    # Kiểm tra nâng cấp từ v4 có sẵn dữ liệu nút
+    v4_path = tmp_path / "v4.db"
+    c4 = sqlite3.connect(v4_path)
+    c4.executescript(load_sql("graph"))
+    c4.execute("DROP TABLE buoc_luong")
+    c4.execute("DROP TABLE luong")
+    c4.execute("UPDATE du_an SET phien_ban_schema = 4")
+    c4.execute("PRAGMA user_version = 4")
+    c4.execute("INSERT INTO nut (id_nut, loai_nut, nhan, ten_day_du, nguon_goc) VALUES ('.#repository', 'repository', 'r', 'r', 'ast')")
+    c4.commit()
+    c4.close()
+
+    c5 = open_graph_db(v4_path)
+    assert c5.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert c5.execute("SELECT nhan FROM nut WHERE id_nut = '.#repository'").fetchone()[0] == "r"
+    c5_tables = {r["name"] for r in c5.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"luong", "buoc_luong"} <= c5_tables
+    c5.close()
