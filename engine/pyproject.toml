@@ -44,6 +44,9 @@ dependencies = [
     "neo4j>=6.4.1",
     "falkordb>=1.8.2",
     "scipy>=1.11",
+    "pypdf>=4",
+    "python-docx>=1.1",
+    "openpyxl>=3.1",
 ]
 
 [project.scripts]

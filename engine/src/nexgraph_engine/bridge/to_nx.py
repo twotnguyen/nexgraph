@@ -11,10 +11,12 @@ from typing import Literal
 
 import networkx as nx
 
+from nexgraph_engine.index.discovery import DOC_LANGUAGES
 from nexgraph_engine.store.graph_store import GraphStore
 
 EXPORT_NODE_LIMIT = 5000
 OTHER_COMMUNITY = -1
+DOC_KINDS = ("document", "concept")
 
 RELATION = {
     "CALLS": "calls", "IMPORTS": "imports_from", "INHERITS": "inherits", "IMPLEMENTS": "implements",
@@ -83,13 +85,14 @@ def build_nx(store: GraphStore, scope: Scope = Scope()) -> BridgeGraph:
     communities: dict[int, list[str]] = {}
     rows = conn.execute(
         "SELECT n.ma_nut, n.id_nut, n.loai_nut, n.nhan, n.dong_bat_dau, n.la_kiem_thu, n.ma_khoi,"
-        " t.duong_dan_tuong_doi AS tep FROM nut n LEFT JOIN tep t ON t.ma_tep = n.ma_tep")
+        " t.duong_dan_tuong_doi AS tep, t.ngon_ngu FROM nut n LEFT JOIN tep t ON t.ma_tep = n.ma_tep")
     for r in rows:
         if r["ma_nut"] not in keep:
             continue
         cid = r["ma_khoi"] if r["ma_khoi"] in blocks else OTHER_COMMUNITY
         G.add_node(r["id_nut"], id=r["id_nut"], label=r["nhan"], source_file=r["tep"] or "",
-                   source_location=f"L{r['dong_bat_dau']}" if r["dong_bat_dau"] else "", file_type="code",
+                   source_location=f"L{r['dong_bat_dau']}" if r["dong_bat_dau"] else "",
+                   file_type="document" if r["loai_nut"] in DOC_KINDS or r["ngon_ngu"] in DOC_LANGUAGES else "code",
                    community=cid, kind=r["loai_nut"], is_test=bool(r["la_kiem_thu"]))
         pk_to_id[r["ma_nut"]] = r["id_nut"]
         communities.setdefault(cid, []).append(r["id_nut"])

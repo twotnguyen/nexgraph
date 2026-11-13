@@ -34,6 +34,8 @@ for dist in md.distributions():
 hiddenimports += collect_submodules("uvicorn")
 # Graphify import các gói export trong thân hàm (F10): khai báo rõ để bản đóng gói có đủ.
 hiddenimports += ["matplotlib.backends.backend_agg", "matplotlib.backends.backend_svg", *collect_submodules("scipy.sparse"), *collect_submodules("neo4j"), *collect_submodules("falkordb")]
+# Đọc tài liệu khi bật "Gồm tài liệu" (F10 6a): Graphify import các gói này trong thân hàm.
+hiddenimports += [*collect_submodules("pypdf"), *collect_submodules("docx"), *collect_submodules("openpyxl")]
 
 a = Analysis(
     [os.path.join(ENGINE_DIR, "src", "nexgraph_engine", "cli.py")],

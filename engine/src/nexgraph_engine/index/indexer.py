@@ -12,7 +12,9 @@ from typing import Literal
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
-from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
+from nexgraph_engine.docs.extract import extract_document
+from nexgraph_engine.docs.text import doc_text
+from nexgraph_engine.index.discovery import DOC_LANGUAGES, DiscoveredFile, discover, sha256_file
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.index.generic import extract_generic
 from nexgraph_engine.index.resolver import _package_name, resolve_references
@@ -80,8 +82,13 @@ def extract_file(root: Path, f: DiscoveredFile) -> ExtractedFile:
     if read_error or source is None:
         return ExtractedFile(rec, [file_node], [], [], {}, [("read", read_error or "Không đọc được tệp")])
     try:
-        x: FileExtraction = (extract_dart(f.rel_path, source, is_test=f.is_test) if f.language == "dart"
-                             else extract_generic(root, f.rel_path, f.language, is_test=f.is_test))
+        if f.language in DOC_LANGUAGES:
+            x: FileExtraction = (FileExtraction() if f.language == "media"
+                                 else extract_document(f.rel_path, doc_text(path, f.language), file_id=file_node.id))
+        elif f.language == "dart":
+            x = extract_dart(f.rel_path, source, is_test=f.is_test)
+        else:
+            x = extract_generic(root, f.rel_path, f.language, is_test=f.is_test)
     except Exception as exc:  # lỗi trích xuất một tệp không được dừng cả job
         return ExtractedFile(rec, [file_node], [], [], {}, [("extract", f"{type(exc).__name__}: {exc}")])
     return ExtractedFile(rec, [file_node, *x.nodes], list(x.edges), list(x.refs), dict(x.bindings), list(x.errors))
