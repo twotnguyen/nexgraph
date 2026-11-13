@@ -97,6 +97,15 @@ class JobManager:
         lock = self._locks.get(info.project_id) if self._locks else None
         if lock is not None:
             lock.acquire()  # đợi một lần refresh đang chạy dở (vài giây) rồi mới ghi đồ thị
+        terminal_event: ProgressEvent | None = None
+
+        def on_event(e: ProgressEvent) -> None:
+            nonlocal terminal_event
+            if e.state in ("done", "cancelled"):
+                terminal_event = e
+            else:
+                self._update(job_id, e)
+
         try:
             conn = open_graph_db(info.graph_db)
             store = GraphStore(conn)
@@ -104,14 +113,16 @@ class JobManager:
             last_docs, last_media = store.last_doc_flags()
             include_docs = last_docs if include_docs is None else include_docs
             include_media = last_media if include_media is None else include_media
-            self._indexer_cls(store, info.path, on_progress=lambda e: self._update(job_id, e), cancel=cancel,
+            self._indexer_cls(store, info.path, on_progress=on_event, cancel=cancel,
                               subdir=subdir, exclude=exclude, include_docs=include_docs,
                               include_media=include_media,
                               transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id).run()
         except Exception as exc:
-            self._update(job_id, ProgressEvent("error", 0, 0, f"{type(exc).__name__}: {exc}"))
+            terminal_event = ProgressEvent("error", 0, 0, f"{type(exc).__name__}: {exc}")
         finally:
             if conn is not None:
                 conn.close()
             if lock is not None:
                 lock.release()
+            if terminal_event is not None:
+                self._update(job_id, terminal_event)

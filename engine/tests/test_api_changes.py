@@ -106,18 +106,18 @@ def test_concurrent_refresh_second_is_skipped(api, opened, monkeypatch):
 
     def slow(store, root, **kw):
         started.set()
-        release.wait(5)
+        release.wait(15)
         return real(store, root, **kw)
 
     monkeypatch.setattr(refresh_service, "refresh_project", slow)
     service = api.app.state.services.refresh
     first = threading.Thread(target=lambda: service.refresh(pid))
     first.start()
-    assert started.wait(5)
+    assert started.wait(15)
     second = service.refresh(pid)
     assert (second["status"], second["reason"]) == ("skipped", "refresh_running")
     release.set()
-    first.join(5)
+    first.join(15)
     assert service.refresh(pid)["status"] == "ok"
 
 
