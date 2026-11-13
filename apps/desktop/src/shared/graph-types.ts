@@ -218,6 +218,16 @@ export interface AskResult {
   truncated: boolean
 }
 
+export interface TourStep {
+  order: number
+  kind: 'entry' | 'flow' | 'community' | 'hub' | 'tests'
+  title: string
+  body: string
+  node: GraphNode | null
+  flow_id: number | null
+  block_id: string | null
+}
+
 export interface MapNode { id: string; label: string; kind: 'directory' | 'file'; files: number; symbols: number; community: number | null; drillable: boolean }
 export interface MapEdge { source: string; target: string; weight: number; types: Record<string, number> }
 export interface ProjectMap { parent: { id: string; label: string } | null; nodes: MapNode[]; edges: MapEdge[]; truncated: boolean; totals: { files: number; nodes: number } }

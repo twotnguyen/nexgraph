@@ -13,6 +13,7 @@ import { ReportView } from '../components/report/ReportView'
 import { TreeView } from '../components/tree/TreeView'
 import { SearchPanel } from '../components/search/SearchPanel'
 import { FlowsView } from '../components/flows/FlowsView'
+import { TourPanel } from '../components/tour/TourPanel'
 import { ChatPanel } from '../components/chat/ChatPanel'
 import { MapView } from '../components/map/MapView'
 import { useChanges } from '../state/useChanges'
@@ -37,6 +38,13 @@ const SearchIcon = (
   </svg>
 )
 
+const TourIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <circle cx="12" cy="12" r="8" />
+    <path d="m15.5 8.5-2 5-5 2 2-5z" />
+  </svg>
+)
+
 const ChangesIcon = (
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
     <circle cx="6" cy="6" r="2.5" />
@@ -58,6 +66,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [])
+  const [archParent, setArchParent] = useState<string | undefined>(undefined)
   const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
   const openFlow = (id: number) => {
     setFlowId(id)
@@ -139,6 +148,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setNotice(note)
     setTab('graph')
   }
+  const openArch = (blockId: string) => {
+    setArchParent(blockId)
+    setTab('arch')
+  }
   const openExport = (scope: ExportScope, format: ExportFormat = 'html') => {
     setExportFormat(format)
     setExportScope(scope)
@@ -183,7 +196,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       <ActivityBar
         items={[
           { id: 'search', title: vi.activity.search, icon: SearchIcon },
-          { id: 'changes', title: vi.activity.changes, icon: ChangesIcon }
+          { id: 'changes', title: vi.activity.changes, icon: ChangesIcon },
+          { id: 'tour', title: vi.activity.tour, icon: TourIcon }
         ]}
         active={panel}
         onToggle={(id) => setPanel((cur) => (cur === id ? null : id))}
@@ -191,6 +205,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       {panel === 'search' && (
         <aside className="sidebar">
           <SearchPanel projectId={project.project_id} onOpen={openNode} onShowSubgraph={(g) => { setOverlay(g); setNotice(null); setTab('graph') }} onOpenFlow={openFlow} />
+        </aside>
+      )}
+      {panel === 'tour' && (
+        <aside className="sidebar wide">
+          <TourPanel projectId={project.project_id} projectName={project.name} onOpenFlow={openFlow} onOpenNode={openNodeId} onOpenArch={openArch} />
         </aside>
       )}
       {panel === 'changes' && (
@@ -226,7 +245,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         )}
         <div className="tabs" role="tablist">
           {MAIN_TABS.map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => { if (t === 'arch') setArchParent(undefined); setTab(t) }}>
               {{ arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
             </button>
           ))}
@@ -240,7 +259,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ))}
         </div>
         <div className="canvas-wrap">
-          {tab === 'arch' && <ArchitectureCanvas projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'arch' && <ArchitectureCanvas key={archParent ?? 'root'} projectId={project.project_id} initialParent={archParent} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'map' && <MapView projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={() => setTab('arch')} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} initialFlowId={flowId} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (

@@ -46,6 +46,15 @@ describe('WorkspaceScreen', () => {
     expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).toBeNull()
   })
 
+  it('mục Tham quan của thanh hoạt động mở panel và nạp chuyến tham quan', async () => {
+    const tour = vi.fn(async () => ({ steps: [] }))
+    installNexgraph({ graph: { tour } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.click(screen.getByRole('button', { name: 'Tham quan' }))
+    expect(tour).toHaveBeenCalledWith('p1')
+    expect(await screen.findByText(/Chưa đủ dữ liệu/)).toBeInTheDocument()
+  })
+
   it('starts on the Kiến trúc tab with the search panel open', () => {
     setup()
     expect(screen.getByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()

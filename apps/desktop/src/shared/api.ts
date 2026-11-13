@@ -3,7 +3,7 @@ import type { AgentId, IntegrationPlan } from './integration-types'
 import type {
   AiSettings, ChatAnswer, ChatMessage,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
-  ContextPack, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
+  ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   GraphNode, GraphReport, GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult,
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from './graph-types'
@@ -50,6 +50,7 @@ export interface NexGraphApi {
     recluster(projectId: string): Promise<{ communities: number }>
     flows(projectId: string, opts?: FlowQuery): Promise<FlowList>
     flow(projectId: string, flowId: number): Promise<FlowDetail>
+    tour(projectId: string): Promise<{ steps: TourStep[] }>
     locate(projectId: string, file: string, line: number): Promise<{ node: GraphNode }>
     context(projectId: string, question: string, budget?: number): Promise<ContextPack>
     map(projectId: string, opts?: { parent?: string; detail?: number }): Promise<ProjectMap>

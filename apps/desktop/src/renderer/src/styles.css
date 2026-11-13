@@ -1501,3 +1501,55 @@ button.card:hover:not(:disabled) {
   padding-left: 16px;
   font-size: 11px;
 }
+
+/* Tour */
+.tour {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+}
+
+.tour li {
+  margin-bottom: 8px;
+}
+
+.tour .tour-step {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 8px;
+  width: 100%;
+  padding: 8px;
+  text-align: left;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.tour .cur .tour-step {
+  background: #fff;
+  border-color: var(--color-map-blue);
+}
+
+.tour .n {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #dfe5ec;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+
+.tour .cur .n {
+  background: var(--color-map-blue);
+  color: #fff;
+}
+
+.tour .tour-step p {
+  margin: 3px 0 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
