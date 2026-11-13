@@ -1,6 +1,6 @@
 import type {
-  ArchEvidence, ArchView, Changes, CodeSlice, GraphNode, GraphStats, Job, NeighborQuery, Neighborhood, ProjectSummary, RefreshResult,
-  ScanInfo, SearchHit
+  ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope, GraphNode, GraphReport, GraphStats, Job,
+  NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
 
@@ -50,8 +50,9 @@ export class EngineApi {
   listProjects(): Promise<ProjectSummary[]> {
     return this.request('GET', '/v1/projects')
   }
-  startIndex(pid: string, o?: { subdir?: string }): Promise<{ job_id: string }> {
-    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, o?.subdir ? { subdir: o.subdir } : undefined)
+  startIndex(pid: string, o?: { subdir?: string; exclude?: string[] }): Promise<{ job_id: string }> {
+    const body = { ...(o?.subdir ? { subdir: o.subdir } : {}), ...(o?.exclude?.length ? { exclude: o.exclude } : {}) }
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, Object.keys(body).length ? body : undefined)
   }
   scan(pid: string): Promise<ScanInfo> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/scan`)
@@ -103,5 +104,30 @@ export class EngineApi {
     if (start !== undefined) p.set('start', String(start))
     if (end !== undefined) p.set('end', String(end))
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/code?${p}`)
+  }
+  report(pid: string): Promise<GraphReport> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/report`)
+  }
+  paths(pid: string, nodeIds: string[], o?: { maxHops?: number; directed?: boolean }): Promise<PathResult> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/paths`, {
+      node_ids: nodeIds,
+      ...(o?.maxHops !== undefined ? { max_hops: o.maxHops } : {}),
+      ...(o?.directed !== undefined ? { directed: o.directed } : {})
+    })
+  }
+  impactOf(pid: string, nodeId: string): Promise<NodeImpact> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/impact?${new URLSearchParams({ node: nodeId })}`)
+  }
+  ask(pid: string, question: string, o?: { depth?: number; budget?: number; mode?: 'bfs' | 'dfs' }): Promise<AskResult> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/ask`, { question, ...o })
+  }
+  recluster(pid: string): Promise<{ communities: number }> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/communities`)
+  }
+  exportGraph(pid: string, format: ExportFormat, scope: ExportScope, outDir: string): Promise<ExportResult> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export`, { format, scope, out_dir: outDir })
+  }
+  pushGraph(pid: string, req: PushRequest): Promise<PushResult> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export/push`, req)
   }
 }

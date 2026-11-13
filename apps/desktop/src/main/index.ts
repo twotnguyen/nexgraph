@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
-import { registerIpc, stopAllWatchers } from './ipc'
+import { registerIpc, stopAllMcpHttp, stopAllWatchers } from './ipc'
 import { join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
 import { getHealth } from './engine/client'
@@ -32,8 +32,9 @@ function followEvents(handle: EngineHandle | null): void {
   )
 }
 
+const engineCommand = () => resolveEngineCommand({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, repoRoot })
 const supervisor = new EngineSupervisor(
-  () => resolveEngineCommand({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, repoRoot }),
+  engineCommand,
   dataDir,
   (status) => {
     mainWindow?.webContents.send('engine:status-changed', status)
@@ -61,7 +62,7 @@ function createWindow(): void {
   else void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-registerIpc(() => supervisor.getHandle(), () => mainWindow)
+registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir)
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
@@ -109,5 +110,5 @@ app.on('before-quit', (e) => {
   e.preventDefault()
   quitting = true
   stopAllWatchers()
-  void supervisor.stop().finally(() => app.quit())
+  void Promise.all([supervisor.stop(), stopAllMcpHttp()]).finally(() => app.quit())
 })

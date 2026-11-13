@@ -148,3 +148,45 @@ describe('toIpcResult', () => {
     expect(other).toEqual({ ok: false, error: { code: 'internal', message: 'boom' } })
   })
 })
+
+type Echo = { method: string; path: string; query: Record<string, string>; body: unknown }
+const echo = (p: Promise<unknown>): Promise<Echo> => p as Promise<Echo>
+
+describe('EngineApi: F10 wave 1 routes', () => {
+  it('report is a GET', async () => {
+    expect(await echo(api.report('p1'))).toMatchObject({ method: 'GET', path: '/v1/projects/p1/report' })
+  })
+
+  it('paths posts node ids with snake_case options', async () => {
+    const r = await echo(api.paths('p1', ['a#file', 'b#file'], { maxHops: 3, directed: false }))
+    expect(r).toMatchObject({ method: 'POST', path: '/v1/projects/p1/paths' })
+    expect(r.body).toEqual({ node_ids: ['a#file', 'b#file'], max_hops: 3, directed: false })
+    expect((await echo(api.paths('p1', ['a', 'b']))).body).toEqual({ node_ids: ['a', 'b'] })
+  })
+
+  it('impactOf sends the node id as a query parameter', async () => {
+    const id = 'lib/a.dart::A.run#method'
+    expect(await echo(api.impactOf('p1', id))).toMatchObject({ method: 'GET', query: { node: id } })
+  })
+
+  it('ask posts the question and options', async () => {
+    const r = await echo(api.ask('p1', 'đăng nhập ở đâu', { depth: 3, budget: 500, mode: 'dfs' }))
+    expect(r.body).toEqual({ question: 'đăng nhập ở đâu', depth: 3, budget: 500, mode: 'dfs' })
+  })
+
+  it('recluster posts to communities', async () => {
+    expect(await echo(api.recluster('p1'))).toMatchObject({ method: 'POST', path: '/v1/projects/p1/communities' })
+  })
+
+  it('startIndex sends exclude patterns', async () => {
+    expect(await api.startIndex('p1', { exclude: ['vendor/', '*.g.dart'] })).toMatchObject({ received_body: { exclude: ['vendor/', '*.g.dart'] } })
+    expect(await api.startIndex('p1', { subdir: 'lib', exclude: [] })).toMatchObject({ received_body: { subdir: 'lib' } })
+  })
+
+  it('exportGraph and pushGraph post format, scope and target', async () => {
+    const e = await echo(api.exportGraph('p1', 'obsidian', { kind: 'community', value: 'com:2' }, '/tmp/Đồ án'))
+    expect(e.body).toEqual({ format: 'obsidian', scope: { kind: 'community', value: 'com:2' }, out_dir: '/tmp/Đồ án' })
+    const p = await echo(api.pushGraph('p1', { target: 'neo4j', uri: 'bolt://localhost:7687', user: 'neo4j', password: 'x', scope: { kind: 'all' } }))
+    expect(p).toMatchObject({ path: '/v1/projects/p1/export/push', body: { target: 'neo4j', uri: 'bolt://localhost:7687' } })
+  })
+})

@@ -29,7 +29,13 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     graph: { stats: vi.fn(), neighbors: vi.fn(), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
       language: null, file: null, line_start: null, line_end: null, is_test: false, origin: 'ast', signature: null, community: null })), code: vi.fn(), search: vi.fn(async () => []),
       architecture: vi.fn(async () => ({ parent: null, blocks: [], links: [] })), archEvidence: vi.fn(async () => []),
-      changes: vi.fn(async () => emptyChanges()), ...over.graph },
+      changes: vi.fn(async () => emptyChanges()), report: vi.fn(), paths: vi.fn(), impactOf: vi.fn(), ask: vi.fn(),
+      recluster: vi.fn(async () => ({ communities: 3 })), ...over.graph },
+    exporter: { pickDir: vi.fn(async () => '/Đồ án/xuất'), run: vi.fn(async () => ({ files: [], truncated: false })),
+      push: vi.fn(async () => ({ nodes: 0, edges: 0, truncated: false })), png: vi.fn(async () => null),
+      reveal: vi.fn(async () => {}), ...over.exporter },
+    mcp: { config: vi.fn(async () => ({ stdio: '{}' })), startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:1/mcp', key: 'k' })),
+      stopHttp: vi.fn(async () => {}), httpStatus: vi.fn(async () => null), ...over.mcp },
     watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}), ...over.watch }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api

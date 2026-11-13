@@ -44,7 +44,25 @@ const api: NexGraphApi = {
     search: (pid, q, opts) => call('graph:search', pid, q, opts),
     architecture: (pid, parent) => call('graph:architecture', pid, parent),
     archEvidence: (pid, from, to, limit) => call('graph:arch-evidence', pid, from, to, limit),
-    changes: (pid, opts) => call('graph:changes', pid, opts)
+    changes: (pid, opts) => call('graph:changes', pid, opts),
+    report: (pid) => call('graph:report', pid),
+    paths: (pid, nodeIds, opts) => call('graph:paths', pid, nodeIds, opts),
+    impactOf: (pid, nodeId) => call('graph:impact-of', pid, nodeId),
+    ask: (pid, question, opts) => call('graph:ask', pid, question, opts),
+    recluster: (pid) => call('graph:recluster', pid)
+  },
+  exporter: {
+    pickDir: () => call('export:pick-dir'),
+    run: (pid, format, scope, outDir) => call('export:run', pid, format, scope, outDir),
+    push: (pid, req) => call('export:push', pid, req),
+    png: () => call('export:png'),
+    reveal: (path) => call('export:reveal', path)
+  },
+  mcp: {
+    config: (projectPath) => call('mcp:config', projectPath),
+    startHttp: (pid, projectPath) => call('mcp:start-http', pid, projectPath),
+    stopHttp: (pid) => call('mcp:stop-http', pid),
+    httpStatus: (pid) => call('mcp:http-status', pid)
   },
   watch: {
     start: (pid, path) => call('watch:start', pid, path),

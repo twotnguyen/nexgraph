@@ -4,6 +4,16 @@ import http from 'node:http'
 const mode = process.env.FAKE_MODE ?? 'ok'
 const token = process.env.NEXGRAPH_TOKEN
 
+// `mcp --http`: in dòng ready rồi trả lại key nhận qua biến môi trường (test McpHttpManager).
+if (process.argv.includes('mcp') && process.argv.includes('--http')) {
+  const key = process.env.NEXGRAPH_MCP_KEY ?? ''
+  const server = http.createServer((req, res) => {
+    res.writeHead(req.headers['x-api-key'] === key ? 200 : 401, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ argv: process.argv.slice(2) }))
+  })
+  server.listen(0, '127.0.0.1', () => console.log(JSON.stringify({ event: 'ready', port: server.address().port, pid: process.pid })))
+} else
+
 if (mode === 'never-ready') {
   setInterval(() => {}, 1000)
 } else if (mode === 'crash-before-ready') {
@@ -56,6 +66,15 @@ if (mode === 'never-ready') {
       return
     }
     if (url.pathname === '/v1/projects') return json(200, [{ project_id: 'p1', path: '/demo', name: 'demo', is_git: false, storage: 'in_project', last_indexed_at: null, last_index_commit: null }])
+    const ECHO = ['/v1/projects/p1/report', '/v1/projects/p1/paths', '/v1/projects/p1/impact', '/v1/projects/p1/ask',
+      '/v1/projects/p1/communities', '/v1/projects/p1/export', '/v1/projects/p1/export/push']
+    if (ECHO.includes(url.pathname)) {
+      let body = ''
+      req.on('data', (c) => (body += c))
+      req.on('end', () => json(200, { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams),
+        body: body ? JSON.parse(body) : null }))
+      return
+    }
     if (url.pathname === '/v1/projects/p1/index' && req.method === 'POST') {
       let body = ''
       req.on('data', (c) => (body += c))

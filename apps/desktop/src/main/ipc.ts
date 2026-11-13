@@ -1,11 +1,50 @@
-import { dialog, ipcMain, type BrowserWindow } from 'electron'
-import type { NeighborQuery } from '../shared/graph-types'
+import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'electron'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { ExportFormat, ExportScope, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi } from './engine/api'
-import type { EngineHandle } from './engine/launcher'
+import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
+import { McpHttpManager, mcpStdioConfig, type McpKeyStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
 
 const watchers = new Map<string, ProjectWatcher>()
+let mcpHttp: McpHttpManager | null = null
+
+export const stopAllMcpHttp = (): Promise<void> => mcpHttp?.stopAll() ?? Promise.resolve()
+
+function readJson(file: string): Record<string, string> {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8')) as Record<string, string>
+  } catch {
+    return {}
+  }
+}
+
+const prefsFile = (): string => join(app.getPath('userData'), 'prefs.json')
+
+/** Key MCP HTTP theo project, mã hoá bằng safeStorage (Keychain/DPAPI) trong userData/mcp-keys.json. */
+function safeKeyStore(): McpKeyStore {
+  const file = (): string => join(app.getPath('userData'), 'mcp-keys.json')
+  return {
+    load(pid) {
+      const enc = readJson(file())[pid]
+      if (!enc || !safeStorage.isEncryptionAvailable()) return null
+      try {
+        return safeStorage.decryptString(Buffer.from(enc, 'base64'))
+      } catch {
+        return null
+      }
+    },
+    save(pid, key) {
+      if (!safeStorage.isEncryptionAvailable()) return // không lưu key dạng rõ; lần sau sinh key mới
+      const all = readJson(file())
+      all[pid] = safeStorage.encryptString(key).toString('base64')
+      writeFileSync(file(), JSON.stringify(all), { mode: 0o600 })
+    }
+  }
+}
 
 export function stopAllWatchers(): void {
   for (const w of watchers.values()) w.stop()
@@ -13,7 +52,14 @@ export function stopAllWatchers(): void {
 }
 
 /** Đăng ký các kênh IPC của dự án và đồ thị. `handle()` trả engine hiện tại hoặc null khi chưa sẵn sàng. */
-export function registerIpc(getHandle: () => EngineHandle | null, getWindow: () => BrowserWindow | null): void {
+export function registerIpc(
+  getHandle: () => EngineHandle | null,
+  getWindow: () => BrowserWindow | null,
+  getCommand: () => EngineCommand,
+  dataDir: string
+): void {
+  mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore())
+  const mcp = mcpHttp
   const api = (): EngineApi => {
     const h = getHandle()
     if (!h) throw new Error('Engine chưa sẵn sàng')
@@ -31,7 +77,7 @@ export function registerIpc(getHandle: () => EngineHandle | null, getWindow: () 
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
   on('index:scan', (pid: string) => api().scan(pid))
-  on('index:start', async (pid: string, opts?: { subdir?: string }) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
+  on('index:start', async (pid: string, opts?: { subdir?: string; exclude?: string[] }) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
   on('index:cancel', async (jobId: string) => void (await api().cancelJob(jobId)))
   on('index:refresh', (pid: string) => api().refresh(pid))
   on('graph:changes', (pid: string, opts?: { refresh?: boolean }) => api().changes(pid, opts))
@@ -56,4 +102,45 @@ export function registerIpc(getHandle: () => EngineHandle | null, getWindow: () 
   on('graph:search', (pid: string, q: string, opts?: { kinds?: string[]; limit?: number }) => api().search(pid, q, opts))
   on('graph:architecture', (pid: string, parent?: string) => api().architecture(pid, parent))
   on('graph:arch-evidence', (pid: string, from: string, to: string, limit?: number) => api().archEvidence(pid, from, to, limit))
+  on('graph:report', (pid: string) => api().report(pid))
+  on('graph:paths', (pid: string, ids: string[], o?: { maxHops?: number; directed?: boolean }) => api().paths(pid, ids, o))
+  on('graph:impact-of', (pid: string, nodeId: string) => api().impactOf(pid, nodeId))
+  on('graph:ask', (pid: string, q: string, o?: { depth?: number; budget?: number; mode?: 'bfs' | 'dfs' }) => api().ask(pid, q, o))
+  on('graph:recluster', (pid: string) => api().recluster(pid))
+
+  on('export:pick-dir', async () => {
+    const prefs = readJson(prefsFile())
+    const win = getWindow()
+    const opts = {
+      properties: ['openDirectory' as const, 'createDirectory' as const],
+      title: 'Chọn thư mục lưu kết quả xuất',
+      defaultPath: prefs.exportDir ?? app.getPath('downloads')
+    }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || r.filePaths.length === 0) return null
+    writeFileSync(prefsFile(), JSON.stringify({ ...prefs, exportDir: r.filePaths[0] }))
+    return r.filePaths[0]
+  })
+  on('export:run', (pid: string, format: ExportFormat, scope: ExportScope, outDir: string) => api().exportGraph(pid, format, scope, outDir))
+  on('export:push', (pid: string, req: PushRequest) => api().pushGraph(pid, req))
+  on('export:png', async () => {
+    const win = getWindow()
+    if (!win) return null
+    const image = await win.webContents.capturePage()
+    const prefs = readJson(prefsFile())
+    const r = await dialog.showSaveDialog(win, {
+      title: 'Lưu ảnh đồ thị',
+      defaultPath: join(prefs.exportDir ?? app.getPath('downloads'), 'nexgraph.png'),
+      filters: [{ name: 'PNG', extensions: ['png'] }]
+    })
+    if (r.canceled || !r.filePath) return null
+    await writeFile(r.filePath, image.toPNG())
+    return r.filePath
+  })
+  on('export:reveal', async (path: string) => shell.showItemInFolder(path))
+
+  on('mcp:config', async (projectPath: string) => ({ stdio: mcpStdioConfig(getCommand(), projectPath, dataDir) }))
+  on('mcp:start-http', (pid: string, projectPath: string) => mcp.start(pid, projectPath))
+  on('mcp:stop-http', (pid: string) => mcp.stop(pid))
+  on('mcp:http-status', async (pid: string) => mcp.status(pid))
 }

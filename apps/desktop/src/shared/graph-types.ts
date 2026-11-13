@@ -171,3 +171,65 @@ export type EngineEvent =
   | ({ type: 'job_progress' } & Job)
   | { type: 'graph_updated'; project_id: string }
   | { type: 'changes_updated'; project_id: string }
+
+// --- F10 đợt 1: báo cáo, truy vấn, export (hình dạng JSON của engine) ---------------------------
+
+export interface ReportCommunity {
+  id: string
+  label: string
+  size: number
+  cohesion: number
+}
+
+/** `GET /report`: surprising/questions mang nhãn (Graphify chỉ trả nhãn, không trả id nút). */
+export interface GraphReport {
+  god_nodes: { node: GraphNode; degree: number }[]
+  communities: ReportCommunity[]
+  surprising: { source: string; target: string; source_files: string[]; relation: string; why: string }[]
+  questions: { question: string; why: string }[]
+  benchmark: { corpus_tokens: number; graph_tokens: number; reduction: number } | null
+  truncated: boolean
+}
+
+export interface PathResult {
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  unconnected: string[]
+}
+
+export interface NodeImpact {
+  node: GraphNode
+  impacted: ImpactedNode[]
+  tests: GraphNode[]
+  truncated: boolean
+}
+
+export interface AskResult {
+  seeds: GraphNode[]
+  nodes: GraphNode[]
+  edges: GraphEdge[]
+  truncated: boolean
+}
+
+export type ExportFormat = 'html' | 'callflow_html' | 'obsidian' | 'wiki' | 'svg' | 'graphml' | 'cypher' | 'json' | 'markdown'
+
+export type ExportScope = { kind: 'all' } | { kind: 'community'; value: string } | { kind: 'node'; value: string }
+
+export interface ExportResult {
+  files: string[]
+  truncated: boolean
+}
+
+export interface PushRequest {
+  target: 'neo4j' | 'falkordb'
+  uri: string
+  user?: string
+  password?: string
+  scope: ExportScope
+}
+
+export interface PushResult {
+  nodes: number
+  edges: number
+  truncated: boolean
+}
