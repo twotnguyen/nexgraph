@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, Request
 
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.serialize import edge_json, node_json
+from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.index.discovery import language_of, sha256_file
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
@@ -16,6 +17,7 @@ from nexgraph_engine.store.search import build_match_query, search
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
 MAX_CODE_LINES = 2000
+CONVERTED_LANGUAGES = ("docx", "xlsx", "pdf")
 
 
 @contextmanager
@@ -118,10 +120,13 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
     first = 1 if start is None else start
     if first < 1 or (end is not None and (end < first or end - first + 1 > MAX_CODE_LINES)):
         raise ApiError(400, "bad_param", f"start >= 1, end >= start, tối đa {MAX_CODE_LINES} dòng mỗi lần")
-    lines = path.read_bytes().decode("utf-8", errors="replace").splitlines()
+    if record.language in CONVERTED_LANGUAGES:  # docx/xlsx/PDF: chuyển lại sang chữ, cùng hàm lúc index nên dòng khớp
+        lines = doc_text(path, record.language).splitlines()
+    else:
+        lines = path.read_bytes().decode("utf-8", errors="replace").splitlines()
     last = min(len(lines), end if end is not None else first + MAX_CODE_LINES - 1)
     return {"file": file, "start": first, "end": last, "text": "\n".join(lines[first - 1:last]),
-            "language": language_of(file), "stale": sha256_file(path) != record.sha256}
+            "language": language_of(file) or record.language, "stale": sha256_file(path) != record.sha256}
 
 
 @router.get("/search")

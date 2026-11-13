@@ -194,6 +194,21 @@ def resolve_references(store: GraphStore, *, package_name: str | None) -> tuple[
         edge(ref, hit.node, EdgeType.CALLS, hit.score, subtype)
         resolved.append(ref_id)
 
+    # --- 4. tài liệu nhắc tên symbol (F10 6a): chỉ nối khi duy nhất trong cả project ---------------------
+    for ref_id, ref in pending:
+        if ref.type != EdgeType.DOCUMENTS or ref.source not in idx.by_id:
+            continue
+        name = ref.name.replace("::", ".")
+        if "." in name:
+            owner, x = name.rsplit(".", 1)
+            cands = [n for (_, o), names in idx.members.items() if o == owner for n in names.get(x, [])]
+            hit = _levels([(cands + idx.g_types.get(name, []), IMPORTED)])
+        else:
+            hit = _levels([(idx.g_types.get(name, []) + idx.g_funcs.get(name, []), GLOBAL)])
+        if hit:
+            edge(ref, hit.node, EdgeType.DOCUMENTS, hit.score)
+            resolved.append(ref_id)
+
     created = store.add_edges(new_edges)
     store.delete_refs(resolved)
     remaining = store.fail_pending_refs()
