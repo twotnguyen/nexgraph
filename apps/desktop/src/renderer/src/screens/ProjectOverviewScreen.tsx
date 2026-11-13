@@ -5,7 +5,7 @@ import { IndexOptionsDialog } from '../components/overview/IndexOptionsDialog'
 import { McpCard } from '../components/overview/McpCard'
 import { vi } from '../strings'
 
-export type WorkspaceTab = 'arch' | 'graph' | 'tree' | 'report'
+export type WorkspaceTab = 'arch' | 'flows' | 'graph' | 'tree' | 'report'
 
 interface Props {
   project: ProjectSummary
@@ -81,6 +81,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       <h2>{vi.overview.view}</h2>
       <div className="cards">
         <Card title={vi.workspace.archTab} desc={vi.overview.archDesc} onClick={() => onOpenWorkspace('arch')} />
+        <Card title={vi.workspace.flowsTab} desc={vi.overview.flowsDesc} onClick={() => onOpenWorkspace('flows')} />
         <Card title={vi.workspace.graphTab} desc={vi.overview.graphDesc} onClick={() => onOpenWorkspace('graph')} />
         <Card title={vi.workspace.treeTab} desc={vi.overview.treeDesc} onClick={() => onOpenWorkspace('tree')} />
         <Card title={vi.workspace.reportTab} desc={vi.overview.reportDesc} onClick={() => onOpenWorkspace('report')} />

@@ -9,6 +9,7 @@ interface Props {
   onOpen: (node: GraphNode) => void
   /** Khi có: bật chế độ "Hỏi graph", bấm "Xem trên graph" vẽ vùng con trả về. */
   onShowSubgraph?: (g: { nodes: GraphNode[]; edges: GraphEdge[] }) => void
+  onOpenFlow?: (flowId: number) => void
 }
 
 const DEBOUNCE_MS = 200
@@ -77,7 +78,7 @@ function SymbolSearch({ projectId, onOpen }: Props) {
   )
 }
 
-function AskGraph({ projectId, onOpen, onShowSubgraph }: Props) {
+function AskGraph({ projectId, onOpen, onShowSubgraph, onOpenFlow }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<AskResult | null>(null)
@@ -126,6 +127,21 @@ function AskGraph({ projectId, onOpen, onShowSubgraph }: Props) {
               <li key={n.id}><NodeButton node={n} onOpen={onOpen} /></li>
             ))}
           </ul>
+          {result.flows && result.flows.length > 0 && (
+            <>
+              <h4>{vi.flows.related}</h4>
+              <ul className="search-results">
+                {result.flows.map((f) => (
+                  <li key={f.id}>
+                    <button type="button" onClick={() => onOpenFlow?.(f.id)}>
+                      <b>{f.name}</b>
+                      <small className="kind">{f.kind}</small>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
     </>

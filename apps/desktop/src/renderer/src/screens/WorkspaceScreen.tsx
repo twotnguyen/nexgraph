@@ -12,11 +12,12 @@ import { NodeInspector } from '../components/graph/NodeInspector'
 import { ReportView } from '../components/report/ReportView'
 import { TreeView } from '../components/tree/TreeView'
 import { SearchPanel } from '../components/search/SearchPanel'
+import { FlowsView } from '../components/flows/FlowsView'
 import { useChanges } from '../state/useChanges'
 import { vi } from '../strings'
 
-type Tab = 'arch' | 'graph' | 'tree' | 'report' | `file:${string}`
-const MAIN_TABS = ['arch', 'graph', 'tree', 'report'] as const
+type Tab = 'arch' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}`
+const MAIN_TABS = ['arch', 'flows', 'graph', 'tree', 'report'] as const
 interface OpenFile { file: string; line: number; lineEnd?: number }
 const baseName = (p: string): string => p.split('/').pop() as string
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
@@ -43,7 +44,12 @@ const ChangesIcon = (
   </svg>
 )
 
-export function WorkspaceScreen({ project, initialTab, onBack }: { project: ProjectSummary; initialTab?: Tab; onBack?: () => void }) {
+export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack }: { project: ProjectSummary; initialTab?: Tab; initialFlowId?: number; onBack?: () => void }) {
+  const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
+  const openFlow = (id: number) => {
+    setFlowId(id)
+    setTab('flows')
+  }
   const [panel, setPanel] = useState<string | null>('search')
   const live = useChanges(project.project_id)
   const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
@@ -166,7 +172,7 @@ export function WorkspaceScreen({ project, initialTab, onBack }: { project: Proj
       />
       {panel === 'search' && (
         <aside className="sidebar">
-          <SearchPanel projectId={project.project_id} onOpen={openNode} onShowSubgraph={(g) => { setOverlay(g); setNotice(null); setTab('graph') }} />
+          <SearchPanel projectId={project.project_id} onOpen={openNode} onShowSubgraph={(g) => { setOverlay(g); setNotice(null); setTab('graph') }} onOpenFlow={openFlow} />
         </aside>
       )}
       {panel === 'changes' && (
@@ -202,7 +208,7 @@ export function WorkspaceScreen({ project, initialTab, onBack }: { project: Proj
         <div className="tabs" role="tablist">
           {MAIN_TABS.map((t) => (
             <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-              {{ arch: vi.workspace.archTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
+              {{ arch: vi.workspace.archTab, flows: vi.workspace.flowsTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
             </button>
           ))}
           {files.map((f) => (
@@ -216,6 +222,7 @@ export function WorkspaceScreen({ project, initialTab, onBack }: { project: Proj
         </div>
         <div className="canvas-wrap">
           {tab === 'arch' && <ArchitectureCanvas projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'flows' && <FlowsView projectId={project.project_id} initialFlowId={flowId} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (
             <>
               <GraphCanvas projectId={project.project_id} startNodeId=".#repository" focusNodeId={focus} highlights={highlights}

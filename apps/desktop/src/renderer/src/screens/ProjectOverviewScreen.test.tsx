@@ -28,6 +28,8 @@ describe('ProjectOverviewScreen', () => {
     const { props } = renderOverview()
     await userEvent.click(screen.getByRole('button', { name: /^Báo cáo/ }))
     expect(props.onOpenWorkspace).toHaveBeenCalledWith('report')
+    await userEvent.click(screen.getByRole('button', { name: /^Luồng/ }))
+    expect(props.onOpenWorkspace).toHaveBeenCalledWith('flows')
     await userEvent.click(screen.getByRole('button', { name: /^Cây/ }))
     expect(props.onOpenWorkspace).toHaveBeenCalledWith('tree')
   })

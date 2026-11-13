@@ -56,7 +56,7 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
       setView({
         raw: new Map(hood.nodes.map((n) => [n.id, n])),
         truncated: 'truncated' in hood && hood.truncated === true,
-        total: 'total' in hood ? (hood as Neighborhood).total : undefined,
+        total: 'total' in hood && typeof hood.total === 'number' ? hood.total : null,
         pos,
         edges: toFlowEdges(hood.edges, overlay != null)
       })
@@ -94,9 +94,20 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
               position: view.pos[n.id] ?? { x: 0, y: 0 },
               initialWidth: W,
               initialHeight: H,
-              data: { label: (<div><b>{n.label}</b><small className="kind">{n.kind}</small>{h && <small className="tag" style={{ color }}>{vi.changes.tag[h]}</small>}</div>) },
+              data: {
+                label: (
+                  <div>
+                    <b>{n.label}</b>
+                    <small className="kind">{n.kind}</small>
+                    {h && h !== 'current' && h !== 'visited' && (
+                      <small className="tag" style={{ color }}>{vi.changes.tag[h]}</small>
+                    )}
+                  </div>
+                )
+              },
               style: {
-                width: W, borderColor: color, borderWidth: n.id === center || h === 'changed' || h === 'gap' ? 3 : h ? 2.5 : 1.5,
+                width: W, borderColor: color,
+                borderWidth: n.id === center || h === 'changed' || h === 'gap' || h === 'current' ? 3 : (h === 'visited' || h ? 2.5 : 1.5),
                 borderStyle: 'solid', borderRadius: 8, fontSize: 12
               }
             }
