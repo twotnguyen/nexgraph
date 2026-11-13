@@ -1,6 +1,7 @@
 """MCP server chỉ đọc của NexGraph cho trợ lý AI (spec §5.8, UC10).
 
-Chạy: ``nexgraph-engine mcp --project <đường dẫn> [--data-dir <thư mục app>]`` (stdio).
+Chạy: ``nexgraph-engine mcp --project <đường dẫn> [--data-dir <thư mục app>] [--http --port N]``
+(stdio; hoặc Streamable HTTP tại 127.0.0.1 với header ``X-API-Key`` = biến môi trường ``NEXGRAPH_MCP_KEY``).
 
 Mọi tool gọi cùng hàm với route HTTP ``/v1`` (ADR 0002), mở CSDL đồ thị ở chế độ chỉ đọc
 cho từng lần gọi, nên app vẫn ghi song song được (WAL).
@@ -15,6 +16,7 @@ Modified by NexGraph contributors, 2026.
 from __future__ import annotations
 
 import asyncio
+import hmac
 import os
 import sqlite3
 from collections.abc import Callable
@@ -32,6 +34,11 @@ from nexgraph_engine.api.routes_arch import architecture_json, evidence_json
 from nexgraph_engine.api.routes_changes import changes_json
 from nexgraph_engine.api.routes_graph import get_node_json, neighbors_json, parse_edge_types, search_json
 from nexgraph_engine.api.routes_graph import read_code as read_code_json
+from nexgraph_engine.api.serialize import node_json
+from nexgraph_engine.query.ask import ask_graph
+from nexgraph_engine.query.common import nodes_by_pk
+from nexgraph_engine.query.paths import find_paths
+from nexgraph_engine.report.build import report_json
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import NEXGRAPH_DIR, ProjectRegistry
@@ -47,6 +54,9 @@ SERVER_INSTRUCTIONS = (
     "- các khối kiến trúc và mũi tên giữa chúng -> get_architecture, rồi get_evidence để lấy tệp:dòng\n"
     "- sửa X thì ảnh hưởng đâu, test nào liên quan -> get_impact\n"
     "- đọc đoạn mã để trích dẫn -> read_code\n"
+    "- câu hỏi tự do, lấy đồ thị con liên quan -> query_graph\n"
+    "- đường đi giữa hai nút -> shortest_path\n"
+    "- nút trung tâm, số liệu tổng, một cộng đồng -> god_nodes, graph_stats, get_community\n"
     "Khi trả lời, trích dẫn dạng tệp:dòng lấy từ kết quả tool; không bịa đường đi không có trong đồ thị. "
     "Mọi tool chỉ đọc."
 )
@@ -147,8 +157,91 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
         """Đọc mã của tệp đã lập chỉ mục (đường dẫn tương đối trong dự án), tối đa 2.000 dòng."""
         return await run("read_code", lambda s: read_code_json(s, root, file, start, end))
 
+    @mcp.tool(annotations=READ_ONLY)
+    async def query_graph(question: str, depth: int = 2, budget: int = 2000,
+                          mode: Literal["bfs", "dfs"] = "bfs") -> dict:
+        """Hỏi đồ thị bằng câu tự do: tìm nút khớp rồi mở rộng BFS/DFS trong giới hạn token (budget)."""
+        def body(s: GraphStore) -> dict:
+            try:
+                return ask_graph(s, question, max(1, min(depth, 6)), max(1, min(budget, 100_000)), mode)
+            except ValueError as exc:
+                raise ToolError(str(exc)) from exc
+        return await run("query_graph", body)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def shortest_path(source: str, target: str, max_hops: int = 4, directed: bool = True) -> dict:
+        """Đường đi ngắn nhất giữa hai nút (id), tối đa max_hops cạnh (1–6)."""
+        def body(s: GraphStore) -> dict:
+            try:
+                return find_paths(s, [source, target], max(1, min(max_hops, 6)), directed)
+            except KeyError as exc:
+                raise ToolError(f"Không có nút {exc.args[0]}") from exc
+        return await run("shortest_path", body)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def god_nodes(top: int = 10) -> list[dict]:
+        """Các nút có nhiều liên kết nhất (không tính tệp và test)."""
+        return await run("god_nodes", lambda s: report_json(s)["god_nodes"][:max(1, min(top, 10))])
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def graph_stats() -> dict:
+        """Số tệp, số nút theo loại, số cạnh theo loại, ngôn ngữ, số tham chiếu chưa phân giải."""
+        return await run("graph_stats", lambda s: s.stats())
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_community(community_id: str, limit: int = 200) -> dict:
+        """Một cộng đồng (khối kiến trúc) theo id dạng `com:<số>`: nhãn, kích thước, độ gắn kết và các nút."""
+        return await run("get_community", lambda s: community_json(s, community_id, max(1, min(limit, 2000))))
+
     return mcp
 
+
+def community_json(store: GraphStore, community_id: str, limit: int) -> dict:
+    raw = community_id[4:] if community_id.startswith("com:") else ""
+    row = store.conn.execute("SELECT ma_khoi, ten, do_gan_ket FROM khoi_kien_truc WHERE ma_khoi = ?",
+                             (int(raw),)).fetchone() if raw.isdigit() else None
+    if row is None:
+        raise ToolError(f"Không có cộng đồng {community_id}")
+    pks = [r[0] for r in store.conn.execute(
+        "SELECT ma_nut FROM nut WHERE ma_khoi = ? ORDER BY ma_nut", (row["ma_khoi"],))]
+    nodes = [{**node_json(n), "community": community_id} for n in nodes_by_pk(store, pks[:limit])]
+    return {"community": {"id": community_id, "label": row["ten"], "size": len(pks),
+                          "cohesion": row["do_gan_ket"]},
+            "nodes": nodes, "truncated": len(pks) > limit}
+
+
+class ApiKeyMiddleware:
+    """Chặn mọi request HTTP thiếu/sai header X-API-Key (so sánh hằng thời gian)."""
+
+    def __init__(self, app: Any, key: str) -> None:
+        self.app, self.key = app, key.encode()
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http":
+            given = dict(scope.get("headers") or []).get(b"x-api-key", b"")
+            if not hmac.compare_digest(given, self.key):
+                await send({"type": "http.response.start", "status": 401,
+                            "headers": [(b"content-type", b"application/json")]})
+                await send({"type": "http.response.body",
+                            "body": b'{"error":{"code":"unauthorized","message":"X-API-Key sai hoac thieu"}}'})
+                return
+        await self.app(scope, receive, send)
+
+
+def run_http(project: Path, data_dir: Path | None, port: int, key: str) -> int:
+    import json
+    import socket
+
+    import uvicorn
+
+    mcp = build_server(project, data_dir)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", port))
+    sock.listen(128)
+    print(json.dumps({"event": "ready", "port": sock.getsockname()[1], "pid": os.getpid()}), flush=True)
+    app = ApiKeyMiddleware(mcp.streamable_http_app(), key)
+    uvicorn.Server(uvicorn.Config(app, log_level="warning")).run(sockets=[sock])
+    return 0
 
 
 def run_stdio(project: Path, data_dir: Path | None) -> int:

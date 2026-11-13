@@ -1,5 +1,9 @@
 import json
+import os
+import subprocess
 import sys
+import urllib.error
+import urllib.request
 
 import anyio
 import pytest
@@ -9,7 +13,8 @@ from mcp.shared.memory import create_connected_server_and_client_session
 
 from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
 
-TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code"}
+TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
+         "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community"}
 
 
 @pytest.fixture
@@ -106,3 +111,91 @@ def test_stdio_cli(indexed):
             await client.initialize()
             return await client.call_tool("search", {"query": "login"})
     assert payload(anyio.run(run))
+
+
+def test_query_graph_tool(indexed):
+    body = payload(call(build_server(*indexed), "query_graph", {"question": "login auth"}))
+    assert body["nodes"] and "edges" in body
+    bad = call(build_server(*indexed), "query_graph", {"question": "!!!"})
+    assert bad.isError
+
+
+def test_shortest_path_tool(indexed):
+    server = build_server(*indexed)
+    body = payload(call(server, "shortest_path", {"source": "lib/screens/login_screen.dart#file",
+                                                 "target": "lib/services/auth_service.dart#file"}))
+    assert body["unconnected"] == [] and len(body["nodes"]) >= 2
+    bad = call(server, "shortest_path", {"source": "nope#file", "target": "lib/main.dart#file"})
+    assert bad.isError and "nope#file" in bad.content[0].text
+
+
+def test_god_nodes_and_stats_tools(indexed):
+    server = build_server(*indexed)
+    gods = payload(call(server, "god_nodes", {"top": 3}))
+    assert 0 < len(gods) <= 3
+    stats = payload(call(server, "graph_stats", {}))
+    assert stats["files"] > 0 and stats["edges_by_type"]
+
+
+def test_get_community_tool(indexed):
+    server = build_server(*indexed)
+    view = payload(call(server, "get_architecture", {}))
+    com = payload(call(server, "get_community", {"community_id": f"com:{_first_community(indexed)}", "limit": 2}))
+    assert com["community"]["size"] >= len(com["nodes"]) and len(com["nodes"]) <= 2
+    assert com["truncated"] == (com["community"]["size"] > 2)
+    assert view  # kiến trúc vẫn chạy cùng server
+    bad = call(server, "get_community", {"community_id": "com:999999"})
+    assert bad.isError
+
+
+def _first_community(indexed):
+    from nexgraph_engine.mcp.server import resolve_graph_db
+    from nexgraph_engine.schema.db import open_graph_db
+    conn = open_graph_db(resolve_graph_db(*indexed), read_only=True)
+    try:
+        return conn.execute("SELECT ma_khoi FROM khoi_kien_truc ORDER BY ma_khoi LIMIT 1").fetchone()[0]
+    finally:
+        conn.close()
+
+
+KEY = "m" * 32
+
+
+def _start_http(indexed, key):
+    root, data_dir = indexed
+    env = {k: v for k, v in os.environ.items() if k != "NEXGRAPH_MCP_KEY"}
+    if key is not None:
+        env["NEXGRAPH_MCP_KEY"] = key
+    return subprocess.Popen([sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root),
+                             "--data-dir", str(data_dir), "--http", "--port", "0"],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", env=env)
+
+
+def _post(port, headers):
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}}).encode()
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/mcp", data=body, method="POST", headers={
+        "Content-Type": "application/json", "Accept": "application/json, text/event-stream", **headers})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def test_http_requires_key(indexed):
+    from test_cli_serve import read_ready
+    p = _start_http(indexed, KEY)
+    try:
+        port = read_ready(p)["port"]
+        assert _post(port, {}) == 401
+        assert _post(port, {"X-API-Key": "x" * 32}) == 401
+        assert _post(port, {"X-API-Key": KEY}) == 200
+    finally:
+        p.kill()
+
+
+def test_http_without_key_exits_2(indexed):
+    p = _start_http(indexed, None)
+    assert p.wait(timeout=20) == 2
+    assert "NEXGRAPH_MCP_KEY" in p.stderr.read()

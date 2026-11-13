@@ -29,6 +29,9 @@ def _build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--project", required=True, type=Path)
     mcp.add_argument("--data-dir", type=Path, default=None,
                      help="Thư mục dữ liệu của app, cần khi đồ thị không lưu trong <project>/.nexgraph")
+    mcp.add_argument("--http", action="store_true",
+                     help="Streamable HTTP tại 127.0.0.1 thay vì stdio; cần NEXGRAPH_MCP_KEY (>=32 ký tự)")
+    mcp.add_argument("--port", type=int, default=0)
     return parser
 
 
@@ -67,8 +70,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "serve":
         return _serve(args.data_dir, args.port, args.exit_on_stdin_close)
     if args.command == "mcp":
-        from nexgraph_engine.mcp.server import ProjectNotIndexed, run_stdio
+        from nexgraph_engine.mcp.server import ProjectNotIndexed, run_http, run_stdio
+        if args.http:
+            key = os.environ.get("NEXGRAPH_MCP_KEY", "")
+            if len(key) < MIN_TOKEN_LEN:
+                print("NEXGRAPH_MCP_KEY is required (>=32 chars)", file=sys.stderr)
+                return 2
         try:
+            if args.http:
+                return run_http(args.project, args.data_dir, args.port, key)
             return run_stdio(args.project, args.data_dir)
         except ProjectNotIndexed as exc:
             print(str(exc), file=sys.stderr)  # stdout dành riêng cho giao thức MCP

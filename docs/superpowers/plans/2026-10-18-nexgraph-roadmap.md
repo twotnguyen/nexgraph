@@ -78,6 +78,8 @@ Lỗi chung của các route F10-1: `409 not_indexed` khi dự án chưa lập c
 
 **MCP stdio đã cài (2026-11-11, nhánh `feat/p5-mcp`)**: `engine/src/nexgraph_engine/mcp/server.py`, SDK `mcp>=1.10,<2` (FastMCP; bản 2.x đổi API nên ghim dưới 2). Bảy tool, đều khai báo `readOnlyHint`: `search(query, kinds?, limit)`, `get_node(node_id)`, `get_neighbors(node_id, types?, direction, depth, limit)`, `get_architecture(parent?)`, `get_evidence(from_block, to_block, limit)` (thêm so với danh sách trên, cần cho trích dẫn), `get_impact()`, `read_code(file, start?, end?)`. Kết quả cùng hình dạng JSON với route HTTP tương ứng (dùng chung hàm `*_json` trong `api/routes_*.py`). Lỗi nghiệp vụ trả về lỗi tool kèm thông điệp tiếng Việt. `--data-dir` tuỳ chọn; chỉ đọc CSDL đã có, dự án chưa lập chỉ mục thì thoát mã 3. `get_impact` **không** tự refresh (MCP không ghi). `trace_flow` chờ `/paths`. Biến `NEXGRAPH_MCP_TIMEOUT` (giây) giới hạn thời gian mỗi tool, mặc định không giới hạn.
 
+**MCP tương đương Graphify (2026-11-13, F10 đợt 1)**: thêm năm tool chỉ đọc, tổng **12 tool**: `query_graph(question, depth=2, budget=2000, mode=bfs|dfs)` (= `/ask`), `shortest_path(source, target, max_hops=4, directed=true)` (= `/paths`, thay cho `trace_flow`), `god_nodes(top=10)` (lấy từ `/report`), `graph_stats()`, `get_community(community_id "com:<n>", limit=200)` → `{community:{id,label,size,cohesion}, nodes, truncated}`. Transport HTTP: `nexgraph-engine mcp --project P [--data-dir D] --http --port N` chạy Streamable HTTP tại `127.0.0.1:N/mcp` (0 = cổng ngẫu nhiên), in dòng `{"event":"ready","port":…}` như `serve`; bắt buộc `NEXGRAPH_MCP_KEY` (≥ 32 ký tự, thiếu thì thoát mã 2), request thiếu/sai header `X-API-Key` nhận 401.
+
 ## Hình dạng JSON v1 (chốt ở kế hoạch con 2, 2026-10-27)
 
 ```
