@@ -152,6 +152,28 @@ def test_full_index_persists_bindings_and_baseline(copy_fixture, index_project):
     assert store.last_scope() == "lib/services"
 
 
+def test_python_cross_file_call_resolved(copy_fixture, index_project):
+    # Hồi quy: generic.py gọi bộ trích xuất từng tệp làm mất lời gọi sang tệp khác (repo-reference/docs/11 §5).
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    targets = {e.edge.target for e in out_edges(store, "main.py::App.step#method", EdgeType.CALLS)}
+    assert "util.py::helper#function" in targets
+    tested = {e.edge.target for e in out_edges(store, "test_util.py::test_helper#function", EdgeType.CALLS)}
+    assert "util.py::helper#function" in tested
+
+
+def test_typescript_cross_file_call_resolved(tmp_path, index_project):
+    (tmp_path / "util.ts").write_text("export function hashPw(p: string) { return p; }\n")
+    (tmp_path / "svc.ts").write_text(
+        "import { hashPw } from './util';\n"
+        "export class AuthService {\n"
+        "  login(p: string) { return hashPw(p); }\n"
+        "}\n")
+    store, result, _ = index_project(tmp_path)
+    assert result.state == "hoan_tat"
+    targets = {e.edge.target for e in out_edges(store, "svc.ts::AuthService.login#method", EdgeType.CALLS)}
+    assert "util.ts::hashPw#function" in targets
+
+
 def test_python_and_typescript_imports_become_file_edges(tmp_path, index_project):
     # Hồi quy: tên import từ bộ trích xuất đa ngôn ngữ là id tệp của nó (`pkg_mod`), không phải đường dẫn,
     # nên resolver chỉ hiểu đường dẫn kiểu Dart từng cho 0 cạnh IMPORTS với Python/TS (đo trên repo 17k tệp).
