@@ -32,7 +32,46 @@ def _build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--http", action="store_true",
                      help="Streamable HTTP tại 127.0.0.1 thay vì stdio; cần NEXGRAPH_MCP_KEY (>=32 ký tự)")
     mcp.add_argument("--port", type=int, default=0)
+    refresh = sub.add_parser("refresh", help="Cập nhật tăng dần đồ thị của một dự án đã lập chỉ mục (dùng cho git hook)")
+    refresh.add_argument("--project", required=True, type=Path)
+    refresh.add_argument("--data-dir", type=Path, default=None)
     return parser
+
+
+def _refresh(project: Path, data_dir: Path | None) -> int:
+    """In một dòng JSON; thoát 0 kể cả khi bỏ qua (không bao giờ làm commit thất bại), 3 khi dự án chưa lập chỉ mục."""
+    import sqlite3
+
+    from nexgraph_engine.index.refresh import refresh_project
+    from nexgraph_engine.mcp.server import ProjectNotIndexed, resolve_graph_db
+    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.store.graph_store import GraphStore
+
+    skipped = {"status": "skipped", "reason": "index_running", "added": 0, "changed": 0, "removed": 0, "seconds": 0.0}
+    try:
+        db = resolve_graph_db(project, data_dir)
+    except ProjectNotIndexed as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+    try:
+        conn = open_graph_db(db)
+        try:
+            store = GraphStore(conn)
+            if store.last_completed_run() is None:
+                print(f"Dự án chưa được lập chỉ mục trong NexGraph: {project}", file=sys.stderr)
+                return 3
+            if conn.execute("SELECT 1 FROM lan_lap_chi_muc WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai') LIMIT 1").fetchone():
+                print(json.dumps(skipped))
+                return 0
+            r = refresh_project(store, project.resolve())
+        finally:
+            conn.close()
+    except sqlite3.OperationalError:  # CSDL đang bị app khoá để ghi
+        print(json.dumps(skipped))
+        return 0
+    print(json.dumps({"status": "ok", "added": r.added, "changed": r.changed, "removed": r.removed,
+                      "unchanged": r.unchanged, "seconds": round(r.seconds, 3)}))
+    return 0
 
 
 def _exit_when_stdin_closes(server: uvicorn.Server) -> None:
@@ -69,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     if args.command == "serve":
         return _serve(args.data_dir, args.port, args.exit_on_stdin_close)
+    if args.command == "refresh":
+        return _refresh(args.project, args.data_dir)
     if args.command == "mcp":
         from nexgraph_engine.mcp.server import ProjectNotIndexed, run_http, run_stdio
         if args.http:
