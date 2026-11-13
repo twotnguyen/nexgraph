@@ -1,6 +1,7 @@
 """Ghi và đọc đồ thị của một project trong SQLite. Nơi duy nhất dịch giữa mã tiếng Anh và cột tiếng Việt."""
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 import uuid
@@ -47,12 +48,13 @@ class GraphStore:
         return row["ma_du_an"] if row else None
 
     def begin_run(self, files_total: int = 0, commit_sha: str | None = None, *,
-                  kind: Literal["day_du", "tang_dan"] = "day_du", subdir: str | None = None) -> int:
+                  kind: Literal["day_du", "tang_dan"] = "day_du", subdir: str | None = None,
+                  exclude: list[str] | None = None) -> int:
         pid = self.project_id()
         cur = self.conn.execute(
-            "INSERT INTO lan_lap_chi_muc (ma_du_an, loai, trang_thai, bat_dau_luc, so_tep_tong, commit_sha, thu_muc_con)"
-            " VALUES (?, ?, 'cho', ?, ?, ?, ?)",
-            (pid, kind, int(time.time()), files_total, commit_sha, subdir),
+            "INSERT INTO lan_lap_chi_muc (ma_du_an, loai, trang_thai, bat_dau_luc, so_tep_tong, commit_sha, thu_muc_con,"
+            " mau_bo_qua) VALUES (?, ?, 'cho', ?, ?, ?, ?, ?)",
+            (pid, kind, int(time.time()), files_total, commit_sha, subdir, json.dumps(exclude) if exclude else None),
         )
         self.conn.commit()
         return int(cur.lastrowid)
@@ -63,6 +65,13 @@ class GraphStore:
             "SELECT thu_muc_con FROM lan_lap_chi_muc WHERE loai = 'day_du'"
             " AND trang_thai IN ('cho', 'cau_truc', 'phan_giai', 'hoan_tat') ORDER BY ma_lan DESC LIMIT 1").fetchone()
         return row["thu_muc_con"] if row else None
+
+    def last_exclude(self) -> list[str]:
+        """Mẫu bỏ qua của lần lập chỉ mục đầy đủ gần nhất; refresh tăng dần dùng lại để không thêm tệp đã loại."""
+        row = self.conn.execute(
+            "SELECT mau_bo_qua FROM lan_lap_chi_muc WHERE loai = 'day_du'"
+            " AND trang_thai IN ('cho', 'cau_truc', 'phan_giai', 'hoan_tat') ORDER BY ma_lan DESC LIMIT 1").fetchone()
+        return json.loads(row["mau_bo_qua"]) if row and row["mau_bo_qua"] else []
 
     # --- kiểu biến và mốc tệp (lược đồ v2) -------------------------------------------------
     def add_bindings(self, bindings: dict[str, dict[str, str]]) -> None:

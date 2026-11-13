@@ -11,6 +11,10 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectRegistry
 
 
+class NotIndexed(Exception):
+    pass
+
+
 class ProjectLocks:
     """Một khoá cho mỗi project: lập chỉ mục và refresh không bao giờ cùng ghi vào một graph.db."""
 
@@ -30,6 +34,30 @@ class RefreshService:
     @staticmethod
     def _skipped(reason: str) -> dict:
         return {"status": "skipped", "reason": reason, "added": 0, "changed": 0, "removed": 0, "seconds": 0.0}
+
+    def recluster(self, project_id: str) -> int:
+        """Gom cụm lại trên đồ thị hiện có (`graphify cluster-only`). Ném IndexAlreadyRunning khi đang index/refresh."""
+        from nexgraph_engine.arch.communities import detect_communities
+        from nexgraph_engine.index.jobs import IndexAlreadyRunning
+        info = self._registry.get(project_id)
+        if info is None:
+            raise UnknownProject(project_id)
+        lock = self._locks.get(project_id)
+        if self._jobs.is_active(project_id) or not lock.acquire(blocking=False):
+            raise IndexAlreadyRunning(project_id)
+        try:
+            conn = open_graph_db(info.graph_db)
+            try:
+                store = GraphStore(conn)
+                if store.last_completed_run() is None:
+                    raise NotIndexed(project_id)
+                count = detect_communities(store)
+            finally:
+                conn.close()
+        finally:
+            lock.release()
+        self._bus.publish({"type": "graph_updated", "project_id": project_id})
+        return count
 
     def refresh(self, project_id: str) -> dict:
         info = self._registry.get(project_id)

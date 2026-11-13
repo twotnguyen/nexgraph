@@ -72,9 +72,12 @@ def _ignored(rel: str, rules: list[tuple[str, pathspec.PathSpec]]) -> bool:
     return False
 
 
-def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None = None) -> Iterator[DiscoveredFile]:
+def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None = None,
+             exclude: list[str] | None = None) -> Iterator[DiscoveredFile]:
     root = Path(root)
     found: list[DiscoveredFile] = []
+    # Mẫu người dùng chọn (kiểu .gitignore, tính từ gốc project) áp như một .gitignore ở gốc.
+    base_rules = [("", pathspec.PathSpec.from_lines("gitignore", exclude))] if exclude else []
 
     def inside(rel_dir: str) -> bool:
         return subdir is None or rel_dir == subdir or rel_dir.startswith(subdir + "/")
@@ -107,5 +110,5 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                 found.append(DiscoveredFile(rel, language, st.st_size, int(st.st_mtime),
                                             is_test_path(rel), st.st_size > max_file_bytes))
 
-    walk(root, "", [])
+    walk(root, "", base_rules)
     yield from sorted(found, key=lambda f: f.rel_path)

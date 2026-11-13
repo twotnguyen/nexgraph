@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
@@ -17,6 +17,7 @@ class OpenBody(BaseModel):
 
 class IndexBody(BaseModel):
     subdir: str | None = None
+    exclude: list[str] = Field(default_factory=list, max_length=200)
 
 
 def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
@@ -58,7 +59,8 @@ def list_projects(request: Request) -> list[dict]:
 @router.post("/projects/{project_id}/index", status_code=202)
 def start_index(project_id: str, request: Request, body: IndexBody | None = None) -> dict:
     try:
-        return {"job_id": request.app.state.services.jobs.start_index(project_id, subdir=body.subdir if body else None)}
+        return {"job_id": request.app.state.services.jobs.start_index(project_id, subdir=body.subdir if body else None,
+                                                                       exclude=[e for e in body.exclude if e.strip()] if body else None)}
     except ProjectPathError as exc:
         raise ApiError(400, "bad_path", str(exc)) from exc
     except UnknownProject as exc:
@@ -92,3 +94,16 @@ def scan_project(project_id: str, request: Request) -> dict:
     return {"files": result.files, "by_language": result.by_language, "large": result.large,
             "threshold": scan_module.LARGE_FILE_COUNT,
             "top_dirs": [{"path": p, "files": n} for p, n in result.top_dirs]}
+
+
+@router.post("/projects/{project_id}/communities")
+def recluster(project_id: str, request: Request) -> dict:
+    from nexgraph_engine.index.refresh_service import NotIndexed
+    try:
+        return {"communities": request.app.state.services.refresh.recluster(project_id)}
+    except UnknownProject as exc:
+        raise ApiError(404, "unknown_project", f"Không có dự án {project_id}") from exc
+    except IndexAlreadyRunning as exc:
+        raise ApiError(409, "index_running", "Dự án đang được lập chỉ mục hoặc cập nhật") from exc
+    except NotIndexed as exc:
+        raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục xong") from exc
