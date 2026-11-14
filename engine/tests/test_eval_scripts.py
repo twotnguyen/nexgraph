@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
@@ -63,6 +65,7 @@ def test_sample_is_deterministic_and_skips_tests(index_project, fixtures_dir, tm
     assert all(not f.startswith("test_") for f in a)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="bench_all đo RAM bằng module resource, chỉ có trên Unix")
 def test_bench_all_smoke(fixtures_dir, tmp_path):
     out = tmp_path / "perf.json"
     # PYTHONUTF8: script in tiếng Việt ra stdout; Windows mặc định cp1252 sẽ lỗi.
