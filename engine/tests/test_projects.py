@@ -25,7 +25,7 @@ def test_creates_nexgraph_with_gitignore(tmp_path, registry):
     info = registry.open_project(root)
     assert info.storage == "in_project"
     assert info.graph_db == root.resolve() / ".nexgraph" / "graph.db" and info.graph_db.exists()
-    assert (root / ".nexgraph" / ".gitignore").read_text() == "*\n"
+    assert (root / ".nexgraph" / ".gitignore").read_text(encoding="utf-8") == "*\n"
     assert not (root / ".gitignore").exists()  # không tạo hay sửa .gitignore gốc
     assert len(info.project_id) == 36 and info.name == "bookstore"
 

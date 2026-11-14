@@ -46,7 +46,7 @@ def stat(xs: list[float]) -> dict:
 
 def sh(*args: str, cwd: Path | None = None) -> str:
     try:
-        return subprocess.run(args, cwd=cwd, capture_output=True, text=True, timeout=20).stdout.strip()
+        return subprocess.run(args, cwd=cwd, capture_output=True, text=True, encoding="utf-8", timeout=20).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return ""
 

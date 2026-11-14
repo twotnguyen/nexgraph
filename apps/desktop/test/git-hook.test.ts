@@ -20,7 +20,7 @@ describe('git hook', () => {
     const text = readFileSync(hook, 'utf8')
     expect(text.startsWith('#!/bin/sh\n')).toBe(true)
     expect(text).toContain(BEGIN)
-    expect(statSync(hook).mode & 0o111).not.toBe(0)
+    if (process.platform !== 'win32') expect(statSync(hook).mode & 0o111).not.toBe(0) // Windows không có bit thực thi
     expect(hookStatus(root, cmd, dataDir)).toBe('on')
   })
 

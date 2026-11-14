@@ -297,7 +297,7 @@ def test_small_edit_updates_flows_without_a_full_rebuild(copy_fixture, index_pro
     store, _, _ = index_project(root)
     kept = dict(store.conn.execute("SELECT ten, ma_luong FROM luong"))
     monkeypatch.setattr(build, "rebuild_flows", lambda *a, **k: pytest.fail("dựng lại toàn bộ luồng"))
-    write(root, "service.py", (root / "service.py").read_text().replace("def list_books():\n    return all_books()",
+    write(root, "service.py", (root / "service.py").read_text(encoding="utf-8").replace("def list_books():\n    return all_books()",
                                                                         "def list_books():\n    x = all_books()\n    return x"))
     refresh_project(store, root)
     after = dict(store.conn.execute("SELECT ten, ma_luong FROM luong"))

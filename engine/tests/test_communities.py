@@ -29,7 +29,7 @@ def test_two_clusters_found(tmp_path, index_project):
     root = tmp_path / "proj"
     clique(root, "lib/services")
     clique(root, "lib/ui")
-    write(root, "lib/ui/a.dart", "import '../services/a.dart';\n" + (root / "lib/ui/a.dart").read_text())  # một cầu nối
+    write(root, "lib/ui/a.dart", "import '../services/a.dart';\n" + (root / "lib/ui/a.dart").read_text(encoding="utf-8"))  # một cầu nối
     store, _, _ = index_project(root)
     got = store.communities()
     assert len(got) == 2

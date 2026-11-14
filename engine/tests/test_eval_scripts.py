@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -64,8 +65,10 @@ def test_sample_is_deterministic_and_skips_tests(index_project, fixtures_dir, tm
 
 def test_bench_all_smoke(fixtures_dir, tmp_path):
     out = tmp_path / "perf.json"
-    subprocess.run([sys.executable, str(SCRIPTS / "bench_all.py"), str(fixtures_dir / "flow_app"), "--repeat", "1", "--out", str(out)],
-                   check=True, capture_output=True, text=True)
+    # PYTHONUTF8: script in tiếng Việt ra stdout; Windows mặc định cp1252 sẽ lỗi.
+    r = subprocess.run([sys.executable, str(SCRIPTS / "bench_all.py"), str(fixtures_dir / "flow_app"), "--repeat", "1", "--out", str(out)],
+                       capture_output=True, text=True, encoding="utf-8", env={**os.environ, "PYTHONUTF8": "1"})
+    assert r.returncode == 0, r.stderr
     data = json.loads(out.read_text(encoding="utf-8"))
     for key in ("index_full_ms", "reopen_ms", "refresh_one_file_ms", "rebuild_flows_ms", "build_map_400_ms", "import_cycles_ms",
                 "build_tour_ms", "build_context_login_ms", "list_flows_auth_ms", "neighbors_top_node_ms", "graph_db_mb", "peak_rss_total_mb"):

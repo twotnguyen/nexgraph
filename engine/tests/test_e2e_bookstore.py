@@ -19,7 +19,7 @@ def test_demo_data_flow_over_api(api, copy_fixture):
     p = api.open(root)
     pid = p["project_id"]
     assert p["storage"] == "in_project"
-    assert (root / ".nexgraph" / ".gitignore").read_text() == "*\n"
+    assert (root / ".nexgraph" / ".gitignore").read_text(encoding="utf-8") == "*\n"
 
     assert api.index(pid)["state"] == "done"
     first_stats = api.get(f"/v1/projects/{pid}/stats").json()

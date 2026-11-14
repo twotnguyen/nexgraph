@@ -49,7 +49,7 @@ def test_ids_and_lines():
     n = by_qname(x)["AuthService.login"]
     assert n.id == "lib/services/auth_service.dart::AuthService.login#method"
     assert n.file == "lib/services/auth_service.dart" and 1 <= n.line_start <= n.line_end
-    assert (FIXTURE / n.file).read_text().splitlines()[n.line_start - 1].lstrip().startswith("Future<User> login")
+    assert (FIXTURE / n.file).read_text(encoding="utf-8").splitlines()[n.line_start - 1].lstrip().startswith("Future<User> login")
     assert "login" in n.signature and len(n.signature) <= 200
     cls = by_qname(x)["AuthService"]
     assert cls.line_start < n.line_start and n.line_end <= cls.line_end

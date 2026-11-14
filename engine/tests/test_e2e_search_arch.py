@@ -40,7 +40,8 @@ def test_search_and_architecture_flow(api, copy_fixture):
     # lập chỉ mục lại cho cùng kết quả
     stats = api.get(f"/v1/projects/{pid}/stats").json()
     assert api.index(pid)["state"] == "done"
-    assert api.get(f"/v1/projects/{pid}/stats").json() == stats
+    # indexed_at tính theo giây: hai lần lập chỉ mục vắt qua một giây thì khác nhau
+    assert {**api.get(f"/v1/projects/{pid}/stats").json(), "indexed_at": None} == {**stats, "indexed_at": None}
     assert api.get(f"/v1/projects/{pid}/architecture").json() == root_view
 
 

@@ -83,7 +83,7 @@ def test_trace_caps_and_cycles():
 def test_flows_follow_refresh(copy_fixture, index_project):
     root = copy_fixture("flow_app")
     store, _, _ = index_project(root)
-    (root / "app.py").write_text((root / "app.py").read_text().replace('@app.get("/books")\n', ""))
+    (root / "app.py").write_text((root / "app.py").read_text(encoding="utf-8").replace('@app.get("/books")\n', ""))
     refresh_project(store, root)
     assert flows(store)["login"]["loai_vao"] == "route"
     assert "books" not in flows(store)  # hết decorator, lại được main gọi -> không còn là điểm vào

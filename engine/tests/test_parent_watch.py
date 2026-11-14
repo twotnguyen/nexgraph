@@ -10,7 +10,7 @@ def start(data_dir, *extra):
     env = {**os.environ, "NEXGRAPH_TOKEN": TOKEN}
     return subprocess.Popen(
         [sys.executable, "-m", "nexgraph_engine.cli", "serve", "--data-dir", str(data_dir), "--port", "0", *extra],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", env=env,
     )
 
 

@@ -18,7 +18,7 @@ def test_context_for_login_question(copy_fixture, index_project):
     assert not any(i["node"]["is_test"] for i in pack["items"])
     item = next(i for i in pack["items"] if i["node"]["id"] == "service.py::login_user#function")
     assert item["code"] == {"file": "service.py", "start": 4, "end": 7,
-                            "text": "\n".join((root / "service.py").read_text().splitlines()[3:7])}
+                            "text": "\n".join((root / "service.py").read_text(encoding="utf-8").splitlines()[3:7])}
     assert pack["flows"][0]["name"] == "login" and pack["truncated"] is False
     assert pack["tokens"] == sum(len(i["code"]["text"]) // 4 + 20 for i in pack["items"])
 

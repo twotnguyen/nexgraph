@@ -14,7 +14,7 @@ GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": o
 
 def git(root: Path, *args: str) -> None:
     out = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t.t", "-c", "commit.gpgsign=false", *args],
-                         cwd=root, env=GIT_ENV, capture_output=True, text=True)
+                         cwd=root, env=GIT_ENV, capture_output=True, text=True, encoding="utf-8")
     assert out.returncode == 0, out.stderr
 
 
@@ -79,21 +79,24 @@ def test_no_git_uses_baseline(copy_fixture, index_project):
 def test_reverting_dirty_source_to_head_is_stale(git_project):
     store, root = git_project
     source = root / "util.py"
-    original = source.read_text()
+    original = source.read_text(encoding="utf-8")
     source.write_text("def helper(x):\n    return x + 7\n")
     refresh_project(store, root)
     source.write_text(original)
     assert freshness(store, root)["stale"] is True
 
 
-def test_recent_edit_with_unchanged_stat_is_still_hashed(copy_fixture, index_project):
+def test_recent_edit_with_unchanged_stat_is_still_hashed(copy_fixture, index_project, monkeypatch):
     """Cùng luật với refresh_project: stat không đổi thì tin, trừ khi mtime vừa mới đây (sửa hai lần trong một giây)."""
     root = copy_fixture("py_mini")
     source = root / "util.py"
+    # Máy CI chậm lập chỉ mục lâu hơn RACY_SECONDS thật, nên nới ngưỡng để mtime vẫn tính là "vừa mới đây".
+    monkeypatch.setattr("nexgraph_engine.store.freshness.RACY_SECONDS", 3600)
+    monkeypatch.setattr("nexgraph_engine.index.refresh.RACY_SECONDS", 3600)
     source.touch()  # mtime = bây giờ, như tệp vừa lưu ngay trước khi lập chỉ mục
     store, _, _ = index_project(root)
     stat = source.stat()
-    original = source.read_text()
+    original = source.read_text(encoding="utf-8")
     changed = original.replace("+ 1", "+ 2")
     assert len(changed) == len(original)
     source.write_text(changed)

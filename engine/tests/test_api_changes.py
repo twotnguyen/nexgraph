@@ -19,7 +19,7 @@ AUTH = "lib/services/auth_service.dart"
 
 def git(root: Path, *args: str) -> None:
     out = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t.t", "-c", "commit.gpgsign=false", *args],
-                         cwd=root, env=GIT_ENV, capture_output=True, text=True)
+                         cwd=root, env=GIT_ENV, capture_output=True, text=True, encoding="utf-8")
     assert out.returncode == 0, out.stderr
 
 
