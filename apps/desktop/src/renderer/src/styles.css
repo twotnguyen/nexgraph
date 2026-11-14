@@ -1,11 +1,41 @@
 :root {
   --font-sans: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --color-map-blue: #1f5fbf;
-  --color-error-red: #b3261e;
-  --color-border: #d9dde3;
-  --color-bg: #ffffff;
-  --color-text: #1d2330;
+  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* Khung: chàm đêm. Nội dung: giấy sáng để ảnh chụp in được. */
+  --night: #12183a;
+  --night-2: #232c63;
+  --on-night: #a9b3e6;
+  --color-bg: #f3f5fc;
+  --color-surface: #ffffff;
+  --panel: #eceffa;
+  --track: #e2e6f5;
+  --color-text: #1a2142;
+  --color-fg: var(--color-text);
+  --color-muted: #5d6685;
+  --color-border: #dce1f0;
+  /* Bảng màu loại nút và thẻ xem (trùng với kindStyle.ts, icons.tsx) */
+  --blue: #3257f0;
+  --violet: #7a4df2;
+  --teal: #0a9c99;
+  --magenta: #e23d94;
+  --green: #1c9a5b;
+  --amber: #e0a100;
+  --orange: #e07a00;
+  --color-map-blue: var(--blue);
+  --color-error-red: #d93a2f;
+  --accent-soft: #ebefff;
+  --amber-soft: #fff3d1;
+  --tone: var(--blue);
+  --shadow: 0 1px 2px rgba(18, 24, 58, 0.06), 0 8px 24px -12px rgba(18, 24, 58, 0.25);
 }
+
+[data-tone='blue'] { --tone: var(--blue); }
+[data-tone='teal'] { --tone: var(--teal); }
+[data-tone='magenta'] { --tone: var(--magenta); }
+[data-tone='violet'] { --tone: var(--violet); }
+[data-tone='green'] { --tone: var(--green); }
+[data-tone='amber'] { --tone: var(--amber); }
+
 
 * {
   box-sizing: border-box;
@@ -54,7 +84,7 @@ body {
 }
 
 .muted {
-  color: #5b6b7d;
+  color: var(--color-muted);
 }
 
 .error {
@@ -66,7 +96,7 @@ button {
   padding: 6px 14px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--color-surface);
   cursor: pointer;
 }
 
@@ -105,7 +135,7 @@ button:disabled {
 
 .bar {
   height: 8px;
-  background: #e9edf2;
+  background: var(--track);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -131,7 +161,7 @@ button:disabled {
 .sidebar {
   width: 220px;
   padding: 16px;
-  background: #f4f6f9;
+  background: var(--panel);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
@@ -188,7 +218,7 @@ button:disabled {
   left: 110px;
   margin: 0;
   padding: 4px 8px;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 6px;
 }
 
@@ -199,7 +229,7 @@ button:disabled {
   top: 16px;
   width: 280px;
   padding: 12px 14px;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
@@ -208,12 +238,12 @@ button:disabled {
 
 .inspector h3 {
   margin: 0 0 6px;
-  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 14px;
 }
 
 .mono {
-  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   word-break: break-all;
 }
@@ -226,7 +256,7 @@ button:disabled {
 
 .activity-bar {
   width: 48px;
-  background: #1b2a3a;
+  background: var(--night);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -243,11 +273,11 @@ button:disabled {
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: #9fb0c3;
+  color: var(--on-night);
 }
 
 .activity-bar button[aria-pressed='true'] {
-  background: #2c4258;
+  background: var(--night-2);
   color: #fff;
 }
 
@@ -308,7 +338,7 @@ button:disabled {
   z-index: 5;
   top: 10px;
   left: 10px;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 2px 6px;
@@ -352,7 +382,7 @@ button:disabled {
   gap: 4px;
   max-height: 40%;
   overflow: auto;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   font-size: 12px;
@@ -372,7 +402,7 @@ button:disabled {
   width: 420px;
   max-height: 70%;
   overflow: auto;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 10px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
@@ -454,7 +484,7 @@ button:disabled {
 }
 
 .changes-panel button.entry {
-  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   text-decoration: underline;
 }
 
@@ -475,7 +505,7 @@ button:disabled {
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: #fff;
+  background: var(--color-surface);
 }
 
 .code-head {
@@ -489,7 +519,7 @@ button:disabled {
 .code-body {
   flex: 1;
   overflow: auto;
-  font-family: ui-monospace, 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.55;
 }
@@ -500,7 +530,7 @@ button:disabled {
 }
 
 .code-line.hit {
-  background: #fff1d6;
+  background: var(--amber-soft);
 }
 
 .code-line .ln {
@@ -508,14 +538,14 @@ button:disabled {
   width: 56px;
   padding-right: 12px;
   text-align: right;
-  color: #8896a6;
+  color: #9aa2bd;
   user-select: none;
 }
 
 .stale-banner {
   margin: 0;
   padding: 6px 12px;
-  background: #fff1d6;
+  background: var(--amber-soft);
   color: #7a4a00;
 }
 
@@ -542,7 +572,7 @@ button:disabled {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(29, 35, 48, 0.35);
+  background: rgba(18, 24, 58, 0.5);
   display: grid;
   place-items: center;
   z-index: 50;
@@ -552,7 +582,7 @@ button:disabled {
   width: min(640px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
-  background: #fff;
+  background: var(--color-surface);
   border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
   padding: 16px 20px;
@@ -603,7 +633,7 @@ button:disabled {
 
 .export-formats label.active {
   border-color: var(--color-map-blue);
-  background: #eef4fd;
+  background: var(--accent-soft);
 }
 
 .export-formats span {
@@ -637,7 +667,7 @@ button:disabled {
 
 .warn {
   color: #7a5200;
-  background: #fff4d6;
+  background: var(--amber-soft);
   border-radius: 6px;
   padding: 6px 10px;
 }
@@ -657,7 +687,7 @@ button:disabled {
   position: fixed;
   z-index: 41;
   min-width: 200px;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
@@ -673,7 +703,7 @@ button:disabled {
 
 .context-menu button:hover,
 .context-menu button:focus-visible {
-  background: #eef4fd;
+  background: var(--accent-soft);
 }
 
 .pick-banner {
@@ -682,7 +712,7 @@ button:disabled {
   align-items: center;
   justify-content: space-between;
   padding: 6px 16px;
-  background: #eef4fd;
+  background: var(--accent-soft);
   border-bottom: 1px solid var(--color-map-blue);
   font-size: 13px;
 }
@@ -696,7 +726,7 @@ button:disabled {
   transform: translateX(-50%);
   margin: 0;
   padding: 6px 12px;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 6px;
   font-size: 13px;
@@ -823,7 +853,7 @@ button.link.back {
 
 .tree-row:focus-visible,
 .tree-row:hover {
-  background: #eef4fd;
+  background: var(--accent-soft);
   outline: none;
 }
 
@@ -856,7 +886,7 @@ button.link.back {
 .overview h2 {
   font-size: 15px;
   margin: 24px 0 8px;
-  color: #5b6b7d;
+  color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -873,7 +903,7 @@ button.link.back {
 }
 
 .badge {
-  background: #fff4d6;
+  background: var(--amber-soft);
   color: #7a5200;
   border-radius: 999px;
   padding: 2px 10px;
@@ -894,13 +924,13 @@ button.link.back {
   padding: 12px 14px;
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--color-surface);
   font-size: 13px;
 }
 
 button.card:hover:not(:disabled) {
   border-color: var(--color-map-blue);
-  background: #f6f9fe;
+  background: var(--accent-soft);
 }
 
 .card b {
@@ -922,7 +952,7 @@ button.card:hover:not(:disabled) {
 }
 
 .ok {
-  color: #1e7d34;
+  color: var(--green);
 }
 
 .switch {
@@ -940,7 +970,7 @@ button.card:hover:not(:disabled) {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--color-surface);
   transition: transform 0.15s;
 }
 
@@ -1039,7 +1069,7 @@ button.card:hover:not(:disabled) {
 }
 
 .kind-chip.active {
-  background: #f0f5fc;
+  background: var(--accent-soft);
   border-color: var(--color-map-blue);
   color: var(--color-map-blue);
   font-weight: 600;
@@ -1069,7 +1099,7 @@ button.card:hover:not(:disabled) {
 
 .flow-card.selected, .flow-item.active {
   border-color: var(--color-map-blue);
-  background: #f0f5fc;
+  background: var(--accent-soft);
 }
 
 .flow-card-title {
@@ -1084,7 +1114,7 @@ button.card:hover:not(:disabled) {
 .flow-card-kind {
   font-size: 10px;
   text-transform: uppercase;
-  background: #e3e8ef;
+  background: var(--track);
   padding: 1px 5px;
   border-radius: 3px;
   color: var(--color-muted);
@@ -1113,7 +1143,7 @@ button.card:hover:not(:disabled) {
 .crit-bar {
   height: 4px;
   width: 60px;
-  background: #e3e8ef;
+  background: var(--track);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -1138,7 +1168,7 @@ button.card:hover:not(:disabled) {
   flex-direction: column;
   position: relative;
   min-height: 0;
-  background: #f8fafc;
+  background: var(--color-bg);
 }
 
 .canvas-col .canvas-area {
@@ -1230,11 +1260,11 @@ button.card:hover:not(:disabled) {
 }
 
 .step-row:hover, .flow-step:hover {
-  background: #e6ebf1;
+  background: var(--track);
 }
 
 .step-row.current, .flow-step[aria-current="step"] {
-  background: #f0f5fc;
+  background: var(--accent-soft);
   color: var(--color-map-blue);
   font-weight: 600;
 }
@@ -1243,7 +1273,7 @@ button.card:hover:not(:disabled) {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #dfe5ec;
+  background: var(--track);
   display: grid;
   place-items: center;
   font-size: 10.5px;
@@ -1283,9 +1313,9 @@ button.card:hover:not(:disabled) {
   color: var(--color-muted);
 }
 
-.detail-code, .code-body {
-  background: #1e1e1e;
-  color: #d4d4d4;
+.detail-code {
+  background: var(--night);
+  color: #dfe4ff;
   padding: 8px;
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -1313,7 +1343,7 @@ button.card:hover:not(:disabled) {
 }
 
 .btn-action:hover {
-  background: #e6ebf1;
+  background: var(--track);
 }
 
 /* Map View */
@@ -1341,7 +1371,7 @@ button.card:hover:not(:disabled) {
 
 .map-toolbar > * {
   pointer-events: auto;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 2px 8px;
@@ -1402,7 +1432,7 @@ button.card:hover:not(:disabled) {
   width: 340px;
   max-height: 50%;
   overflow: auto;
-  background: #fff;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 6px;
@@ -1456,7 +1486,7 @@ button.card:hover:not(:disabled) {
 
 .chat .me {
   align-self: flex-end;
-  background: #f0f5fc;
+  background: var(--accent-soft);
   border-radius: 10px;
   padding: 6px 10px;
   max-width: 85%;
@@ -1511,7 +1541,7 @@ button.card:hover:not(:disabled) {
   padding: 1px 6px;
   border-radius: 6px;
   border: 1px solid var(--color-map-blue);
-  background: #f0f5fc;
+  background: var(--accent-soft);
   color: var(--color-map-blue);
 }
 
@@ -1553,7 +1583,7 @@ button.card:hover:not(:disabled) {
 }
 
 .tour .cur .tour-step {
-  background: #fff;
+  background: var(--color-surface);
   border-color: var(--color-map-blue);
 }
 
@@ -1561,7 +1591,7 @@ button.card:hover:not(:disabled) {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #dfe5ec;
+  background: var(--track);
   display: grid;
   place-items: center;
   font-size: 11px;
@@ -1579,4 +1609,490 @@ button.card:hover:not(:disabled) {
   color: var(--color-muted);
   font-size: 12px;
   line-height: 1.45;
+}
+
+/* ============ Diện mạo 2026-11-14: khung chàm đêm, màu theo thẻ xem ============ */
+body {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+button {
+  color: var(--color-text);
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s, transform 0.12s;
+}
+
+button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--color-border));
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+button.primary {
+  background: linear-gradient(135deg, var(--blue), var(--violet));
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: 0 6px 16px -8px var(--blue);
+}
+
+button.primary:hover:not(:disabled) {
+  border-color: transparent;
+  box-shadow: 0 8px 20px -8px var(--violet);
+}
+
+button.link {
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  color: var(--blue);
+  font-weight: 500;
+}
+
+button.link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+input,
+textarea {
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+/* --- Đầu trang: mảnh đồ thị trên nền đêm --- */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 28px 32px;
+  border-radius: 18px;
+  color: #fff;
+  background:
+    radial-gradient(520px 260px at 88% -10%, rgba(122, 77, 242, 0.55), transparent 70%),
+    radial-gradient(420px 260px at 100% 110%, rgba(10, 156, 153, 0.4), transparent 70%),
+    var(--night);
+}
+
+.hero > * {
+  position: relative;
+}
+
+.hero .graph-art {
+  position: absolute;
+  right: -10px;
+  top: 50%;
+  width: 460px;
+  max-width: 62%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.graph-art line {
+  stroke: #fff;
+  stroke-opacity: 0.28;
+  stroke-width: 1.2;
+}
+
+.hero .brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 22px;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+}
+
+.hero .lead {
+  margin: 6px 0 0;
+  color: var(--on-night);
+  font-size: 15px;
+}
+
+.hero .muted {
+  color: var(--on-night);
+}
+
+.hero .actions {
+  margin-top: 22px;
+  align-items: center;
+}
+
+.hero button.link {
+  color: #fff;
+  padding-left: 0;
+}
+
+.hero button.primary {
+  background: #fff;
+  color: var(--night);
+  box-shadow: none;
+  padding: 9px 18px;
+}
+
+.hero .graph-status {
+  display: inline-flex;
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  font-weight: 600;
+}
+
+.hero .graph-status .muted {
+  font-weight: 400;
+}
+
+.hero .mono {
+  max-width: 62%;
+}
+
+.screen > h2 {
+  margin: 28px 0 10px;
+}
+
+/* --- Dự án gần đây --- */
+.recent button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.recent button:hover:not(:disabled) {
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
+}
+
+.recent .muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #fff;
+  background: var(--tone);
+}
+
+/* --- Tổng quan: thẻ có biểu tượng màu --- */
+.overview h2 {
+  font-size: 13px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-muted);
+  font-weight: 600;
+}
+
+.card {
+  grid-template-columns: 40px 1fr;
+  column-gap: 12px;
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.card > * {
+  grid-column: 2;
+}
+
+.card > .card-icon {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: var(--tone);
+  background: color-mix(in srgb, var(--tone) 13%, #fff);
+}
+
+button.card:hover:not(:disabled) {
+  border-color: var(--tone);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+
+button.card:hover:not(:disabled) .card-icon {
+  color: #fff;
+  background: var(--tone);
+}
+
+.card-status {
+  color: var(--tone);
+  font-weight: 500;
+}
+
+.mcp-card > * {
+  grid-column: 1 / -1;
+}
+
+.badge {
+  font-weight: 600;
+}
+
+/* --- Thanh tiến độ --- */
+.bar {
+  height: 10px;
+  border-radius: 999px;
+}
+
+.bar-fill {
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--blue), var(--violet), var(--magenta));
+}
+
+/* --- Không gian làm việc --- */
+.center {
+  background: var(--color-bg);
+}
+
+.ws-head,
+.tabs,
+.code-viewer,
+.report-view,
+.tree-view {
+  background: var(--color-surface);
+}
+
+.ws-head {
+  align-items: center;
+}
+
+.ws-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.sidebar {
+  background: var(--panel);
+}
+
+.activity-bar button:hover {
+  background: var(--night-2);
+  color: #fff;
+  border: none;
+}
+
+.activity-bar button[aria-pressed='true'] {
+  background: linear-gradient(135deg, var(--blue), var(--violet));
+}
+
+.tabs {
+  padding: 0 8px;
+  gap: 2px;
+  overflow-x: auto;
+}
+
+.tab {
+  background: transparent;
+  color: var(--color-muted);
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.tab[data-tone]::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--tone);
+  opacity: 0.45;
+}
+
+.tab:hover {
+  color: var(--color-text);
+}
+
+.tab.active {
+  color: var(--color-text);
+  border-bottom-color: var(--tone);
+}
+
+.tab.active::before {
+  opacity: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 22%, transparent);
+}
+
+/* Nút trên canvas: nền nhuốm màu loại nút */
+.react-flow__node-default {
+  background: color-mix(in srgb, var(--node-c, #fff) 9%, #fff);
+  color: var(--color-text);
+  box-shadow: 0 4px 12px -8px var(--node-c, transparent);
+}
+
+.react-flow__node-default .kind {
+  color: var(--node-c);
+  opacity: 1;
+  font-weight: 600;
+}
+
+.inspector,
+.evidence-popover,
+.context-menu,
+.modal {
+  box-shadow: var(--shadow), 0 20px 48px -24px rgba(18, 24, 58, 0.45);
+}
+
+.inspector {
+  border-top: 3px solid var(--blue);
+}
+
+.segmented button.active {
+  background: var(--blue);
+}
+
+/* --- Luồng: màu magenta của thẻ Luồng --- */
+.flows-view {
+  --tone: var(--magenta);
+}
+
+.kind-chip.active,
+.flow-card.selected,
+.flow-item.active,
+.step-row.current,
+.flow-step[aria-current='step'] {
+  background: color-mix(in srgb, var(--tone) 9%, #fff);
+  border-color: var(--tone);
+  color: var(--tone);
+}
+
+.flow-card.selected {
+  color: inherit;
+  box-shadow: inset 3px 0 0 var(--tone);
+}
+
+.flow-card:hover,
+.flow-item:hover {
+  border-color: var(--tone);
+}
+
+.flow-card-kind {
+  background: color-mix(in srgb, var(--tone) 12%, #fff);
+  color: var(--tone);
+}
+
+.crit-fill,
+.crit-bar > span {
+  background: linear-gradient(90deg, var(--amber), var(--magenta));
+}
+
+.step-row.current .step-num,
+.flow-step[aria-current='step'] .step-num {
+  background: var(--tone);
+}
+
+.detail-code {
+  border-radius: 8px;
+}
+
+/* --- Chat và tour: tím của trợ lý AI --- */
+.chat > header {
+  border-top: 3px solid var(--violet);
+}
+
+.chat .me {
+  background: linear-gradient(135deg, var(--blue), var(--violet));
+  color: #fff;
+  border-radius: 14px 14px 4px 14px;
+  padding: 8px 12px;
+}
+
+.tour .cur .tour-step {
+  box-shadow: var(--shadow);
+}
+
+/* --- Thanh trạng thái --- */
+.status-bar {
+  background: var(--night);
+  color: var(--on-night);
+  border-top: 0;
+}
+
+.status-bar::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+.status-bar[data-state='ready']::before {
+  background: #3ddc97;
+  box-shadow: 0 0 0 3px rgba(61, 220, 151, 0.2);
+}
+
+.status-bar[data-state='error']::before {
+  background: #ff6b5e;
+}
+
+.status-bar button {
+  color: #fff;
+  border-color: var(--on-night);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
+}
+
+.recent {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.recent .muted {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Ô nhập dùng chung (Cài đặt, hộp thoại) */
+input:not([type='checkbox'], [type='radio'], [type='range']),
+select,
+textarea {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.settings .field {
+  margin-top: 14px;
+}
+
+.settings > .row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 18px;
 }

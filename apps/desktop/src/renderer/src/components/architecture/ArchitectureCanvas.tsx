@@ -46,7 +46,7 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
           initialWidth: W,
           initialHeight: H,
           data: { label: (<div><b>{b.label}</b><small className="kind">{vi.arch.files(b.size)}</small></div>) },
-          style: { width: W, borderColor: blockColor(b.kind), borderWidth: 2, borderStyle: b.kind === 'group' ? 'dashed' : 'solid', borderRadius: 10, fontSize: 12 }
+          style: { width: W, borderColor: blockColor(b.kind), '--node-c': blockColor(b.kind), borderWidth: 2, borderStyle: b.kind === 'group' ? 'dashed' : 'solid', borderRadius: 10, fontSize: 12 }
         })),
         edges: view.links.map((l) => ({
           id: `${l.from}->${l.to}`, source: l.from, target: l.to, label: String(l.count),

@@ -99,19 +99,19 @@ describe('GraphCanvas highlights', () => {
   it('tags and colours highlighted nodes by meaning', async () => {
     renderWith({ a: 'changed', b: 'impacted', c: 'test', d: 'gap' })
     await screen.findByText('a')
-    expect(nodeEl('a')).toHaveStyle({ borderColor: '#b86e00' })
+    expect(nodeEl('a')).toHaveStyle({ borderColor: '#e07a00' })
     expect(within(nodeEl('a')).getByText('đã đổi')).toBeInTheDocument()
     expect(within(nodeEl('b')).getByText('ảnh hưởng')).toBeInTheDocument()
-    expect(nodeEl('c')).toHaveStyle({ borderColor: '#2e7d4f' })
+    expect(nodeEl('c')).toHaveStyle({ borderColor: '#1c9a5b' })
     expect(within(nodeEl('c')).getByText('test')).toBeInTheDocument()
-    expect(nodeEl('d')).toHaveStyle({ borderColor: '#b3261e' })
+    expect(nodeEl('d')).toHaveStyle({ borderColor: '#d93a2f' })
     expect(within(nodeEl('d')).getByText('chưa có test')).toBeInTheDocument()
   })
 
   it('leaves the look unchanged without highlights', async () => {
     renderWith()
     await screen.findByText('a')
-    expect(nodeEl('a')).toHaveStyle({ borderColor: '#1f5fbf' })
+    expect(nodeEl('a')).toHaveStyle({ borderColor: '#3257f0' })
     expect(document.querySelectorAll('.tag')).toHaveLength(0)
   })
 })
@@ -119,7 +119,7 @@ describe('GraphCanvas highlights', () => {
 describe('kindStyle cho tài liệu', () => {
   it('nút document và concept có màu riêng', async () => {
     const { kindStyle } = await import('./kindStyle')
-    expect(kindStyle('document').color).toBe('#8a6d1f')
-    expect(kindStyle('concept').color).toBe('#8a6d1f')
+    expect(kindStyle('document').color).toBe('#c27c00')
+    expect(kindStyle('concept').color).toBe('#c27c00')
   })
 })

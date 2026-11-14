@@ -28,7 +28,7 @@ interface Props {
 const toFlowEdges = (edges: GraphEdge[], strong: boolean): Edge[] =>
   edges.map((e) => ({
     id: String(e.id), source: e.source, target: e.target, label: e.type,
-    ...(strong ? { animated: true, style: { stroke: 'var(--color-map-blue)', strokeWidth: 2.5 } } : {})
+    ...(strong ? { animated: true, style: { stroke: 'var(--magenta)', strokeWidth: 2.5 } } : {})
   }))
 
 interface View { pos: Record<string, { x: number; y: number }>; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean; total?: number | null }
@@ -106,7 +106,7 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
                 )
               },
               style: {
-                width: W, borderColor: color,
+                width: W, borderColor: color, '--node-c': color,
                 borderWidth: n.id === center || h === 'changed' || h === 'gap' || h === 'current' ? 3 : (h === 'visited' || h ? 2.5 : 1.5),
                 borderStyle: 'solid', borderRadius: 8, fontSize: 12
               }

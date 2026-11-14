@@ -1,5 +1,5 @@
 // Màu cụm và cỡ nút/cạnh của thẻ Bản đồ. Màu cụm chỉ để phân biệt, không mang ý nghĩa như màu ngữ nghĩa.
-export const PALETTE = ['#1f5fbf', '#0f7c78', '#6a4fb3', '#b3407a', '#8a6d1f', '#2e7d4f', '#b86e00', '#3d6a8a', '#7a4b2a', '#5b6b7d']
+export const PALETTE = ['#3257f0', '#0a9c99', '#7a4df2', '#e23d94', '#e0a100', '#1c9a5b', '#e07a00', '#2b9be0', '#b0522d', '#5d6685']
 
 export const communityColor = (c: number | null): string => (c == null ? '#9aa5b1' : PALETTE[c % PALETTE.length])
 

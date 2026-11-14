@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ProjectSummary } from '@shared/graph-types'
+import { Icon } from '../common/icons'
 import { vi } from '../../strings'
 
 type Status = 'no_git' | 'off' | 'on' | 'outdated'
@@ -34,7 +35,8 @@ export function HookCard({ project }: { project: ProjectSummary }) {
   const label = status === 'no_git' ? vi.hook.noGit : status === 'on' ? vi.hook.on : status === 'outdated' ? vi.hook.outdated : status === 'off' ? vi.hook.off : ''
   return (
     <>
-      <button type="button" className="card" disabled={status === 'no_git' || status === null} onClick={() => void openDialog()}>
+      <button type="button" className="card" data-tone="green" disabled={status === 'no_git' || status === null} onClick={() => void openDialog()}>
+        <span className="card-icon"><Icon name="commit" /></span>
         <b>{vi.hook.card}</b>
         <span className="muted">{vi.hook.cardDesc}</span>
         <small className="card-status">{label}</small>

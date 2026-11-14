@@ -17,6 +17,7 @@ import { TourPanel } from '../components/tour/TourPanel'
 import { ChatPanel } from '../components/chat/ChatPanel'
 import { MapView } from '../components/map/MapView'
 import { useChanges } from '../state/useChanges'
+import { Logo, VIEW_TONE } from '../components/common/icons'
 import { vi } from '../strings'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}`
@@ -224,7 +225,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       <section className="center">
         <header className="ws-head">
           {onBack && <button type="button" className="link" onClick={onBack}>{vi.workspace.back}</button>}
-          <b>{project.name}</b>
+          <b className="ws-name"><Logo size={18} /> {project.name}</b>
           <span className="muted mono">{project.path}</span>
           <span className="ws-actions">
             <button type="button" aria-label={vi.chat.toggle} aria-pressed={chatOpen} onClick={() => setChatOpen((v) => !v)}>{vi.chat.title}</button>
@@ -245,7 +246,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         )}
         <div className="tabs" role="tablist">
           {MAIN_TABS.map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => { if (t === 'arch') setArchParent(undefined); setTab(t) }}>
+            <button key={t} type="button" role="tab" aria-selected={tab === t} data-tone={VIEW_TONE[t]} className={`tab${tab === t ? ' active' : ''}`} onClick={() => { if (t === 'arch') setArchParent(undefined); setTab(t) }}>
               {{ arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
             </button>
           ))}
