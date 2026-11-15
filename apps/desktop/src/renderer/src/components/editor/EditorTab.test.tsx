@@ -150,6 +150,43 @@ describe('EditorTab', () => {
     expect(ta.value).toBe('void a() {}\n!')
   })
 
+  it('sự kiện đổi tệp đến giữa lúc đang lưu không bị coi là xung đột', async () => {
+    const { read, write, emit } = setup()
+    const ta = await box()
+    await userEvent.type(ta, '!')
+    let finish: (v: { mtimeMs: number }) => void = () => {}
+    write.mockImplementationOnce(() => new Promise((r) => { finish = r }))
+    read.mockResolvedValue(content({ text: 'void a() {}\n!', mtimeMs: 200 })) // đĩa đã mang bản vừa ghi
+    await userEvent.keyboard('{Control>}s{/Control}')
+    await changedOnDisk(emit)
+    await act(async () => finish({ mtimeMs: 200 }))
+    await waitFor(() => expect(read).toHaveBeenCalledTimes(2)) // một lần kiểm lại sau khi lưu xong
+    expect(screen.queryByRole('button', { name: 'Nạp lại' })).toBeNull()
+    expect(ta.value).toBe('void a() {}\n!')
+  })
+
+  it('tệp bị xoá trên đĩa thì báo và giữ nội dung', async () => {
+    const { read, emit } = setup()
+    const ta = await box()
+    read.mockRejectedValue(rejection('file_not_found'))
+    await changedOnDisk(emit)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tệp đã bị xoá hoặc đổi tên trên đĩa')
+    expect(ta.value).toBe('void a() {}\n')
+  })
+
+  it('thẻ ẩn không nhận Ctrl+S, thẻ hiện thì có', async () => {
+    const write = vi.fn(async () => ({ mtimeMs: 200 }))
+    installNexgraph({ fs: { read: vi.fn(async () => content()), write } })
+    const base = { projectId: 'p1', line: 1, onClose: vi.fn(), onDirtyChange: vi.fn() }
+    render(<><EditorTab {...base} file="lib/a.dart" active={false} /><EditorTab {...base} file="lib/b.dart" /></>)
+    const [a, b] = (await screen.findAllByLabelText('editor')) as HTMLTextAreaElement[]
+    await userEvent.type(a, 'A')
+    await userEvent.type(b, 'B')
+    await userEvent.keyboard('{Control>}s{/Control}')
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1))
+    expect(write).toHaveBeenCalledWith('p1', 'lib/b.dart', 'void a() {}\nB', expect.anything())
+  })
+
   it('lỗi đọc hiện thông báo theo code', async () => {
     installNexgraph({ fs: { read: vi.fn(async () => { throw rejection('file_not_found') }) } })
     render(<EditorTab projectId="p1" file="lib/a.dart" line={1} onClose={vi.fn()} onDirtyChange={vi.fn()} />)

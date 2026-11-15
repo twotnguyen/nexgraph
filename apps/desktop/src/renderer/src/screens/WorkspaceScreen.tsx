@@ -180,6 +180,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       return next
     })
   }, [])
+  // Rời màn hình dự án làm mất mọi thẻ đang sửa nên hỏi trước, giống khi đóng một thẻ.
+  const guardLeave = (go?: () => void): (() => void) | undefined =>
+    go && (() => { if (dirtyFiles.size === 0 || window.confirm(vi.editor.confirmLeave(dirtyFiles.size))) go() })
   const closeFile = (file: string) => {
     if (dirtyFiles.has(file) && !window.confirm(vi.editor.confirmClose(baseName(file)))) return
     const order: Tab[] = [lastMain, ...files.map((f) => `file:${f.file}` as Tab)] // về tab chính dùng gần nhất
@@ -235,7 +238,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       )}
       <section className="center">
         <header className="ws-head">
-          {onBack && <button type="button" className="link" onClick={onBack}>{vi.workspace.back}</button>}
+          {onBack && <button type="button" className="link" onClick={guardLeave(onBack)}>{vi.workspace.back}</button>}
           <b className="ws-name"><Logo size={18} /> {project.name}</b>
           <span className="muted mono">{project.path}</span>
           <span className="ws-actions">
@@ -296,14 +299,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <ReportView projectId={project.project_id} onOpenNode={openNodeId} onAsk={(q) => void askOnGraph(q)}
               onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
           )}
-          {files.map((f) =>
-            tab === `file:${f.file}` ? (
-              <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} />
-            ) : null
-          )}
+          {files.map((f) => (
+            <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} active={tab === `file:${f.file}`}
+              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} />
+          ))}
         </div>
       </section>
-      <ChatPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={onOpenSettings ?? (() => {})} />
+      <ChatPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />
     </div>
   )
 }

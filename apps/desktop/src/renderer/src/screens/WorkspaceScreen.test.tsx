@@ -218,6 +218,38 @@ describe('WorkspaceScreen: editor tabs', () => {
     confirm.mockRestore()
   })
 
+  it('đổi sang thẻ khác rồi quay lại vẫn giữ nội dung đang sửa và dấu ●', async () => {
+    await openFromSearch()
+    const ta = await screen.findByLabelText('editor')
+    await userEvent.type(ta, 'x')
+    await userEvent.click(screen.getByRole('tab', { name: 'Graph' }))
+    expect(ta).not.toBeVisible()
+    expect(document.querySelector('.dirty-dot')).not.toBeNull()
+    await userEvent.click(screen.getByRole('tab', { name: 'a.dart' }))
+    expect(screen.getByLabelText('editor')).toBe(ta)
+    expect(ta).toBeVisible()
+    expect(ta).toHaveValue('one\ntwo\nthreex')
+  })
+
+  it('rời dự án khi còn tệp chưa lưu thì hỏi; huỷ thì ở lại', async () => {
+    const neighbors = vi.fn(async (_p: string, q: { node: string }) => hood(q.node))
+    const search = vi.fn(async () => [{ node: gnode('lib/a.dart::AuthService.login#method', 'login'), score: 2 }])
+    installNexgraph({ fs: { read: read() }, graph: { neighbors, search } })
+    const onBack = vi.fn()
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} onBack={onBack} /></div>)
+    await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'login')
+    await userEvent.click(await screen.findByText('login'))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
+    await userEvent.type(await screen.findByLabelText('editor'), 'x')
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    await userEvent.click(screen.getByRole('button', { name: /Dự án|Quay lại|←/ }))
+    expect(confirm).toHaveBeenCalledWith('Còn 1 tệp có thay đổi chưa lưu. Rời khỏi dự án và bỏ các thay đổi này?')
+    expect(onBack).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: /Dự án|Quay lại|←/ }))
+    expect(onBack).toHaveBeenCalledTimes(1)
+    confirm.mockRestore()
+  })
+
   it('đóng thẻ sạch thì không hỏi', async () => {
     await openFromSearch()
     await screen.findByLabelText('editor')

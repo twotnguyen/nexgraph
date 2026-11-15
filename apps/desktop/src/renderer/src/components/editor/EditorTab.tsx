@@ -10,6 +10,8 @@ interface Props {
   lineEnd?: number
   onClose: () => void
   onDirtyChange: (file: string, dirty: boolean) => void
+  /** Thẻ đang hiện; thẻ ẩn vẫn gắn kết để giữ nội dung, con trỏ và undo, và không nhận Ctrl+S. */
+  active?: boolean
 }
 
 function explain(e: { code?: string; message?: string }): string {
@@ -19,7 +21,7 @@ function explain(e: { code?: string; message?: string }): string {
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChange }: Props) {
+export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChange, active = true }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
   // base: bản đang coi là "đã lưu" (nội dung + mtime đĩa tương ứng + eol/bom giữ nguyên khi ghi lại).
@@ -69,29 +71,36 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
     setDisk(null)
   }
 
-  // Tín hiệu "dự án có thay đổi" của bộ theo dõi: đọc lại tệp và so mtime.
-  useEffect(() => {
-    let alive = true
-    const off = window.nexgraph.index.onEvent((e) => {
-      if (e.type !== 'changes_updated' || e.project_id !== projectId) return
-      window.nexgraph.fs.read(projectId, file).then((c) => {
-        if (!alive || !base.current || c.mtimeMs === base.current.mtimeMs) return
-        if (dirty.current) setDisk(c)
-        else adopt(c)
-      }).catch(() => {})
-    })
-    return () => {
-      alive = false
-      off()
+  // Tín hiệu "dự án có thay đổi" của bộ theo dõi: đọc lại tệp và so mtime. Đang lưu thì bỏ qua rồi kiểm lại một lần sau khi lưu xong.
+  const saving = useRef(false)
+  const skipped = useRef(false)
+  const checkDisk = useCallback(() => {
+    if (saving.current) {
+      skipped.current = true
+      return
     }
+    window.nexgraph.fs.read(projectId, file).then((c) => {
+      if (saving.current || !base.current || c.mtimeMs === base.current.mtimeMs) return
+      if (dirty.current) setDisk(c)
+      else adopt(c)
+    }).catch((e) => {
+      if ((e as { code?: string })?.code === 'file_not_found') setError(vi.editor.deletedOnDisk) // giữ nguyên nội dung đang có
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, file])
+  useEffect(() => {
+    const off = window.nexgraph.index.onEvent((e) => {
+      if (e.type === 'changes_updated' && e.project_id === projectId) checkDisk()
+    })
+    return off
+  }, [projectId, checkDisk])
 
   const save = async (): Promise<void> => {
     const ed = editor.current
     const b = base.current
     if (!ed || !b || readOnly) return
     const text = ed.getValue()
+    saving.current = true
     try {
       const r = await window.nexgraph.fs.write(projectId, file, text, { eol: b.eol, bom: b.bom, expectedMtimeMs: b.mtimeMs })
       base.current = { ...b, text, mtimeMs: r.mtimeMs }
@@ -104,15 +113,23 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
       } catch (e2) {
         setError(explain(e2 as { code?: string }))
       }
+    } finally {
+      saving.current = false
+      if (skipped.current) {
+        skipped.current = false
+        checkDisk()
+      }
     }
   }
 
   // Chỉ thẻ đang hiện được gắn kết, nên nghe cả tài liệu: Ctrl+S vẫn hoạt động khi tiêu điểm vừa rời khỏi thanh xung đột.
+  const activeRef = useRef(active)
+  activeRef.current = active
   const saveRef = useRef(save)
   saveRef.current = save
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if (activeRef.current && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
         void saveRef.current()
       }
@@ -128,7 +145,7 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
 
   const readOnlyNote = readOnly === 'too_large' ? vi.editor.readOnlyTooLarge : readOnly === 'not_text' ? vi.editor.readOnlyNotText : readOnly ? vi.editor.readOnly : null
   return (
-    <div className="code-viewer editor-tab">
+    <div className="code-viewer editor-tab" style={active ? undefined : { display: 'none' }}>
       <header className="code-head">
         <span className="mono">{file}</span>
         <button type="button" onClick={onClose}>{vi.editor.close}</button>

@@ -302,8 +302,10 @@ export const vi = {
     readOnlyNotText: 'Tệp không phải văn bản nên không sửa được',
     readOnly: 'Tệp chỉ đọc nên không lưu được',
     changedOnDisk: 'Tệp đã đổi trên đĩa trong lúc bạn đang sửa.',
+    deletedOnDisk: 'Tệp đã bị xoá hoặc đổi tên trên đĩa. Nội dung trong thẻ vẫn được giữ.',
     reload: 'Nạp lại',
     keepMine: 'Giữ bản của tôi',
+    confirmLeave: (n: number) => `Còn ${n} tệp có thay đổi chưa lưu. Rời khỏi dự án và bỏ các thay đổi này?`,
     confirmClose: (name: string) => `${name} có thay đổi chưa lưu. Đóng và bỏ các thay đổi này?`
   },
   changes: {
