@@ -1,8 +1,8 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, statSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { readProjectFile, resolveInside, writeProjectFile } from '../src/main/fs/project-fs'
+import { fsHandlers, readProjectFile, resolveInside, writeProjectFile } from '../src/main/fs/project-fs'
 import { toIpcResult } from '../src/main/ipc-result'
 
 let root: string
@@ -73,5 +73,36 @@ describe('project-fs', () => {
   it('FsError.code đi qua toIpcResult thành error.code', async () => {
     const r = await toIpcResult(() => writeProjectFile(root, '../x', 'x', { eol: '\n', bom: false }))
     expect(r).toMatchObject({ ok: false, error: { code: 'outside_project' } })
+  })
+  it('không ghi đè tệp chỉ đọc (not_text, too_large)', async () => {
+    const bin = Buffer.from([0xff, 0xfe, 0x00, 0x80])
+    writeFileSync(join(root, 'b.bin'), bin)
+    await expect(writeProjectFile(root, 'b.bin', 'x', { eol: '\n', bom: false })).rejects.toMatchObject({ code: 'not_text' })
+    expect(readFileSync(join(root, 'b.bin'))).toEqual(bin)
+    writeFileSync(join(root, 'big.txt'), 'a'.repeat(5 * 1024 * 1024 + 1))
+    await expect(writeProjectFile(root, 'big.txt', 'x', { eol: '\n', bom: false })).rejects.toMatchObject({ code: 'too_large' })
+    await expect(writeProjectFile(root, 'new.txt', 'a'.repeat(5 * 1024 * 1024 + 1), { eol: '\n', bom: false }))
+      .rejects.toMatchObject({ code: 'too_large' })
+  })
+  it.skipIf(process.platform === 'win32')('giữ quyền thực thi khi ghi lại', async () => {
+    writeFileSync(join(root, 'run.sh'), 'a', { mode: 0o755 })
+    chmodSync(join(root, 'run.sh'), 0o755)
+    await writeProjectFile(root, 'run.sh', 'b', { eol: '\n', bom: false })
+    expect(statSync(join(root, 'run.sh')).mode & 0o777).toBe(0o755)
+  })
+})
+
+describe('fsHandlers qua toIpcResult', () => {
+  const h = fsHandlers(async () => [{ project_id: 'p1', path: root }])
+  it('ghi ngoài gốc dự án trả outside_project', async () => {
+    expect(await toIpcResult(() => h.write('p1', '../x', 'x', { eol: '\n', bom: false })))
+      .toMatchObject({ ok: false, error: { code: 'outside_project' } })
+  })
+  it('projectId lạ trả unknown_project', async () => {
+    expect(await toIpcResult(() => h.read('nope', 'a.ts'))).toMatchObject({ ok: false, error: { code: 'unknown_project' } })
+  })
+  it('đọc ghi đúng gốc của dự án', async () => {
+    await toIpcResult(() => h.write('p1', 'a.ts', 'hi', { eol: '\n', bom: false }))
+    expect(await toIpcResult(() => h.read('p1', 'a.ts'))).toMatchObject({ ok: true, data: { text: 'hi' } })
   })
 })

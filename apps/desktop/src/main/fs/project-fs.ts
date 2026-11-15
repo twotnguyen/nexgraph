@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, realpathSync } from 'node:fs'
-import { readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { chmod, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import type { FileContent, WriteOpts } from '../../shared/api'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
-export type FsErrorCode = 'outside_project' | 'file_not_found' | 'too_large' | 'not_text' | 'conflict'
+export type FsErrorCode = 'outside_project' | 'file_not_found' | 'too_large' | 'not_text' | 'conflict' | 'unknown_project'
 
 export class FsError extends Error {
   constructor(public code: FsErrorCode, message: string) {
@@ -77,9 +77,16 @@ export async function writeProjectFile(
   opts: WriteOpts
 ): Promise<{ mtimeMs: number }> {
   const abs = resolveInside(root, relPath)
-  if (opts.expectedMtimeMs !== undefined) {
-    const cur = await stat(abs).catch(() => null)
-    if (cur && cur.mtimeMs !== opts.expectedMtimeMs) throw new FsError('conflict', `Tệp đã thay đổi trên đĩa: ${relPath}`)
+  if (Buffer.byteLength(text, 'utf8') > MAX_EDIT_BYTES) throw new FsError('too_large', `Nội dung quá lớn: ${relPath}`)
+  const cur = await stat(abs).catch(() => null)
+  if (cur) {
+    // Tệp đang có trên đĩa mà đọc ra chỉ-đọc thì không được ghi đè (đọc trả text rỗng, ghi sẽ làm mất dữ liệu).
+    if (cur.isFile()) {
+      const r = await readProjectFile(root, relPath)
+      if (r.reason) throw new FsError(r.reason, `Tệp không thể sửa (${r.reason}): ${relPath}`)
+    }
+    if (opts.expectedMtimeMs !== undefined && cur.mtimeMs !== opts.expectedMtimeMs)
+      throw new FsError('conflict', `Tệp đã thay đổi trên đĩa: ${relPath}`)
   }
   mkdirSync(dirname(abs), { recursive: true })
   const body = (opts.bom ? '﻿' : '') + (opts.eol === '\r\n' ? text.replace(/\n/g, '\r\n') : text)
@@ -87,10 +94,29 @@ export async function writeProjectFile(
   const tmp = join(dirname(abs), `.${basename(abs)}.${randomUUID()}.tmp`)
   try {
     await writeFile(tmp, body, 'utf8')
+    if (cur?.isFile()) await chmod(tmp, cur.mode & 0o7777) // giữ quyền (vd. bit thực thi) của tệp gốc
     await rename(tmp, abs)
   } catch (e) {
     await unlink(tmp).catch(() => {})
     throw e
   }
   return { mtimeMs: (await stat(abs)).mtimeMs }
+}
+
+type ProjectLookup = () => Promise<{ project_id: string; path: string }[]>
+
+/** Thân handler `fs:read`/`fs:write`: tra gốc dự án từ `projectId` rồi gọi hàm đọc/ghi an toàn. */
+export function fsHandlers(listProjects: ProjectLookup): {
+  read: (pid: string, relPath: string) => Promise<FileContent>
+  write: (pid: string, relPath: string, text: string, opts: WriteOpts) => Promise<{ mtimeMs: number }>
+} {
+  const rootOf = async (pid: string): Promise<string> => {
+    const p = (await listProjects()).find((x) => x.project_id === pid)
+    if (!p) throw new FsError('unknown_project', `Không tìm thấy dự án: ${pid}`) // cùng mã với engine
+    return p.path
+  }
+  return {
+    read: async (pid, relPath) => readProjectFile(await rootOf(pid), relPath),
+    write: async (pid, relPath, text, opts) => writeProjectFile(await rootOf(pid), relPath, text, opts)
+  }
 }

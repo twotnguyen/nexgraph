@@ -6,12 +6,11 @@ import type { ChatMessage, ExportFormat, ExportScope, FlowQuery, IndexOptions, N
 import { EngineApi } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
-import { readProjectFile, writeProjectFile } from './fs/project-fs'
+import { fsHandlers } from './fs/project-fs'
 import { runChat } from './ai/chat'
 import { AiSettingsStore, endpoint } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
 import { applyIntegration, planIntegration } from './integrations'
-import type { WriteOpts } from '../shared/api'
 import type { AgentId } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
@@ -89,14 +88,9 @@ export function registerIpc(
   })
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
-  const rootOf = async (pid: string): Promise<string> => {
-    const p = (await api().listProjects()).find((x) => x.project_id === pid)
-    if (!p) throw new Error(`Không tìm thấy dự án: ${pid}`)
-    return p.path
-  }
-  on('fs:read', async (pid: string, relPath: string) => readProjectFile(await rootOf(pid), relPath))
-  on('fs:write', async (pid: string, relPath: string, text: string, o: WriteOpts) =>
-    writeProjectFile(await rootOf(pid), relPath, text, o))
+  const fsh = fsHandlers(() => api().listProjects())
+  on('fs:read', fsh.read)
+  on('fs:write', fsh.write)
   on('index:scan', (pid: string) => api().scan(pid))
   on('index:start', async (pid: string, opts?: IndexOptions) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
   on('index:cancel', async (jobId: string) => void (await api().cancelJob(jobId)))
