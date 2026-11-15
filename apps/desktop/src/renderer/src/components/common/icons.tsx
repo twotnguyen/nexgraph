@@ -34,14 +34,19 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   )
 }
 
-/** Dấu hiệu NexGraph: ba nút nối nhau, ba màu loại nút. */
+/** Dấu hiệu NexGraph: đồ thị tri thức tạo hình chữ N (Nexus + Graph). */
 export function Logo({ size = 22 }: { size?: number }) {
   return (
     <svg className="logo" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
-      <path d="M6 6.5 18 9 11 18.5z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" opacity=".55" />
-      <circle cx="6" cy="6.5" r="3.4" fill="var(--blue)" />
-      <circle cx="18" cy="9" r="2.8" fill="var(--magenta)" />
-      <circle cx="11" cy="18.5" r="3" fill="var(--teal)" />
+      <path d="M6 18V6l12 12V6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity=".4" />
+      <path d="M6 6l6-3 6 3M6 18l6 3 6-3" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity=".25" />
+      <circle cx="6" cy="18" r="2.2" fill="var(--teal)" />
+      <circle cx="6" cy="6" r="2.4" fill="var(--blue)" />
+      <circle cx="18" cy="18" r="2.4" fill="var(--magenta)" />
+      <circle cx="18" cy="6" r="2.2" fill="var(--amber)" />
+      <circle cx="12" cy="12" r="2.6" fill="var(--violet)" />
+      <circle cx="12" cy="3" r="1.3" fill="var(--violet)" />
+      <circle cx="12" cy="21" r="1.3" fill="var(--green)" />
     </svg>
   )
 }
