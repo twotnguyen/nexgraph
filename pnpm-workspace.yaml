@@ -4,6 +4,8 @@ packages:
 allowBuilds:
   electron: true
   esbuild: true
+  '@google/genai': false
+  protobufjs: false
   electron-winstaller: false # chỉ dùng cho Squirrel.Windows; NexGraph dùng NSIS
 onlyBuiltDependencies:
   - electron

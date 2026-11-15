@@ -31,3 +31,17 @@ Mỗi mục ghi nguồn, giấy phép, commit được dùng và phần nào c�
 - Phiên bản: `0.57.0` (gói npm `monaco-editor`, dùng qua API công khai, không chép mã)
 - Giấy phép: MIT, Copyright (c) Microsoft Corporation.
 - Dùng ở: `apps/desktop/src/renderer/src/components/editor/monaco.ts` — trình soạn thảo mã trong thẻ tệp của renderer, được Vite gói vào bản dựng.
+
+## pi coding-agent
+
+- Nguồn: https://github.com/earendil-works/pi
+- Phiên bản: `1.5.2` (gói npm `@earendil-works/pi-coding-agent`, dùng qua API công khai, không chép mã)
+- Giấy phép: MIT, Copyright (c) Mario Zechner.
+- Dùng ở: `apps/desktop/src/main/agent/` — harness agent lập trình chạy trong tiến trình main; NexGraph đăng ký tool đồ thị và cổng duyệt qua extension.
+
+## TypeBox
+
+- Nguồn: https://github.com/sinclairzx81/typebox
+- Phiên bản: `1.3.27` (gói npm `typebox`, dùng qua API công khai, không chép mã)
+- Giấy phép: MIT, Copyright (c) 2017-2026 Haydn Paterson.
+- Dùng ở: `apps/desktop/src/main/agent/extension.ts` — bọc JSON Schema của tool đồ thị thành tham số tool của pi.
