@@ -10,7 +10,7 @@ import type { ApprovalGate } from './approval'
 const GRAPH_TOOLS: string[] = TOOL_DEFS.map((t) => t.function.name)
 const ALLOWED = new Set([...GRAPH_TOOLS, 'read', 'grep', 'find', 'ls', 'edit', 'write', 'bash'])
 
-export function createNexgraphExtension(deps: { api: EngineApi; projectId: string; gate: ApprovalGate }): (pi: ExtensionAPI) => void {
+export function createNexgraphExtension(deps: { api: EngineApi; projectId: string; root: string; gate: ApprovalGate }): (pi: ExtensionAPI) => void {
   return (pi) => {
     for (const { function: f } of TOOL_DEFS) {
       pi.registerTool({
@@ -29,13 +29,47 @@ export function createNexgraphExtension(deps: { api: EngineApi; projectId: strin
     pi.on('tool_call', async (event) => {
       if (!ALLOWED.has(event.toolName)) return { block: true, reason: `Tool "${event.toolName}" không được phép dùng trong NexGraph` }
       try {
+        if (PATH_TOOLS.has(event.toolName)) {
+          const blocked = pinPath(deps.root, event.toolName, event.input)
+          if (blocked) return { block: true, reason: blocked }
+        }
         const d = await deps.gate.check(event.toolName, event.input)
-        return d.allow ? undefined : { block: true, reason: d.reason }
+        return d.allow ? undefined : { block: true, reason: d.reason || 'Thao tác bị từ chối' }
       } catch {
         return { block: true, reason: 'Cổng duyệt gặp lỗi nên thao tác bị từ chối' }
       }
     })
   }
+}
+
+// Các tool dựng sẵn của pi có trường `path` (edit/write/read bắt buộc; ls/grep/find tuỳ chọn). Đều qua resolveToCwd
+// (coding-agent/src/core/tools/path-utils.ts:46-48 → utils/paths.ts:120-150) nên cùng bị viết lại.
+const PATH_TOOLS = new Set(['read', 'write', 'edit', 'ls', 'grep', 'find'])
+const OPTIONAL_PATH = new Set(['ls', 'grep', 'find'])
+// Chép từ utils/paths.ts:7 (UNICODE_SPACES); pi đổi các ký tự này thành dấu cách thường.
+const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/
+
+/**
+ * Trả lý do chặn (tiếng Việt) hoặc undefined. Chặn path mà pi sẽ viết lại (@, ~, file:, dấu cách Unicode) thay vì tự chuẩn hoá,
+ * chặn path ngoài root, rồi ghi path tuyệt đối đã kiểm vào input: pi chạy đúng chuỗi đó (agent-loop.ts:742,770 dùng chung một args;
+ * path tuyệt đối đi qua resolveToCwd nguyên vẹn, paths.ts:150).
+ */
+function pinPath(root: string, tool: string, input: unknown): string | undefined {
+  const i = input as { path?: unknown } | null
+  if (typeof i !== 'object' || i === null) return 'Đầu vào của tool không hợp lệ'
+  const p = i.path
+  if (p === undefined && OPTIONAL_PATH.has(tool)) return undefined
+  if (typeof p !== 'string' || p === '') return 'Thiếu đường dẫn hợp lệ'
+  if (p.startsWith('@') || p.startsWith('~') || /^file:/i.test(p) || UNICODE_SPACES.test(p)) return 'Đường dẫn chứa ký tự mà pi sẽ viết lại (@, ~, file:, dấu cách Unicode), thao tác bị chặn'
+  let abs: string
+  try {
+    abs = resolveInside(root, toRel(root, p))
+  } catch {
+    return 'Đường dẫn nằm ngoài dự án'
+  }
+  if (UNICODE_SPACES.test(abs)) return 'Đường dẫn tuyệt đối chứa dấu cách Unicode, thao tác bị chặn'
+  i.path = abs
+  return undefined
 }
 
 /** Đường dẫn tuyệt đối nằm trong root thì đổi sang tương đối (resolveInside từ chối tuyệt đối); ngoài root thì ném. */
@@ -48,6 +82,9 @@ function toRel(root: string, p: string): string {
   throw new FsError('outside_project', `Đường dẫn nằm ngoài dự án: ${p}`)
 }
 
+// Như normalizeToLF của pi (edit-diff.ts:11-13). before/after của bản xem trước là văn bản đã chuẩn hoá LF; UI diff hiển thị LF là chấp nhận được.
+const toLF = (t: string) => t.replace(/\r\n?/g, '\n')
+
 type Edit = { oldText: string; newText: string }
 
 /**
@@ -58,10 +95,11 @@ type Edit = { oldText: string; newText: string }
 function applyEdits(before: string, edits: Edit[]): string {
   const found = edits.map((e, i) => {
     if (typeof e?.oldText !== 'string' || typeof e.newText !== 'string' || e.oldText === '') throw new Error(`edits[${i}] không hợp lệ`)
-    const at = before.indexOf(e.oldText)
+    const oldText = toLF(e.oldText)
+    const at = before.indexOf(oldText)
     if (at === -1) throw new Error(`Không tìm thấy edits[${i}]`)
-    if (before.indexOf(e.oldText, at + 1) !== -1) throw new Error(`edits[${i}] xuất hiện nhiều lần`)
-    return { at, end: at + e.oldText.length, newText: e.newText }
+    if (before.indexOf(oldText, at + 1) !== -1) throw new Error(`edits[${i}] xuất hiện nhiều lần`)
+    return { at, end: at + oldText.length, newText: toLF(e.newText) }
   }).sort((a, b) => a.at - b.at)
   let out = ''
   let pos = 0
@@ -84,7 +122,7 @@ export async function previewWrite(root: string, tool: 'edit' | 'write', input: 
   try {
     const f = await readProjectFile(root, rel)
     if (f.readOnly) throw new Error(`Không xem trước được tệp (${f.reason ?? 'chỉ đọc'})`)
-    before = f.text
+    before = toLF(f.text)
   } catch (e) {
     if (!(tool === 'write' && e instanceof FsError && e.code === 'file_not_found')) throw e
   }

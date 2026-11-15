@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -8,14 +8,19 @@ import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
 import type { ApprovalGate } from '../src/main/agent/approval'
 
-type Handler = (e: { toolName: string; input: unknown }) => Promise<{ block: true; reason: string } | undefined>
+type Handler = (e: { toolName: string; input: any }) => Promise<{ block: true; reason: string } | undefined>
 const names = TOOL_DEFS.map((t) => t.function.name)
+
+const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-ext-h-')))
+const proj = join(base, 'p')
+mkdirSync(proj)
+writeFileSync(join(proj, 'a.txt'), 'x')
 
 function setup(check: ApprovalGate['check'] = async () => ({ allow: true })) {
   const search = vi.fn(async () => ({ hits: [] }))
   const gate = { check: vi.fn(check) } as unknown as ApprovalGate
   const pi = { registerTool: vi.fn(), on: vi.fn() }
-  createNexgraphExtension({ api: { search } as unknown as EngineApi, projectId: 'p1', gate })(pi as never)
+  createNexgraphExtension({ api: { search } as unknown as EngineApi, projectId: 'p1', root: proj, gate })(pi as never)
   const handler = pi.on.mock.calls.find((c) => c[0] === 'tool_call')![1] as Handler
   return { pi, search, gate, handler }
 }
@@ -36,21 +41,52 @@ describe('extension NexGraph', () => {
 
   it('tool_call: gate từ chối thì block, cho qua thì undefined, gate ném thì block', async () => {
     const deny = setup(async () => ({ allow: false, reason: 'không' }))
-    expect(await deny.handler({ toolName: 'edit', input: { a: 1 } })).toEqual({ block: true, reason: 'không' })
-    expect(deny.gate.check).toHaveBeenCalledWith('edit', { a: 1 })
+    expect(await deny.handler({ toolName: 'edit', input: { path: 'a.txt' } })).toEqual({ block: true, reason: 'không' })
+    expect(deny.gate.check).toHaveBeenCalledWith('edit', { path: join(proj, 'a.txt') })
+    const empty = setup((async () => ({ allow: false })) as never)
+    expect(await empty.handler({ toolName: 'bash', input: {} })).toMatchObject({ block: true, reason: expect.stringMatching(/\S/) })
     const ok = setup()
     expect(await ok.handler({ toolName: 'bash', input: {} })).toBeUndefined()
     const boom = setup(async () => { throw new Error('x') })
-    expect(await boom.handler({ toolName: 'edit', input: {} })).toMatchObject({ block: true })
+    expect(await boom.handler({ toolName: 'edit', input: { path: 'a.txt' } })).toMatchObject({ block: true })
   })
 
   it('tool_call: chặn tên lạ, so khớp phân biệt hoa thường', async () => {
     const { handler, gate } = setup()
     for (const toolName of ['Bash', 'multiedit', 'get_node ', ...names, 'read', 'grep', 'find', 'ls']) {
       const blocked = toolName === 'Bash' || toolName === 'multiedit' || toolName === 'get_node '
-      expect(await handler({ toolName, input: {} }) !== undefined).toBe(blocked)
+      expect(await handler({ toolName, input: { path: 'a.txt' } }) !== undefined).toBe(blocked)
     }
     expect(gate.check).toHaveBeenCalledTimes(names.length + 4)
+  })
+})
+
+describe('tool_call: chuẩn hoá đường dẫn của pi', () => {
+  const bad = ['@/etc/x', '~/x', '~', 'file:///etc/x', 'FILE:///etc/x', 'a\u00a0b', 'a\u2003b', 'a\u202fb', 'a\u3000b']
+  for (const toolName of ['write', 'read', 'edit', 'ls', 'grep', 'find']) {
+    it(`${toolName}: chặn không hỏi khi path bị pi viết lại`, async () => {
+      const { handler, gate } = setup()
+      for (const path of bad) expect(await handler({ toolName, input: { path } })).toMatchObject({ block: true })
+      expect(gate.check).not.toHaveBeenCalled()
+    })
+  }
+
+  it('chặn path ngoài root, cho qua path vắng của ls/grep/find', async () => {
+    const { handler, gate } = setup()
+    expect(await handler({ toolName: 'read', input: { path: '../x' } })).toMatchObject({ block: true })
+    expect(await handler({ toolName: 'read', input: { path: '/etc/passwd' } })).toMatchObject({ block: true })
+    expect(await handler({ toolName: 'read', input: { path: 5 } })).toMatchObject({ block: true })
+    expect(await handler({ toolName: 'read', input: {} })).toMatchObject({ block: true })
+    expect(gate.check).not.toHaveBeenCalled()
+    for (const toolName of ['ls', 'grep', 'find']) expect(await handler({ toolName, input: {} })).toBeUndefined()
+  })
+
+  it('ghim path tuyệt đối đã kiểm vào event.input, gate nhận đúng path đó', async () => {
+    const { handler, gate } = setup()
+    const input = { path: 'sub/../new.txt', content: 'y' }
+    expect(await handler({ toolName: 'write', input })).toBeUndefined()
+    expect(input.path).toBe(join(proj, 'new.txt'))
+    expect(gate.check).toHaveBeenCalledWith('write', input)
   })
 })
 
@@ -67,6 +103,13 @@ describe('previewWrite', () => {
   it('edit: áp dụng edits[] lên bản gốc; nhận đường dẫn tuyệt đối trong root', async () => {
     const r = await previewWrite(root, 'edit', { path: join(root, 'a.txt'), edits: [{ oldText: 'one', newText: '1' }, { oldText: 'three', newText: '3' }] })
     expect(r).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: '1 two\n3\n' })
+  })
+
+  it('edit: CRLF trong oldText/newText được chuẩn hoá như pi, before/after là văn bản LF', async () => {
+    writeFileSync(join(root, 'crlf.txt'), 'a\r\nb\r\nc\rd\r\n')
+    const r = await previewWrite(root, 'edit', { path: 'crlf.txt', edits: [{ oldText: 'a\r\nb', newText: 'x\r\ny\rz' }, { oldText: 'c\rd', newText: 'c2' }] })
+    expect(r.after).toBe('x\ny\nz\nc2\n')
+    expect(r.after).not.toContain('\r')
   })
 
   it('ném khi edit không áp dụng được hoặc path ngoài root', async () => {
