@@ -59,6 +59,10 @@ const api: NexGraphApi = {
     map: (pid, opts) => call('graph:map', pid, opts),
     cycles: (pid, limit) => call('graph:cycles', pid, limit)
   },
+  fs: {
+    read: (pid, relPath) => call('fs:read', pid, relPath),
+    write: (pid, relPath, text, opts) => call('fs:write', pid, relPath, text, opts)
+  },
   exporter: {
     pickDir: () => call('export:pick-dir'),
     run: (pid, format, scope, outDir) => call('export:run', pid, format, scope, outDir),
