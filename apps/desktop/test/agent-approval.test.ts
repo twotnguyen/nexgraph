@@ -146,4 +146,18 @@ describe('approval gate', () => {
     expect(await p).toMatchObject({ allow: false })
     expect(ask).not.toHaveBeenCalled()
   })
+  it('closed được gọi một lần cho mỗi yêu cầu đã giải quyết (duyệt, denyAll, hết giờ)', async () => {
+    const closed = vi.fn()
+    const g = createApprovalGate({ root, getMode: () => 'edit', ask, preview, closed } as never)
+    const a = g.check('bash', { command: 'a' })
+    const b = g.check('bash', { command: 'b' })
+    await flush()
+    g.resolve(asked(0).id, true)
+    g.denyAll('x')
+    await Promise.all([a, b])
+    const c = g.check('bash', { command: 'c' })
+    await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS)
+    await c
+    expect(closed.mock.calls.map((x) => x[0])).toEqual([asked(0).id, asked(1).id, asked(2).id])
+  })
 })

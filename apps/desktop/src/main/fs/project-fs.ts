@@ -106,15 +106,18 @@ export async function writeProjectFile(
 type ProjectLookup = () => Promise<{ project_id: string; path: string }[]>
 
 /** Thân handler `fs:read`/`fs:write`: tra gốc dự án từ `projectId` rồi gọi hàm đọc/ghi an toàn. */
+/** Gốc dự án theo projectId; id lạ → FsError('unknown_project'). */
+export const projectRoot = (listProjects: ProjectLookup) => async (pid: string): Promise<string> => {
+  const p = (await listProjects()).find((x) => x.project_id === pid)
+  if (!p) throw new FsError('unknown_project', `Không tìm thấy dự án: ${pid}`) // cùng mã với engine
+  return p.path
+}
+
 export function fsHandlers(listProjects: ProjectLookup): {
   read: (pid: string, relPath: string) => Promise<FileContent>
   write: (pid: string, relPath: string, text: string, opts: WriteOpts) => Promise<{ mtimeMs: number }>
 } {
-  const rootOf = async (pid: string): Promise<string> => {
-    const p = (await listProjects()).find((x) => x.project_id === pid)
-    if (!p) throw new FsError('unknown_project', `Không tìm thấy dự án: ${pid}`) // cùng mã với engine
-    return p.path
-  }
+  const rootOf = projectRoot(listProjects)
   return {
     read: async (pid, relPath) => readProjectFile(await rootOf(pid), relPath),
     write: async (pid, relPath, text, opts) => writeProjectFile(await rootOf(pid), relPath, text, opts)

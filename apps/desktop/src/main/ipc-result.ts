@@ -1,5 +1,6 @@
 import { EngineApiError } from './engine/api'
 import { FsError } from './fs/project-fs'
+import { AgentError } from './agent/session'
 
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 
@@ -8,7 +9,7 @@ export async function toIpcResult<T>(fn: () => Promise<T>): Promise<IpcResult<T>
   try {
     return { ok: true, data: await fn() }
   } catch (err) {
-    if (err instanceof EngineApiError || err instanceof FsError) return { ok: false, error: { code: err.code, message: err.message } }
+    if (err instanceof EngineApiError || err instanceof FsError || err instanceof AgentError) return { ok: false, error: { code: err.code, message: err.message } }
     return { ok: false, error: { code: 'internal', message: err instanceof Error ? err.message : String(err) } }
   }
 }

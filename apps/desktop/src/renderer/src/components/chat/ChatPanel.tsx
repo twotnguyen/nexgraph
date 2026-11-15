@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { AiSettings, ChatAnswer, GraphEdge, GraphNode } from '@shared/graph-types'
+import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { CitationText } from './CitationText'
 import { ConsentDialog } from './ConsentDialog'
@@ -12,7 +12,7 @@ interface Props {
   onOpenSettings: () => void
 }
 
-type Msg = { role: 'user'; content: string } | { role: 'assistant'; content: string; answer: ChatAnswer }
+type Msg = { role: 'user'; content: string } | { role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
 
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
@@ -26,52 +26,64 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
   const [error, setError] = useState<string | null>(null)
   const [consent, setConsent] = useState<string | null>(null) // câu hỏi đang chờ đồng ý
   const [openTools, setOpenTools] = useState<number | null>(null)
-  const chatId = useRef<string | null>(null)
+  const [draft, setDraft] = useState('') // chữ đang chảy về của lượt hiện tại
+  const turn = useRef<{ q: string; tools: string[] } | null>(null) // lượt đang chạy; kết thúc bằng sự kiện done/error
   const mounted = useRef(true)
+
+  const end = () => {
+    turn.current = null
+    setBusy(false)
+    setTool(null)
+    setDraft('')
+  }
+  const fail = (q: string, message: string) => {
+    setMsgs((cur) => cur.slice(0, -1))
+    setText(q)
+    setError(message)
+    end()
+  }
 
   useEffect(() => {
     let alive = true
     mounted.current = true
     window.nexgraph.ai.getSettings().then((s) => alive && setCfg(s)).catch(() => {})
-    const off = window.nexgraph.ai.onEvent((e) => {
-      if (mounted.current && e.chatId === chatId.current) setTool(e.name)
+    const off = window.nexgraph.agent.onEvent((pid, e) => {
+      const t = turn.current
+      if (!mounted.current || pid !== projectId || !t) return
+      if (e.type === 'tool' && e.status === 'start') {
+        t.tools.push(e.name)
+        setTool(e.name)
+      } else if (e.type === 'text') setDraft((d) => d + e.delta)
+      else if (e.type === 'done') {
+        setMsgs((cur) => [...cur, { role: 'assistant', content: e.text, citations: e.citations, tools: t.tools }])
+        end()
+      } else if (e.type === 'error') fail(t.q, vi.chat.errors[e.code] || e.message)
     })
     return () => {
       alive = false
       mounted.current = false
-      const id = chatId.current
-      chatId.current = null
-      if (id) void window.nexgraph.ai.cancel(id)
+      if (turn.current) void window.nexgraph.agent.abort(projectId)
+      turn.current = null
       off()
     }
-  }, [])
+  }, [projectId])
 
   const configured = !!cfg && cfg.baseUrl !== '' && cfg.model !== ''
 
   const run = async (question: string) => {
-    const id = crypto.randomUUID()
-    chatId.current = id
-    const history = msgs.map((m) => ({ role: m.role, content: m.content }))
+    turn.current = { q: question, tools: [] }
     setMsgs((cur) => [...cur, { role: 'user', content: question }])
     setText('')
     setError(null)
     setBusy(true)
     setTool(null)
+    setDraft('')
     try {
-      const answer = await window.nexgraph.ai.send(projectId, id, [...history, { role: 'user', content: question }])
-      if (!mounted.current || chatId.current !== id) return
-      setMsgs((cur) => [...cur, { role: 'assistant', content: answer.text, answer }])
+      await window.nexgraph.agent.prompt(projectId, question)
     } catch (e) {
-      if (!mounted.current || chatId.current !== id) return
-      setMsgs((cur) => cur.slice(0, -1))
-      setText(question)
+      if (!mounted.current || turn.current?.q !== question) return
       const code = errCode(e)
-      setError((code && vi.chat.errors[code]) || errMessage(e))
-    } finally {
-      if (!mounted.current || chatId.current !== id) return
-      setBusy(false)
-      setTool(null)
-      chatId.current = null
+      fail(question, (code && vi.chat.errors[code]) || errMessage(e))
     }
   }
 
@@ -89,10 +101,10 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
     }
   }
 
-  const highlight = async (answer: ChatAnswer) => {
+  const highlight = async (citations: Citation[]) => {
     const seen = new Set<string>()
     const ids: string[] = []
-    for (const c of answer.citations.filter((x) => x.valid)) {
+    for (const c of citations.filter((x) => x.valid)) {
       try {
         const { node } = await window.nexgraph.graph.locate(projectId, c.file, c.start)
         if (!seen.has(node.id)) { seen.add(node.id); ids.push(node.id) }
@@ -126,24 +138,25 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
               <div key={i} className="me">{m.content}</div>
             ) : (
               <div key={i} className="ai">
-                <CitationText text={m.content} citations={m.answer.citations} onOpen={onOpenCode} />
+                <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />
                 <div className="foot muted">
-                  {m.answer.citations.length === 0 ? <span>{vi.chat.noCitations}</span>
-                    : <span>{vi.chat.verified(m.answer.citations.filter((c) => c.valid).length, m.answer.citations.length)}</span>}
-                  {m.answer.citations.some((c) => c.valid) && (
-                    <button type="button" className="link" onClick={() => void highlight(m.answer)}>{vi.chat.highlight}</button>
+                  {m.citations.length === 0 ? <span>{vi.chat.noCitations}</span>
+                    : <span>{vi.chat.verified(m.citations.filter((c) => c.valid).length, m.citations.length)}</span>}
+                  {m.citations.some((c) => c.valid) && (
+                    <button type="button" className="link" onClick={() => void highlight(m.citations)}>{vi.chat.highlight}</button>
                   )}
-                  {m.answer.toolCalls.length > 0 && (
-                    <button type="button" className="link" onClick={() => setOpenTools(openTools === i ? null : i)}>{vi.chat.tools(m.answer.toolCalls.length)}</button>
+                  {m.tools.length > 0 && (
+                    <button type="button" className="link" onClick={() => setOpenTools(openTools === i ? null : i)}>{vi.chat.tools(m.tools.length)}</button>
                   )}
                 </div>
                 {openTools === i && (
                   <ul className="tool-list mono">
-                    {m.answer.toolCalls.map((t, k) => <li key={k}>{t.name} {t.args}</li>)}
+                    {m.tools.map((t, k) => <li key={k}>{t}</li>)}
                   </ul>
                 )}
               </div>
             ))}
+            {busy && draft && <div className="ai">{draft}</div>}
             {busy && <div className="ai muted" role="status">{tool ? vi.chat.usingTool(tool) : vi.chat.thinking}</div>}
           </div>
           {error && <p role="alert" className="error">{error}</p>}
@@ -152,7 +165,7 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
             <div className="row">
               <small className="muted">{vi.chat.hint}</small>
               {busy
-                ? <button type="button" onClick={() => chatId.current && void window.nexgraph.ai.cancel(chatId.current)}>{vi.chat.stop}</button>
+                ? <button type="button" onClick={() => void window.nexgraph.agent.abort(projectId)}>{vi.chat.stop}</button>
                 : <button type="button" className="primary" onClick={() => void submit()}>{vi.chat.send}</button>}
             </div>
           </div>

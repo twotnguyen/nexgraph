@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
-import { registerIpc, stopAllMcpHttp, stopAllWatchers } from './ipc'
+import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers } from './ipc'
+import { confirmUnload } from './unload-guard'
 import { join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
 import { getHealth } from './engine/client'
@@ -55,8 +56,16 @@ function createWindow(): void {
       sandbox: true
     }
   })
-  mainWindow.once('ready-to-show', () => mainWindow?.show())
-  mainWindow.on('closed', () => (mainWindow = null))
+  const win = mainWindow
+  win.once('ready-to-show', () => win.show())
+  // Renderer chặn unload khi còn tệp chưa lưu (beforeunload); preventDefault ở đây là cho phép đóng.
+  win.webContents.on('will-prevent-unload', (e) => {
+    if (confirmUnload((o) => dialog.showMessageBoxSync(win, o))) e.preventDefault()
+  })
+  win.on('closed', () => {
+    closeAllAgents()
+    mainWindow = null
+  })
 
   if (process.env['ELECTRON_RENDERER_URL']) void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
@@ -110,5 +119,6 @@ app.on('before-quit', (e) => {
   e.preventDefault()
   quitting = true
   stopAllWatchers()
+  closeAllAgents()
   void Promise.all([supervisor.stop(), stopAllMcpHttp()]).finally(() => app.quit())
 })

@@ -18,6 +18,8 @@ export type ApprovalDeps = {
   getMode(): AgentMode
   ask(req: ApprovalRequest): void
   preview(tool: 'edit' | 'write', input: unknown): Promise<{ path: string; before: string; after: string }>
+  /** Gọi khi một yêu cầu đã hỏi được giải quyết (duyệt, từ chối, hết giờ, denyAll). */
+  closed?(id: string): void
 }
 
 const deny = (reason: string): ApprovalDecision => ({ allow: false, reason })
@@ -56,6 +58,7 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
           clearTimeout(timer)
           waiting.delete(req.id)
           done(d)
+          deps.closed?.(req.id)
         }
       })
       try {

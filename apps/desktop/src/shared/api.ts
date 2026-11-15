@@ -1,7 +1,8 @@
 import type { EngineStatus } from './engine-status'
 import type { AgentId, IntegrationPlan } from './integration-types'
+import type { AgentEvent, AgentMode } from './agent-types'
 import type {
-  AiSettings, ChatAnswer, ChatMessage,
+  AiSettings,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
   ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   GraphNode, GraphReport, GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult,
@@ -86,9 +87,19 @@ export interface NexGraphApi {
     test(): Promise<{ ok: boolean; ms: number; error: string | null }>
     hasConsent(projectId: string): Promise<boolean>
     grantConsent(projectId: string): Promise<void>
-    send(projectId: string, chatId: string, messages: ChatMessage[]): Promise<ChatAnswer>
-    cancel(chatId: string): Promise<void>
-    onEvent(cb: (e: { chatId: string; type: 'tool'; name: string }) => void): () => void
+  }
+  /** Phiên agent theo dự án (giữ hội thoại trong bộ nhớ). Lỗi có `code`: `consent_required` | `ai_not_configured` | `agent_busy`. */
+  agent: {
+    /** Gửi một lượt; kết quả đến qua `onEvent` (`text`… rồi `done` hoặc `error`). Resolve khi lượt kết thúc. */
+    prompt(projectId: string, text: string): Promise<void>
+    abort(projectId: string): Promise<void>
+    /** Đổi chế độ; yêu cầu duyệt đang chờ bị từ chối. */
+    setMode(projectId: string, mode: AgentMode): Promise<void>
+    getMode(projectId: string): Promise<AgentMode>
+    approve(projectId: string, id: string, allow: boolean): Promise<void>
+    /** Rời dự án: từ chối yêu cầu đang chờ, huỷ phiên. */
+    close(projectId: string): Promise<void>
+    onEvent(cb: (projectId: string, e: AgentEvent) => void): () => void
   }
   mcp: {
     /** JSON `mcpServers` cho trợ lý AI chạy MCP qua stdio. */

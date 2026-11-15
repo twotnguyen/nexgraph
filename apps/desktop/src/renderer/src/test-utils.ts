@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
 import type { Changes, EngineEvent, ProjectSummary } from '@shared/graph-types'
+import type { AgentEvent } from '@shared/agent-types'
 
 export const project = (over: Partial<ProjectSummary> = {}): ProjectSummary => ({
   project_id: 'p1', path: '/Đồ án/demo', name: 'demo', storage: 'in_project', ...over
@@ -11,9 +12,10 @@ export const emptyChanges = (over: Partial<Changes> = {}): Changes => ({
   impacted: [], tests: [], test_gaps: [], truncated: false, ...over
 })
 
-/** Dựng `window.nexgraph` giả; `emit` bắn sự kiện engine tới mọi người đăng ký. */
+/** Dựng `window.nexgraph` giả; `emit` bắn sự kiện engine, `emitAgent` bắn sự kiện agent tới mọi người đăng ký. */
 export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGraphApi[K]> } = {}) {
   const handlers = new Set<(e: EngineEvent) => void>()
+  const agentHandlers = new Set<(pid: string, e: AgentEvent) => void>()
   const api = {
     engine: { status: vi.fn(async () => ({ state: 'ready' as const, engineVersion: '0.1.0', vendorCommit: 'x' })),
       restart: vi.fn(async () => {}),
@@ -44,14 +46,16 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       reveal: vi.fn(async () => {}), ...over.exporter },
     hook: { status: vi.fn(async () => 'off' as const), preview: vi.fn(async () => '# >>> nexgraph >>>'), install: vi.fn(async () => {}), uninstall: vi.fn(async () => {}), ...over.hook },
     ai: { getSettings: vi.fn(async () => ({ baseUrl: '', model: '', hasKey: false })), saveSettings: vi.fn(async (s: { baseUrl: string; model: string }) => ({ ...s, hasKey: false })),
-      test: vi.fn(async () => ({ ok: true, ms: 1, error: null })), hasConsent: vi.fn(async () => false), grantConsent: vi.fn(async () => {}),
-      send: vi.fn(), cancel: vi.fn(async () => {}), onEvent: vi.fn(() => () => {}), ...over.ai },
+      test: vi.fn(async () => ({ ok: true, ms: 1, error: null })), hasConsent: vi.fn(async () => false), grantConsent: vi.fn(async () => {}), ...over.ai },
+    agent: { prompt: vi.fn(async () => {}), abort: vi.fn(async () => {}), setMode: vi.fn(async () => {}), getMode: vi.fn(async () => 'ask' as const),
+      approve: vi.fn(async () => {}), close: vi.fn(async () => {}),
+      onEvent: vi.fn((cb: (pid: string, e: AgentEvent) => void) => { agentHandlers.add(cb); return () => agentHandlers.delete(cb) }), ...over.agent },
     mcp: { config: vi.fn(async () => ({ stdio: '{}' })), plan: vi.fn(), apply: vi.fn(), startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:1/mcp', key: 'k' })),
       stopHttp: vi.fn(async () => {}), httpStatus: vi.fn(async () => null), ...over.mcp },
     watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}), ...over.watch }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
-  return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)) }
+  return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)) }
 }
 
 export const progress = (state: string, done: number, total: number, extra: object = {}): EngineEvent =>

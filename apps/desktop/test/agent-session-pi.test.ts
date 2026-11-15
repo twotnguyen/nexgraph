@@ -1,0 +1,172 @@
+// Kiểm AgentService với SDK pi THẬT (nạp ESM, typebox, hook tool_call) và một máy chủ giả tương thích OpenAI (SSE).
+import http from 'node:http'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { AgentService } from '../src/main/agent/session'
+import { settingsModels } from '../src/main/agent/model'
+import { AiSettingsStore } from '../src/main/ai/settings'
+import type { EngineApi } from '../src/main/engine/api'
+import type { AgentEvent } from '../src/shared/agent-types'
+
+const KEY = 'sk-test-khong-duoc-ghi-ra-dia'
+const OUTSIDE = `/tmp/x-outside-${process.pid}-${Date.now()}`
+
+type Msg = { role: string; content?: unknown }
+/** Kịch bản theo câu hỏi cuối: lượt đầu gọi tool, sau khi có kết quả tool thì trả lời. */
+const SCRIPT: Record<string, [string, object]> = {
+  'tra đồ thị': ['search', { query: 'login' }],
+  'viết b.txt': ['write', { path: 'b.txt', content: 'nội dung mới' }],
+  'viết c.txt': ['write', { path: 'c.txt', content: 'không được ghi' }],
+  'viết ngoài': ['write', { path: `@${OUTSIDE}`, content: 'x' }],
+  'viết d.txt': ['write', { path: 'd.txt', content: 'bị dừng' }]
+}
+
+function fakeLlm(seen: { auth: string[]; tools: string[][] }): Promise<{ url: string; close: () => Promise<void> }> {
+  const srv = http.createServer((req, res) => {
+    let body = ''
+    req.on('data', (c) => (body += c))
+    req.on('end', () => {
+      seen.auth.push(String(req.headers.authorization))
+      const j = JSON.parse(body || '{}') as { messages?: Msg[]; tools?: { function: { name: string } }[] }
+      seen.tools.push((j.tools ?? []).map((t) => t.function.name))
+      const msgs = j.messages ?? []
+      const lastUser = msgs.map((m) => m.role).lastIndexOf('user')
+      const q = JSON.stringify(msgs[lastUser]?.content ?? '')
+      const answered = msgs.slice(lastUser).some((m) => m.role === 'tool')
+      if (q.includes('khoá sai')) { res.writeHead(401, { 'content-type': 'application/json' }); return res.end('{"error":{"message":"bad key"}}') }
+      const step = Object.entries(SCRIPT).find(([k]) => q.includes(k))?.[1]
+      res.writeHead(200, { 'content-type': 'text/event-stream' })
+      const send = (c: object) => res.write(`data: ${JSON.stringify({ id: 'x', object: 'chat.completion.chunk', created: 1, model: 'fake-1', ...c })}\n\n`)
+      if (step && !answered) {
+        send({ choices: [{ index: 0, delta: { role: 'assistant', content: null, tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: step[0], arguments: JSON.stringify(step[1]) } }] }, finish_reason: null }] })
+        send({ choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] })
+      } else {
+        send({ choices: [{ index: 0, delta: { role: 'assistant', content: 'Xong ' }, finish_reason: null }] })
+        send({ choices: [{ index: 0, delta: { content: '[[a.py:1-1]]' }, finish_reason: null }] })
+        send({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 } })
+      }
+      res.end('data: [DONE]\n\n')
+    })
+  })
+  return new Promise((ok) => srv.listen(0, '127.0.0.1', () => ok({
+    url: `http://127.0.0.1:${(srv.address() as { port: number }).port}/v1`,
+    close: () => new Promise<void>((r) => { srv.closeAllConnections(); srv.close(() => r()) })
+  })))
+}
+
+const filesUnder = (dir: string): string[] => !existsSync(dir) ? [] : readdirSync(dir).flatMap((f) => {
+  const p = join(dir, f)
+  return statSync(p).isDirectory() ? filesUnder(p) : [p]
+})
+
+describe('AgentService + pi SDK thật', () => {
+  const seen = { auth: [] as string[], tools: [] as string[][] }
+  const events: AgentEvent[] = []
+  const searches: unknown[] = []
+  let llm: Awaited<ReturnType<typeof fakeLlm>>
+  let svc: AgentService
+  let root: string
+  let dataDir: string
+
+  beforeAll(async () => {
+    llm = await fakeLlm(seen)
+    const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-pi-real-')))
+    root = join(base, 'proj')
+    dataDir = join(base, 'data')
+    mkdirSync(root)
+    mkdirSync(dataDir)
+    writeFileSync(join(root, 'a.py'), 'print(1)\n')
+    const settings = new AiSettingsStore(join(base, 'prefs.json'), join(base, 'key.json'), { available: () => true, encrypt: (s) => `enc:${s}`, decrypt: (s) => s.slice(4) })
+    settings.save({ baseUrl: llm.url, model: 'fake-1', apiKey: KEY })
+    const api = {
+      search: async (...a: unknown[]) => { searches.push(a); return [] },
+      code: async (_p: string, file: string, start: number, end: number) => ({ file, start, end, text: 'print(1)' })
+    } as unknown as EngineApi
+    svc = new AgentService({
+      api, dataDir, models: settingsModels(dataDir, settings), hasConsent: () => true,
+      rootOf: async () => root, emit: (_pid, e) => events.push(e)
+    })
+  }, 30_000)
+
+  afterAll(async () => {
+    svc?.closeAll()
+    await llm?.close()
+  })
+
+  const lastEnd = () => events.filter((e) => e.type === 'done' || e.type === 'error').at(-1)
+  /** Chạy một lượt; khi có yêu cầu duyệt thì trả lời bằng `answer`. */
+  async function turn(text: string, answer?: boolean) {
+    const from = events.length
+    const run = svc.prompt('p1', text)
+    if (answer !== undefined) {
+      const t0 = Date.now()
+      while (!events.slice(from).some((e) => e.type === 'approval')) {
+        if (Date.now() - t0 > 10_000) throw new Error('không thấy sự kiện approval')
+        await new Promise((r) => setTimeout(r, 10))
+      }
+      const req = events.slice(from).find((e) => e.type === 'approval') as Extract<AgentEvent, { type: 'approval' }>
+      svc.approve('p1', req.request.id, answer)
+    }
+    await run
+    return events.slice(from)
+  }
+
+  it('(a) chế độ Hỏi: mô hình gọi tool đồ thị, lượt kết thúc bằng done có trích dẫn đã kiểm', async () => {
+    const evs = await turn('tra đồ thị')
+    expect(searches).toHaveLength(1)
+    expect(evs).toContainEqual({ type: 'tool', name: 'search', status: 'start' })
+    expect(lastEnd()).toEqual({ type: 'done', text: 'Xong [[a.py:1-1]]', citations: [expect.objectContaining({ file: 'a.py', valid: true })] })
+    expect(seen.tools[0].sort()).toEqual(['find', 'get_architecture', 'get_context', 'get_impact', 'get_neighbors', 'get_node', 'grep', 'list_flows', 'ls', 'read', 'read_code', 'search', 'trace_flow'])
+    expect(seen.auth[0]).toBe(`Bearer ${KEY}`)
+  }, 30_000)
+
+  it('(b) chế độ Sửa: write trong dự án → approval → duyệt → tệp có trên đĩa', async () => {
+    svc.setMode('p1', 'edit')
+    const evs = await turn('viết b.txt', true)
+    expect(evs.find((e) => e.type === 'approval')).toMatchObject({ request: { tool: 'write', path: 'b.txt', before: '', after: 'nội dung mới' } })
+    expect(evs.some((e) => e.type === 'approval_closed')).toBe(true)
+    expect(readFileSync(join(root, 'b.txt'), 'utf8')).toBe('nội dung mới')
+    expect(seen.tools.at(-1)).toEqual(expect.arrayContaining(['edit', 'write', 'bash']))
+    expect(lastEnd()).toMatchObject({ type: 'done' })
+    expect(svc.pending('p1')).toBe(0)
+  }, 30_000)
+
+  it('(c) từ chối → tệp không được tạo, lượt vẫn kết thúc', async () => {
+    await turn('viết c.txt', false)
+    expect(existsSync(join(root, 'c.txt'))).toBe(false)
+    expect(lastEnd()).toMatchObject({ type: 'done' })
+    expect(svc.pending('p1')).toBe(0)
+  }, 30_000)
+
+  it('(d) write với "@/tmp/…" ngoài dự án → không hỏi duyệt, không ghi gì', async () => {
+    const evs = await turn('viết ngoài')
+    expect(evs.some((e) => e.type === 'approval')).toBe(false)
+    expect(existsSync(OUTSIDE)).toBe(false)
+    expect(evs).toContainEqual({ type: 'tool', name: 'write', status: 'end', error: true })
+  }, 30_000)
+
+  it('dừng khi đang chờ duyệt → prompt() kết thúc với ai_cancelled, không còn yêu cầu treo, tệp không được tạo', async () => {
+    const from = events.length
+    const run = svc.prompt('p1', 'viết d.txt')
+    while (!events.slice(from).some((e) => e.type === 'approval')) await new Promise((r) => setTimeout(r, 10))
+    await svc.abort('p1')
+    await run
+    expect(lastEnd()).toEqual({ type: 'error', code: 'ai_cancelled', message: 'Đã dừng' })
+    expect(events.slice(from).some((e) => e.type === 'approval_closed')).toBe(true)
+    expect(existsSync(join(root, 'd.txt'))).toBe(false)
+    expect(svc.pending('p1')).toBe(0)
+  }, 30_000)
+
+  it('nhà cung cấp trả 401 → error ai_unauthorized, lượt sau trên cùng phiên vẫn chạy', async () => {
+    await turn('khoá sai')
+    expect(lastEnd()).toEqual({ type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' })
+    await turn('chào')
+    expect(lastEnd()).toMatchObject({ type: 'done', text: 'Xong [[a.py:1-1]]' })
+  }, 30_000)
+
+  it('khoá API không nằm dạng thường trong tệp nào dưới dataDir', () => {
+    for (const f of filesUnder(dataDir)) expect(readFileSync(f, 'utf8')).not.toContain(KEY)
+  })
+})

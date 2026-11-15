@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { NexGraphApi } from '../shared/api'
 import type { EngineStatus } from '../shared/engine-status'
 import type { EngineEvent } from '../shared/graph-types'
+import type { AgentEvent } from '../shared/agent-types'
 
 type IpcResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 
@@ -81,10 +82,16 @@ const api: NexGraphApi = {
     saveSettings: (s) => call('ai:save-settings', s),
     test: () => call('ai:test'),
     hasConsent: (pid) => call('ai:has-consent', pid),
-    grantConsent: (pid) => call('ai:grant-consent', pid),
-    send: (pid, chatId, messages) => call('ai:send', pid, chatId, messages),
-    cancel: (chatId) => call('ai:cancel', chatId),
-    onEvent: (cb) => subscribe('ai:event', cb)
+    grantConsent: (pid) => call('ai:grant-consent', pid)
+  },
+  agent: {
+    prompt: (pid, text) => call('agent:prompt', pid, text),
+    abort: (pid) => call('agent:abort', pid),
+    setMode: (pid, mode) => call('agent:set-mode', pid, mode),
+    getMode: (pid) => call('agent:get-mode', pid),
+    approve: (pid, id, allow) => call('agent:approve', pid, id, allow),
+    close: (pid) => call('agent:close', pid),
+    onEvent: (cb) => subscribe<{ projectId: string; event: AgentEvent }>('agent:event', (v) => cb(v.projectId, v.event))
   },
   mcp: {
     config: (projectPath) => call('mcp:config', projectPath),

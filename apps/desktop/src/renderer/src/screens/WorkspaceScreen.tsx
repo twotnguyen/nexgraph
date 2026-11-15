@@ -78,10 +78,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
   const changes = nodeImpact ? impactAsChanges(nodeImpact) : live.changes
 
-  // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp.
+  // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp. Rời đi cũng đóng phiên agent.
   useEffect(() => {
     void window.nexgraph.watch.start(project.project_id, project.path).catch(() => {})
-    return () => void window.nexgraph.watch.stop(project.project_id).catch(() => {})
+    return () => {
+      void window.nexgraph.watch.stop(project.project_id).catch(() => {})
+      void window.nexgraph.agent.close(project.project_id).catch(() => {})
+    }
   }, [project.project_id, project.path])
 
   // Một nút vừa đổi vừa thiếu test thì hiện là "chưa có test" (đỏ); ưu tiên: gap > changed > test > impacted.
@@ -180,6 +183,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       return next
     })
   }, [])
+  // Đóng cửa sổ khi còn tệp chưa lưu: chặn unload, main hỏi bằng hộp thoại hệ thống (will-prevent-unload).
+  useEffect(() => {
+    if (dirtyFiles.size === 0) return
+    const block = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', block)
+    return () => window.removeEventListener('beforeunload', block)
+  }, [dirtyFiles.size])
   // Rời màn hình dự án làm mất mọi thẻ đang sửa nên hỏi trước, giống khi đóng một thẻ.
   const guardLeave = (go?: () => void): (() => void) | undefined =>
     go && (() => { if (dirtyFiles.size === 0 || window.confirm(vi.editor.confirmLeave(dirtyFiles.size))) go() })

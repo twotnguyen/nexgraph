@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { ChatAnswer, GraphNode, Neighborhood } from '@shared/graph-types'
+import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
 
 vi.mock('../services/elkLayoutService', async () => ({
@@ -60,12 +60,10 @@ function setup() {
 
 describe('WorkspaceScreen', () => {
   it('Ctrl+L ẩn panel trợ lý nhưng giữ bản nháp và lượt đang chạy', async () => {
-    const send = vi.fn(() => new Promise<ChatAnswer>(() => {}))
     installNexgraph({ ai: {
       getSettings: vi.fn(async () => ({ baseUrl: 'https://api.example.com/v1', model: 'm1', hasKey: true })),
-      hasConsent: vi.fn(async () => true),
-      send
-    } })
+      hasConsent: vi.fn(async () => true)
+    }, agent: { prompt: vi.fn(() => new Promise<void>(() => {})) } })
     const view = render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
     const toggle = screen.getByRole('button', { name: 'Ẩn/hiện trợ lý AI' })
     await userEvent.click(toggle)
@@ -216,6 +214,22 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Đóng a.dart' }))
     expect(screen.queryByRole('tab', { name: 'a.dart' })).not.toBeInTheDocument()
     confirm.mockRestore()
+  })
+
+  it('còn tệp chưa lưu thì chặn beforeunload; lưu/không sửa thì không chặn', async () => {
+    const unload = () => { const e = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(e); return e.defaultPrevented }
+    await openFromSearch()
+    expect(unload()).toBe(false)
+    await userEvent.type(await screen.findByLabelText('editor'), 'x')
+    expect(unload()).toBe(true)
+  })
+
+  it('rời workspace thì đóng phiên agent của dự án', () => {
+    const { api } = installNexgraph()
+    const view = render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    expect(api.agent.close).not.toHaveBeenCalled()
+    view.unmount()
+    expect(api.agent.close).toHaveBeenCalledWith('p1')
   })
 
   it('đổi sang thẻ khác rồi quay lại vẫn giữ nội dung đang sửa và dấu ●', async () => {

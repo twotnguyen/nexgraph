@@ -3,8 +3,23 @@
 // Kịch bản: gọi list_flows -> trace_flow (flow_id lấy từ kết quả tool trước) -> trả lời có trích dẫn dựng từ các bước, cộng một trích dẫn sai.
 import http from 'node:http'
 
-const toolCall = (name, args) => ({ choices: [{ message: { role: 'assistant', content: null,
-  tool_calls: [{ id: `call_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] } }] })
+const toolCall = (name, args) => ({ role: 'assistant', content: null,
+  tool_calls: [{ id: `call_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
+const text = (m) => (typeof m.content === 'string' ? m.content : (m.content ?? []).map((p) => p.text ?? '').join(''))
+
+/** Trả một tin nhắn dạng JSON thường, hoặc SSE khi client xin `stream: true` (harness pi luôn stream). */
+function reply(res, stream, msg) {
+  if (!stream) {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    return res.end(JSON.stringify({ choices: [{ message: msg }] }))
+  }
+  const chunk = (delta, finish_reason = null) => `data: ${JSON.stringify({ id: 'x', object: 'chat.completion.chunk', created: 1, model: 'fake', choices: [{ index: 0, delta, finish_reason }] })}\n\n`
+  res.writeHead(200, { 'content-type': 'text/event-stream' })
+  const tool_calls = msg.tool_calls?.map((t, index) => ({ index, ...t }))
+  res.write(chunk({ role: 'assistant', content: msg.content, ...(tool_calls ? { tool_calls } : {}) }))
+  res.write(chunk({}, tool_calls ? 'tool_calls' : 'stop'))
+  res.end('data: [DONE]\n\n')
+}
 
 export function createFakeLlm() {
   return http.createServer((req, res) => {
@@ -13,17 +28,18 @@ export function createFakeLlm() {
     req.on('end', () => {
       const send = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)) }
       if (!req.url.endsWith('/chat/completions')) return send(404, {})
-      const { messages = [], max_tokens } = JSON.parse(body || '{}')
-      if (max_tokens === 1) return send(200, { choices: [{ message: { role: 'assistant', content: 'pong' } }] })
+      const { messages = [], max_tokens, stream } = JSON.parse(body || '{}')
+      const out = (msg) => reply(res, stream, msg)
+      if (max_tokens === 1) return out({ role: 'assistant', content: 'pong' })
       const tools = messages.filter((m) => m.role === 'tool')
-      if (tools.length === 0) return send(200, toolCall('list_flows', { query: 'login' }))
+      if (tools.length === 0) return out(toolCall('list_flows', { query: 'login' }))
       if (tools.length === 1) {
-        const flows = JSON.parse(tools[0].content).flows ?? []
-        return send(200, toolCall('trace_flow', { flow_id: flows[0]?.id ?? 0 }))
+        const flows = JSON.parse(text(tools[0])).flows ?? []
+        return out(toolCall('trace_flow', { flow_id: flows[0]?.id ?? 0 }))
       }
-      const steps = JSON.parse(tools[1].content).steps ?? []
+      const steps = JSON.parse(text(tools[1])).steps ?? []
       const lines = steps.slice(0, 3).map((s, i) => `${i + 1}. ${s.node.label} [[${s.node.file}:${s.node.line_start}-${s.node.line_end}]]`)
-      send(200, { choices: [{ message: { role: 'assistant', content: `${lines.join('\n')}\n${steps.length + 1}. Bước không có thật [[khong-co.ts:1-2]]` } }] })
+      out({ role: 'assistant', content: `${lines.join('\n')}\n${steps.length + 1}. Bước không có thật [[khong-co.ts:1-2]]` })
     })
   })
 }

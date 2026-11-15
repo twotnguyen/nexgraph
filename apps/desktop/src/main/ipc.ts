@@ -2,12 +2,14 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ChatMessage, ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
+import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
-import { fsHandlers } from './fs/project-fs'
-import { runChat } from './ai/chat'
+import { fsHandlers, projectRoot } from './fs/project-fs'
+import { AgentService } from './agent/session'
+import { settingsModels } from './agent/model'
+import type { AgentMode } from '../shared/agent-types'
 import { AiSettingsStore, endpoint } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
 import { applyIntegration, planIntegration } from './integrations'
@@ -17,6 +19,10 @@ import { ProjectWatcher } from './watch/project-watcher'
 
 const watchers = new Map<string, ProjectWatcher>()
 let mcpHttp: McpHttpManager | null = null
+let agents: AgentService | null = null
+
+/** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent. */
+export const closeAllAgents = (): void => agents?.closeAll()
 
 export const stopAllMcpHttp = (): Promise<void> => mcpHttp?.stopAll() ?? Promise.resolve()
 
@@ -72,11 +78,12 @@ export function registerIpc(
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
-  const api = (): EngineApi => {
+  const handle = (): EngineHandle => {
     const h = getHandle()
     if (!h) throw new Error('Engine chưa sẵn sàng')
-    return new EngineApi(h)
+    return h
   }
+  const api = (): EngineApi => new EngineApi(handle())
   const on = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
     ipcMain.handle(channel, (_e, ...args) => toIpcResult(() => fn(...(args as A))))
 
@@ -136,7 +143,6 @@ export function registerIpc(
     encrypt: (s) => safeStorage.encryptString(s).toString('base64'),
     decrypt: (b64) => safeStorage.decryptString(Buffer.from(b64, 'base64'))
   })
-  const chats = new Map<string, AbortController>()
   on('ai:get-settings', async () => ai.get())
   on('ai:save-settings', async (s: { baseUrl: string; model: string; apiKey?: string }) => ai.save(s))
   on('ai:has-consent', async (pid: string) => ai.hasConsent(pid))
@@ -156,17 +162,20 @@ export function registerIpc(
       return { ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : String(e) }
     }
   })
-  on('ai:send', async (pid: string, chatId: string, messages: ChatMessage[]) => {
-    const ctl = new AbortController()
-    chats.set(chatId, ctl)
-    try {
-      return await runChat({ settings: ai, api: api(), fetch }, { projectId: pid, messages },
-        (name) => getWindow()?.webContents.send('ai:event', { chatId, type: 'tool', name }), ctl.signal)
-    } finally {
-      chats.delete(chatId)
-    }
-  })
-  on('ai:cancel', async (chatId: string) => { chats.get(chatId)?.abort() })
+  // EngineApi đọc baseUrl/token mỗi lần gọi nên theo kịp engine khởi động lại.
+  const liveApi = new EngineApi({ get baseUrl() { return handle().baseUrl }, get token() { return handle().token } })
+  const agent = (agents = new AgentService({
+    api: liveApi, dataDir, models: settingsModels(dataDir, ai),
+    hasConsent: (pid) => ai.hasConsent(pid),
+    rootOf: projectRoot(() => api().listProjects()),
+    emit: (projectId, event) => getWindow()?.webContents.send('agent:event', { projectId, event })
+  }))
+  on('agent:prompt', (pid: string, text: string) => agent.prompt(pid, text))
+  on('agent:abort', (pid: string) => agent.abort(pid))
+  on('agent:set-mode', async (pid: string, mode: AgentMode) => agent.setMode(pid, mode === 'edit' ? 'edit' : 'ask'))
+  on('agent:get-mode', async (pid: string) => agent.getMode(pid))
+  on('agent:approve', async (pid: string, id: string, allow: boolean) => agent.approve(pid, id, allow === true))
+  on('agent:close', async (pid: string) => agent.close(pid))
 
   on('export:pick-dir', async () => {
     const prefs = readJson(prefsFile())
