@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.index import scan as scan_module
-from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.schema.db import SchemaVersionError, open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectPathError
 
@@ -48,6 +48,8 @@ def open_project(body: OpenBody, request: Request) -> dict:
         info = request.app.state.services.registry.open_project(body.path)
     except ProjectPathError as exc:
         raise ApiError(400, "bad_path", str(exc)) from exc
+    except SchemaVersionError as exc:
+        raise ApiError(400, "schema_version", str(exc)) from exc
     at, commit = _last_run(info)
     return {**_summary(info), "last_indexed_at": at, "last_index_commit": commit}
 

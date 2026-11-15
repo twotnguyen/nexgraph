@@ -172,6 +172,8 @@ class Indexer:
             self.on_progress(ProgressEvent("done", total, total))
             return self._result(run_id, "hoan_tat", t0)
         except Exception as exc:  # không để job làm sập engine; ghi lỗi vào lần lập chỉ mục
+            if self.cancel.is_set():
+                return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", 0, total))
             store.conn.rollback()
             store.set_run_state(run_id, "loi", error=f"{type(exc).__name__}: {exc}")
             self.on_progress(ProgressEvent("error", 0, 0, str(exc)))
@@ -233,10 +235,17 @@ class Indexer:
                 tasks = [(self.root, f, self.transcript_dir) for f in files]
                 for i, (f, x) in enumerate(zip(files, executor.map(_extract_worker, tasks, chunksize=16)), start=1):
                     if self.cancel.is_set():
+                        for p in list(getattr(executor, '_processes', {}).values()):
+                            try: p.terminate()
+                            except Exception: pass
                         executor.shutdown(wait=False, cancel_futures=True)
                         return False
                     _consume(i, f, x)
             finally:
+                if self.cancel.is_set():
+                    for p in list(getattr(executor, '_processes', {}).values()):
+                        try: p.terminate()
+                        except Exception: pass
                 executor.shutdown(wait=False, cancel_futures=True)
 
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from nexgraph_engine.schema.db import open_app_db, open_graph_db
+from nexgraph_engine.schema.db import SchemaOutdatedError, SchemaVersionError, open_app_db, open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
 NEXGRAPH_DIR = ".nexgraph"
@@ -95,7 +95,13 @@ class ProjectRegistry:
 
     @staticmethod
     def _read_id(graph_db: Path) -> str | None:
-        conn = open_graph_db(graph_db, read_only=True)
+        try:
+            conn = open_graph_db(graph_db, read_only=True)
+        except SchemaOutdatedError:
+            conn = sqlite3.connect(f"{graph_db.resolve().as_uri()}?mode=ro", uri=True)
+            conn.row_factory = sqlite3.Row
+        except Exception:
+            return None
         try:
             row = conn.execute("SELECT ma_du_an FROM du_an").fetchone()
         finally:

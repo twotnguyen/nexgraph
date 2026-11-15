@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -96,3 +97,22 @@ def test_registry_lists_most_recent_first(tmp_path, registry):
     time.sleep(0.01)
     registry.open_project(tmp_path / "a")
     assert registry.list_projects()[0].project_id == a.project_id
+
+
+def test_open_project_with_outdated_schema(tmp_path, registry):
+    root = make_project(tmp_path, "outdated")
+    db_file = root / ".nexgraph" / "graph.db"
+    db_file.parent.mkdir()
+    conn = sqlite3.connect(db_file)
+    conn.execute("CREATE TABLE du_an (ma_du_an TEXT PRIMARY KEY, ten TEXT, co_git INTEGER, phien_ban_schema INTEGER, tao_luc INTEGER)")
+    conn.execute("INSERT INTO du_an VALUES ('11111111-2222-3333-4444-555555555555', 'outdated', 0, 1, 0)")
+    conn.execute("CREATE TABLE lan_lap_chi_muc (ma_lan INTEGER PRIMARY KEY, ma_du_an TEXT, loai TEXT, trang_thai TEXT, bat_dau_luc INTEGER, ket_thuc_luc INTEGER, so_tep_tong INTEGER, commit_sha TEXT, thu_muc_con TEXT)")
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+
+    info = registry.open_project(root)
+    assert info.project_id == "11111111-2222-3333-4444-555555555555"
+    conn = sqlite3.connect(db_file)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    conn.close()
