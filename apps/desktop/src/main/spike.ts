@@ -21,7 +21,7 @@ function fakeServer(log: string[]): Promise<{ url: string; close: () => void }> 
       if (!hasTool) {
         const tc = (i: number, name: string, args: object) => ({ index: i, id: `call_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } })
         return sse(res, [
-          { choices: [{ index: 0, delta: { role: 'assistant', content: null, tool_calls: [tc(0, 'ping', { msg: 'hi' }), tc(1, 'bash', { command: 'echo pwned' })] }, finish_reason: null }] },
+          { choices: [{ index: 0, delta: { role: 'assistant', content: null, tool_calls: [tc(0, 'ping', { msg: 'hi' }), tc(1, 'bash', { command: 'echo pwned' }), tc(2, 'edit', { path: 'a.txt', oldText: 'hello', newText: 'bye' }), tc(3, 'write', { path: 'b.txt', content: 'x' })] }, finish_reason: null }] },
           { choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }
         ])
       }
@@ -54,6 +54,7 @@ export async function runPiSpike(): Promise<string[]> {
     })
     pi.on('tool_call', async (event) => {
       out.push(`tool_call ${event.toolName} input=${JSON.stringify(event.input)}`)
+      if (event.toolName !== 'ping') return { block: true, reason: 'chặn trong spike' }
       if (isToolCallEventType('bash', event)) return { block: true, reason: 'bash bị chặn trong spike' }
       return undefined
     })
@@ -65,7 +66,7 @@ export async function runPiSpike(): Promise<string[]> {
     appendSystemPromptOverride: (base) => [...base, 'SPIKE-APPEND-MARKER']
   })
   await resourceLoader.reload()
-  const { session } = await createAgentSession({ cwd: dir, sessionManager: SessionManager.inMemory(), tools: ['read'], resourceLoader, modelRuntime })
+  const { session } = await createAgentSession({ cwd: dir, sessionManager: SessionManager.inMemory(), tools: ['read', 'ping', 'bash', 'edit', 'write'], resourceLoader, modelRuntime })
   out.push(`active tools=${session.getActiveToolNames().join(',')}`)
   out.push(`providers with oauth=${modelRuntime.getProviders().filter((p) => p.auth.oauth).length}/${modelRuntime.getProviders().length}`)
   const m = modelRuntime.getModel('fake', 'fake-1')
