@@ -1,6 +1,6 @@
 // Kiểm AgentService với SDK pi THẬT (nạp ESM, typebox, hook tool_call) và một máy chủ giả tương thích OpenAI (SSE).
 import http from 'node:http'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -12,6 +12,8 @@ import type { AgentEvent } from '../src/shared/agent-types'
 
 const KEY = 'sk-test-khong-duoc-ghi-ra-dia'
 const OUTSIDE = `/tmp/x-outside-${process.pid}-${Date.now()}`
+const OUTSIDE_READ = join(realpathSync(tmpdir()), `ng-outside-read-${process.pid}-${Date.now()}.txt`)
+const MARK = { root: 'MARKER-AGENTS-GOC-7f3a', parent: 'MARKER-AGENTS-CHA-91c2', outside: 'MARKER-NGOAI-DU-AN-55e0' }
 
 type Msg = { role: string; content?: unknown }
 /** Kịch bản theo câu hỏi cuối: lượt đầu gọi tool, sau khi có kết quả tool thì trả lời. */
@@ -20,15 +22,17 @@ const SCRIPT: Record<string, [string, object]> = {
   'viết b.txt': ['write', { path: 'b.txt', content: 'nội dung mới' }],
   'viết c.txt': ['write', { path: 'c.txt', content: 'không được ghi' }],
   'viết ngoài': ['write', { path: `@${OUTSIDE}`, content: 'x' }],
-  'viết d.txt': ['write', { path: 'd.txt', content: 'bị dừng' }]
+  'viết d.txt': ['write', { path: 'd.txt', content: 'bị dừng' }],
+  'đọc ngoài': ['read', { path: OUTSIDE_READ }]
 }
 
-function fakeLlm(seen: { auth: string[]; tools: string[][] }): Promise<{ url: string; close: () => Promise<void> }> {
+function fakeLlm(seen: { auth: string[]; tools: string[][]; bodies: string[] }): Promise<{ url: string; close: () => Promise<void> }> {
   const srv = http.createServer((req, res) => {
     let body = ''
     req.on('data', (c) => (body += c))
     req.on('end', () => {
       seen.auth.push(String(req.headers.authorization))
+      seen.bodies.push(body)
       const j = JSON.parse(body || '{}') as { messages?: Msg[]; tools?: { function: { name: string } }[] }
       seen.tools.push((j.tools ?? []).map((t) => t.function.name))
       const msgs = j.messages ?? []
@@ -62,7 +66,7 @@ const filesUnder = (dir: string): string[] => !existsSync(dir) ? [] : readdirSyn
 })
 
 describe('AgentService + pi SDK thật', () => {
-  const seen = { auth: [] as string[], tools: [] as string[][] }
+  const seen = { auth: [] as string[], tools: [] as string[][], bodies: [] as string[] }
   const events: AgentEvent[] = []
   const searches: unknown[] = []
   let llm: Awaited<ReturnType<typeof fakeLlm>>
@@ -78,6 +82,9 @@ describe('AgentService + pi SDK thật', () => {
     mkdirSync(root)
     mkdirSync(dataDir)
     writeFileSync(join(root, 'a.py'), 'print(1)\n')
+    writeFileSync(join(root, 'AGENTS.md'), `# Quy ước\n${MARK.root}\n`)
+    writeFileSync(join(base, 'AGENTS.md'), `# Ngoài dự án\n${MARK.parent}\n`)
+    writeFileSync(OUTSIDE_READ, MARK.outside)
     const settings = new AiSettingsStore(join(base, 'prefs.json'), join(base, 'key.json'), { available: () => true, encrypt: (s) => `enc:${s}`, decrypt: (s) => s.slice(4) })
     settings.save({ baseUrl: llm.url, model: 'fake-1', apiKey: KEY })
     const api = {
@@ -93,6 +100,7 @@ describe('AgentService + pi SDK thật', () => {
   afterAll(async () => {
     svc?.closeAll()
     await llm?.close()
+    rmSync(OUTSIDE_READ, { force: true })
   })
 
   const lastEnd = () => events.filter((e) => e.type === 'done' || e.type === 'error').at(-1)
@@ -164,6 +172,24 @@ describe('AgentService + pi SDK thật', () => {
     expect(lastEnd()).toEqual({ type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' })
     await turn('chào')
     expect(lastEnd()).toMatchObject({ type: 'done', text: 'Xong [[a.py:1-1]]' })
+  }, 30_000)
+
+  it('không gửi AGENTS.md (của dự án hay thư mục cha) cho nhà cung cấp', () => {
+    expect(seen.bodies.length).toBeGreaterThan(0)
+    for (const b of seen.bodies) {
+      expect(b).not.toContain(MARK.root)
+      expect(b).not.toContain(MARK.parent)
+    }
+  })
+
+  it('chế độ Hỏi: read đường dẫn tuyệt đối ngoài dự án bị chặn, nội dung không đi tới mô hình', async () => {
+    svc.setMode('p1', 'ask')
+    const from = seen.bodies.length
+    const evs = await turn('đọc ngoài')
+    expect(evs).toContainEqual({ type: 'tool', name: 'read', status: 'end', error: true })
+    const after = seen.bodies.slice(from).join('\n')
+    expect(after).toContain('Đường dẫn nằm ngoài dự án')
+    expect(after).not.toContain(MARK.outside)
   }, 30_000)
 
   it('khoá API không nằm dạng thường trong tệp nào dưới dataDir', () => {

@@ -47,7 +47,8 @@ export async function createPiSession(spec: SessionSpec): Promise<PiSession> {
   const settingsManager = SettingsManager.inMemory({}, { projectTrusted: false })
   const resourceLoader = new DefaultResourceLoader({
     cwd: spec.cwd, agentDir: spec.agentDir, settingsManager,
-    noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true,
+    // noContextFiles: pi đọc AGENTS.md/CLAUDE.md từ gốc dự án lên tận / và agentDir; tệp ngoài dự án không được gửi đi.
+    noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
     extensionFactories: [spec.extension],
     appendSystemPromptOverride: (base) => [...base, NEXGRAPH_RULES]
   })
@@ -60,7 +61,8 @@ export async function createPiSession(spec: SessionSpec): Promise<PiSession> {
   return session
 }
 
-type Entry = { gate: ApprovalGate; session: Promise<PiSession>; busy: boolean; text: string }
+// stopped: đang dừng/đã đóng, yêu cầu duyệt mới bị từ chối ngay; lượt mới bỏ cờ.
+type Entry = { gate: ApprovalGate; session: Promise<PiSession>; busy: boolean; text: string; stopped: boolean }
 
 const STATUS = /\b([45]\d\d)\b/
 const NETWORK = /fetch failed|connection error|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timed? ?out|network|socket|terminated/i
@@ -71,7 +73,9 @@ function providerError(raw: string): AgentEvent {
   if (status === '401' || status === '403') return { type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' }
   if (status) return { type: 'error', code: 'ai_unreachable', message: `Nhà cung cấp AI trả về ${status}` }
   if (NETWORK.test(raw)) return { type: 'error', code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI' }
-  return { type: 'error', code: 'ai_error', message: `Trợ lý AI gặp lỗi: ${raw}` }
+  // Không chuyển nguyên văn lỗi của nhà cung cấp: bỏ thứ trông như khoá, cắt ngắn.
+  const detail = raw.replace(/\b(sk-|Bearer\s+)\S+/gi, '$1***').slice(0, 200)
+  return { type: 'error', code: 'ai_error', message: `Trợ lý AI gặp lỗi (${detail})` }
 }
 const CANCELLED: AgentEvent = { type: 'error', code: 'ai_cancelled', message: 'Đã dừng' }
 
@@ -110,6 +114,7 @@ export class AgentService {
     const entry = this.entries.get(projectId) ?? (await this.open(projectId, modelRuntime, model))
     if (entry.busy) throw new AgentError('agent_busy', 'Trợ lý đang trả lời, hãy đợi hoặc bấm Dừng')
     entry.busy = true
+    entry.stopped = false
     entry.text = ''
     try {
       this.deps.emit(projectId, await this.run(projectId, entry, model, text))
@@ -140,8 +145,13 @@ export class AgentService {
     const e = this.entries.get(projectId)
     if (!e) return
     // denyAll trước: abort() đợi agent rảnh, mà agent đang đợi hook tool_call chờ duyệt.
+    e.stopped = true
     e.gate.denyAll('Đã dừng')
-    await (await e.session).abort()
+    try {
+      await (await e.session).abort()
+    } catch {
+      // phiên tạo thất bại: không có gì để dừng
+    }
     e.gate.denyAll('Đã dừng')
   }
 
@@ -149,6 +159,7 @@ export class AgentService {
     const e = this.entries.get(projectId)
     if (!e) return
     this.entries.delete(projectId)
+    e.stopped = true
     e.gate.denyAll('Đã đóng dự án')
     void e.session.then((s) => s.dispose()).catch(() => {})
   }
@@ -162,21 +173,24 @@ export class AgentService {
     const existing = this.entries.get(projectId) // hai prompt đồng thời cùng tạo phiên
     if (existing) return existing
     const emit = (e: AgentEvent) => this.deps.emit(projectId, e)
-    const gate = createApprovalGate({
+    const entry = { busy: false, text: '', stopped: false } as Entry
+    entry.gate = createApprovalGate({
       root,
       getMode: () => this.getMode(projectId),
-      ask: (request) => emit({ type: 'approval', request }),
+      ask: (request) => {
+        if (entry.stopped) throw new Error('Đã dừng') // gate từ chối ngay, không phát approval
+        emit({ type: 'approval', request })
+      },
       closed: (id) => emit({ type: 'approval_closed', id }),
       preview: (tool, input) => previewWrite(root, tool, input)
     })
     const create = this.deps.createSession ?? createPiSession
-    const entry: Entry = { gate, busy: false, text: '', session: null as never }
     entry.session = create({
       cwd: root,
       agentDir: join(this.deps.dataDir, 'agent'),
       // Allowlist gồm cả tool sửa để đổi chế độ tại chỗ được; tool đang bật do chế độ quyết định, cổng duyệt vẫn chặn sửa ở chế độ Hỏi.
       tools: toolsFor('edit'),
-      extension: createNexgraphExtension({ api: this.deps.api, projectId, root, gate }),
+      extension: createNexgraphExtension({ api: this.deps.api, projectId, root, gate: entry.gate }),
       modelRuntime,
       model
     }).then((s) => {

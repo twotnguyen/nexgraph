@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
 import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers } from './ipc'
-import { confirmUnload } from './unload-guard'
+import { closesAgents, confirmUnload } from './unload-guard'
 import { join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
 import { getHealth } from './engine/client'
@@ -62,6 +62,8 @@ function createWindow(): void {
   win.webContents.on('will-prevent-unload', (e) => {
     if (confirmUnload((o) => dialog.showMessageBoxSync(win, o))) e.preventDefault()
   })
+  win.webContents.on('did-start-navigation', (e) => { if (closesAgents(e)) closeAllAgents() })
+  win.webContents.on('render-process-gone', () => closeAllAgents())
   win.on('closed', () => {
     closeAllAgents()
     mainWindow = null

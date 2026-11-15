@@ -268,4 +268,57 @@ describe('AgentService (phiên giả)', () => {
     expect(() => svc.approve('p9', 'x', true)).not.toThrow()
     expect(svc.pending('p9')).toBe(0)
   })
+
+  it('sau khi abort bắt đầu, tool_call write đến muộn bị từ chối ngay, không có sự kiện approval', async () => {
+    const { svc, sessions, of } = setup()
+    svc.setMode('p1', 'edit')
+    await svc.prompt('p1', 'a')
+    let release = () => {}
+    const gateOpen = new Promise<void>((r) => { release = r })
+    sessions[0].script = async (s) => { await gateOpen; await s.call('write', { path: 'b.txt', content: 'x' }); s.finish() }
+    const run = svc.prompt('p1', 'viết')
+    await tick()
+    await svc.abort('p1')
+    release()
+    await run
+    expect(sessions[0].decisions.at(-1)).toMatchObject({ block: true })
+    expect(of('p1', 'approval')).toHaveLength(0)
+    expect(svc.pending('p1')).toBe(0)
+    // lượt mới bỏ cờ dừng: lại hỏi duyệt bình thường
+    sessions[0].script = writeScript()
+    const next = svc.prompt('p1', 'viết lại')
+    await vi.waitFor(() => expect(of('p1', 'approval')).toHaveLength(1))
+    svc.close('p1')
+    await next
+  })
+
+  it('sau close() không phát sự kiện approval cho tool_call đến muộn', async () => {
+    const { svc, sessions, of } = setup()
+    svc.setMode('p1', 'edit')
+    await svc.prompt('p1', 'a')
+    const s = sessions[0]
+    svc.close('p1')
+    expect(await s.handler({ type: 'tool_call', toolName: 'write', toolCallId: 'c', input: { path: 'b.txt', content: 'x' } })).toMatchObject({ block: true })
+    expect(of('p1', 'approval')).toHaveLength(0)
+  })
+
+  it('abort khi tạo phiên thất bại không ném', async () => {
+    const { svc } = setup()
+    ;(svc as unknown as { deps: { createSession: () => Promise<never> } }).deps.createSession = async () => { throw new Error('nạp pi lỗi') }
+    await svc.prompt('p1', 'a')
+    await expect(svc.abort('p1')).resolves.toBeUndefined()
+  })
+
+  it('ai_error không chứa nguyên văn lỗi nhà cung cấp có dạng khoá, chi tiết bị cắt ngắn', async () => {
+    const { svc, sessions, of } = setup()
+    await svc.prompt('p1', 'a')
+    sessions[0].script = async (s) => { s.finish('error', `weird failure sk-abcdef1234567890 Bearer xyz.secret ${'z'.repeat(500)}`) }
+    await svc.prompt('p1', 'b')
+    const e = of('p1', 'error').at(-1) as Extract<AgentEvent, { type: 'error' }>
+    expect(e.code).toBe('ai_error')
+    expect(e.message).toMatch(/^Trợ lý AI gặp lỗi/)
+    expect(e.message).not.toContain('sk-abcdef1234567890')
+    expect(e.message).not.toContain('xyz.secret')
+    expect(e.message.length).toBeLessThanOrEqual(260)
+  })
 })
