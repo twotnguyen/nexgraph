@@ -287,14 +287,24 @@ export const vi = {
     changes: 'Thay đổi'
   },
   code: {
-    close: 'Đóng',
-    missing: 'Tệp không còn tồn tại hoặc chưa được lập chỉ mục',
-    outside: 'Tệp nằm ngoài thư mục project',
-    failed: 'Không đọc được mã nguồn',
-    stale: 'Tệp đã thay đổi so với lần lập chỉ mục',
-    capped: 'Chỉ hiện tối đa 2.000 dòng',
     open: 'Mở mã',
     viewNode: 'Xem nút'
+  },
+  editor: {
+    close: 'Đóng',
+    save: 'Lưu',
+    loading: 'Đang mở tệp…',
+    missing: 'Tệp không còn tồn tại',
+    outside: 'Tệp nằm ngoài thư mục project',
+    failed: 'Không đọc được tệp',
+    saveFailed: 'Không lưu được tệp',
+    readOnlyTooLarge: 'Tệp quá lớn nên chỉ xem, không sửa được',
+    readOnlyNotText: 'Tệp không phải văn bản nên không sửa được',
+    readOnly: 'Tệp chỉ đọc nên không lưu được',
+    changedOnDisk: 'Tệp đã đổi trên đĩa trong lúc bạn đang sửa.',
+    reload: 'Nạp lại',
+    keepMine: 'Giữ bản của tôi',
+    confirmClose: (name: string) => `${name} có thay đổi chưa lưu. Đóng và bỏ các thay đổi này?`
   },
   changes: {
     title: 'Thay đổi',

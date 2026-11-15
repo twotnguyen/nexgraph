@@ -24,3 +24,10 @@ Mỗi mục ghi nguồn, giấy phép, commit được dùng và phần nào c�
 - Commit: `a3b13ceac38dfd0f420e0dd9e94447675e1a4a69`
 - Giấy phép: Apache-2.0. Bản đầy đủ và NOTICE ở `engine/third_party/coderag/`.
 - Dùng ở: `engine/src/nexgraph_engine/query/context.py` — port ý tưởng hợp nhất xếp hạng Reciprocal Rank Fusion (`retrieval/fusion.py`) và dựng ngữ cảnh theo ngân sách token (`context/builder.py`). Viết lại cho NexGraph, không chép nguyên mã.
+
+## Monaco Editor
+
+- Nguồn: https://github.com/microsoft/monaco-editor
+- Phiên bản: `0.57.0` (gói npm `monaco-editor`, dùng qua API công khai, không chép mã)
+- Giấy phép: MIT, Copyright (c) Microsoft Corporation.
+- Dùng ở: `apps/desktop/src/renderer/src/components/editor/monaco.ts` — trình soạn thảo mã trong thẻ tệp của renderer, được Vite gói vào bản dựng.

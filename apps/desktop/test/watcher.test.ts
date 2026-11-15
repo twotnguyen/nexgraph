@@ -36,6 +36,16 @@ describe('shouldIgnore', () => {
   })
 })
 
+describe('shouldIgnore temp files of fs.write', () => {
+  it('ignores .<name>.<uuid>.tmp beside the target but not ordinary tmp files', () => {
+    const tmp = '.a.dart.3f2b8c1e-5d4a-4e7b-9c0d-1a2b3c4d5e6f.tmp'
+    expect(shouldIgnore(`lib/${tmp}`)).toBe(true)
+    expect(shouldIgnore(`lib\\${tmp}`)).toBe(true)
+    expect(shouldIgnore('lib/notes.tmp')).toBe(false)
+    expect(shouldIgnore('lib/.hidden.tmp')).toBe(false)
+  })
+})
+
 describe('ProjectWatcher', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())

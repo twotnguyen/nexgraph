@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Changes, ExportFormat, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
-import { CodeViewer } from '../components/code/CodeViewer'
+import { EditorTab } from '../components/editor/EditorTab'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanvas'
 import { ActivityBar } from '../components/layout/ActivityBar'
@@ -170,7 +170,18 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd } : f)) : [...cur, { file, line, lineEnd }]))
     setTab(`file:${file}`)
   }
+  const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set()) // tệp có thay đổi chưa lưu
+  const onDirtyChange = useCallback((file: string, dirty: boolean) => {
+    setDirtyFiles((cur) => {
+      if (cur.has(file) === dirty) return cur
+      const next = new Set(cur)
+      if (dirty) next.add(file)
+      else next.delete(file)
+      return next
+    })
+  }, [])
   const closeFile = (file: string) => {
+    if (dirtyFiles.has(file) && !window.confirm(vi.editor.confirmClose(baseName(file)))) return
     const order: Tab[] = [lastMain, ...files.map((f) => `file:${f.file}` as Tab)] // về tab chính dùng gần nhất
     const at = order.indexOf(`file:${file}`)
     setFiles((cur) => cur.filter((f) => f.file !== file))
@@ -254,6 +265,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`}>
               <button type="button" role="tab" aria-selected={tab === `file:${f.file}`} title={f.file} className="tab-name" onClick={() => setTab(`file:${f.file}`)}>
                 {baseName(f.file)}
+                {dirtyFiles.has(f.file) && <span className="dirty-dot" aria-hidden="true"> ●</span>}
               </button>
               <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}>×</button>
             </span>
@@ -286,7 +298,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
           {files.map((f) =>
             tab === `file:${f.file}` ? (
-              <CodeViewer key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} onClose={() => closeFile(f.file)} />
+              <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} />
             ) : null
           )}
         </div>

@@ -37,6 +37,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       map: vi.fn(async () => ({ parent: null, nodes: [], edges: [], truncated: false, totals: { files: 0, nodes: 0 } })),
       cycles: vi.fn(async () => ({ cycles: [], total: 0 })),
       ...over.graph },
+    fs: { read: vi.fn(async () => ({ text: '', eol: '\n' as const, bom: false, mtimeMs: 1, readOnly: false })),
+      write: vi.fn(async () => ({ mtimeMs: 2 })), ...over.fs },
     exporter: { pickDir: vi.fn(async () => '/Đồ án/xuất'), run: vi.fn(async () => ({ files: [], truncated: false })),
       push: vi.fn(async () => ({ nodes: 0, edges: 0, truncated: false })), png: vi.fn(async () => null),
       reveal: vi.fn(async () => {}), ...over.exporter },

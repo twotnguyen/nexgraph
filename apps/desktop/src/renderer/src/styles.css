@@ -2096,3 +2096,17 @@ textarea {
   align-items: center;
   margin-top: 18px;
 }
+
+/* --- Thẻ soạn thảo (F13) --- */
+.editor-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.editor-hit {
+  background: var(--amber-soft);
+}
+
+.dirty-dot {
+  color: var(--amber);
+}

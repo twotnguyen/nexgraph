@@ -15,6 +15,22 @@ vi.mock('../components/map/MapView', () => ({
   )
 }))
 
+// jsdom không chạy Monaco: thay bằng <textarea> có giao diện EditorHandle.
+const revealLines = vi.hoisted(() => vi.fn())
+vi.mock('../components/editor/monaco', () => ({
+  languageFor: () => 'dart',
+  createEditor: (el: HTMLElement, opts: { value: string }) => {
+    const ta = document.createElement('textarea')
+    ta.value = opts.value
+    ta.setAttribute('aria-label', 'editor')
+    el.appendChild(ta)
+    return {
+      getValue: () => ta.value, setValue: (v: string) => { ta.value = v },
+      onChange: (cb: () => void) => ta.addEventListener('input', cb), revealLines, dispose: () => ta.remove()
+    }
+  }
+}))
+
 import { WorkspaceScreen } from './WorkspaceScreen'
 
 beforeAll(() => {
@@ -145,14 +161,14 @@ describe('WorkspaceScreen: changes', () => {
   })
 })
 
-describe('WorkspaceScreen: code viewer tabs', () => {
-  const slice = { file: 'lib/a.dart', start: 1, end: 3, text: 'one\ntwo\nthree', language: 'dart', stale: false }
+describe('WorkspaceScreen: editor tabs', () => {
+  const read = () => vi.fn(async () => ({ text: 'one\ntwo\nthree', eol: '\n' as const, bom: false, mtimeMs: 1, readOnly: false }))
 
   async function openFromSearch() {
-    const code = vi.fn(async () => slice)
+    const code = read()
     const neighbors = vi.fn(async (_p: string, q: { node: string }) => hood(q.node))
     const search = vi.fn(async () => [{ node: gnode('lib/a.dart::AuthService.login#method', 'login'), score: 2 }])
-    const { api } = installNexgraph({ graph: { code, neighbors, search } })
+    const { api } = installNexgraph({ fs: { read: code }, graph: { neighbors, search } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
     await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'login')
     await userEvent.click(await screen.findByText('login'))
@@ -163,8 +179,8 @@ describe('WorkspaceScreen: code viewer tabs', () => {
   it('opens a file tab from the inspector, once per file, and closes back to the previous tab', async () => {
     const { code } = await openFromSearch()
     expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
-    expect(code).toHaveBeenCalledWith('p1', 'lib/a.dart', 1)
-    await screen.findByText('two')
+    expect(code).toHaveBeenCalledWith('p1', 'lib/a.dart')
+    expect(await screen.findByLabelText('editor')).toHaveValue('one\ntwo\nthree')
     await userEvent.click(screen.getByRole('tab', { name: 'Graph' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
     expect(screen.getAllByRole('tab', { name: 'a.dart' })).toHaveLength(1)
@@ -176,9 +192,7 @@ describe('WorkspaceScreen: code viewer tabs', () => {
   it('opens code at the evidence line from the architecture arrow list', async () => {
     const evidence = [{ file: 'lib/a.dart', line: 2, edge: { id: 1, source: 'lib/a.dart::A.run#method', target: 'lib/b.dart::B.go#method', type: 'CALLS',
       subtype: null, confidence: 'INFERRED' as const, confidence_score: 0.9, origin: 'resolver', evidence: { file: 'lib/a.dart', line: 2, col: 0 } } }]
-    const code = vi.fn(async () => slice)
-    installNexgraph({ graph: {
-      code,
+    installNexgraph({ fs: { read: read() }, graph: {
       architecture: vi.fn(async () => ({ parent: null, links: [{ from: 'dir:lib', to: 'dir:test', count: 1, types: { CALLS: 1 } }],
         blocks: [{ id: 'dir:lib', label: 'lib', kind: 'directory' as const, size: 1, symbols: 1, drillable: true },
                  { id: 'dir:test', label: 'test', kind: 'directory' as const, size: 1, symbols: 1, drillable: true }] })),
@@ -188,7 +202,29 @@ describe('WorkspaceScreen: code viewer tabs', () => {
     await userEvent.click(await screen.findByRole('button', { name: /lib → test/ }))
     await userEvent.click(await screen.findByRole('button', { name: /lib\/a\.dart:2/ }))
     expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
-    await waitFor(() => expect(document.querySelector('[data-line="2"][data-highlight="true"]')).toBeTruthy())
+    await waitFor(() => expect(revealLines).toHaveBeenCalledWith(2, undefined))
+  })
+
+  it('đóng thẻ chưa lưu thì hỏi xác nhận; huỷ thì giữ thẻ, đồng ý thì đóng', async () => {
+    await openFromSearch()
+    await userEvent.type(await screen.findByLabelText('editor'), 'x')
+    expect(document.querySelector('.dirty-dot')).not.toBeNull()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Đóng a.dart' }))
+    expect(confirm).toHaveBeenCalledWith('a.dart có thay đổi chưa lưu. Đóng và bỏ các thay đổi này?')
+    expect(screen.getByRole('tab', { name: 'a.dart' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Đóng a.dart' }))
+    expect(screen.queryByRole('tab', { name: 'a.dart' })).not.toBeInTheDocument()
+    confirm.mockRestore()
+  })
+
+  it('đóng thẻ sạch thì không hỏi', async () => {
+    await openFromSearch()
+    await screen.findByLabelText('editor')
+    const confirm = vi.spyOn(window, 'confirm')
+    await userEvent.click(screen.getByRole('button', { name: 'Đóng a.dart' }))
+    expect(confirm).not.toHaveBeenCalled()
+    confirm.mockRestore()
   })
 
   it('opens the export dialog scoped to the whole project from the Kiến trúc tab', async () => {
