@@ -21,3 +21,7 @@ This product includes ideas and algorithms adapted from CodeRAG
 (Copyright 2026 CodeRAG contributors), licensed under the Apache License,
 Version 2.0. See engine/third_party/coderag/LICENSE and
 engine/third_party/coderag/NOTICE.
+
+This product includes Monaco Editor (Copyright (c) 2016 - present Microsoft
+Corporation) and pi packages (Copyright (c) 2025 Mario Zechner), licensed
+under the MIT License. Full license texts are in THIRD_PARTY_LICENSES.md.

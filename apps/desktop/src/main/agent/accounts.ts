@@ -1,0 +1,380 @@
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
+import type { AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from '../../shared/agent-types'
+import { readJson, writeJson, type SecretStore } from '../ai/settings'
+import { AgentError, loadPi, scrub } from './session'
+
+// pi-coding-agent không tái xuất các kiểu auth; suy ra từ chữ ký login() công khai.
+type AuthInteraction = Parameters<ModelRuntime['login']>[2]
+type AuthEvent = Parameters<AuthInteraction['notify']>[0]
+type AuthPrompt = Parameters<AuthInteraction['prompt']>[0]
+type Credential = Awaited<ReturnType<ModelRuntime['login']>>
+type CredentialInfo = Awaited<ReturnType<ModelRuntime['listCredentials']>>[number]
+
+/**
+ * CredentialStore dạng tệp cho ModelRuntime: `auth.json` = `{ [providerId]: Credential }`, 0600.
+ * `modify` trả lại đúng credential của provider được sửa; mọi lần ghi xếp hàng tuần tự trên
+ * cùng một tệp nên hai provider đổi cùng lúc không ghi đè mất thay đổi của nhau.
+ */
+class FileCredentialStore {
+  private chain: Promise<unknown> = Promise.resolve()
+
+  constructor(private readonly file: string) {}
+
+  private all(): Record<string, Credential> {
+    try {
+      const v = JSON.parse(readFileSync(this.file, 'utf8'))
+      return v && typeof v === 'object' ? (v as Record<string, Credential>) : {}
+    } catch {
+      return {}
+    }
+  }
+
+  private write(all: Record<string, Credential>): void {
+    mkdirSync(dirname(this.file), { recursive: true })
+    const tmp = `${this.file}.tmp`
+    writeFileSync(tmp, JSON.stringify(all), { mode: 0o600 })
+    renameSync(tmp, this.file)
+  }
+
+  async read(providerId: string): Promise<Credential | undefined> {
+    return this.all()[providerId]
+  }
+
+  async list(): Promise<readonly CredentialInfo[]> {
+    return Object.entries(this.all()).map(([providerId, c]) => ({ providerId, type: c.type }))
+  }
+
+  async modify(providerId: string, fn: (current: Credential | undefined) => Promise<Credential | undefined>): Promise<Credential | undefined> {
+    return this.enqueue(async () => {
+      const next = await fn(this.all()[providerId])
+      if (next === undefined) return undefined // hợp đồng CredentialStore: undefined = giữ nguyên mục
+      const all = this.all()
+      all[providerId] = next
+      this.write(all)
+      return next
+    })
+  }
+
+  async delete(providerId: string): Promise<void> {
+    await this.enqueue(async () => {
+      const all = this.all()
+      if (!(providerId in all)) return
+      delete all[providerId]
+      this.write(all)
+    })
+  }
+
+  private enqueue<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(task, task)
+    this.chain = run.catch(() => {})
+    return run
+  }
+}
+
+export type AccountDeps = {
+  dataDir: string
+  prefsFile: string
+  secrets: SecretStore
+  openExternal(url: string): void
+  /** Sự kiện đăng nhập (auth_url, device_code…) gửi xuống renderer. */
+  notify(event: AuthEventView): void
+  /** Câu hỏi đăng nhập hiện ở renderer; trả về chuỗi nhập, `null` khi renderer huỷ. */
+  ask(prompt: AuthPromptView): Promise<string | null>
+}
+
+export const CUSTOM_MODEL_SPEC = (id: string) => ({
+  id, name: id, reasoning: false, input: ['text'] as ('text' | 'image')[],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128_000, maxTokens: 8192
+})
+
+const isCustom = (v: unknown): v is CustomProvider =>
+  !!v && typeof v === 'object' && typeof (v as CustomProvider).id === 'string' &&
+  typeof (v as CustomProvider).label === 'string' && typeof (v as CustomProvider).baseUrl === 'string' &&
+  typeof (v as CustomProvider).model === 'string'
+
+const BASE_URL = /^https?:\/\/[^\s/]+/i
+const PROVIDER_ID = /^[\w.-]{1,64}$/
+
+const cancelled = (): AgentError => new AgentError('ai_cancelled', 'Đã huỷ đăng nhập')
+
+const toAgentError = (e: unknown): AgentError => {
+  if (e instanceof AgentError) return e
+  const msg = e instanceof Error ? e.message : String(e)
+  if (/\babort|cancel|huỷ/i.test(msg)) return cancelled()
+  return new AgentError('ai_error', `Đăng nhập thất bại (${scrub(msg)})`)
+}
+
+/**
+ * Tài khoản AI: nhà cung cấp có sẵn + tuỳ chỉnh, key mã hoá safeStorage (chỉ runtime),
+ * OAuth qua `modelRuntime.login` (auth.json do pi ghi, 0600), chọn model và consent theo host.
+ */
+export class AccountService {
+  private loginAbort: AbortController | null = null
+
+  private constructor(
+    readonly modelRuntime: ModelRuntime,
+    private readonly deps: AccountDeps,
+    private readonly credentials: FileCredentialStore
+  ) {}
+
+  static async create(deps: AccountDeps): Promise<AccountService> {
+    let rt: ModelRuntime
+    const credentials = new FileCredentialStore(join(deps.dataDir, 'agent', 'auth.json'))
+    try {
+      const { ModelRuntime } = await loadPi()
+      rt = await ModelRuntime.create({
+        credentials,
+        modelsPath: join(deps.dataDir, 'agent', 'models.json')
+      })
+    } catch (e) {
+      throw new AgentError('ai_error', `Không nạp được bộ mô hình AI (${scrub(e instanceof Error ? e.message : String(e))})`)
+    }
+    const svc = new AccountService(rt, deps, credentials)
+    svc.migrate()
+    for (const c of svc.customs()) svc.registerCustom(c)
+    // Key chỉ vào runtime (bộ nhớ); không bao giờ ghi vào auth.json/models.json.
+    for (const id of deps.secrets.ids()) {
+      const key = deps.secrets.get(id)
+      try {
+        if (key && rt.getProvider(id)) await rt.setRuntimeApiKey(id, key)
+      } catch { /* key của provider không còn: bỏ qua, có thể xoá trong Cài đặt */ }
+    }
+    return svc
+  }
+
+  // ----- nhà cung cấp tuỳ chỉnh (prefs.json, không bí mật) -----
+
+  private customs(): CustomProvider[] {
+    const list = readJson(this.deps.prefsFile).aiCustomProviders
+    return Array.isArray(list) ? list.filter(isCustom) : []
+  }
+
+  private saveCustoms(list: CustomProvider[]): void {
+    writeJson(this.deps.prefsFile, { ...readJson(this.deps.prefsFile), aiCustomProviders: list })
+  }
+
+  /** shortcut: SDK OpenAI trong pi không gửi được request thiếu Authorization; khi chưa có key,
+   *  endpoint nhận giá trị sentinel 'unused' của chính pi (server không cần key sẽ bỏ qua). */
+  private registerCustom(p: CustomProvider): void {
+    this.modelRuntime.registerProvider(p.id, {
+      name: p.label, baseUrl: p.baseUrl, api: 'openai-completions', apiKey: 'unused',
+      models: [CUSTOM_MODEL_SPEC(p.model)]
+    })
+  }
+
+  async saveCustomProvider(p: CustomProvider, apiKey?: string): Promise<void> {
+    if (!PROVIDER_ID.test(p.id)) throw new AgentError('bad_param', 'ID nhà cung cấp không hợp lệ')
+    if (!p.label.trim() || !p.model.trim()) throw new AgentError('bad_param', 'Thiếu tên hoặc model')
+    if (!BASE_URL.test(p.baseUrl)) throw new AgentError('bad_param', 'Base URL phải bắt đầu bằng http:// hoặc https://')
+    let origin: string
+    try { origin = new URL(p.baseUrl).origin } catch { throw new AgentError('bad_param', 'Base URL không hợp lệ') }
+    const previous = this.customs().find((c) => c.id === p.id)
+    if (!previous && this.modelRuntime.getProvider(p.id)) throw new AgentError('bad_param', 'ID đã thuộc nhà cung cấp có sẵn')
+    // Key của máy chủ cũ không được tự chuyển sang origin khác.
+    if (previous && new URL(previous.baseUrl).origin !== origin) await this.removeApiKey(p.id)
+    const custom: CustomProvider = { id: p.id, label: p.label.trim(), baseUrl: p.baseUrl.trim(), model: p.model.trim() }
+    this.saveCustoms([...this.customs().filter((c) => c.id !== p.id), custom])
+    this.registerCustom(custom)
+    if (apiKey !== undefined) {
+      const key = apiKey.trim()
+      if (key) {
+        this.deps.secrets.set(p.id, key)
+        await this.modelRuntime.setRuntimeApiKey(p.id, key)
+      } else await this.removeApiKey(p.id)
+    }
+  }
+
+  async removeCustomProvider(id: string): Promise<void> {
+    if (!this.customs().some((c) => c.id === id)) throw new AgentError('bad_param', 'Không có nhà cung cấp tuỳ chỉnh này')
+    this.saveCustoms(this.customs().filter((c) => c.id !== id))
+    try {
+      this.modelRuntime.unregisterProvider(id)
+    } catch { /* đã unregister hoặc không còn */ }
+    this.deps.secrets.remove(id)
+    const sel = this.getSelectedModel()
+    if (sel?.provider === id) writeJson(this.deps.prefsFile, { ...readJson(this.deps.prefsFile), aiSelectedModel: null })
+  }
+
+  // ----- API key -----
+
+  /** Có thể gọi provider này không khoá ngoài: key đã lưu hoặc đã đăng nhập OAuth. */
+  hasKey(providerId: string): boolean {
+    return this.deps.secrets.get(providerId) != null || this.modelRuntime.isUsingOAuth(providerId)
+  }
+
+  async setApiKey(providerId: string, key: string): Promise<void> {
+    if (!this.modelRuntime.getProvider(providerId)) throw new AgentError('bad_param', 'Không có nhà cung cấp này')
+    if (!key.trim()) throw new AgentError('bad_param', 'API key trống')
+    this.deps.secrets.set(providerId, key.trim())
+    await this.modelRuntime.setRuntimeApiKey(providerId, key.trim())
+  }
+
+  async removeApiKey(providerId: string): Promise<void> {
+    this.deps.secrets.remove(providerId)
+    if (this.modelRuntime.getProvider(providerId)) await this.modelRuntime.removeRuntimeApiKey(providerId)
+  }
+
+  // ----- danh sách provider / model / chọn model -----
+
+  async listProviders(): Promise<ProviderInfo[]> {
+    const customs = new Set(this.customs().map((c) => c.id))
+    return this.modelRuntime.getProviders()
+      .filter((p) => p.auth.apiKey || p.auth.oauth || customs.has(p.id))
+      .map((p) => ({
+        id: p.id, label: p.name,
+        hasKey: this.hasKey(p.id),
+        oauth: !!p.auth.oauth,
+        loggedIn: !!p.auth.oauth && this.modelRuntime.isUsingOAuth(p.id),
+        custom: customs.has(p.id)
+      }))
+  }
+
+  async listModels(): Promise<ModelInfo[]> {
+    const customs = new Set(this.customs().map((c) => c.id))
+    const out: ModelInfo[] = []
+    for (const p of this.modelRuntime.getProviders()) {
+      // Chỉ model của provider dùng được: tuỳ chỉnh, đã có key/đăng nhập, hoặc env đã cấu hình.
+      if (!customs.has(p.id) && !this.modelRuntime.hasConfiguredAuth(p.id)) continue
+      for (const m of this.modelRuntime.getModels(p.id)) out.push({ provider: p.id, id: m.id, label: m.name })
+    }
+    return out
+  }
+
+  getSelectedModel(): { provider: string; id: string } | null {
+    const s = readJson(this.deps.prefsFile).aiSelectedModel
+    if (!s || typeof s !== 'object') return null
+    const { provider, id } = s as { provider?: unknown; id?: unknown }
+    return typeof provider === 'string' && typeof id === 'string' ? { provider, id } : null
+  }
+
+  selectModel(provider: string, id: string): void {
+    if (!this.modelRuntime.getModel(provider, id)) throw new AgentError('bad_param', 'Không có model này')
+    writeJson(this.deps.prefsFile, { ...readJson(this.deps.prefsFile), aiSelectedModel: { provider, id } })
+  }
+
+  // ----- OAuth -----
+
+  async loginOAuth(providerId: string): Promise<void> {
+    if (this.loginAbort) throw new AgentError('bad_param', 'Đang có đăng nhập khác đang chạy')
+    const p = this.modelRuntime.getProvider(providerId)
+    if (!p?.auth.oauth) throw new AgentError('bad_param', 'Nhà cung cấp này không hỗ trợ đăng nhập bằng gói đăng ký')
+    // Chỉ chụp credential của provider đang đăng nhập; provider khác đổi trong lúc chờ vẫn được giữ.
+    const before = await this.credentials.read(providerId)
+    const ac = new AbortController()
+    this.loginAbort = ac
+    let seq = 0
+    const interaction: AuthInteraction = {
+      signal: ac.signal,
+      prompt: (prompt: AuthPrompt): Promise<string> => {
+        const id = `${providerId}#${++seq}`
+        const view: AuthPromptView = {
+          id, kind: prompt.type, message: prompt.message,
+          ...(prompt.type === 'select'
+            ? { options: prompt.options.map((o) => ({ id: o.id, label: o.label, description: o.description })) }
+            : { placeholder: prompt.placeholder })
+        }
+        return this.deps.ask(view).then((value) => {
+          if (ac.signal.aborted || value == null) throw cancelled()
+          return value
+        })
+      },
+      notify: (event: AuthEvent): void => {
+        if (event.type === 'auth_url') {
+          this.deps.openExternal(event.url)
+          this.deps.notify({ type: 'auth_url', url: event.url, instructions: event.instructions })
+        } else if (event.type === 'device_code') {
+          // Mở trang xác nhận trước, mã hiển thị ở renderer để người dùng dán.
+          this.deps.openExternal(event.verificationUri)
+          this.deps.notify({ type: 'device_code', userCode: event.userCode, verificationUri: event.verificationUri,
+            intervalSeconds: event.intervalSeconds, expiresInSeconds: event.expiresInSeconds })
+        } else if (event.type === 'progress') this.deps.notify({ type: 'progress', message: event.message })
+        else this.deps.notify({ type: 'info', message: event.message, links: event.links })
+      }
+    }
+    try {
+      await this.modelRuntime.login(providerId, 'oauth', interaction, { agentName: 'NexGraph' })
+    } catch (e) {
+      // Không để lại trạng thái dở: trả credential của riêng provider này như trước khi đăng nhập.
+      if (before === undefined) await this.credentials.delete(providerId).catch(() => {})
+      else await this.credentials.modify(providerId, async () => before).catch(() => {})
+      throw toAgentError(e)
+    } finally {
+      this.loginAbort = null
+    }
+  }
+
+  /** Huỷ đăng nhập đang chạy (renderer reload/crash/đóng cửa sổ hoặc nút Huỷ): mọi prompt đang chờ bị từ chối. */
+  cancelLogin(): void {
+    this.loginAbort?.abort()
+  }
+
+  async logout(providerId: string): Promise<void> {
+    const p = this.modelRuntime.getProvider(providerId)
+    if (!p?.auth.oauth) throw new AgentError('bad_param', 'Nhà cung cấp này không đăng nhập bằng gói đăng ký')
+    await this.modelRuntime.logout(providerId)
+  }
+
+  // ----- kiểm tra kết nối: gọi provider thật với model đang chọn -----
+
+  async test(): Promise<{ ok: boolean; message: string }> {
+    const sel = this.getSelectedModel()
+    const model = sel && this.modelRuntime.getModel(sel.provider, sel.id)
+    if (!model) return { ok: false, message: 'Chưa chọn model hoặc model không còn' }
+    try {
+      await this.modelRuntime.completeSimple(model, { messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }] },
+        { signal: AbortSignal.timeout(15_000), maxTokens: 1 })
+      return { ok: true, message: 'Kết nối được' }
+    } catch (e) {
+      return { ok: false, message: scrub(e instanceof Error ? e.message : String(e)) }
+    }
+  }
+
+  // ----- consent theo host của provider đang chọn -----
+
+  private consentHost(): string | null {
+    const sel = this.getSelectedModel()
+    if (!sel) return null
+    const base = this.modelRuntime.getProvider(sel.provider)?.baseUrl
+    if (!base) return null
+    try {
+      return new URL(base).host || null
+    } catch {
+      return null
+    }
+  }
+
+  hasConsent(projectId: string): boolean {
+    const host = this.consentHost()
+    const list = readJson(this.deps.prefsFile).aiConsent
+    return host != null && Array.isArray(list) && list.includes(`${projectId}|${host}`)
+  }
+
+  grantConsent(projectId: string): void {
+    const host = this.consentHost()
+    if (!host) return
+    const prefs = readJson(this.deps.prefsFile)
+    const list = Array.isArray(prefs.aiConsent) ? (prefs.aiConsent as string[]) : []
+    const entry = `${projectId}|${host}`
+    if (!list.includes(entry)) writeJson(this.deps.prefsFile, { ...prefs, aiConsent: [...list, entry] })
+  }
+
+  // ----- di trú cấu hình cũ (một lần) -----
+
+  private migrate(): void {
+    const prefs = readJson(this.deps.prefsFile)
+    if (prefs.aiMigrated) return
+    const baseUrl = typeof prefs.aiBaseUrl === 'string' ? prefs.aiBaseUrl : ''
+    const model = typeof prefs.aiModel === 'string' ? prefs.aiModel : ''
+    const next: Record<string, unknown> = { ...prefs, aiMigrated: true }
+    if (BASE_URL.test(baseUrl) && model) {
+      const custom = { id: 'custom-1', label: 'Nhà cung cấp cũ', baseUrl, model }
+      const current = Array.isArray(prefs.aiCustomProviders) ? prefs.aiCustomProviders.filter(isCustom) : []
+      next.aiCustomProviders = current.some((p) => p.id === custom.id) ? current : [...current, custom]
+      if (!this.getSelectedModel()) next.aiSelectedModel = { provider: custom.id, id: custom.model }
+      this.deps.secrets.migrateLegacyKey(custom.id)
+    }
+    writeJson(this.deps.prefsFile, next)
+  }
+}

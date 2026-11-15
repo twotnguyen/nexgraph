@@ -1,6 +1,6 @@
 import type { EngineStatus } from './engine-status'
 import type { AgentId, IntegrationPlan } from './integration-types'
-import type { AgentEvent, AgentMode } from './agent-types'
+import type { AgentEvent, AgentMode, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from './agent-types'
 import type {
   AiSettings,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
@@ -82,11 +82,29 @@ export interface NexGraphApi {
     uninstall(projectPath: string): Promise<void>
   }
   ai: {
+    /** Cấu hình dẫn xuất của provider đang chọn, cho các panel hiển thị "chưa cấu hình" và host consent. */
     getSettings(): Promise<AiSettings>
-    saveSettings(s: { baseUrl: string; model: string; apiKey?: string }): Promise<AiSettings>
-    test(): Promise<{ ok: boolean; ms: number; error: string | null }>
     hasConsent(projectId: string): Promise<boolean>
     grantConsent(projectId: string): Promise<void>
+  }
+  /** Tài khoản AI: key chỉ ở main (safeStorage), renderer chỉ nhận `hasKey`. */
+  auth: {
+    list(): Promise<ProviderInfo[]>
+    setKey(providerId: string, key: string): Promise<void>
+    removeKey(providerId: string): Promise<void>
+    saveCustom(p: CustomProvider, apiKey?: string): Promise<void>
+    removeCustom(id: string): Promise<void>
+    /** Đăng nhập OAuth; resolve khi xong. Sự kiện/câu hỏi qua `onEvent`/`onPrompt`, trả lời `promptReply`. */
+    login(providerId: string): Promise<void>
+    loginCancel(): Promise<void>
+    promptReply(id: string, value: string | null): Promise<void>
+    logout(providerId: string): Promise<void>
+    models(): Promise<ModelInfo[]>
+    selectModel(provider: string, id: string): Promise<void>
+    /** Gọi provider thật với model đang chọn. */
+    test(): Promise<{ ok: boolean; message: string }>
+    onEvent(cb: (e: AuthEventView) => void): () => void
+    onPrompt(cb: (p: AuthPromptView) => void): () => void
   }
   /** Phiên agent theo dự án (giữ hội thoại trong bộ nhớ). Lỗi có `code`: `consent_required` | `ai_not_configured` | `agent_busy`. */
   agent: {

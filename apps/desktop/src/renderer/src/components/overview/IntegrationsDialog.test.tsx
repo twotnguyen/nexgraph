@@ -49,4 +49,32 @@ describe('IntegrationsDialog', () => {
     expect(await screen.findByText('Tệp đã có, chỉ thêm mục nexgraph')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cập nhật' })).toBeEnabled()
   })
+
+  it('Codex: radio mới gọi plan với codex, hiện ghi chú tin cậy; TOML đã có thì báo dán tay, không có nút ghi', async () => {
+    const planFn = vi.fn(async () => plan({ agent: 'codex', path: '/p/.codex/config.toml', exists: true, status: 'invalid', after: '' }))
+    open({ plan: planFn })
+    await userEvent.click(screen.getByRole('radio', { name: 'Codex' }))
+    expect(await screen.findByText('/p/.codex/config.toml')).toBeInTheDocument()
+    expect(planFn).toHaveBeenLastCalledWith('codex', expect.any(String))
+    expect(screen.getByText('Codex chỉ đọc .codex/config.toml của dự án khi dự án đã được đánh dấu tin cậy trong Codex.')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tệp .codex/config.toml đã có nên NexGraph không sửa (TOML)')
+    expect(screen.queryByRole('button', { name: 'Ghi tệp này' })).toBeNull()
+  })
+
+  it('skill-claude đã có nội dung khác: invalid, câu không ghi đè, không có nút ghi', async () => {
+    open({ plan: vi.fn(async () => plan({ agent: 'skill-claude', path: '/p/.claude/skills/nexgraph/SKILL.md', exists: true, status: 'invalid', after: '' })) })
+    await userEvent.click(screen.getByRole('radio', { name: 'Skill nexgraph (Claude Code)' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('SKILL.md') // vi.integration.skillExisting
+    expect(screen.queryByRole('button', { name: 'Ghi tệp này' })).toBeNull()
+  })
+
+  it('hai mục skill: gọi plan với skill-claude / agents-md', async () => {
+    const planFn = vi.fn(async () => plan({ agent: 'skill-claude', path: '/p/.claude/skills/nexgraph/SKILL.md' }))
+    open({ plan: planFn })
+    await userEvent.click(screen.getByRole('radio', { name: 'Skill nexgraph (Claude Code)' }))
+    expect(await screen.findByText('/p/.claude/skills/nexgraph/SKILL.md')).toBeInTheDocument()
+    expect(planFn).toHaveBeenLastCalledWith('skill-claude', expect.any(String))
+    await userEvent.click(screen.getByRole('radio', { name: 'Khối nexgraph trong AGENTS.md' }))
+    expect(planFn).toHaveBeenLastCalledWith('agents-md', expect.any(String))
+  })
 })

@@ -35,7 +35,7 @@ export type AgentDeps = {
   api: EngineApi
   dataDir: string
   models(): Promise<ModelChoice>
-  hasConsent(projectId: string): boolean
+  hasConsent(projectId: string): Promise<boolean>
   rootOf(projectId: string): Promise<string>
   emit(projectId: string, e: AgentEvent): void
   createSession?: (spec: SessionSpec) => Promise<PiSession>
@@ -67,15 +67,16 @@ type Entry = { gate: ApprovalGate; session: Promise<PiSession>; busy: boolean; t
 const STATUS = /\b([45]\d\d)\b/
 const NETWORK = /fetch failed|connection error|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timed? ?out|network|socket|terminated/i
 
+/** Gỡ thứ trông như khoá và cắt ngắn: chi tiết lỗi nhà cung cấp không đi nguyên văn ra renderer. */
+export const scrub = (raw: string): string => raw.replace(/\b(sk-|Bearer\s+)\S+/gi, '$1***').slice(0, 200)
+
 /** Ánh xạ lỗi nhà cung cấp sang mã/câu tiếng Việt, dùng lại mã của chat.ts cũ. */
 function providerError(raw: string): AgentEvent {
   const status = STATUS.exec(raw)?.[1]
   if (status === '401' || status === '403') return { type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' }
   if (status) return { type: 'error', code: 'ai_unreachable', message: `Nhà cung cấp AI trả về ${status}` }
   if (NETWORK.test(raw)) return { type: 'error', code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI' }
-  // Không chuyển nguyên văn lỗi của nhà cung cấp: bỏ thứ trông như khoá, cắt ngắn.
-  const detail = raw.replace(/\b(sk-|Bearer\s+)\S+/gi, '$1***').slice(0, 200)
-  return { type: 'error', code: 'ai_error', message: `Trợ lý AI gặp lỗi (${detail})` }
+  return { type: 'error', code: 'ai_error', message: `Trợ lý AI gặp lỗi (${scrub(raw)})` }
 }
 const CANCELLED: AgentEvent = { type: 'error', code: 'ai_cancelled', message: 'Đã dừng' }
 
@@ -83,8 +84,20 @@ const CANCELLED: AgentEvent = { type: 'error', code: 'ai_cancelled', message: '�
 export class AgentService {
   private readonly entries = new Map<string, Entry>()
   private readonly modes = new Map<string, AgentMode>()
+  /** Prompt đang nạp model/consent/root nhưng chưa có Entry để abort()/close() thấy. */
+  private readonly starting = new Map<string, number>()
+  private readonly generations = new Map<string, number>()
 
   constructor(private readonly deps: AgentDeps) {}
+
+  private active(projectId: string, generation: number): boolean {
+    return (this.generations.get(projectId) ?? 0) === generation
+  }
+
+  private invalidate(projectId: string): void {
+    this.generations.set(projectId, (this.generations.get(projectId) ?? 0) + 1)
+    this.starting.delete(projectId)
+  }
 
   getMode(projectId: string): AgentMode {
     return this.modes.get(projectId) ?? 'ask'
@@ -107,35 +120,55 @@ export class AgentService {
   }
 
   async prompt(projectId: string, text: string): Promise<void> {
-    const { modelRuntime, selected } = await this.deps.models()
-    const model = selected && modelRuntime.getModel(selected.provider, selected.id)
-    if (!model) throw new AgentError('ai_not_configured', 'Chưa cấu hình trợ lý AI')
-    if (!this.deps.hasConsent(projectId)) throw new AgentError('consent_required', 'Chưa đồng ý gửi dữ liệu tới nhà cung cấp AI')
-    const entry = this.entries.get(projectId) ?? (await this.open(projectId, modelRuntime, model))
-    if (entry.busy) throw new AgentError('agent_busy', 'Trợ lý đang trả lời, hãy đợi hoặc bấm Dừng')
-    entry.busy = true
-    entry.stopped = false
-    entry.text = ''
+    if (this.entries.get(projectId)?.busy || this.starting.has(projectId)) {
+      throw new AgentError('agent_busy', 'Trợ lý đang trả lời, hãy đợi hoặc bấm Dừng')
+    }
+    const generation = this.generations.get(projectId) ?? 0
+    const active = (): boolean => this.active(projectId, generation)
+    this.starting.set(projectId, generation)
     try {
-      this.deps.emit(projectId, await this.run(projectId, entry, model, text))
+      const { modelRuntime, selected } = await this.deps.models()
+      if (!active()) return
+      const model = selected && modelRuntime.getModel(selected.provider, selected.id)
+      if (!model) throw new AgentError('ai_not_configured', 'Chưa cấu hình trợ lý AI')
+      const consent = await this.deps.hasConsent(projectId)
+      if (!active()) return
+      if (!consent) throw new AgentError('consent_required', 'Chưa đồng ý gửi dữ liệu tới nhà cung cấp AI')
+      const entry = this.entries.get(projectId) ?? await this.open(projectId, modelRuntime, model, active)
+      if (!active() || !entry) return
+      if (entry.busy) throw new AgentError('agent_busy', 'Trợ lý đang trả lời, hãy đợi hoặc bấm Dừng')
+      entry.busy = true
+      entry.stopped = false
+      entry.text = ''
+      try {
+        const result = await this.run(projectId, entry, model, text, active)
+        if (active()) this.deps.emit(projectId, result)
+      } finally {
+        entry.busy = false
+      }
     } finally {
-      entry.busy = false
+      if (this.starting.get(projectId) === generation) this.starting.delete(projectId)
     }
   }
 
   /** Chạy một lượt và trả sự kiện kết thúc (done hoặc error); không ném. */
-  private async run(projectId: string, entry: Entry, model: Model, text: string): Promise<AgentEvent> {
-    const closed = () => this.entries.get(projectId) !== entry
+  private async run(projectId: string, entry: Entry, model: Model, text: string, active: () => boolean): Promise<AgentEvent> {
+    const closed = () => !active() || this.entries.get(projectId) !== entry
     try {
       const session = await entry.session
       if (closed()) return CANCELLED
-      if (session.model?.provider !== model.provider || session.model?.id !== model.id) await session.setModel(model)
+      if (session.model?.provider !== model.provider || session.model?.id !== model.id) {
+        await session.setModel(model)
+        if (closed()) return CANCELLED
+      }
+      if (closed()) return CANCELLED
       await session.prompt(text)
       if (closed()) return CANCELLED
       const last = session.messages.filter((m) => m.role === 'assistant').at(-1) as { stopReason?: string; errorMessage?: string } | undefined
       if (last?.stopReason === 'aborted') return CANCELLED
       if (last?.stopReason === 'error') return providerError(last.errorMessage ?? '')
-      return { type: 'done', text: entry.text, citations: await verifyCitations(this.deps.api, projectId, entry.text) }
+      const citations = await verifyCitations(this.deps.api, projectId, entry.text)
+      return closed() ? CANCELLED : { type: 'done', text: entry.text, citations }
     } catch (err) {
       return closed() ? CANCELLED : providerError(err instanceof Error ? err.message : String(err))
     }
@@ -143,6 +176,10 @@ export class AgentService {
 
   async abort(projectId: string): Promise<void> {
     const e = this.entries.get(projectId)
+    const hadTurn = this.starting.has(projectId) || e?.busy === true
+    this.invalidate(projectId)
+    // Kết thúc lượt UI hiện tại ngay; kết quả cũ về sau bị generation chặn.
+    if (hadTurn) this.deps.emit(projectId, CANCELLED)
     if (!e) return
     // denyAll trước: abort() đợi agent rảnh, mà agent đang đợi hook tool_call chờ duyệt.
     e.stopped = true
@@ -156,6 +193,7 @@ export class AgentService {
   }
 
   close(projectId: string): void {
+    this.invalidate(projectId)
     const e = this.entries.get(projectId)
     if (!e) return
     this.entries.delete(projectId)
@@ -165,11 +203,12 @@ export class AgentService {
   }
 
   closeAll(): void {
-    for (const pid of [...this.entries.keys()]) this.close(pid)
+    for (const pid of new Set([...this.entries.keys(), ...this.starting.keys()])) this.close(pid)
   }
 
-  private async open(projectId: string, modelRuntime: ModelRuntime, model: Model): Promise<Entry> {
+  private async open(projectId: string, modelRuntime: ModelRuntime, model: Model, active: () => boolean): Promise<Entry | null> {
     const root = realpathSync(await this.deps.rootOf(projectId))
+    if (!active()) return null // bị close/abort trong lúc chờ root: không tạo phiên
     const existing = this.entries.get(projectId) // hai prompt đồng thời cùng tạo phiên
     if (existing) return existing
     const emit = (e: AgentEvent) => this.deps.emit(projectId, e)

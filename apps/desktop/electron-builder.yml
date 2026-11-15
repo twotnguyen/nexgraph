@@ -5,6 +5,12 @@ directories:
 files:
   - out/**
   - package.json
+  - from: ../../THIRD_PARTY_LICENSES.md
+    to: THIRD_PARTY_LICENSES.md
+  - from: ../../NOTICE
+    to: NOTICE
+  - from: ../../LICENSE
+    to: LICENSE
 # Engine đã đóng gói bằng PyInstaller (engine/dist/nexgraph-engine) được chép vào resources/engine/.
 extraResources:
   - from: ../../engine/dist/nexgraph-engine

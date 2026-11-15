@@ -6,8 +6,18 @@ import { resolveInside } from '../fs/project-fs'
 
 export const APPROVAL_TIMEOUT_MS = 5 * 60_000
 
+/** Bản xem trước đã duyệt cho write/edit; lúc execute phai revalidate đúng cái này roi moi ghi.
+ * `file` là tình trang tep tai thoi diem preview (eol/bom/mtime) — execute dùng lam tien de ghi;
+ * vang khi tep chua ton tai (write tao moi). */
+export type ApprovedWrite = {
+  path: string
+  before: string
+  after: string
+  file?: { eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number }
+}
+
 export interface ApprovalGate {
-  check(toolName: string, input: unknown): Promise<ApprovalDecision>
+  check(toolName: string, input: unknown): Promise<ApprovalDecision & { approved?: ApprovedWrite }>
   resolve(id: string, allow: boolean): void
   denyAll(reason: string): void
   pending(): number
@@ -17,7 +27,7 @@ export type ApprovalDeps = {
   root: string
   getMode(): AgentMode
   ask(req: ApprovalRequest): void
-  preview(tool: 'edit' | 'write', input: unknown): Promise<{ path: string; before: string; after: string }>
+  preview(tool: 'edit' | 'write', input: unknown): Promise<{ path: string; before: string; after: string; file?: { eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number } }>
   /** Gọi khi một yêu cầu đã hỏi được giải quyết (duyệt, từ chối, hết giờ, denyAll). */
   closed?(id: string): void
 }
@@ -68,7 +78,7 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
       }
     })
 
-  async function check(toolName: string, input: unknown): Promise<ApprovalDecision> {
+  async function check(toolName: string, input: unknown): Promise<ApprovalDecision & { approved?: ApprovedWrite }> {
     if (toolName !== 'edit' && toolName !== 'write' && toolName !== 'bash') return { allow: true }
     if (deps.getMode() !== 'edit') return deny('Chế độ Hỏi không cho phép sửa tệp hoặc chạy lệnh')
     const obj = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
@@ -89,7 +99,9 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
       return deny('Không tạo được bản xem trước thay đổi')
     }
     if (myEpoch !== epoch) return deny('Đã dừng')
-    return wait({ id, tool: toolName, path: pv.path, before: pv.before, after: pv.after })
+    // pv chính là bản xem trước người dùng thấy: khi duyệt, gắn kèm quyết định để execute revalidate đúng nội dung này.
+    const d = await wait({ id, tool: toolName, path: pv.path, before: pv.before, after: pv.after })
+    return d.allow ? { ...d, approved: { path: pv.path, before: pv.before, after: pv.after, file: pv.file } } : d
   }
 
   return {

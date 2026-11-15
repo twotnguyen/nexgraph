@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, realpathSync } from 'node:fs'
+import { lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import { chmod, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import type { FileContent, WriteOpts } from '../../shared/api'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
@@ -18,8 +19,10 @@ type Eol = FileContent['eol']
 export const MAX_EDIT_BYTES = 5 * 1024 * 1024
 
 const outside = (relPath: string): FsError => new FsError('outside_project', `Đường dẫn nằm ngoài dự án: ${relPath}`)
+const danglingLink = (): Error => Object.assign(new Error('Symlink treo'), { code: 'dangling_symlink' })
 
-/** `realpath` của tổ tiên gần nhất còn tồn tại, rồi nối phần chưa tồn tại: symlink ở bất kỳ cấp nào đều bị lộ ra. */
+/** `realpath` của tổ tiên gần nhất còn tồn tại, rồi nối phần chưa tồn tại: symlink ở bất kỳ cấp nào đều bị lộ ra.
+ * ENOENT không có nghĩa là "chưa có": lstat để phát hiện symlink treo (đích không tồn tại) — bỏ qua nó sẽ để ghi tạo tệp ngoài dự án qua symlink. */
 function realpathLoose(p: string): string {
   const tail: string[] = []
   let cur = p
@@ -27,8 +30,16 @@ function realpathLoose(p: string): string {
     try {
       return join(realpathSync(cur), ...tail.reverse())
     } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+      let st: Stats | undefined
+      try {
+        st = lstatSync(cur)
+      } catch {
+        // thành phần không có thật: leo tiếp lên cha
+      }
+      if (st?.isSymbolicLink()) throw danglingLink()
       const parent = dirname(cur)
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT' || parent === cur) throw e
+      if (parent === cur) throw e
       tail.push(basename(cur))
       cur = parent
     }
@@ -38,7 +49,13 @@ function realpathLoose(p: string): string {
 export function resolveInside(root: string, relPath: string): string {
   if (isAbsolute(relPath)) throw outside(relPath)
   const realRoot = realpathSync(root)
-  const abs = realpathLoose(resolve(realRoot, relPath))
+  let abs: string
+  try {
+    abs = realpathLoose(resolve(realRoot, relPath))
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'dangling_symlink') throw outside(relPath)
+    throw e
+  }
   const rel = relative(realRoot, abs)
   if (rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)) throw outside(relPath)
   return abs

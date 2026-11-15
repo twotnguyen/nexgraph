@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { NexGraphApi } from '../shared/api'
 import type { EngineStatus } from '../shared/engine-status'
 import type { EngineEvent } from '../shared/graph-types'
-import type { AgentEvent } from '../shared/agent-types'
+import type { AgentEvent, AuthEventView, AuthPromptView } from '../shared/agent-types'
 
 type IpcResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 
@@ -79,10 +79,24 @@ const api: NexGraphApi = {
   },
   ai: {
     getSettings: () => call('ai:get-settings'),
-    saveSettings: (s) => call('ai:save-settings', s),
-    test: () => call('ai:test'),
     hasConsent: (pid) => call('ai:has-consent', pid),
     grantConsent: (pid) => call('ai:grant-consent', pid)
+  },
+  auth: {
+    list: () => call('auth:list'),
+    setKey: (providerId, key) => call('auth:set-key', providerId, key),
+    removeKey: (providerId) => call('auth:remove-key', providerId),
+    saveCustom: (p, apiKey) => call('auth:save-custom', p, apiKey),
+    removeCustom: (id) => call('auth:remove-custom', id),
+    login: (providerId) => call('auth:login', providerId),
+    loginCancel: () => call('auth:login-cancel'),
+    promptReply: (id, value) => call('auth:prompt-reply', id, value),
+    logout: (providerId) => call('auth:logout', providerId),
+    models: () => call('auth:models'),
+    selectModel: (provider, id) => call('auth:select-model', provider, id),
+    test: () => call('auth:test'),
+    onEvent: (cb) => subscribe<AuthEventView>('auth:login-event', cb),
+    onPrompt: (cb) => subscribe<AuthPromptView>('auth:login-prompt', cb)
   },
   agent: {
     prompt: (pid, text) => call('agent:prompt', pid, text),

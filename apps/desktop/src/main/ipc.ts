@@ -8,9 +8,10 @@ import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
 import { fsHandlers, projectRoot } from './fs/project-fs'
 import { AgentService } from './agent/session'
-import { settingsModels } from './agent/model'
-import type { AgentMode } from '../shared/agent-types'
-import { AiSettingsStore, endpoint } from './ai/settings'
+import { AccountService } from './agent/accounts'
+import type { AgentMode, AuthEventView, AuthPromptView } from '../shared/agent-types'
+import type { AiSettings } from '../shared/graph-types'
+import { SecretStore } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
 import { applyIntegration, planIntegration } from './integrations'
 import type { AgentId } from '../shared/integration-types'
@@ -21,8 +22,12 @@ const watchers = new Map<string, ProjectWatcher>()
 let mcpHttp: McpHttpManager | null = null
 let agents: AgentService | null = null
 
-/** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent. */
-export const closeAllAgents = (): void => agents?.closeAll()
+/** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
+export const closeAllAgents = (): void => {
+  agents?.closeAll()
+  cancelPendingAuthPrompts()
+  void accountsPromise?.then((a) => a.cancelLogin()).catch(() => {})
+}
 
 export const stopAllMcpHttp = (): Promise<void> => mcpHttp?.stopAll() ?? Promise.resolve()
 
@@ -42,7 +47,14 @@ const prefsPortStore = (): McpPortStore => ({
   save: (pid, port) => writeFileSync(prefsFile(), JSON.stringify({ ...readJson(prefsFile()), [`mcpPort:${pid}`]: String(port) }))
 })
 
-/** Key MCP HTTP theo project, mã hoá bằng safeStorage (Keychain/DPAPI) trong userData/mcp-keys.json. */
+/** Box mã hoá safeStorage (Keychain/DPAPI) dùng chung cho key MCP và key AI provider. */
+const secretBox = {
+  available: () => safeStorage.isEncryptionAvailable(),
+  encrypt: (s: string) => safeStorage.encryptString(s).toString('base64'),
+  decrypt: (b64: string) => safeStorage.decryptString(Buffer.from(b64, 'base64'))
+}
+
+/** Key MCP HTTP theo project, mã hoá bằng safeStorage trong userData/mcp-keys.json. */
 function safeKeyStore(): McpKeyStore {
   const file = (): string => join(app.getPath('userData'), 'mcp-keys.json')
   return {
@@ -63,6 +75,30 @@ function safeKeyStore(): McpKeyStore {
     }
   }
 }
+
+// ----- Tài khoản AI -----
+
+let accountsPromise: Promise<AccountService> | null = null
+const pendingPrompts = new Map<string, (value: string | null) => void>()
+
+const cancelPendingAuthPrompts = (): void => {
+  for (const [, resolve] of pendingPrompts) resolve(null)
+  pendingPrompts.clear()
+}
+
+/** Tạo một lần; mỗi handler chờ nó. `ask` giữ cầu nối prompt OAuth ↔ renderer. */
+const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promise<AccountService> =>
+  (accountsPromise ??= AccountService.create({
+    dataDir,
+    prefsFile: prefsFile(),
+    secrets: new SecretStore(join(app.getPath('userData'), 'ai-key.json'), secretBox),
+    openExternal: (url) => void shell.openExternal(url).catch(() => {}),
+    notify: (event: AuthEventView) => getWindow()?.webContents.send('auth:login-event', event),
+    ask: (view: AuthPromptView) => new Promise<string | null>((resolve) => {
+      pendingPrompts.set(view.id, resolve)
+      getWindow()?.webContents.send('auth:login-prompt', view)
+    })
+  }))
 
 export function stopAllWatchers(): void {
   for (const w of watchers.values()) w.stop()
@@ -138,37 +174,53 @@ export function registerIpc(
   on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
 
-  const ai = new AiSettingsStore(prefsFile(), join(app.getPath('userData'), 'ai-key.json'), {
-    available: () => safeStorage.isEncryptionAvailable(),
-    encrypt: (s) => safeStorage.encryptString(s).toString('base64'),
-    decrypt: (b64) => safeStorage.decryptString(Buffer.from(b64, 'base64'))
-  })
-  on('ai:get-settings', async () => ai.get())
-  on('ai:save-settings', async (s: { baseUrl: string; model: string; apiKey?: string }) => ai.save(s))
-  on('ai:has-consent', async (pid: string) => ai.hasConsent(pid))
-  on('ai:grant-consent', async (pid: string) => ai.grantConsent(pid))
-  on('ai:test', async () => {
-    const cfg = ai.get()
-    const key = ai.key()
-    const t0 = Date.now()
-    try {
-      const r = await fetch(endpoint(cfg.baseUrl), {
-        method: 'POST', signal: AbortSignal.timeout(15_000),
-        headers: { 'Content-Type': 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) },
-        body: JSON.stringify({ model: cfg.model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 })
-      })
-      return { ok: r.ok, ms: Date.now() - t0, error: r.ok ? null : `HTTP ${r.status}` }
-    } catch (e) {
-      return { ok: false, ms: Date.now() - t0, error: e instanceof Error ? e.message : String(e) }
+  const win = (): BrowserWindow | null => getWindow()
+  const acc = (): Promise<AccountService> => accounts(win, dataDir)
+  const derivedSettings = async (): Promise<AiSettings> => {
+    const a = await acc()
+    const sel = a.getSelectedModel()
+    const p = sel && a.modelRuntime.getProvider(sel.provider)
+    return {
+      baseUrl: p?.baseUrl ?? '',
+      model: sel?.id ?? '',
+      hasKey: !!sel && a.hasKey(sel.provider),
+      provider: sel?.provider
     }
+  }
+  on('ai:get-settings', () => derivedSettings())
+  on('ai:has-consent', async (pid: string) => (await acc()).hasConsent(pid))
+  on('ai:grant-consent', async (pid: string) => void (await acc()).grantConsent(pid))
+  on('auth:list', async () => (await acc()).listProviders())
+  on('auth:set-key', async (providerId: string, key: string) => (await acc()).setApiKey(providerId, key))
+  on('auth:remove-key', async (providerId: string) => (await acc()).removeApiKey(providerId))
+  on('auth:save-custom', async (p: Parameters<AccountService['saveCustomProvider']>[0], apiKey?: string) => (await acc()).saveCustomProvider(p, apiKey))
+  on('auth:remove-custom', async (id: string) => (await acc()).removeCustomProvider(id))
+  on('auth:login', async (providerId: string) => (await acc()).loginOAuth(providerId))
+  on('auth:login-cancel', async () => {
+    cancelPendingAuthPrompts()
+    ;(await acc()).cancelLogin()
   })
+  on('auth:prompt-reply', async (id: string, value: string | null) => {
+    const resolve = pendingPrompts.get(id)
+    if (!resolve) return
+    pendingPrompts.delete(id)
+    resolve(typeof value === 'string' ? value : null)
+  })
+  on('auth:logout', async (providerId: string) => (await acc()).logout(providerId))
+  on('auth:models', async () => (await acc()).listModels())
+  on('auth:select-model', async (provider: string, id: string) => (await acc()).selectModel(provider, id))
+  on('auth:test', async () => (await acc()).test())
   // EngineApi đọc baseUrl/token mỗi lần gọi nên theo kịp engine khởi động lại.
   const liveApi = new EngineApi({ get baseUrl() { return handle().baseUrl }, get token() { return handle().token } })
   const agent = (agents = new AgentService({
-    api: liveApi, dataDir, models: settingsModels(dataDir, ai),
-    hasConsent: (pid) => ai.hasConsent(pid),
+    api: liveApi, dataDir,
+    models: async () => {
+      const a = await acc()
+      return { modelRuntime: a.modelRuntime, selected: a.getSelectedModel() }
+    },
+    hasConsent: async (pid) => (await acc()).hasConsent(pid),
     rootOf: projectRoot(() => api().listProjects()),
-    emit: (projectId, event) => getWindow()?.webContents.send('agent:event', { projectId, event })
+    emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
   }))
   on('agent:prompt', (pid: string, text: string) => agent.prompt(pid, text))
   on('agent:abort', (pid: string) => agent.abort(pid))

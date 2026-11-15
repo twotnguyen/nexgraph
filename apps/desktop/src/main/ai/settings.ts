@@ -1,11 +1,11 @@
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs'
-import type { AiSettings } from '../../shared/graph-types'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 
 export interface SecretBox { available(): boolean; encrypt(s: string): string; decrypt(b64: string): string }
 
-const fail = (code: string, message: string): Error => Object.assign(new Error(message), { code })
+export const fail = (code: string, message: string): Error => Object.assign(new Error(message), { code })
 
-function readJson(file: string): Record<string, unknown> {
+export function readJson(file: string): Record<string, unknown> {
   try {
     const v = JSON.parse(readFileSync(file, 'utf8'))
     return v && typeof v === 'object' ? (v as Record<string, unknown>) : {}
@@ -14,43 +14,20 @@ function readJson(file: string): Record<string, unknown> {
   }
 }
 
-/** Bỏ mọi '/' cuối rồi nối '/chat/completions'. */
-export const endpoint = (baseUrl: string): string => `${baseUrl.replace(/\/+$/, '')}/chat/completions`
+export function writeJson(file: string, value: Record<string, unknown>): void {
+  mkdirSync(dirname(file), { recursive: true })
+  writeFileSync(file, JSON.stringify(value), { mode: 0o600 })
+}
 
-/** Cấu hình trợ lý AI: Base URL và model trong prefs.json, API key mã hoá bằng kho khoá của hệ điều hành trong tệp riêng. */
-export class AiSettingsStore {
-  constructor(private readonly prefsFile: string, private readonly keyFile: string, private readonly box: SecretBox) {}
+/**
+ * Kho bí mật nhiều khoá: `{ [providerId]: bản mã hoá safeStorage }` trong một tệp 0600.
+ * Key không bao giờ ở dạng rõ trên đĩa và không bao giờ về renderer.
+ */
+export class SecretStore {
+  constructor(private readonly file: string, private readonly box: SecretBox) {}
 
-  get(): AiSettings {
-    const p = readJson(this.prefsFile)
-    return { baseUrl: String(p.aiBaseUrl ?? ''), model: String(p.aiModel ?? ''), hasKey: this.key() != null }
-  }
-
-  save(s: { baseUrl: string; model: string; apiKey?: string }): AiSettings {
-    if (!/^https?:\/\/[^\s/]+/i.test(s.baseUrl)) throw fail('bad_param', 'Base URL phải bắt đầu bằng http:// hoặc https://')
-    if (s.apiKey && !this.box.available()) throw fail('no_keychain', 'Máy này không có kho khoá an toàn')
-    const previousOrigin = this.origin(readJson(this.prefsFile).aiBaseUrl)
-    const nextOrigin = this.origin(s.baseUrl)
-    const encrypted = s.apiKey ? this.box.encrypt(s.apiKey) : null
-    if (s.apiKey === '' || previousOrigin !== nextOrigin) {
-      if (existsSync(this.keyFile)) unlinkSync(this.keyFile)
-    }
-    writeFileSync(this.prefsFile, JSON.stringify({ ...readJson(this.prefsFile), aiBaseUrl: s.baseUrl, aiModel: s.model }))
-    if (encrypted) writeFileSync(this.keyFile, JSON.stringify({ key: encrypted }), { mode: 0o600 })
-    return this.get()
-  }
-
-  private origin(baseUrl: unknown): string | null {
-    if (typeof baseUrl !== 'string') return null
-    try {
-      return new URL(baseUrl).origin
-    } catch {
-      return null
-    }
-  }
-
-  key(): string | null {
-    const enc = readJson(this.keyFile).key
+  get(id: string): string | null {
+    const enc = readJson(this.file)[id]
     if (typeof enc !== 'string' || !this.box.available()) return null
     try {
       return this.box.decrypt(enc)
@@ -59,28 +36,29 @@ export class AiSettingsStore {
     }
   }
 
-  /** hostname[:port] của Base URL; null nếu rỗng hoặc không hợp lệ. */
-  host(): string | null {
-    try {
-      const { host } = new URL(this.get().baseUrl)
-      return host || null
-    } catch {
-      return null
-    }
+  set(id: string, key: string): void {
+    if (!this.box.available()) throw fail('no_keychain', 'Máy này không có kho khoá an toàn')
+    writeJson(this.file, { ...readJson(this.file), [id]: this.box.encrypt(key) })
   }
 
-  hasConsent(projectId: string): boolean {
-    const host = this.host()
-    const list = readJson(this.prefsFile).aiConsent
-    return host != null && Array.isArray(list) && list.includes(`${projectId}|${host}`)
+  /** Di trú một lần: khoá đơn của AiSettingsStore cũ (`key`) đổi tên thành khoá của một provider. */
+  migrateLegacyKey(id: string): boolean {
+    const all = readJson(this.file)
+    const enc = all.key
+    if (typeof enc !== 'string' || all[id] !== undefined) return false
+    const { key: _old, ...rest } = all
+    writeJson(this.file, { ...rest, [id]: enc })
+    return true
   }
 
-  grantConsent(projectId: string): void {
-    const host = this.host()
-    if (!host) return
-    const p = readJson(this.prefsFile)
-    const list = Array.isArray(p.aiConsent) ? (p.aiConsent as string[]) : []
-    const entry = `${projectId}|${host}`
-    if (!list.includes(entry)) writeFileSync(this.prefsFile, JSON.stringify({ ...p, aiConsent: [...list, entry] }))
+  remove(id: string): void {
+    const all = readJson(this.file)
+    if (!(id in all)) return
+    delete all[id]
+    writeJson(this.file, all)
+  }
+
+  ids(): string[] {
+    return Object.keys(readJson(this.file)).filter((id) => id !== 'key')
   }
 }

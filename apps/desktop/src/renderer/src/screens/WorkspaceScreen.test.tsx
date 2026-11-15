@@ -26,7 +26,8 @@ vi.mock('../components/editor/monaco', () => ({
     el.appendChild(ta)
     return {
       getValue: () => ta.value, setValue: (v: string) => { ta.value = v },
-      onChange: (cb: () => void) => ta.addEventListener('input', cb), revealLines, dispose: () => ta.remove()
+      onChange: (cb: () => void) => ta.addEventListener('input', cb), revealLines, dispose: () => ta.remove(),
+      setReadOnly: () => {}
     }
   }
 }))

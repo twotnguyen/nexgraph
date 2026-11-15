@@ -3,7 +3,16 @@ import type { AgentId, IntegrationPlan } from '@shared/integration-types'
 import type { ProjectSummary } from '@shared/graph-types'
 import { vi } from '../../strings'
 
-const AGENTS: AgentId[] = ['claude', 'cursor', 'vscode', 'opencode']
+// Bốn agent JSON dùng nhãn có sẵn; Codex và hai mục skill dùng nhãn mới (strings.ts: vi.integration).
+const AGENTS: { id: AgentId; label: string }[] = [
+  { id: 'claude', label: vi.integrate.agents.claude },
+  { id: 'cursor', label: vi.integrate.agents.cursor },
+  { id: 'vscode', label: vi.integrate.agents.vscode },
+  { id: 'opencode', label: vi.integrate.agents.opencode },
+  { id: 'codex', label: vi.integration.codex },
+  { id: 'skill-claude', label: vi.integration.skillClaude },
+  { id: 'agents-md', label: vi.integration.skillAgentsMd }
+]
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 export function IntegrationsDialog({ project, onClose }: { project: ProjectSummary; onClose: () => void }) {
@@ -39,15 +48,16 @@ export function IntegrationsDialog({ project, onClose }: { project: ProjectSumma
     setCopied(true)
   }
 
+  const invalidMessage = agent === 'codex' ? vi.integration.codexExisting : agent === 'skill-claude' ? vi.integration.skillExisting : vi.integrate.invalid
   return (
     <div className="modal-backdrop">
       <div role="dialog" aria-label={vi.integrate.title} className="modal">
         <header><h2>{vi.integrate.title}</h2><button type="button" aria-label={vi.integrate.close} onClick={onClose}>×</button></header>
         <div role="radiogroup" aria-label={vi.integrate.agentLabel} className="segmented">
           {AGENTS.map((a) => (
-            <label key={a}>
-              <input type="radio" name="agent" checked={agent === a} onChange={() => setAgent(a)} />
-              <span>{vi.integrate.agents[a]}</span>
+            <label key={a.id}>
+              <input type="radio" name="agent" checked={agent === a.id} onChange={() => setAgent(a.id)} />
+              <span>{a.label}</span>
             </label>
           ))}
         </div>
@@ -55,10 +65,11 @@ export function IntegrationsDialog({ project, onClose }: { project: ProjectSumma
           <>
             <p><b>{vi.integrate.willWrite}</b> <span className="mono">{plan.path}</span></p>
             <p className="muted">{plan.status === 'new' ? vi.integrate.fresh : vi.integrate.existing}</p>
-            {plan.status === 'invalid' ? <p role="alert" className="error">{vi.integrate.invalid}</p> : <pre className="mono">{plan.after}</pre>}
+            {plan.status === 'invalid' ? <p role="alert" className="error">{invalidMessage}</p> : <pre className="mono">{plan.after}</pre>}
             {plan.status === 'up_to_date' && <p className="muted">{vi.integrate.upToDate}</p>}
           </>
         )}
+        {agent === 'codex' && <p className="muted small">{vi.integration.codexTrusted}</p>}
         {done && <p role="status">{done}</p>}
         {error && <p role="alert" className="error">{error}</p>}
         <p className="muted small">{vi.integrate.note}</p>

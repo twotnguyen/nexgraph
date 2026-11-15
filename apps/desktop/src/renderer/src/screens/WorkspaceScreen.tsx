@@ -14,7 +14,7 @@ import { TreeView } from '../components/tree/TreeView'
 import { SearchPanel } from '../components/search/SearchPanel'
 import { FlowsView } from '../components/flows/FlowsView'
 import { TourPanel } from '../components/tour/TourPanel'
-import { ChatPanel } from '../components/chat/ChatPanel'
+import { AgentPanel } from '../components/agent/AgentPanel'
 import { MapView } from '../components/map/MapView'
 import { useChanges } from '../state/useChanges'
 import { Logo, VIEW_TONE } from '../components/common/icons'
@@ -315,7 +315,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ))}
         </div>
       </section>
-      <ChatPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />
+      <AgentPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />
     </div>
   )
 }

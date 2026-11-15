@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { AgentService, ASK_TOOLS, EDIT_TOOLS, type PiSession, type SessionSpec } from '../src/main/agent/session'
+import { AgentService, ASK_TOOLS, EDIT_TOOLS, type ModelChoice, type PiSession, type SessionSpec } from '../src/main/agent/session'
 import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
 import type { AgentEvent } from '../src/shared/agent-types'
@@ -48,7 +48,7 @@ class FakeSession {
   async setModel(m: { provider: string; id: string }) { this.model = m }
 }
 
-function setup(over: { consent?: boolean; selected?: null } = {}) {
+function setup(over: { consent?: boolean; selected?: null; models?: () => Promise<ModelChoice>; rootOf?: (pid: string) => Promise<string> } = {}) {
   const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-sess-')))
   const roots: Record<string, string> = { p1: join(base, 'p1'), p2: join(base, 'p2') }
   for (const r of Object.values(roots)) { mkdirSync(r); writeFileSync(join(r, 'a.py'), 'x\n') }
@@ -62,14 +62,21 @@ function setup(over: { consent?: boolean; selected?: null } = {}) {
   const svc = new AgentService({
     api: { code } as unknown as EngineApi,
     dataDir: join(base, 'data'),
-    models: async () => ({ modelRuntime: { getModel: () => fakeModel } as never, selected: over.selected === null ? null : { provider: 'nexgraph-custom', id: 'm1' } }),
-    hasConsent: () => over.consent ?? true,
-    rootOf: async (pid) => { if (!roots[pid]) throw new Error('unknown'); return roots[pid] },
+    models: over.models ?? (async () => ({ modelRuntime: { getModel: () => fakeModel } as never, selected: over.selected === null ? null : { provider: 'nexgraph-custom', id: 'm1' } })),
+    hasConsent: async () => over.consent ?? true,
+    rootOf: over.rootOf ?? (async (pid) => { if (!roots[pid]) throw new Error('unknown'); return roots[pid] }),
     emit: (pid, e) => events.push({ pid, e }),
     createSession: async (spec) => { const s = new FakeSession(spec); sessions.push(s); return s as unknown as PiSession }
   })
   const of = (pid: string, type: AgentEvent['type']) => events.filter((x) => x.pid === pid && x.e.type === type).map((x) => x.e)
   return { svc, events, sessions, roots, base, of }
+}
+
+/** Promise có resolve gọi được từ ngoài (không dùng timer). */
+const deferred = <T,>() => {
+  let resolve: (v: T) => void = () => {}
+  const promise = new Promise<T>((r) => { resolve = r })
+  return { promise, resolve }
 }
 
 /** Kịch bản: gọi write trong dự án rồi kết thúc. */
@@ -320,5 +327,67 @@ describe('AgentService (phiên giả)', () => {
     expect(e.message).not.toContain('sk-abcdef1234567890')
     expect(e.message).not.toContain('xyz.secret')
     expect(e.message.length).toBeLessThanOrEqual(260)
+  })
+})
+
+describe('AgentService (huỷ lượt đang khởi động)', () => {
+  const modelChoice = {
+    modelRuntime: { getModel: (): { provider: string; id: string } => ({ provider: 'x', id: 'm' }) } as unknown as ModelChoice['modelRuntime'],
+    selected: { provider: 'x', id: 'm' }
+  }
+
+  it('closeAll trong lúc nạp model: lượt cũ không tạo phiên, không phát done/error', async () => {
+    const gate = deferred<typeof modelChoice>()
+    const { svc, events, sessions, base } = setup({ models: () => gate.promise })
+    const run = svc.prompt('p1', 'hỏi')
+    svc.closeAll()
+    gate.resolve(modelChoice)
+    await expect(run).resolves.toBeUndefined()
+    expect(sessions).toHaveLength(0)
+    expect(events).toHaveLength(0)
+    rmSync(base, { recursive: true, force: true })
+  })
+
+  it('close trong lúc chờ root: không tạo phiên sau khi root về', async () => {
+    const asked = deferred<void>()
+    const gate = deferred<string>()
+    const { svc, events, sessions, roots, base } = setup({
+      rootOf: () => { asked.resolve(undefined); return gate.promise }
+    })
+    const run = svc.prompt('p1', 'hỏi')
+    await asked.promise
+    svc.close('p1')
+    gate.resolve(roots.p1)
+    await expect(run).resolves.toBeUndefined()
+    expect(sessions).toHaveLength(0)
+    expect(events).toHaveLength(0)
+    rmSync(base, { recursive: true, force: true })
+  })
+
+  it('abort trong lúc nạp model: panel nhận ai_cancelled ngay, phiên không được tạo', async () => {
+    const gate = deferred<typeof modelChoice>()
+    const { svc, of, sessions, base } = setup({ models: () => gate.promise })
+    const run = svc.prompt('p1', 'hỏi')
+    await svc.abort('p1')
+    expect(of('p1', 'error').at(-1)).toMatchObject({ type: 'error', code: 'ai_cancelled' })
+    gate.resolve(modelChoice)
+    await expect(run).resolves.toBeUndefined()
+    expect(sessions).toHaveLength(0)
+    expect(of('p1', 'done')).toHaveLength(0)
+    rmSync(base, { recursive: true, force: true })
+  })
+
+  it('lượt mới sau closeAll không nhận done/error trễ của lượt cũ', async () => {
+    const gate = deferred<typeof modelChoice>()
+    const { svc, of, base } = setup({ models: () => gate.promise })
+    const old = svc.prompt('p1', 'cũ')
+    svc.closeAll()
+    gate.resolve(modelChoice)
+    await old
+    await svc.prompt('p1', 'mới')
+    await svc.prompt('p1', 'mới nữa')
+    expect(of('p1', 'done')).toHaveLength(2) // chỉ hai lượt mới, lượt cũ bị huỷ không phát gì
+    expect(of('p1', 'error')).toHaveLength(0)
+    rmSync(base, { recursive: true, force: true })
   })
 })

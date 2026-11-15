@@ -54,19 +54,44 @@ Installer từ chối `post-commit` hiện có dùng Python/Node hoặc interpre
 
 ## Tích hợp trợ lý AI (H5)
 
-Ghi `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code), `opencode.json` (OpenCode) sau khi bạn xem trước và xác nhận. Chỉ thêm mục `nexgraph`; tệp không phải JSON hợp lệ (kể cả có chú thích `//`) thì không ghi, dùng nút "Sao chép cấu hình".
+Ghi `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code), `opencode.json` (OpenCode), `.codex/config.toml` (Codex) sau khi bạn xem trước và xác nhận. Chỉ thêm mục `nexgraph`; tệp không phân tích được (JSON hỏng hoặc có chú thích `//`, TOML đã có sẵn) thì không ghi, dùng nút "Sao chép cấu hình".
 
-### Đối chiếu nguồn chính thức (2026-11-13)
+### Skill nexgraph cho agent ngoài (F15)
+
+Tổng quan dự án → "Tích hợp trợ lý AI" có thêm hai mục skill, nội dung sinh từ cùng nguồn với phần "Quy tắc dùng đồ thị NexGraph" trong app (gồm danh sách tool chỉ đọc của MCP):
+
+- **Skill nexgraph (Claude Code):** ghi `.claude/skills/nexgraph/SKILL.md` (frontmatter `name`/`description` + quy tắc). File đã có cùng nội dung → báo "Đã cài"; khác → **không ghi đè**, hiện nội dung để người dùng ghép tay.
+- **Khối nexgraph trong AGENTS.md:** chèn hoặc thay khối giữa hai dòng `<!-- nexgraph:start -->` và `<!-- nexgraph:end -->`. Phần ngoài khối giữ nguyên từng byte; chưa có `AGENTS.md` thì tạo tệp chỉ gồm khối. Khối dùng được cho mọi agent đọc AGENTS.md (Codex, Cursor…).
+- Cả hai đường dẫn đều được kiểm symlink: symlink (kể cả symlink treo) trỏ ra ngoài dự án bị chặn và không ghi gì.
+
+### Đối chiếu nguồn chính thức (2026-11-13; hàng Codex tra ngày 2026-11-15)
 
 | Client | Cấu hình được NexGraph ghi | Nguồn |
 |---|---|---|
-| Claude Code | `.mcp.json`, `mcpServers.nexgraph`, `type: stdio`, `command` và `args` | [Project scope và stdio](https://code.claude.com/docs/en/mcp) |
+| Claude Code | `.mcp.json`, `mcpServers.nexgraph`, `type: stdio`, `command` và `args`; skill: `.claude/skills/nexgraph/SKILL.md` | [Project scope và stdio](https://code.claude.com/docs/en/mcp) |
 | Cursor | `.cursor/mcp.json`, `mcpServers.nexgraph`, `type: stdio`, `command` và `args` | [MCP](https://cursor.com/docs/mcp), [vị trí tệp](https://cursor.com/help/customization/mcp) |
 | VS Code | `.vscode/mcp.json`, `servers.nexgraph`, `type: stdio`, `command` và `args` | [Editor-managed configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration#_editor-managed-configuration-for-local-harness-compatibility) |
 | OpenCode | `opencode.json` (hoặc `.jsonc` có sẵn), `mcp.nexgraph`, `type: local`, `command` là mảng | [JSON schema chính thức](https://opencode.ai/config.json), [MCP](https://opencode.ai/docs/mcp-servers/) |
+| Codex | `.codex/config.toml` của dự án (tạo khi chưa có), `[mcp_servers.nexgraph]`, `command` và `args`, định dạng TOML | [Model Context Protocol](https://learn.chatgpt.com/docs/extend/mcp), [config.toml](https://learn.chatgpt.com/docs/config-file/config-advanced) (tra 2026-11-15) |
+
+Codex (tài liệu OpenAI tra ngày 2026-11-15): MCP cấu hình bằng bảng `[mcp_servers.<tên>]` với `command`, `args` (stdio); Codex đọc thêm `.codex/config.toml` của dự án nhưng **chỉ khi dự án được đánh dấu tin cậy trong Codex** — cấu hình dự án không được tin cậy sẽ bị bỏ qua, kể cả layer `.codex/`. NexGraph không bao giờ ghi `~/.codex/config.toml` toàn cục. Nếu `.codex/config.toml` đã có trong dự án, NexGraph không phân tích/sửa TOML: sao chép mục `[mcp_servers.nexgraph]` rồi dán vào tệp dự án hoặc tệp toàn cục bằng tay.
 
 OpenCode hiện mô tả dạng mới `mcp.servers`; schema chính thức vẫn nhận dạng trực tiếp `mcp.<tên>` nhưng đánh dấu deprecated. NexGraph giữ dạng đang được schema nhận, không tự di chuyển server khác của người dùng. Đã kiểm binary có trên máy: `opencode v2.2.7`; không còn là 2.1.4 trong ghi chú spike cũ.
 
 VS Code đánh dấu Local harness/editor-managed là deprecated; `.vscode/mcp.json` vẫn là cấu hình hợp lệ của editor và có thể forward sang Copilot. Copilot native dùng `.mcp.json`/`mcpServers`; không đồng nhất hai schema. Chọn Claude Code trong NexGraph nếu cần xuất dạng workspace-root `.mcp.json` rồi đối chiếu hướng dẫn Copilot.
 
 Đây là đối chiếu schema, không phải bằng chứng đã kết nối bằng cả bốn client. JSONC có chú thích vẫn chỉ sao chép cấu hình để ghép tay: không ghi lại làm mất chú thích.
+
+## Editor và agent tích hợp (F13–F15, 2026-11-15)
+
+- Monaco mở nhiều thẻ tệp, Cmd/Ctrl+S lưu qua main; thẻ bẩn không tự nạp lại khi tệp đổi bên ngoài. Tệp lớn hơn 5 MB hoặc không phải UTF-8 chỉ đọc. Giữ CRLF, BOM và quyền tệp.
+- Agent mặc định **Hỏi** (13 tool chỉ đọc: 9 tool đồ thị và read/grep/find/ls). **Sửa** thêm write/edit/bash; mỗi thao tác phải được duyệt. Diff bị cũ hoặc đích bị tráo symlink thì từ chối, không tự áp lại.
+- `bash` **không có sandbox**, chạy bằng quyền người dùng sau khi duyệt; không có "luôn cho phép". Windows chưa kiểm shell thực tế, xem `windows-checklist.md`.
+- Tài khoản AI ưu tiên API key và custom provider; key mã hoá qua safeStorage, chỉ nạp vào runtime. OAuth có thể mở trình duyệt, hiện device code hoặc hỏi mã trong Settings; huỷ/rời màn thì huỷ lượt đăng nhập. Token OAuth lưu trong `agent/auth.json` của thư mục dữ liệu ứng dụng, quyền 0600 trên Unix. Không dùng chung `~/.pi`.
+- Endpoint custom không cần key nhận sentinel `Bearer unused` do SDK OpenAI của pi yêu cầu key; server phải bỏ qua header này (như Ollama). Không phải API key thật. Nếu server từ chối header dư thì hiện chưa hỗ trợ endpoint đó.
+- API key/OAuth với nhà cung cấp thật và Windows **chưa kiểm**; các test OAuth dùng provider giả đăng ký qua SDK pi thật, không chứng minh nhà cung cấp cho phép đăng nhập bên thứ ba.
+- `smoke:packaged` dùng engine đóng gói, một máy chủ LLM giả cục bộ và renderer thật để kiểm `fs:write/read` cùng `agent:prompt → done`. Kho userData và dự án đều tạm; không đọc/ghi tài khoản người dùng. Kiểm giao diện với dữ liệu tạm có thể đặt `NEXGRAPH_USER_DATA_DIR` và `NEXGRAPH_DATA_DIR`; mặc định sản phẩm không đổi.
+
+### Bản macOS editor + agent đã kiểm ngày 2026-11-15
+
+`apps/desktop/dist/NexGraph-0.1.0-arm64.dmg`: **239.223.266 byte (~239,2 MB)**, dưới ngưỡng 400 MB sau khi giới hạn ngữ pháp Monaco. Typecheck sạch, 409 test desktop và 466 test engine đạt; smoke bản cài `SMOKE OK nodes=2 fs=OK agent=OK`. Đã bấm thử Monaco, hỏi có trích dẫn, tô luồng, duyệt/từ chối/dừng trên bản `.app` với engine thật và LLM giả cục bộ. Bằng chứng, ảnh và phần **chưa** nghiệm thu: [kiểm editor + agent](benchmarks/2026-11-15-editor-agent.md).

@@ -30,14 +30,28 @@ export function createFakeLlm() {
       if (!req.url.endsWith('/chat/completions')) return send(404, {})
       const { messages = [], max_tokens, stream } = JSON.parse(body || '{}')
       const out = (msg) => reply(res, stream, msg)
+      const lastUser = messages.findLastIndex((m) => m.role === 'user')
+      const question = text(messages[lastUser] ?? {})
+      if (question.includes('NEXGRAPH_SMOKE')) return out({ role: 'assistant', content: 'NEXGRAPH_SMOKE_OK' })
       if (max_tokens === 1) return out({ role: 'assistant', content: 'pong' })
-      const tools = messages.filter((m) => m.role === 'tool')
+      const tools = messages.slice(lastUser).filter((m) => m.role === 'tool')
       if (tools.length === 0) return out(toolCall('list_flows', { query: 'login' }))
       if (tools.length === 1) {
         const flows = JSON.parse(text(tools[0])).flows ?? []
         return out(toolCall('trace_flow', { flow_id: flows[0]?.id ?? 0 }))
       }
       const steps = JSON.parse(text(tools[1])).steps ?? []
+      // Kịch bản chỉ dành cho bản sao fixture flow_app khi kiểm duyệt trong app.
+      if (question.includes('NEXGRAPH_DEMO_EDIT')) {
+        if (tools.length === 2) {
+          const changed = steps.find((s) => s.node.file === 'service.py' && s.node.label.includes('login_user'))
+          return out(toolCall('get_impact', { node_id: (changed ?? steps[0])?.node.id ?? '' }))
+        }
+        if (tools.length === 3) return out(toolCall('edit', {
+          path: 'service.py',
+          edits: [{ oldText: 'return save_session(user)', newText: 'return save_session(user)  # NexGraph demo' }]
+        }))
+      }
       const lines = steps.slice(0, 3).map((s, i) => `${i + 1}. ${s.node.label} [[${s.node.file}:${s.node.line_start}-${s.node.line_end}]]`)
       out({ role: 'assistant', content: `${lines.join('\n')}\n${steps.length + 1}. Bước không có thật [[khong-co.ts:1-2]]` })
     })

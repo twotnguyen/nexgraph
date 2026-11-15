@@ -45,8 +45,14 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       push: vi.fn(async () => ({ nodes: 0, edges: 0, truncated: false })), png: vi.fn(async () => null),
       reveal: vi.fn(async () => {}), ...over.exporter },
     hook: { status: vi.fn(async () => 'off' as const), preview: vi.fn(async () => '# >>> nexgraph >>>'), install: vi.fn(async () => {}), uninstall: vi.fn(async () => {}), ...over.hook },
-    ai: { getSettings: vi.fn(async () => ({ baseUrl: '', model: '', hasKey: false })), saveSettings: vi.fn(async (s: { baseUrl: string; model: string }) => ({ ...s, hasKey: false })),
-      test: vi.fn(async () => ({ ok: true, ms: 1, error: null })), hasConsent: vi.fn(async () => false), grantConsent: vi.fn(async () => {}), ...over.ai },
+    ai: { getSettings: vi.fn(async () => ({ baseUrl: '', model: '', hasKey: false })), hasConsent: vi.fn(async () => false), grantConsent: vi.fn(async () => {}), ...over.ai },
+    auth: {
+      list: vi.fn(async () => []), setKey: vi.fn(async () => {}), removeKey: vi.fn(async () => {}),
+      saveCustom: vi.fn(async () => {}), removeCustom: vi.fn(async () => {}), login: vi.fn(async () => {}),
+      loginCancel: vi.fn(async () => {}), promptReply: vi.fn(async () => {}), logout: vi.fn(async () => {}),
+      models: vi.fn(async () => []), selectModel: vi.fn(async () => {}), test: vi.fn(async () => ({ ok: true, message: '' })),
+      onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), ...over.auth
+    },
     agent: { prompt: vi.fn(async () => {}), abort: vi.fn(async () => {}), setMode: vi.fn(async () => {}), getMode: vi.fn(async () => 'ask' as const),
       approve: vi.fn(async () => {}), close: vi.fn(async () => {}),
       onEvent: vi.fn((cb: (pid: string, e: AgentEvent) => void) => { agentHandlers.add(cb); return () => agentHandlers.delete(cb) }), ...over.agent },

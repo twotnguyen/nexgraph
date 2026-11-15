@@ -1,57 +1,117 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../test-utils'
+import type { NexGraphApi } from '@shared/api'
 import { SettingsScreen } from './SettingsScreen'
 
-const configured = { getSettings: vi.fn(async () => ({ baseUrl: 'https://a/v1', model: 'm', hasKey: true })) }
+const provider = (id: string, over: Record<string, unknown> = {}) =>
+  ({ id, label: id, hasKey: false, oauth: false, loggedIn: false, custom: false, ...over })
 
 describe('SettingsScreen', () => {
-  it('nạp cấu hình, lưu, không bao giờ hiển thị lại key', async () => {
-    const { api } = installNexgraph({ ai: { ...configured, saveSettings: vi.fn(async (s) => ({ ...s, hasKey: true })) } })
+  it('thứ tự ba mục từ trên xuống: key theo nhà cung cấp → nhà cung cấp tuỳ chỉnh → đăng nhập gói đăng ký', async () => {
+    installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic', { oauth: true, hasKey: true }), provider('smoke', { custom: true })]) } })
+    const { container } = render(<SettingsScreen onBack={() => {}} />)
+    const headings = await screen.findAllByRole('heading', { level: 2 })
+    expect(headings[0]).toHaveTextContent('API key')
+    expect(headings[1]).toHaveTextContent('tuỳ chỉnh')
+    expect(headings[2]).toHaveTextContent('gói đăng ký')
+    expect(headings[0].compareDocumentPosition(headings[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(headings[1].compareDocumentPosition(headings[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(container).toBeInTheDocument()
+  })
+
+  it('câu cảnh báo OAuth hiện đúng nguyên văn', async () => {
+    installNexgraph({ auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true })]) } })
     render(<SettingsScreen onBack={() => {}} />)
-    expect(await screen.findByDisplayValue('https://a/v1')).toBeInTheDocument()
-    expect(screen.getByText('Đã lưu key')).toBeInTheDocument()
-    expect(screen.queryByLabelText('API key')).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: 'Thay' }))
+    expect(await screen.findByText(/không cho phép dùng gói đăng ký trong ứng dụng bên thứ ba/)).toBeInTheDocument()
+  })
+
+  it('ô khoá không bao giờ hiển thị giá trị đã lưu (placeholder thay thế)', async () => {
+    installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic', { hasKey: true })]) } })
+    render(<SettingsScreen onBack={() => {}} />)
+    const input = await screen.findByLabelText('API key')
+    expect(input).toHaveValue('')
+    expect(input).toHaveAttribute('type', 'password')
+    expect(input).toHaveAttribute('placeholder', 'Đã có key trong kho khoá')
+  })
+
+  it('lưu key gọi auth.setKey cho nhà cung cấp đang chọn; gỡ key gọi removeKey', async () => {
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic'), provider('openai')]) } })
+    render(<SettingsScreen onBack={() => {}} />)
+    await screen.findByLabelText('API key')
+    const select = screen.getAllByRole('combobox')[0]
+    await userEvent.selectOptions(select, 'openai')
     await userEvent.type(screen.getByLabelText('API key'), 'sk-1')
-    expect(screen.getByLabelText('API key')).toHaveAttribute('type', 'password')
-    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }))
-    expect(api.ai.saveSettings).toHaveBeenCalledWith({ baseUrl: 'https://a/v1', model: 'm', apiKey: 'sk-1' })
-    expect(await screen.findByText('Đã lưu')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu key' }))
+    expect(api.auth.setKey).toHaveBeenCalledWith('openai', 'sk-1')
   })
 
-  it('không đổi key thì không gửi trường apiKey', async () => {
-    const { api } = installNexgraph({ ai: { ...configured, saveSettings: vi.fn(async (s) => ({ ...s, hasKey: true })) } })
+  it('lưu nhà cung cấp tuỳ chỉnh gọi saveCustom và tự chọn model', async () => {
+    const { api } = installNexgraph()
     render(<SettingsScreen onBack={() => {}} />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Lưu' }))
-    expect(api.ai.saveSettings).toHaveBeenCalledWith({ baseUrl: 'https://a/v1', model: 'm' })
+    await userEvent.type(await screen.findByLabelText('ID'), 'smoke')
+    await userEvent.type(screen.getByLabelText('Tên hiển thị'), 'Smoke local')
+    await userEvent.type(screen.getByLabelText('Base URL'), 'http://127.0.0.1:9/v1')
+    await userEvent.type(screen.getByLabelText('Tên model'), 'fake')
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu nhà cung cấp' }))
+    expect(api.auth.saveCustom).toHaveBeenCalledWith({ id: 'smoke', label: 'Smoke local', baseUrl: 'http://127.0.0.1:9/v1', model: 'fake' }, undefined)
+    expect(api.auth.selectModel).toHaveBeenCalledWith('smoke', 'fake')
   })
 
-  it('để trống key khi thay thế sẽ gửi yêu cầu xoá rõ ràng', async () => {
-    const { api } = installNexgraph({ ai: { ...configured, saveSettings: vi.fn(async (s) => ({ ...s, hasKey: false })) } })
+  it('đăng nhập OAuth: sự kiện auth_url hiện hướng dẫn, Huỷ gọi loginCancel', async () => {
+    const { api } = installNexgraph({ auth: {
+      list: vi.fn(async () => [provider('openai-codex', { oauth: true })]),
+      login: vi.fn(() => new Promise<void>(() => {}))
+    } })
+    const { emitAuth } = installAuthSinks(api)
     render(<SettingsScreen onBack={() => {}} />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Thay' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }))
-    expect(api.ai.saveSettings).toHaveBeenCalledWith({ baseUrl: 'https://a/v1', model: 'm', apiKey: '' })
+    await userEvent.click(await screen.findByRole('button', { name: 'Đăng nhập' }))
+    expect(api.auth.login).toHaveBeenCalledWith('openai-codex')
+    act(() => emitAuth({ type: 'auth_url', url: 'https://oauth.example/authorize', instructions: 'Mở liên kết' }))
+    expect(await screen.findByText('Mở liên kết')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Huỷ đăng nhập' }))
+    expect(api.auth.loginCancel).toHaveBeenCalled()
   })
 
-  it('kiểm tra kết nối hiện thời gian hoặc lỗi', async () => {
-    const test = vi.fn().mockResolvedValueOnce({ ok: true, ms: 420, error: null }).mockResolvedValueOnce({ ok: false, ms: 5, error: 'x' })
-    installNexgraph({ ai: { ...configured, test } })
+  it('câu hỏi đăng nhập OAuth cho phép trả lời và huỷ bằng null', async () => {
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true })]) } })
+    const { emitPrompt } = installAuthSinks(api)
     render(<SettingsScreen onBack={() => {}} />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Kiểm tra kết nối' }))
-    expect(await screen.findByText('Kết nối được, 420 ms')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Kiểm tra kết nối' }))
-    expect(await screen.findByText('Không kết nối được: x')).toBeInTheDocument()
+    await screen.findByRole('button', { name: 'Đăng nhập' })
+    act(() => emitPrompt({ id: 'openai-codex#1', kind: 'text', message: 'Dán mã' }))
+    await userEvent.type(await screen.findByLabelText('Dán mã'), 'abc')
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi' }))
+    expect(api.auth.promptReply).toHaveBeenCalledWith('openai-codex#1', 'abc')
   })
 
-  it('lỗi no_keychain hiện câu noKeychain', async () => {
-    installNexgraph({ ai: { saveSettings: vi.fn(async () => { throw { code: 'no_keychain', message: 'x' } }) } })
-    render(<SettingsScreen onBack={() => {}} />)
-    await userEvent.type(await screen.findByLabelText('API key'), 'k')
-    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('không có kho khoá an toàn')
+  it('rời màn khi OAuth còn chờ → huỷ đăng nhập, không treo prompt ở main', async () => {
+    const { api } = installNexgraph({
+      auth: {
+        list: vi.fn(async () => [provider('openai-codex', { oauth: true })]),
+        login: vi.fn(() => new Promise<void>(() => {}))
+      }
+    })
+    const { emitPrompt } = installAuthSinks(api)
+    const { unmount } = render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Đăng nhập' }))
+    act(() => emitPrompt({ id: 'openai-codex#1', kind: 'text', message: 'Dán mã' }))
+    await screen.findByLabelText('Dán mã')
+    unmount()
+    expect(api.auth.loginCancel).toHaveBeenCalled()
   })
 })
+
+/** Nối các sink onEvent/onPrompt của stub auth trong installNexgraph để bắn sự kiện từ main. */
+function installAuthSinks(api: NexGraphApi) {
+  const eventSinks = new Set<(e: unknown) => void>()
+  const promptSinks = new Set<(p: unknown) => void>()
+  const auth = api.auth
+  ;(auth.onEvent as ReturnType<typeof vi.fn>).mockImplementation((cb: (e: unknown) => void) => { eventSinks.add(cb); return () => eventSinks.delete(cb) })
+  ;(auth.onPrompt as ReturnType<typeof vi.fn>).mockImplementation((cb: (p: unknown) => void) => { promptSinks.add(cb); return () => promptSinks.delete(cb) })
+  return {
+    emitAuth: (e: unknown) => eventSinks.forEach((h) => h(e)),
+    emitPrompt: (p: unknown) => promptSinks.forEach((h) => h(p))
+  }
+}

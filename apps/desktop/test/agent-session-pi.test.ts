@@ -1,12 +1,12 @@
 // Kiểm AgentService với SDK pi THẬT (nạp ESM, typebox, hook tool_call) và một máy chủ giả tương thích OpenAI (SSE).
 import http from 'node:http'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AgentService } from '../src/main/agent/session'
-import { settingsModels } from '../src/main/agent/model'
-import { AiSettingsStore } from '../src/main/ai/settings'
+import { AccountService } from '../src/main/agent/accounts'
+import { SecretStore } from '../src/main/ai/settings'
 import type { EngineApi } from '../src/main/engine/api'
 import type { AgentEvent } from '../src/shared/agent-types'
 
@@ -23,7 +23,9 @@ const SCRIPT: Record<string, [string, object]> = {
   'viết c.txt': ['write', { path: 'c.txt', content: 'không được ghi' }],
   'viết ngoài': ['write', { path: `@${OUTSIDE}`, content: 'x' }],
   'viết d.txt': ['write', { path: 'd.txt', content: 'bị dừng' }],
-  'đọc ngoài': ['read', { path: OUTSIDE_READ }]
+  'ghi e.txt': ['write', { path: 'e.txt', content: 'độc hại' }],
+  'đọc ngoài': ['read', { path: OUTSIDE_READ }],
+  'đọc nháy': ['read', { path: "a'b.txt" }]
 }
 
 function fakeLlm(seen: { auth: string[]; tools: string[][]; bodies: string[] }): Promise<{ url: string; close: () => Promise<void> }> {
@@ -85,14 +87,19 @@ describe('AgentService + pi SDK thật', () => {
     writeFileSync(join(root, 'AGENTS.md'), `# Quy ước\n${MARK.root}\n`)
     writeFileSync(join(base, 'AGENTS.md'), `# Ngoài dự án\n${MARK.parent}\n`)
     writeFileSync(OUTSIDE_READ, MARK.outside)
-    const settings = new AiSettingsStore(join(base, 'prefs.json'), join(base, 'key.json'), { available: () => true, encrypt: (s) => `enc:${s}`, decrypt: (s) => s.slice(4) })
-    settings.save({ baseUrl: llm.url, model: 'fake-1', apiKey: KEY })
+    const accounts = await AccountService.create({
+      dataDir, prefsFile: join(base, 'prefs.json'),
+      secrets: new SecretStore(join(base, 'key.json'), { available: () => true, encrypt: (s) => `enc:${s}`, decrypt: (s) => s.slice(4) }),
+      openExternal: () => {}, notify: () => {}, ask: async () => null
+    })
+    await accounts.saveCustomProvider({ id: 'fake', label: 'Fake', baseUrl: llm.url, model: 'fake-1' }, KEY)
+    accounts.selectModel('fake', 'fake-1')
     const api = {
       search: async (...a: unknown[]) => { searches.push(a); return [] },
       code: async (_p: string, file: string, start: number, end: number) => ({ file, start, end, text: 'print(1)' })
     } as unknown as EngineApi
     svc = new AgentService({
-      api, dataDir, models: settingsModels(dataDir, settings), hasConsent: () => true,
+      api, dataDir, models: async () => ({ modelRuntime: accounts.modelRuntime, selected: accounts.getSelectedModel() }), hasConsent: async () => true,
       rootOf: async () => root, emit: (_pid, e) => events.push(e)
     })
   }, 30_000)
@@ -195,4 +202,41 @@ describe('AgentService + pi SDK thật', () => {
   it('khoá API không nằm dạng thường trong tệp nào dưới dataDir', () => {
     for (const f of filesUnder(dataDir)) expect(readFileSync(f, 'utf8')).not.toContain(KEY)
   })
+
+  it('read với path vắng chứa dấu nháy thẳng bị chặn, không rơi vào biến thể dấu nháy cong là symlink ngoài', async () => {
+    // a'b.txt không tồn tại; pi resolveReadPathAsync sẽ thử a’b.txt (cong) nếu được chạy — symlink trỏ ra ngoài
+    const curly = join(root, 'a’b.txt')
+    symlinkSync(OUTSIDE_READ, curly)
+    svc.setMode('p1', 'ask')
+    const from = seen.bodies.length
+    const evs = await turn('đọc nháy')
+    expect(evs).toContainEqual({ type: 'tool', name: 'read', status: 'end', error: true })
+    const after = seen.bodies.slice(from).join('\n')
+    expect(after).toContain('Tệp không tồn tại')
+    expect(after).not.toContain(MARK.outside)
+    rmSync(curly)
+  }, 30_000)
+
+  it('duyệt sau khi tệp đổi thành symlink trỏ ngoài → execute từ chối, tệp ngoài nguyên vẹn', async () => {
+    const outsideFile = join(realpathSync(tmpdir()), `ng-pi-write-${process.pid}.txt`)
+    writeFileSync(outsideFile, 'NGOAI\n')
+    writeFileSync(join(root, 'e.txt'), 'an toàn\n')
+    svc.setMode('p1', 'edit')
+    const from = events.length
+    const run = svc.prompt('p1', 'ghi e.txt')
+    while (!events.slice(from).some((e) => e.type === 'approval')) await new Promise((r) => setTimeout(r, 10))
+    const approval = events.slice(from).find((e) => e.type === 'approval') as Extract<AgentEvent, { type: 'approval' }>
+    expect(approval.request).toMatchObject({ tool: 'write', path: 'e.txt', before: 'an toàn\n', after: 'độc hại' })
+    // giữa lúc preview, trước khi Duyệt: e.txt bị thay bằng symlink ra ngoài
+    rmSync(join(root, 'e.txt'))
+    symlinkSync(outsideFile, join(root, 'e.txt'))
+    svc.approve('p1', approval.request.id, true)
+    await run
+    expect(events.slice(from)).toContainEqual({ type: 'tool', name: 'write', status: 'end', error: true })
+    expect(readFileSync(outsideFile, 'utf8')).toBe('NGOAI\n')
+    expect(lastEnd()).toMatchObject({ type: 'done' })
+    expect(svc.pending('p1')).toBe(0)
+    rmSync(join(root, 'e.txt'), { force: true })
+    rmSync(outsideFile, { force: true })
+  }, 30_000)
 })

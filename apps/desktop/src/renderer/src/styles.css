@@ -1559,6 +1559,67 @@ button.card:hover:not(:disabled) {
   font-size: 11px;
 }
 
+/* Khung Agent: công tắc Hỏi/Sửa và thẻ duyệt */
+.chat > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat .mode {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.chat .mode button {
+  border: 0;
+  background: none;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chat .mode button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.approvals {
+  padding: 8px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.approval {
+  border: 1px solid var(--violet);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 8px;
+  background: var(--color-surface, #fff);
+}
+
+.approval p {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.approval-diff {
+  height: 180px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.approval .row {
+  justify-content: flex-start;
+}
+
 /* Tour */
 .tour {
   list-style: none;

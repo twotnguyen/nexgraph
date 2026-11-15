@@ -26,6 +26,21 @@ describe('project-fs', () => {
       .rejects.toMatchObject({ code: 'outside_project' })
     expect(existsSync(join(outsideDir, 'a.txt'))).toBe(false)
   })
+  it('chặn symlink treo, kể cả ở giữa đường dẫn và ở chính tệp cần ghi', async () => {
+    // symlink treo ở thành phần giữa: ghi qua nó sẽ tạo tệp ngoài dự án
+    symlinkSync(join(outsideDir, 'missing'), join(root, 'skills'))
+    await expect(writeProjectFile(root, 'skills/nexgraph/SKILL.md', 'x', { eol: '\n', bom: false }))
+      .rejects.toMatchObject({ code: 'outside_project' })
+    expect(() => resolveInside(root, 'skills/nexgraph/SKILL.md')).toThrow(expect.objectContaining({ code: 'outside_project' }))
+    expect(existsSync(join(outsideDir, 'missing'))).toBe(false)
+    // symlink treo trực tiếp là tệp đích
+    symlinkSync(join(outsideDir, 'gone.md'), join(root, 'AGENTS.md'))
+    await expect(writeProjectFile(root, 'AGENTS.md', 'x', { eol: '\n', bom: false }))
+      .rejects.toMatchObject({ code: 'outside_project' })
+    expect(existsSync(join(outsideDir, 'gone.md'))).toBe(false)
+    // đường dẫn chưa có thật (không symlink) vẫn được coi là tệp mới hợp lệ
+    expect(resolveInside(root, 'new/deep/a.txt').endsWith(join('proj', 'new', 'deep', 'a.txt'))).toBe(true)
+  })
   it('tạo thư mục cha còn thiếu khi ghi tệp mới', async () => {
     await writeProjectFile(root, 'new/dir/a.txt', 'x', { eol: '\n', bom: false })
     expect(readFileSync(join(root, 'new/dir/a.txt'), 'utf8')).toBe('x')

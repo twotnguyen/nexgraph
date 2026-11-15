@@ -6,9 +6,17 @@ import { closesAgents, confirmUnload } from './unload-guard'
 import { join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
 import { getHealth } from './engine/client'
-import { startEngine } from './engine/launcher'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { runRendererSmoke } from './smoke-desktop'
 import { EngineSupervisor } from './engine/supervisor'
 import { runSmoke } from './smoke'
+
+// Kiểm bản cài dùng kho tài khoản riêng, không đọc/ghi cấu hình AI thật của người dùng.
+if (process.env.NEXGRAPH_USER_DATA_DIR) {
+  mkdirSync(process.env.NEXGRAPH_USER_DATA_DIR, { recursive: true })
+  app.setPath('userData', process.env.NEXGRAPH_USER_DATA_DIR)
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -43,7 +51,7 @@ const supervisor = new EngineSupervisor(
   }
 )
 
-function createWindow(): void {
+async function createWindow(show = true): Promise<void> {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -57,7 +65,7 @@ function createWindow(): void {
     }
   })
   const win = mainWindow
-  win.once('ready-to-show', () => win.show())
+  if (show) win.once('ready-to-show', () => win.show())
   // Renderer chặn unload khi còn tệp chưa lưu (beforeunload); preventDefault ở đây là cho phép đóng.
   win.webContents.on('will-prevent-unload', (e) => {
     if (confirmUnload((o) => dialog.showMessageBoxSync(win, o))) e.preventDefault()
@@ -69,28 +77,40 @@ function createWindow(): void {
     mainWindow = null
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  else void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  if (process.env['ELECTRON_RENDERER_URL']) await mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  else await mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
 registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir)
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
-// NEXGRAPH_SMOKE=1: không mở cửa sổ; khởi động engine, chạy selftest, in kết quả rồi thoát (kiểm tra bản đóng gói).
+// NEXGRAPH_SMOKE=1: kiểm engine; script smoke:packaged còn kiểm fs/agent qua preload + IPC thật.
 async function smoke(): Promise<void> {
   const watchdog = setTimeout(() => {
     console.log('SMOKE FAIL timeout 90s')
     app.exit(1)
   }, 90_000)
   try {
-    const command = resolveEngineCommand({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, repoRoot })
-    const handle = await startEngine(command, { dataDir })
+    await supervisor.startEngine()
+    const handle = supervisor.getHandle()
+    if (!handle) throw new Error('engine not ready')
+    const root = mkdtempSync(join(tmpdir(), 'nexgraph-smoke-project-'))
     try {
       await getHealth(handle)
-      console.log(await runSmoke(handle))
+      const engine = await runSmoke(handle)
+      const url = process.env.NEXGRAPH_SMOKE_LLM_URL
+      let desktop = ''
+      if (url) {
+        await createWindow(false)
+        const script = `(${runRendererSmoke.toString()})(window.nexgraph, ${JSON.stringify(root)}, ${JSON.stringify(url)})`
+        desktop = await mainWindow!.webContents.executeJavaScript(script) as string
+      }
+      console.log(`${engine}${desktop ? ` ${desktop}` : ''}`)
     } finally {
-      await handle.stop()
+      closeAllAgents()
+      await supervisor.stop()
+      rmSync(root, { recursive: true, force: true })
     }
     clearTimeout(watchdog)
     app.exit(0)
@@ -105,10 +125,10 @@ app.whenReady().then(() => {
     void smoke()
     return
   }
-  createWindow()
+  void createWindow()
   void supervisor.startEngine()
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) void createWindow()
   })
 })
 
@@ -119,6 +139,11 @@ let quitting = false
 app.on('before-quit', (e) => {
   if (quitting) return
   e.preventDefault()
+  // close() hỏi beforeunload trước; chọn “Ở lại” thì mọi dịch vụ phải tiếp tục chạy.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close()
+    return
+  }
   quitting = true
   stopAllWatchers()
   closeAllAgents()

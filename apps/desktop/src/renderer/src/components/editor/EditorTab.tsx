@@ -24,7 +24,7 @@ function explain(e: { code?: string; message?: string }): string {
 export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChange, active = true }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
-  // base: bản đang coi là "đã lưu" (nội dung + mtime đĩa tương ứng + eol/bom giữ nguyên khi ghi lại).
+  // base: bản đang coi là "đã lưu" — nội dung + metadata (mtime/eol/bom) của đĩa tương ứng.
   const base = useRef<{ text: string; mtimeMs: number; eol: FileContent['eol']; bom: boolean } | null>(null)
   const dirty = useRef(false)
   const [readOnly, setReadOnly] = useState<FileContent['reason'] | boolean>(false)
@@ -67,6 +67,8 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
   const adopt = (c: FileContent): void => {
     base.current = { text: c.text, mtimeMs: c.mtimeMs, eol: c.eol, bom: c.bom }
     editor.current?.setValue(c.text)
+    editor.current?.setReadOnly(c.readOnly)
+    setReadOnly(c.readOnly ? (c.reason ?? true) : false)
     setDirty(false)
     setDisk(null)
   }
@@ -139,7 +141,11 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
   }, [])
 
   const keepMine = (): void => {
-    if (base.current && disk) base.current = { ...base.current, mtimeMs: disk.mtimeMs }
+    if (base.current && disk) {
+      // Baseline trở thành bản đĩa (nội dung + metadata) nên dirty so với đĩa; buffer/undo giữ nguyên.
+      base.current = { text: disk.text, mtimeMs: disk.mtimeMs, eol: disk.eol, bom: disk.bom }
+      setDirty(editor.current ? editor.current.getValue() !== disk.text : false)
+    }
     setDisk(null)
   }
 

@@ -8,13 +8,13 @@ Máy: Windows 10/11, tên CPU/RAM ………, có/không GPU rời ………
 - [ ] Tải artifact `.exe` (job `package`, `windows-latest`) từ trang Actions của `twotnguyen/nexgraph` (cần quyền kho riêng tư).
 - [ ] Chạy trình cài. Có cảnh báo **Windows SmartScreen** ("Windows protected your PC") vì bản chưa ký: bấm `More info → Run anyway`. Ghi lại nội dung.
 - [ ] Mở app lần đầu: thấy màn **Dự án**, không báo lỗi engine.
-- [ ] Dung lượng bộ cài ………  MB (mục tiêu < 300 MB).
+- [ ] Dung lượng bộ cài ……… MB (ngưỡng editor + agent < 400 MB; ghi thực đo, không dùng kích thước `.app` giải nén).
 
 ## B. Kịch bản demo (`docs/demo-script.md`)
 - [ ] Bước 1: mở thư mục bản sao NestJS (chép sang `C:\Users\<tên>\Đồ án\nestjs demo`).
 - [ ] Bước 2: thẻ Kiến trúc và thẻ Bản đồ.
-- [ ] Bước 3: thẻ Luồng (`signIn`), chat (nếu có key).
-- [ ] Bước 4: sửa `string-util.service.ts` trong VS Code, thẻ Thay đổi cập nhật.
+- [ ] Bước 3: thẻ Luồng (`signIn`), Agent chế độ Hỏi, chip mở đúng dòng trong Monaco.
+- [ ] Bước 4: sửa `string-util.service.ts` ngay trong NexGraph, Ctrl+S, thẻ Thay đổi cập nhật.
 - [ ] Tổng thời gian ……… phút.
 
 ## C. Năm kịch bản lỗi (spec §6.3)
@@ -31,5 +31,20 @@ Máy: Windows 10/11, tên CPU/RAM ………, có/không GPU rời ………
 - [ ] **Tích hợp trợ lý AI**: ghi `.mcp.json`; mở lại bằng Claude Code (nếu có) và gọi `graph_stats`.
 - [ ] Đóng app: không còn tiến trình `nexgraph-engine.exe` mồ côi trong Task Manager.
 
-## E. Ghi chú thêm
+
+## E. Editor + agent tích hợp (F13–F15)
+
+- [ ] Mở tệp CRLF có BOM, sửa và Ctrl+S; byte xuống dòng/BOM giữ nguyên.
+- [ ] Thẻ chưa lưu còn nguyên khi đổi thẻ; đóng thẻ/thoát app hỏi trước khi bỏ nội dung.
+- [ ] Sửa cùng tệp từ bên ngoài: thẻ sạch nạp lại; thẻ bẩn hiện Nạp lại / Giữ bản của tôi, không tự ghi đè.
+- [ ] API key, custom provider, chọn model và Kiểm tra kết nối; ô key không hiện lại khoá đã lưu.
+- [ ] Hỏi có streaming, Dừng, chip trích dẫn và Tô luồng.
+- [ ] Chuyển Sửa thấy cảnh báo không có sandbox; Duyệt diff làm đổi tệp, Từ chối không đổi.
+- [ ] Đang chờ duyệt: bấm Dừng / đổi Hỏi / tải lại cửa sổ → từ chối ngay, lượt sau vẫn dùng được.
+- [ ] `bash`: spike chưa kiểm Windows; ghi shell đang có, duyệt một lệnh vô hại (`echo NexGraph`). Thiếu shell hoặc chạy lỗi phải ghi nguyên văn, không coi là đã hỗ trợ.
+- [ ] OAuth: thử nhà cung cấp được phép, ghi kết quả và khả năng huỷ; không dùng tài khoản thật khi chưa đọc cảnh báo hạn chế tài khoản.
+- [ ] Codex MCP + skill: xem trước, áp dụng trong dự án, nội dung cấu hình cũ giữ nguyên.
+- [ ] Chạy `pnpm --filter @nexgraph/desktop smoke:packaged` → có `SMOKE OK ... fs=OK agent=OK`.
+- [ ] Trạng thái hiện tại: **chưa kiểm trên Windows**, P3 ghi máy/ngày và kết quả trước nghiệm thu.
+## F. Ghi chú thêm
 ………

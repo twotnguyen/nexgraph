@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import type { AgentEvent, AgentMode, ApprovalRequest } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
-import { CitationText } from './CitationText'
-import { ConsentDialog } from './ConsentDialog'
+import { ApprovalCard } from './ApprovalCard'
+import { CitationText } from '../chat/CitationText'
+import { ConsentDialog } from '../chat/ConsentDialog'
 
 interface Props {
   projectId: string
@@ -14,10 +16,7 @@ interface Props {
 
 type Msg = { role: 'user'; content: string } | { role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
 
-const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
-
-export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSettings }: Props) {
+export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSettings }: Props) {
   const [cfg, setCfg] = useState<AiSettings | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
@@ -27,7 +26,10 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
   const [consent, setConsent] = useState<string | null>(null) // câu hỏi đang chờ đồng ý
   const [openTools, setOpenTools] = useState<number | null>(null)
   const [draft, setDraft] = useState('') // chữ đang chảy về của lượt hiện tại
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
+  const [mode, setMode] = useState<AgentMode>('ask')
   const turn = useRef<{ q: string; tools: string[] } | null>(null) // lượt đang chạy; kết thúc bằng sự kiện done/error
+  const editWarned = useRef(false) // lần đầu sang Sửa phải cảnh báo sandbox
   const mounted = useRef(true)
 
   const end = () => {
@@ -47,9 +49,23 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
     let alive = true
     mounted.current = true
     window.nexgraph.ai.getSettings().then((s) => alive && setCfg(s)).catch(() => {})
+    window.nexgraph.agent.getMode(projectId).then((m) => {
+      if (!alive) return
+      if (m === 'edit') editWarned.current = true // phiên đã ở Sửa từ trước thì không hỏi lại
+      setMode(m)
+    }).catch(() => {})
     const off = window.nexgraph.agent.onEvent((pid, e) => {
       const t = turn.current
-      if (!mounted.current || pid !== projectId || !t) return
+      if (!mounted.current || pid !== projectId) return
+      if (e.type === 'approval') {
+        setApprovals((cur) => (cur.some((a) => a.id === e.request.id) ? cur : [...cur, e.request]))
+        return
+      }
+      if (e.type === 'approval_closed') {
+        setApprovals((cur) => cur.filter((a) => a.id !== e.id)) // id lạ không có gì để gỡ
+        return
+      }
+      if (!t) return
       if (e.type === 'tool' && e.status === 'start') {
         t.tools.push(e.name)
         setTool(e.name)
@@ -70,6 +86,16 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
 
   const configured = !!cfg && cfg.baseUrl !== '' && cfg.model !== ''
 
+  const pickMode = (m: AgentMode) => {
+    if (m === mode) return
+    if (m === 'edit' && !editWarned.current) {
+      if (!window.confirm(vi.agent.editWarn)) return
+      editWarned.current = true
+    }
+    setMode(m)
+    void window.nexgraph.agent.setMode(projectId, m).catch(() => {})
+  }
+
   const run = async (question: string) => {
     turn.current = { q: question, tools: [] }
     setMsgs((cur) => [...cur, { role: 'user', content: question }])
@@ -82,14 +108,19 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
       await window.nexgraph.agent.prompt(projectId, question)
     } catch (e) {
       if (!mounted.current || turn.current?.q !== question) return
-      const code = errCode(e)
-      fail(question, (code && vi.chat.errors[code]) || errMessage(e))
+      const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : undefined
+      fail(question, (code && vi.chat.errors[code]) || (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)))
     }
   }
 
   const submit = async () => {
     const q = text.trim()
     if (!q || busy) return
+    if (q === '/login') {
+      setText('')
+      onOpenSettings()
+      return
+    }
     if (!(await window.nexgraph.ai.hasConsent(projectId))) return setConsent(q)
     void run(q)
   }
@@ -116,15 +147,20 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
       const linked = r.unconnected.length === 0
       onHighlight(r.nodes, linked ? r.edges : [], linked ? null : vi.path.noLink)
     } catch (e) {
-      onHighlight([], [], errMessage(e))
+      onHighlight([], [], e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
     }
   }
+
+  const decide = (id: string, allow: boolean) => void window.nexgraph.agent.approve(projectId, id, allow).catch(() => {})
 
   return (
     <aside className="chat" aria-label={vi.chat.title} hidden={hidden}>
       <header>
         <b>{vi.chat.title}</b>
-        <span className="muted mono"> {cfg?.model ? `${cfg.model} · ` : ''}{vi.chat.readOnly}</span>
+        <span className="mode" role="group" aria-label={vi.agent.modeTitle}>
+          <button type="button" aria-pressed={mode === 'ask'} onClick={() => pickMode('ask')}>{vi.agent.ask}</button>
+          <button type="button" aria-pressed={mode === 'edit'} onClick={() => pickMode('edit')}>{vi.agent.edit}</button>
+        </span>
       </header>
       {cfg && !configured ? (
         <div className="chat-empty">
@@ -159,9 +195,14 @@ export function ChatPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSe
             {busy && draft && <div className="ai">{draft}</div>}
             {busy && <div className="ai muted" role="status">{tool ? vi.chat.usingTool(tool) : vi.chat.thinking}</div>}
           </div>
+          {approvals.length > 0 && (
+            <div className="approvals">
+              {approvals.map((a) => <ApprovalCard key={a.id} request={a} onDecide={(allow) => decide(a.id, allow)} />)}
+            </div>
+          )}
           {error && <p role="alert" className="error">{error}</p>}
           <div className="compose">
-            <textarea value={text} placeholder={vi.chat.placeholder} rows={2} disabled={!cfg} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
+            <textarea value={text} placeholder={vi.chat.placeholder} rows={2} disabled={!cfg || busy} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
             <div className="row">
               <small className="muted">{vi.chat.hint}</small>
               {busy

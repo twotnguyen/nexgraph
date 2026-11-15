@@ -1,4 +1,6 @@
-export type AgentId = 'claude' | 'cursor' | 'vscode' | 'opencode'
+export type AgentId = 'claude' | 'cursor' | 'vscode' | 'opencode' | 'codex' | 'skill-claude' | 'agents-md'
+/** Mục tiêu cài skill: SKILL.md của Claude Code hay khối trong AGENTS.md. */
+export type SkillTarget = 'claude' | 'agents-md'
 export interface IntegrationPlan {
   agent: AgentId
   path: string

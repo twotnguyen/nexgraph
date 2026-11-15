@@ -60,7 +60,7 @@ describe('approval gate', () => {
       await flush()
       expect(ask).toHaveBeenCalledTimes(1)
       gate.resolve(asked().id, true)
-      expect(await p).toEqual({ allow: true })
+      expect(await p).toEqual({ allow: true, approved: { path: abs, before: 'B', after: 'A' } }) // preview giả trả path nguyên văn
     }
   })
   it('thiếu path/command → từ chối, không hỏi', async () => {
@@ -74,7 +74,7 @@ describe('approval gate', () => {
     expect(asked()).toMatchObject({ tool: 'edit', path: 'a.ts', before: 'B', after: 'A' })
     expect(typeof asked().id).toBe('string')
     gate.resolve(asked().id, true)
-    expect(await a).toEqual({ allow: true })
+    expect(await a).toEqual({ allow: true, approved: { path: 'a.ts', before: 'B', after: 'A' } })
 
     const b = gate.check('bash', { command: 'rm x' })
     await flush()

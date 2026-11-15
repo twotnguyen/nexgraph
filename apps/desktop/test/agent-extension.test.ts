@@ -1,14 +1,14 @@
-import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, type Mock } from 'vitest'
 import { createNexgraphExtension, previewWrite } from '../src/main/agent/extension'
 import { NEXGRAPH_RULES, NEXGRAPH_SKILL_NAME, skillMarkdown } from '../src/main/agent/skill'
 import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
 import type { ApprovalGate } from '../src/main/agent/approval'
 
-type Handler = (e: { toolName: string; input: any }) => Promise<{ block: true; reason: string } | undefined>
+type Handler = (e: { toolName: string; toolCallId?: string; input: unknown }) => Promise<{ block: true; reason: string } | undefined>
 const names = TOOL_DEFS.map((t) => t.function.name)
 
 const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-ext-h-')))
@@ -26,9 +26,9 @@ function setup(check: ApprovalGate['check'] = async () => ({ allow: true })) {
 }
 
 describe('extension NexGraph', () => {
-  it('đăng ký đúng 9 tool trùng TOOL_DEFS', () => {
+  it('đăng ký 9 tool trùng TOOL_DEFS cộng write/edit ghi đè builtin pi', () => {
     const { pi } = setup()
-    expect(pi.registerTool.mock.calls.map((c) => c[0].name)).toEqual(names)
+    expect(pi.registerTool.mock.calls.map((c) => c[0].name)).toEqual([...names, 'write', 'edit'])
   })
 
   it('execute của search gọi runTool và trả content text', async () => {
@@ -88,6 +88,116 @@ describe('tool_call: chuẩn hoá đường dẫn của pi', () => {
     expect(input.path).toBe(join(proj, 'new.txt'))
     expect(gate.check).toHaveBeenCalledWith('write', input)
   })
+
+  it('read: tệp chưa có bị chặn trước khi pi thử biến thể dấu nháy (resolveReadPathAsync)', async () => {
+    const { handler, gate } = setup()
+    expect(await handler({ toolName: 'read', input: { path: "a'b.txt" } })).toMatchObject({ block: true, reason: 'Tệp không tồn tại' })
+    expect(gate.check).not.toHaveBeenCalled()
+  })
+})
+
+describe('write/edit an toàn (override builtin pi)', () => {
+  const tool = (pi: { registerTool: Mock }, name: string) => pi.registerTool.mock.calls.map((c) => c[0]).find((t) => t.name === name)!
+  const fileOf = (path: string) => {
+    const abs = join(proj, path)
+    if (!existsSync(abs)) return undefined
+    const raw = readFileSync(abs, 'utf8')
+    const bom = raw.charCodeAt(0) === 0xfeff
+    return { eol: (bom ? raw.slice(1) : raw).includes('\r\n') ? ('\r\n' as const) : ('\n' as const), bom, mtimeMs: statSync(abs).mtimeMs }
+  }
+  const allow = (path: string, before: string, after: string) => async () => ({ allow: true as const, approved: { path, before, after, file: fileOf(path) } })
+
+  it('duyệt xong execute ghi đúng after, consume snapshot; cùng id chạy lại thì lỗi', async () => {
+    writeFileSync(join(proj, 'w1.txt'), 'x')
+    const g = setup(allow('w1.txt', 'x', 'y'))
+    expect(await g.handler({ toolName: 'write', input: { path: 'w1.txt', content: 'y' }, toolCallId: 't1' })).toBeUndefined()
+    const r = await tool(g.pi, 'write').execute('t1', { path: join(proj, 'w1.txt'), content: 'y' })
+    expect(r.content[0].text).toContain('w1.txt')
+    expect(readFileSync(join(proj, 'w1.txt'), 'utf8')).toBe('y')
+    await expect(tool(g.pi, 'write').execute('t1', { path: join(proj, 'w1.txt'), content: 'y' })).rejects.toThrow('Không còn bản duyệt')
+  })
+
+  it('edit: ghi after đã duyệt (không fuzzy pi), revalidate before', async () => {
+    writeFileSync(join(proj, 'e1.txt'), 'one two\n')
+    const g = setup(allow('e1.txt', 'one two\n', 'ONE two\n'))
+    await g.handler({ toolName: 'edit', input: { path: 'e1.txt', edits: [{ oldText: 'one', newText: 'ONE' }] }, toolCallId: 't2' })
+    await tool(g.pi, 'edit').execute('t2', { path: join(proj, 'e1.txt'), edits: [{ oldText: 'one', newText: 'ONE' }] })
+    expect(readFileSync(join(proj, 'e1.txt'), 'utf8')).toBe('ONE two\n')
+  })
+
+  it('nội dung đổi sau preview → từ chối, tệp giữ nguyên', async () => {
+    writeFileSync(join(proj, 'e2.txt'), 'đã đổi\n')
+    const g = setup(allow('e2.txt', 'gốc\n', 'mới\n'))
+    await g.handler({ toolName: 'edit', input: { path: 'e2.txt', edits: [] }, toolCallId: 't3' })
+    await expect(tool(g.pi, 'edit').execute('t3', { path: join(proj, 'e2.txt'), edits: [] })).rejects.toThrow('Tệp đã thay đổi')
+    expect(readFileSync(join(proj, 'e2.txt'), 'utf8')).toBe('đã đổi\n')
+  })
+
+  it.each([true, false])('tệp rỗng đổi trạng thái tồn tại sau preview (ban đầu %s) → từ chối', async (existed) => {
+    const name = `empty-${existed}.txt`
+    const path = join(proj, name)
+    if (existed) writeFileSync(path, '')
+    const g = setup(allow(name, '', 'không được ghi'))
+    await g.handler({ toolName: 'write', input: { path: name, content: 'không được ghi' }, toolCallId: 'empty' })
+    if (existed) rmSync(path)
+    else writeFileSync(path, '')
+    await expect(tool(g.pi, 'write').execute('empty', { path, content: 'không được ghi' })).rejects.toThrow('Tệp đã thay đổi')
+    expect(existsSync(path)).toBe(!existed)
+    if (!existed) expect(readFileSync(path, 'utf8')).toBe('')
+  })
+
+  it('tệp bị thay bằng symlink trỏ ngoài sau preview → từ chối, tệp ngoài nguyên vẹn', async () => {
+    const outsideFile = join(realpathSync(tmpdir()), `ng-ext-out-${Date.now()}`)
+    writeFileSync(outsideFile, 'NGOAI\n')
+    writeFileSync(join(proj, 'w2.txt'), 'an toàn\n')
+    const g = setup(allow('w2.txt', 'an toàn\n', 'độc'))
+    await g.handler({ toolName: 'write', input: { path: 'w2.txt', content: 'độc' }, toolCallId: 't4' })
+    rmSync(join(proj, 'w2.txt'))
+    symlinkSync(outsideFile, join(proj, 'w2.txt'))
+    await expect(tool(g.pi, 'write').execute('t4', { path: join(proj, 'w2.txt'), content: 'độc' })).rejects.toThrow('Đường dẫn nằm ngoài dự án')
+    expect(readFileSync(outsideFile, 'utf8')).toBe('NGOAI\n')
+    rmSync(join(proj, 'w2.txt'), { force: true })
+    rmSync(outsideFile, { force: true })
+  })
+
+  it('symlink tráo sang tệp KHÁC trong dự án nhưng nội dung before giống nhau → từ chối, tệp đích nguyên vẹn', async () => {
+    writeFileSync(join(proj, 's1.txt'), 'giống nhau\n')
+    writeFileSync(join(proj, 's2.txt'), 'giống nhau\n')
+    const g = setup(allow('s1.txt', 'giống nhau\n', 'độc'))
+    await g.handler({ toolName: 'write', input: { path: 's1.txt', content: 'độc' }, toolCallId: 't5' })
+    rmSync(join(proj, 's1.txt'))
+    symlinkSync(join(proj, 's2.txt'), join(proj, 's1.txt')) // trỏ vào trong dự án, before trùng khớp
+    await expect(tool(g.pi, 'write').execute('t5', { path: join(proj, 's1.txt'), content: 'độc' })).rejects.toThrow('Đường dẫn đã thay đổi')
+    expect(readFileSync(join(proj, 's2.txt'), 'utf8')).toBe('giống nhau\n')
+    expect(existsSync(join(proj, 's1.txt'))).toBe(true) // symlink còn, không có gì bị ghi
+  })
+
+  it('giữ CRLF và BOM của tệp hiện hữu; after CRLF thô được chuẩn hoá LF trước khi ghi', async () => {
+    const p = join(proj, 'c1.txt')
+    writeFileSync(p, '﻿dòng một\r\ndòng hai\r\n') // BOM + CRLF
+    const g = setup(allow('c1.txt', 'dòng một\ndòng hai\n', 'dòng một\ndòng hai\nthem\r\n'))
+    await g.handler({ toolName: 'write', input: { path: 'c1.txt', content: 'dòng một\r\ndòng hai\r\nthem\r\n' }, toolCallId: 't6' })
+    await tool(g.pi, 'write').execute('t6', { path: p, content: 'dòng một\r\ndòng hai\r\nthem\r\n' })
+    const raw = readFileSync(p, 'utf8')
+    expect(raw.charCodeAt(0)).toBe(0xfeff) // BOM giữ nguyên
+    expect(raw).toBe('﻿dòng một\r\ndòng hai\r\nthem\r\n') // CRLF giữ nguyên, không có \r\r\n
+  })
+
+  it('tệp đổi trên đĩa giữa preview và execute (mtime khác) → conflict, tệp giữ nguyên', async () => {
+    writeFileSync(join(proj, 'm1.txt'), 'x')
+    const g = setup(allow('m1.txt', 'x', 'y'))
+    await g.handler({ toolName: 'write', input: { path: 'm1.txt', content: 'y' }, toolCallId: 't7' })
+    utimesSync(join(proj, 'm1.txt'), new Date(1e12), new Date(1e12)) // cùng nội dung, khác mtime → rơi vào mtime check
+    await expect(tool(g.pi, 'write').execute('t7', { path: join(proj, 'm1.txt'), content: 'y' })).rejects.toThrow('Tệp đã thay đổi trên đĩa')
+    expect(readFileSync(join(proj, 'm1.txt'), 'utf8')).toBe('x')
+  })
+
+  it('gate cho qua nhưng không có snapshot (hook chưa lưu) → lỗi, không ghi', async () => {
+    const g = setup(async () => ({ allow: true }))
+    writeFileSync(join(proj, 'w3.txt'), 'x')
+    await expect(tool(g.pi, 'write').execute('t9', { path: join(proj, 'w3.txt'), content: 'y' })).rejects.toThrow('Không còn bản duyệt')
+    expect(readFileSync(join(proj, 'w3.txt'), 'utf8')).toBe('x')
+  })
 })
 
 describe('previewWrite', () => {
@@ -95,14 +205,14 @@ describe('previewWrite', () => {
   mkdirSync(root)
   writeFileSync(join(root, 'a.txt'), 'one two\nthree\n')
 
-  it('write: before là nội dung hiện tại (rỗng nếu chưa có), after là nội dung mới', async () => {
-    expect(await previewWrite(root, 'write', { path: 'a.txt', content: 'x' })).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: 'x' })
-    expect(await previewWrite(root, 'write', { path: 'new.txt', content: 'y' })).toEqual({ path: 'new.txt', before: '', after: 'y' })
+  it('write: before là nội dung hiện tại (rỗng nếu chưa có), after là nội dung mới; kèm eol/bom/mtime của tệp', async () => {
+    expect(await previewWrite(root, 'write', { path: 'a.txt', content: 'x' })).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: 'x', file: { eol: '\n', bom: false, mtimeMs: statSync(join(root, 'a.txt')).mtimeMs } })
+    expect(await previewWrite(root, 'write', { path: 'new.txt', content: 'y' })).toEqual({ path: 'new.txt', before: '', after: 'y', file: undefined })
   })
 
   it('edit: áp dụng edits[] lên bản gốc; nhận đường dẫn tuyệt đối trong root', async () => {
     const r = await previewWrite(root, 'edit', { path: join(root, 'a.txt'), edits: [{ oldText: 'one', newText: '1' }, { oldText: 'three', newText: '3' }] })
-    expect(r).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: '1 two\n3\n' })
+    expect(r).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: '1 two\n3\n', file: { eol: '\n', bom: false, mtimeMs: statSync(join(root, 'a.txt')).mtimeMs } })
   })
 
   it('edit: CRLF trong oldText/newText được chuẩn hoá như pi, before/after là văn bản LF', async () => {

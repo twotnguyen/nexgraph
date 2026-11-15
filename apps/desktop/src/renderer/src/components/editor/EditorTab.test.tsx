@@ -23,6 +23,7 @@ vi.mock('./monaco', () => ({
       setValue: (v: string) => { ta.value = v },
       onChange: (cb: () => void) => ta.addEventListener('input', cb),
       revealLines,
+      setReadOnly: (v: boolean) => { ta.readOnly = v },
       dispose: () => ta.remove()
     }
   }
@@ -137,6 +138,35 @@ describe('EditorTab', () => {
     expect(ta.value).toBe('void a() {}\nx')
     await userEvent.keyboard('{Control>}s{/Control}')
     await waitFor(() => expect(write).toHaveBeenCalledWith('p1', 'lib/a.dart', 'void a() {}\nx', expect.objectContaining({ expectedMtimeMs: 300 })))
+  })
+
+  it('Giữ bản của tôi đổi baseline về bản đĩa: undo về nội dung mở ban đầu vẫn còn dấu ●', async () => {
+    const { read, emit, onDirtyChange } = setup()
+    const ta = await box()
+    await userEvent.type(ta, 'x')
+    read.mockResolvedValue(content({ text: 'từ đĩa\n', mtimeMs: 300 }))
+    await changedOnDisk(emit)
+    await userEvent.click(await screen.findByRole('button', { name: 'Giữ bản của tôi' }))
+    expect(ta.value).toBe('void a() {}\nx') // không mất nội dung đang giữ
+    await userEvent.type(ta, '{backspace}') // "undo" về đúng nội dung mở ban đầu
+    expect(ta.value).toBe('void a() {}\n')
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith('lib/a.dart', true)) // đĩa vẫn là bản khác
+  })
+
+  it('nạp lại bản đĩa thì áp lại readOnly/reason theo FileContent (không chỉ lúc mở thẻ)', async () => {
+    const { read, emit } = setup()
+    const ta = await box()
+    expect(ta.readOnly).toBe(false)
+    read.mockResolvedValue(content({ text: '', mtimeMs: 300, readOnly: true, reason: 'too_large' }))
+    await changedOnDisk(emit)
+    await waitFor(() => expect(ta.readOnly).toBe(true))
+    expect(await screen.findByText('Tệp quá lớn nên chỉ xem, không sửa được')).toBeInTheDocument()
+    expect(ta.value).toBe('')
+    read.mockResolvedValue(content({ text: 'nhỏ lại\n', mtimeMs: 400 }))
+    await changedOnDisk(emit)
+    await waitFor(() => expect(ta.readOnly).toBe(false))
+    expect(screen.queryByText('Tệp quá lớn nên chỉ xem, không sửa được')).toBeNull()
+    expect(ta.value).toBe('nhỏ lại\n')
   })
 
   it('fs.write trả conflict thì hiện cùng thanh đó, không mất nội dung', async () => {
