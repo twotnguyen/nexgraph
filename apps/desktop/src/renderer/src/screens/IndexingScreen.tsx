@@ -7,14 +7,16 @@ interface Props {
   subdir?: string | null
   options?: IndexOptions
   onExplore: () => void
+  onBack?: () => void
 }
 
 function Bar({ label, value, max }: { label: string; value: number; max: number }) {
+  const isPreparing = max === 0
   return (
     <div className="phase">
       <div className="phase-head">
         <span>{label}</span>
-        <span>{`${value} / ${max}`}</span>
+        <span>{isPreparing ? vi.indexing.cleaning : `${value} / ${max}`}</span>
       </div>
       <div className="bar" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
         <div className="bar-fill" style={{ width: max > 0 ? `${Math.min(100, (value / max) * 100)}%` : '0%' }} />
@@ -23,7 +25,7 @@ function Bar({ label, value, max }: { label: string; value: number; max: number 
   )
 }
 
-export function IndexingScreen({ project, subdir, options, onExplore }: Props) {
+export function IndexingScreen({ project, subdir, options, onExplore, onBack }: Props) {
   const { job, error, cancel } = useIndexJob(project.project_id, subdir, options)
   const state = job?.state
   const phase1Done = state === 'resolve' || state === 'done'
@@ -49,7 +51,11 @@ export function IndexingScreen({ project, subdir, options, onExplore }: Props) {
       {state === 'cancelled' && <p className="muted">{vi.indexing.cancelled}</p>}
       {message && <p role="alert" className="error">{vi.indexing.error(message)}</p>}
       <div className="actions">
-        <button type="button" disabled={!running} onClick={cancel}>{vi.indexing.cancel}</button>
+        {onBack && !running ? (
+          <button type="button" onClick={onBack}>{vi.indexing.back}</button>
+        ) : (
+          <button type="button" disabled={!running} onClick={cancel}>{vi.indexing.cancel}</button>
+        )}
         <button type="button" className="primary" disabled={!phase1Done} onClick={onExplore}>{vi.indexing.explore}</button>
       </div>
     </main>

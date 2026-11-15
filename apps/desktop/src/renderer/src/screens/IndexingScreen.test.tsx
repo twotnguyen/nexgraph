@@ -87,4 +87,23 @@ describe('IndexingScreen', () => {
     setup({ index: { start: vi.fn(async () => { throw Object.assign(new Error('Engine chưa sẵn sàng'), { code: 'internal' }) }) } })
     expect(await screen.findByRole('alert')).toHaveTextContent('Engine chưa sẵn sàng')
   })
+
+  it('shows cleaning message when files_total is 0', async () => {
+    const h = setup()
+    await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())
+    emit(h, progress('structure', 0, 0))
+    expect(await screen.findByText('Đang quét tệp và dọn dẹp dữ liệu cũ…')).toBeInTheDocument()
+  })
+
+  it('shows "Quay lại" and calls onBack when job is cancelled and onBack is provided', async () => {
+    const h = installNexgraph()
+    const onBack = vi.fn()
+    render(<IndexingScreen project={project()} onExplore={() => {}} onBack={onBack} />)
+    await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())
+    emit(h, progress('cancelled', 0, 100))
+    const backBtn = await screen.findByRole('button', { name: 'Quay lại' })
+    expect(backBtn).toBeEnabled()
+    await userEvent.click(backBtn)
+    expect(onBack).toHaveBeenCalled()
+  })
 })

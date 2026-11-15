@@ -18,6 +18,8 @@ export const vi = {
     phase2: 'Nối quan hệ',
     phase2Hint: 'Chạy nền, đồ thị cập nhật dần',
     cancel: 'Hủy',
+    back: 'Quay lại',
+    cleaning: 'Đang quét tệp và dọn dẹp dữ liệu cũ…',
     explore: 'Bắt đầu khám phá',
     cancelled: 'Đã hủy lập chỉ mục',
     done: 'Hoàn tất',

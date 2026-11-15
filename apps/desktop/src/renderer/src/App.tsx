@@ -77,7 +77,8 @@ export default function App() {
       )}
       {screen.name === 'indexing' && (
         <IndexingScreen project={screen.project} subdir={screen.subdir} options={screen.options}
-          onExplore={() => setScreen({ name: 'workspace', project: screen.project })} />
+          onExplore={() => setScreen({ name: 'workspace', project: screen.project })}
+          onBack={() => setScreen(screen.project.last_indexed_at ? { name: 'overview', project: screen.project } : { name: 'projects' })} />
       )}
       {screen.name === 'overview' && (
         <ProjectOverviewScreen
