@@ -10,7 +10,12 @@ import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/600.css'
 import './styles.css'
 
-createRoot(document.getElementById('root')!).render(
+if (location.hash === '#monaco-spike') {
+  void import('./spike/monaco-spike').then(async (m) => {
+    const r = await m.runMonacoSpike().catch((e) => ({ error: String(e) }))
+    ;(window as unknown as { __spike: unknown }).__spike = r
+  })
+} else createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
   </StrictMode>

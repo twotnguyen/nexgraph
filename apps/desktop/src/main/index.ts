@@ -8,6 +8,7 @@ import { getHealth } from './engine/client'
 import { startEngine } from './engine/launcher'
 import { EngineSupervisor } from './engine/supervisor'
 import { runSmoke } from './smoke'
+import { runPiSpike } from './spike'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -89,7 +90,26 @@ async function smoke(): Promise<void> {
   }
 }
 
+async function spike(): Promise<void> {
+  const wd = setTimeout(() => { console.log('SPIKE FAIL timeout'); app.exit(1) }, 120_000)
+  try {
+    console.log('--- PI ---')
+    try { console.log((await runPiSpike()).join('\n')) } catch (e) { console.log('PI ERROR', e instanceof Error ? e.stack : e) }
+    console.log('--- MONACO ---')
+    const win = new BrowserWindow({ show: false, width: 800, height: 600, webPreferences: { sandbox: true } })
+    win.webContents.on('console-message', (e) => { if (!e.message.startsWith('Loading the font')) console.log('renderer:', e.message.slice(0, 300)) })
+    if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(process.env['ELECTRON_RENDERER_URL'] + '#monaco-spike')
+    else await win.loadFile(join(__dirname, '../renderer/index.html'), { hash: 'monaco-spike' })
+    for (let i = 0; i < 40; i++) {
+      const r = await win.webContents.executeJavaScript('window.__spike ? JSON.stringify(window.__spike) : ""')
+      if (r) { console.log(r); break }
+      await new Promise((ok) => setTimeout(ok, 500))
+    }
+  } finally { clearTimeout(wd); app.exit(0) }
+}
+
 app.whenReady().then(() => {
+  if (process.env.NEXGRAPH_SPIKE === '1') { void spike(); return }
   if (process.env.NEXGRAPH_SMOKE === '1') {
     void smoke()
     return
