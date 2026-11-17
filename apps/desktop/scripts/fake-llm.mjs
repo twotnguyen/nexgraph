@@ -25,14 +25,14 @@ const smokeCalls = {
   }) }
 }
 
-function smokePolicy(scenario, advertised, results) {
+function smokePolicy(scenario, advertised, results, turn) {
   if (results.length) return { role: 'assistant', content: 'NEXGRAPH_SMOKE_POLICY_OK' }
   const expected = scenario.editing ? [...readOnlyTools, 'edit', 'write'] : readOnlyTools
   const names = (advertised ?? []).map((item) => item.function?.name)
   if (names.length !== expected.length || expected.some((name) => !names.includes(name))) {
     throw new Error('Bộ công cụ quảng bá của agent không đúng chế độ')
   }
-  return scenario.call
+  return { ...scenario.call, tool_calls: scenario.call.tool_calls.map((call) => ({ ...call, id: `${call.id}_${turn}` })) }
 }
 
 /** Trả một tin nhắn dạng JSON thường, hoặc SSE khi client xin `stream: true` (harness pi luôn stream). */
@@ -66,7 +66,7 @@ function complete(messages, maxTokens, advertised) {
   if (question === 'NEXGRAPH_SMOKE') return { role: 'assistant', content: 'NEXGRAPH_SMOKE_OK' }
   if (maxTokens === 1) return { role: 'assistant', content: 'pong' }
   const tools = messages.slice(lastUser).filter((m) => m.role === 'tool')
-  if (Object.hasOwn(smokeCalls, question)) return smokePolicy(smokeCalls[question], advertised, tools)
+  if (Object.hasOwn(smokeCalls, question)) return smokePolicy(smokeCalls[question], advertised, tools, lastUser)
   if (tools.length === 0) return toolCall('list_flows', { query: 'login' })
   if (tools.length === 1) {
     const flows = readToolResult(tools[0], 'list_flows').flows ?? []

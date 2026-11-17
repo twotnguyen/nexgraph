@@ -92,14 +92,17 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
   const original = await api.fs.read(pid, filename)
 
   async function prompt(question: string, decision?: 'deny' | 'stop' | 'approve'): Promise<void> {
-    let result = ''
     let approvals = 0
     let unexpectedDiff = false
+    let streamed = 0
     const actions: Promise<void>[] = []
+    let finish!: (result: string) => void
+    const terminal = new Promise<string>((resolve) => { finish = resolve })
     const off = api.agent.onEvent((eventPid, event) => {
       if (eventPid !== pid) return
-      if (event.type === 'done') result = event.text
-      if (event.type === 'error') result = `ERROR: ${event.code}`
+      if (event.type === 'text') streamed += event.delta.length
+      if (event.type === 'done') finish(`done:${event.text}`)
+      if (event.type === 'error') finish(`error:${event.code}`)
       if (event.type !== 'approval') return
       approvals++
       const diff = event.request
@@ -112,15 +115,22 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
         actions.push(api.agent.approve(pid, diff.id, decision === 'approve'))
       }
     })
+    let timer: ReturnType<typeof setTimeout> | undefined
     try {
-      await api.agent.prompt(pid, question, target)
+      // Phản hồi invoke và sự kiện webContents.send tới renderer qua hai đường độc lập.
+      const deadline = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`agent IPC timed out for ${question}`)), 15_000)
+      })
+      const [result] = await Promise.all([Promise.race([terminal, deadline]), api.agent.prompt(pid, question, target)])
       await Promise.all(actions)
+      const expected = decision === 'stop' ? 'error:ai_cancelled'
+        : question === 'NEXGRAPH_SMOKE' ? 'done:NEXGRAPH_SMOKE_OK' : 'done:NEXGRAPH_SMOKE_POLICY_OK'
+      if (unexpectedDiff || approvals !== (decision ? 1 : 0) || result !== expected) {
+        throw new Error(`agent IPC policy failed for ${question}: approvals=${approvals}, streamed=${streamed}, result=${result}`)
+      }
     } finally {
+      clearTimeout(timer)
       off()
-    }
-    const expected = question === 'NEXGRAPH_SMOKE' ? 'NEXGRAPH_SMOKE_OK' : 'NEXGRAPH_SMOKE_POLICY_OK'
-    if (unexpectedDiff || approvals !== (decision ? 1 : 0) || (decision !== 'stop' && result !== expected)) {
-      throw new Error(`agent IPC policy failed for ${question}: approvals=${approvals}, result=${result}`)
     }
   }
 
