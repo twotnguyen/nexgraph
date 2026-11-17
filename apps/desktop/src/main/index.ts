@@ -115,7 +115,11 @@ async function smoke(): Promise<void> {
     clearTimeout(watchdog)
     app.exit(0)
   } catch (err) {
-    console.log(`SMOKE FAIL ${err instanceof Error ? err.message : String(err)}`)
+    // Lỗi IPC đôi khi là object {code, message} (không phải Error): in rõ để không ra `[object Object]`.
+    const detail = err instanceof Error ? err.message
+      : err && typeof err === 'object' ? JSON.stringify(err)
+      : String(err)
+    console.log(`SMOKE FAIL ${detail}`)
     app.exit(1)
   }
 }

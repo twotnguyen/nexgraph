@@ -35,6 +35,8 @@ try {
     const child = spawn(bin, [], {
       env: { ...process.env, NEXGRAPH_SMOKE: '1', NEXGRAPH_DATA_DIR: join(temp, 'Đồ án', 'data'),
         NEXGRAPH_USER_DATA_DIR: join(temp, 'user-data'),
+        // Fake LLM chạy trên loopback: cần cờ dev cho phép HTTP (mặc định chỉ HTTPS, ADR 0013).
+        NEXGRAPH_ALLOW_HTTP_PROVIDER: '1',
         NEXGRAPH_SMOKE_LLM_URL: `http://127.0.0.1:${server.address().port}/v1` }
     })
     let stdout = '', stderr = ''
