@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_graph import open_store
+from nexgraph_engine.api.routes_graph import model_payload, open_store
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.context import build_context, locate_json
 from nexgraph_engine.query.paths import find_paths, impact_of
@@ -30,6 +30,12 @@ class AskBody(BaseModel):
     mode: Literal["bfs", "dfs"] = "bfs"
 
 
+@router.get("/ai/source-scope")
+def ai_source_scope(project_id: str, request: Request) -> dict:
+    with open_store(request, project_id) as (store, _):
+        return {"exclude": store.last_exclude()}
+
+
 @router.post("/paths")
 def paths(project_id: str, request: Request, body: PathsBody) -> dict:
     with open_store(request, project_id) as (store, _):
@@ -41,9 +47,9 @@ def paths(project_id: str, request: Request, body: PathsBody) -> dict:
 
 @router.get("/impact")
 def impact(project_id: str, request: Request, node: str = Query(...)) -> dict:
-    with open_store(request, project_id) as (store, _):
+    with open_store(request, project_id) as (store, info):
         try:
-            return impact_of(store, node)
+            return model_payload(request, store, info, impact_of(store, node))
         except KeyError as exc:
             raise ApiError(404, "unknown_node", f"Không có nút {node}") from exc
 

@@ -62,7 +62,7 @@ function setup() {
 describe('WorkspaceScreen', () => {
   it('Ctrl+L ẩn panel trợ lý nhưng giữ bản nháp và lượt đang chạy', async () => {
     installNexgraph({ ai: {
-      getSettings: vi.fn(async () => ({ baseUrl: 'https://api.example.com/v1', model: 'm1', hasKey: true })),
+      getSettings: vi.fn(async () => ({ provider: 'example', baseUrl: 'https://api.example.com/v1', model: 'm1', hasKey: true })),
       hasConsent: vi.fn(async () => true)
     }, agent: { prompt: vi.fn(() => new Promise<void>(() => {})) } })
     const view = render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)

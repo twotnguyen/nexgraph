@@ -53,7 +53,7 @@ Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<
 Trong **Cài đặt → Tài khoản AI**, chọn nhà cung cấp có sẵn và nhập API key, hoặc thêm **Nhà cung cấp tuỳ chỉnh** với tên, Base URL và model. Chọn model có tool calling và bấm **Kiểm tra kết nối**. Với nhà cung cấp có OAuth, màn hình có thể mở trình duyệt, hiện device code hoặc hỏi mã. Các test OAuth dùng provider giả qua SDK pi.
 
 - Base URL custom mặc định dùng HTTPS và phải qua kiểm tra địa chỉ mạng. Để thử máy chủ HTTP loopback cục bộ, khởi động app với `NEXGRAPH_ALLOW_HTTP_PROVIDER=1` theo [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Custom endpoint không có API key vẫn nhận `Authorization: Bearer unused` do SDK pi.
-- API key được mã hóa qua kho bí mật của ứng dụng. OAuth lưu token trong `agent/auth.json` thuộc thư mục dữ liệu của NexGraph, quyền tệp `0600` trên Unix. Các phiên hội thoại của Agent giữ trong bộ nhớ.
+- API key và token OAuth dùng kho mã hóa của NexGraph. Token OAuth nằm trong `agent/oauth-secrets.json` dưới thư mục dữ liệu engine. NexGraph thử di trú `agent/auth.json` của bản cũ khi kho khóa an toàn khả dụng. Các phiên hội thoại của Agent giữ trong bộ nhớ và tách theo dự án, nhà cung cấp, URL đích.
 - Lần gửi đầu cho mỗi cặp dự án và máy chủ yêu cầu đồng ý. **Hỏi** mặc định chỉ đọc. **Sửa** đòi xác nhận từng lần ghi, sửa hoặc chạy lệnh. Lệnh `bash` chạy bằng quyền người dùng, không có sandbox.
 - Trên Electron, Monaco giữ CRLF/BOM khi lưu. Thẻ có thay đổi chưa lưu được giữ lại nếu tệp trên đĩa đổi. Editor đánh dấu chỉ đọc khi tệp vượt 5 MiB hoặc không phải UTF-8.
 

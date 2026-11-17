@@ -22,13 +22,18 @@ export class EngineApiError extends Error {
 type Target = Pick<EngineHandle, 'baseUrl' | 'token'>
 
 export class EngineApi {
-  constructor(private readonly h: Target) {}
+  constructor(private readonly h: Target, private readonly modelAudience = false) {}
+
+  forModel(): EngineApi {
+    return new EngineApi(this.h, true)
+  }
 
   private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`${this.h.baseUrl}${path}`, {
       method,
       headers: {
         Authorization: `Bearer ${this.h.token}`,
+        ...(this.modelAudience ? { 'X-NexGraph-Audience': 'model' } : {}),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' })
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -69,6 +74,16 @@ export class EngineApi {
   }
   scan(pid: string): Promise<ScanInfo> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/scan`)
+  }
+  async aiSourceExcludes(pid: string): Promise<string[]> {
+    try {
+      const result = await this.request<{ exclude: string[] }>('GET', `/v1/projects/${encodeURIComponent(pid)}/ai/source-scope`,
+        undefined, AbortSignal.timeout(5_000))
+      return result.exclude
+    } catch (error) {
+      if (error instanceof EngineApiError && (error.code === 'not_indexed' || error.code === 'index_running')) return []
+      throw error
+    }
   }
   search(pid: string, q: string, o?: { kinds?: string[]; limit?: number }): Promise<SearchHit[]> {
     const p = new URLSearchParams({ q })

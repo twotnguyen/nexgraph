@@ -26,8 +26,8 @@ const protectedPath = (relPath: string): FsError => new FsError('protected_path'
 const danglingLink = (): Error => Object.assign(new Error('Symlink treo'), { code: 'dangling_symlink' })
 const conflict = (relPath: string): FsError => new FsError('conflict', `Tệp đã thay đổi trên đĩa: ${relPath}`)
 
-const PROTECTED_DIRS = new Set(['.git', '.nexgraph'])
-const PROTECTED_NAMES = new Set(['.npmrc', '.netrc'])
+const PROTECTED_NAMES = new Set(['.git', '.nexgraph', '.npmrc', '.netrc'])
+const PROTECTED_PREFIXES = ['.env', 'credentials', 'id_rsa', 'id_ed25519', 'id_ecdsa', 'id_dsa']
 
 /**
  * Deny-list dùng chung cho fs:read/write và cổng tool của pi (`pinPath` → `previewWrite`):
@@ -35,16 +35,9 @@ const PROTECTED_NAMES = new Set(['.npmrc', '.netrc'])
  * Nhận cả dấu `/` lẫn `\` để cùng đúng trên macOS/Linux và Windows.
  */
 export function isProtectedRel(relPath: string): boolean {
-  const parts = relPath.replace(/\\/g, '/').split('/').filter((p) => p !== '' && p !== '.')
-  const lower = parts.map((p) => p.toLowerCase())
-  if (lower.some((p) => PROTECTED_DIRS.has(p))) return true
-  const name = lower.at(-1) ?? ''
-  if (name.startsWith('.env')) return true
-  if (name.endsWith('.pem') || name.endsWith('.key')) return true
-  if (name.startsWith('id_rsa')) return true
-  if (PROTECTED_NAMES.has(name)) return true
-  if (name.startsWith('credentials')) return true
-  return false
+  return relPath.toLowerCase().split(/[/\\]/).some((name) =>
+    PROTECTED_NAMES.has(name) || name.endsWith('.pem') || name.endsWith('.key') ||
+    PROTECTED_PREFIXES.some((prefix) => name.startsWith(prefix)))
 }
 
 /** `realpath` của tổ tiên gần nhất còn tồn tại, rồi nối phần chưa tồn tại: symlink ở bất kỳ cấp nào đều bị lộ ra.
@@ -73,7 +66,8 @@ function realpathLoose(p: string): string {
 }
 
 export function resolveInside(root: string, relPath: string): string {
-  if (isAbsolute(relPath)) throw outside(relPath)
+  // NTFS có luồng dữ liệu thay thế (file:stream), không phải tệp thường trong cây dự án.
+  if (isAbsolute(relPath) || (process.platform === 'win32' && relPath.includes(':'))) throw outside(relPath)
   if (isProtectedRel(relPath)) throw protectedPath(relPath)
   const realRoot = realpathSync.native(root)
   let abs: string
@@ -85,6 +79,7 @@ export function resolveInside(root: string, relPath: string): string {
   }
   const rel = relative(realRoot, abs)
   if (rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)) throw outside(relPath)
+  if (isProtectedRel(rel)) throw protectedPath(relPath)
   return abs
 }
 
@@ -115,11 +110,11 @@ function revision(stat: BigIntStats, bytes: Buffer | null): FileRevision {
 
 type DiskFile = { stat: BigIntStats; bytes: Buffer | null; revision: FileRevision }
 
-function snapshotFile(abs: string, relPath: string): DiskFile | null {
+function snapshotFile(abs: string, relPath: string, maxBytes = MAX_EDIT_BYTES): DiskFile | null {
   const stat = lstatIfPresent(abs)
   if (!stat) return null
   if (stat.isSymbolicLink()) throw conflict(relPath)
-  if (!stat.isFile() || stat.size > BigInt(MAX_EDIT_BYTES)) {
+  if (!stat.isFile() || stat.size > BigInt(maxBytes)) {
     return { stat, bytes: null, revision: revision(stat, null) }
   }
   // Gắn nội dung và thông tin định danh với cùng một inode, kể cả khi có người đổi đích trong lúc đọc.
@@ -168,11 +163,23 @@ function decodeFile(file: DiskFile): FileContent {
   return { ...file.revision, text: text.replace(/\r\n/g, '\n'), eol, bom, readOnly: false }
 }
 
-export async function readProjectFile(root: string, relPath: string): Promise<FileContent> {
+function readProjectSnapshot(root: string, relPath: string, maxBytes = MAX_EDIT_BYTES): DiskFile {
   const abs = resolveInside(root, relPath)
-  const file = snapshotFile(abs, relPath)
+  const file = snapshotFile(abs, relPath, maxBytes)
   if (!file?.stat.isFile()) throw notFound(relPath)
-  return decodeFile(file)
+  if (resolveInside(root, relPath) !== abs) throw conflict(relPath)
+  return file
+}
+
+export async function readProjectFile(root: string, relPath: string): Promise<FileContent> {
+  return decodeFile(readProjectSnapshot(root, relPath))
+}
+
+/** Đọc cùng snapshot đã kiểm tra với editor, giữ byte gốc cho công cụ AI. */
+export function readProjectFileBytes(root: string, relPath: string, maxBytes = MAX_EDIT_BYTES): Buffer {
+  const { bytes } = readProjectSnapshot(root, relPath, maxBytes)
+  if (!bytes) throw new FsError('too_large', `Tệp quá lớn: ${relPath}`)
+  return bytes
 }
 
 type ProjectFsHooks = {

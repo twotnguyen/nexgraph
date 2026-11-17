@@ -11,7 +11,7 @@ export const vi = {
     saveKey: 'Lưu key',
     removeKey: 'Gỡ key',
     saved: 'Đã lưu',
-    noKeychain: 'Máy này không có kho khoá an toàn nên không lưu được API key.',
+    noKeychain: 'Kho khoá an toàn của hệ điều hành không khả dụng. Không thể lưu thông tin đăng nhập AI.',
     customTitle: 'Nhà cung cấp tuỳ chỉnh',
     customLead: 'Thêm endpoint tương thích OpenAI (Ollama, OpenRouter, vLLM…). Dùng lại ID để cập nhật.',
     customSecurityNote: 'Chỉ nhận Base URL HTTPS trong môi trường chính thức. NexGraph từ chối địa chỉ IP riêng/link-local để tránh gửi API key tới máy chủ nội bộ. HTTP chỉ dùng được cho 127.0.0.1/localhost khi bật cờ dev NEXGRAPH_ALLOW_HTTP_PROVIDER=1.',
@@ -224,13 +224,14 @@ export const vi = {
     highlightNone: 'Cần ít nhất hai trích dẫn hợp lệ để tô luồng',
     tools: (n: number) => `Đã gọi ${n} công cụ`,
     consentTitle: 'Gửi dữ liệu tới nhà cung cấp AI',
-    consentBody: (host: string, model: string) =>
-      `Câu hỏi của bạn và mọi tệp văn bản trong dự án mà trợ lý đọc sẽ được gửi tới ${host} (model ${model}). NexGraph không gửi gì khác và không lưu nội dung này ở nơi nào ngoài máy bạn.`,
+    consentBody: (project: string, provider: string, endpoint: string, model: string) =>
+      `Câu hỏi, ngữ cảnh đồ thị và nội dung tệp mà trợ lý đọc trong dự án ${project} có thể được gửi đến ${provider} tại ${endpoint} (model ${model}).`,
     consentOk: 'Đồng ý và gửi', consentCancel: 'Huỷ',
     errors: {
       ai_not_configured: 'Chưa cấu hình trợ lý AI.', ai_unauthorized: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.',
       ai_unreachable: 'Không kết nối được tới nhà cung cấp AI.', ai_bad_response: 'Nhà cung cấp AI trả về dữ liệu không hợp lệ.',
-      ai_too_many_rounds: 'Trợ lý gọi công cụ quá nhiều lần mà chưa trả lời. Hãy hỏi cụ thể hơn.', ai_cancelled: 'Đã dừng.'
+      ai_too_many_rounds: 'Trợ lý gọi công cụ quá nhiều lần mà chưa trả lời. Hãy hỏi cụ thể hơn.', ai_cancelled: 'Đã dừng.',
+      ai_provider_changed: 'Nhà cung cấp hoặc model AI đã thay đổi. Hãy kiểm tra lại rồi gửi câu hỏi.'
     } as Record<string, string>
   },
   flows: {

@@ -23,6 +23,12 @@ describe('project-fs', () => {
     expect(() => resolveInside(root, '../x')).toThrow(expect.objectContaining({ code: 'outside_project' }))
     expect(() => resolveInside(root, '/etc/hosts')).toThrow(expect.objectContaining({ code: 'outside_project' }))
   })
+  it.skipIf(process.platform !== 'win32')('chặn dấu : của NTFS alternate data stream và đường dẫn ổ đĩa tương đối', async () => {
+    writeFileSync(join(root, 'readme.txt'), 'ordinary file')
+    await expect(readProjectFile(root, 'readme.txt:hidden')).rejects.toMatchObject({ code: 'outside_project' })
+    await expect(writeProjectFile(root, 'readme.txt:hidden', 'stream', format)).rejects.toMatchObject({ code: 'outside_project' })
+    expect(() => resolveInside(root, 'C:file.txt')).toThrow(expect.objectContaining({ code: 'outside_project' }))
+  })
   it('chặn symlink trỏ ra ngoài', async () => {
     directoryLink(outsideDir, join(root, 'link'))
     await expect(writeProjectFile(root, 'link/a.txt', 'x', { eol: '\n', bom: false }))
@@ -140,6 +146,17 @@ describe('deny-list tệp nhạy cảm (fs:read/write)', () => {
 
   it('từ chối đọc mọi tệp nhạy cảm', async () => {
     for (const rel of secrets) await expect(h.read('p1', rel)).rejects.toMatchObject({ code: 'protected_path' })
+  })
+
+  it('chặn đọc và ghi qua alias có đích canonical ở thư mục nhạy cảm', async () => {
+    mkdirSync(join(root, 'src', 'id_ed25519_backup'), { recursive: true })
+    const protectedDir = join(root, 'src', 'id_ed25519_backup')
+    const realFile = join(protectedDir, 'data.txt')
+    writeFileSync(realFile, 'FAKE_TEST_CREDENTIAL')
+    directoryLink(protectedDir, join(root, 'public-looking'))
+    await expect(h.read('p1', 'public-looking/data.txt')).rejects.toMatchObject({ code: 'protected_path' })
+    await expect(h.write('p1', 'public-looking/data.txt', 'replacement', format)).rejects.toMatchObject({ code: 'protected_path' })
+    expect(readFileSync(realFile, 'utf8')).toBe('FAKE_TEST_CREDENTIAL')
   })
 
   it('từ chối ghi .git/hooks/post-commit ngay cả khi đã có bản duyệt/đúng mtime', async () => {

@@ -38,11 +38,13 @@ Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi 
 - [ ] Đổi thẻ khi có thay đổi chưa lưu. Đóng thẻ/thoát app hiện xác nhận.
 - [ ] Sửa từ ngoài: thẻ sạch nạp lại; thẻ bẩn hiện lựa chọn xử lý xung đột và giữ nháp.
 - [ ] Thêm nhà cung cấp tuỳ chỉnh, chọn model, kiểm kết nối. Key đã lưu không xuất hiện lại trong ô nhập.
+- [ ] Dùng hai máy chủ mô phỏng. Mở xác nhận gửi mã ở dự án A rồi đổi nhà cung cấp, kiểm câu hỏi còn trong ô nhập. Sau khi xác nhận ở nhà cung cấp mới, kiểm payload đầu tiên và đối chiếu lịch sử.
+- [ ] Tạo `.env` giả và liên kết nội bộ tới tệp đã bị loại. Dùng `read`, `grep`, `find`, `get_context` và MCP để kiểm tệp bị loại, cùng một tệp công khai để kiểm luồng đọc bình thường.
 - [ ] Hỏi: xem streaming, bấm **Dừng**, mở trích dẫn và **Tô luồng**. Ghi loại provider (giả hoặc thật).
 - [ ] Chuyển **Sửa** thấy cảnh báo quyền chạy lệnh. Duyệt diff làm đổi tệp, từ chối giữ nguyên byte. Khi đang chờ duyệt, thử **Dừng**, đổi **Hỏi** hoặc tải lại cửa sổ, xác nhận đề xuất cũ không thực thi và lượt sau dùng được.
 - [ ] Trong lúc chờ duyệt diff, sửa tệp từ VS Code hoặc Monaco. Duyệt và kiểm agent báo xung đột, bản đã lưu trên đĩa giữ nguyên. Lặp lại với đề xuất tạo tệp và một tệp vừa xuất hiện ở cùng đường dẫn.
 - [ ] Thử duyệt lệnh vô hại `echo NexGraph`, ghi shell Windows thực tế và kết quả.
-- [ ] Nếu kiểm OAuth, ghi provider, kết quả đăng nhập và hủy. Ghi rõ khi dùng adapter/provider giả.
+- [ ] Nếu kiểm OAuth, ghi provider, kết quả đăng nhập và hủy. Thử di trú `auth.json`, mở lại, làm mới token và đăng xuất với credential thử nghiệm. Ghi rõ khi dùng adapter/provider giả.
 - [ ] Xem trước rồi áp dụng cấu hình MCP/skill trong bản sao, xác nhận phần cấu hình cũ được giữ. Nếu client đã cài, mở dự án và gọi `graph_stats` để xác nhận kết nối runtime.
 
 ## E. Bằng chứng

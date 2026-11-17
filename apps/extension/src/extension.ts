@@ -169,7 +169,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.window.registerWebviewViewProvider('nexgraph.agent', {
       resolveWebviewView(v) {
         attach(ctx, v.webview, 'agent')
-        v.onDidDispose(() => views.delete(v.webview))
+        const visibility = v.onDidChangeVisibility(() => {
+          void v.webview.postMessage({ event: 'host:command', payload: { name: 'agent:visibility', arg: v.visible } })
+        })
+        v.onDidDispose(() => {
+          visibility.dispose()
+          views.delete(v.webview)
+        })
       }
     }, { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand('nexgraph.open', () => openPanel(ctx)),
@@ -177,7 +183,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     ...NAV.flatMap((g) => g.items).map((i) => vscode.commands.registerCommand(`nexgraph.go.${i.id}`, () =>
       i.id === 'agent' ? vscode.commands.executeCommand('nexgraph.agent.focus') : openPanel(ctx, i.command))),
     vscode.window.registerTreeDataProvider('nexgraph.home', navTree),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => navChanged.fire())
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      navChanged.fire()
+      host.send('host:command', { name: 'agent:folder', arg: folder() })
+    })
   )
   void sup.startEngine()
   // Thanh bên phụ của nền chỉ chứa khung Chat đã tắt; đóng một lần ở lần chạy đầu, sau đó tôn trọng lựa chọn của người dùng.

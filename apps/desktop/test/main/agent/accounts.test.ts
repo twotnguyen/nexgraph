@@ -26,11 +26,11 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true })
 })
 
-const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) => Promise<string | null> } = {}) => {
+const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox } = {}) => {
   const prefs = join(base, 'prefs.json')
   const svc = await AccountService.create({
     dataDir: base, prefsFile: prefs,
-    secrets: new SecretStore(join(base, 'ai-key.json'), box),
+    secrets: new SecretStore(join(base, 'ai-key.json'), over.secretBox ?? box),
     openExternal: (url) => opens.push(url),
     notify: over.notify ?? (() => {}),
     ask: over.ask ?? (async () => 'answer')
@@ -38,6 +38,9 @@ const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) =>
   return { svc, prefs }
 }
 const opens: string[] = []
+const legacyAuth = () => join(base, 'agent', 'auth.json')
+const vaultFile = () => join(base, 'agent', 'oauth-secrets.json')
+const vault = () => JSON.parse(new SecretStore(vaultFile(), box).readStrict('credentials') ?? '{}') as Record<string, unknown>
 
 /** Quét mọi tệp dưới dataDir, báo nếu chứa chuỗi. */
 const scan = (needle: string): string[] => {
@@ -53,9 +56,9 @@ const scan = (needle: string): string[] => {
   return hits
 }
 
-type FakeOAuthLogin = NonNullable<Parameters<typeof AccountService.prototype.modelRuntime.registerProvider>[1]['oauth']>['login']
+type OAuthHooks = NonNullable<Parameters<typeof AccountService.prototype.modelRuntime.registerProvider>[1]['oauth']>
 
-const fakeOauthProvider = (svc: AccountService, login: FakeOAuthLogin, id = 'fakeoauth'): void => {
+const fakeOauthProvider = (svc: AccountService, login: OAuthHooks['login'], id = 'fakeoauth', refreshToken: OAuthHooks['refreshToken'] = async (c) => c): void => {
   svc.modelRuntime.registerProvider(id, {
     name: id,
     api: 'openai-completions',
@@ -63,7 +66,7 @@ const fakeOauthProvider = (svc: AccountService, login: FakeOAuthLogin, id = 'fak
     oauth: {
       name: `${id} subscription`,
       login,
-      refreshToken: async (c) => c,
+      refreshToken,
       getApiKey: (c) => c.access
     },
     models: [{ id: 'm', name: 'm', reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 8192, maxTokens: 1024 }]
@@ -147,7 +150,7 @@ describe('AccountService', () => {
     const providers = await svc.listProviders()
     expect(providers.find((p) => p.id === 'custom-1')).toMatchObject({ custom: true, hasKey: true })
     expect(svc.getSelectedModel()).toEqual({ provider: 'custom-1', id: 'm-cũ' })
-    expect(svc.hasConsent('p1')).toBe(true) // host giữ nguyên nên consent cũ còn hiệu lực
+    await expect(svc.hasConsent('p1', (await svc.getConsentTarget())!)).resolves.toBe(false)
     const { svc: again } = await make()
     expect((await again.listProviders()).filter((p) => p.id === 'custom-1')).toHaveLength(1)
     expect(JSON.parse(readFileSync(prefs, 'utf8')).aiCustomProviders).toHaveLength(1)
@@ -167,32 +170,42 @@ describe('AccountService', () => {
     svc.selectModel('c1', 'm1')
     expect(svc.getSelectedModel()).toEqual({ provider: 'c1', id: 'm1' })
     expect(() => svc.selectModel('c1', 'm-không')).toThrow(expect.objectContaining({ code: 'bad_param' }))
-    expect(svc.hasConsent('p1')).toBe(false)
-    svc.grantConsent('p1')
-    expect(svc.hasConsent('p1')).toBe(true)
-    expect(JSON.parse(readFileSync(prefs, 'utf8')).aiConsent).toEqual(['p1|a.example'])
+    const target = (await svc.getConsentTarget())!
+    expect(target).toEqual({ provider: 'c1', baseUrl: 'https://a.example/v1' })
+    await expect(svc.hasConsent('p1', target)).resolves.toBe(false)
+    await svc.grantConsent('p1', target)
+    await expect(svc.hasConsent('p1', target)).resolves.toBe(true)
+    await expect(svc.hasConsent('p2', target)).resolves.toBe(false)
+    expect(JSON.parse(readFileSync(prefs, 'utf8')).aiConsent).toEqual([JSON.stringify(['p1', 'c1', 'https://a.example/v1'])])
+
+    await svc.saveCustomProvider({ id: 'c2', label: 'C2', baseUrl: 'https://a.example/v1', model: 'm2' })
+    svc.selectModel('c2', 'm2')
+    await expect(svc.grantConsent('p1', target)).rejects.toMatchObject({ code: 'ai_provider_changed' })
+    await expect(svc.hasConsent('p1', (await svc.getConsentTarget())!)).resolves.toBe(false)
+    await svc.saveCustomProvider({ id: 'c1', label: 'C', baseUrl: 'https://a.example/v2', model: 'm1' })
+    svc.selectModel('c1', 'm1')
+    await expect(svc.hasConsent('p1', (await svc.getConsentTarget())!)).resolves.toBe(false)
   })
 
-  it('loginOAuth gọi openExternal với URL của nhà cung cấp và lưu thông tin đăng nhập vào auth.json có quyền 0600', async () => {
+  it('loginOAuth mở URL nhà cung cấp và giữ token trong kho mã hoá qua khởi động lại', async () => {
     const { svc } = await make()
     fakeOauthProvider(svc, async (cb) => {
       cb.onAuth({ url: 'https://oauth.example/authorize' })
       await cb.onPrompt({ message: 'Dán mã', placeholder: 'code' })
-      return { refresh: 'r', access: 'a', expires: Date.now() + 3_600_000 }
+      return { refresh: 'fake-secret-refresh', access: 'fake-secret-access', expires: Date.now() + 3_600_000 }
     })
     const p = await svc.listProviders().then((l) => l.find((x) => x.id === 'fakeoauth'))
     expect(p).toMatchObject({ oauth: true, loggedIn: false, hasKey: false })
     await svc.loginOAuth('fakeoauth')
     expect(opens).toContain('https://oauth.example/authorize')
-    const authFile = join(base, 'agent', 'auth.json')
-    expect(readFileSync(authFile, 'utf8')).toContain('fakeoauth')
-    if (process.platform === 'win32') {
-      // Windows không có bit mode POSIX: chỉ kiểm tệp tồn tại và chứa provider.
-      expect(existsSync(authFile)).toBe(true)
-    } else {
-      expect(statSync(authFile).mode & 0o777).toBe(0o600)
-    }
+    expect(existsSync(legacyAuth())).toBe(false)
+    expect(vault().fakeoauth).toMatchObject({ type: 'oauth', access: 'fake-secret-access', refresh: 'fake-secret-refresh' })
+    expect(scan('fake-secret-')).toEqual([])
+    if (process.platform !== 'win32') expect(statSync(vaultFile()).mode & 0o777).toBe(0o600)
     expect((await svc.listProviders()).find((x) => x.id === 'fakeoauth')?.loggedIn).toBe(true)
+    const { svc: reopened } = await make()
+    fakeOauthProvider(reopened, async () => { throw new Error('không cần đăng nhập lại') })
+    expect((await reopened.modelRuntime.getAuth('fakeoauth'))?.auth.apiKey).toBe('fake-secret-access')
   })
 
   it('loginOAuth huỷ bởi renderer → ai_cancelled, auth.json không để trạng thái dở', async () => {
@@ -207,14 +220,13 @@ describe('AccountService', () => {
     await ask.asked
     ask.reply(null) // renderer trả lời null = huỷ
     await expect(run).rejects.toMatchObject({ code: 'ai_cancelled' })
-    const auth = join(base, 'agent', 'auth.json')
-    expect(existsSync(auth) ? readFileSync(auth, 'utf8') : '{}').toBe('{}')
+    expect(existsSync(legacyAuth())).toBe(false)
+    expect(vault()).toEqual({})
   })
 
   it('huỷ OAuth A không làm sống lại provider B đã đăng xuất trong lúc A chờ', async () => {
     const ask = parkedAsk()
     const { svc } = await make({ ask: ask.ask })
-    const authFile = join(base, 'agent', 'auth.json')
     fakeOauthProvider(svc, async () => ({ refresh: 'b', access: 'b', expires: Date.now() + 3_600_000 }), 'oauthb')
     await svc.loginOAuth('oauthb')
     expect(await svc.listProviders().then((l) => l.find((p) => p.id === 'oauthb')?.loggedIn)).toBe(true)
@@ -228,7 +240,7 @@ describe('AccountService', () => {
     await svc.logout('oauthb') // B đăng xuất trong lúc A còn chờ
     ask.reply(null) // huỷ A
     await expect(run).rejects.toMatchObject({ code: 'ai_cancelled' })
-    const stored = JSON.parse(readFileSync(authFile, 'utf8')) as Record<string, unknown>
+    const stored = vault()
     expect(stored.oautha).toBeUndefined()
     expect(stored.oauthb).toBeUndefined()
     expect(await svc.listProviders().then((l) => l.find((p) => p.id === 'oauthb')?.loggedIn)).toBe(false)
@@ -236,19 +248,54 @@ describe('AccountService', () => {
 
   it('loginOAuth thất bại → không để lại trạng thái dở', async () => {
     const { svc } = await make()
-    const auth = join(base, 'agent', 'auth.json')
     fakeOauthProvider(svc, async () => { throw new Error('invalid_grant') })
     await expect(svc.loginOAuth('fakeoauth')).rejects.toMatchObject({ code: 'ai_error' })
-    expect(existsSync(auth) ? readFileSync(auth, 'utf8') : '{}').toBe('{}')
+    expect(existsSync(legacyAuth())).toBe(false)
+    expect(vault()).toEqual({})
   })
 
-  it('loginOAuth đăng ký ghi auth.json dở trước đó → khôi phục nội dung cũ khi thất bại', async () => {
+  it('di trú auth.json, xóa bản rõ sau khi kiểm tra bản mã; logout không khôi phục token', async () => {
     mkdirSync(join(base, 'agent'))
-    writeFileSync(join(base, 'agent', 'auth.json'), JSON.stringify({ 'x-other': { type: 'oauth' } }))
+    writeFileSync(legacyAuth(), JSON.stringify({ fakeoauth: { type: 'oauth', access: 'legacy-fake-access', refresh: 'legacy-fake-refresh', expires: Date.now() + 3_600_000 } }))
     const { svc } = await make()
     fakeOauthProvider(svc, async () => { throw new Error('boom') })
+    expect(vault().fakeoauth).toMatchObject({ access: 'legacy-fake-access' })
+    expect(existsSync(legacyAuth())).toBe(false)
+    expect(scan('legacy-fake-')).toEqual([])
     await expect(svc.loginOAuth('fakeoauth')).rejects.toBeInstanceOf(Error)
-    expect(JSON.parse(readFileSync(join(base, 'agent', 'auth.json'), 'utf8'))['x-other']).toBeTruthy()
+    expect(vault().fakeoauth).toMatchObject({ access: 'legacy-fake-access' })
+    await svc.logout('fakeoauth')
+    await make()
+    expect(vault()).toEqual({})
+  })
+
+  it('kho khoá vắng: không đọc token cũ vào Pi, không mở trình duyệt và di trú được khi kho hoạt động lại', async () => {
+    mkdirSync(join(base, 'agent'))
+    const legacy = JSON.stringify({ fakeoauth: { type: 'oauth', access: 'legacy-fake-access', refresh: 'legacy-fake-refresh', expires: Date.now() + 3_600_000 } })
+    writeFileSync(legacyAuth(), legacy)
+    const { svc } = await make({ secretBox: { ...box, available: () => false } })
+    const login = vi.fn(async () => { throw new Error('không nên gọi provider') })
+    fakeOauthProvider(svc, login)
+    expect(await svc.modelRuntime.getAuth('fakeoauth')).toBeUndefined()
+    expect((await svc.listProviders()).find((p) => p.id === 'fakeoauth')).toMatchObject({ loggedIn: false, oauthStorageIssue: expect.stringContaining('không khả dụng') })
+    await expect(svc.loginOAuth('fakeoauth')).rejects.toMatchObject({ code: 'no_keychain' })
+    expect(login).not.toHaveBeenCalled()
+    expect(existsSync(vaultFile())).toBe(false)
+    expect(readFileSync(legacyAuth(), 'utf8')).toBe(legacy)
+    await make()
+    expect(existsSync(legacyAuth())).toBe(false)
+    expect(vault().fakeoauth).toMatchObject({ access: 'legacy-fake-access' })
+  })
+
+  it('refresh OAuth lưu token đã xoay vòng trong kho mã hoá', async () => {
+    const { svc } = await make()
+    const refresh = vi.fn(async () => ({ refresh: 'rotated-only-refresh', access: 'rotated-only-access', expires: Date.now() + 86_400_000 }))
+    fakeOauthProvider(svc, async () => ({ refresh: 'initial-only-refresh', access: 'initial-only-access', expires: Date.now() + 3_600_000 }), 'fakeoauth', refresh)
+    await svc.loginOAuth('fakeoauth')
+    await svc.modelRuntime.getAuth('fakeoauth', { minOAuthValidityMs: 7_200_000 })
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(vault().fakeoauth).toMatchObject({ refresh: 'rotated-only-refresh', access: 'rotated-only-access' })
+    expect(scan('rotated-only-')).toEqual([])
   })
 
   it('logout đăng xuất; test() không có chọn model → ok false', async () => {

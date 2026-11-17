@@ -48,12 +48,12 @@ run('AI end-to-end (engine thật + LLM giả)', () => {
     })
     await accounts.saveCustomProvider({ id: 'fake', label: 'Fake', baseUrl: `http://127.0.0.1:${llm.address().port}/v1`, model: 'fake' })
     accounts.selectModel('fake', 'fake')
-    accounts.grantConsent(pid)
+    const target = (await accounts.getConsentTarget())!
+    await accounts.grantConsent(pid, target)
     const events: AgentEvent[] = []
-    const svc = new AgentService({ api: new EngineApi(h), dataDir: dir, models: async () => ({ modelRuntime: accounts.modelRuntime, selected: accounts.getSelectedModel() }),
-      hasConsent: async (p) => accounts.hasConsent(p),
+    const svc = new AgentService({ api: new EngineApi(h), dataDir: dir, accounts: async () => accounts,
       rootOf: async () => (await new EngineApi(h).listProjects()).find((p) => p.project_id === pid)!.path, emit: (_p, e) => events.push(e) })
-    await svc.prompt(pid, 'luồng đăng nhập chạy thế nào?')
+    await svc.prompt(pid, 'luồng đăng nhập chạy thế nào?', target)
     svc.closeAll()
     expect(events.filter((e) => e.type === 'tool' && e.status === 'start').map((e) => (e as { name: string }).name)).toEqual(['list_flows', 'trace_flow'])
     const done = events.at(-1) as Extract<AgentEvent, { type: 'done' }>

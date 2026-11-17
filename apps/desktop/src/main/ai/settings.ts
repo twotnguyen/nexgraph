@@ -15,7 +15,7 @@ export function readJson(file: string): Record<string, unknown> {
   }
 }
 
-/** Ghi temp cùng thư mục rồi rename: không bao giờ để lại prefs.json/auth.json/ai-key.json bị cụt. */
+/** Ghi temp cùng thư mục rồi rename để không để lại tệp cấu hình bị cụt. */
 export function writeJson(file: string, value: Record<string, unknown>): void {
   mkdirSync(dirname(file), { recursive: true })
   const tmp = join(dirname(file), `.${file.split(/[\\/]/).at(-1)}.${randomUUID()}.tmp`)
@@ -35,6 +35,30 @@ export function writeJson(file: string, value: Record<string, unknown>): void {
 export class SecretStore {
   constructor(private readonly file: string, private readonly box: SecretBox) {}
 
+  withFile(file: string): SecretStore {
+    return new SecretStore(file, this.box)
+  }
+
+  requireAvailable(): void {
+    if (!this.box.available()) throw fail('no_keychain', 'Máy này không có kho khoá an toàn')
+  }
+
+  /** Dùng cho di trú OAuth: phân biệt tệp vắng, kho khoá vắng và bản mã bị lỗi. */
+  readStrict(id: string): string | null {
+    this.requireAvailable()
+    try {
+      const data: unknown = JSON.parse(readFileSync(this.file, 'utf8'))
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid secret storage')
+      const enc = (data as Record<string, unknown>)[id]
+      if (enc === undefined) return null
+      if (typeof enc !== 'string') throw new Error('invalid ciphertext')
+      return this.box.decrypt(enc)
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw fail('oauth_storage', 'Không đọc được kho thông tin đăng nhập AI đã mã hoá.')
+    }
+  }
+
   get(id: string): string | null {
     const enc = readJson(this.file)[id]
     if (typeof enc !== 'string' || !this.box.available()) return null
@@ -46,7 +70,7 @@ export class SecretStore {
   }
 
   set(id: string, key: string): void {
-    if (!this.box.available()) throw fail('no_keychain', 'Máy này không có kho khoá an toàn')
+    this.requireAvailable()
     writeJson(this.file, { ...readJson(this.file), [id]: this.box.encrypt(key) })
   }
 

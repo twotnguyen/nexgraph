@@ -21,7 +21,8 @@ vi.mock('../editor/monaco', () => ({
 
 import { AgentPanel } from './AgentPanel'
 
-const configured = vi.fn(async () => ({ baseUrl: 'https://api.example.com/v1', model: 'm1', hasKey: true }))
+const target = { provider: 'provider-one', baseUrl: 'https://api.example.com/v1' }
+const configured = vi.fn(async () => ({ ...target, model: 'm1', hasKey: true }))
 const consented = () => ({ ai: { getSettings: configured, hasConsent: vi.fn(async () => true) } })
 const props = () => ({ projectId: 'p1', onOpenCode: vi.fn(), onHighlight: vi.fn(), onOpenSettings: vi.fn() })
 const ask = async (q: string) => userEvent.type(await screen.findByPlaceholderText(/Hỏi về dự án/), `${q}{Enter}`)
@@ -176,16 +177,62 @@ describe('AgentPanel', () => {
 
   it('chưa đồng ý gửi mã → hiện ConsentDialog trước khi gửi; Huỷ thì không gửi', async () => {
     const { api } = installNexgraph({ ai: { getSettings: configured, hasConsent: vi.fn(async () => false) } })
-    render(<AgentPanel {...props()} />)
+    render(<AgentPanel {...props()} projectName="Kho thử nghiệm" />)
     await ask('luồng đăng nhập?')
     const dlg = await screen.findByRole('dialog')
-    expect(dlg).toHaveTextContent('api.example.com')
+    expect(dlg).toHaveTextContent('Kho thử nghiệm')
+    expect(dlg).toHaveTextContent('provider-one')
+    expect(dlg).toHaveTextContent('https://api.example.com/v1')
     await userEvent.click(screen.getByRole('button', { name: 'Huỷ' }))
     expect(api.agent.prompt).not.toHaveBeenCalled()
     await userEvent.type(await screen.findByPlaceholderText(/Hỏi về dự án/), '{Enter}') // gửi lại lần nữa
     await userEvent.click(await screen.findByRole('button', { name: 'Đồng ý và gửi' }))
-    await waitFor(() => expect(api.agent.prompt).toHaveBeenCalledWith('p1', 'luồng đăng nhập?'))
-    expect(api.ai.grantConsent).toHaveBeenCalledWith('p1')
+    await waitFor(() => expect(api.agent.prompt).toHaveBeenCalledWith('p1', 'luồng đăng nhập?', target))
+    expect(api.ai.grantConsent).toHaveBeenCalledWith('p1', target)
+  })
+
+  it('nhà cung cấp đổi lúc hộp thoại mở → giữ câu hỏi, không cấp phép hay gửi tới nơi mới', async () => {
+    let provider = target.provider
+    const getSettings = vi.fn(async () => ({ ...target, provider, model: 'm1', hasKey: true }))
+    const { api } = installNexgraph({ ai: { getSettings, hasConsent: vi.fn(async () => false) } })
+    render(<AgentPanel {...props()} />)
+    await ask('câu hỏi cần đồng ý')
+    expect(await screen.findByRole('dialog')).toHaveTextContent('provider-one')
+    provider = 'provider-two' // cùng máy chủ nhưng tài khoản khác
+    await userEvent.click(screen.getByRole('button', { name: 'Đồng ý và gửi' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nhà cung cấp hoặc model AI đã thay đổi')
+    expect(screen.getByPlaceholderText(/Hỏi về dự án/)).toHaveValue('câu hỏi cần đồng ý')
+    expect(api.ai.grantConsent).not.toHaveBeenCalled()
+    expect(api.agent.prompt).not.toHaveBeenCalled()
+    await userEvent.type(screen.getByPlaceholderText(/Hỏi về dự án/), '{Enter}')
+    expect(await screen.findByRole('dialog')).toHaveTextContent('provider-two')
+  })
+
+  it('đổi dự án khi đang chờ đồng ý → đóng hộp thoại và không gửi câu cũ', async () => {
+    const { api } = installNexgraph({ ai: { getSettings: configured, hasConsent: vi.fn(async () => false) } })
+    const p = props()
+    const view = render(<AgentPanel {...p} projectName="Dự án một" />)
+    await ask('câu của dự án một')
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Dự án một')
+    view.rerender(<AgentPanel {...p} projectId="p2" projectName="Dự án hai" />)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/Hỏi về dự án/)).toHaveValue('')
+    expect(api.ai.grantConsent).not.toHaveBeenCalled()
+    expect(api.agent.prompt).not.toHaveBeenCalled()
+  })
+
+  it('ẩn bảng trong lúc cấp phép thì không gửi câu hỏi sau khi cấp phép hoàn tất', async () => {
+    let resolve!: () => void
+    const grantConsent = vi.fn(() => new Promise<void>((done) => { resolve = done }))
+    const { api } = installNexgraph({ ai: { getSettings: configured, hasConsent: vi.fn(async () => false), grantConsent } })
+    const p = props()
+    const view = render(<AgentPanel {...p} />)
+    await ask('câu hỏi bị đóng')
+    await userEvent.click(await screen.findByRole('button', { name: 'Đồng ý và gửi' }))
+    await waitFor(() => expect(grantConsent).toHaveBeenCalledWith('p1', target))
+    view.rerender(<AgentPanel {...p} hidden />)
+    await act(async () => resolve())
+    expect(api.agent.prompt).not.toHaveBeenCalled()
   })
 
   it('sự kiện của dự án khác bị bỏ qua (approval, done)', async () => {

@@ -62,7 +62,7 @@ export async function runTool(api: EngineApi, projectId: string, name: string, a
   }
   if (!TOOL_DEFS.some((t) => t.function.name === name)) return wrap(name, JSON.stringify({ error: 'unknown_tool' }))
   try {
-    const out = JSON.stringify(await run(api, projectId, name, args))
+    const out = JSON.stringify(await run(api.forModel(), projectId, name, args))
     const body = out.length > MAX_TOOL_CHARS ? `${out.slice(0, MAX_TOOL_CHARS)}\n…[đã cắt, hãy thu hẹp truy vấn]` : out
     return wrap(name, body)
   } catch (err) {

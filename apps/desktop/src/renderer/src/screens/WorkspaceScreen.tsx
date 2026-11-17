@@ -354,7 +354,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ))}
         </div>
       </section>
-      {!window.nexgraph.host && <AgentPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />}
+      {!window.nexgraph.host && <AgentPanel hidden={!chatOpen} projectId={project.project_id} projectName={project.name} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />}
     </div>
   )
 }

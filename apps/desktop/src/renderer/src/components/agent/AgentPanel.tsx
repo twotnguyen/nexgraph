@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { AgentEvent, AgentMode, ApprovalRequest } from '@shared/agent-types'
+import { sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { ApprovalCard } from './ApprovalCard'
@@ -8,6 +8,7 @@ import { ConsentDialog } from '../chat/ConsentDialog'
 
 interface Props {
   projectId: string
+  projectName?: string
   hidden?: boolean
   onOpenCode: (file: string, line: number, lineEnd?: number) => void
   onHighlight: (nodes: GraphNode[], edges: GraphEdge[], notice: string | null) => void
@@ -15,15 +16,33 @@ interface Props {
 }
 
 type Msg = { id: number; role: 'user'; content: string } | { id: number; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
+type PendingConsent = { question: string; target: AiConsentTarget; model: string }
 
-export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSettings }: Props) {
+function targetOf(settings: AiSettings): AiConsentTarget | null {
+  return settings.provider && settings.baseUrl && settings.model ? { provider: settings.provider, baseUrl: settings.baseUrl } : null
+}
+
+function errorCode(e: unknown): string {
+  return e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
+}
+
+function errorMessage(e: unknown): string {
+  return vi.chat.errors[errorCode(e)] || (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
+}
+
+export function AgentPanel(props: Props) {
+  return <ProjectAgentPanel key={props.projectId} {...props} />
+}
+
+function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenCode, onHighlight, onOpenSettings }: Props) {
   const [cfg, setCfg] = useState<AiSettings | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [tool, setTool] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [consent, setConsent] = useState<string | null>(null) // câu hỏi đang chờ đồng ý
+  const [consent, setConsent] = useState<PendingConsent | null>(null)
+  const [checking, setChecking] = useState(false)
   const [openTools, setOpenTools] = useState<number | null>(null)
   const [draft, setDraft] = useState('') // chữ đang chảy về của lượt hiện tại
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
@@ -33,6 +52,24 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
   const failedTurns = useRef(new Set<number>())
   const editWarned = useRef(false) // lần đầu sang Sửa phải cảnh báo sandbox
   const mounted = useRef(true)
+  const visible = useRef(!hidden)
+  visible.current = !hidden
+  const scope = useRef<AiConsentTarget | null>(null)
+  const operation = useRef<number | null>(null)
+  const operationSeq = useRef(0)
+
+  const applySettings = (settings: AiSettings) => {
+    const target = targetOf(settings)
+    if (scope.current && !sameConsentTarget(scope.current, target)) {
+      setMsgs([])
+      setApprovals([])
+      setOpenTools(null)
+      failedTurns.current.clear()
+    }
+    scope.current = target
+    setCfg(settings)
+    return target
+  }
 
   const end = () => {
     turn.current = null
@@ -53,8 +90,23 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
 
   useEffect(() => {
     let alive = true
+    let read = 0
     mounted.current = true
-    window.nexgraph.ai.getSettings().then((s) => alive && setCfg(s)).catch(() => {})
+    const refresh = () => {
+      if (operation.current !== null || turn.current) return
+      const which = ++read
+      const beforeSubmit = operationSeq.current
+      const stillCurrent = () => alive && which === read && beforeSubmit === operationSeq.current && !turn.current
+      void window.nexgraph.ai.getSettings().then((s) => {
+        if (stillCurrent()) applySettings(s)
+      }).catch((e) => {
+        if (!stillCurrent()) return
+        applySettings({ baseUrl: '', model: '', hasKey: false })
+        setError(errorMessage(e))
+      })
+    }
+    refresh()
+    window.addEventListener('focus', refresh)
     window.nexgraph.agent.getMode(projectId).then((m) => {
       if (!alive) return
       if (m === 'edit') editWarned.current = true // phiên đã ở Sửa từ trước thì không hỏi lại
@@ -88,13 +140,38 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
     return () => {
       alive = false
       mounted.current = false
+      operation.current = null
       if (turn.current) void window.nexgraph.agent.abort(projectId)
       turn.current = null
+      window.removeEventListener('focus', refresh)
       off()
     }
   }, [projectId])
 
-  const configured = !!cfg && cfg.baseUrl !== '' && cfg.model !== ''
+  useEffect(() => {
+    if (!hidden) return
+    operation.current = null
+    setConsent(null)
+    setChecking(false)
+  }, [hidden])
+
+  const configured = !!cfg && !!targetOf(cfg)
+
+  const isCurrent = (id: number) => mounted.current && visible.current && operation.current === id
+  const begin = () => {
+    if (!visible.current || operation.current !== null || turn.current) return null
+    const id = ++operationSeq.current
+    operation.current = id
+    setChecking(true)
+    setError(null)
+    return id
+  }
+
+  const finish = (id: number) => {
+    if (!isCurrent(id)) return
+    operation.current = null
+    setChecking(false)
+  }
 
   const pickMode = (m: AgentMode) => {
     if (m === mode) return
@@ -106,7 +183,7 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
     void window.nexgraph.agent.setMode(projectId, m).catch(() => {})
   }
 
-  const run = async (question: string) => {
+  const run = async (question: string, target: AiConsentTarget) => {
     const id = ++turnSeq.current
     turn.current = { id, q: question, tools: [] }
     setMsgs((cur) => [...cur, { id, role: 'user', content: question }])
@@ -116,24 +193,61 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
     setTool(null)
     setDraft('')
     try {
-      await window.nexgraph.agent.prompt(projectId, question)
+      await window.nexgraph.agent.prompt(projectId, question, target)
     } catch (e) {
-      if (!mounted.current || turn.current?.q !== question) return
-      const code = e && typeof e === 'object' && 'code' in e ? String(e.code) : undefined
-      fail(question, (code && vi.chat.errors[code]) || (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)))
+      if (!mounted.current || turn.current?.id !== id) return
+      if (errorCode(e) === 'ai_provider_changed') {
+        setMsgs((cur) => cur.filter((m) => m.id !== id))
+        setText(question)
+        setError(errorMessage(e))
+        end()
+      } else fail(question, errorMessage(e))
     }
   }
 
   const submit = async () => {
     const q = text.trim()
-    if (!q || busy) return
+    if (!q || busy || consent || operation.current !== null || !visible.current) return
     if (q === '/login') {
       setText('')
       onOpenSettings()
       return
     }
-    if (!(await window.nexgraph.ai.hasConsent(projectId))) return setConsent(q)
-    void run(q)
+    const id = begin()
+    if (id === null) return
+    try {
+      const settings = await window.nexgraph.ai.getSettings()
+      if (!isCurrent(id)) return
+      const target = applySettings(settings)
+      if (!target) throw new Error(vi.chat.notConfigured)
+      const allowed = await window.nexgraph.ai.hasConsent(projectId, target)
+      if (!isCurrent(id)) return
+      if (allowed) void run(q, target)
+      else setConsent({ question: q, target, model: settings.model })
+    } catch (e) {
+      if (isCurrent(id)) setError(errorMessage(e))
+    } finally {
+      finish(id)
+    }
+  }
+
+  const confirmConsent = async (pending: PendingConsent) => {
+    const id = begin()
+    if (id === null) return
+    setConsent(null)
+    try {
+      const settings = await window.nexgraph.ai.getSettings()
+      if (!isCurrent(id)) return
+      const current = applySettings(settings)
+      if (!sameConsentTarget(current, pending.target) || settings.model !== pending.model)
+        throw new Error(vi.chat.errors.ai_provider_changed)
+      await window.nexgraph.ai.grantConsent(projectId, pending.target)
+      if (isCurrent(id)) void run(pending.question, pending.target)
+    } catch (e) {
+      if (isCurrent(id)) setError(errorMessage(e))
+    } finally {
+      finish(id)
+    }
   }
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -173,6 +287,7 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
           <button type="button" aria-pressed={mode === 'edit'} onClick={() => pickMode('edit')}>{vi.agent.edit}</button>
         </span>
       </header>
+      {error && <p role="alert" className="error">{error}</p>}
       {cfg && !configured ? (
         <div className="chat-empty">
           <p className="muted">{vi.chat.notConfigured}</p>
@@ -211,27 +326,22 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
               {approvals.map((a) => <ApprovalCard key={a.id} request={a} onDecide={(allow) => decide(a.id, allow)} />)}
             </div>
           )}
-          {error && <p role="alert" className="error">{error}</p>}
           <div className="compose">
-            <textarea value={text} placeholder={vi.chat.placeholder} rows={2} disabled={!cfg || busy} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
+            <textarea value={text} placeholder={vi.chat.placeholder} rows={2} disabled={!cfg || busy || checking || !!consent} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
             <div className="row">
               <small className="muted">{vi.chat.hint}</small>
               {busy
                 ? <button type="button" onClick={() => void window.nexgraph.agent.abort(projectId)}>{vi.chat.stop}</button>
-                : <button type="button" className="primary" onClick={() => void submit()}>{vi.chat.send}</button>}
+                : <button type="button" className="primary" disabled={checking || !!consent} onClick={() => void submit()}>{vi.chat.send}</button>}
             </div>
           </div>
         </>
       )}
-      {consent && cfg && (
-        <ConsentDialog host={safeHost(cfg.baseUrl)} model={cfg.model}
+      {consent && !hidden && (
+        <ConsentDialog project={projectName} target={consent.target} model={consent.model}
           onCancel={() => setConsent(null)}
-          onOk={() => { const q = consent; setConsent(null); void window.nexgraph.ai.grantConsent(projectId).then(() => run(q)) }} />
+          onOk={() => void confirmConsent(consent)} />
       )}
     </aside>
   )
-}
-
-function safeHost(baseUrl: string): string {
-  try { return new URL(baseUrl).host } catch { return baseUrl }
 }

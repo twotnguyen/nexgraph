@@ -1,6 +1,6 @@
 import type { EngineStatus } from './engine-status'
 import type { AgentId, IntegrationPlan } from './integration-types'
-import type { AgentEvent, AgentMode, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from './agent-types'
+import type { AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from './agent-types'
 import type {
   AiSettings,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
@@ -109,10 +109,10 @@ export interface NexGraphApi {
     uninstall(projectId: string): Promise<void>
   }
   ai: {
-    /** Cấu hình dẫn xuất của provider đang chọn, cho các panel hiển thị "chưa cấu hình" và host consent. */
+    /** Cấu hình của đích nhận dữ liệu đang chọn. */
     getSettings(): Promise<AiSettings>
-    hasConsent(projectId: string): Promise<boolean>
-    grantConsent(projectId: string): Promise<void>
+    hasConsent(projectId: string, target: AiConsentTarget): Promise<boolean>
+    grantConsent(projectId: string, target: AiConsentTarget): Promise<void>
   }
   /** Tài khoản AI: key chỉ ở main (safeStorage), renderer chỉ nhận `hasKey`. */
   auth: {
@@ -133,10 +133,10 @@ export interface NexGraphApi {
     onEvent(cb: (e: AuthEventView) => void): () => void
     onPrompt(cb: (p: AuthPromptView) => void): () => void
   }
-  /** Phiên agent theo dự án (giữ hội thoại trong bộ nhớ). Lỗi có `code`: `consent_required` | `ai_not_configured` | `agent_busy`. */
+  /** Phiên agent giữ hội thoại trong bộ nhớ cho cùng dự án và đích nhận dữ liệu. */
   agent: {
     /** Gửi một lượt; kết quả đến qua `onEvent` (`text`… rồi `done` hoặc `error`). Resolve khi lượt kết thúc. */
-    prompt(projectId: string, text: string): Promise<void>
+    prompt(projectId: string, text: string, target: AiConsentTarget): Promise<void>
     abort(projectId: string): Promise<void>
     /** Đổi chế độ; yêu cầu duyệt đang chờ bị từ chối. */
     setMode(projectId: string, mode: AgentMode): Promise<void>

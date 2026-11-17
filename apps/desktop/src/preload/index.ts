@@ -81,8 +81,8 @@ const api: NexGraphApi = {
   },
   ai: {
     getSettings: () => call('ai:get-settings'),
-    hasConsent: (pid) => call('ai:has-consent', pid),
-    grantConsent: (pid) => call('ai:grant-consent', pid)
+    hasConsent: (pid, target) => call('ai:has-consent', pid, target),
+    grantConsent: (pid, target) => call('ai:grant-consent', pid, target)
   },
   auth: {
     list: () => call('auth:list'),
@@ -101,7 +101,7 @@ const api: NexGraphApi = {
     onPrompt: (cb) => subscribe<AuthPromptView>('auth:login-prompt', cb)
   },
   agent: {
-    prompt: (pid, text) => call('agent:prompt', pid, text),
+    prompt: (pid, text, target) => call('agent:prompt', pid, text, target),
     abort: (pid) => call('agent:abort', pid),
     setMode: (pid, mode) => call('agent:set-mode', pid, mode),
     getMode: (pid) => call('agent:get-mode', pid),

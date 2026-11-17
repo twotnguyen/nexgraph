@@ -46,7 +46,9 @@ from nexgraph_engine.query.contracts import (
     stats_json,
 )
 from nexgraph_engine.query.context import build_context
+from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.query.paths import find_paths
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.report.build import report_json
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
@@ -125,7 +127,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
                 store = GraphStore(conn)
                 if not store.has_published_graph():
                     raise ToolError("Dự án chưa được lập chỉ mục xong")
-                return body(store)
+                return ModelGraph(store, root).filter(body(store))
             except ApiError as exc:  # lỗi nghiệp vụ dùng chung với HTTP -> lỗi tool đọc được
                 raise ToolError(exc.message) from exc
             finally:
@@ -172,7 +174,8 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     @mcp.tool(annotations=READ_ONLY)
     async def read_code(file: str, start: int | None = None, end: int | None = None) -> dict:
         """Đọc mã của tệp đã lập chỉ mục (đường dẫn tương đối trong dự án), tối đa 2.000 dòng."""
-        return await run("read_code", lambda s: read_code_json(s, root, file, start, end))
+        return await run("read_code", lambda s: read_code_json(
+            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude())))
 
     @mcp.tool(annotations=READ_ONLY)
     async def query_graph(question: str, depth: int = 2, budget: int = 2000,

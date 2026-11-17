@@ -10,7 +10,7 @@ import { toIpcResult } from './ipc-result'
 import { FsError, fsHandlers, isWithin, projectRoot } from './fs/project-fs'
 import { AgentError, AgentService } from './agent/session'
 import { AccountService } from './agent/accounts'
-import type { AgentMode, AuthEventView, AuthPromptView } from '../shared/agent-types'
+import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView } from '../shared/agent-types'
 import type { AiSettings } from '../shared/graph-types'
 import { SecretStore, writeJson } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
@@ -57,7 +57,7 @@ const savedExportDir = (pid: string): string | null => {
 
 /** Box mã hoá safeStorage (Keychain/DPAPI) dùng chung cho key MCP và key AI provider. */
 const secretBox = {
-  available: () => safeStorage.isEncryptionAvailable(),
+  available: () => safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend?.() !== 'basic_text'),
   encrypt: (s: string) => safeStorage.encryptString(s).toString('base64'),
   decrypt: (b64: string) => safeStorage.decryptString(Buffer.from(b64, 'base64'))
 }
@@ -203,23 +203,31 @@ export function registerIpc(
   const acc = (): Promise<AccountService> => accounts(win, dataDir)
   const derivedSettings = async (): Promise<AiSettings> => {
     const a = await acc()
-    const sel = a.getSelectedModel()
-    const p = sel && a.modelRuntime.getProvider(sel.provider)
+    const target = await a.getConsentTarget()
+    const model = a.getSelectedModel()
     return {
-      baseUrl: p?.baseUrl ?? '',
-      model: sel?.id ?? '',
-      hasKey: !!sel && a.hasKey(sel.provider),
-      provider: sel?.provider
+      baseUrl: target?.baseUrl ?? '',
+      model: model?.id ?? '',
+      hasKey: !!target && a.hasKey(target.provider),
+      provider: target?.provider
     }
   }
   on('ai:get-settings', () => derivedSettings())
-  on('ai:has-consent', async (pid: string) => (await acc()).hasConsent(pid))
-  on('ai:grant-consent', async (pid: string) => void (await acc()).grantConsent(pid))
+  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => (await acc()).hasConsent(pid, target))
+  on('ai:grant-consent', async (pid: string, target: AiConsentTarget) => {
+    await rootOf(pid)
+    await (await acc()).grantConsent(pid, target)
+  })
   on('auth:list', async () => (await acc()).listProviders())
   on('auth:set-key', async (providerId: string, key: string) => (await acc()).setApiKey(providerId, key))
   on('auth:remove-key', async (providerId: string) => (await acc()).removeApiKey(providerId))
-  on('auth:save-custom', async (p: Parameters<AccountService['saveCustomProvider']>[0], apiKey?: string) => (await acc()).saveCustomProvider(p, apiKey))
-  on('auth:remove-custom', async (id: string) => (await acc()).removeCustomProvider(id))
+  on('auth:save-custom', async (p: Parameters<AccountService['saveCustomProvider']>[0], apiKey?: string) => {
+    try { await (await acc()).saveCustomProvider(p, apiKey) } finally { agent.selectionChanged() }
+  })
+  on('auth:remove-custom', async (id: string) => {
+    await (await acc()).removeCustomProvider(id)
+    agent.selectionChanged()
+  })
   on('auth:login', async (providerId: string) => (await acc()).loginOAuth(providerId))
   on('auth:login-cancel', async () => {
     cancelPendingAuthPrompts()
@@ -233,21 +241,20 @@ export function registerIpc(
   })
   on('auth:logout', async (providerId: string) => (await acc()).logout(providerId))
   on('auth:models', async () => (await acc()).listModels())
-  on('auth:select-model', async (provider: string, id: string) => (await acc()).selectModel(provider, id))
+  on('auth:select-model', async (provider: string, id: string) => {
+    (await acc()).selectModel(provider, id)
+    agent.selectionChanged()
+  })
   on('auth:test', async () => (await acc()).test())
   // EngineApi đọc baseUrl/token mỗi lần gọi nên theo kịp engine khởi động lại.
   const liveApi = new EngineApi({ get baseUrl() { return handle().baseUrl }, get token() { return handle().token } })
   const agent = (agents = new AgentService({
     api: liveApi, dataDir,
-    models: async () => {
-      const a = await acc()
-      return { modelRuntime: a.modelRuntime, selected: a.getSelectedModel() }
-    },
-    hasConsent: async (pid) => (await acc()).hasConsent(pid),
-    rootOf: projectRoot(() => api().listProjects()),
+    accounts: acc,
+    rootOf,
     emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
   }))
-  on('agent:prompt', (pid: string, text: string) => agent.prompt(pid, text))
+  on('agent:prompt', (pid: string, text: string, target: AiConsentTarget) => agent.prompt(pid, text, target))
   on('agent:abort', (pid: string) => agent.abort(pid))
   on('agent:set-mode', async (pid: string, mode: AgentMode) => agent.setMode(pid, mode === 'edit' ? 'edit' : 'ask'))
   on('agent:get-mode', async (pid: string) => agent.getMode(pid))

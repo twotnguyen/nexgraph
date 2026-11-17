@@ -84,7 +84,10 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
 
   await api.auth.saveCustom({ id: 'smoke', label: 'Smoke local', baseUrl, model: 'fake' })
   await api.auth.selectModel('smoke', 'fake')
-  await api.ai.grantConsent(pid)
+  const settings = await api.ai.getSettings()
+  if (settings.provider !== 'smoke' || !settings.baseUrl) throw new Error('agent IPC did not expose the selected smoke provider')
+  const target = { provider: settings.provider, baseUrl: settings.baseUrl }
+  await api.ai.grantConsent(pid, target)
   let result = ''
   const off = api.agent.onEvent((eventPid, event) => {
     if (eventPid !== pid) return
@@ -92,7 +95,7 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
     if (event.type === 'error') result = `ERROR: ${event.code}`
   })
   try {
-    await api.agent.prompt(pid, 'NEXGRAPH_SMOKE')
+    await api.agent.prompt(pid, 'NEXGRAPH_SMOKE', target)
     if (result !== 'NEXGRAPH_SMOKE_OK') throw new Error(`agent IPC failed: ${result}`)
   } finally {
     off()

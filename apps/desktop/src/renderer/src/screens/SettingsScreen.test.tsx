@@ -28,6 +28,24 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText(/không cho phép dùng gói đăng ký trong ứng dụng bên thứ ba/)).toBeInTheDocument()
   })
 
+  it('giải thích kho khoá vắng và vô hiệu hoá đăng nhập OAuth', async () => {
+    const issue = 'Kho khoá an toàn của hệ điều hành không khả dụng.'
+    installNexgraph({ auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true, oauthStorageIssue: issue })]) } })
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('status')).toHaveTextContent(issue)
+    expect(screen.getByRole('button', { name: 'Đăng nhập' })).toBeDisabled()
+  })
+
+  it('vẫn cho đăng xuất khi không đọc được điểm đến OAuth', async () => {
+    const { api } = installNexgraph({
+      ai: { getSettings: vi.fn(async () => { throw new Error('Không xác minh được điểm đến OAuth') }) },
+      auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true, loggedIn: true })]) }
+    })
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Đăng xuất' }))
+    expect(api.auth.logout).toHaveBeenCalledWith('openai-codex')
+  })
+
   it('ô khoá không bao giờ hiển thị giá trị đã lưu (placeholder thay thế)', async () => {
     installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic', { hasKey: true })]) } })
     render(<SettingsScreen onBack={() => {}} />)

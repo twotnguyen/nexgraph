@@ -3,12 +3,12 @@ import http from 'node:http'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AgentService } from '../src/main/agent/session'
 import { AccountService } from '../src/main/agent/accounts'
 import { SecretStore } from '../src/main/ai/settings'
 import type { EngineApi } from '../src/main/engine/api'
-import type { AgentEvent } from '../src/shared/agent-types'
+import type { AgentEvent, AiConsentTarget } from '../src/shared/agent-types'
 
 const KEY = 'sk-test-khong-duoc-ghi-ra-dia'
 const OUTSIDE = `/tmp/x-outside-${process.pid}-${Date.now()}`
@@ -25,17 +25,23 @@ const SCRIPT: Record<string, [string, object]> = {
   'viết d.txt': ['write', { path: 'd.txt', content: 'bị dừng' }],
   'ghi e.txt': ['write', { path: 'e.txt', content: 'độc hại' }],
   'sửa f.txt': ['edit', { path: 'f.txt', edits: [{ oldText: 'gốc', newText: 'bản AI' }] }],
+  'đọc marker.txt': ['read', { path: 'marker.txt' }],
+  'viết g.txt': ['write', { path: 'g.txt', content: 'không được ghi' }],
   'đọc ngoài': ['read', { path: OUTSIDE_READ }],
   'đọc nháy': ['read', { path: "a'b.txt" }]
 }
 
-function fakeLlm(seen: { auth: string[]; tools: string[][]; bodies: string[] }): Promise<{ url: string; close: () => Promise<void> }> {
+function fakeLlm(seen: { auth: string[]; tools: string[][]; bodies: string[] }, redirectTo?: string): Promise<{ url: string; close: () => Promise<void> }> {
   const srv = http.createServer((req, res) => {
     let body = ''
     req.on('data', (c) => (body += c))
     req.on('end', () => {
       seen.auth.push(String(req.headers.authorization))
       seen.bodies.push(body)
+      if (redirectTo) {
+        res.writeHead(307, { location: redirectTo })
+        return res.end()
+      }
       const j = JSON.parse(body || '{}') as { messages?: Msg[]; tools?: { function: { name: string } }[] }
       seen.tools.push((j.tools ?? []).map((t) => t.function.name))
       const msgs = j.messages ?? []
@@ -73,6 +79,8 @@ describe('AgentService + pi SDK thật', () => {
   const events: AgentEvent[] = []
   const searches: unknown[] = []
   let llm: Awaited<ReturnType<typeof fakeLlm>>
+  let accounts: AccountService
+  let target: AiConsentTarget
   let svc: AgentService
   let root: string
   let dataDir: string
@@ -89,19 +97,23 @@ describe('AgentService + pi SDK thật', () => {
     writeFileSync(join(root, 'AGENTS.md'), `# Quy ước\n${MARK.root}\n`)
     writeFileSync(join(base, 'AGENTS.md'), `# Ngoài dự án\n${MARK.parent}\n`)
     writeFileSync(OUTSIDE_READ, MARK.outside)
-    const accounts = await AccountService.create({
+    accounts = await AccountService.create({
       dataDir, prefsFile: join(base, 'prefs.json'),
       secrets: new SecretStore(join(base, 'key.json'), { available: () => true, encrypt: (s) => `enc:${s}`, decrypt: (s) => s.slice(4) }),
       openExternal: () => {}, notify: () => {}, ask: async () => null
     })
     await accounts.saveCustomProvider({ id: 'fake', label: 'Fake', baseUrl: llm.url, model: 'fake-1' }, KEY)
     accounts.selectModel('fake', 'fake-1')
+    target = (await accounts.getConsentTarget())!
+    await accounts.grantConsent('p1', target)
     const api = {
+      forModel() { return this },
+      aiSourceExcludes: async () => [],
       search: async (...a: unknown[]) => { searches.push(a); return [] },
       code: async (_p: string, file: string, start: number, end: number) => ({ file, start, end, text: 'print(1)' })
     } as unknown as EngineApi
     svc = new AgentService({
-      api, dataDir, models: async () => ({ modelRuntime: accounts.modelRuntime, selected: accounts.getSelectedModel() }), hasConsent: async () => true,
+      api, dataDir, accounts: async () => accounts,
       rootOf: async () => root, emit: (_pid, e) => events.push(e)
     })
   }, 30_000)
@@ -117,7 +129,7 @@ describe('AgentService + pi SDK thật', () => {
   /** Chạy một lượt; khi có yêu cầu duyệt thì trả lời bằng `answer`. */
   async function turn(text: string, answer?: boolean, beforeApproval?: () => void) {
     const from = events.length
-    const run = svc.prompt('p1', text)
+    const run = svc.prompt('p1', text, target)
     if (answer !== undefined) {
       const t0 = Date.now()
       while (!events.slice(from).some((e) => e.type === 'approval')) {
@@ -186,7 +198,7 @@ describe('AgentService + pi SDK thật', () => {
 
   it('dừng khi đang chờ duyệt → prompt() kết thúc với ai_cancelled, không còn yêu cầu treo, tệp không được tạo', async () => {
     const from = events.length
-    const run = svc.prompt('p1', 'viết d.txt')
+    const run = svc.prompt('p1', 'viết d.txt', target)
     while (!events.slice(from).some((e) => e.type === 'approval')) await new Promise((r) => setTimeout(r, 10))
     await svc.abort('p1')
     await run
@@ -245,7 +257,7 @@ describe('AgentService + pi SDK thật', () => {
     writeFileSync(join(root, 'e.txt'), 'an toàn\n')
     svc.setMode('p1', 'edit')
     const from = events.length
-    const run = svc.prompt('p1', 'ghi e.txt')
+    const run = svc.prompt('p1', 'ghi e.txt', target)
     while (!events.slice(from).some((e) => e.type === 'approval')) await new Promise((r) => setTimeout(r, 10))
     const approval = events.slice(from).find((e) => e.type === 'approval') as Extract<AgentEvent, { type: 'approval' }>
     expect(approval.request).toMatchObject({ tool: 'write', path: 'e.txt', before: 'an toàn\n', after: 'độc hại' })
@@ -260,5 +272,100 @@ describe('AgentService + pi SDK thật', () => {
     expect(svc.pending('p1')).toBe(0)
     rmSync(join(root, 'e.txt'), { force: true })
     rmSync(outsideFile, { force: true })
+  }, 30_000)
+
+  it('SDK đổi endpoint sau khi kiểm đồng ý → chặn payload ở endpoint mới', async () => {
+    const redirectedSeen = { auth: [] as string[], tools: [] as string[][], bodies: [] as string[] }
+    const redirected = await fakeLlm(redirectedSeen)
+    const auth = vi.spyOn(accounts.modelRuntime, 'getAuth').mockResolvedValueOnce({
+      auth: { apiKey: KEY, baseUrl: redirected.url },
+    } as Awaited<ReturnType<typeof accounts.modelRuntime.getAuth>>)
+    const requestCount = seen.bodies.length
+    try {
+      await svc.prompt('p1', 'chỉ gửi tới endpoint đã đồng ý', target)
+      expect(lastEnd()).toMatchObject({ type: 'error', code: 'ai_provider_changed' })
+      expect(auth).toHaveBeenCalled()
+      expect(seen.bodies).toHaveLength(requestCount)
+      expect(redirectedSeen.bodies).toHaveLength(0)
+    } finally {
+      auth.mockRestore()
+      await redirected.close()
+    }
+  }, 30_000)
+
+  it('nhà cung cấp OpenAI-compatible trả 307 → không chuyển payload hoặc API key sang máy chủ khác', async () => {
+    const firstSeen = { auth: [] as string[], tools: [] as string[][], bodies: [] as string[] }
+    const secondSeen = { auth: [] as string[], tools: [] as string[][], bodies: [] as string[] }
+    const second = await fakeLlm(secondSeen)
+    const first = await fakeLlm(firstSeen, `${second.url}/chat/completions`)
+    try {
+      await accounts.saveCustomProvider({ id: 'redirect', label: 'Redirect', baseUrl: first.url, model: 'fake-1' }, KEY)
+      accounts.selectModel('redirect', 'fake-1')
+      svc.selectionChanged()
+      const redirectTarget = (await accounts.getConsentTarget())!
+      await accounts.grantConsent('p1', redirectTarget)
+      await svc.prompt('p1', 'chỉ gửi nội dung đến đích ban đầu', redirectTarget)
+
+      expect(lastEnd()).toMatchObject({ type: 'error' })
+      expect(firstSeen.bodies.some((body) => body.includes('chỉ gửi nội dung đến đích ban đầu'))).toBe(true)
+      expect(secondSeen.bodies).toHaveLength(0)
+      expect(secondSeen.auth).toHaveLength(0)
+    } finally {
+      accounts.selectModel('fake', 'fake-1')
+      svc.selectionChanged()
+      await Promise.all([first.close(), second.close()])
+    }
+  }, 30_000)
+
+  it('đổi nhà cung cấp lúc đang duyệt thao tác → huỷ lượt và phiên mới không nhận lịch sử cũ', async () => {
+    svc.setMode('p1', 'ask')
+    const marker = 'PRIVATE-TOOL-RESULT-c919'
+    writeFileSync(join(root, 'marker.txt'), marker)
+    await turn('đọc marker.txt')
+    expect(seen.bodies.at(-1)?.includes(marker)).toBe(true)
+    await accounts.saveCustomProvider({ id: 'fake', label: 'Fake', baseUrl: llm.url, model: 'fake-2' })
+    accounts.selectModel('fake', 'fake-2')
+    svc.selectionChanged()
+    await turn('tiếp tục với model khác cùng đích nhận')
+    expect(seen.bodies.at(-1)?.includes(marker)).toBe(true)
+
+    const secondSeen = { auth: [] as string[], tools: [] as string[][], bodies: [] as string[] }
+    const second = await fakeLlm(secondSeen)
+    try {
+      await accounts.saveCustomProvider({ id: 'fake-b', label: 'Fake B', baseUrl: second.url, model: 'fake-1' })
+      svc.setMode('p1', 'edit')
+      const from = events.length
+      const run = svc.prompt('p1', 'viết g.txt', target)
+      const approval = await vi.waitFor(() => {
+        const event = events.slice(from).find((e) => e.type === 'approval')
+        if (!event) throw new Error('không thấy sự kiện approval')
+        return event.request
+      }, { timeout: 10_000 })
+      const requestsBeforeSwitch = seen.bodies.length
+
+      accounts.selectModel('fake-b', 'fake-1')
+      svc.selectionChanged()
+      svc.approve('p1', approval.id, true)
+      await run
+
+      expect(lastEnd()).toMatchObject({ type: 'error', code: 'ai_provider_changed' })
+      expect(svc.pending('p1')).toBe(0)
+      expect(existsSync(join(root, 'g.txt'))).toBe(false)
+      expect(seen.bodies).toHaveLength(requestsBeforeSwitch)
+      await expect(svc.prompt('p1', 'dùng lựa chọn cũ', target)).rejects.toMatchObject({ code: 'ai_provider_changed' })
+      const secondTarget = (await accounts.getConsentTarget())!
+      await expect(svc.prompt('p1', 'chưa đồng ý', secondTarget)).rejects.toMatchObject({ code: 'consent_required' })
+      expect(secondSeen.bodies).toHaveLength(0)
+
+      await accounts.grantConsent('p1', secondTarget)
+      await svc.prompt('p1', 'bắt đầu với nhà cung cấp mới', secondTarget)
+      expect(lastEnd()).toMatchObject({ type: 'done' })
+      expect(secondSeen.bodies).toHaveLength(1)
+      expect(secondSeen.bodies[0]).toContain('bắt đầu với nhà cung cấp mới')
+      expect(secondSeen.bodies[0]).not.toContain(marker)
+      expect(secondSeen.bodies[0]).not.toContain('viết g.txt')
+    } finally {
+      await second.close()
+    }
   }, 30_000)
 })

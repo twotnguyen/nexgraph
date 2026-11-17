@@ -1,4 +1,4 @@
-import { relative, sep } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { Type } from 'typebox'
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent' // chỉ kiểu: pi là ESM, không import tĩnh giá trị
@@ -6,6 +6,7 @@ import type { EngineApi } from '../engine/api'
 import { FsError, isProtectedRel, readProjectFile, resolveInside, writeProjectFile } from '../fs/project-fs'
 import { TOOL_DEFS, runTool } from '../ai/tools'
 import { toProjectRelative, type ApprovedWrite, type ApprovalGate, type WritePreview } from './approval'
+import { registerScopedFileTools } from './file-tools'
 
 const GRAPH_TOOLS: string[] = TOOL_DEFS.map((t) => t.function.name)
 const ALLOWED = new Set([...GRAPH_TOOLS, 'read', 'grep', 'find', 'ls', 'edit', 'write', 'bash'])
@@ -30,6 +31,7 @@ export function createNexgraphExtension(deps: {
         }
       })
     }
+    registerScopedFileTools(pi, deps.root, () => deps.api.aiSourceExcludes(deps.projectId))
 
     // Ghi đè write/edit dựng sẵn của pi (registry đặt tool extension LÊN TRÊN builtin cùng tên:
     // agent-session.ts _refreshToolRegistry — builtin trước, extension sau). Execute revalidate đúng
@@ -130,8 +132,9 @@ async function executeApprovedWrite(
       assertApprovedPath(snap.path)
     } })
   } catch (e) {
-    if (e instanceof FsError && (e.code === 'conflict' || e.code === 'outside_project')) {
-      const reason = e.code === 'outside_project' ? 'Đường dẫn nằm ngoài dự án' : e.message
+    if (e instanceof FsError && (e.code === 'conflict' || e.code === 'outside_project' || e.code === 'protected_path')) {
+      const reason = e.code === 'outside_project' ? 'Đường dẫn nằm ngoài dự án'
+        : e.code === 'protected_path' ? 'Đường dẫn dẫn tới tệp hoặc thư mục được bảo vệ' : e.message
       const message = `${reason}. Chưa ghi thay đổi. Hãy đọc lại tệp và duyệt bản xem trước mới.`
       deps.onWriteConflict?.(message)
       throw new FsError('conflict', message)
@@ -145,13 +148,13 @@ async function executeApprovedWrite(
 // (coding-agent/src/core/tools/path-utils.ts:46-48 → utils/paths.ts:120-150) nên cùng bị viết lại.
 const PATH_TOOLS = new Set(['read', 'write', 'edit', 'ls', 'grep', 'find'])
 const OPTIONAL_PATH = new Set(['ls', 'grep', 'find'])
+const PROTECTED_PATH = 'Đường dẫn tới tệp hoặc thư mục được bảo vệ (.git, .nexgraph, .env, khoá…), thao tác bị chặn'
 // Chép từ utils/paths.ts:7 (UNICODE_SPACES); pi đổi các ký tự này thành dấu cách thường.
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/
 
 /**
  * Trả lý do chặn (tiếng Việt) hoặc undefined. Chặn path mà pi sẽ viết lại (@, ~, file:, dấu cách Unicode) thay vì tự chuẩn hoá,
- * chặn path ngoài root, rồi ghi path tuyệt đối đã kiểm vào input: pi chạy đúng chuỗi đó (agent-loop.ts:742,770 dùng chung một args;
- * path tuyệt đối đi qua resolveToCwd nguyên vẹn, paths.ts:150).
+ * chặn path ngoài root. Tool đọc giữ tên alias để kiểm tra luật bỏ qua trên cả alias và đích thật.
  */
 function pinPath(root: string, tool: string, input: unknown): string | undefined {
   const i = input as { path?: unknown } | null
@@ -166,18 +169,18 @@ function pinPath(root: string, tool: string, input: unknown): string | undefined
   } catch {
     return 'Đường dẫn nằm ngoài dự án'
   }
-  if (isProtectedRel(rel)) return 'Đường dẫn tới tệp hoặc thư mục được bảo vệ (.git, .nexgraph, .env, khoá…), thao tác bị chặn'
+  if (isProtectedRel(rel)) return PROTECTED_PATH
   let abs: string
   try {
     abs = resolveInside(root, rel)
-  } catch {
+  } catch (error) {
+    if (error instanceof FsError && error.code === 'protected_path') return PROTECTED_PATH
     return 'Đường dẫn nằm ngoài dự án'
   }
   if (UNICODE_SPACES.test(abs)) return 'Đường dẫn tuyệt đối chứa dấu cách Unicode, thao tác bị chặn'
-  // read: path phải tồn tại. pi resolveReadPathAsync (path-utils.ts:72-101) thử biến thể dấu nháy thẳng→cong và NFD
-  // khi path vắng — chặn ở đây để không bao giờ đọc tệp khác mà gate chưa kiểm (ví dụ a'b vắng nhưng a’b là symlink ngoài).
+  // Không thử biến thể chính tả của tệp chưa tồn tại.
   if (tool === 'read' && !existsSync(abs)) return 'Tệp không tồn tại'
-  i.path = abs
+  i.path = tool === 'write' || tool === 'edit' ? abs : resolve(realpathSync.native(root), rel)
   return undefined
 }
 

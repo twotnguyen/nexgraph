@@ -27,16 +27,20 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const loginPending = useRef(false)
 
   const load = useCallback(async () => {
+    const currentSettings = window.nexgraph.ai.getSettings().then(setSettings).catch((e) => {
+      setSettings(null)
+      setError(errMessage(e))
+    })
     try {
       const a = window.nexgraph.auth
-      const [providers, models, settings] = await Promise.all([a.list(), a.models(), window.nexgraph.ai.getSettings()])
+      const [providers, models] = await Promise.all([a.list(), a.models()])
       setProviders(providers)
       setModels(models)
-      setSettings(settings)
       setKeyProvider((prev) => prev || providers.find((p) => !p.custom && p.hasKey)?.id || providers.find((p) => !p.custom)?.id || '')
     } catch (e) {
       setError(errMessage(e))
     }
+    await currentSettings
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -120,6 +124,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const keyTarget = providers.find((p) => p.id === keyProvider)
   const customs = providers.filter((p) => p.custom)
   const oauthProviders = providers.filter((p) => p.oauth && !p.custom)
+  const oauthStorageIssue = oauthProviders.find((p) => p.oauthStorageIssue)?.oauthStorageIssue
 
   return (
     <main className="screen settings">
@@ -176,6 +181,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
       <h2>{vi.accounts.oauthTitle}</h2>
       <p className="muted">{vi.accounts.oauthWarning}</p>
+      {oauthStorageIssue && <p role="status" className="muted">{oauthStorageIssue}</p>}
       {loginEvent && <p className="muted">{'userCode' in loginEvent ? `${vi.accounts.oauthUserCode}: ${loginEvent.userCode}` : 'url' in loginEvent ? loginEvent.instructions ?? loginEvent.url : loginEvent.message}</p>}
       {loginProvider && <div className="row"><button type="button" onClick={loginCancel}>{vi.accounts.oauthCancel}</button></div>}
       {loginPrompt && (
@@ -204,7 +210,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           <span>{p.label}</span>
           {p.loggedIn
             ? <button type="button" onClick={() => void run(async () => { await window.nexgraph.auth.logout(p.id) }, vi.accounts.saved)}>{vi.accounts.oauthLogout}</button>
-            : <button type="button" onClick={() => login(p.id)}>{vi.accounts.oauthLogin}</button>}
+            : <button type="button" disabled={!!loginProvider || !!p.oauthStorageIssue} onClick={() => login(p.id)}>{vi.accounts.oauthLogin}</button>}
         </div>
       ))}
 
