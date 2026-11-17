@@ -55,7 +55,17 @@ const ChangesIcon = (
   </svg>
 )
 
-export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings }: { project: ProjectSummary; initialTab?: Tab; initialFlowId?: number; onBack?: () => void; onOpenSettings?: () => void }) {
+interface Props {
+  project: ProjectSummary
+  initialTab?: Tab
+  initialFlowId?: number
+  onBack?: () => void
+  onOpenSettings?: () => void
+  backLabel?: string
+  indexNotice?: string
+}
+
+export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, backLabel = vi.workspace.back, indexNotice }: Props) {
   const [chatOpen, setChatOpen] = useState(false)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -276,7 +286,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       )}
       <section className="center">
         <header className="ws-head">
-          {onBack && <button type="button" className="link" onClick={guardLeave(onBack)}>{vi.workspace.back}</button>}
+          {onBack && <button type="button" className="link" onClick={guardLeave(onBack)}>{backLabel}</button>}
           <b className="ws-name"><Logo size={18} /> {project.name}</b>
           <span className="muted mono">{project.path}</span>
           <span className="ws-actions">
@@ -286,6 +296,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             </button>
           </span>
         </header>
+        {indexNotice && <div role="status" className="ws-index-status muted">{indexNotice}</div>}
         {exportScope && (
           <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} initialFormat={exportFormat}
             onClose={() => setExportScope(null)} />

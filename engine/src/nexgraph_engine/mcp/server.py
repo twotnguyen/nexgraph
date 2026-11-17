@@ -87,7 +87,7 @@ def resolve_graph_db(project: Path, data_dir: Path | None) -> Path:
     if in_project.is_file():
         return in_project
     if data_dir is not None and (data_dir / "app.db").is_file():
-        for info in ProjectRegistry(data_dir).list_projects():
+        for info in ProjectRegistry(data_dir, read_only=True).list_projects():
             if info.path.resolve() == root and info.graph_db.is_file():
                 return info.graph_db
     raise ProjectNotIndexed(f"Dự án chưa được lập chỉ mục trong NexGraph: {root}")
@@ -122,7 +122,10 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
             except (sqlite3.Error, OSError) as exc:
                 raise ToolError(f"Không mở được dữ liệu đồ thị: {exc}") from exc
             try:
-                return body(GraphStore(conn))
+                store = GraphStore(conn)
+                if not store.has_published_graph():
+                    raise ToolError("Dự án chưa được lập chỉ mục xong")
+                return body(store)
             except ApiError as exc:  # lỗi nghiệp vụ dùng chung với HTTP -> lỗi tool đọc được
                 raise ToolError(exc.message) from exc
             finally:

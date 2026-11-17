@@ -333,11 +333,12 @@ def _many_py(tmp_path, n=40):
 
 
 def test_parallel_index_equals_serial(tmp_path, index_project, monkeypatch):
+    from nexgraph_engine.index import indexer
     from test_refresh import graph_state
     root = _many_py(tmp_path / "p")
     monkeypatch.setenv("NEXGRAPH_INDEX_WORKERS", "1")
     serial, _, _ = index_project(root)
-    monkeypatch.setenv("NEXGRAPH_INDEX_WORKERS", "3")
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 3)
     parallel, r, events = index_project(root)
     assert r.state == "hoan_tat"
     assert graph_state(parallel) == graph_state(serial)
@@ -345,7 +346,8 @@ def test_parallel_index_equals_serial(tmp_path, index_project, monkeypatch):
 
 
 def test_cancel_during_parallel_index(tmp_path, index_project, monkeypatch):
-    monkeypatch.setenv("NEXGRAPH_INDEX_WORKERS", "3")
+    from nexgraph_engine.index import indexer
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 3)
     cancel = threading.Event()
     store, r, _ = index_project(_many_py(tmp_path / "p", 60), cancel=cancel,
                                 on_event=lambda e: e.files_done == 5 and cancel.set())
@@ -354,12 +356,45 @@ def test_cancel_during_parallel_index(tmp_path, index_project, monkeypatch):
 
 
 def test_broken_file_in_worker_does_not_stop_job(tmp_path, index_project, monkeypatch):
-    monkeypatch.setenv("NEXGRAPH_INDEX_WORKERS", "3")
+    from nexgraph_engine.index import indexer
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 3)
     root = _many_py(tmp_path / "p", 30)
     (root / "bad.py").write_bytes(b"def broken(:\n\x00\xff")
     store, r, _ = index_project(root)
     assert r.state == "hoan_tat"
     assert store.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 31
+
+
+def test_stalled_workers_fall_back_without_repeating_completed_files(tmp_path, index_project, monkeypatch):
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    class StalledPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            self.batches = 0
+
+        def submit(self, fn, *args):
+            future = Future()
+            if self.batches == 0:
+                future.set_result(fn(*args))
+            self.batches += 1
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            assert not wait and cancel_futures
+
+    root = _many_py(tmp_path / "p")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", StalledPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    recovered, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert graph_state(recovered) == graph_state(serial)
+    assert [e.files_done for e in events if e.state == "structure"] == list(range(41))
 
 
 def test_index_workers_policy(monkeypatch):

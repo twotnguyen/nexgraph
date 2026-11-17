@@ -49,7 +49,7 @@ def test_job_runs_to_done_and_emits_events(env):
     progress = [e["state"] for e in events if e["type"] == "job_progress"]
     assert progress[0] == "queued" and progress[-1] == "done" and "structure" in progress and "resolve" in progress
     assert [e for e in events if e["type"] == "graph_updated"] == [
-        {"type": "graph_updated", "project_id": info.project_id}] * 2
+        {"type": "graph_updated", "project_id": info.project_id}]
     assert all(e["job_id"] == job_id and e["project_id"] == info.project_id
                for e in events if e["type"] == "job_progress")
 
@@ -74,8 +74,9 @@ def test_second_start_while_running_rejected(env):
     manager = JobManager(registry, bus, indexer_cls=BlockingIndexer)
     try:
         first = manager.start_index(info.project_id)
-        with pytest.raises(IndexAlreadyRunning):
+        with pytest.raises(IndexAlreadyRunning) as conflict:
             manager.start_index(info.project_id)
+        assert conflict.value.job_id == first
         BlockingIndexer.gate.set()
         wait_done(manager, first)
         assert manager.start_index(info.project_id)  # chạy lại được sau khi xong

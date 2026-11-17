@@ -12,6 +12,7 @@ from pathlib import Path
 from nexgraph_engine.changes.model import MAX_FILES as _MAX_FILES_DEFAULT  # noqa: F401  (đọc lại ở lúc gọi)
 from nexgraph_engine.changes.model import ChangeSet, FileChange
 from nexgraph_engine.index.discovery import GENERATED_SUFFIXES, SKIP_DIRS, language_of
+from nexgraph_engine.subprocesses import run_captured
 
 MAX_FILES = _MAX_FILES_DEFAULT
 TIMEOUT = 15
@@ -27,8 +28,8 @@ class _GitError(Exception):
 def _git(root: Path, *args: str) -> str:
     env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
     try:
-        out = subprocess.run(["git", "--no-optional-locks", "-c", "core.quotepath=off", *args], cwd=root, env=env,
-                             capture_output=True, timeout=TIMEOUT)
+        out = run_captured(["git", "--no-optional-locks", "-c", "core.quotepath=off", *args],
+                           cwd=root, env=env, timeout=TIMEOUT)
     except FileNotFoundError:
         raise _GitError("no_git") from None
     except (OSError, subprocess.SubprocessError):

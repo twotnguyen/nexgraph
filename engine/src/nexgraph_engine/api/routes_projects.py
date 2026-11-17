@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
-from nexgraph_engine.api.errors import ApiError
+from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.index import scan as scan_module
 from nexgraph_engine.schema.db import SchemaVersionError, open_graph_db
@@ -29,7 +29,8 @@ def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
     try:
         conn = open_graph_db(info.graph_db, read_only=True)
         try:
-            run = GraphStore(conn).last_completed_run()
+            store = GraphStore(conn)
+            run = store.last_completed_run() if store.has_published_graph() else None
         finally:
             conn.close()
     except Exception:
@@ -64,7 +65,7 @@ def list_projects(request: Request) -> list[dict]:
 
 
 @router.post("/projects/{project_id}/index", status_code=202)
-def start_index(project_id: str, request: Request, body: IndexBody | None = None) -> dict:
+def start_index(project_id: str, request: Request, body: IndexBody | None = None):
     try:
         return {"job_id": request.app.state.services.jobs.start_index(project_id, subdir=body.subdir if body else None,
                                                                        exclude=[e for e in body.exclude if e.strip()] if body else None,
@@ -75,7 +76,7 @@ def start_index(project_id: str, request: Request, body: IndexBody | None = None
     except UnknownProject as exc:
         raise ApiError(404, "unknown_project", f"Không có dự án {project_id}") from exc
     except IndexAlreadyRunning as exc:
-        raise ApiError(409, "index_running", "Dự án đang được lập chỉ mục") from exc
+        return error_response(409, "index_running", "Dự án đang được lập chỉ mục", job_id=exc.job_id)
 
 
 @router.get("/jobs/{job_id}")

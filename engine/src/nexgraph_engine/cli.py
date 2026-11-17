@@ -41,11 +41,13 @@ def _build_parser() -> argparse.ArgumentParser:
 def _refresh(project: Path, data_dir: Path | None) -> int:
     """In một dòng JSON; thoát 0 kể cả khi bỏ qua (không bao giờ làm commit thất bại), 3 khi dự án chưa lập chỉ mục."""
     import sqlite3
+    from contextlib import closing
 
     from nexgraph_engine.index.refresh import refresh_project
     from nexgraph_engine.mcp.server import ProjectNotIndexed, resolve_graph_db
     from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
 
     skipped = {"status": "skipped", "reason": "index_running", "added": 0, "changed": 0, "removed": 0, "seconds": 0.0}
     try:
@@ -54,19 +56,16 @@ def _refresh(project: Path, data_dir: Path | None) -> int:
         print(str(exc), file=sys.stderr)
         return 3
     try:
-        conn = open_graph_db(db)
-        try:
+        with graph_writer(db) as path, closing(open_graph_db(path)) as conn:
             store = GraphStore(conn)
-            if store.last_completed_run() is None:
+            if not store.has_published_graph():
                 print(f"Dự án chưa được lập chỉ mục trong NexGraph: {project}", file=sys.stderr)
                 return 3
             if conn.execute("SELECT 1 FROM lan_lap_chi_muc WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai') LIMIT 1").fetchone():
                 print(json.dumps(skipped))
                 return 0
             r = refresh_project(store, project.resolve())
-        finally:
-            conn.close()
-    except sqlite3.OperationalError:  # CSDL đang bị app khoá để ghi
+    except (GraphWriteBusy, sqlite3.OperationalError):
         print(json.dumps(skipped))
         return 0
     print(json.dumps({"status": "ok", "added": r.added, "changed": r.changed, "removed": r.removed,

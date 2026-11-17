@@ -6,6 +6,8 @@ Tài liệu mô tả cấu trúc lưu trữ và cách mã sử dụng nó ở m�
 
 `graph.db` mặc định ở `<project>/.nexgraph/graph.db`. Nếu dự án không dùng được chỗ này, registry có thể đặt DB ở `<engine-data>/projects/<projectId>/graph.db`. Mỗi DB chứa tối đa một hàng `du_an`. Khi mở DB để ghi, engine bật WAL và khóa ngoại, đồng thời có migration 1→2→3→4→5. SQLite từ 3.43 hỗ trợ cấu hình FTS5 cần dùng. ERD biểu diễn bảng và khóa chính/ngoại. Các thuộc tính có ràng buộc duy nhất, mặc định, nullable hoặc trigger đối chiếu trong SQL. [Schema và trigger Graph v5](../../engine/src/nexgraph_engine/schema/graph.sql) · [Mở DB và nâng cấp](../../engine/src/nexgraph_engine/schema/db.py) · [Chọn chỗ lưu](../../engine/src/nexgraph_engine/store/projects.py)
 
+Lượt lập chỉ mục đầy đủ dùng CSDL tạm riêng ở cùng thư mục. Chỉ khi hoàn tất, SQLite backup công bố toàn bộ đồ thị vào `graph.db` tại đường dẫn cũ. Các giao dịch đọc đang mở giữ snapshot ban đầu. `lan_lap_chi_muc` trong `graph.db` giữ lịch sử đã công bố. Trạng thái lượt đang dựng, lỗi và hủy được báo qua API job của engine. [Công bố SQLite](../../engine/src/nexgraph_engine/store/publication.py) · [API job](../../engine/src/nexgraph_engine/api/routes_projects.py)
+
 ```mermaid
 erDiagram
     DU_AN ||..o{ LAN_LAP_CHI_MUC : "có lượt lập chỉ mục"

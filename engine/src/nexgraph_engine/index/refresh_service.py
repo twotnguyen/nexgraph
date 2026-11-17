@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import threading
+from contextlib import closing
 
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.jobs import JobManager, UnknownProject
@@ -9,6 +10,7 @@ from nexgraph_engine.index.refresh import refresh_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectRegistry
+from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
 
 
 class NotIndexed(Exception):
@@ -46,14 +48,13 @@ class RefreshService:
         if self._jobs.is_active(project_id) or not lock.acquire(blocking=False):
             raise IndexAlreadyRunning(project_id)
         try:
-            conn = open_graph_db(info.graph_db)
-            try:
+            with graph_writer(info.graph_db) as db, closing(open_graph_db(db)) as conn:
                 store = GraphStore(conn)
-                if store.last_completed_run() is None:
+                if not store.has_published_graph():
                     raise NotIndexed(project_id)
                 count = detect_communities(store)
-            finally:
-                conn.close()
+        except GraphWriteBusy as exc:
+            raise IndexAlreadyRunning(project_id) from exc
         finally:
             lock.release()
         self._bus.publish({"type": "graph_updated", "project_id": project_id})
@@ -69,15 +70,14 @@ class RefreshService:
         if not lock.acquire(blocking=False):
             return self._skipped("refresh_running")
         try:
-            conn = open_graph_db(info.graph_db)
-            try:
+            with graph_writer(info.graph_db) as db, closing(open_graph_db(db)) as conn:
                 store = GraphStore(conn)
-                if store.last_completed_run() is None:
+                if not store.has_published_graph():
                     return self._skipped("not_indexed")
                 result = refresh_project(store, info.path,
                                          transcript_dir=self._registry.app_data_dir / "transcripts" / project_id)
-            finally:
-                conn.close()
+        except GraphWriteBusy:
+            return self._skipped("refresh_running")
         finally:
             lock.release()
         if result.added or result.changed or result.removed:

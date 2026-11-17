@@ -23,6 +23,7 @@ router = APIRouter(prefix="/v1/projects/{project_id}")
 
 @contextmanager
 def open_store(request: Request, project_id: str) -> Iterator[tuple[GraphStore, ProjectInfo]]:
+    """Đọc bản đã công bố, kể cả khi đang dựng lại ở CSDL tạm."""
     info = request.app.state.services.registry.get(project_id)
     if info is None:
         raise ApiError(404, "unknown_project", f"Không có dự án {project_id}")
@@ -31,20 +32,14 @@ def open_store(request: Request, project_id: str) -> Iterator[tuple[GraphStore, 
     except (sqlite3.Error, OSError) as exc:
         raise ApiError(404, "graph_unavailable", f"Chưa có dữ liệu đồ thị: {exc}") from exc
     try:
-        yield GraphStore(conn), info
+        store = GraphStore(conn)
+        if not store.has_published_graph():
+            if request.app.state.services.jobs.is_active(project_id):
+                raise ApiError(409, "index_running", "Dự án đang được lập chỉ mục, thử lại khi xong")
+            raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục xong")
+        yield store, info
     finally:
         conn.close()
-
-
-def require_indexed(store: GraphStore, request: Request, project_id: str) -> None:
-    """Báo cáo, export, truy vấn trên CSDL rỗng hoặc dở dang sẽ cho kết quả gây hiểu nhầm: báo lỗi rõ thay vào đó.
-    Index lại đầy đủ xoá đồ thị trước khi dựng, nên đang chạy hoặc lần gần nhất bị huỷ/lỗi đều không dùng được."""
-    if request.app.state.services.jobs.is_active(project_id):
-        raise ApiError(409, "index_running", "Dự án đang được lập chỉ mục, thử lại khi xong")
-    last_full = store.conn.execute(
-        "SELECT trang_thai FROM lan_lap_chi_muc WHERE loai = 'day_du' ORDER BY ma_lan DESC LIMIT 1").fetchone()
-    if last_full is None or last_full[0] != "hoan_tat":
-        raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục xong")
 
 
 @router.get("/stats")

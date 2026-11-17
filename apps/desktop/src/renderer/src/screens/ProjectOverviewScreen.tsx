@@ -58,7 +58,8 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
     }
   }
 
-  const when = project.last_indexed_at ? new Date(project.last_indexed_at * 1000).toLocaleString('vi-VN') : null
+  const indexedAt = stats?.indexed_at ?? project.last_indexed_at
+  const when = indexedAt == null ? null : new Date(indexedAt * 1000).toLocaleString('vi-VN')
   return (
     <main className="screen overview">
       <header className="hero">

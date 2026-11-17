@@ -52,6 +52,7 @@ def test_index_twice_409_while_running(api, copy_fixture):
         second = api.post(f"/v1/projects/{p['project_id']}/index")
         assert second.status_code == 409 and second.json()["error"]["code"] == "index_running"
         job_id = first.json()["job_id"]
+        assert second.json()["error"]["job_id"] == job_id
         assert api.delete(f"/v1/jobs/{job_id}").json() == {"cancelled": True}
     finally:
         Blocking.gate.set()

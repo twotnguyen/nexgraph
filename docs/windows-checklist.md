@@ -26,6 +26,8 @@ Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi 
 
 - [ ] Chưa cấu hình AI: các thẻ đồ thị vẫn dùng được và Agent hướng dẫn vào **Tài khoản AI**.
 - [ ] Dự án lớn chưa lập chỉ mục: app cho chọn thư mục con.
+- [ ] Đã có đồ thị: bấm **Index lại**, mở đồ thị hiện có, quay lại tiến độ rồi **Hủy**. Mở lại dự án và kiểm tìm kiếm, Kiến trúc và Luồng giữ kết quả đã công bố.
+- [ ] Trên bản sao thử nghiệm, dừng engine khi đang dựng lại. Mở app và kiểm đồ thị đã công bố vẫn đọc được. Chạy lại rồi đối chiếu số tệp, nút, cạnh và truy vấn với bản dựng sạch.
 - [ ] Dự án Go hoặc Java nhỏ: graph chung được dựng, app hiển thị mức hỗ trợ.
 - [ ] Mất mạng với provider online: mở lại được dự án đã lập chỉ mục; Agent báo lỗi kết nối.
 - [ ] Dự án không có `.git`: thẻ **Thay đổi** so với lần lập chỉ mục trước.

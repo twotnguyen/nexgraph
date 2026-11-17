@@ -140,6 +140,15 @@ class GraphStore:
             " ORDER BY ma_lan DESC LIMIT 1").fetchone()
         return (row["ket_thuc_luc"], row["commit_sha"]) if row else None
 
+    def has_published_graph(self) -> bool:
+        """Lần full gần nhất trong graph.db phải hoàn tất mới dùng được đồ thị."""
+        # Một bản cũ từng index lại tại chỗ có thể còn lịch sử thành công
+        # dù lần full cuối đã xoá đồ thị rồi bị huỷ hoặc gián đoạn.
+        last_full = self.conn.execute(
+            "SELECT trang_thai FROM lan_lap_chi_muc WHERE loai = 'day_du' ORDER BY ma_lan DESC LIMIT 1"
+        ).fetchone()
+        return last_full is not None and last_full[0] == "hoan_tat"
+
     def set_last_run_commit(self, sha: str | None) -> None:
         """Ghi lại commit mà đồ thị hiện khớp (lần refresh không có gì đổi nhưng HEAD đã dịch)."""
         if sha:

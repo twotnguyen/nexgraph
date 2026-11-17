@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
-import type { Changes, EngineEvent, ProjectSummary } from '@shared/graph-types'
+import type { Changes, EngineEvent, Job, JobState, ProjectSummary } from '@shared/graph-types'
 import type { AgentEvent } from '@shared/agent-types'
 
 export const project = (over: Partial<ProjectSummary> = {}): ProjectSummary => ({
@@ -24,7 +24,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       list: vi.fn(async () => []), ...over.project },
     index: {
       scan: vi.fn(async () => ({ files: 10, by_language: {}, large: false, threshold: 5000, top_dirs: [] })),
-      start: vi.fn(async () => ({ jobId: 'j1' })), cancel: vi.fn(async () => {}),
+      start: vi.fn(async () => ({ jobId: 'j1' })), status: vi.fn(async () => progress('queued', 0, 0)), cancel: vi.fn(async () => {}),
       refresh: vi.fn(async () => ({ status: 'ok' as const, reason: null, added: 0, changed: 0, removed: 0, seconds: 0 })),
       onEvent: vi.fn((cb: (e: EngineEvent) => void) => { handlers.add(cb); return () => handlers.delete(cb) }),
       ...over.index
@@ -64,5 +64,5 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)) }
 }
 
-export const progress = (state: string, done: number, total: number, extra: object = {}): EngineEvent =>
-  ({ type: 'job_progress', job_id: 'j1', project_id: 'p1', state, files_done: done, files_total: total, message: null, ...extra }) as EngineEvent
+export const progress = (state: JobState, done: number, total: number, extra: Partial<Job> = {}): Extract<EngineEvent, { type: 'job_progress' }> =>
+  ({ type: 'job_progress', job_id: 'j1', project_id: 'p1', state, files_done: done, files_total: total, message: null, ...extra })

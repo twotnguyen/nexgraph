@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
-import { EngineApi } from './engine/api'
+import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
 import { FsError, fsHandlers, isWithin, projectRoot } from './fs/project-fs'
@@ -145,7 +145,15 @@ export function registerIpc(
   on('fs:read', fsh.read)
   on('fs:write', fsh.write)
   on('index:scan', (pid: string) => api().scan(pid))
-  on('index:start', async (pid: string, opts?: IndexOptions) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
+  on('index:start', async (pid: string, opts?: IndexOptions) => {
+    try {
+      return { jobId: (await api().startIndex(pid, opts)).job_id }
+    } catch (error) {
+      if (error instanceof EngineApiError && error.code === 'index_running' && error.jobId) return { jobId: error.jobId }
+      throw error
+    }
+  })
+  on('index:status', (jobId: string) => api().getJob(jobId))
   on('index:cancel', async (jobId: string) => void (await api().cancelJob(jobId)))
   on('index:refresh', (pid: string) => api().refresh(pid))
   on('graph:changes', (pid: string, opts?: { refresh?: boolean }) => api().changes(pid, opts))

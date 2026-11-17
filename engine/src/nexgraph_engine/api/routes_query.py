@@ -4,7 +4,7 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_graph import open_store, require_indexed
+from nexgraph_engine.api.routes_graph import open_store
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.context import build_context, locate_json
 from nexgraph_engine.query.paths import find_paths, impact_of
@@ -33,7 +33,6 @@ class AskBody(BaseModel):
 @router.post("/paths")
 def paths(project_id: str, request: Request, body: PathsBody) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store, request, project_id)
         try:
             return find_paths(store, body.node_ids, body.max_hops, body.directed)
         except KeyError as exc:
@@ -43,7 +42,6 @@ def paths(project_id: str, request: Request, body: PathsBody) -> dict:
 @router.get("/impact")
 def impact(project_id: str, request: Request, node: str = Query(...)) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store, request, project_id)
         try:
             return impact_of(store, node)
         except KeyError as exc:
@@ -53,7 +51,6 @@ def impact(project_id: str, request: Request, node: str = Query(...)) -> dict:
 @router.post("/ask")
 def ask(project_id: str, request: Request, body: AskBody) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store, request, project_id)
         try:
             return ask_graph(store, body.question, body.depth, body.budget, body.mode)
         except ValueError as exc:
@@ -63,7 +60,6 @@ def ask(project_id: str, request: Request, body: AskBody) -> dict:
 @router.post("/context")
 def context(project_id: str, request: Request, body: ContextBody) -> dict:
     with open_store(request, project_id) as (store, info):
-        require_indexed(store, request, project_id)
         try:
             return build_context(store, info.path, body.question, body.budget)
         except ValueError as exc:
@@ -73,5 +69,4 @@ def context(project_id: str, request: Request, body: ContextBody) -> dict:
 @router.get("/locate")
 def locate(project_id: str, request: Request, file: str = Query(...), line: int = Query(..., ge=1)) -> dict:
     with open_store(request, project_id) as (store, _):
-        require_indexed(store, request, project_id)
         return locate_json(store, file, line)

@@ -14,7 +14,7 @@ type Screen =
   | { name: 'projects' }
   | { name: 'scan'; project: ProjectSummary }
   | { name: 'large'; project: ProjectSummary; scan: ScanInfo }
-  | { name: 'indexing'; project: ProjectSummary; subdir: string | null; options?: IndexOptions }
+  | { name: 'indexing'; project: ProjectSummary; subdir: string | null; options?: IndexOptions; rebuild?: boolean; exploring?: boolean }
   | { name: 'overview'; project: ProjectSummary }
   | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab }
   | { name: 'settings'; back: Screen }
@@ -58,7 +58,7 @@ export default function App() {
     if (!hostFolder || status.state !== 'ready' || screen.name !== 'projects') return
     let alive = true
     window.nexgraph.project.open(hostFolder)
-      .then((project) => alive && setScreen(project.last_indexed_at ? { name: 'workspace', project, tab: window.nexgraph.host?.initialView as WorkspaceTab | undefined } : { name: 'scan', project }))
+      .then((project) => alive && setScreen(project.last_indexed_at != null ? { name: 'workspace', project, tab: window.nexgraph.host?.initialView as WorkspaceTab | undefined } : { name: 'scan', project }))
       .catch(() => {}) // lỗi mở: ở lại màn Dự án để người dùng thấy và thử lại
     return () => { alive = false }
   }, [hostFolder, status.state]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -66,19 +66,34 @@ export default function App() {
   // Lệnh chọn thẻ từ nền khi đang ở màn Tổng quan: vào không gian làm việc đúng thẻ đó.
   // Lệnh từ nền khi không ở không gian làm việc (màn đó tự xử lý lệnh của nó): chọn thẻ, mở Cài đặt, về Tổng quan.
   useEffect(() => window.nexgraph.host?.onCommand((c) => {
-    if (screen.name === 'workspace') return
+    if (screen.name === 'workspace' || (screen.name === 'indexing' && screen.exploring)) return
     const at = screen.name === 'settings' ? screen.back : screen // màn nằm dưới Cài đặt
     if (c === 'settings' && screen.name !== 'settings') setScreen({ name: 'settings', back: screen })
     else if (c === 'overview' && screen.name === 'settings') setScreen(screen.back)
     else if (c.startsWith('view:') && (at.name === 'overview' || at.name === 'workspace')) setScreen({ name: 'workspace', project: at.project, tab: c.slice(5) as WorkspaceTab })
   }), [screen])
 
+  const indexing = screen.name === 'indexing' ? screen
+    : screen.name === 'settings' && screen.back.name === 'indexing' ? screen.back
+    : undefined
+
+  const showCompletedGraph = (project: ProjectSummary, name: 'workspace' | 'overview') => {
+    const pending = { ...project, last_indexed_at: null, last_index_commit: null }
+    setScreen(name === 'workspace' ? { name: 'workspace', project: pending } : { name: 'overview', project: pending })
+    void window.nexgraph.project.list().then((projects) => {
+      const latest = projects.find((p) => p.project_id === project.project_id && p.last_indexed_at != null)
+      if (latest) setScreen((current) =>
+        (current.name === 'workspace' || current.name === 'overview') && current.project === pending
+          ? { ...current, project: latest } : current)
+    }).catch(() => {}) // Tổng quan đọc thêm mốc lập chỉ mục từ số liệu đồ thị.
+  }
+
   return (
     <div className="app">
       {screen.name === 'projects' && (
         <ProjectsScreen engineReady={status.state === 'ready'}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
-          onOpened={(project) => setScreen(project.last_indexed_at ? { name: 'overview', project } : { name: 'scan', project })} />
+          onOpened={(project) => setScreen(project.last_indexed_at != null ? { name: 'overview', project } : { name: 'scan', project })} />
       )}
       {screen.name === 'scan' && (
         <ScanStep
@@ -96,10 +111,18 @@ export default function App() {
           onCancel={() => setScreen({ name: 'projects' })}
         />
       )}
-      {screen.name === 'indexing' && (
-        <IndexingScreen project={screen.project} subdir={screen.subdir} options={screen.options}
-          onExplore={() => setScreen({ name: 'workspace', project: screen.project })}
-          onBack={() => setScreen(screen.project.last_indexed_at ? { name: 'overview', project: screen.project } : { name: 'projects' })} />
+      {indexing && (
+        <IndexingScreen project={indexing.project} subdir={indexing.subdir} options={indexing.options}
+          rebuild={indexing.rebuild} hidden={screen.name === 'settings'}
+          onExplore={() => showCompletedGraph(indexing.project, 'workspace')}
+          onBack={(completed) => completed ? showCompletedGraph(indexing.project, 'overview')
+            : setScreen(indexing.rebuild ? { name: 'overview', project: indexing.project } : { name: 'projects' })}
+          onShowExisting={() => setScreen({ ...indexing, exploring: true })}
+          renderExisting={indexing.exploring ? (notice) => (
+            <WorkspaceScreen project={indexing.project} indexNotice={notice} backLabel={vi.indexing.backToProgress}
+              onOpenSettings={() => setScreen({ name: 'settings', back: indexing })}
+              onBack={() => setScreen({ ...indexing, exploring: false })} />
+          ) : undefined} />
       )}
       {screen.name === 'overview' && (
         <ProjectOverviewScreen
@@ -107,13 +130,13 @@ export default function App() {
           onBack={() => setScreen({ name: 'projects' })}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
           onOpenWorkspace={(tab) => setScreen({ name: 'workspace', project: screen.project, tab })}
-          onReindex={(options) => setScreen({ name: 'indexing', project: screen.project, subdir: null, options })}
+          onReindex={(options) => setScreen({ name: 'indexing', project: screen.project, subdir: null, options, rebuild: true })}
         />
       )}
       {screen.name === 'workspace' && (
         <WorkspaceScreen key={screen.tab ?? 'arch'} project={screen.project} initialTab={screen.tab}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
-          onBack={() => setScreen({ name: 'overview', project: { ...screen.project, last_indexed_at: screen.project.last_indexed_at ?? Math.floor(Date.now() / 1000) } })} />
+          onBack={() => setScreen({ name: 'overview', project: screen.project })} />
       )}
       {screen.name === 'settings' && <SettingsScreen onBack={() => setScreen(screen.back)} />}
       <EngineStatusBar status={status} onRestart={() => void window.nexgraph.engine.restart()} />

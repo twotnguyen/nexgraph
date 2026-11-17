@@ -68,6 +68,9 @@ def _open(
         conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    if read_only:
+        # Một truy vấn HTTP/MCP có thể đọc nhiều bảng khi graph mới được công bố.
+        conn.execute("BEGIN")
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version > current:
         conn.close()
@@ -88,5 +91,5 @@ def open_graph_db(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
     return _open(path, "graph", read_only=read_only, wal=True, current=GRAPH_SCHEMA_VERSION)
 
 
-def open_app_db(path: Path) -> sqlite3.Connection:
-    return _open(path, "app", read_only=False, wal=True, current=APP_SCHEMA_VERSION)
+def open_app_db(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
+    return _open(path, "app", read_only=read_only, wal=True, current=APP_SCHEMA_VERSION)

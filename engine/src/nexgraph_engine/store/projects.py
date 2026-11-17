@@ -30,12 +30,16 @@ class ProjectInfo:
 
 
 class ProjectRegistry:
-    def __init__(self, app_data_dir: Path) -> None:
+    def __init__(self, app_data_dir: Path, *, read_only: bool = False) -> None:
         self.app_data_dir = Path(app_data_dir)
         self._app_db = self.app_data_dir / "app.db"
-        open_app_db(self._app_db).close()  # tạo sẵn
+        self._read_only = read_only
+        if not read_only:
+            open_app_db(self._app_db).close()  # tạo sẵn
 
     def open_project(self, path: Path) -> ProjectInfo:
+        if self._read_only:
+            raise RuntimeError("Danh bạ dự án đang mở chỉ đọc")
         root = Path(path).expanduser()
         if not root.is_dir():
             raise ProjectPathError(f"Không phải thư mục: {root}")
@@ -80,7 +84,7 @@ class ProjectRegistry:
 
     # --- nội bộ -------------------------------------------------------------------
     def _conn(self) -> sqlite3.Connection:
-        return open_app_db(self._app_db)
+        return open_app_db(self._app_db, read_only=self._read_only)
 
     def _app_dir_db(self, project_id: str) -> Path:
         return self.app_data_dir / "projects" / project_id / "graph.db"
