@@ -4,12 +4,33 @@ export interface LayoutNode { id: string; width: number; height: number }
 export interface LayoutEdge { id: string; source: string; target: string }
 export type LayoutRunner = (graph: ElkNode) => Promise<ElkNode>
 
+/** `layered`: xếp lớp trái → phải. `layered-down`: trên → dưới (sơ đồ khối, hoặc khung cao hơn rộng). */
+export type LayoutKind = 'layered' | 'layered-down'
+export interface Point { x: number; y: number }
+export interface Layout {
+  /** Góc trên trái của từng nút. */
+  pos: Record<string, Point>
+  /** Đường đi của từng cạnh do ELK tính: các đoạn ngang/dọc, không cắt qua nút. */
+  routes: Record<string, Point[]>
+}
+
+// Nút cùng lớp thẳng hàng; cạnh đi vuông góc, giữ khoảng cách đều với nút và với nhau.
+const LAYERED = {
+  'elk.algorithm': 'layered', 'elk.edgeRouting': 'ORTHOGONAL', 'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+  'elk.spacing.nodeNode': '28', 'elk.spacing.edgeNode': '18', 'elk.spacing.edgeEdge': '12',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '18', 'elk.layered.spacing.edgeEdgeBetweenLayers': '12'
+}
+const OPTIONS: Record<LayoutKind, Record<string, string>> = {
+  layered: { ...LAYERED, 'elk.direction': 'RIGHT', 'elk.layered.spacing.nodeNodeBetweenLayers': '80' },
+  'layered-down': { ...LAYERED, 'elk.direction': 'DOWN', 'elk.layered.spacing.nodeNodeBetweenLayers': '64' }
+}
+
 /** Dựng đồ thị đầu vào cho ELK; bỏ cạnh trỏ tới nút không có trong danh sách. */
-export function toElkGraph(nodes: LayoutNode[], edges: LayoutEdge[]): ElkNode {
+export function toElkGraph(nodes: LayoutNode[], edges: LayoutEdge[], kind: LayoutKind = 'layered'): ElkNode {
   const ids = new Set(nodes.map((n) => n.id))
   return {
     id: 'root',
-    layoutOptions: { 'elk.algorithm': 'layered', 'elk.direction': 'RIGHT', 'elk.spacing.nodeNode': '24', 'elk.layered.spacing.nodeNodeBetweenLayers': '80' },
+    layoutOptions: OPTIONS[kind],
     children: nodes.map((n) => ({ id: n.id, width: n.width, height: n.height })),
     edges: edges.filter((e) => ids.has(e.source) && ids.has(e.target)).map((e) => ({ id: e.id, sources: [e.source], targets: [e.target] }))
   }
@@ -27,8 +48,18 @@ const workerRunner: LayoutRunner = (graph) => {
   return elk.layout(graph)
 }
 
-export async function layoutGraph(nodes: LayoutNode[], edges: LayoutEdge[], runner: LayoutRunner = workerRunner): Promise<Record<string, { x: number; y: number }>> {
-  if (nodes.length === 0) return {}
-  const out = await runner(toElkGraph(nodes, edges))
-  return Object.fromEntries((out.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0 }]))
+/** Bố cục kèm đường đi của cạnh, cho sơ đồ ô chữ nhật (Kiến trúc, Luồng, đường đi). */
+export async function layoutDiagram(nodes: LayoutNode[], edges: LayoutEdge[], kind: LayoutKind = 'layered', runner: LayoutRunner = workerRunner): Promise<Layout> {
+  if (nodes.length === 0) return { pos: {}, routes: {} }
+  const out = await runner(toElkGraph(nodes, edges, kind))
+  const routes: Record<string, Point[]> = {}
+  for (const e of out.edges ?? []) {
+    const sec = e.sections?.[0]
+    if (sec) routes[e.id] = [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint]
+  }
+  return { pos: Object.fromEntries((out.children ?? []).map((c) => [c.id, { x: c.x ?? 0, y: c.y ?? 0 }])), routes }
+}
+
+export async function layoutGraph(nodes: LayoutNode[], edges: LayoutEdge[], runner: LayoutRunner = workerRunner): Promise<Record<string, Point>> {
+  return (await layoutDiagram(nodes, edges, 'layered', runner)).pos
 }

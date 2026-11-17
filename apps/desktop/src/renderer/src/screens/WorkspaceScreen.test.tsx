@@ -6,7 +6,7 @@ import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
 
 vi.mock('../services/elkLayoutService', async () => ({
-  layoutGraph: async (nodes: { id: string }[]) => Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }]))
+  layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
 }))
 
 vi.mock('../components/map/MapView', () => ({

@@ -7,7 +7,7 @@ import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
 
 vi.mock('../../services/elkLayoutService', async () => ({
-  layoutGraph: async (nodes: { id: string }[]) => Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }]))
+  layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
 }))
 
 import { GraphCanvas } from './GraphCanvas'
@@ -95,23 +95,25 @@ describe('GraphCanvas highlights', () => {
     render(<div style={{ width: 800, height: 600 }}><GraphCanvas projectId="p1" startNodeId=".#repository" highlights={highlights} /></div>)
   }
   const nodeEl = (label: string) => screen.getByText(label).closest('.react-flow__node') as HTMLElement
+  // Màu của nút tròn nằm ở biến --node-c (tô nền và viền hình tròn).
+  const colorOf = (label: string) => (nodeEl(label).querySelector('.dot-node') as HTMLElement).style.getPropertyValue('--node-c')
 
   it('tags and colours highlighted nodes by meaning', async () => {
     renderWith({ a: 'changed', b: 'impacted', c: 'test', d: 'gap' })
     await screen.findByText('a')
-    expect(nodeEl('a')).toHaveStyle({ borderColor: '#e07a00' })
+    expect(colorOf('a')).toBe('#e07a00')
     expect(within(nodeEl('a')).getByText('đã đổi')).toBeInTheDocument()
     expect(within(nodeEl('b')).getByText('ảnh hưởng')).toBeInTheDocument()
-    expect(nodeEl('c')).toHaveStyle({ borderColor: '#1c9a5b' })
+    expect(colorOf('c')).toBe('#1c9a5b')
     expect(within(nodeEl('c')).getByText('test')).toBeInTheDocument()
-    expect(nodeEl('d')).toHaveStyle({ borderColor: '#d93a2f' })
+    expect(colorOf('d')).toBe('#d93a2f')
     expect(within(nodeEl('d')).getByText('chưa có test')).toBeInTheDocument()
   })
 
   it('leaves the look unchanged without highlights', async () => {
     renderWith()
     await screen.findByText('a')
-    expect(nodeEl('a')).toHaveStyle({ borderColor: '#3257f0' })
+    expect(colorOf('a')).toBe('#3257f0')
     expect(document.querySelectorAll('.tag')).toHaveLength(0)
   })
 })

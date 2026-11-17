@@ -1,14 +1,13 @@
-import { Background, Controls, MarkerType, ReactFlow, type Edge, type Node } from '@xyflow/react'
+import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react'
 import { useCallback, useEffect, useState } from 'react'
 import type { ArchBlock, ArchEvidence, ArchLink, ArchView } from '@shared/graph-types'
-import { layoutGraph } from '../../services/elkLayoutService'
+import { layoutDiagram } from '../../services/elkLayoutService'
 import { vi } from '../../strings'
 import { AutoFit } from '../common/AutoFit'
+import { BOX_H, BOX_W, dotEdge, dotEdgeTypes, dotNodeTypes } from '../common/dotGraph'
 import { blockColor } from './blockStyle'
 import { EvidencePopover } from './EvidencePopover'
 
-const W = 190
-const H = 56
 const EVIDENCE_LIMIT = 50
 
 interface Crumb { id: string | null; label: string }
@@ -32,26 +31,27 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
     setEvidence(null)
     ;(async () => {
       const view = await window.nexgraph.graph.architecture(projectId, current ?? undefined)
-      const pos = await layoutGraph(
-        view.blocks.map((b) => ({ id: b.id, width: W, height: H })),
-        view.links.map((l) => ({ id: `${l.from}->${l.to}`, source: l.from, target: l.to }))
+      // Sơ đồ khối: ô xếp theo lớp từ trên xuống, thẳng hàng; cạnh đi vuông góc theo tuyến ELK tính nên không cắt qua ô.
+      const { pos, routes } = await layoutDiagram(
+        view.blocks.map((b) => ({ id: b.id, width: BOX_W, height: BOX_H })),
+        view.links.map((l) => ({ id: `${l.from}->${l.to}`, source: l.from, target: l.to })),
+        'layered-down'
       )
       if (!alive) return
       setLaid({
         view,
         nodes: view.blocks.map((b) => ({
           id: b.id,
+          type: 'box',
           selected: b.id === initialParent,
           position: pos[b.id] ?? { x: 0, y: 0 },
-          initialWidth: W,
-          initialHeight: H,
-          data: { label: (<div><b>{b.label}</b><small className="kind">{vi.arch.files(b.size)}</small></div>) },
-          style: { width: W, borderColor: blockColor(b.kind), '--node-c': blockColor(b.kind), borderWidth: 2, borderStyle: b.kind === 'group' ? 'dashed' : 'solid', borderRadius: 10, fontSize: 12 }
+          initialWidth: BOX_W,
+          initialHeight: BOX_H,
+          data: { label: b.label, sub: vi.arch.files(b.size), color: blockColor(b.kind), size: BOX_W, dashed: b.kind === 'group' }
         })),
-        edges: view.links.map((l) => ({
-          id: `${l.from}->${l.to}`, source: l.from, target: l.to, label: String(l.count),
-          markerEnd: { type: MarkerType.ArrowClosed },
-          style: { strokeWidth: 1 + Math.min(4, Math.log2(l.count + 1)) }
+        edges: view.links.map((l) => dotEdge({
+          id: `${l.from}->${l.to}`, source: l.from, target: l.to, label: String(l.count), width: 1 + Math.min(1.5, Math.log2(l.count + 1) / 3),
+          points: routes[`${l.from}->${l.to}`]
         }))
       })
     })().catch((err: Error) => alive && setError(err.message))
@@ -108,7 +108,7 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
         </ul>
       )}
       {laid && laid.view.blocks.length > 0 && (
-        <ReactFlow key={current ?? 'root'} nodes={laid.nodes} edges={laid.edges} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
+        <ReactFlow className="dot-graph show-edge-labels" key={current ?? 'root'} nodes={laid.nodes} edges={laid.edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes} minZoom={0.2} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
                    nodesDraggable={false} proOptions={{ hideAttribution: true }}>
           <Background />
           <Controls showInteractive={false} />

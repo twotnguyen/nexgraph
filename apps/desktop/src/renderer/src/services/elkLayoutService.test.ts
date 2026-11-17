@@ -1,6 +1,6 @@
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { describe, expect, it } from 'vitest'
-import { layoutGraph, toElkGraph, type LayoutRunner } from './elkLayoutService'
+import { layoutDiagram, layoutGraph, toElkGraph, type LayoutRunner } from './elkLayoutService'
 
 const elk = new ELK()
 const runner: LayoutRunner = (graph) => elk.layout(graph)
@@ -42,3 +42,21 @@ describe('layoutGraph', () => {
     expect(Object.keys(pos).sort()).toEqual(['a', 'b'])
   })
 })
+
+describe('layoutDiagram', () => {
+  it('trả tuyến của cạnh: điểm đầu, các điểm rẽ, điểm cuối theo thứ tự', async () => {
+    const runner: LayoutRunner = async (g) => ({
+      ...g,
+      children: g.children?.map((c, i) => ({ ...c, x: i * 100, y: 0 })),
+      edges: [{ id: 'e', sources: ['a'], targets: ['b'], sections: [{ id: 's', startPoint: { x: 1, y: 2 }, bendPoints: [{ x: 1, y: 9 }], endPoint: { x: 5, y: 9 } }] }]
+    })
+    const out = await layoutDiagram([node('a'), node('b')], [{ id: 'e', source: 'a', target: 'b' }], 'layered-down', runner)
+    expect(out.pos.b).toEqual({ x: 100, y: 0 })
+    expect(out.routes.e).toEqual([{ x: 1, y: 2 }, { x: 1, y: 9 }, { x: 5, y: 9 }])
+  })
+
+  it('layered-down xếp lớp từ trên xuống', () => {
+    expect(toElkGraph([node('a')], [], 'layered-down').layoutOptions?.['elk.direction']).toBe('DOWN')
+  })
+})
+

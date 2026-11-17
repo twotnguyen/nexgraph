@@ -48,16 +48,36 @@ export function SigmaView({ nodes, edges, dimmed, onNodeClick, onEdgeClick, onSt
 
     let cancelled = false
     // sigma nạp lúc chạy: nó đọc WebGL2RenderingContext ngay khi import nên không thể import tĩnh (jsdom, build không có WebGL).
-    void import('sigma').then(({ default: SigmaCtor }) => {
+    void Promise.all([import('sigma'), import('sigma/rendering')]).then(([{ default: SigmaCtor }, { drawDiscNodeLabel }]) => {
       if (cancelled || !box.current) return
+      // Màu lấy từ token của theme (sáng/tối); không có token (test jsdom) thì dùng màu bản sáng.
+      const token = (name: string, fallback: string): string => getComputedStyle(document.body).getPropertyValue(name).trim() || fallback
+      const muted = token('--track', MUTED)
+      const text = token('--color-text', '#000')
+      const surface = token('--color-surface', '#fff')
       let sigma: Sigma
       try {
         let hovered: string | null = null
         sigma = new SigmaCtor(graph, box.current, { renderEdgeLabels: false, labelRenderedSizeThreshold: 10, enableEdgeEvents: true,
+          labelColor: { color: text },
+          // Nhãn khi rê chuột: sigma mặc định vẽ nền trắng, không hợp theme tối → vẽ nền bằng màu bề mặt.
+          defaultDrawNodeHover: (ctx, data, settings) => {
+            if (!data.label) return
+            ctx.font = `${settings.labelWeight} ${settings.labelSize}px ${settings.labelFont}`
+            const h = Math.max(settings.labelSize + 8, data.size * 2 + 4)
+            ctx.fillStyle = surface
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.35)'
+            ctx.shadowBlur = 8
+            ctx.beginPath()
+            ctx.roundRect(data.x - data.size - 2, data.y - h / 2, ctx.measureText(data.label).width + data.size * 2 + 12, h, 6)
+            ctx.fill()
+            ctx.shadowBlur = 0
+            drawDiscNodeLabel(ctx, data, settings)
+          },
           nodeReducer: (node, data) => {
             const near = hovered && (node === hovered || graph.hasEdge(hovered, node) || graph.hasEdge(node, hovered))
             const off = (dimmedRef.current?.has(node) ?? false) || (hovered != null && !near)
-            return off ? { ...data, color: MUTED, label: null } : data
+            return off ? { ...data, color: muted, label: null } : data
           },
           edgeReducer: (edge, data) => {
             const [s, t] = edgeKey.get(edge) ?? ['', '']
