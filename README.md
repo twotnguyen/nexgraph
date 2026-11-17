@@ -6,6 +6,13 @@ NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ 
 
 ## Bắt đầu
 
+Sau khi có Node.js, pnpm và uv trong `PATH`, chạy từ thư mục gốc repo.
+
+```sh
+pnpm run setup:dev
+pnpm dev
+```
+
 - [Bản bàn giao Electron/Monaco 0.1.0, cách cài và ảnh giao diện](docs/release/README.md)
 - [Cài đặt và chạy từ mã nguồn trên Windows/macOS](docs/install-notes.md)
 - [Demo nhanh với mẫu Python và kịch bản bảo vệ trên NestJS](docs/demo-script.md)
@@ -20,7 +27,7 @@ NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ 
 - [Kiến trúc và luồng xử lý](docs/srs/architecture.md), [ERD và lưu trữ hiện hành](docs/srs/data-model.md).
 - Các tài liệu trong [`docs/superpowers/`](docs/superpowers/) ghi lại lịch sử thiết kế và kế hoạch theo tuần.
 
-CI kiểm engine, desktop và khởi chạy bản Electron đã đóng gói trên Windows/macOS. Nhóm cũng đã thử editor và agent với engine thật và mô hình AI giả lập. Biên bản nghiệm thu ghi riêng lần cài và chạy trên máy thật, đúng phiên bản và với nhà cung cấp AI dùng khi bàn giao. [Workflow](.github/workflows/ci.yml) · [Biên bản thử editor và agent](docs/benchmarks/2026-11-15-editor-agent.md)
+CI chạy setup từ checkout sạch rồi kiểm trên Windows và macOS. Job đóng gói mở ứng dụng từ chính bộ cài sẽ tải lên, lập chỉ mục dự án mẫu bằng engine đi kèm và kiểm đọc, ghi tệp cùng trợ lý giả lập. Biên bản nghiệm thu ghi riêng lần cài và chạy trên máy đích. [Workflow](.github/workflows/ci.yml) · [Biên bản thử editor và agent](docs/benchmarks/2026-11-15-editor-agent.md)
 
 ## Cấu trúc repo
 

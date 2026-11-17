@@ -4,22 +4,22 @@ Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. 
 
 ## Chạy Electron từ checkout sạch
 
-Cần Git, Node.js 24 (kho yêu cầu Node ≥ 22), pnpm `11.24.0` theo `package.json` và uv trong `PATH`. Engine yêu cầu Python 3.12. Thực hiện từ thư mục gốc kho trong PowerShell trên Windows hoặc terminal trên macOS:
+Cần Git, Node.js 24 (kho yêu cầu Node ≥ 22), pnpm `11.24.0` theo `package.json` và uv trong `PATH`. Thực hiện từ thư mục gốc repo trong PowerShell trên Windows hoặc terminal trên macOS.
 
 ```sh
-uv python install 3.12
-uv sync --project engine --python 3.12 --locked
-pnpm install --frozen-lockfile
-pnpm --filter @nexgraph/desktop exec install-electron
+pnpm run setup:dev
 pnpm dev
 ```
 
-`install-electron` tải binary Electron 44 cho máy hiện tại. Đợi tải xong rồi mới chạy `pnpm dev`. Ứng dụng tự khởi động engine từ mã nguồn qua uv. Chọn **Mở thư mục…**, chọn một bản sao dự án và dựng graph. Phần lập chỉ mục và khám phá graph dùng được khi chưa cấu hình AI. Xem [hướng dẫn tải binary Electron](https://www.electronjs.org/docs/latest/tutorial/installation#binary-download-step) và [fixture cùng kịch bản NestJS](demo-script.md).
+`setup:dev` đồng bộ Python 3.12 và dependency từ `engine/uv.lock`, thử nạp CLI engine, cài dependency JavaScript từ `pnpm-lock.yaml` rồi tải binary Electron bằng `install-electron`. `pnpm dev` tự khởi động engine qua uv. Khi thấy **Engine: sẵn sàng**, chọn **Mở thư mục…** và chọn bản sao dự án. Lập chỉ mục và khám phá graph dùng được khi chưa cấu hình AI. [Chi tiết bước tải Electron](https://www.electronjs.org/docs/latest/tutorial/installation#binary-download-step) · [Dự án mẫu](demo-script.md)
+
+- Nếu gặp `Electron uninstall`, chạy lại `pnpm run setup:dev` và kiểm phần tải binary. Nếu máy mới cài uv, mở lại terminal rồi thử `uv --version` trong chính terminal dùng để chạy `pnpm dev`.
+- Nếu Windows báo Application Control khi nạp Python, dùng bản Python 3.12 đã được cho phép trên máy. Đặt `$env:UV_PYTHON` thành đường dẫn đầy đủ đến `python.exe` đó, rồi chạy lại cả hai lệnh trong cùng phiên PowerShell.
 
 Từ gốc kho, kiểm tra mã bằng:
 
 ```sh
-uv run --project engine pytest engine/tests -q
+uv run --project engine --locked pytest engine/tests -q
 pnpm --filter @nexgraph/desktop typecheck
 pnpm --filter @nexgraph/desktop test
 ```
@@ -30,18 +30,18 @@ Chạy trên hệ điều hành cần đóng gói, sau khi cài phụ thuộc nh
 
 ```sh
 cd engine
-uv run pyinstaller packaging/nexgraph-engine.spec --noconfirm
+uv run --locked pyinstaller packaging/nexgraph-engine.spec --noconfirm
 cd ..
 pnpm --filter @nexgraph/desktop run package
 pnpm --filter @nexgraph/desktop run smoke:packaged
 ```
 
-Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<arch>.dmg` hoặc `NexGraph-<version>-windows-<arch>.exe`. Smoke mở bản dựng đã giải nén với engine đóng gói, dự án và thư mục dữ liệu tạm. Kết quả đạt có dòng `SMOKE OK` kèm `fs=OK agent=OK`. Script tự chạy LLM giả cục bộ. Để kiểm việc cài bộ cài, mở app trên máy đích và ghi kết quả theo [hướng dẫn bản bàn giao](release/README.md) và [danh sách kiểm Windows](windows-checklist.md).
+Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<arch>.dmg` hoặc `NexGraph-<version>-windows-<arch>.exe`. Lệnh `smoke:packaged` ở trên dùng app đã giải nén để kiểm nhanh khi phát triển. Trong CI, cùng script chạy từ app do chính tệp NSIS cài vào thư mục tạm hoặc do CI chép từ DMG vừa gắn. Kết quả đạt có `SMOKE OK`, `fs=OK`, `agent=OK` và `index=OK`. Script dùng thư mục dữ liệu tạm, engine đi kèm và LLM giả cục bộ. Ghi kết quả trên máy đích theo [hướng dẫn bản bàn giao](release/README.md) và [danh sách kiểm Windows](windows-checklist.md).
 
 | Bằng chứng | Phạm vi |
 | --- | --- |
 | [Kiểm trên macOS ngày 15/11/2026](benchmarks/2026-11-15-editor-agent.md) | Bản Electron arm64 chưa ký, DMG khoảng 239,2 MB. Đã bấm thử editor và Agent trên fixture Python với engine thật và LLM giả. |
-| [CI Electron run 44065280698](https://github.com/twotnguyen/nexgraph/actions/runs/44065280698) | Cả sáu job engine, desktop và package/smoke trên macOS và Windows qua tại `6687fc9`. Kho riêng tư, cần quyền xem log và artifact. |
+| [CI Electron](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) | Xem theo đúng commit bàn giao. Job desktop kiểm setup và chạy dev. Job package kiểm bộ cài tương ứng trước khi tải artifact lên. Kho riêng tư, cần quyền xem log và artifact. |
 | Còn chờ nghiệm thu | Cài artifact trên máy Windows của nhóm, chạy đủ ba lượt demo NestJS trên bản đóng gói, kiểm nhà cung cấp AI thật và client MCP ngoài app. |
 
 ## Chạy Code-OSS

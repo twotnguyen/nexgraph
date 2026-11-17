@@ -2,6 +2,7 @@
 // Dùng: node scripts/fake-llm.mjs [cổng]   -> đặt Base URL = http://127.0.0.1:<cổng>/v1 trong Cài đặt.
 // Kịch bản: gọi list_flows -> trace_flow (flow_id lấy từ kết quả tool trước) -> trả lời có trích dẫn dựng từ các bước, cộng một trích dẫn sai.
 import http from 'node:http'
+import { pathToFileURL } from 'node:url'
 
 const toolCall = (name, args) => ({ role: 'assistant', content: null,
   tool_calls: [{ id: `call_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
@@ -58,7 +59,7 @@ export function createFakeLlm() {
   })
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.argv[2] ?? 0)
   const server = createFakeLlm()
   server.listen(port, '127.0.0.1', () => console.log(`fake LLM: http://127.0.0.1:${server.address().port}/v1`))

@@ -20,9 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync
+      - run: uv sync --locked
         working-directory: engine
-      - run: uv run pytest tests -v
+      - run: uv run --locked pytest tests -v
         working-directory: engine
 
   desktop:
@@ -34,12 +34,23 @@ jobs:
         os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm run setup:dev
+      - name: Smoke test checkout sạch
+        shell: bash
+        timeout-minutes: 5
+        env:
+          NEXGRAPH_SMOKE: '1'
+          NEXGRAPH_USER_DATA_DIR: ${{ runner.temp }}/nexgraph-dev-profile
+          NEXGRAPH_DATA_DIR: ${{ runner.temp }}/nexgraph-dev-engine
+        run: |
+          pnpm dev 2>&1 | tee nexgraph-dev-smoke.log
+          grep -F 'SMOKE OK nodes=' nexgraph-dev-smoke.log
       - run: pnpm --filter @nexgraph/desktop typecheck
       - run: pnpm --filter @nexgraph/desktop test
 
@@ -63,8 +74,8 @@ jobs:
           cache: pnpm
       - name: Đóng gói engine (PyInstaller)
         run: |
-          uv sync
-          uv run pyinstaller packaging/nexgraph-engine.spec --noconfirm
+          uv sync --locked
+          uv run --locked pyinstaller packaging/nexgraph-engine.spec --noconfirm
         working-directory: engine
       - run: pnpm install --frozen-lockfile
       - name: Đóng gói ứng dụng (electron-builder)
@@ -72,8 +83,12 @@ jobs:
       - name: Kiểm tra tệp cài đặt
         id: installer
         run: node apps/desktop/scripts/check-installer.mjs
-      - name: Smoke test bản đóng gói
-        run: node apps/desktop/scripts/smoke-packaged.mjs
+      - name: Cài và smoke test bộ cài
+        shell: bash
+        timeout-minutes: 8
+        env:
+          NEXGRAPH_INSTALLER: ${{ steps.installer.outputs.path }}
+        run: node apps/desktop/scripts/smoke-packaged.mjs --installer "$NEXGRAPH_INSTALLER"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.installer.outputs.name }}

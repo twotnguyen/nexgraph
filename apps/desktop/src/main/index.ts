@@ -85,7 +85,7 @@ registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataD
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
-// NEXGRAPH_SMOKE=1: kiểm engine; script smoke:packaged còn kiểm fs/agent qua preload + IPC thật.
+// NEXGRAPH_SMOKE=1: kiểm engine; script smoke:packaged còn kiểm index/fs/agent qua preload và IPC thật.
 async function smoke(): Promise<void> {
   const watchdog = setTimeout(() => {
     console.log('SMOKE FAIL timeout 90s')
@@ -94,8 +94,11 @@ async function smoke(): Promise<void> {
   try {
     await supervisor.startEngine()
     const handle = supervisor.getHandle()
-    if (!handle) throw new Error('engine not ready')
-    const root = mkdtempSync(join(tmpdir(), 'nexgraph-smoke-project-'))
+    if (!handle) {
+      const status = supervisor.getStatus()
+      throw new Error(status.state === 'error' ? status.message : 'engine not ready')
+    }
+    const root = mkdtempSync(join(tmpdir(), 'nexgraph-smoke-Đồ án-'))
     try {
       await getHealth(handle)
       const engine = await runSmoke(handle)

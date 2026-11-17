@@ -40,7 +40,7 @@ CI đặt tên theo phiên bản và kiến trúc của lượt build. Có thể
 
 ## Bằng chứng và nghiệm thu
 
-Smoke đóng gói chạy app Electron đã giải nén với engine thật và LLM giả cục bộ. Điều kiện của phép thử là có `SMOKE OK` cùng `fs=OK agent=OK`. Kết quả máy đích cần ghi riêng khi cài tệp NSIS/DMG. Dùng bản cài đúng commit và ghi **Đạt**, **Lỗi** hoặc **Chưa chạy** cho từng phép thử.
+CI cài chính tệp NSIS vào thư mục tạm trên Windows. Trên macOS, CI gắn chính tệp DMG và chép app vào thư mục tạm. Smoke khởi động app vừa lấy từ bộ cài, lập chỉ mục dự án mẫu với engine đi kèm, kiểm đọc, ghi tệp và trợ lý với LLM giả cục bộ. Điều kiện đạt là `SMOKE OK` cùng `fs=OK`, `agent=OK` và `index=OK`. Khi nghiệm thu trên máy đích, dùng bản cài đúng commit và ghi **Đạt**, **Lỗi** hoặc **Chưa chạy** cho từng phép thử.
 
 | Phép thử | Kết quả cần ghi |
 |---|---|
@@ -48,7 +48,7 @@ Smoke đóng gói chạy app Electron đã giải nén với engine thật và L
 | Cài trên máy đích | Mở app từ bộ cài, engine sẵn sàng, index bản sao có đường dẫn chứa dấu và khoảng trắng, mở bằng chứng. Ghi cảnh báo và xác nhận thoát app sạch. |
 | Demo và AI | Ba lượt NestJS, thời gian từng lượt. Kiểm Hỏi/Sửa, Duyệt/Từ chối/Dừng với provider dự định trình diễn và một truy vấn MCP từ client thật. Ghi rõ provider giả hay thật. |
 
-Phạm vi 0.1.0 ở đây chốt dạng bàn giao và quy trình đọc bằng chứng. Hướng dẫn dựng lặp lại và biên bản nghiệm thu thủ công đầy đủ là các đợt tiếp theo. Kết quả Electron với fixture và provider giả lập được lưu trong báo cáo riêng. [Smoke đóng gói](../../apps/desktop/scripts/smoke-packaged.mjs) · [Checklist Windows](../windows-checklist.md) · [Kịch bản NestJS](../demo-script.md) · [Báo cáo editor và agent](../benchmarks/2026-11-15-editor-agent.md)
+Người phát triển có thể dựng từ checkout sạch theo hướng dẫn cài đặt. Kết quả CI và biên bản nghiệm thu máy đích được ghi theo từng lượt kiểm. [Cài đặt từ mã nguồn](../install-notes.md) · [Smoke đóng gói](../../apps/desktop/scripts/smoke-packaged.mjs) · [Checklist Windows](../windows-checklist.md) · [Kịch bản NestJS](../demo-script.md) · [Báo cáo editor và agent](../benchmarks/2026-11-15-editor-agent.md)
 
 ## Bản xem trước Code-OSS
 

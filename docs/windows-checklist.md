@@ -10,7 +10,7 @@ Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi 
 - [ ] Ghi đường dẫn tệp `.exe` đã tải, kích thước và SHA-256. Ví dụ từ thư mục chứa bộ cài x64, chạy `Get-FileHash -Algorithm SHA256 -LiteralPath '.\NexGraph-0.1.0-windows-x64.exe'`.
 - [ ] Chạy installer NSIS và ghi đường dẫn cài thực tế. Ghi cảnh báo SmartScreen nếu xuất hiện và kết quả mở NexGraph.
 - [ ] Mở `NexGraph.exe` từ thư mục vừa cài. Kiểm tệp `resources\engine\nexgraph-engine.exe`, trạng thái **Engine: sẵn sàng** và nút **Mở thư mục…** ở màn **Dự án**.
-- [ ] Nếu tự build, chạy `pnpm --filter @nexgraph/desktop run smoke:packaged`. Lưu dòng `SMOKE OK` kèm `fs=OK agent=OK` trong log. Script smoke dùng `apps/desktop/dist/win-unpacked/NexGraph.exe`; kết quả cài qua NSIS được ghi riêng ở các bước trên.
+- [ ] Xem job package Windows của commit cần kiểm. CI chạy NSIS và smoke app đã cài vào thư mục tạm. Lưu dòng `SMOKE OK` kèm `fs=OK`, `agent=OK` và `index=OK`. Khi tự build, `pnpm --filter @nexgraph/desktop run smoke:packaged` dùng bản `win-unpacked` để kiểm nhanh. Ghi kết quả cài NSIS trên máy đích ở các bước trên.
 
 ## B. Luồng dự án và demo
 

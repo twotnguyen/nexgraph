@@ -81,7 +81,8 @@ export function startEngine(
   }
 
   const stop = async (): Promise<void> => {
-    if (exited) return
+    // Spawn thất bại không có PID và có thể không phát sự kiện exit.
+    if (exited || pid < 0) return
     killTree('SIGTERM')
     const timer = setTimeout(() => killTree('SIGKILL'), KILL_GRACE_MS)
     await exitPromise

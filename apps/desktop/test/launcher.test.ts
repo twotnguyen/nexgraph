@@ -74,6 +74,14 @@ describe('startEngine', () => {
     expect(err.stderrTail).toContain('boom')
   })
 
+  it('reports a failed spawn without waiting for an exit event', async () => {
+    const dataDir = tmp()
+    const command = join(dataDir, 'missing-engine')
+    await expect(startEngine({ command, args: [] }, { dataDir })).rejects.toMatchObject({
+      name: 'EngineStartError', pid: -1, message: expect.stringContaining('ENOENT')
+    })
+  }, 2000)
+
   it('reports exit after ready', async () => {
     const h = await run('crash-after-ready')
     const code = await new Promise((resolve) => h.onExit((c) => resolve(c)))

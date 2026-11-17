@@ -30,10 +30,10 @@ NEXGRAPH_USER_DATA_DIR="$demo/user-data" NEXGRAPH_DATA_DIR="$demo/engine-data" \
   NEXGRAPH_ALLOW_HTTP_PROVIDER=1 pnpm dev
 ```
 
-Mở terminal thứ hai ở gốc repo để chạy máy chủ kiểm thử. Lệnh import trực tiếp dùng được trên Windows, nơi kiểm tra đường dẫn ở điểm vào của script có thể bỏ qua khởi động khi gọi script trực tiếp:
+Mở terminal thứ hai ở gốc repo và chạy máy chủ AI giả lập trên Windows hoặc macOS.
 
 ```sh
-node --input-type=module -e "import { createFakeLlm } from './apps/desktop/scripts/fake-llm.mjs'; createFakeLlm().listen(8787, '127.0.0.1', () => console.log('http://127.0.0.1:8787/v1'));"
+node apps/desktop/scripts/fake-llm.mjs 8787
 ```
 
 1. Trong app, mở bản sao `flow_app` vừa tạo và dựng graph. Vào **Cài đặt → Tài khoản AI → Nhà cung cấp tuỳ chỉnh**, thêm nhà cung cấp với Base URL `http://127.0.0.1:8787/v1`, model `fake`, để trống API key. Lưu, chọn model và bấm **Kiểm tra kết nối**.
