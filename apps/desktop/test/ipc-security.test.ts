@@ -95,7 +95,9 @@ describe('IPC: path thô từ renderer bị từ chối', () => {
   it('mcp:config và mcp:plan bỏ path lạ, dùng root thật của projectId', async () => {
     const cfg = await invoke('mcp:config', 'p1', '/etc/evil')
     expect(cfg.ok).toBe(true)
-    expect(dataOf<{ stdio: string }>(cfg).stdio).toContain(root)
+    // So trên giá trị đã parse: trên Windows JSON.stringify nhân đôi dấu '\', so chuỗi thô sẽ sai.
+    const stdio = JSON.parse(dataOf<{ stdio: string }>(cfg).stdio) as { mcpServers: { nexgraph: { args: string[] } } }
+    expect(stdio.mcpServers.nexgraph.args).toContain(root)
     expect(dataOf<{ stdio: string }>(cfg).stdio).not.toContain('/etc/evil')
     const plan = await invoke('mcp:plan', 'codex', 'p1', '/etc/evil')
     expect(plan.ok).toBe(true)
