@@ -1,50 +1,49 @@
-# Danh sách kiểm Windows (giao cho P3)
+# Danh sách nghiệm thu Windows
 
-Mỗi dòng ghi **ĐẠT** hoặc **LỖI + mô tả nguyên văn** (chụp màn hình, chép thông báo lỗi). Lỗi tái hiện được → báo lại để viết test và sửa; không tái hiện → ghi vào "Hạn chế đã biết".
+Dùng checklist này cho **Electron độc lập**. Ghi kết quả Code-OSS riêng với artifact và quy trình dựng tương ứng. CI đã được ghi nhận ở mốc `61cc7af` cho build và smoke bản Electron, còn cài và thao tác trên máy Windows của nhóm đang chờ ghi nhận. Xem [bằng chứng và hướng dẫn](install-notes.md).
 
-Máy: Windows 10/11, tên CPU/RAM ………, có/không GPU rời ………
+Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi bước tái hiện, nội dung lỗi, log hoặc ảnh. Ghi OS/build Windows, CPU, RAM, GPU, commit NexGraph, URL run/artifact, dung lượng và ngày kiểm.
 
-## A. Cài đặt
-- [ ] Tải artifact `.exe` (job `package`, `windows-latest`) từ trang Actions của `twotnguyen/nexgraph` (cần quyền kho riêng tư).
-- [ ] Chạy trình cài. Có cảnh báo **Windows SmartScreen** ("Windows protected your PC") vì bản chưa ký: bấm `More info → Run anyway`. Ghi lại nội dung.
-- [ ] Mở app lần đầu: thấy màn **Dự án**, không báo lỗi engine.
-- [ ] Dung lượng bộ cài ……… MB (ngưỡng editor + agent < 400 MB; ghi thực đo, không dùng kích thước `.app` giải nén).
+## A. Cài và khởi động
 
-## B. Kịch bản demo (`docs/demo-script.md`)
-- [ ] Bước 1: mở thư mục bản sao NestJS (chép sang `C:\Users\<tên>\Đồ án\nestjs demo`).
-- [ ] Bước 2: thẻ Kiến trúc và thẻ Bản đồ.
-- [ ] Bước 3: thẻ Luồng (`signIn`), Agent chế độ Hỏi, chip mở đúng dòng trong Monaco.
-- [ ] Bước 4: sửa `string-util.service.ts` ngay trong NexGraph, Ctrl+S, thẻ Thay đổi cập nhật.
-- [ ] Tổng thời gian ……… phút.
+- [ ] Tải `.exe` từ job `package (windows-latest)` của commit cần kiểm hoặc tạo bộ cài theo [hướng dẫn đóng gói](install-notes.md#đóng-gói-electron). Ghi đúng loại artifact và kích thước của bộ cài.
+- [ ] Chạy installer NSIS. Ghi cảnh báo SmartScreen nếu xuất hiện và kết quả mở NexGraph.
+- [ ] Mở app trên máy đích, kiểm màn **Dự án** và trạng thái engine.
+- [ ] Nếu tự build, chạy `pnpm --filter @nexgraph/desktop run smoke:packaged`. Lưu dòng `SMOKE OK` kèm `fs=OK agent=OK` trong log kiểm tự động.
 
-## C. Năm kịch bản lỗi (spec §6.3)
-- [ ] 1. Chưa cấu hình AI: mọi thẻ dùng được, chat hiện hướng dẫn.
-- [ ] 2. Mở dự án lớn chưa lập chỉ mục: hiện hộp thoại dự án lớn, chọn thư mục con được.
-- [ ] 3. Mở một dự án Go/Java nhỏ: lập chỉ mục được ở mức chung.
-- [ ] 4. Tắt mạng (tắt Wi-Fi): dự án đã lập chỉ mục vẫn mở; chat báo `ai_unreachable`.
-- [ ] 5. Thư mục không có `.git`: thẻ Thay đổi hiện ghi chú "Không có Git: so với lần lập chỉ mục trước".
+## B. Luồng dự án và demo
 
-## D. Riêng Windows
-- [ ] Thẻ **Bản đồ** (WebGL) trên máy không có GPU rời: hiện đồ thị hoặc báo không hỗ trợ (không trắng màn hình).
-- [ ] Đường dẫn có dấu tiếng Việt và khoảng trắng (`C:\Users\...\Đồ án\nestjs demo`): lập chỉ mục, mở code từ chip trích dẫn, thẻ Thay đổi.
-- [ ] **Git hook** (Tổng quan → "Cập nhật sau mỗi commit"): cài Git for Windows; bật hook; `git commit` một thay đổi trong dự án; trong vài giây thẻ Thay đổi/Tổng quan hết "Graph cũ". Gỡ hook; tệp `.git/hooks/post-commit` mất khối nexgraph.
-- [ ] **Tích hợp trợ lý AI**: ghi `.mcp.json`; mở lại bằng Claude Code (nếu có) và gọi `graph_stats`.
-- [ ] Đóng app: không còn tiến trình `nexgraph-engine.exe` mồ côi trong Task Manager.
+- [ ] Chạy [fixture Python ngắn](demo-script.md#kiểm-nhanh-bằng-fixture-python) với LLM giả để kiểm luồng cơ bản.
+- [ ] Chạy [demo NestJS](demo-script.md#demo-nestjs-trong-5-phút) từ bản sao có dấu và khoảng trắng, chẳng hạn `Đồ án\nestjs demo`. Ghi tổng thời gian.
+- [ ] Mở **Kiến trúc** và **Bản đồ**. Nếu WebGL không dùng được, app có báo trạng thái và vẫn xem được **Kiến trúc**.
+- [ ] Chọn luồng `signIn`, thử **Tô luồng** và mở trích dẫn đúng dòng trong Monaco.
+- [ ] Sửa rồi Ctrl+S, kiểm **Thay đổi** và kiểm thử liên quan; đổi nhánh Git và kiểm graph làm mới.
+- [ ] Bật **Cập nhật sau mỗi commit**, commit một thay đổi trên bản sao, kiểm trạng thái hết “Graph cũ”. Gỡ rồi kiểm khối NexGraph trong `.git/hooks/post-commit` đã được bỏ.
+- [ ] Thoát app, Task Manager không còn tiến trình `nexgraph-engine.exe` của phiên vừa kiểm.
 
+## C. Các kịch bản lỗi
 
-## E. Editor + agent tích hợp (F13–F15)
+- [ ] Chưa cấu hình AI: các thẻ đồ thị vẫn dùng được và Agent hướng dẫn vào **Tài khoản AI**.
+- [ ] Dự án lớn chưa lập chỉ mục: app cho chọn thư mục con.
+- [ ] Dự án Go hoặc Java nhỏ: graph chung được dựng, app hiển thị mức hỗ trợ.
+- [ ] Mất mạng với provider online: mở lại được dự án đã lập chỉ mục; Agent báo lỗi kết nối.
+- [ ] Dự án không có `.git`: thẻ **Thay đổi** so với lần lập chỉ mục trước.
 
-- [ ] Mở tệp CRLF có BOM, sửa và Ctrl+S; byte xuống dòng/BOM giữ nguyên.
-- [ ] Thẻ chưa lưu còn nguyên khi đổi thẻ; đóng thẻ/thoát app hỏi trước khi bỏ nội dung.
-- [ ] Sửa cùng tệp từ bên ngoài: thẻ sạch nạp lại; thẻ bẩn hiện Nạp lại / Giữ bản của tôi, không tự ghi đè.
-- [ ] API key, custom provider, chọn model và Kiểm tra kết nối; ô key không hiện lại khoá đã lưu.
-- [ ] Hỏi có streaming, Dừng, chip trích dẫn và Tô luồng.
-- [ ] Chuyển Sửa thấy cảnh báo không có sandbox; Duyệt diff làm đổi tệp, Từ chối không đổi.
-- [ ] Đang chờ duyệt: bấm Dừng / đổi Hỏi / tải lại cửa sổ → từ chối ngay, lượt sau vẫn dùng được.
-- [ ] `bash`: spike chưa kiểm Windows; ghi shell đang có, duyệt một lệnh vô hại (`echo NexGraph`). Thiếu shell hoặc chạy lỗi phải ghi nguyên văn, không coi là đã hỗ trợ.
-- [ ] OAuth: thử nhà cung cấp được phép, ghi kết quả và khả năng huỷ; không dùng tài khoản thật khi chưa đọc cảnh báo hạn chế tài khoản.
-- [ ] Codex MCP + skill: xem trước, áp dụng trong dự án, nội dung cấu hình cũ giữ nguyên.
-- [ ] Chạy `pnpm --filter @nexgraph/desktop smoke:packaged` → có `SMOKE OK ... fs=OK agent=OK`.
-- [ ] Trạng thái hiện tại: **chưa kiểm trên Windows**, P3 ghi máy/ngày và kết quả trước nghiệm thu.
-## F. Ghi chú thêm
-………
+## D. Editor, Agent và MCP
+
+- [ ] Mở tệp CRLF có BOM, sửa và Ctrl+S, xác nhận EOL/BOM giữ nguyên.
+- [ ] Đổi thẻ khi có thay đổi chưa lưu. Đóng thẻ/thoát app hiện xác nhận.
+- [ ] Sửa từ ngoài: thẻ sạch nạp lại; thẻ bẩn hiện lựa chọn xử lý xung đột và giữ nháp.
+- [ ] Thêm nhà cung cấp tuỳ chỉnh, chọn model, kiểm kết nối. Key đã lưu không xuất hiện lại trong ô nhập.
+- [ ] Hỏi: xem streaming, bấm **Dừng**, mở trích dẫn và **Tô luồng**. Ghi loại provider (giả hoặc thật).
+- [ ] Chuyển **Sửa** thấy cảnh báo quyền chạy lệnh. Duyệt diff làm đổi tệp, từ chối giữ nguyên byte. Khi đang chờ duyệt, thử **Dừng**, đổi **Hỏi** hoặc tải lại cửa sổ, xác nhận đề xuất cũ không thực thi và lượt sau dùng được.
+- [ ] Thử duyệt lệnh vô hại `echo NexGraph`, ghi shell Windows thực tế và kết quả.
+- [ ] Nếu kiểm OAuth, ghi provider, kết quả đăng nhập và hủy. Ghi rõ khi dùng adapter/provider giả.
+- [ ] Xem trước rồi áp dụng cấu hình MCP/skill trong bản sao, xác nhận phần cấu hình cũ được giữ. Nếu client đã cài, mở dự án và gọi `graph_stats` để xác nhận kết nối runtime.
+
+## E. Bằng chứng
+
+- Máy, ngày, commit, bản chạy và artifact:
+- Fixture/dự án, nhà cung cấp AI, client MCP:
+- Log, ảnh hoặc video:
+- Lỗi và mục còn chờ:
