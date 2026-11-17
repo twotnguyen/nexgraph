@@ -307,6 +307,10 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+.ws-path {
+  flex: 1 1 0;
+}
+
 .search-panel {
   display: flex;
   flex-direction: column;
