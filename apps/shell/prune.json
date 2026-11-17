@@ -1,0 +1,15 @@
+{
+  "//": "Những phần của nền bị loại khỏi bản đóng gói vì không phục vụ NexGraph. Đường dẫn tính từ thư mục app (…/Resources/app trên macOS, resources/app trên Windows).",
+  "extensions": {
+    "AI và đăng nhập của nền (NexGraph có trợ lý riêng)": ["copilot", "prompt-basics", "microsoft-authentication"],
+    "Gỡ lỗi JavaScript và dò tác vụ build": ["ms-vscode.js-debug", "ms-vscode.js-debug-companion", "ms-vscode.vscode-js-profile-table", "debug-auto-launch", "debug-server-ready", "grunt", "gulp", "jake", "npm"],
+    "Notebook, sơ đồ và trình duyệt nhúng trong Markdown": ["ipynb", "notebook-renderers", "mermaid-markdown-features", "markdown-math", "simple-browser"],
+    "Viết extension và PHP": ["extension-editing", "php-language-features"],
+    "Theme màu khác (NexGraph có theme sáng và tối riêng)": ["theme-abyss", "theme-kimbie-dark", "theme-monokai", "theme-monokai-dimmed", "theme-quietlight", "theme-red", "theme-solarized-dark", "theme-solarized-light", "theme-tomorrow-night-blue"]
+  },
+  "paths": {
+    "Cửa sổ Agents của nền": ["out/vs/sessions"],
+    "Bộ chạy Copilot": ["node_modules.asar.unpacked/@github"]
+  },
+  "sourceMaps": true
+}
