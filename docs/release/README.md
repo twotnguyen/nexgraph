@@ -28,6 +28,10 @@ CI đặt tên theo phiên bản và kiến trúc của lượt build. Có thể
 
 ![Màn Dự án của NexGraph 0.1.0 trên Windows, nút Mở thư mục và trạng thái engine sẵn sàng](screenshots/projects.png)
 
+**Kiến trúc NestJS.** Ảnh chụp trên Windows từ renderer Electron 0.1.0 đã build, dùng engine phát triển và bản sao `ecommerce-backend-nestjs` tại `d11f4ef`. Đồ thị gốc hiển thị các khối và quan hệ `test → src`.
+
+![Màn Kiến trúc của dự án NestJS và quan hệ phụ thuộc từ test sang src](screenshots/architecture.png)
+
 **Monaco và trợ lý.** Hai ảnh chụp bản Electron đóng gói trên macOS arm64 với fixture Python và mô hình giả lập. Ảnh Hỏi minh họa trích dẫn mở đúng dòng và vùng ảnh hưởng. Ảnh Sửa minh họa diff cùng hai lựa chọn Duyệt và Từ chối. [Biên bản chụp ảnh](../benchmarks/2026-11-15-editor-agent.md#kiểm-trên-bản-đóng-gói-electron-thật)
 
 ![Trình soạn thảo Monaco mở trích dẫn từ chế độ Hỏi](../benchmarks/2026-11-15-editor-ask.png)
