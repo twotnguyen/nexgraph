@@ -77,6 +77,7 @@ describe('AgentService + pi SDK thật', () => {
   let dataDir: string
 
   beforeAll(async () => {
+    process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER = '1' // LLM giả chạy trên 127.0.0.1
     llm = await fakeLlm(seen)
     const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-pi-real-')))
     root = join(base, 'proj')
@@ -107,6 +108,7 @@ describe('AgentService + pi SDK thật', () => {
   afterAll(async () => {
     svc?.closeAll()
     await llm?.close()
+    delete process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER
     rmSync(OUTSIDE_READ, { force: true })
   })
 

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { AgentService, ASK_TOOLS, EDIT_TOOLS, type ModelChoice, type PiSession, type SessionSpec } from '../src/main/agent/session'
+import { AgentService, ASK_TOOLS, EDIT_TOOLS, rememberSecret, scrub, type ModelChoice, type PiSession, type SessionSpec } from '../src/main/agent/session'
 import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
 import type { AgentEvent } from '../src/shared/agent-types'
@@ -327,6 +327,18 @@ describe('AgentService (phiên giả)', () => {
     expect(e.message).not.toContain('sk-abcdef1234567890')
     expect(e.message).not.toContain('xyz.secret')
     expect(e.message.length).toBeLessThanOrEqual(260)
+  })
+})
+
+describe('scrub', () => {
+  it('che gsk_, AIza, JWT, Bearer và giá trị key đang active', () => {
+    rememberSecret('active-key-value-xyz')
+    const raw = 'gsk_abcdef123456 AIzaSyA123456789 AIza eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig active-key-value-xyz Bearer tok sk-abcdef123456'
+    const out = scrub(raw)
+    for (const needle of ['gsk_abcdef123456', 'AIzaSyA123456789', 'eyJhbGciOiJIUzI1NiJ9', 'active-key-value-xyz', 'tok', 'sk-abcdef123456'])
+      expect(out).not.toContain(needle)
+    expect(out).toContain('***')
+    expect(out.length).toBeLessThanOrEqual(200)
   })
 })
 

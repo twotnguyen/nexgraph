@@ -1,9 +1,14 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccountService } from '../../../src/main/agent/accounts'
 import { SecretStore, type SecretBox } from '../../../src/main/ai/settings'
+
+// DNS giả: hostname công khai phân giải tới IP công khai; IP literal giữ nguyên để test chặn link-local.
+vi.mock('node:dns/promises', () => ({
+  lookup: async (host: string) => [{ address: /^\d+\.\d+\.\d+\.\d+$/.test(host) ? host : '93.184.216.34', family: 4 }]
+}))
 
 const box: SecretBox = {
   available: () => true,
@@ -97,10 +102,42 @@ describe('AccountService', () => {
     const { svc } = await make()
     await expect(svc.saveCustomProvider({ id: 'smoke', label: 'S', baseUrl: 'ftp://x', model: 'fake' }))
       .rejects.toMatchObject({ code: 'bad_param' })
-    await svc.saveCustomProvider({ id: 'smoke', label: 'Smoke', baseUrl: 'http://127.0.0.1:9/v1', model: 'fake' })
+    // HTTP chỉ cho localhost khi bật cờ dev tường minh.
+    process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER = '1'
+    try {
+      await svc.saveCustomProvider({ id: 'smoke', label: 'Smoke', baseUrl: 'http://127.0.0.1:9/v1', model: 'fake' })
+    } finally {
+      delete process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER
+    }
     expect((await svc.listModels()).find((m) => m.provider === 'smoke' && m.id === 'fake')).toBeTruthy()
     const providers = await svc.listProviders()
     expect(providers.find((p) => p.id === 'smoke')).toMatchObject({ custom: true, label: 'Smoke' })
+  })
+
+  it('chặn HTTP công khai và IP link-local/private, kể cả khi có cờ dev cho localhost', async () => {
+    const { svc } = await make()
+    await expect(svc.saveCustomProvider({ id: 'pub', label: 'P', baseUrl: 'http://api.example.com/v1', model: 'm' }))
+      .rejects.toMatchObject({ code: 'bad_param' })
+    await expect(svc.saveCustomProvider({ id: 'link', label: 'L', baseUrl: 'http://169.254.169.254/latest', model: 'm' }))
+      .rejects.toMatchObject({ code: 'bad_param' })
+    await expect(svc.saveCustomProvider({ id: 'priv', label: 'R', baseUrl: 'https://10.0.0.5/v1', model: 'm' }))
+      .rejects.toMatchObject({ code: 'bad_param' })
+    process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER = '1'
+    try {
+      await expect(svc.saveCustomProvider({ id: 'link2', label: 'L', baseUrl: 'http://169.254.169.254/latest', model: 'm' }))
+        .rejects.toMatchObject({ code: 'bad_param' })
+    } finally {
+      delete process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER
+    }
+    expect((await svc.listProviders()).filter((p) => p.custom)).toHaveLength(0)
+  })
+
+  it('không đăng ký lại provider tuỳ chỉnh không an toàn từ cấu hình cũ', async () => {
+    writeFileSync(join(base, 'prefs.json'), JSON.stringify({
+      aiCustomProviders: [{ id: 'old', label: 'Old', baseUrl: 'http://169.254.169.254/v1', model: 'm' }]
+    }))
+    const { svc } = await make()
+    expect((await svc.listProviders()).find((p) => p.id === 'old')).toBeUndefined()
   })
 
   it('di trú cấu hình cũ một lần, không nhân đôi khi chạy lại', async () => {
@@ -149,7 +186,12 @@ describe('AccountService', () => {
     expect(opens).toContain('https://oauth.example/authorize')
     const authFile = join(base, 'agent', 'auth.json')
     expect(readFileSync(authFile, 'utf8')).toContain('fakeoauth')
-    expect(statSync(authFile).mode & 0o777).toBe(0o600)
+    if (process.platform === 'win32') {
+      // Windows không có bit mode POSIX: chỉ kiểm tệp tồn tại và chứa provider.
+      expect(existsSync(authFile)).toBe(true)
+    } else {
+      expect(statSync(authFile).mode & 0o777).toBe(0o600)
+    }
     expect((await svc.listProviders()).find((x) => x.id === 'fakeoauth')?.loggedIn).toBe(true)
   })
 

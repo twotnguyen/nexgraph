@@ -67,8 +67,27 @@ type Entry = { gate: ApprovalGate; session: Promise<PiSession>; busy: boolean; t
 const STATUS = /\b([45]\d\d)\b/
 const NETWORK = /fetch failed|connection error|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timed? ?out|network|socket|terminated/i
 
-/** Gỡ thứ trông như khoá và cắt ngắn: chi tiết lỗi nhà cung cấp không đi nguyên văn ra renderer. */
-export const scrub = (raw: string): string => raw.replace(/\b(sk-|Bearer\s+)\S+/gi, '$1***').slice(0, 200)
+/** Khoá đang active (do AccountService đăng ký) để che cả giá trị không theo mẫu `sk-*`. */
+const activeSecrets = new Set<string>()
+export const rememberSecret = (key?: string | null): void => {
+  if (!key || key.length < 6) return
+  activeSecrets.add(key)
+  if (activeSecrets.size > 32) activeSecrets.delete(activeSecrets.values().next().value!)
+}
+
+/**
+ * Gỡ mọi dạng khoá biết được (giá trị key đang active, `sk-`, `gsk_`, `AIza`, OAuth JWT, Bearer)
+ * rồi cắt ngắn: chi tiết lỗi nhà cung cấp không đi nguyên văn ra renderer.
+ */
+export const scrub = (raw: string): string => {
+  let s = raw
+  for (const secret of activeSecrets) s = s.split(secret).join('***')
+  return s
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, '***')
+    .replace(/\b(sk-|gsk_|AIza|xoxb-|ghp_)[A-Za-z0-9_\-]{6,}/gi, '$1***')
+    .replace(/\bBearer\s+\S+/gi, 'Bearer ***')
+    .slice(0, 200)
+}
 
 /** Ánh xạ lỗi nhà cung cấp sang mã/câu tiếng Việt, dùng lại mã của chat.ts cũ. */
 function providerError(raw: string): AgentEvent {
@@ -76,7 +95,8 @@ function providerError(raw: string): AgentEvent {
   if (status === '401' || status === '403') return { type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' }
   if (status) return { type: 'error', code: 'ai_unreachable', message: `Nhà cung cấp AI trả về ${status}` }
   if (NETWORK.test(raw)) return { type: 'error', code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI' }
-  return { type: 'error', code: 'ai_error', message: `Trợ lý AI gặp lỗi (${scrub(raw)})` }
+  // Không đưa err.message thô (dù đã scrub) vào AgentEvent.error.message.
+  return { type: 'error', code: 'ai_error', message: 'Trợ lý AI gặp lỗi' }
 }
 const CANCELLED: AgentEvent = { type: 'error', code: 'ai_cancelled', message: 'Đã dừng' }
 
@@ -199,7 +219,11 @@ export class AgentService {
     this.entries.delete(projectId)
     e.stopped = true
     e.gate.denyAll('Đã đóng dự án')
-    void e.session.then((s) => s.dispose()).catch(() => {})
+    // Dừng lượt đang chạy trước rồi mới huỷ phiên: dispose() riêng lẻ có thể chờ mãi một tool đang treo.
+    void e.session.then(async (s) => {
+      try { await s.abort() } catch { /* phiên chưa tạo xong hoặc đã dừng */ }
+      await s.dispose()
+    }).catch(() => {})
   }
 
   closeAll(): void {

@@ -1,17 +1,17 @@
 import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'electron'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
-import { fsHandlers, projectRoot } from './fs/project-fs'
-import { AgentService } from './agent/session'
+import { FsError, fsHandlers, isWithin, projectRoot } from './fs/project-fs'
+import { AgentError, AgentService } from './agent/session'
 import { AccountService } from './agent/accounts'
 import type { AgentMode, AuthEventView, AuthPromptView } from '../shared/agent-types'
 import type { AiSettings } from '../shared/graph-types'
-import { SecretStore } from './ai/settings'
+import { SecretStore, writeJson } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
 import { applyIntegration, planIntegration } from './integrations'
 import type { AgentId } from '../shared/integration-types'
@@ -44,8 +44,15 @@ const prefsFile = (): string => join(app.getPath('userData'), 'prefs.json')
 /** Cổng MCP HTTP lần trước theo project (không bí mật) trong prefs.json. */
 const prefsPortStore = (): McpPortStore => ({
   load: (pid) => Number(readJson(prefsFile())[`mcpPort:${pid}`]) || null,
-  save: (pid, port) => writeFileSync(prefsFile(), JSON.stringify({ ...readJson(prefsFile()), [`mcpPort:${pid}`]: String(port) }))
+  save: (pid, port) => writeJson(prefsFile(), { ...readJson(prefsFile()), [`mcpPort:${pid}`]: String(port) })
 })
+
+/** Thư mục xuất đã chọn theo projectId: chỉ main được ghi, renderer không gửi lại path tuỳ ý. */
+const exportDirKey = (pid: string): string => `exportDir:${pid}`
+const savedExportDir = (pid: string): string | null => {
+  const prefs = readJson(prefsFile())
+  return prefs[exportDirKey(pid)] ?? null
+}
 
 /** Box mã hoá safeStorage (Keychain/DPAPI) dùng chung cho key MCP và key AI provider. */
 const secretBox = {
@@ -71,7 +78,7 @@ function safeKeyStore(): McpKeyStore {
       if (!safeStorage.isEncryptionAvailable()) return // không lưu key dạng rõ; lần sau sinh key mới
       const all = readJson(file())
       all[pid] = safeStorage.encryptString(key).toString('base64')
-      writeFileSync(file(), JSON.stringify(all), { mode: 0o600 })
+      writeJson(file(), all)
     }
   }
 }
@@ -131,7 +138,10 @@ export function registerIpc(
   })
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
-  const fsh = fsHandlers(() => api().listProjects())
+  const listProjects = (): Promise<{ project_id: string; path: string }[]> => api().listProjects()
+  const fsh = fsHandlers(listProjects)
+  /** Mọi kênh nhận path đều phải suy root từ projectId đã đăng ký; id lạ → FsError('unknown_project'). */
+  const rootOf = projectRoot(listProjects)
   on('fs:read', fsh.read)
   on('fs:write', fsh.write)
   on('index:scan', (pid: string) => api().scan(pid))
@@ -139,10 +149,10 @@ export function registerIpc(
   on('index:cancel', async (jobId: string) => void (await api().cancelJob(jobId)))
   on('index:refresh', (pid: string) => api().refresh(pid))
   on('graph:changes', (pid: string, opts?: { refresh?: boolean }) => api().changes(pid, opts))
-  on('watch:start', async (pid: string, path: string) => {
+  on('watch:start', async (pid: string) => {
     watchers.get(pid)?.stop()
     const w = new ProjectWatcher({
-      root: path,
+      root: await rootOf(pid),
       onFlush: async () => void (await api().refresh(pid)),
       onError: (e) => console.warn(`[watch] ${pid}: ${e.message}`)
     })
@@ -229,20 +239,26 @@ export function registerIpc(
   on('agent:approve', async (pid: string, id: string, allow: boolean) => agent.approve(pid, id, allow === true))
   on('agent:close', async (pid: string) => agent.close(pid))
 
-  on('export:pick-dir', async () => {
+  on('export:pick-dir', async (pid: string) => {
+    await rootOf(pid) // chỉ dự án đã đăng ký mới có thể chọn thư mục xuất
     const prefs = readJson(prefsFile())
     const win = getWindow()
     const opts = {
       properties: ['openDirectory' as const, 'createDirectory' as const],
       title: 'Chọn thư mục lưu kết quả xuất',
-      defaultPath: prefs.exportDir ?? app.getPath('downloads')
+      defaultPath: savedExportDir(pid) ?? app.getPath('downloads')
     }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || r.filePaths.length === 0) return null
-    writeFileSync(prefsFile(), JSON.stringify({ ...prefs, exportDir: r.filePaths[0] }))
+    writeJson(prefsFile(), { ...prefs, [exportDirKey(pid)]: r.filePaths[0] })
     return r.filePaths[0]
   })
-  on('export:run', (pid: string, format: ExportFormat, scope: ExportScope, outDir: string) => api().exportGraph(pid, format, scope, outDir))
+  on('export:run', async (pid: string, format: ExportFormat, scope: ExportScope) => {
+    await rootOf(pid)
+    const dir = savedExportDir(pid)
+    if (!dir) throw new AgentError('bad_param', 'Chưa chọn thư mục lưu kết quả xuất')
+    return api().exportGraph(pid, format, scope, dir)
+  })
   on('export:push', (pid: string, req: PushRequest) => api().pushGraph(pid, req))
   on('export:png', async (rect?: { x: number; y: number; width: number; height: number }) => {
     const win = getWindow()
@@ -258,16 +274,23 @@ export function registerIpc(
     await writeFile(r.filePath, image.toPNG())
     return r.filePath
   })
-  on('export:reveal', async (path: string) => shell.showItemInFolder(path))
+  on('export:reveal', async (pid: string, path: string) => {
+    const root = await rootOf(pid)
+    const dir = savedExportDir(pid)
+    if (!isWithin(root, path) && !(dir && isWithin(dir, path)))
+      throw new FsError('outside_project', `Đường dẫn nằm ngoài dự án và thư mục xuất: ${path}`)
+    await shell.showItemInFolder(path)
+  })
 
-  on('mcp:config', async (projectPath: string) => ({ stdio: mcpStdioConfig(getCommand(), projectPath, dataDir) }))
-  on('hook:status', async (projectPath: string) => hookStatus(projectPath, getCommand(), dataDir))
-  on('hook:preview', async (projectPath: string) => hookBlock(getCommand(), projectPath, dataDir))
-  on('hook:install', async (projectPath: string) => installHook(projectPath, getCommand(), dataDir))
-  on('hook:uninstall', async (projectPath: string) => uninstallHook(projectPath))
-  on('mcp:plan', async (agent: AgentId, projectPath: string) => planIntegration(agent, projectPath, getCommand(), dataDir))
-  on('mcp:apply', async (agent: AgentId, projectPath: string) => applyIntegration(agent, projectPath, getCommand(), dataDir))
-  on('mcp:start-http', (pid: string, projectPath: string) => mcp.start(pid, projectPath))
+  // Mọi path đi vào engine/git hook/MCP đều suy từ projectId đã đăng ký, không tin path renderer gửi.
+  on('mcp:config', async (pid: string) => ({ stdio: mcpStdioConfig(getCommand(), await rootOf(pid), dataDir) }))
+  on('hook:status', async (pid: string) => hookStatus(await rootOf(pid), getCommand(), dataDir))
+  on('hook:preview', async (pid: string) => hookBlock(getCommand(), await rootOf(pid), dataDir))
+  on('hook:install', async (pid: string) => installHook(await rootOf(pid), getCommand(), dataDir))
+  on('hook:uninstall', async (pid: string) => uninstallHook(await rootOf(pid)))
+  on('mcp:plan', async (agent: AgentId, pid: string) => planIntegration(agent, await rootOf(pid), getCommand(), dataDir))
+  on('mcp:apply', async (agent: AgentId, pid: string) => applyIntegration(agent, await rootOf(pid), getCommand(), dataDir))
+  on('mcp:start-http', async (pid: string) => mcp.start(pid, await rootOf(pid)))
   on('mcp:stop-http', (pid: string) => mcp.stop(pid))
   on('mcp:http-status', async (pid: string) => mcp.status(pid))
 }

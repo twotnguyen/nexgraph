@@ -4,7 +4,7 @@ import { Type } from 'typebox'
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent' // chỉ kiểu: pi là ESM, không import tĩnh giá trị
 import type { EngineApi } from '../engine/api'
 import type { FileContent } from '../../shared/api'
-import { FsError, readProjectFile, resolveInside, writeProjectFile } from '../fs/project-fs'
+import { FsError, isProtectedRel, readProjectFile, resolveInside, writeProjectFile } from '../fs/project-fs'
 import { TOOL_DEFS, runTool } from '../ai/tools'
 import type { ApprovedWrite, ApprovalGate } from './approval'
 
@@ -31,6 +31,8 @@ export function createNexgraphExtension(deps: { api: EngineApi; projectId: strin
     // bản xem trước đã duyệt (gate gắn kèm quyết định) và ghi qua writeProjectFile nguyên tử của
     // NexGraph; pi không tự ghi qua fs.write nữa nên symlink tráo tệp sau preview không ghi ra ngoài.
     const approvedWrites = new Map<string, ApprovedWrite>()
+    // Mỗi lượt agent_start là một generation: bản duyệt của lượt trước không còn giá trị.
+    pi.on('agent_start', () => { approvedWrites.clear() })
     pi.registerTool({
       name: 'write',
       label: 'write',
@@ -151,9 +153,16 @@ function pinPath(root: string, tool: string, input: unknown): string | undefined
   if (p === undefined && OPTIONAL_PATH.has(tool)) return undefined
   if (typeof p !== 'string' || p === '') return 'Thiếu đường dẫn hợp lệ'
   if (p.startsWith('@') || p.startsWith('~') || /^file:/i.test(p) || UNICODE_SPACES.test(p)) return 'Đường dẫn chứa ký tự mà pi sẽ viết lại (@, ~, file:, dấu cách Unicode), thao tác bị chặn'
+  let rel: string
+  try {
+    rel = toRel(root, p)
+  } catch {
+    return 'Đường dẫn nằm ngoài dự án'
+  }
+  if (isProtectedRel(rel)) return 'Đường dẫn tới tệp hoặc thư mục được bảo vệ (.git, .nexgraph, .env, khoá…), thao tác bị chặn'
   let abs: string
   try {
-    abs = resolveInside(root, toRel(root, p))
+    abs = resolveInside(root, rel)
   } catch {
     return 'Đường dẫn nằm ngoài dự án'
   }

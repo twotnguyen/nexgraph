@@ -67,19 +67,21 @@ export interface NexGraphApi {
     write(projectId: string, relPath: string, text: string, opts: WriteOpts): Promise<{ mtimeMs: number }>
   }
   exporter: {
-    /** Hộp thoại chọn thư mục đích, nhớ lựa chọn lần trước; `null` khi huỷ. */
-    pickDir(): Promise<string | null>
-    run(projectId: string, format: ExportFormat, scope: ExportScope, outDir: string): Promise<ExportResult>
+    /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */
+    pickDir(projectId: string): Promise<string | null>
+    /** Chỉ dùng thư mục đã lưu theo projectId; renderer không gửi path. */
+    run(projectId: string, format: ExportFormat, scope: ExportScope): Promise<ExportResult>
     push(projectId: string, req: PushRequest): Promise<PushResult>
     /** Chụp vùng `rect` của cửa sổ (toạ độ CSS; vắng thì cả cửa sổ) và lưu PNG; `null` khi huỷ. */
     png(rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>
-    reveal(path: string): Promise<void>
+    /** Chỉ cho path nằm trong gốc dự án hoặc thư mục xuất đã lưu. */
+    reveal(projectId: string, path: string): Promise<void>
   }
   hook: {
-    status(projectPath: string): Promise<'no_git' | 'off' | 'on' | 'outdated'>
-    preview(projectPath: string): Promise<string>
-    install(projectPath: string): Promise<void>
-    uninstall(projectPath: string): Promise<void>
+    status(projectId: string): Promise<'no_git' | 'off' | 'on' | 'outdated'>
+    preview(projectId: string): Promise<string>
+    install(projectId: string): Promise<void>
+    uninstall(projectId: string): Promise<void>
   }
   ai: {
     /** Cấu hình dẫn xuất của provider đang chọn, cho các panel hiển thị "chưa cấu hình" và host consent. */
@@ -121,16 +123,16 @@ export interface NexGraphApi {
   }
   mcp: {
     /** JSON `mcpServers` cho trợ lý AI chạy MCP qua stdio. */
-    config(projectPath: string): Promise<{ stdio: string }>
-    plan(agent: AgentId, projectPath: string): Promise<IntegrationPlan>
-    apply(agent: AgentId, projectPath: string): Promise<IntegrationPlan>
-    startHttp(projectId: string, projectPath: string): Promise<{ url: string; key: string }>
+    config(projectId: string): Promise<{ stdio: string }>
+    plan(agent: AgentId, projectId: string): Promise<IntegrationPlan>
+    apply(agent: AgentId, projectId: string): Promise<IntegrationPlan>
+    startHttp(projectId: string): Promise<{ url: string; key: string }>
     stopHttp(projectId: string): Promise<void>
     httpStatus(projectId: string): Promise<{ url: string } | null>
   }
   /** Theo dõi thư mục project; sự thay đổi làm main gọi refresh và engine phát `changes_updated`. */
   watch: {
-    start(projectId: string, path: string): Promise<void>
+    start(projectId: string): Promise<void>
     stop(projectId: string): Promise<void>
   }
 }

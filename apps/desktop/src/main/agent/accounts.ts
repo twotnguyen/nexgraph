@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto'
+import { lookup } from 'node:dns/promises'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
 import type { AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from '../../shared/agent-types'
 import { readJson, writeJson, type SecretStore } from '../ai/settings'
-import { AgentError, loadPi, scrub } from './session'
+import { AgentError, loadPi, rememberSecret, scrub } from './session'
 
 // pi-coding-agent không tái xuất các kiểu auth; suy ra từ chữ ký login() công khai.
 type AuthInteraction = Parameters<ModelRuntime['login']>[2]
@@ -33,7 +35,7 @@ class FileCredentialStore {
 
   private write(all: Record<string, Credential>): void {
     mkdirSync(dirname(this.file), { recursive: true })
-    const tmp = `${this.file}.tmp`
+    const tmp = `${this.file}.${randomUUID()}.tmp`
     writeFileSync(tmp, JSON.stringify(all), { mode: 0o600 })
     renameSync(tmp, this.file)
   }
@@ -94,8 +96,52 @@ const isCustom = (v: unknown): v is CustomProvider =>
   typeof (v as CustomProvider).label === 'string' && typeof (v as CustomProvider).baseUrl === 'string' &&
   typeof (v as CustomProvider).model === 'string'
 
-const BASE_URL = /^https?:\/\/[^\s/]+/i
+// Mặc định CHỈ HTTPS. HTTP chỉ cho localhost/127.0.0.1 khi bật cờ dev tường minh.
+const BASE_URL = /^https:\/\/[^\s/]+/i
 const PROVIDER_ID = /^[\w.-]{1,64}$/
+const devHttpAllowed = (): boolean => /^(1|true)$/i.test(process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER ?? '')
+
+const badUrl = (message: string): AgentError => new AgentError('bad_param', message)
+
+const isLocalHost = (host: string): boolean => {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '')
+  return h === 'localhost' || h.endsWith('.localhost') || h === '127.0.0.1' || h === '::1'
+}
+
+/** Chặn loopback/private/link-local (IPv4 và IPv6, kể cả dạng IPv4-mapped) trước khi đăng ký provider. */
+function isBlockedIp(address: string): boolean {
+  const a = address.toLowerCase().split('%')[0]
+  if (a.startsWith('::ffff:')) return isBlockedIp(a.slice(7))
+  if (a.includes(':')) {
+    if (a === '::' || a === '::1') return true
+    if (/^f[cd][0-9a-f]{2}:/.test(a)) return true // fc00::/7
+    if (/^fe[89ab][0-9a-f]:/.test(a)) return true // fe80::/10
+    return false
+  }
+  const v4 = a.split('.').map(Number)
+  if (v4.length !== 4 || v4.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true
+  const [x, y] = v4
+  return x === 0 || x === 10 || x === 127 || x === 169 && y === 254 || x === 172 && y >= 16 && y <= 31 || x === 192 && y === 168 || x === 100 && y >= 64 && y <= 127
+}
+
+/**
+ * Kiểm tra Base URL trước mọi `registerProvider`: HTTPS (hoặc HTTP localhost khi bật cờ dev),
+ * không trỏ tới IP riêng/link-local sau khi phân giải DNS. Trả origin đã chuẩn hoá.
+ */
+export async function validateBaseUrl(raw: string): Promise<string> {
+  let url: URL
+  try { url = new URL(raw.trim()) } catch { throw badUrl('Base URL không hợp lệ') }
+  const local = isLocalHost(url.hostname)
+  if (url.protocol === 'http:') {
+    if (!devHttpAllowed() || !local) throw badUrl('Base URL phải dùng HTTPS (HTTP chỉ cho localhost khi bật cờ dev)')
+  } else if (url.protocol !== 'https:') throw badUrl('Base URL phải bắt đầu bằng https://')
+  if (local && devHttpAllowed()) return url.origin // endpoint dev cục bộ: cố tình cho loopback
+  let addresses: { address: string }[]
+  try { addresses = await lookup(url.hostname, { all: true }) } catch { throw badUrl('Không phân giải được tên máy chủ của Base URL') }
+  if (addresses.length === 0 || addresses.some((a) => isBlockedIp(a.address)))
+    throw badUrl('Base URL trỏ tới địa chỉ IP riêng hoặc link-local nên bị từ chối')
+  return url.origin
+}
 
 const cancelled = (): AgentError => new AgentError('ai_cancelled', 'Đã huỷ đăng nhập')
 
@@ -133,12 +179,18 @@ export class AccountService {
     }
     const svc = new AccountService(rt, deps, credentials)
     svc.migrate()
-    for (const c of svc.customs()) svc.registerCustom(c)
+    // Cấu hình cũ từng lưu http công khai/IP riêng: bỏ qua, không đăng ký và không gắn key.
+    for (const c of svc.customs()) {
+      try { await validateBaseUrl(c.baseUrl); svc.registerCustom(c) } catch { /* provider không an toàn */ }
+    }
     // Key chỉ vào runtime (bộ nhớ); không bao giờ ghi vào auth.json/models.json.
     for (const id of deps.secrets.ids()) {
       const key = deps.secrets.get(id)
       try {
-        if (key && rt.getProvider(id)) await rt.setRuntimeApiKey(id, key)
+        if (key && rt.getProvider(id)) {
+          rememberSecret(key)
+          await rt.setRuntimeApiKey(id, key)
+        }
       } catch { /* key của provider không còn: bỏ qua, có thể xoá trong Cài đặt */ }
     }
     return svc
@@ -165,11 +217,9 @@ export class AccountService {
   }
 
   async saveCustomProvider(p: CustomProvider, apiKey?: string): Promise<void> {
-    if (!PROVIDER_ID.test(p.id)) throw new AgentError('bad_param', 'ID nhà cung cấp không hợp lệ')
-    if (!p.label.trim() || !p.model.trim()) throw new AgentError('bad_param', 'Thiếu tên hoặc model')
-    if (!BASE_URL.test(p.baseUrl)) throw new AgentError('bad_param', 'Base URL phải bắt đầu bằng http:// hoặc https://')
-    let origin: string
-    try { origin = new URL(p.baseUrl).origin } catch { throw new AgentError('bad_param', 'Base URL không hợp lệ') }
+    if (!PROVIDER_ID.test(p.id)) throw badUrl('ID nhà cung cấp không hợp lệ')
+    if (!p.label.trim() || !p.model.trim()) throw badUrl('Thiếu tên hoặc model')
+    const origin = await validateBaseUrl(p.baseUrl) // HTTPS (hoặc localhost+cờ dev) + DNS + chặn IP riêng TRƯỚC registerProvider/gắn key
     const previous = this.customs().find((c) => c.id === p.id)
     if (!previous && this.modelRuntime.getProvider(p.id)) throw new AgentError('bad_param', 'ID đã thuộc nhà cung cấp có sẵn')
     // Key của máy chủ cũ không được tự chuyển sang origin khác.
@@ -180,6 +230,7 @@ export class AccountService {
     if (apiKey !== undefined) {
       const key = apiKey.trim()
       if (key) {
+        rememberSecret(key)
         this.deps.secrets.set(p.id, key)
         await this.modelRuntime.setRuntimeApiKey(p.id, key)
       } else await this.removeApiKey(p.id)
@@ -207,6 +258,7 @@ export class AccountService {
   async setApiKey(providerId: string, key: string): Promise<void> {
     if (!this.modelRuntime.getProvider(providerId)) throw new AgentError('bad_param', 'Không có nhà cung cấp này')
     if (!key.trim()) throw new AgentError('bad_param', 'API key trống')
+    rememberSecret(key.trim())
     this.deps.secrets.set(providerId, key.trim())
     await this.modelRuntime.setRuntimeApiKey(providerId, key.trim())
   }

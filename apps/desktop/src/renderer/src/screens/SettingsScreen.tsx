@@ -146,6 +146,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
       <h2>{vi.accounts.customTitle}</h2>
       <p className="muted">{vi.accounts.customLead}</p>
+      <p className="muted small" role="note">{vi.accounts.customSecurityNote}</p>
       {customs.length > 0 && (
         <ul className="muted">
           {customs.map((c) => (

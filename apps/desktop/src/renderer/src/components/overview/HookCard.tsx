@@ -11,20 +11,20 @@ export function HookCard({ project }: { project: ProjectSummary }) {
   const [preview, setPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const load = () => window.nexgraph.hook.status(project.path).then(setStatus).catch((e) => setError(errMessage(e)))
-  useEffect(() => { void load() }, [project.path]) // eslint-disable-line react-hooks/exhaustive-deps
+  const load = () => window.nexgraph.hook.status(project.project_id).then(setStatus).catch((e) => setError(errMessage(e)))
+  useEffect(() => { void load() }, [project.project_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDialog = async () => {
     setError(null)
     try {
-      setPreview(await window.nexgraph.hook.preview(project.path))
+      setPreview(await window.nexgraph.hook.preview(project.project_id))
     } catch (e) {
       setError(errMessage(e))
     }
   }
   const apply = async (install: boolean) => {
     try {
-      await (install ? window.nexgraph.hook.install(project.path) : window.nexgraph.hook.uninstall(project.path))
+      await (install ? window.nexgraph.hook.install(project.project_id) : window.nexgraph.hook.uninstall(project.project_id))
       setPreview(null)
       await load()
     } catch (e) {

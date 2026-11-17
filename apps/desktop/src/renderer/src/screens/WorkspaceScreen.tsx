@@ -80,7 +80,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
 
   // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp. Rời đi cũng đóng phiên agent.
   useEffect(() => {
-    void window.nexgraph.watch.start(project.project_id, project.path).catch(() => {})
+    void window.nexgraph.watch.start(project.project_id).catch(() => {})
     return () => {
       void window.nexgraph.watch.stop(project.project_id).catch(() => {})
       void window.nexgraph.agent.close(project.project_id).catch(() => {})

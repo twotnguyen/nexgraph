@@ -48,7 +48,7 @@ export function FlowList({
         <div className="kind-filter" role="tablist">
           {KINDS.map((k) => (
             <button
-              key={k.label}
+              key={`${k.key}:${k.label}`}
               type="button"
               className={`kind-chip ${currentKind === k.key ? 'active' : ''}`}
               onClick={() => onKindChange(k.key)}

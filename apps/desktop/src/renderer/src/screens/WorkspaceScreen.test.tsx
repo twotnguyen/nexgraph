@@ -141,7 +141,7 @@ describe('WorkspaceScreen: changes', () => {
     const { api } = installNexgraph()
     const { unmount } = render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
     await waitFor(() => expect(api.watch.start).toHaveBeenCalledTimes(1))
-    expect(api.watch.start).toHaveBeenCalledWith('p1', '/Đồ án/demo')
+    expect(api.watch.start).toHaveBeenCalledWith('p1')
     unmount()
     expect(api.watch.stop).toHaveBeenCalledWith('p1')
   })

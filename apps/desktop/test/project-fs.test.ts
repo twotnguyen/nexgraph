@@ -1,4 +1,4 @@
-import { chmodSync, statSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, statSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -119,5 +119,47 @@ describe('fsHandlers qua toIpcResult', () => {
   it('đọc ghi đúng gốc của dự án', async () => {
     await toIpcResult(() => h.write('p1', 'a.ts', 'hi', { eol: '\n', bom: false }))
     expect(await toIpcResult(() => h.read('p1', 'a.ts'))).toMatchObject({ ok: true, data: { text: 'hi' } })
+  })
+})
+
+describe('deny-list tệp nhạy cảm (fs:read/write)', () => {
+  const h = fsHandlers(async () => [{ project_id: 'p1', path: root }])
+  const secrets = ['.env', '.env.local', '.git/config', '.nexgraph/graph.sql', 'cert.pem', 'server.key', 'id_rsa', 'id_rsa.pub', '.npmrc', '.netrc', 'credentials.json']
+
+  it('từ chối đọc mọi tệp nhạy cảm', async () => {
+    for (const rel of secrets) await expect(h.read('p1', rel)).rejects.toMatchObject({ code: 'protected_path' })
+  })
+
+  it('từ chối ghi .git/hooks/post-commit ngay cả khi đã có bản duyệt/đúng mtime', async () => {
+    mkdirSync(join(root, '.git', 'hooks'), { recursive: true })
+    writeFileSync(join(root, '.git', 'hooks', 'post-commit'), '#!/bin/sh\n')
+    const st = statSync(join(root, '.git', 'hooks', 'post-commit'))
+    for (const rel of secrets) await expect(h.write('p1', rel, 'x', { eol: '\n', bom: false, expectedMtimeMs: st.mtimeMs }))
+      .rejects.toMatchObject({ code: 'protected_path' })
+    expect(readFileSync(join(root, '.git', 'hooks', 'post-commit'), 'utf8')).toBe('#!/bin/sh\n')
+  })
+
+  it('không chặn tệp mã nguồn thường', async () => {
+    await h.write('p1', 'src/service.ts', 'export {}', { eol: '\n', bom: false })
+    expect(await h.read('p1', 'src/service.ts')).toMatchObject({ text: 'export {}' })
+  })
+})
+
+describe('TOCTOU khi ghi', () => {
+  it('đổi thư mục cha thành symlink giữa chừng → outside_project, không ghi ra ngoài', async () => {
+    const sub = join(root, 'sub')
+    mkdirSync(sub)
+    writeFileSync(join(sub, 'a.txt'), 'cũ')
+    const outsideSub = join(outsideDir, 'sub')
+    mkdirSync(outsideSub)
+    const swap = () => {
+      renameSync(sub, join(root, 'sub-real'))
+      symlinkSync(outsideSub, sub)
+    }
+    await expect(writeProjectFile(root, 'sub/a.txt', 'mới', { eol: '\n', bom: false }, swap))
+      .rejects.toMatchObject({ code: 'outside_project' })
+    expect(readFileSync(join(root, 'sub-real', 'a.txt'), 'utf8')).toBe('cũ')
+    expect(existsSync(join(outsideSub, 'a.txt'))).toBe(false)
+    expect(readdirSync(outsideSub).filter((n) => n.endsWith('.tmp'))).toEqual([])
   })
 })

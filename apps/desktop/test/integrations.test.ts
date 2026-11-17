@@ -66,7 +66,7 @@ describe('integrations', () => {
   it('codex: chưa có .codex/config.toml → new, TOML có lệnh engine và tham số mcp --project', () => {
     const p = planIntegration('codex', root, cmd, dataDir)
     expect(p).toMatchObject({ agent: 'codex', exists: false, status: 'new' })
-    expect(p.path.endsWith('/.codex/config.toml')).toBe(true) // resolveInside trả realpath, có thể khác prefix tmp
+    expect(p.path.replace(/\\/g, '/').endsWith('/.codex/config.toml')).toBe(true) // Windows dùng \
     expect(p.after).toBe('[mcp_servers.nexgraph]\ncommand = "/Apps/NexGraph/engine"\nargs = ["mcp", "--project", ' + JSON.stringify(root) + ', "--data-dir", ' + JSON.stringify(dataDir) + ']\n')
     expect(p.snippet).toBe(p.after)
     expect(existsSync(join(root, '.codex', 'config.toml'))).toBe(false)
@@ -87,7 +87,7 @@ describe('integrations', () => {
     const skill = skillMarkdown()
     const p = planSkill('claude', root)
     expect(p).toMatchObject({ agent: 'skill-claude', exists: false, status: 'new', after: skill })
-    expect(p.path.endsWith('/.claude/skills/nexgraph/SKILL.md')).toBe(true) // resolveInside trả realpath, có thể khác prefix tmp
+    expect(p.path.replace(/\\/g, '/').endsWith('/.claude/skills/nexgraph/SKILL.md')).toBe(true) // Windows dùng \
     expect(existsSync(p.path)).toBe(false)
     applySkill('claude', root)
     expect(readFileSync(p.path, 'utf8')).toBe(skill)

@@ -91,8 +91,8 @@ export function ReportView({ projectId, onOpenNode, onAsk, onExportMarkdown }: P
           <h3>{vi.report.questions}</h3>
           <p className="muted small">{vi.report.questionsHint}</p>
           <ul className="report-list">
-            {report.questions.map((q) => (
-              <li key={q.question}>
+            {report.questions.map((q, i) => (
+              <li key={`${i}:${q.question}`}>
                 <button type="button" className="link" onClick={() => onAsk(q.question)}>{q.question}</button>
                 {q.why && <span className="muted small">{q.why}</span>}
               </li>

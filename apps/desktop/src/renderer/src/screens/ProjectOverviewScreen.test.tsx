@@ -86,7 +86,7 @@ describe('ProjectOverviewScreen', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     const { api } = renderOverview({ mcp: { config: vi.fn(async () => ({ stdio: '{"mcpServers":{}}' })) } })
     await userEvent.click(screen.getByRole('button', { name: 'Sao chép cấu hình MCP' }))
-    expect(api.mcp.config).toHaveBeenCalledWith('/Đồ án/demo')
+    expect(api.mcp.config).toHaveBeenCalledWith('p1')
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('{"mcpServers":{}}'))
     expect(await screen.findByText('Đã sao chép')).toBeInTheDocument()
   })
@@ -94,7 +94,7 @@ describe('ProjectOverviewScreen', () => {
   it('bật MCP qua HTTP hiện URL, key ẩn tới khi bấm hiện', async () => {
     const { api } = renderOverview({ mcp: { startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:5555/mcp', key: 'abc123' })) } })
     await userEvent.click(await screen.findByRole('switch', { name: 'MCP qua HTTP' }))
-    expect(api.mcp.startHttp).toHaveBeenCalledWith('p1', '/Đồ án/demo')
+    expect(api.mcp.startHttp).toHaveBeenCalledWith('p1')
     expect(await screen.findByText('http://127.0.0.1:5555/mcp')).toBeInTheDocument()
     expect(screen.queryByText('abc123')).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: 'Hiện key' }))

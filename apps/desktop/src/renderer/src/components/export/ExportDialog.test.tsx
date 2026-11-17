@@ -14,10 +14,11 @@ describe('ExportDialog', () => {
     render(<ExportDialog {...props} />)
     await userEvent.click(screen.getByLabelText('HTML tương tác'))
     await userEvent.click(screen.getByRole('button', { name: 'Chọn thư mục và xuất' }))
-    expect(api.exporter.run).toHaveBeenCalledWith('p1', 'html', { kind: 'all' }, '/tmp/out')
+    expect(api.exporter.pickDir).toHaveBeenCalledWith('p1')
+    expect(api.exporter.run).toHaveBeenCalledWith('p1', 'html', { kind: 'all' })
     expect(await screen.findByText('/tmp/out/demo-graph.html')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Mở thư mục' }))
-    expect(api.exporter.reveal).toHaveBeenCalledWith('/tmp/out/demo-graph.html')
+    expect(api.exporter.reveal).toHaveBeenCalledWith('p1', '/tmp/out/demo-graph.html')
   })
 
   it('báo khi bị cắt', async () => {
@@ -40,7 +41,7 @@ describe('ExportDialog', () => {
     render(<ExportDialog {...props} scope={{ kind: 'node', value: 'lib/a.dart#file' }} />)
     await userEvent.click(screen.getByLabelText('Toàn bộ dự án'))
     await userEvent.click(screen.getByRole('button', { name: 'Chọn thư mục và xuất' }))
-    expect(api.exporter.run).toHaveBeenCalledWith('p1', 'html', { kind: 'all' }, '/Đồ án/xuất')
+    expect(api.exporter.run).toHaveBeenCalledWith('p1', 'html', { kind: 'all' })
   })
 
   it('PNG chụp vùng đang xem, không chụp chính hộp thoại', async () => {

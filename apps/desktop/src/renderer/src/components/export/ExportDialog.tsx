@@ -65,9 +65,9 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
 
   const exportFiles = () =>
     run(async () => {
-      const dir = await window.nexgraph.exporter.pickDir()
+      const dir = await window.nexgraph.exporter.pickDir(projectId)
       if (!dir) return null
-      const r = await window.nexgraph.exporter.run(projectId, choice as ExportFormat, scope, dir)
+      const r = await window.nexgraph.exporter.run(projectId, choice as ExportFormat, scope)
       return { kind: 'files', ...r }
     })
   const savePng = () =>
@@ -142,7 +142,7 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
           <div className="export-done">
             <p>{vi.export.saved}</p>
             <ul>{done.files.map((f) => <li key={f} className="mono">{f}</li>)}</ul>
-            <button type="button" onClick={() => void window.nexgraph.exporter.reveal(done.files[0])}>{vi.export.reveal}</button>
+            <button type="button" onClick={() => void window.nexgraph.exporter.reveal(projectId, done.files[0])}>{vi.export.reveal}</button>
           </div>
         )}
         {done?.kind === 'push' && <p className="export-done">{vi.export.pushed(done.nodes, done.edges)}</p>}

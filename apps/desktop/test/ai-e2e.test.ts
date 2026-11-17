@@ -20,6 +20,7 @@ run('AI end-to-end (engine thật + LLM giả)', () => {
   let llm: ReturnType<typeof createFakeLlm>
   let pid: string
   beforeAll(async () => {
+    process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER = '1' // LLM giả chạy trên 127.0.0.1
     const root = mkdtempSync(join(tmpdir(), 'ng-e2e-'))
     cpSync(join(repo, 'engine/tests/fixtures/flow_app'), join(root, 'proj'), { recursive: true })
     h = await startEngine({ command: 'uv', args: ['run', '--project', join(repo, 'engine'), 'nexgraph-engine'] }, { dataDir: join(root, 'data'), env: process.env })
@@ -34,7 +35,7 @@ run('AI end-to-end (engine thật + LLM giả)', () => {
     llm = createFakeLlm()
     await new Promise<void>((r) => llm.listen(0, '127.0.0.1', r))
   }, 120_000)
-  afterAll(async () => { llm?.close(); await h?.stop() })
+  afterAll(async () => { llm?.close(); await h?.stop(); delete process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER })
 
   it('hỏi luồng đăng nhập: gọi list_flows, trace_flow; trích dẫn thật hợp lệ, trích dẫn bịa bị đánh dấu', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'ng-e2e-s-'))

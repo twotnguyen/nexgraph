@@ -15,18 +15,18 @@ export function McpCard({ project }: { project: ProjectSummary }) {
     let alive = true
     // Đang chạy từ trước: start trả lại đúng phiên cũ (cùng URL, cùng key).
     window.nexgraph.mcp.httpStatus(project.project_id)
-      .then((s) => (s ? window.nexgraph.mcp.startHttp(project.project_id, project.path) : null))
+      .then((s) => (s ? window.nexgraph.mcp.startHttp(project.project_id) : null))
       .then((r) => alive && setHttp(r))
       .catch(() => {})
     return () => {
       alive = false
     }
-  }, [project.project_id, project.path])
+  }, [project.project_id])
 
   const copyConfig = async () => {
     setError(null)
     try {
-      const { stdio } = await window.nexgraph.mcp.config(project.path)
+      const { stdio } = await window.nexgraph.mcp.config(project.project_id)
       await navigator.clipboard.writeText(stdio)
       setCopied(true)
     } catch (e) {
@@ -42,7 +42,7 @@ export function McpCard({ project }: { project: ProjectSummary }) {
         setHttp(null)
         setShowKey(false)
       } else {
-        setHttp(await window.nexgraph.mcp.startHttp(project.project_id, project.path))
+        setHttp(await window.nexgraph.mcp.startHttp(project.project_id))
       }
     } catch (e) {
       setError(errMessage(e))

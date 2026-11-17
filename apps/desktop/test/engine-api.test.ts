@@ -145,7 +145,7 @@ describe('toIpcResult', () => {
     const other = await toIpcResult(async () => {
       throw new Error('boom')
     })
-    expect(other).toEqual({ ok: false, error: { code: 'internal', message: 'boom' } })
+    expect(other).toEqual({ ok: false, error: { code: 'internal', message: 'Máy chủ nội bộ gặp lỗi. Vui lòng thử lại.' } })
   })
 })
 

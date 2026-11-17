@@ -8,8 +8,9 @@ type IpcResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; 
 
 async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
   const r = (await ipcRenderer.invoke(channel, ...args)) as IpcResult<T>
-  // contextBridge chỉ chuyển `message` của Error và làm mất thuộc tính khác, nên lỗi phải là đối tượng thường có `code`.
-  if (!r.ok) throw { name: 'EngineError', code: r.error.code, message: r.error.message }
+  // Giữ prototype Error để `instanceof Error` đúng, đồng thời giữ các thuộc tính own (name/code/message)
+  // vì contextBridge chỉ chuyển message của Error thật và làm mất thuộc tính tuỳ biến.
+  if (!r.ok) throw Object.assign(Object.create(Error.prototype) as Error, { name: 'EngineError', code: r.error.code, message: r.error.message })
   return r.data
 }
 
@@ -65,17 +66,17 @@ const api: NexGraphApi = {
     write: (pid, relPath, text, opts) => call('fs:write', pid, relPath, text, opts)
   },
   exporter: {
-    pickDir: () => call('export:pick-dir'),
-    run: (pid, format, scope, outDir) => call('export:run', pid, format, scope, outDir),
+    pickDir: (pid) => call('export:pick-dir', pid),
+    run: (pid, format, scope) => call('export:run', pid, format, scope),
     push: (pid, req) => call('export:push', pid, req),
     png: (rect) => call('export:png', rect),
-    reveal: (path) => call('export:reveal', path)
+    reveal: (pid, path) => call('export:reveal', pid, path)
   },
   hook: {
-    status: (path) => call('hook:status', path),
-    preview: (path) => call('hook:preview', path),
-    install: (path) => call('hook:install', path),
-    uninstall: (path) => call('hook:uninstall', path)
+    status: (pid) => call('hook:status', pid),
+    preview: (pid) => call('hook:preview', pid),
+    install: (pid) => call('hook:install', pid),
+    uninstall: (pid) => call('hook:uninstall', pid)
   },
   ai: {
     getSettings: () => call('ai:get-settings'),
@@ -108,15 +109,15 @@ const api: NexGraphApi = {
     onEvent: (cb) => subscribe<{ projectId: string; event: AgentEvent }>('agent:event', (v) => cb(v.projectId, v.event))
   },
   mcp: {
-    config: (projectPath) => call('mcp:config', projectPath),
-    plan: (agent, projectPath) => call('mcp:plan', agent, projectPath),
-    apply: (agent, projectPath) => call('mcp:apply', agent, projectPath),
-    startHttp: (pid, projectPath) => call('mcp:start-http', pid, projectPath),
+    config: (pid) => call('mcp:config', pid),
+    plan: (agent, pid) => call('mcp:plan', agent, pid),
+    apply: (agent, pid) => call('mcp:apply', agent, pid),
+    startHttp: (pid) => call('mcp:start-http', pid),
     stopHttp: (pid) => call('mcp:stop-http', pid),
     httpStatus: (pid) => call('mcp:http-status', pid)
   },
   watch: {
-    start: (pid, path) => call('watch:start', pid, path),
+    start: (pid) => call('watch:start', pid),
     stop: (pid) => call('watch:stop', pid)
   }
 }

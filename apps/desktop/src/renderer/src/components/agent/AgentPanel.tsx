@@ -14,7 +14,7 @@ interface Props {
   onOpenSettings: () => void
 }
 
-type Msg = { role: 'user'; content: string } | { role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
+type Msg = { id: number; role: 'user'; content: string } | { id: number; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
 
 export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenSettings }: Props) {
   const [cfg, setCfg] = useState<AiSettings | null>(null)
@@ -28,7 +28,9 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
   const [draft, setDraft] = useState('') // chữ đang chảy về của lượt hiện tại
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [mode, setMode] = useState<AgentMode>('ask')
-  const turn = useRef<{ q: string; tools: string[] } | null>(null) // lượt đang chạy; kết thúc bằng sự kiện done/error
+  const turn = useRef<{ id: number; q: string; tools: string[] } | null>(null) // lượt đang chạy; kết thúc bằng sự kiện done/error
+  const turnSeq = useRef(0)
+  const failedTurns = useRef(new Set<number>())
   const editWarned = useRef(false) // lần đầu sang Sửa phải cảnh báo sandbox
   const mounted = useRef(true)
 
@@ -39,7 +41,11 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
     setDraft('')
   }
   const fail = (q: string, message: string) => {
-    setMsgs((cur) => cur.slice(0, -1))
+    const id = turn.current?.id ?? ++turnSeq.current
+    if (failedTurns.current.has(id)) return
+    failedTurns.current.add(id)
+    // Giữ câu hỏi và gắn thông báo lỗi vào đúng id lượt; không xoá phần tử cuối (có thể là lượt khác).
+    setMsgs((cur) => [...cur, { id, role: 'assistant', content: message, citations: [], tools: [] }])
     setText(q)
     setError(message)
     end()
@@ -71,7 +77,7 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
         setTool(e.name)
       } else if (e.type === 'text') setDraft((d) => d + e.delta)
       else if (e.type === 'done') {
-        setMsgs((cur) => [...cur, { role: 'assistant', content: e.text, citations: e.citations, tools: t.tools }])
+        setMsgs((cur) => [...cur, { id: t.id, role: 'assistant', content: e.text, citations: e.citations, tools: t.tools }])
         end()
       } else if (e.type === 'error') fail(t.q, vi.chat.errors[e.code] || e.message)
     })
@@ -97,8 +103,9 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
   }
 
   const run = async (question: string) => {
-    turn.current = { q: question, tools: [] }
-    setMsgs((cur) => [...cur, { role: 'user', content: question }])
+    const id = ++turnSeq.current
+    turn.current = { id, q: question, tools: [] }
+    setMsgs((cur) => [...cur, { id, role: 'user', content: question }])
     setText('')
     setError(null)
     setBusy(true)
@@ -170,10 +177,10 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
       ) : (
         <>
           <div className="msgs">
-            {msgs.map((m, i) => m.role === 'user' ? (
-              <div key={i} className="me">{m.content}</div>
+            {msgs.map((m) => m.role === 'user' ? (
+              <div key={m.id} className="me">{m.content}</div>
             ) : (
-              <div key={i} className="ai">
+              <div key={m.id} className="ai">
                 <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />
                 <div className="foot muted">
                   {m.citations.length === 0 ? <span>{vi.chat.noCitations}</span>
@@ -182,12 +189,12 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
                     <button type="button" className="link" onClick={() => void highlight(m.citations)}>{vi.chat.highlight}</button>
                   )}
                   {m.tools.length > 0 && (
-                    <button type="button" className="link" onClick={() => setOpenTools(openTools === i ? null : i)}>{vi.chat.tools(m.tools.length)}</button>
+                    <button type="button" className="link" onClick={() => setOpenTools(openTools === m.id ? null : m.id)}>{vi.chat.tools(m.tools.length)}</button>
                   )}
                 </div>
-                {openTools === i && (
+                {openTools === m.id && (
                   <ul className="tool-list mono">
-                    {m.tools.map((t, k) => <li key={k}>{t}</li>)}
+                    {m.tools.map((t, k) => <li key={`${m.id}-${k}`}>{t}</li>)}
                   </ul>
                 )}
               </div>

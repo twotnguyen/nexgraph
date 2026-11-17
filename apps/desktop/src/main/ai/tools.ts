@@ -2,6 +2,12 @@ import type { EngineApi } from '../engine/api'
 
 export const MAX_TOOL_CHARS = 12_000
 
+/** Kết quả tool là DỮ LIỆU, bọc trong delimiter để mô hình không nhầm với chỉ dẫn của người dùng. */
+export const TOOL_RESULT_OPEN = '<nexgraph_tool_result>'
+export const TOOL_RESULT_CLOSE = '</nexgraph_tool_result>'
+const wrap = (name: string, body: string): string =>
+  `${TOOL_RESULT_OPEN} tool="${name}"\n${body.split(TOOL_RESULT_CLOSE).join('[kết thúc kết quả tool đã thoát]')}\n${TOOL_RESULT_CLOSE}`
+
 type Def = { type: 'function'; function: { name: string; description: string; parameters: object } }
 const obj = (properties: Record<string, object>, required: string[] = []): object => ({ type: 'object', properties, required })
 const str = { type: 'string' }
@@ -52,14 +58,15 @@ export async function runTool(api: EngineApi, projectId: string, name: string, a
     if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new Error('not an object')
     args = v as Args
   } catch {
-    return JSON.stringify({ error: 'bad_arguments' })
+    return wrap(name, JSON.stringify({ error: 'bad_arguments' }))
   }
-  if (!TOOL_DEFS.some((t) => t.function.name === name)) return JSON.stringify({ error: 'unknown_tool' })
+  if (!TOOL_DEFS.some((t) => t.function.name === name)) return wrap(name, JSON.stringify({ error: 'unknown_tool' }))
   try {
     const out = JSON.stringify(await run(api, projectId, name, args))
-    return out.length > MAX_TOOL_CHARS ? `${out.slice(0, MAX_TOOL_CHARS)}\n…[đã cắt, hãy thu hẹp truy vấn]` : out
+    const body = out.length > MAX_TOOL_CHARS ? `${out.slice(0, MAX_TOOL_CHARS)}\n…[đã cắt, hãy thu hẹp truy vấn]` : out
+    return wrap(name, body)
   } catch (err) {
     const e = err as { code?: string; message?: string }
-    return JSON.stringify({ error: e.code ?? 'tool_failed', message: e.message ?? String(err) })
+    return wrap(name, JSON.stringify({ error: e.code ?? 'tool_failed', message: e.message ?? String(err) }))
   }
 }

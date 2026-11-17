@@ -14,6 +14,7 @@ export const vi = {
     noKeychain: 'Máy này không có kho khoá an toàn nên không lưu được API key.',
     customTitle: 'Nhà cung cấp tuỳ chỉnh',
     customLead: 'Thêm endpoint tương thích OpenAI (Ollama, OpenRouter, vLLM…). Dùng lại ID để cập nhật.',
+    customSecurityNote: 'Chỉ nhận Base URL HTTPS trong môi trường chính thức. NexGraph từ chối địa chỉ IP riêng/link-local để tránh gửi API key tới máy chủ nội bộ. HTTP chỉ dùng được cho 127.0.0.1/localhost khi bật cờ dev NEXGRAPH_ALLOW_HTTP_PROVIDER=1.',
     customId: 'ID',
     customLabel: 'Tên hiển thị',
     baseUrl: 'Base URL',
@@ -214,7 +215,7 @@ export const vi = {
     tools: (n: number) => `Đã gọi ${n} công cụ`,
     consentTitle: 'Gửi dữ liệu tới nhà cung cấp AI',
     consentBody: (host: string, model: string) =>
-      `Câu hỏi của bạn và các đoạn mã mà trợ lý đọc sẽ được gửi tới ${host} (model ${model}). NexGraph không gửi gì khác và không lưu nội dung này ở nơi nào ngoài máy bạn.`,
+      `Câu hỏi của bạn và mọi tệp văn bản trong dự án mà trợ lý đọc sẽ được gửi tới ${host} (model ${model}). NexGraph không gửi gì khác và không lưu nội dung này ở nơi nào ngoài máy bạn.`,
     consentOk: 'Đồng ý và gửi', consentCancel: 'Huỷ',
     errors: {
       ai_not_configured: 'Chưa cấu hình trợ lý AI.', ai_unauthorized: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.',

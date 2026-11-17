@@ -28,14 +28,14 @@ export function IntegrationsDialog({ project, onClose }: { project: ProjectSumma
     setDone(null)
     setCopied(false)
     setError(null)
-    window.nexgraph.mcp.plan(agent, project.path).then((p) => alive && setPlan(p)).catch((e) => alive && setError(errMessage(e)))
+    window.nexgraph.mcp.plan(agent, project.project_id).then((p) => alive && setPlan(p)).catch((e) => alive && setError(errMessage(e)))
     return () => { alive = false }
-  }, [agent, project.path])
+  }, [agent, project.project_id])
 
   const write = async () => {
     setError(null)
     try {
-      const p = await window.nexgraph.mcp.apply(agent, project.path)
+      const p = await window.nexgraph.mcp.apply(agent, project.project_id)
       setDone(vi.integrate.written(p.path))
       setPlan(p.status === 'up_to_date' || p.status === 'invalid' ? p : { ...p, status: 'up_to_date' })
     } catch (e) {

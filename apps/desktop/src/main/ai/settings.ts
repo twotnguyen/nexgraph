@@ -1,5 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 
 export interface SecretBox { available(): boolean; encrypt(s: string): string; decrypt(b64: string): string }
 
@@ -14,9 +15,17 @@ export function readJson(file: string): Record<string, unknown> {
   }
 }
 
+/** Ghi temp cùng thư mục rồi rename: không bao giờ để lại prefs.json/auth.json/ai-key.json bị cụt. */
 export function writeJson(file: string, value: Record<string, unknown>): void {
   mkdirSync(dirname(file), { recursive: true })
-  writeFileSync(file, JSON.stringify(value), { mode: 0o600 })
+  const tmp = join(dirname(file), `.${file.split(/[\\/]/).at(-1)}.${randomUUID()}.tmp`)
+  try {
+    writeFileSync(tmp, JSON.stringify(value), { mode: 0o600 })
+    renameSync(tmp, file)
+  } catch (e) {
+    try { unlinkSync(tmp) } catch { /* tệp tạm chưa kịp tạo */ }
+    throw e
+  }
 }
 
 /**
