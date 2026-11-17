@@ -38,7 +38,7 @@ def _chunks(items: list, size: int = _CHUNK):
 
 
 def _nodes(conn: sqlite3.Connection, pks: list[int]) -> list[Node]:
-    return GraphStore(conn)._nodes_by_pk(pks)
+    return GraphStore(conn).nodes_by_pk(pks)
 
 
 def map_to_nodes(conn: sqlite3.Connection, changes: ChangeSet) -> list[Node]:

@@ -1,10 +1,9 @@
+"""Chuyển lỗi nghiệp vụ sang phản hồi HTTP (định nghĩa lỗi nằm ở `nexgraph_engine.errors`)."""
 from fastapi.responses import JSONResponse
 
+from nexgraph_engine.errors import ApiError
 
-class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str) -> None:
-        super().__init__(message)
-        self.status, self.code, self.message = status, code, message
+__all__ = ["ApiError", "error_response"]
 
 
 def error_response(status: int, code: str, message: str) -> JSONResponse:

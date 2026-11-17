@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
+from nexgraph_engine.store.models import Edge
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -106,3 +107,34 @@ def test_inherits_implements_resolved(tmp_path, index_project):
     inh = {(t, e.edge.subtype) for (s, t, _l), e in edges(store, EdgeType.INHERITS).items()}
     assert inh == {("lib/base.dart::Base#class", None), ("lib/base.dart::Mx#mixin", "mixin")}
     assert targets(store, EdgeType.IMPLEMENTS, "Child#class") == {"lib/base.dart::Iface#class"}
+
+
+def test_created_out_only_contains_edges_actually_inserted(tmp_path):
+    """created_out dùng để tính luồng: không được gồm cạnh bị dedup (RB16)."""
+    from nexgraph_engine.index.resolver import resolve_references
+    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.schema.enums import NodeKind
+    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.store.models import FileRec, Node, UnresolvedRef
+
+    conn = open_graph_db(tmp_path / "g.db")
+    store = GraphStore(conn)
+    store.init_project("p", has_git=False)
+    run = store.begin_run()
+    store.add_file(run, FileRec("lib/a.dart", "dart", 10, 1, "a" * 64, False))
+    store.add_nodes([
+        Node(id="lib/a.dart#file", kind=NodeKind.FILE, label="a.dart", qualified_name="lib/a.dart",
+             file="lib/a.dart", line_start=1, line_end=20),
+        Node(id="lib/a.dart::run#function", kind=NodeKind.FUNCTION, label="run", qualified_name="lib/a.dart.run",
+             file="lib/a.dart", line_start=2, line_end=4),
+        Node(id="lib/a.dart::helper#function", kind=NodeKind.FUNCTION, label="helper", qualified_name="lib/a.dart.helper",
+             file="lib/a.dart", line_start=6, line_end=8),
+    ])
+    dup = Edge(source="lib/a.dart::run#function", target="lib/a.dart::helper#function", type=EdgeType.CALLS,
+               line=3, col=2, confidence=Confidence.INFERRED, confidence_score=0.9, origin=Origin.RESOLVER)
+    assert store.add_edges([dup]) == 1
+    store.add_unresolved([UnresolvedRef(source=dup.source, name="helper", type=EdgeType.CALLS, line=3, col=2)])
+    out: list = []
+    created, _ = resolve_references(store, package_name=None, created_out=out)
+    assert created == 0 and out == []
+    conn.close()

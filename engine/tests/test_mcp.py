@@ -148,6 +148,16 @@ def test_get_community_tool(indexed):
     assert bad.isError
 
 
+def test_get_community_rejects_huge_numeric_id():
+    """id hàng nghìn chữ số từng làm int() ném ValueError (tool crash) thay vì lỗi đọc được."""
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    from nexgraph_engine.mcp.server import community_json
+
+    with pytest.raises(ToolError):
+        community_json(object(), "com:" + "9" * 5000, 10)
+
+
 def _first_community(indexed):
     from nexgraph_engine.mcp.server import resolve_graph_db
     from nexgraph_engine.schema.db import open_graph_db

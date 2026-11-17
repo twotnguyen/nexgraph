@@ -45,7 +45,11 @@ def resolve_subdir(root: Path, subdir: str) -> str:
     if not parts or ".." in parts:
         raise ProjectPathError(f"Thư mục con không hợp lệ: {subdir!r}")
     normalized = "/".join(parts)
-    target = (Path(root) / normalized).resolve()
-    if not target.is_dir() or not target.is_relative_to(Path(root).resolve()):
+    try:
+        target = (Path(root) / normalized).resolve()
+        root_resolved = Path(root).resolve()
+    except (ValueError, OSError) as exc:  # NUL byte trong path -> 400 bad_path thay vì 500
+        raise ProjectPathError(f"Thư mục con không hợp lệ: {subdir!r} ({exc})") from exc
+    if not target.is_dir() or not target.is_relative_to(root_resolved):
         raise ProjectPathError(f"Thư mục con không tồn tại hoặc nằm ngoài dự án: {subdir!r}")
     return normalized

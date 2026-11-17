@@ -5,8 +5,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from nexgraph_engine.api.serialize import node_json
 from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, build_nx, write_graph_json
+from nexgraph_engine.query.contracts import node_json
 from nexgraph_engine.store.graph_store import GraphStore
 
 os.environ.setdefault("GRAPHIFY_BACKEND", "none")  # không bao giờ để Graphify tự dò claude-cli (spec F10 §5)

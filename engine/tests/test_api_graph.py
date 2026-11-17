@@ -84,6 +84,12 @@ def test_code_rejects_path_escape(indexed):
         assert r.status_code in (403, 404) and "Secret" not in r.text
 
 
+def test_code_rejects_nul_byte_in_path(indexed):
+    api, pid, _ = indexed
+    r = api.get(f"/v1/projects/{pid}/code", params={"file": "lib/main.dart\x00.txt"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "bad_path"
+
+
 def test_code_only_serves_indexed_files(indexed):
     api, pid, root = indexed
     assert api.get(f"/v1/projects/{pid}/code?file=pubspec.yaml").status_code == 404

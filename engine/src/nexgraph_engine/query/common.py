@@ -35,4 +35,4 @@ def edges_between(store: GraphStore, pks: list[int], types: tuple[str, ...]) -> 
 
 
 def nodes_by_pk(store: GraphStore, pks: list[int]) -> list[Node]:
-    return store._nodes_by_pk(pks)  # noqa: SLF001 — cùng gói store, tránh nhân bản SQL đọc nút
+    return store.nodes_by_pk(pks)

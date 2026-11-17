@@ -29,16 +29,23 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from nexgraph_engine import __version__
-from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_arch import architecture_json, evidence_json
-from nexgraph_engine.api.routes_changes import changes_json
-from nexgraph_engine.api.routes_graph import get_node_json, neighbors_json, parse_edge_types, search_json, stats_json
-from nexgraph_engine.api.routes_graph import read_code as read_code_json
-from nexgraph_engine.api.serialize import node_json
+from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
 from nexgraph_engine.query.ask import ask_graph
-from nexgraph_engine.query.context import build_context
 from nexgraph_engine.query.common import nodes_by_pk
+from nexgraph_engine.query.contracts import (
+    architecture_json,
+    changes_json,
+    evidence_json,
+    get_node_json,
+    neighbors_json,
+    node_json,
+    parse_edge_types,
+    read_code as read_code_json,
+    search_json,
+    stats_json,
+)
+from nexgraph_engine.query.context import build_context
 from nexgraph_engine.query.paths import find_paths
 from nexgraph_engine.report.build import report_json
 from nexgraph_engine.schema.db import open_graph_db
@@ -230,8 +237,10 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
 
 def community_json(store: GraphStore, community_id: str, limit: int) -> dict:
     raw = community_id[4:] if community_id.startswith("com:") else ""
+    # int() trên hàng nghìn chữ số ném ValueError (và giới hạn chuyển đổi của Python): chặn từ độ dài.
+    valid = raw.isdigit() and len(raw) <= 10
     row = store.conn.execute("SELECT ma_khoi, ten, do_gan_ket FROM khoi_kien_truc WHERE ma_khoi = ?",
-                             (int(raw),)).fetchone() if raw.isdigit() else None
+                             (int(raw),)).fetchone() if valid else None
     if row is None:
         raise ToolError(f"Không có cộng đồng {community_id}")
     pks = [r[0] for r in store.conn.execute(

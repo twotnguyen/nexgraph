@@ -16,6 +16,20 @@ def test_list_flows_sorted_and_searchable(api, pid_flow):
     assert len(page["flows"]) == 1 and page["total"] == 3 and page["truncated"] is True
 
 
+def test_list_flows_combines_search_with_kind_and_node(api, pid_flow):
+    """Tổ hợp q+kind/q+node: placeholder của WHERE, ORDER BY, LIMIT phải bind đúng thứ tự."""
+    pid = pid_flow
+    by_kind = api.get(f"/v1/projects/{pid}/flows", params={"q": "login", "kind": "route"}).json()
+    assert by_kind["total"] == 1 and [f["name"] for f in by_kind["flows"]] == ["login"]
+
+    by_node = api.get(f"/v1/projects/{pid}/flows", params={
+        "q": "save_session", "node": "repo.py::save_session#function"}).json()
+    assert by_node["total"] == 1 and [f["name"] for f in by_node["flows"]] == ["login"]
+
+    no_match = api.get(f"/v1/projects/{pid}/flows", params={"q": "login", "kind": "main"}).json()
+    assert no_match["total"] == 0 and no_match["flows"] == []
+
+
 def test_flow_detail_has_caller_and_line(api, pid_flow):
     pid = pid_flow
     fid = api.get(f"/v1/projects/{pid}/flows", params={"q": "login"}).json()["flows"][0]["id"]

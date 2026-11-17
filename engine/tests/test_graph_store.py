@@ -53,15 +53,18 @@ def test_parallel_edges_kept(store):
 
 def test_evidence_outside_source_range_rejected(store):
     seed_two_classes(store)
-    with pytest.raises(sqlite3.IntegrityError, match="RB22"):
-        store.add_edges([call("lib/a.dart::A#class", "lib/a.dart::B#class", 30)])
+    # RB22: một cạnh hỏng bị bỏ qua và ghi lỗi cho tệp nguồn, không làm sập cả lần index.
+    assert store.add_edges([call("lib/a.dart::A#class", "lib/a.dart::B#class", 30)]) == 0
+    err = store.conn.execute("SELECT loai, chi_tiet FROM loi_phan_tich").fetchall()
+    assert len(err) == 1 and err[0]["loai"] == "extract" and "RB22" in err[0]["chi_tiet"]
+    assert store.add_edges([call("lib/a.dart::A#class", "lib/a.dart::B#class", 5)]) == 1
 
 
 def test_call_without_evidence_rejected(store):
     seed_two_classes(store)
     bad = Edge(source="lib/a.dart::A#class", target="lib/a.dart::B#class", type=EdgeType.CALLS)
-    with pytest.raises(sqlite3.IntegrityError):
-        store.add_edges([bad])
+    assert store.add_edges([bad]) == 0  # RB12: bỏ qua, không ném lỗi
+    assert store.conn.execute("SELECT count(*) FROM canh").fetchone()[0] == 0
 
 
 def test_class_requires_line_range(store):

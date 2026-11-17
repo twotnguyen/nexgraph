@@ -84,7 +84,7 @@ class GraphStore:
     # --- kiểu biến và mốc tệp (lược đồ v2) -------------------------------------------------
     def add_bindings(self, bindings: dict[str, dict[str, str]]) -> None:
         for node_id, names in bindings.items():
-            pk = self._pk(node_id)
+            pk = self.pk_of(node_id)
             for name, typ in names.items():
                 if not name or not typ:
                     continue
@@ -196,20 +196,44 @@ class GraphStore:
                  search_keywords(n.label[:255], n.qualified_name[:1024])))
 
     def add_edges(self, edges: Iterable[Edge]) -> int:
-        added = 0
+        return len(self.insert_edges(edges))
+
+    def insert_edges(self, edges: Iterable[Edge]) -> list[Edge]:
+        """Ghi từng cạnh và trả về đúng các cạnh đã chèn.
+
+        Cạnh trùng hoàn toàn (RB16) và cạnh vi phạm ràng buộc khác (đáng chú ý RB22: dòng bằng chứng nằm
+        ngoài khoảng dòng của nút nguồn) đều bị bỏ qua, không làm hỏng cả lần lập chỉ mục. Trường hợp sau
+        được ghi thành lỗi của tệp nguồn để người dùng thấy bằng chứng bị loại.
+        """
+        added: list[Edge] = []
         for e in edges:
             try:
                 self.conn.execute(
                     "INSERT INTO canh (ma_nut_nguon, ma_nut_dich, loai_canh, loai_con, muc_tin_cay, diem_tin_cay,"
                     " nguon_goc, dong_bang_chung, cot_bang_chung) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (self._pk(e.source), self._pk(e.target), e.type.value, e.subtype, e.confidence.value,
+                    (self.pk_of(e.source), self.pk_of(e.target), e.type.value, e.subtype, e.confidence.value,
                      e.confidence_score, e.origin.value, e.line, e.col),
                 )
-                added += 1
             except sqlite3.IntegrityError as exc:
-                if "UNIQUE constraint failed" not in str(exc):  # chỉ bỏ qua cạnh trùng hoàn toàn (RB16)
-                    raise
+                if "UNIQUE constraint failed" in str(exc):  # RB16: cạnh trùng hoàn toàn
+                    continue
+                self._report_invalid_edge(e, str(exc))
+                continue
+            added.append(e)
         return added
+
+    def _report_invalid_edge(self, e: Edge, detail: str) -> None:
+        """Ghi lỗi RB22/loại khác vào tệp nguồn của cạnh (nếu có) rồi bỏ qua cạnh đó."""
+        try:
+            source_file = self.nodes_by_pk([self.pk_of(e.source)])[0].file
+        except (KeyError, IndexError):
+            return
+        if source_file:
+            try:
+                # `loai` phải nằm trong RB4: dùng 'extract' (lỗi khi dựng cạnh), chi tiết giữ nguyên RB22.
+                self.add_file_error(source_file, "extract", f"{e.target} ({e.type.value}): {detail}")
+            except (KeyError, sqlite3.Error):
+                pass  # lỗi ghi log không được làm sập lần lập chỉ mục
 
     def add_unresolved(self, refs: Iterable[UnresolvedRef]) -> None:
         for r in refs:
@@ -217,7 +241,7 @@ class GraphStore:
                 "INSERT INTO tham_chieu_chua_phan_giai (ma_nut_nguon, ten_tham_chieu, loai_tham_chieu, dong, cot)"
                 " VALUES (?, ?, ?, ?, ?) ON CONFLICT (ma_nut_nguon, ten_tham_chieu, loai_tham_chieu, dong, cot)"
                 " DO NOTHING",
-                (self._pk(r.source), r.name[:500], r.type.value, r.line, r.col),
+                (self.pk_of(r.source), r.name[:500], r.type.value, r.line, r.col),
             )
 
     def pending_refs(self) -> list[tuple[int, UnresolvedRef]]:
@@ -457,7 +481,7 @@ class GraphStore:
     def neighbors(self, node_id: str, *, types: set[EdgeType] | None = None,
                   direction: Literal["in", "out", "both"] = "both", depth: int = 1,
                   limit: int = 500) -> Neighborhood:
-        start = self._pk(node_id)  # KeyError nếu không có
+        start = self.pk_of(node_id)  # KeyError nếu không có
         included: list[int] = [start]
         seen = {start}
         edge_rows: dict[int, sqlite3.Row] = {}
@@ -480,7 +504,7 @@ class GraphStore:
             frontier = nxt
             if not frontier:
                 break
-        nodes = self._nodes_by_pk(included)
+        nodes = self.nodes_by_pk(included)
         edges = [
             self._stored_edge(r)
             for _, r in sorted(edge_rows.items())
@@ -536,7 +560,8 @@ class GraphStore:
             pk = self._file_pk[rel_path] = row["ma_tep"]
         return pk
 
-    def _pk(self, node_id: str) -> int:
+    def pk_of(self, node_id: str) -> int:
+        """Khoá chính của nút theo `id_nut`; ném KeyError nếu nút không tồn tại."""
         pk = self._node_pk.get(node_id)
         if pk is None:
             row = self.conn.execute("SELECT ma_nut FROM nut WHERE id_nut = ?", (node_id,)).fetchone()
@@ -544,6 +569,8 @@ class GraphStore:
                 raise KeyError(node_id)
             pk = self._node_pk[node_id] = row["ma_nut"]
         return pk
+
+    _pk = pk_of  # alias cho mã cũ
 
     def _edge_rows(self, pks: list[int], types: set[EdgeType] | None, direction: str) -> list[sqlite3.Row]:
         marks = ",".join("?" * len(pks))
@@ -561,13 +588,16 @@ class GraphStore:
             " FROM canh c JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon JOIN nut nd ON nd.ma_nut = c.ma_nut_dich"
             f" LEFT JOIN tep ts ON ts.ma_tep = ns.ma_tep WHERE {where} ORDER BY c.ma_canh", args).fetchall()
 
-    def _nodes_by_pk(self, pks: list[int]) -> list[Node]:
+    def nodes_by_pk(self, pks: list[int]) -> list[Node]:
+        """Các nút theo khoá chính, giữ nguyên thứ tự `pks`."""
         by_pk: dict[int, Node] = {}
         for chunk in _chunks(pks):
             rows = self.conn.execute(
                 f"{self._NODE_SQL} WHERE n.ma_nut IN ({','.join('?' * len(chunk))})", chunk).fetchall()
             by_pk.update({r["ma_nut"]: self._node(r) for r in rows})
         return [by_pk[pk] for pk in pks]
+
+    _nodes_by_pk = nodes_by_pk  # alias cho mã cũ
 
     @staticmethod
     def _stored_edge(r: sqlite3.Row) -> StoredEdge:

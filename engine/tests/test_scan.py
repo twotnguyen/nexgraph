@@ -57,7 +57,8 @@ def test_subdir_rejects_escape_and_missing(tmp_path):
     write(root, "lib/file.txt")
     outside = tmp_path / "outside"
     outside.mkdir()
-    bad = ["", "  ", "..", "../x", "/etc", "lib/../..", "nope", "lib/file.txt", "C:\\Windows", "lib\\x"]
+    bad = ["", "  ", "..", "../x", "/etc", "lib/../..", "nope", "lib/file.txt", "C:\\Windows", "lib\\x",
+           "lib/\x00x"]  # NUL byte: resolve() ném ValueError, phải thành ProjectPathError (400)
     for s in bad:
         with pytest.raises(ProjectPathError):
             resolve_subdir(root, s)

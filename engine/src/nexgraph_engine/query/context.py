@@ -8,10 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_graph import read_code
-from nexgraph_engine.api.serialize import node_json
+from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.query import flow_json, flows_for_nodes
+from nexgraph_engine.query.contracts import node_json, read_code
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.search import search
@@ -37,7 +36,7 @@ def build_context(store: GraphStore, root: Path, question: str, budget: int = 40
     if not hits:
         raise ValueError("Câu hỏi không có từ nào tìm được")
     seeds = hits[:SEEDS]
-    seed_pks = [store._pk(n.id) for n in seeds]  # noqa: SLF001
+    seed_pks = [store.pk_of(n.id) for n in seeds]
     neighbor_ids: list[str] = []
     for n in seeds:
         hood = store.neighbors(n.id, types={EdgeType.CALLS}, direction="both", depth=1, limit=NEIGHBORS_PER_SEED + 1)

@@ -19,11 +19,8 @@ class Subscription:
             if self._closed:
                 return
             if len(self._items) >= MAX_QUEUE:
-                # Bỏ job_progress cũ nhất; graph_updated không bao giờ bị bỏ (có thể vượt giới hạn một chút).
-                for i, e in enumerate(self._items):
-                    if e.get("type") == "job_progress":
-                        del self._items[i]
-                        break
+                # Drop-oldest tuyệt đối: kể cả graph_updated liên tiếp cũng không được vượt MAX_QUEUE.
+                self._items.popleft()
             self._items.append(event)
             self._cond.notify()
 

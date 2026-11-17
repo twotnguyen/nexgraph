@@ -291,6 +291,32 @@ def test_flows_after_each_refresh_equal_a_full_rebuild(copy_fixture, index_proje
         assert_same_as_full_index(store, root, index_project, step=f"sửa {i} ({rel}), MAX_FLOWS={max_flows}")
 
 
+def test_refresh_rebuilds_flows_when_update_fails(project, index_project, monkeypatch):
+    """Failure injection: update_flows ném lỗi thì phải dựng lại toàn bộ, không báo 'ok' mà giữ luồng cũ."""
+    store, root = project
+    calls: list[int] = []
+    real_rebuild = refresh_mod.rebuild_flows
+
+    def rebuild(s, r):
+        calls.append(1)
+        return real_rebuild(s, r)
+
+    def broken(*a, **k):
+        raise RuntimeError("boom-update-flows")
+
+    monkeypatch.setattr(refresh_mod, "update_flows", broken)
+    monkeypatch.setattr(refresh_mod, "rebuild_flows", rebuild)
+    auth = (root / "lib/services/auth_service.dart").read_text(encoding="utf-8")
+    write(root, "lib/services/auth_service.dart", auth.replace("'/auth/csrf'", "'/auth/csrf-fallback'"))
+    result = refresh_project(store, root)
+    assert calls == [1] and result.warnings and "update_flows" in result.warnings[0]
+    assert store.conn.execute("SELECT count(*) FROM luong").fetchone()[0] > 0
+    state = store.conn.execute(
+        "SELECT trang_thai, thong_bao_loi FROM lan_lap_chi_muc ORDER BY ma_lan DESC LIMIT 1").fetchone()
+    assert state["trang_thai"] == "hoan_tat" and state["thong_bao_loi"] is None
+    assert_same_as_full_index(store, root, index_project, "fallback rebuild_flows")
+
+
 def test_small_edit_updates_flows_without_a_full_rebuild(copy_fixture, index_project, monkeypatch):
     from nexgraph_engine.flows import build
     root = copy_fixture("flow_app")

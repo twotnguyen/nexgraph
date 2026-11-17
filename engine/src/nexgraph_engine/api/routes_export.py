@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.routes_graph import open_store, require_indexed
 from nexgraph_engine.bridge.to_nx import Scope
-from nexgraph_engine.export.run import ExportFormat, export_graph, push_graph
+from nexgraph_engine.export.run import ExportFormat, export_graph, push_graph, validate_push_uri
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
 
@@ -37,6 +37,11 @@ def _writable_dir(raw: str) -> Path:
     path = Path(raw)
     if not path.is_absolute() or not path.is_dir():
         raise ApiError(400, "bad_path", "Thư mục đích phải là đường dẫn tuyệt đối tới một thư mục có sẵn")
+    # Khi triển khai đặt NEXGRAPH_EXPORT_ROOT, mọi lần export phải nằm trong root đó.
+    # Không set biến này thì giữ nguyên hợp đồng v1 (bất kỳ thư mục tuyệt đối có sẵn nào cũng được).
+    export_root = os.environ.get("NEXGRAPH_EXPORT_ROOT")
+    if export_root and not path.resolve().is_relative_to(Path(export_root).resolve()):
+        raise ApiError(400, "bad_path", "Thư mục đích nằm ngoài NEXGRAPH_EXPORT_ROOT")
     try:
         fd, probe = tempfile.mkstemp(dir=path, prefix=".nexgraph-probe-")
         os.close(fd)
@@ -66,6 +71,10 @@ def export(project_id: str, request: Request, body: ExportBody) -> dict:
 
 @router.post("/export/push")
 def push(project_id: str, request: Request, body: PushBody) -> dict:
+    try:
+        validate_push_uri(body.uri)  # 400 bad_param thay vì để driver chạy URI tuỳ ý (SSRF)
+    except ValueError as exc:
+        raise ApiError(400, "bad_param", str(exc)) from exc
     with open_store(request, project_id) as (store, _):
         require_indexed(store, request, project_id)
         try:

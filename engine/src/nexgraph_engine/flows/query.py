@@ -4,9 +4,9 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.serialize import node_json
+from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.build import MAX_DEPTH, load_adjacency, trace
+from nexgraph_engine.query.contracts import node_json
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Node
 
@@ -14,7 +14,7 @@ VALID_KINDS = {"main", "route", "cli", "event", "root"}
 
 
 def _flow_summary(store: GraphStore, row: sqlite3.Row) -> dict[str, Any]:
-    entry_node = store._nodes_by_pk([row["ma_nut_vao"]])[0]
+    entry_node = store.nodes_by_pk([row["ma_nut_vao"]])[0]
     return {
         "id": row["ma_luong"],
         "name": row["ten"],
@@ -46,7 +46,7 @@ def list_flows_json(
 
     if node is not None:
         try:
-            node_pk = store._pk(node)
+            node_pk = store.pk_of(node)
         except KeyError as exc:
             raise ApiError(404, "unknown_node", f"Không có nút {node}") from exc
         where_clauses.append(
@@ -86,7 +86,8 @@ def list_flows_json(
     total = store.conn.execute(count_sql, params).fetchone()[0]
 
     # Danh sách luồng trang hiện tại
-    select_params = ([f"%{q.strip().lower()}%", f"%{q.strip().lower()}%"] if q else []) + params + [limit, offset]
+    # WHERE dùng `params` (đã gồm 3 like_pat khi có q), rồi ORDER BY CASE WHEN LIKE ? LIKE ?, rồi LIMIT/OFFSET.
+    select_params = params + ([like_pat, like_pat] if q else []) + [limit, offset]
     sql = f"""
     SELECT l.* FROM luong l
     {where_str}
@@ -124,7 +125,7 @@ def flow_json(store: GraphStore, flow_id: int) -> dict[str, Any]:
     ).fetchall()
 
     node_pks = [r["ma_nut"] for r in step_rows]
-    nodes_by_pk = dict(zip(node_pks, store._nodes_by_pk(node_pks))) if node_pks else {}
+    nodes_by_pk = dict(zip(node_pks, store.nodes_by_pk(node_pks))) if node_pks else {}
 
     steps = [
         {
@@ -146,7 +147,7 @@ def flow_json(store: GraphStore, flow_id: int) -> dict[str, Any]:
 def trace_from_json(store: GraphStore, node_id: str) -> dict[str, Any]:
     """Lấy chi tiết luồng từ một điểm vào hoặc dựng luồng trực tiếp từ nút bất kỳ."""
     try:
-        node_pk = store._pk(node_id)
+        node_pk = store.pk_of(node_id)
     except KeyError as exc:
         raise ApiError(404, "unknown_node", f"Không có nút {node_id}") from exc
 
@@ -158,12 +159,12 @@ def trace_from_json(store: GraphStore, node_id: str) -> dict[str, Any]:
     # 2. Dựng trực tiếp tại chỗ
     adj = load_adjacency(store.conn)
     raw_steps, cut = trace(adj, node_pk)
-    target_node = store._nodes_by_pk([node_pk])[0]
+    target_node = store.nodes_by_pk([node_pk])[0]
 
     step_pks = [s.pk for s in raw_steps]
     caller_pks = [s.caller_pk for s in raw_steps if s.caller_pk is not None]
     all_needed_pks = list(set(step_pks + caller_pks))
-    nodes_map = dict(zip(all_needed_pks, store._nodes_by_pk(all_needed_pks))) if all_needed_pks else {}
+    nodes_map = dict(zip(all_needed_pks, store.nodes_by_pk(all_needed_pks))) if all_needed_pks else {}
     files = {nodes_map[s.pk].file for s in raw_steps if s.pk in nodes_map and nodes_map[s.pk].file}
     summary = {
         "id": 0,

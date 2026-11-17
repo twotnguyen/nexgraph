@@ -81,6 +81,23 @@ def test_refresh_reports_counts_and_events(api, opened):
     assert api.post("/v1/projects/nope/refresh").status_code == 404
 
 
+def test_refresh_response_shows_fallback_warning(api, opened, monkeypatch):
+    from nexgraph_engine.index.refresh import RefreshResult
+
+    real = refresh_service.refresh_project
+
+    def with_warning(store, root, *, transcript_dir=None):
+        r = real(store, root, transcript_dir=transcript_dir)
+        return RefreshResult(r.added, r.changed, r.removed, r.unchanged, r.seconds,
+                             ("update_flows lỗi; đã dựng lại toàn bộ luồng",))
+
+    monkeypatch.setattr(refresh_service, "refresh_project", with_warning)
+    root, pid = opened
+    edit(root, AUTH, "'/auth/csrf'", "'/auth/csrf-warn'")
+    body = api.post(f"/v1/projects/{pid}/refresh").json()
+    assert body["status"] == "ok" and "update_flows" in body["warnings"][0]
+
+
 def test_refresh_skipped_while_indexing(api, opened):
     _, pid = opened
     Blocking.gate = threading.Event()

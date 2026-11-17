@@ -113,15 +113,15 @@ def test_slow_subscriber_does_not_block_publisher():
     assert time.time() - start < 2
 
 
-def test_graph_updated_never_dropped():
+def test_event_queue_is_bounded_and_keeps_latest_graph_updated():
     bus = EventBus()
     sub = bus.subscribe()
-    bus.publish({"type": "graph_updated", "project_id": "p"})
     for i in range(3000):
         bus.publish({"type": "job_progress", "i": i})
+    bus.publish({"type": "graph_updated", "project_id": "p"})
     got = drain(sub)
-    assert {"type": "graph_updated", "project_id": "p"} in got
-    assert len(got) <= 1001  # job_progress cũ nhất bị bỏ
+    assert len(got) <= 1000  # drop-oldest tuyệt đối, kể cả khi graph_updated liên tiếp
+    assert got[-1] == {"type": "graph_updated", "project_id": "p"}
 
 
 def test_closed_subscription_stops_receiving():

@@ -81,7 +81,12 @@ class RefreshService:
         finally:
             lock.release()
         if result.added or result.changed or result.removed:
-            self._bus.publish({"type": "graph_updated", "project_id": project_id})
-            self._bus.publish({"type": "changes_updated", "project_id": project_id})
-        return {"status": "ok", "reason": None, "added": result.added, "changed": result.changed,
-                "removed": result.removed, "seconds": round(result.seconds, 3)}
+            extra = {"warnings": list(result.warnings)} if result.warnings else {}
+            self._bus.publish({"type": "graph_updated", "project_id": project_id, **extra})
+            self._bus.publish({"type": "changes_updated", "project_id": project_id, **extra})
+        payload = {"status": "ok", "reason": None, "added": result.added, "changed": result.changed,
+                   "removed": result.removed, "seconds": round(result.seconds, 3)}
+        if result.warnings:
+            # Phần phụ phải fallback: không báo "ok" im lặng khi luồng/cụm được giữ lại hoặc dựng lại.
+            payload["warnings"] = list(result.warnings)
+        return payload

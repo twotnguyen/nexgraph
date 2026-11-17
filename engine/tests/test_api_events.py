@@ -17,5 +17,20 @@ def test_events_stream_receives_progress(api, copy_fixture):
     assert all(e["project_id"] == p["project_id"] for e in seen)
 
 
+def test_subscription_drops_oldest_even_for_graph_updated():
+    from nexgraph_engine.index.events import MAX_QUEUE, EventBus
+
+    bus = EventBus()
+    sub = bus.subscribe()
+    for i in range(MAX_QUEUE + 5):
+        bus.publish({"type": "graph_updated", "project_id": "p", "n": i})
+    got = []
+    while (event := sub.get(timeout=0)) is not None:
+        got.append(event)
+    assert len(got) == MAX_QUEUE
+    assert [e["n"] for e in got] == list(range(5, MAX_QUEUE + 5))
+    sub.close()
+
+
 def test_events_requires_auth(api):
     assert api.client.get("/v1/events").status_code == 401

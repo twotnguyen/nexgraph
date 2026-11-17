@@ -48,6 +48,9 @@ class RunResult:
 
 
 def index_workers(n_files: int, include_media: bool) -> int:
+    # Media/ít tệp luôn chạy đơn luồng: override không được trả sớm bỏ qua điều kiện này.
+    if n_files < 200 or include_media:
+        return 1
     override = os.environ.get("NEXGRAPH_INDEX_WORKERS")
     if override:
         try:
@@ -56,8 +59,6 @@ def index_workers(n_files: int, include_media: bool) -> int:
                 return val
         except ValueError:
             pass
-    if n_files < 200 or include_media:
-        return 1
     cpus = os.cpu_count() or 1
     if cpus <= 2:
         return 1

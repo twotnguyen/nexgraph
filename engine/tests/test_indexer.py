@@ -87,6 +87,45 @@ def test_broken_file_does_not_stop_job(copy_fixture, index_project):
     assert [r["loai"] for r in err] == ["parse_partial"]
 
 
+def test_index_workers_override_does_not_bypass_media(monkeypatch):
+    from nexgraph_engine.index.indexer import index_workers
+
+    monkeypatch.setenv("NEXGRAPH_INDEX_WORKERS", "8")
+    assert index_workers(1000, True) == 1  # media luôn đơn luồng
+    assert index_workers(1000, False) == 8  # override vẫn có tác dụng với mã nguồn
+    assert index_workers(10, False) == 1
+
+
+def test_rb22_edge_does_not_break_index_job(copy_fixture, index_project, monkeypatch):
+    """Failure injection: cạnh vi phạm RB22 chỉ thành file_error, job vẫn 'done'."""
+    from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
+    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.store.models import Edge
+
+    root = copy_fixture("bookstore_app")
+    injected: list[int] = []
+    add_edges = GraphStore.add_edges
+
+    def inject(self, edges):
+        count = add_edges(self, edges)
+        if not injected and self.get_node("lib/services/auth_service.dart::AuthService.login#method"):
+            bad = Edge(source="lib/services/auth_service.dart::AuthService.login#method",
+                       target="lib/services/auth_service.dart::AuthService.login#method",
+                       type=EdgeType.CALLS, line=99999, confidence=Confidence.INFERRED,
+                       confidence_score=0.5, origin=Origin.RESOLVER)
+            count += add_edges(self, [bad])  # self-loop có dòng ngoài khoảng -> RB22
+            injected.append(1)
+        return count
+
+    monkeypatch.setattr(GraphStore, "add_edges", inject)
+    store, result, _ = index_project(root)
+    assert result.state == "hoan_tat" and injected
+    errors = store.conn.execute(
+        "SELECT l.chi_tiet FROM loi_phan_tich l JOIN tep t USING (ma_tep)"
+        " WHERE t.duong_dan_tuong_doi = 'lib/services/auth_service.dart'").fetchall()
+    assert any("RB22" in (r["chi_tiet"] or "") for r in errors)
+
+
 def test_oversized_file_recorded_not_parsed(tmp_path, index_project):
     root = tmp_path / "proj"
     (root / "lib").mkdir(parents=True)

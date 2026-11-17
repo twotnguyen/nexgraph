@@ -14,7 +14,7 @@ from pathlib import Path
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
-from nexgraph_engine.flows.build import flows_before, update_flows
+from nexgraph_engine.flows.build import flows_before, rebuild_flows, update_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
 from nexgraph_engine.index.indexer import ExtractedFile, _git_head, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
@@ -33,6 +33,7 @@ class RefreshResult:
     removed: int
     unchanged: int
     seconds: float
+    warnings: tuple[str, ...] = ()  # phần phụ (luồng/cụm) phải fallback: API/SSE không được báo "ok" im lặng
 
 
 def _hash(path: Path) -> str | None:
@@ -121,23 +122,30 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         resolve_references(store, package_name=_package_name(
             pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None), created_out=resolved_edges)
         derive_tested_by(store)
+        warnings: list[str] = []
         try:
-            new_calls = [(store._pk(e.source), store._pk(e.target)) for e in resolved_edges if e.type == EdgeType.CALLS]
+            new_calls = [(store.pk_of(e.source), store.pk_of(e.target)) for e in resolved_edges if e.type == EdgeType.CALLS]
             update_flows(store, root, before_flows, [*added, *modified, *dependents], new_calls)
-        except Exception:
+        except Exception as exc:
+            # Không nuốt lỗi rồi giữ luồng cũ: dựng lại toàn bộ để đúng như một lần index đầy đủ.
             store.conn.rollback()
+            warnings.append(f"update_flows lỗi ({type(exc).__name__}: {exc}); đã dựng lại toàn bộ luồng")
+            rebuild_flows(store, root)  # nếu lỗi ở đây thì handler bên ngoài đánh dấu lần chạy là 'loi'
         if store.file_graph_signature() != sig_before:
             try:
                 detect_communities(store)
-            except Exception:  # cộng đồng chỉ là phần phụ
+            except Exception as exc:  # cộng đồng chỉ là phần phụ, nhưng phải báo là giữ cụm cũ
                 store.conn.rollback()
+                warnings.append(f"detect_communities lỗi ({type(exc).__name__}: {exc}); giữ cụm cũ")
+        # RB: thong_bao_loi chỉ được set khi trang_thai = 'loi' -> cảnh báo đi qua RefreshResult.warnings
+        # và phản hồi POST /refresh, không ghi giả vào cột lỗi của lần chạy.
         store.set_run_state(run_id, "hoan_tat", files_done=len(added) + len(removed) + len(modified))
     except BaseException as exc:
         store.conn.rollback()
         store.set_run_state(run_id, "loi", error=f"{type(exc).__name__}: {exc}")
         raise
     return RefreshResult(len(added), len(modified), len(removed), len(disk) - len(added) - len(modified),
-                         time.time() - t0)
+                         time.time() - t0, tuple(warnings))
 
 
 def _dependents(store: GraphStore, added: list[str], removed: list[str], modified: list[str],

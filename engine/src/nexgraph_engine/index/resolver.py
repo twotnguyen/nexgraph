@@ -249,9 +249,11 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
             edge(ref, hit.node, EdgeType.DOCUMENTS, hit.score)
             resolved.append(ref_id)
 
-    created = store.add_edges(new_edges)
+    inserted = store.insert_edges(new_edges)
+    created = len(inserted)
     if created_out is not None:
-        created_out.extend(new_edges)
+        # Chỉ báo cáo cạnh thật sự được chèn: cạnh trùng (RB16) hoặc vi phạm RB22 đã bị bỏ qua.
+        created_out.extend(inserted)
     store.delete_refs(resolved)
     remaining = store.fail_pending_refs()
     store.commit()

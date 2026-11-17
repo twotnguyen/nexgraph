@@ -61,6 +61,36 @@ def test_export_route_unindexed(api, tmp_path):
     assert r.status_code == 409 and r.json()["error"]["code"] == "not_indexed"
 
 
+@pytest.mark.parametrize("uri", [
+    "http://127.0.0.1:7474", "https://example.com", "file:///etc/passwd",
+    "http://169.254.169.254/latest/meta-data", "khong-co-scheme", "javascript:alert(1)",
+])
+def test_push_rejects_unsupported_scheme(api, copy_fixture, uri):
+    pid = _indexed(api, copy_fixture)
+    r = api.post(f"/v1/projects/{pid}/export/push",
+                 json={"target": "neo4j", "uri": uri, "user": "neo4j", "password": "s3cret-pw-scheme", "scope": {"kind": "all"}})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "bad_param"
+    assert "s3cret-pw-scheme" not in r.text
+
+
+@pytest.mark.parametrize("uri", ["bolt://h:7687", "bolt+s://h", "neo4j://h", "neo4j+s://h", "redis://h", "rediss://h"])
+def test_validate_push_uri_allows_driver_schemes(uri):
+    from nexgraph_engine.export.run import validate_push_uri
+    assert validate_push_uri(uri) == uri.split("://")[0]
+
+
+def test_export_route_obeys_export_root(api, copy_fixture, tmp_path, monkeypatch):
+    pid = _indexed(api, copy_fixture)
+    allowed = tmp_path / "allowed"
+    allowed.mkdir()
+    monkeypatch.setenv("NEXGRAPH_EXPORT_ROOT", str(allowed))
+    body = {"format": "json", "scope": {"kind": "all"}, "out_dir": str(allowed)}
+    assert api.post(f"/v1/projects/{pid}/export", json=body).status_code == 200
+    body["out_dir"] = str(tmp_path)  # thư mục cha nằm ngoài root được phép
+    r = api.post(f"/v1/projects/{pid}/export", json=body)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "bad_path"
+
+
 def test_push_unreachable_server(api, copy_fixture):
     pid = _indexed(api, copy_fixture)
     r = api.post(f"/v1/projects/{pid}/export/push",

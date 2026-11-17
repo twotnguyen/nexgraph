@@ -1,7 +1,7 @@
 """Chuyến tham quan tất định (F7): sinh tại lúc gọi từ luồng, cụm và nút trung tâm; không lưu, không AI."""
 from __future__ import annotations
 
-from nexgraph_engine.api.serialize import node_json
+from nexgraph_engine.query.contracts import node_json
 from nexgraph_engine.store.graph_store import GraphStore
 
 MAX_STEPS = 10

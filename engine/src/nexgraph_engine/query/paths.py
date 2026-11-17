@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 
-from nexgraph_engine.api.serialize import edge_json, node_json
 from nexgraph_engine.impact.analyze import propagate, tests_for
 from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
+from nexgraph_engine.query.contracts import edge_json, node_json
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -55,7 +55,7 @@ def _shortest(store: GraphStore, src: int, dst: int, max_hops: int, directed: bo
 
 
 def find_paths(store: GraphStore, node_ids: list[str], max_hops: int = 4, directed: bool = True) -> dict:
-    pks = [store._pk(n) for n in node_ids]  # noqa: SLF001 — KeyError khi nút lạ
+    pks = [store.pk_of(n) for n in node_ids]  # KeyError khi nút lạ
     node_order: list[int] = [pks[0]]
     edge_ids: list[int] = []
     unconnected: list[str] = []

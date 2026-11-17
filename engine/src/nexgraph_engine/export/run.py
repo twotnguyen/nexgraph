@@ -7,6 +7,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, get_args
+from urllib.parse import urlsplit
 
 from nexgraph_engine.bridge.to_nx import Scope, build_nx, write_graph_json
 from nexgraph_engine.store.graph_store import GraphStore
@@ -15,6 +16,8 @@ os.environ.setdefault("GRAPHIFY_BACKEND", "none")  # không bao giờ để Grap
 
 ExportFormat = Literal["html", "callflow_html", "obsidian", "wiki", "svg", "graphml", "cypher", "json", "markdown"]
 FORMATS: tuple[str, ...] = get_args(ExportFormat)
+# Chỉ các scheme của driver đồ thị được phép: chặn file://, http:// (SSRF), v.v. (spec bảo mật export/push).
+PUSH_SCHEMES: frozenset[str] = frozenset({"bolt", "bolt+s", "neo4j", "neo4j+s", "redis", "rediss"})
 _TARGETS = {"html": "{p}-graph.html", "callflow_html": "{p}-callflow.html", "obsidian": "{p}-obsidian",
             "wiki": "{p}-wiki", "svg": "{p}-graph.svg", "graphml": "{p}.graphml", "cypher": "{p}-cypher.txt",
             "json": "{p}-graph.json", "markdown": "{p}-GRAPH_REPORT.md"}
@@ -29,6 +32,14 @@ class ExportResult:
 def safe_name(name: str) -> str:
     cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", name).strip(" .")
     return cleaned or "nexgraph"
+
+
+def validate_push_uri(uri: str) -> str:
+    """Trả scheme hợp lệ của URI đẩy; ném ValueError cho mọi scheme khác (kể cả thiếu scheme)."""
+    scheme = urlsplit(uri).scheme.lower()
+    if scheme not in PUSH_SCHEMES:
+        raise ValueError(f"Scheme không được phép: {scheme or '(thiếu)'}; cho phép: {', '.join(sorted(PUSH_SCHEMES))}")
+    return scheme
 
 
 def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Path, project_name: str) -> ExportResult:
@@ -73,6 +84,7 @@ def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Pa
 def push_graph(store: GraphStore, target: Literal["neo4j", "falkordb"], uri: str, user: str | None,
                password: str | None, scope: Scope) -> dict:
     """Mật khẩu chỉ dùng cho lần đẩy này; không lưu, không ghi log (spec F10 §4.3)."""
+    validate_push_uri(uri)  # chặn file://, http(s)://... trước khi đưa URI cho driver
     from graphify.exporters.graphdb import push_to_falkordb, push_to_neo4j
     bg = build_nx(store, scope)
     if target == "neo4j":

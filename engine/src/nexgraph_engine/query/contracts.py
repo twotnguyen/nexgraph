@@ -1,0 +1,154 @@
+"""Hình dạng JSON v1 dùng chung giữa route HTTP và tool MCP.
+
+Module thuần tuý của tầng domain: không import FastAPI, không import `api.routes_*`.
+Route chỉ bọc các hàm này bằng `open_store`, còn MCP gọi trực tiếp (ADR 0002).
+"""
+from __future__ import annotations
+
+from pathlib import Path, PurePosixPath, PureWindowsPath
+
+from nexgraph_engine.arch.builder import UnknownBlock, build_view
+from nexgraph_engine.arch.evidence import evidence_between
+from nexgraph_engine.changes.model import read_changes
+from nexgraph_engine.docs.text import doc_text
+from nexgraph_engine.errors import ApiError
+from nexgraph_engine.impact.analyze import analyze
+from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file
+from nexgraph_engine.schema.enums import EdgeType, NodeKind
+from nexgraph_engine.store.freshness import freshness
+from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.store.models import Node, StoredEdge
+from nexgraph_engine.store.search import build_match_query, search
+
+MAX_CODE_LINES = 2000
+CONVERTED_LANGUAGES = ("docx", "xlsx", "pdf")
+
+
+def node_json(n: Node) -> dict:
+    """Chuyển nút sang JSON v1 (hình dạng ghi ở roadmap, mục "Hình dạng JSON v1")."""
+    return {"id": n.id, "kind": n.kind.value, "label": n.label, "qualified_name": n.qualified_name,
+            "language": n.language, "file": n.file, "line_start": n.line_start, "line_end": n.line_end,
+            "is_test": n.is_test, "origin": n.origin.value, "signature": n.signature, "community": None}
+
+
+def edge_json(se: StoredEdge) -> dict:
+    e = se.edge
+    evidence = {"file": se.file, "line": e.line, "col": e.col} if e.line is not None else None
+    return {"id": se.id, "source": e.source, "target": e.target, "type": e.type.value, "subtype": e.subtype,
+            "confidence": e.confidence.value, "confidence_score": e.confidence_score, "origin": e.origin.value,
+            "evidence": evidence}
+
+
+def stats_json(store: GraphStore, root: Path) -> dict:
+    stats = store.stats()
+    generic = sorted(lang for lang in stats["languages"] if lang not in FULL_SUPPORT and lang not in DOC_LANGUAGES)
+    return {**stats, "generic_languages": generic, **freshness(store, root)}
+
+
+def get_node_json(store: GraphStore, node_id: str) -> dict:
+    node = store.get_node(node_id)
+    if node is None:
+        raise ApiError(404, "unknown_node", f"Không có nút {node_id}")
+    return node_json(node)
+
+
+def parse_edge_types(names) -> set[EdgeType]:
+    try:
+        return {EdgeType(t) for t in names if t}
+    except ValueError as exc:
+        raise ApiError(400, "bad_param", f"Loại cạnh không hợp lệ: {exc}") from exc
+
+
+def neighbors_json(store: GraphStore, node: str, types: set[EdgeType] | None, direction: str, depth: int,
+                   limit: int) -> dict:
+    try:
+        hood = store.neighbors(node, types=types, direction=direction, depth=depth, limit=limit)  # type: ignore[arg-type]
+    except KeyError as exc:
+        raise ApiError(404, "unknown_node", f"Không có nút {node}") from exc
+    return {"nodes": [node_json(n) for n in hood.nodes], "edges": [edge_json(e) for e in hood.edges],
+            "truncated": hood.truncated, "total": hood.total}
+
+
+def _safe_file(root: Path, file: str) -> Path:
+    if (not file or file.startswith("/") or "\\" in file or PureWindowsPath(file).drive
+            or PurePosixPath(file).is_absolute() or ".." in PurePosixPath(file).parts):
+        raise ApiError(400, "bad_path", "Đường dẫn phải là đường dẫn tương đối nằm trong dự án")
+    try:
+        resolved = (root / file).resolve()
+        root_resolved = root.resolve()
+    except (ValueError, OSError) as exc:  # NUL byte, tên tệp quá dài, v.v. -> 400 thay vì 500
+        raise ApiError(400, "bad_path", f"Đường dẫn không hợp lệ: {exc}") from exc
+    if not resolved.is_relative_to(root_resolved):
+        raise ApiError(403, "outside_project", "Tệp nằm ngoài thư mục dự án")
+    return resolved
+
+
+def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None, *,
+              transcript_dir: Path | None = None) -> dict:
+    path = _safe_file(root, file)
+    record = store.file_record(file)
+    if record is None:  # chỉ phục vụ tệp đã được lập chỉ mục (không đọc .git, .nexgraph, khóa bí mật...)
+        raise ApiError(404, "file_not_found", f"Tệp chưa được lập chỉ mục: {file}")
+    if not path.is_file():
+        raise ApiError(404, "file_not_found", f"Tệp không còn tồn tại: {file}")
+    first = 1 if start is None else start
+    if first < 1 or (end is not None and (end < first or end - first + 1 > MAX_CODE_LINES)):
+        raise ApiError(400, "bad_param", f"start >= 1, end >= start, tối đa {MAX_CODE_LINES} dòng mỗi lần")
+    if record.language == "media":  # audio/video: phục vụ bản chép lời đã lưu, không đọc tệp nhị phân
+        cached = transcript_dir / f"{record.sha256}.txt" if transcript_dir else None
+        if cached is None or not cached.is_file():
+            raise ApiError(404, "no_text", f"Chưa có bản chép lời cho {file}")
+        lines = cached.read_text(encoding="utf-8").splitlines()
+    elif record.language in CONVERTED_LANGUAGES:  # docx/xlsx/PDF: chuyển lại sang chữ, cùng hàm lúc index
+        lines = doc_text(path, record.language).splitlines()
+    else:
+        lines = path.read_bytes().decode("utf-8", errors="replace").splitlines()
+    last = min(len(lines), end if end is not None else first + MAX_CODE_LINES - 1)
+    return {"file": file, "start": first, "end": last, "text": "\n".join(lines[first - 1:last]),
+            "language": language_of(file) or record.language, "stale": sha256_file(path) != record.sha256}
+
+
+def search_json(store: GraphStore, q: str, kinds, limit: int) -> list[dict]:
+    if build_match_query(q) is None:
+        raise ApiError(400, "bad_param", "Cần ít nhất một từ để tìm kiếm")
+    try:
+        wanted = {NodeKind(k) for k in kinds if k} if kinds else None
+    except ValueError as exc:
+        raise ApiError(400, "bad_param", f"Loại nút không hợp lệ: {exc}") from exc
+    hits = search(store.conn, q, kinds=wanted, limit=limit)
+    return [{"node": node_json(n), "score": score} for n, score in hits]
+
+
+def architecture_json(conn, parent: str | None) -> dict:
+    try:
+        view = build_view(conn, parent or None)
+    except UnknownBlock as exc:
+        raise ApiError(404, "unknown_block", f"Không có khối {parent}") from exc
+    return {
+        "parent": {"id": view.parent[0], "label": view.parent[1]} if view.parent else None,
+        "blocks": [{"id": b.id, "label": b.label, "kind": b.kind, "size": b.size, "symbols": b.symbols,
+                    "drillable": b.drillable} for b in view.blocks],
+        "links": [{"from": l.source, "to": l.target, "count": l.count, "types": l.types} for l in view.links],
+    }
+
+
+def evidence_json(conn, from_: str, to: str, limit: int) -> list[dict]:
+    try:
+        edges = evidence_between(conn, from_, to, limit=limit)
+    except UnknownBlock as exc:
+        raise ApiError(404, "unknown_block", f"Không có khối {exc.args[0]}") from exc
+    return [{"edge": edge_json(e), "file": e.file, "line": e.edge.line} for e in edges]
+
+
+def changes_json(store, root) -> dict:
+    cs = read_changes(root, store)
+    report = analyze(store.conn, cs)
+    return {
+        "base": cs.base, "base_commit": cs.base_commit, "note": cs.note,
+        "changed_files": [{"path": f.path, "status": f.status, "old_path": f.old_path} for f in cs.files],
+        "changed_nodes": [node_json(n) for n in report.changed_nodes],
+        "impacted": [{"node": node_json(i.node), "score": i.score, "hops": i.hops} for i in report.impacted],
+        "tests": [node_json(n) for n in report.tests],
+        "test_gaps": [node_json(n) for n in report.test_gaps],
+        "truncated": cs.truncated or report.truncated,
+    }
