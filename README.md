@@ -6,11 +6,12 @@ NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ 
 
 ## Bắt đầu
 
+- [Bản bàn giao Electron/Monaco 0.1.0, cách cài và ảnh giao diện](docs/release/README.md)
 - [Cài đặt và chạy từ mã nguồn trên Windows/macOS](docs/install-notes.md)
 - [Demo nhanh với mẫu Python và kịch bản bảo vệ trên NestJS](docs/demo-script.md)
 - [Danh sách kiểm trên Windows](docs/windows-checklist.md)
 
-Lệnh `pnpm dev` khởi động bản **Electron/Monaco** và tự chạy engine Python. Bản **Code-OSS** có quy trình build riêng và dùng editor của workbench. Hai bản dùng chung engine. Phiên bản bàn giao chính sẽ được xác nhận khi chốt quy trình phát hành. [Quy trình build Code-OSS](apps/shell/README.md)
+**NexGraph 0.1.0 Electron/Monaco** là bản dùng để bàn giao và bảo vệ. Bộ cài có engine đi kèm. Lệnh `pnpm dev` khởi động cùng giao diện và chạy engine từ mã nguồn. Tích hợp **Code-OSS** là bản thử nghiệm, dùng chung engine và có quy trình build riêng. [Quy trình build Code-OSS](apps/shell/README.md)
 
 ## Đặc tả và trạng thái
 
@@ -19,7 +20,7 @@ Lệnh `pnpm dev` khởi động bản **Electron/Monaco** và tự chạy engin
 - [Kiến trúc và luồng xử lý](docs/srs/architecture.md), [ERD và lưu trữ hiện hành](docs/srs/data-model.md).
 - Các tài liệu trong [`docs/superpowers/`](docs/superpowers/) ghi lại lịch sử thiết kế và kế hoạch theo tuần.
 
-Tại `6687fc9`, sáu job engine, desktop và đóng gói trên Windows/macOS đã qua cho đường chạy Electron. Nhóm cũng đã thử editor và agent trên bản Electron với engine thật và mô hình AI giả lập. Biên bản nghiệm thu cần ghi riêng kết quả trên máy thật, nhà cung cấp AI thật và đúng bản cài được chọn để bàn giao. [CI tại `6687fc9`](https://github.com/twotnguyen/nexgraph/actions/runs/44065280698) · [Workflow hiện tại](.github/workflows/ci.yml) · [Biên bản thử editor và agent](docs/benchmarks/2026-11-15-editor-agent.md)
+CI kiểm engine, desktop và khởi chạy bản Electron đã đóng gói trên Windows/macOS. Nhóm cũng đã thử editor và agent với engine thật và mô hình AI giả lập. Biên bản nghiệm thu ghi riêng lần cài và chạy trên máy thật, đúng phiên bản và với nhà cung cấp AI dùng khi bàn giao. [Workflow](.github/workflows/ci.yml) · [Biên bản thử editor và agent](docs/benchmarks/2026-11-15-editor-agent.md)
 
 ## Cấu trúc repo
 

@@ -1,6 +1,6 @@
 # Kịch bản demo NexGraph
 
-Dùng **Electron độc lập** (`apps/desktop`) theo [hướng dẫn cài đặt](install-notes.md). Chạy trên bản sao dự án. Ghi commit của NexGraph, commit hoặc tên fixture của dự án, hệ điều hành, loại bản chạy và nhà cung cấp AI trước mỗi lượt.
+Dùng **NexGraph 0.1.0 Electron/Monaco** theo [hướng dẫn bản bàn giao và ảnh giao diện](release/README.md). Các lệnh `pnpm dev` bên dưới dùng để chuẩn bị và tập thử. Lượt bảo vệ dùng bộ cài ứng với hệ điều hành của máy demo. Chạy trên bản sao dự án và ghi tên bộ cài, commit NexGraph, commit hoặc tên fixture của dự án, hệ điều hành và nhà cung cấp AI trước mỗi lượt.
 
 ## Kiểm nhanh bằng fixture Python
 

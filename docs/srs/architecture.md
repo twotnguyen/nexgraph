@@ -1,6 +1,6 @@
 # Kiến trúc NexGraph
 
-Tài liệu mô tả mã tại mốc `6687fc9` và bổ sung cho [SRS](SRS.md) và [mô hình dữ liệu](data-model.md). Các thiết kế ở Sprint 2 phản ánh thời điểm lập kế hoạch. Sơ đồ dưới đây lấy điểm vào, hợp đồng và chỗ lưu dữ liệu từ mã hiện hành.
+Tài liệu mô tả mã tại mốc `6687fc9` và bổ sung cho [SRS](SRS.md) và [mô hình dữ liệu](data-model.md). Các thiết kế ở Sprint 2 phản ánh thời điểm lập kế hoạch. Sơ đồ dưới đây lấy điểm vào, hợp đồng và chỗ lưu dữ liệu từ mã hiện hành. [Bản bàn giao chính 0.1.0](../release/README.md) dùng Electron độc lập và Monaco. Code-OSS là bản xem trước tích hợp.
 
 ## Thành phần và ranh giới tiến trình
 
@@ -11,7 +11,7 @@ flowchart LR
     Provider["Nhà cung cấp mô hình đã chọn"]
     Repo[("Thư mục nguồn và Git")]
 
-    subgraph Electron["Ứng dụng Electron"]
+    subgraph Electron["Electron và Monaco · Bản bàn giao chính"]
         React["Renderer React<br/>Không gian dự án, đồ thị và sidebar"]
         Monaco["Monaco tích hợp"]
         Preload["Preload và NexGraphApi"]
@@ -21,7 +21,7 @@ flowchart LR
         Preload <-->|"IPC giới hạn kênh"| Main
     end
 
-    subgraph Hosted["Nền Code-OSS tùy chọn"]
+    subgraph Hosted["Code-OSS · Bản xem trước tích hợp"]
         Webview["Webview dùng lại giao diện React"]
         Editor["Editor của Code-OSS"]
         Bridge["Extension host<br/>Bộ chuyển tiếp tương thích IPC"]
@@ -167,5 +167,5 @@ Chế độ Hỏi cấp các công cụ đọc. Chế độ Sửa cấp thêm `e
 
 ## Phạm vi đã có và phần cần kiểm chứng
 
-- Đường Electron có CI engine, desktop và smoke bản đóng gói trên macOS/Windows. Workflow hiện hành gọi lệnh đóng gói Electron. Đường Code-OSS có mã build riêng, cần engine PyInstaller để mang theo bản chạy Python và ở chế độ dev có thể chạy engine bằng `uv`. Kiểm trên Windows thật và nhà cung cấp AI thật theo checklist nghiệm thu. Code-OSS hiện trả lỗi khi gọi chụp PNG qua lớp tương thích. [Workflow](../../.github/workflows/ci.yml) · [Build Code-OSS](../../apps/shell/README.md) · [PNG trên Code-OSS](../../apps/extension/src/electron-host.ts) · [Windows checklist](../windows-checklist.md)
+- CI của Electron chạy engine test, desktop test, dựng bộ cài và smoke bản đã giải nén trên macOS/Windows. Kết quả từ máy đích và provider thật cần ghi riêng theo [hướng dẫn bàn giao](../release/README.md). Code-OSS có mã build riêng. Khi xét chuyển thành bản chính, cần CI và smoke độc lập trên hai hệ điều hành, engine kèm bản dựng và biên bản kiểm các luồng người dùng tương ứng. [Workflow](../../.github/workflows/ci.yml) · [Build Code-OSS](../../apps/shell/README.md) · [Windows checklist](../windows-checklist.md)
 - Full index hiện thay dữ liệu trong DB đang dùng và ghi theo lô. Một số route HTTP yêu cầu lần full index gần nhất hoàn tất. MCP có đường đọc riêng. Cơ chế giữ bản hoàn tất cũ trong khi dựng bản mới và dùng chung quy tắc sẵn sàng giữa HTTP/MCP là hướng cải thiện cần kiểm bằng kịch bản hủy và engine bị ngắt. [Indexer](../../engine/src/nexgraph_engine/index/indexer.py) · [Điều kiện HTTP](../../engine/src/nexgraph_engine/api/routes_graph.py) · [Đọc DB qua MCP](../../engine/src/nexgraph_engine/mcp/server.py)

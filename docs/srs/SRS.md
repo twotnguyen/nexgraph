@@ -12,7 +12,7 @@
 
 | Hạng mục | Phạm vi |
 |---|---|
-| Nền tảng | Ứng dụng desktop cho Windows và macOS, làm việc với thư mục sẵn có trên máy. Electron/Monaco là đường chạy trong [kịch bản demo hiện tại](../demo-script.md). Repo có thêm [tích hợp Code-OSS](../../apps/shell/README.md) dùng editor của workbench. Bản bàn giao chính và kết quả đóng gói được xác nhận theo từng host. |
+| Nền tảng | Bản bàn giao chính 0.1.0 là Electron độc lập với Monaco tích hợp, cho Windows và macOS. Người dùng chọn đúng kiến trúc theo [bộ cài](../release/README.md). [Code-OSS](../../apps/shell/README.md) được giữ ở mức bản xem trước tích hợp, dùng editor của workbench và có phép nghiệm thu riêng. |
 | Ngôn ngữ MVP | TypeScript, JavaScript và Python. Đánh giá trên ca sử dụng thực tế và báo giới hạn phân tích tĩnh. |
 | Ngôn ngữ bổ sung | C# và Dart có bộ trích xuất trong engine. Go và Java ở mức đồ thị chung. Cây widget, route và phân tích Flutter chuyên sâu thuộc hướng phát triển. Bảng [phần mở rộng thực tế](../../engine/src/nexgraph_engine/index/discovery.py) là tham chiếu khi cập nhật mức hỗ trợ. |
 | Phạm vi đồ thị | Một thư mục dự án mỗi lần phân tích, có thể giới hạn ở thư mục con và loại trừ đường dẫn. Dùng Git khi có commit phù hợp, nếu thiếu thì dùng mốc lập chỉ mục. |
@@ -90,13 +90,13 @@ flowchart LR
 | Dự án nhỏ đến 1.000 tệp | Mục tiêu đã đặt là lập chỉ mục dưới 60 giây, mở lại dưới 3 giây. Đo đầu cuối trên bản cài từ lúc mở đến khi có thể dùng đồ thị. |
 | Dự án lớn | Mục tiêu đo là lập chỉ mục lần đầu trong 10 phút, mở lại dưới 5 giây, cập nhật sau khi lưu dưới 2 giây và bộ nhớ dưới 2 GB. Báo cáo số thực đo và cấu hình máy. Đây là mục tiêu đánh giá, không phải cam kết đã đạt. |
 | Giao diện và đường dẫn | Tiếng Việt là giao diện hiện hành. Thử bàn phím, kích thước cửa sổ, đường dẫn có dấu/khoảng trắng và phương án thay thế khi WebGL không khả dụng. |
-| Đóng gói | Bản phát hành cần mở được và khởi động engine đi kèm trên máy Windows/macOS. Ghi rõ host, hệ điều hành, kiến trúc và dung lượng đo. |
+| Đóng gói | Bộ cài Electron theo phiên bản và kiến trúc cần mở được, khởi động engine đi kèm trên máy Windows/macOS. Ghi tên artifact, commit, kiến trúc, dung lượng và kết quả. Smoke CI và kiểm cài trên máy đích có biên bản riêng. |
 
 Kết quả đo ở [báo cáo thực nghiệm](../benchmarks/2026-12-danh-gia.md) và [đợt tối ưu sau review](../benchmarks/2026-11-13-sua-sau-review.md) dùng các phiên bản và điều kiện khác nhau. Ghi phiên bản, host, phiên bản hệ điều hành và dữ liệu thử cho từng phép đo nghiệm thu mới.
 
 ## Điều kiện nghiệm thu
 
-1. Với bản cài được chọn, chạy mạch mở dự án → kiến trúc/tìm kiếm → luồng → mở mã → sửa → xem ảnh hưởng và test liên quan.
+1. Với [bản cài Electron 0.1.0](../release/README.md), chạy mạch mở dự án → kiến trúc/tìm kiếm → luồng → mở mã trong Monaco → sửa → xem ảnh hưởng và test liên quan.
 2. Kiểm luồng lỗi trên bản cài gồm chưa cấu hình AI, mất mạng, không có Git, dự án lớn chọn thư mục con và ngôn ngữ ở mức đồ thị chung.
 3. Kiểm AI Hỏi/Sửa bằng provider sẽ trình diễn, gồm mở trích dẫn, Duyệt, Từ chối và Dừng. Kiểm MCP bằng client thật.
 4. Chạy ba lượt [kịch bản bảo vệ](../demo-script.md), ghi thời gian và tình huống dự phòng. Duyệt lại nhãn đồ thị, đánh giá có/không MCP và khảo sát người dùng theo [kế hoạch thực nghiệm](../benchmarks/2026-12-danh-gia.md).

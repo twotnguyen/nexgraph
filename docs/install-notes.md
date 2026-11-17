@@ -1,6 +1,6 @@
 # Cài đặt và chạy NexGraph
 
-Hướng dẫn chạy và demo trong kho này dùng **Electron độc lập** (`apps/desktop`). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng. Máy kiểm thử cần ghi rõ mình đang chạy bản nào và commit của bản đó.
+Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.1.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản bàn giao](release/README.md). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng.
 
 ## Chạy Electron từ checkout sạch
 
@@ -36,7 +36,7 @@ pnpm --filter @nexgraph/desktop run package
 pnpm --filter @nexgraph/desktop run smoke:packaged
 ```
 
-Bộ cài nằm ở `apps/desktop/dist/` (`.dmg` trên macOS, `.exe` NSIS trên Windows). Smoke mở bản dựng đã giải nén với engine đóng gói, dự án và thư mục dữ liệu tạm. Kết quả đạt có dòng `SMOKE OK` kèm `fs=OK agent=OK`. Script tự chạy LLM giả cục bộ. Để kiểm việc cài bộ cài, mở app trên máy đích và ghi kết quả riêng theo [danh sách kiểm Windows](windows-checklist.md). Với bản chưa ký số, ghi lại cảnh báo Gatekeeper hoặc SmartScreen nếu xuất hiện.
+Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<arch>.dmg` hoặc `NexGraph-<version>-windows-<arch>.exe`. Smoke mở bản dựng đã giải nén với engine đóng gói, dự án và thư mục dữ liệu tạm. Kết quả đạt có dòng `SMOKE OK` kèm `fs=OK agent=OK`. Script tự chạy LLM giả cục bộ. Để kiểm việc cài bộ cài, mở app trên máy đích và ghi kết quả theo [hướng dẫn bản bàn giao](release/README.md) và [danh sách kiểm Windows](windows-checklist.md).
 
 | Bằng chứng | Phạm vi |
 | --- | --- |

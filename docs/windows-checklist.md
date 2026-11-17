@@ -1,15 +1,16 @@
 # Danh sách nghiệm thu Windows
 
-Dùng checklist này cho **Electron độc lập**. Ghi kết quả Code-OSS riêng với artifact và quy trình dựng tương ứng. CI đã được ghi nhận ở mốc `61cc7af` cho build và smoke bản Electron, còn cài và thao tác trên máy Windows của nhóm đang chờ ghi nhận. Xem [bằng chứng và hướng dẫn](install-notes.md).
+Bản phát hành **NexGraph 0.1.0** dùng **Electron độc lập với Monaco**. [CI tại `6687fc9`](https://github.com/twotnguyen/nexgraph/actions/runs/44065280698) đã build và smoke bản Electron trên Windows. **Nhóm 8** còn phải cài và thao tác trên máy Windows của nhóm bằng đúng bộ cài phát hành. [Hướng dẫn phát hành](release/README.md) · [Hướng dẫn cài đặt](install-notes.md).
 
 Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi bước tái hiện, nội dung lỗi, log hoặc ảnh. Ghi OS/build Windows, CPU, RAM, GPU, commit NexGraph, URL run/artifact, dung lượng và ngày kiểm.
 
 ## A. Cài và khởi động
 
-- [ ] Tải `.exe` từ job `package (windows-latest)` của commit cần kiểm hoặc tạo bộ cài theo [hướng dẫn đóng gói](install-notes.md#đóng-gói-electron). Ghi đúng loại artifact và kích thước của bộ cài.
-- [ ] Chạy installer NSIS. Ghi cảnh báo SmartScreen nếu xuất hiện và kết quả mở NexGraph.
-- [ ] Mở app trên máy đích, kiểm màn **Dự án** và trạng thái engine.
-- [ ] Nếu tự build, chạy `pnpm --filter @nexgraph/desktop run smoke:packaged`. Lưu dòng `SMOKE OK` kèm `fs=OK agent=OK` trong log kiểm tự động.
+- [ ] Tải artifact từ job đóng gói Windows của commit cần kiểm, giải nén và chọn bộ cài NSIS. Ví dụ cho Windows x64 là `NexGraph-0.1.0-windows-x64.exe`. Nếu tự build, lấy bộ cài trong `apps/desktop/dist/` theo [hướng dẫn đóng gói](install-notes.md#đóng-gói-electron). Ghi đúng tên và kiến trúc của tệp thực tế.
+- [ ] Ghi đường dẫn tệp `.exe` đã tải, kích thước và SHA-256. Ví dụ từ thư mục chứa bộ cài x64, chạy `Get-FileHash -Algorithm SHA256 -LiteralPath '.\NexGraph-0.1.0-windows-x64.exe'`.
+- [ ] Chạy installer NSIS và ghi đường dẫn cài thực tế. Ghi cảnh báo SmartScreen nếu xuất hiện và kết quả mở NexGraph.
+- [ ] Mở `NexGraph.exe` từ thư mục vừa cài. Kiểm tệp `resources\engine\nexgraph-engine.exe`, trạng thái **Engine: sẵn sàng** và nút **Mở thư mục…** ở màn **Dự án**.
+- [ ] Nếu tự build, chạy `pnpm --filter @nexgraph/desktop run smoke:packaged`. Lưu dòng `SMOKE OK` kèm `fs=OK agent=OK` trong log. Script smoke dùng `apps/desktop/dist/win-unpacked/NexGraph.exe`; kết quả cài qua NSIS được ghi riêng ở các bước trên.
 
 ## B. Luồng dự án và demo
 
@@ -43,7 +44,8 @@ Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi 
 
 ## E. Bằng chứng
 
-- Máy, ngày, commit, bản chạy và artifact:
+- Máy, ngày, commit, kiến trúc và URL run/artifact:
+- Tên bộ cài, đường dẫn tải, byte, SHA-256 và thư mục sau cài:
 - Fixture/dự án, nhà cung cấp AI, client MCP:
 - Log, ảnh hoặc video:
 - Lỗi và mục còn chờ:

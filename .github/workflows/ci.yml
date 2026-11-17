@@ -69,12 +69,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Đóng gói ứng dụng (electron-builder)
         run: pnpm --filter @nexgraph/desktop run package
+      - name: Kiểm tra tệp cài đặt
+        id: installer
+        run: node apps/desktop/scripts/check-installer.mjs
       - name: Smoke test bản đóng gói
         run: node apps/desktop/scripts/smoke-packaged.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: nexgraph-${{ matrix.os }}
-          path: |
-            apps/desktop/dist/*.dmg
-            apps/desktop/dist/*.exe
+          name: ${{ steps.installer.outputs.name }}
+          path: ${{ steps.installer.outputs.path }}
           if-no-files-found: error
