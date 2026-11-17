@@ -12,7 +12,7 @@ import type { AgentEvent } from '../src/shared/agent-types'
 
 const KEY = 'sk-test-khong-duoc-ghi-ra-dia'
 const OUTSIDE = `/tmp/x-outside-${process.pid}-${Date.now()}`
-const OUTSIDE_READ = join(realpathSync(tmpdir()), `ng-outside-read-${process.pid}-${Date.now()}.txt`)
+const OUTSIDE_READ = join(realpathSync.native(tmpdir()), `ng-outside-read-${process.pid}-${Date.now()}.txt`)
 const MARK = { root: 'MARKER-AGENTS-GOC-7f3a', parent: 'MARKER-AGENTS-CHA-91c2', outside: 'MARKER-NGOAI-DU-AN-55e0' }
 
 type Msg = { role: string; content?: unknown }
@@ -80,7 +80,7 @@ describe('AgentService + pi SDK thật', () => {
   beforeAll(async () => {
     process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER = '1' // LLM giả chạy trên 127.0.0.1
     llm = await fakeLlm(seen)
-    const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-pi-real-')))
+    const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'ng-pi-real-')))
     root = join(base, 'proj')
     dataDir = join(base, 'data')
     mkdirSync(root)
@@ -240,7 +240,7 @@ describe('AgentService + pi SDK thật', () => {
   }, 30_000)
 
   it('duyệt sau khi tệp đổi thành symlink trỏ ngoài → execute từ chối, tệp ngoài nguyên vẹn', async () => {
-    const outsideFile = join(realpathSync(tmpdir()), `ng-pi-write-${process.pid}.txt`)
+    const outsideFile = join(realpathSync.native(tmpdir()), `ng-pi-write-${process.pid}.txt`)
     writeFileSync(outsideFile, 'NGOAI\n')
     writeFileSync(join(root, 'e.txt'), 'an toàn\n')
     svc.setMode('p1', 'edit')

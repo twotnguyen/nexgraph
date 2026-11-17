@@ -12,17 +12,17 @@ import { readProjectFile, writeProjectFile } from '../src/main/fs/project-fs'
 type Handler = (e: { toolName: string; toolCallId?: string; input: unknown }) => Promise<{ block: true; reason: string } | undefined>
 const names = TOOL_DEFS.map((t) => t.function.name)
 
-const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-ext-h-')))
+const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'ng-ext-h-')))
 const proj = join(base, 'p')
 mkdirSync(proj)
 writeFileSync(join(proj, 'a.txt'), 'x')
 
-function setup(check: ApprovalGate['check'] = async () => ({ allow: true })) {
+function setup(check: ApprovalGate['check'] = async () => ({ allow: true }), root = proj) {
   const search = vi.fn(async () => ({ hits: [] }))
   const onWriteConflict = vi.fn()
   const gate = { check: vi.fn(check) } as unknown as ApprovalGate
   const pi = { registerTool: vi.fn(), on: vi.fn() }
-  createNexgraphExtension({ api: { search } as unknown as EngineApi, projectId: 'p1', root: proj, gate, onWriteConflict })(pi as never)
+  createNexgraphExtension({ api: { search } as unknown as EngineApi, projectId: 'p1', root, gate, onWriteConflict })(pi as never)
   const handler = pi.on.mock.calls.find((c) => c[0] === 'tool_call')![1] as Handler
   return { pi, search, gate, handler, onWriteConflict }
 }
@@ -144,6 +144,22 @@ describe('generation snapshot duyệt', () => {
 describe('write/edit an toàn (override builtin pi)', () => {
   const tool = (pi: { registerTool: Mock }, name: string) => pi.registerTool.mock.calls.map((c) => c[0]).find((t) => t.name === name)!
 
+  it('dùng cùng gốc canonical từ lúc ghim đường dẫn đến lúc ghi dù gốc đầu vào có bí danh', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ng-root-'))
+    const input = { path: join(root, 'new.txt'), content: 'đã duyệt' }
+    const ask = vi.fn()
+    const gate = createApprovalGate({ root, getMode: () => 'edit', ask, preview: (name, args) => previewWrite(root, name, args) })
+    const g = setup(gate.check, root)
+    const pending = g.handler({ toolName: 'write', toolCallId: 'canonical', input })
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledWith(expect.objectContaining({ path: 'new.txt', after: 'đã duyệt' })))
+    expect(input.path).toBe(join(realpathSync.native(root), 'new.txt'))
+    gate.resolve(ask.mock.calls[0][0].id, true)
+
+    expect(await pending).toBeUndefined()
+    await tool(g.pi, 'write').execute('canonical', input)
+    expect(readFileSync(join(root, 'new.txt'), 'utf8')).toBe('đã duyệt')
+  })
+
   it('duyệt xong execute ghi đúng after, consume snapshot; cùng id chạy lại thì lỗi', async () => {
     writeFileSync(join(proj, 'w1.txt'), 'x')
     const g = setup(allowPreview)
@@ -206,7 +222,7 @@ describe('write/edit an toàn (override builtin pi)', () => {
   })
 
   it('tệp bị thay bằng symlink trỏ ngoài sau preview → từ chối, tệp ngoài nguyên vẹn', async () => {
-    const outsideFile = join(realpathSync(tmpdir()), `ng-ext-out-${Date.now()}`)
+    const outsideFile = join(realpathSync.native(tmpdir()), `ng-ext-out-${Date.now()}`)
     writeFileSync(outsideFile, 'NGOAI\n')
     writeFileSync(join(proj, 'w2.txt'), 'an toàn\n')
     const g = setup(allowPreview)

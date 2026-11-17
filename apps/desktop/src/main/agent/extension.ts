@@ -1,11 +1,11 @@
-import { isAbsolute, relative, sep } from 'node:path'
+import { relative, sep } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { Type } from 'typebox'
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent' // chỉ kiểu: pi là ESM, không import tĩnh giá trị
 import type { EngineApi } from '../engine/api'
 import { FsError, isProtectedRel, readProjectFile, resolveInside, writeProjectFile } from '../fs/project-fs'
 import { TOOL_DEFS, runTool } from '../ai/tools'
-import type { ApprovedWrite, ApprovalGate, WritePreview } from './approval'
+import { toProjectRelative, type ApprovedWrite, type ApprovalGate, type WritePreview } from './approval'
 
 const GRAPH_TOOLS: string[] = TOOL_DEFS.map((t) => t.function.name)
 const ALLOWED = new Set([...GRAPH_TOOLS, 'read', 'grep', 'find', 'ls', 'edit', 'write', 'bash'])
@@ -114,13 +114,13 @@ async function executeApprovedWrite(
   if (typeof p !== 'string') throw new Error('Thiếu đường dẫn hợp lệ')
   const assertApprovedPath = (rel: string) => {
     const abs = resolveInside(deps.root, rel)
-    if (relative(realpathSync(deps.root), abs).split(sep).join('/') !== snap.path) {
+    if (relative(realpathSync.native(deps.root), abs).split(sep).join('/') !== snap.path) {
       throw new FsError('conflict', 'Đường dẫn đã thay đổi từ lúc xem trước duyệt')
     }
   }
   try {
     snap.assertCurrent()
-    assertApprovedPath(toRel(deps.root, p))
+    assertApprovedPath(toProjectRelative(deps.root, p))
     await writeProjectFile(deps.root, snap.path, snap.after, {
       eol: snap.file?.eol ?? '\n',
       bom: snap.file?.bom ?? false,
@@ -162,7 +162,7 @@ function pinPath(root: string, tool: string, input: unknown): string | undefined
   if (p.startsWith('@') || p.startsWith('~') || /^file:/i.test(p) || UNICODE_SPACES.test(p)) return 'Đường dẫn chứa ký tự mà pi sẽ viết lại (@, ~, file:, dấu cách Unicode), thao tác bị chặn'
   let rel: string
   try {
-    rel = toRel(root, p)
+    rel = toProjectRelative(root, p)
   } catch {
     return 'Đường dẫn nằm ngoài dự án'
   }
@@ -179,16 +179,6 @@ function pinPath(root: string, tool: string, input: unknown): string | undefined
   if (tool === 'read' && !existsSync(abs)) return 'Tệp không tồn tại'
   i.path = abs
   return undefined
-}
-
-/** Đường dẫn tuyệt đối nằm trong root thì đổi sang tương đối (resolveInside từ chối tuyệt đối); ngoài root thì ném. */
-function toRel(root: string, p: string): string {
-  if (!isAbsolute(p)) return p
-  for (const r of [root, realpathSync(root)]) {
-    const rel = relative(r, p)
-    if (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel)) return rel
-  }
-  throw new FsError('outside_project', `Đường dẫn nằm ngoài dự án: ${p}`)
 }
 
 // Như normalizeToLF của pi (edit-diff.ts:11-13). before/after của bản xem trước là văn bản đã chuẩn hoá LF; UI diff hiển thị LF là chấp nhận được.
@@ -225,8 +215,8 @@ function applyEdits(before: string, edits: Edit[]): string {
 export async function previewWrite(root: string, tool: 'edit' | 'write', input: unknown): Promise<WritePreview> {
   const i = (input ?? {}) as { path?: unknown; content?: unknown; edits?: unknown }
   if (typeof i.path !== 'string') throw new Error('Thiếu đường dẫn tệp')
-  const abs = resolveInside(root, toRel(root, i.path))
-  const path = relative(realpathSync(root), abs).split(sep).join('/')
+  const abs = resolveInside(root, toProjectRelative(root, i.path))
+  const path = relative(realpathSync.native(root), abs).split(sep).join('/')
   let before = ''
   let file: WritePreview['file']
   try {

@@ -231,7 +231,7 @@ export class AgentService {
   }
 
   private async open(projectId: string, modelRuntime: ModelRuntime, model: Model, active: () => boolean): Promise<Entry | null> {
-    const root = realpathSync(await this.deps.rootOf(projectId))
+    const root = realpathSync.native(await this.deps.rootOf(projectId))
     if (!active()) return null // bị close/abort trong lúc chờ root: không tạo phiên
     const existing = this.entries.get(projectId) // hai prompt đồng thời cùng tạo phiên
     if (existing) return existing

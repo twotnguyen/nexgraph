@@ -60,7 +60,7 @@ class FakeSession {
 }
 
 function setup(over: { consent?: boolean; selected?: null; models?: () => Promise<ModelChoice>; rootOf?: (pid: string) => Promise<string> } = {}) {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-sess-')))
+  const base = mkdtempSync(join(tmpdir(), 'ng-sess-'))
   const roots: Record<string, string> = { p1: join(base, 'p1'), p2: join(base, 'p2') }
   for (const r of Object.values(roots)) { mkdirSync(r); writeFileSync(join(r, 'a.py'), 'x\n') }
   const events: { pid: string; e: AgentEvent }[] = []
@@ -102,7 +102,7 @@ describe('AgentService (phiên giả)', () => {
     expect(svc.getMode('p1')).toBe('ask')
     await svc.prompt('p1', 'chào')
     const spec = sessions[0].spec
-    expect(spec.cwd).toBe(realpathSync(roots.p1))
+    expect(spec.cwd).toBe(realpathSync.native(roots.p1))
     expect(spec.agentDir.startsWith(join(base, 'data'))).toBe(true)
     expect(sessions[0].active.sort()).toEqual([...ASK_TOOLS, ...GRAPH].sort())
     expect(ASK_TOOLS).toEqual(['read', 'grep', 'find', 'ls'])

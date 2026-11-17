@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs'
 import { isAbsolute, relative, sep } from 'node:path'
 import type { AgentMode, ApprovalDecision, ApprovalRequest } from '../../shared/agent-types'
 import type { FileContent } from '../../shared/api'
-import { resolveInside } from '../fs/project-fs'
+import { FsError, resolveInside } from '../fs/project-fs'
 
 export const APPROVAL_TIMEOUT_MS = 5 * 60_000
 
@@ -36,19 +36,21 @@ export type ApprovalDeps = {
 const deny = (reason: string): ApprovalDecision => ({ allow: false, reason })
 const OUTSIDE = deny('Đường dẫn nằm ngoài dự án')
 
-const isUp = (rel: string) => rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)
+/** Chuẩn hóa đầu vào của Pi trước khi chuyển cho resolveInside kiểm tra đích thật. */
+export function toProjectRelative(root: string, path: string): string {
+  if (!isAbsolute(path)) return path
+  // Dùng cùng realpath với resolveInside, kể cả khi Windows trả về gốc dạng 8.3.
+  for (const base of [root, realpathSync.native(root)]) {
+    const rel = relative(base, path)
+    if (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel)) return rel
+  }
+  throw new FsError('outside_project', `Đường dẫn nằm ngoài dự án: ${path}`)
+}
 
 /** true khi `p` (tương đối hoặc tuyệt đối) nằm trong root sau realpath; mọi lỗi đều coi là ngoài. */
 function insideRoot(root: string, p: string): boolean {
   try {
-    let rel = p
-    if (isAbsolute(p)) {
-      // SDK không chuẩn hoá path: tuyệt đối trong root thì đổi sang tương đối rồi để resolveInside kiểm symlink.
-      const found = [root, realpathSync(root)].map((r) => relative(r, p)).find((r) => !isUp(r))
-      if (found === undefined) return false
-      rel = found
-    }
-    resolveInside(root, rel)
+    resolveInside(root, toProjectRelative(root, p))
     return true
   } catch {
     return false

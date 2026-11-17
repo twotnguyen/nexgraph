@@ -54,7 +54,7 @@ describe('approval gate', () => {
     expect(ask).not.toHaveBeenCalled()
   })
   it('đường dẫn tuyệt đối nằm trong dự án được hỏi', async () => {
-    for (const abs of [join(root, 'a.ts'), join(realpathSync(root), 'a.ts')]) {
+    for (const abs of [join(root, 'a.ts'), join(realpathSync.native(root), 'a.ts')]) {
       ask.mockClear()
       const p = gate.check('write', { path: abs })
       await flush()
