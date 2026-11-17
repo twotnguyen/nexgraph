@@ -1,0 +1,237 @@
+{
+  "name": "nexgraph",
+  "displayName": "NexGraph",
+  "description": "Đồ thị tri thức mã nguồn, vùng ảnh hưởng và agent có duyệt, đóng sẵn trong NexGraph.",
+  "version": "0.1.0",
+  "private": true,
+  "publisher": "nexgraph",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "NexGraph chạy engine và agent trên mã nguồn của thư mục."
+    },
+    "virtualWorkspaces": false
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "nexgraph.open",
+        "title": "Mở không gian đồ thị",
+        "category": "NexGraph"
+      },
+      {
+        "command": "nexgraph.go.arch",
+        "title": "Kiến trúc",
+        "category": "NexGraph",
+        "icon": "$(type-hierarchy-sub)"
+      },
+      {
+        "command": "nexgraph.go.map",
+        "title": "Bản đồ",
+        "category": "NexGraph",
+        "icon": "$(globe)"
+      },
+      {
+        "command": "nexgraph.go.flows",
+        "title": "Luồng",
+        "category": "NexGraph",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "nexgraph.go.graph",
+        "title": "Graph",
+        "category": "NexGraph",
+        "icon": "$(graph-scatter)"
+      },
+      {
+        "command": "nexgraph.go.tree",
+        "title": "Cây",
+        "category": "NexGraph",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "nexgraph.go.report",
+        "title": "Báo cáo",
+        "category": "NexGraph",
+        "icon": "$(graph-line)"
+      },
+      {
+        "command": "nexgraph.go.search",
+        "title": "Tìm trong đồ thị",
+        "category": "NexGraph",
+        "icon": "$(search)"
+      },
+      {
+        "command": "nexgraph.go.changes",
+        "title": "Thay đổi và vùng ảnh hưởng",
+        "category": "NexGraph",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "nexgraph.go.tour",
+        "title": "Tham quan dự án",
+        "category": "NexGraph",
+        "icon": "$(compass)"
+      },
+      {
+        "command": "nexgraph.go.agent",
+        "title": "Trợ lý AI",
+        "category": "NexGraph",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "nexgraph.go.overview",
+        "title": "Tổng quan và lập chỉ mục",
+        "category": "NexGraph",
+        "icon": "$(home)"
+      },
+      {
+        "command": "nexgraph.go.export",
+        "title": "Xuất đồ thị",
+        "category": "NexGraph",
+        "icon": "$(export)"
+      },
+      {
+        "command": "nexgraph.go.settings",
+        "title": "Cài đặt NexGraph",
+        "category": "NexGraph",
+        "icon": "$(gear)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "nexgraph",
+          "title": "NexGraph",
+          "icon": "media/activity.svg"
+        }
+      ],
+      "secondarySidebar": [
+        {
+          "id": "nexgraphAgent",
+          "title": "Trợ lý AI",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "nexgraph": [
+        {
+          "id": "nexgraph.home",
+          "name": "Điều hướng"
+        }
+      ],
+      "nexgraphAgent": [
+        {
+          "id": "nexgraph.agent",
+          "type": "webview",
+          "name": "Trợ lý AI",
+          "when": "workbenchState != empty"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "nexgraph.home",
+        "contents": "Mở một thư mục mã nguồn để NexGraph dựng đồ thị.\n[Mở thư mục](command:vscode.openFolder)",
+        "when": "workbenchState == empty"
+      }
+    ],
+    "themes": [
+      {
+        "label": "NexGraph Light",
+        "uiTheme": "vs",
+        "path": "./themes/nexgraph-light.json"
+      },
+      {
+        "label": "NexGraph Dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/nexgraph-dark.json"
+      }
+    ],
+    "configurationDefaults": {
+      "workbench.colorTheme": "NexGraph Light",
+      "chat.disableAIFeatures": true,
+      "workbench.secondarySideBar.defaultVisibility": "hidden",
+      "window.commandCenter": false,
+      "workbench.layoutControl.enabled": false,
+      "workbench.navigationControl.enabled": false,
+      "workbench.activityBar.location": "top",
+      "workbench.startupEditor": "none",
+      "editor.fontFamily": "'JetBrains Mono', Menlo, monospace",
+      "editor.fontSize": 13,
+      "editor.minimap.enabled": false,
+      "workbench.tree.indent": 14,
+      "workbench.iconTheme": "vs-minimal",
+      "window.title": "${rootName}${separator}NexGraph",
+      "workbench.tips.enabled": false,
+      "telemetry.telemetryLevel": "off",
+      "update.mode": "none",
+      "extensions.ignoreRecommendations": true,
+      "workbench.enableExperiments": false,
+      "npm.autoDetect": "off",
+      "debug.showInStatusBar": "never",
+      "timeline.pageOnScroll": false
+    },
+    "configuration": {
+      "title": "NexGraph",
+      "properties": {
+        "nexgraph.openOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Khi mở một thư mục, tự mở tab đồ thị và điều hướng NexGraph ở thanh bên."
+        }
+      }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "nexgraph.go.agent",
+          "when": "activeWebviewPanelId == 'nexgraph'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nexgraph.go.changes",
+          "when": "activeWebviewPanelId == 'nexgraph'",
+          "group": "navigation@2"
+        },
+        {
+          "command": "nexgraph.go.export",
+          "when": "activeWebviewPanelId == 'nexgraph'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "nexgraph.go.overview",
+          "when": "activeWebviewPanelId == 'nexgraph'",
+          "group": "1_project@1"
+        },
+        {
+          "command": "nexgraph.go.settings",
+          "when": "activeWebviewPanelId == 'nexgraph'",
+          "group": "1_project@2"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "vite build -c vite.host.config.ts && vite build -c vite.webview.config.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.100.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

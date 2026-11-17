@@ -73,7 +73,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setFlowId(id)
     setTab('flows')
   }
-  const [panel, setPanel] = useState<string | null>('search')
+  // Trong extension bảng công cụ đóng sẵn: thanh bên của nền đã có điều hướng, nhường chỗ cho đồ thị.
+  const [panel, setPanel] = useState<string | null>(window.nexgraph.host ? null : 'search')
   const live = useChanges(project.project_id)
   const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
   const changes = nodeImpact ? impactAsChanges(nodeImpact) : live.changes
@@ -83,7 +84,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     void window.nexgraph.watch.start(project.project_id).catch(() => {})
     return () => {
       void window.nexgraph.watch.stop(project.project_id).catch(() => {})
-      void window.nexgraph.agent.close(project.project_id).catch(() => {})
+      // Trong extension, trợ lý sống ở view riêng của nền nên rời màn này không đóng phiên của nó.
+      if (!window.nexgraph.host) void window.nexgraph.agent.close(project.project_id).catch(() => {})
     }
   }, [project.project_id, project.path])
 
@@ -170,6 +172,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
 
   const openCode = (file: string, line = 1, lineEnd?: number) => {
+    // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.
+    if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e) => setNotice((e as Error).message))
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd } : f)) : [...cur, { file, line, lineEnd }]))
     setTab(`file:${file}`)
   }
@@ -200,6 +204,21 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setFiles((cur) => cur.filter((f) => f.file !== file))
     setTab((cur) => (cur === `file:${file}` ? order[Math.max(0, at - 1)] : cur))
   }
+  // Trong extension, thanh công cụ và cây điều hướng của nền gửi lệnh vào đây. Không có mảng phụ thuộc: luôn dùng trạng thái mới nhất.
+  useEffect(() => window.nexgraph.host?.onCommand((c, arg) => {
+    if (c.startsWith('view:')) {
+      if (c === 'view:arch') setArchParent(undefined)
+      setTab(c.slice(5) as Tab)
+    } else if (c.startsWith('panel:')) setPanel((cur) => (cur === c.slice(6) ? null : c.slice(6))) // bấm lại mục đang mở thì đóng
+    else if (c === 'highlight') {
+      const h = arg as { nodes: GraphNode[]; edges: GraphEdge[]; note: string | null }
+      highlightFromChat(h.nodes, h.edges, h.note)
+    }
+    else if (c === 'export') openExport(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })
+    else if (c === 'overview') guardLeave(onBack)?.()
+    else if (c === 'settings') guardLeave(onOpenSettings)?.()
+  }))
+
   const openNode = (node: GraphNode) => {
     if (pathFrom) return void findPath(pathFrom, node)
     clearOverlay()
@@ -216,29 +235,38 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     window.nexgraph.graph.node(project.project_id, id).then(setSelected).catch(() => {})
   }
 
+  const hosted = !!window.nexgraph.host
+  const closePanel = hosted && <button type="button" className="panel-close" aria-label={vi.workspace.closePanel} onClick={() => setPanel(null)}>×</button>
+
   return (
     <div className="workspace">
-      <ActivityBar
-        items={[
-          { id: 'search', title: vi.activity.search, icon: SearchIcon },
-          { id: 'changes', title: vi.activity.changes, icon: ChangesIcon },
-          { id: 'tour', title: vi.activity.tour, icon: TourIcon }
-        ]}
-        active={panel}
-        onToggle={(id) => setPanel((cur) => (cur === id ? null : id))}
-      />
+      {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
+      {!hosted && (
+        <ActivityBar
+          items={[
+            { id: 'search', title: vi.activity.search, icon: SearchIcon },
+            { id: 'changes', title: vi.activity.changes, icon: ChangesIcon },
+            { id: 'tour', title: vi.activity.tour, icon: TourIcon }
+          ]}
+          active={panel}
+          onToggle={(id) => setPanel((cur) => (cur === id ? null : id))}
+        />
+      )}
       {panel === 'search' && (
         <aside className="sidebar">
+          {closePanel}
           <SearchPanel projectId={project.project_id} onOpen={openNode} onShowSubgraph={(g) => { setOverlay(g); setNotice(null); setTab('graph') }} onOpenFlow={openFlow} />
         </aside>
       )}
       {panel === 'tour' && (
         <aside className="sidebar wide">
+          {closePanel}
           <TourPanel projectId={project.project_id} projectName={project.name} onOpenFlow={openFlow} onOpenNode={openNodeId} onOpenArch={openArch} />
         </aside>
       )}
       {panel === 'changes' && (
         <aside className="sidebar wide">
+          {closePanel}
           {nodeImpact && (
             <button type="button" className="link back" onClick={() => setNodeImpact(null)}>{vi.impact.back}</button>
           )}
@@ -315,7 +343,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ))}
         </div>
       </section>
-      <AgentPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />
+      {!window.nexgraph.host && <AgentPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />}
     </div>
   )
 }

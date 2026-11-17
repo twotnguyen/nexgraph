@@ -88,6 +88,7 @@ export const vi = {
     subdir: (path: string) => `Thư mục con: ${path}`
   },
   workspace: {
+    closePanel: 'Đóng bảng',
     archTab: 'Kiến trúc',
     flowsTab: 'Luồng',
     mapTab: 'Bản đồ',
