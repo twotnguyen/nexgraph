@@ -4,7 +4,7 @@
 
 > Kết nối mã nguồn. Khám phá tri thức.
 
-**Trạng thái nghiệm thu (2026-11-17):** gốc là `main` commit `0f4dd6f` (repo GitHub `twotnguyen/nexgraph`, **private**), hiện có thêm các sửa sau review **chưa commit/push**. Đã chạy lại: **488 test engine + 424 test desktop đạt**, typecheck sạch; bản DMG macOS đóng gói và smoke test đạt; đã bấm thử trên cửa sổ Electron thật với engine thật và LLM giả. **Chạy được trên macOS; Windows chưa nghiệm thu** (chưa chạy bản cài thật). CI từ xa tại `0f4dd6f` vẫn **ĐỎ** (3 assertion portability của job `desktop (windows-latest)`: `accounts.test.ts:152`, `integrations.test.ts:69,90`) — đã sửa trong working tree, cần push để xác nhận cả sáu job xanh. Chưa thử nhà cung cấp AI thật và chưa chạy đủ ba lượt demo.
+**Trạng thái nghiệm thu (2026-11-17):** `main` tại commit `61cc7af` (repo GitHub `twotnguyen/nexgraph`, **private**), đã đẩy kèm các sửa sau review. **488 test engine + 424 test desktop đạt**, typecheck sạch; đã bấm thử trên cửa sổ Electron thật với engine thật và LLM giả. **CI xanh cả sáu job** (engine/desktop/package × macOS/Windows, run `44014209525`), gồm smoke test bản đóng gói trên cả hai hệ điều hành. Đây là bằng chứng build/chạy tự động trên Windows, **chưa phải nghiệm thu Windows trên máy thật của nhóm**. Chưa thử nhà cung cấp AI thật và chưa chạy đủ ba lượt demo.
 
 ## Cấu trúc
 
