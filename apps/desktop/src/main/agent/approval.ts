@@ -83,16 +83,9 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
     })
 
   async function check(toolName: string, input: unknown): Promise<ApprovalDecision & { approved?: ApprovedWrite }> {
-    if (toolName !== 'edit' && toolName !== 'write' && toolName !== 'bash') return { allow: true }
-    if (deps.getMode() !== 'edit') return deny('Chế độ Hỏi không cho phép sửa tệp hoặc chạy lệnh')
+    if (toolName !== 'edit' && toolName !== 'write') return deny('Chỉ có thể duyệt thao tác sửa tệp')
+    if (deps.getMode() !== 'edit') return deny('Chế độ Hỏi chỉ cho phép đọc')
     const obj = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
-    const id = randomUUID()
-
-    if (toolName === 'bash') {
-      if (typeof obj.command !== 'string') return deny('Thiếu lệnh cần chạy')
-      return wait({ id, tool: 'bash', command: obj.command })
-    }
-
     if (typeof obj.path !== 'string') return deny('Thiếu đường dẫn tệp')
     if (!insideRoot(deps.root, obj.path)) return OUTSIDE
     const myEpoch = epoch
@@ -103,7 +96,7 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
       return deny('Không tạo được bản xem trước thay đổi')
     }
     if (myEpoch !== epoch) return deny(revokedReason)
-    const decision = await wait({ id, tool: toolName, path: preview.path, before: preview.before, after: preview.after })
+    const decision = await wait({ id: randomUUID(), tool: toolName, path: preview.path, before: preview.before, after: preview.after })
     if (!decision.allow) return decision
     if (myEpoch !== epoch) return deny(revokedReason)
     const assertCurrent = () => {

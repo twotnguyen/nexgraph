@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentEvent, ApprovalRequest } from '@shared/agent-types'
@@ -25,8 +25,13 @@ const target = { provider: 'provider-one', baseUrl: 'https://api.example.com/v1'
 const configured = vi.fn(async () => ({ ...target, model: 'm1', hasKey: true }))
 const consented = () => ({ ai: { getSettings: configured, hasConsent: vi.fn(async () => true) } })
 const props = () => ({ projectId: 'p1', onOpenCode: vi.fn(), onHighlight: vi.fn(), onOpenSettings: vi.fn() })
-const ask = async (q: string) => userEvent.type(await screen.findByPlaceholderText(/Hỏi về dự án/), `${q}{Enter}`)
+const ask = async (q: string) => {
+  const input = screen.getByPlaceholderText(/Hỏi về dự án/)
+  await waitFor(() => expect(input).toBeEnabled())
+  await userEvent.type(input, `${q}{Enter}`)
+}
 const pending = () => vi.fn(() => new Promise<void>(() => {}))
+const editMode = () => ({ getMode: vi.fn(async () => 'edit' as const), prompt: pending() })
 /** prompt giả phát `events` rồi kết thúc lượt. */
 const replying = (emit: () => (pid: string, e: AgentEvent) => void, ...events: AgentEvent[]) =>
   vi.fn(async (pid: string) => { for (const e of events) emit()(pid, e) })
@@ -38,7 +43,7 @@ const done: AgentEvent = {
     { raw: '[[ma.py:1-2]]', file: 'ma.py', start: 1, end: 2, valid: false, reason: 'file_not_found' }]
 }
 const editReq: ApprovalRequest = { id: 'r1', tool: 'edit', path: 'lib/auth.dart', before: 'int a = 1;\n', after: 'int a = 2;\n' }
-const bashReq: ApprovalRequest = { id: 'r2', tool: 'bash', command: 'rm -rf /' }
+const writeReq: ApprovalRequest = { id: 'r2', tool: 'write', path: 'lib/new.dart', before: '', after: 'void a() {}\n' }
 
 describe('AgentPanel', () => {
   it('sự kiện text nối dần vào tin đang trả lời', async () => {
@@ -64,15 +69,18 @@ describe('AgentPanel', () => {
     expect(screen.getByRole('button', { name: /ma\.py:1–2/ })).toBeDisabled()
   })
 
-  it('công tắc mặc định ở Hỏi; lần đầu sang Sửa hiện cảnh báo sandbox rồi gọi setMode edit', async () => {
+  it('Hỏi chỉ đọc; lần đầu sang Sửa giải thích việc duyệt từng bản diff', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { api } = installNexgraph({ ...consented(), agent: { getMode: vi.fn(async () => 'ask' as const) } })
     render(<AgentPanel {...props()} />)
-    expect(await screen.findByRole('button', { name: 'Hỏi' })).toHaveAttribute('aria-pressed', 'true')
+    const askMode = screen.getByRole('button', { name: 'Hỏi' })
+    await waitFor(() => expect(askMode).toHaveAttribute('aria-pressed', 'true'))
+    expect(screen.getByText('Chỉ đọc mã và đồ thị dự án.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sửa' })).toHaveAttribute('aria-pressed', 'false')
     await userEvent.click(screen.getByRole('button', { name: 'Sửa' }))
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('sandbox'))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('xem bản diff và duyệt từng thay đổi'))
     await waitFor(() => expect(api.agent.setMode).toHaveBeenCalledWith('p1', 'edit'))
+    expect(await screen.findByText('Duyệt bản diff của từng tệp trước khi ghi.')).toBeInTheDocument()
     confirm.mockRestore()
   })
 
@@ -80,7 +88,9 @@ describe('AgentPanel', () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
     const { api } = installNexgraph({ ...consented(), agent: { getMode: vi.fn(async () => 'ask' as const) } })
     render(<AgentPanel {...props()} />)
-    await userEvent.click(await screen.findByRole('button', { name: 'Sửa' }))
+    const edit = screen.getByRole('button', { name: 'Sửa' })
+    await waitFor(() => expect(edit).toBeEnabled())
+    await userEvent.click(edit)
     expect(api.agent.setMode).not.toHaveBeenCalled()
     await userEvent.click(await screen.findByRole('button', { name: 'Hỏi' })) // đổi qua lại không cảnh báo, không setMode
     expect(api.agent.setMode).not.toHaveBeenCalled()
@@ -93,48 +103,88 @@ describe('AgentPanel', () => {
   it('getMode trả edit thì công tắc ở Sửa ngay, không hỏi lại', async () => {
     installNexgraph({ ...consented(), agent: { getMode: vi.fn(async () => 'edit' as const) } })
     render(<AgentPanel {...props()} />)
-    expect(await screen.findByRole('button', { name: 'Sửa' })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sửa' })).toHaveAttribute('aria-pressed', 'true'))
   })
 
-  it('approval edit hiện đường dẫn; Duyệt gọi approve(id, true)', async () => {
-    const { api, emitAgent } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
+  it('approval edit hiện bản diff chỉ đọc cùng đường dẫn; duyệt gọi approve(id, true)', async () => {
+    const { api, emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
     render(<AgentPanel {...props()} />)
     await ask('sửa giúp hàm login')
     act(() => emitAgent('p1', { type: 'approval', request: editReq }))
-    expect(await screen.findByText('Sửa tệp lib/auth.dart')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Duyệt' }))
+    const card = await screen.findByRole('group', { name: 'Sửa tệp lib/auth.dart' })
+    expect(within(card).getByLabelText('diff')).toHaveValue(editReq.after)
+    expect(within(card).getByLabelText('diff')).toHaveAttribute('readonly')
+    await userEvent.click(within(card).getByRole('button', { name: 'Duyệt thay đổi' }))
     expect(api.agent.approve).toHaveBeenCalledWith('p1', 'r1', true)
   })
 
-  it('approval bash hiện nguyên lệnh; Từ chối gọi approve(id, false)', async () => {
-    const { api, emitAgent } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
+  it('approval write hiện diff kể cả trước đó trống; Từ chối gọi approve(id, false)', async () => {
+    const { api, emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
     render(<AgentPanel {...props()} />)
-    await ask('dọn cache')
-    act(() => emitAgent('p1', { type: 'approval', request: bashReq }))
-    expect(await screen.findByText(/rm -rf \//)).toBeInTheDocument()
-    expect(screen.queryByLabelText('diff')).toBeNull() // bash không có diff
-    await userEvent.click(screen.getByRole('button', { name: 'Từ chối' }))
+    await ask('tạo tệp mới')
+    act(() => emitAgent('p1', { type: 'approval', request: writeReq }))
+    const card = await screen.findByRole('group', { name: 'Ghi tệp lib/new.dart' })
+    expect(within(card).getByLabelText('diff')).toHaveValue(writeReq.after)
+    await userEvent.click(within(card).getByRole('button', { name: 'Từ chối' }))
     expect(api.agent.approve).toHaveBeenCalledWith('p1', 'r2', false)
   })
 
-  it('approval_closed gỡ thẻ duyệt đúng id; id lạ bị bỏ qua', async () => {
-    const { emitAgent } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
+  it('Sửa bỏ qua phê duyệt lệnh kiểu cũ và phê duyệt tệp thiếu bản diff', async () => {
+    const { api, emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
+    render(<AgentPanel {...props()} />)
+    await ask('sửa giúp')
+    const legacy = { type: 'approval', request: { id: 'old', tool: 'bash', command: 'echo legacy-command' } }
+    const incomplete = { type: 'approval', request: { id: 'bad', tool: 'edit', path: 'lib/bad.dart', before: '' } }
+    act(() => emitAgent('p1', legacy as unknown as AgentEvent))
+    act(() => emitAgent('p1', incomplete as unknown as AgentEvent))
+    expect(screen.queryByText(/legacy-command|lib\/bad.dart/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Duyệt thay đổi' })).not.toBeInTheDocument()
+    expect(api.agent.approve).not.toHaveBeenCalled()
+  })
+
+  it('lượt Hỏi chỉ đọc nên bỏ qua yêu cầu duyệt ngay cả khi đúng dự án', async () => {
+    const { api, emitAgent } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
+    render(<AgentPanel {...props()} />)
+    await ask('mã này ở đâu?')
+    act(() => emitAgent('p1', { type: 'approval', request: editReq }))
+    expect(screen.queryByRole('button', { name: 'Duyệt thay đổi' })).not.toBeInTheDocument()
+    expect(api.agent.approve).not.toHaveBeenCalled()
+  })
+
+  it('chuyển từ Sửa về Hỏi khóa phê duyệt ngay và gỡ bản diff khi xác nhận chế độ', async () => {
+    let ack!: () => void
+    const setMode = vi.fn(() => new Promise<void>((resolve) => { ack = resolve }))
+    const { emitAgent } = installNexgraph({ ...consented(), agent: { ...editMode(), setMode } })
     render(<AgentPanel {...props()} />)
     await ask('sửa giúp')
     act(() => emitAgent('p1', { type: 'approval', request: editReq }))
-    act(() => emitAgent('p1', { type: 'approval', request: bashReq }))
+    const approve = screen.getByRole('button', { name: 'Duyệt thay đổi' })
+    await userEvent.click(screen.getByRole('button', { name: 'Hỏi' }))
+    expect(setMode).toHaveBeenCalledWith('p1', 'ask')
+    expect(approve).toBeDisabled()
+    await act(async () => ack())
+    act(() => emitAgent('p1', { type: 'approval', request: writeReq }))
+    expect(screen.queryByRole('button', { name: 'Duyệt thay đổi' })).not.toBeInTheDocument()
+  })
+
+  it('approval_closed gỡ thẻ duyệt đúng id; id lạ bị bỏ qua', async () => {
+    const { emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
+    render(<AgentPanel {...props()} />)
+    await ask('sửa giúp')
+    act(() => emitAgent('p1', { type: 'approval', request: editReq }))
+    act(() => emitAgent('p1', { type: 'approval', request: writeReq }))
     act(() => emitAgent('p1', { type: 'approval_closed', id: 'khong-lam-gi' }))
     expect(screen.getByText('Sửa tệp lib/auth.dart')).toBeInTheDocument() // id lạ không gỡ oan thẻ nào
     act(() => emitAgent('p1', { type: 'approval_closed', id: 'r1' }))
     await waitFor(() => expect(screen.queryByText('Sửa tệp lib/auth.dart')).toBeNull())
-    expect(screen.getByText(/rm -rf \//)).toBeInTheDocument()
+    expect(screen.getByText('Ghi tệp lib/new.dart')).toBeInTheDocument()
   })
 
   it('nút Dừng gọi agent.abort; đang chạy thì ô nhập khoá', async () => {
     const { api } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
     render(<AgentPanel {...props()} />)
     const box = await screen.findByPlaceholderText(/Hỏi về dự án/)
-    expect(box).toBeEnabled()
+    await waitFor(() => expect(box).toBeEnabled())
     await userEvent.type(box, 'hỏi{Enter}')
     expect(await screen.findByPlaceholderText(/Hỏi về dự án/)).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Dừng' })).toBeInTheDocument()
@@ -164,7 +214,7 @@ describe('AgentPanel', () => {
   })
 
   it('xung đột khi ghi vẫn hiện sau câu trả lời và được xóa khi gửi câu hỏi mới', async () => {
-    const { emitAgent } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
+    const { emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
     render(<AgentPanel {...props()} />)
     await ask('sửa hàm login')
     const message = 'Tệp đã thay đổi. Chưa ghi thay đổi. Hãy đọc lại tệp và duyệt bản xem trước mới.'
@@ -236,7 +286,7 @@ describe('AgentPanel', () => {
   })
 
   it('sự kiện của dự án khác bị bỏ qua (approval, done)', async () => {
-    const { emitAgent } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
+    const { emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
     render(<AgentPanel {...props()} />)
     await ask('q')
     act(() => emitAgent('p2', { type: 'approval', request: editReq }))

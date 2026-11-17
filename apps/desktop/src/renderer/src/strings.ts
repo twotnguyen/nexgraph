@@ -38,11 +38,13 @@ export const vi = {
   },
   agent: {
     ask: 'Hỏi', edit: 'Sửa', modeTitle: 'Chế độ',
-    editWarn: 'Chuyển sang Sửa: lệnh sẽ chạy với quyền của bạn, không có sandbox.',
-    approve: 'Duyệt', reject: 'Từ chối',
+    askHint: 'Chỉ đọc mã và đồ thị dự án.',
+    editHint: 'Duyệt bản diff của từng tệp trước khi ghi.',
+    editWarn: 'Trong chế độ Sửa, trợ lý có thể đề xuất tạo hoặc sửa tệp trong dự án. Hãy xem bản diff và duyệt từng thay đổi trước khi ghi.',
+    modeFailed: 'Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.',
+    approve: 'Duyệt thay đổi', reject: 'Từ chối',
     editPath: (path: string) => `Sửa tệp ${path}`,
-    writePath: (path: string) => `Tạo tệp ${path}`,
-    bash: 'Chạy lệnh'
+    writePath: (path: string) => `Ghi tệp ${path}`
   },
   integration: {
     skillExisting: 'Tệp SKILL.md đã có nội dung khác nên NexGraph không ghi đè. Hãy sao chép nội dung mới và cập nhật tệp bằng tay.',

@@ -2,7 +2,7 @@
 
 NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ mục thư mục mã nguồn cục bộ, khám phá kiến trúc, tìm ký hiệu và xem vùng ảnh hưởng khi sửa mã. Đề tài ưu tiên **TypeScript/JavaScript và Python**. Đồ thị dẫn đến vị trí mã nguồn, hỗ trợ truy vết luồng thực thi và cung cấp ngữ cảnh cho trợ lý AI qua MCP.
 
-Ứng dụng có trình soạn thảo tích hợp và hai chế độ trợ lý. **Hỏi** chỉ đọc. **Sửa** yêu cầu người dùng duyệt từng thao tác ghi tệp hoặc chạy lệnh. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
+Ứng dụng có trình soạn thảo tích hợp và hai chế độ trợ lý. **Hỏi** chỉ đọc. **Sửa** cho xem diff và yêu cầu duyệt từng đề xuất tạo, sửa hoặc ghi đè tệp. Cả hai chế độ từ chối lời gọi công cụ chạy lệnh shell. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
 
 ## Bắt đầu
 

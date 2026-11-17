@@ -54,21 +54,24 @@ describe('extension NexGraph', () => {
     const deny = setup(async () => ({ allow: false, reason: 'không' }))
     expect(await deny.handler({ toolName: 'edit', input: { path: 'a.txt' } })).toEqual({ block: true, reason: 'không' })
     expect(deny.gate.check).toHaveBeenCalledWith('edit', { path: join(proj, 'a.txt') })
-    const empty = setup((async () => ({ allow: false })) as never)
-    expect(await empty.handler({ toolName: 'bash', input: {} })).toMatchObject({ block: true, reason: expect.stringMatching(/\S/) })
+    const empty = setup(async () => ({ allow: false, reason: '' }))
+    expect(await empty.handler({ toolName: 'write', input: { path: 'a.txt' } })).toMatchObject({ block: true, reason: expect.stringMatching(/\S/) })
     const ok = setup()
-    expect(await ok.handler({ toolName: 'bash', input: {} })).toBeUndefined()
+    expect(await ok.handler({ toolName: 'read', input: { path: 'a.txt' } })).toBeUndefined()
+    expect(ok.gate.check).not.toHaveBeenCalled()
     const boom = setup(async () => { throw new Error('x') })
     expect(await boom.handler({ toolName: 'edit', input: { path: 'a.txt' } })).toMatchObject({ block: true })
   })
 
   it('tool_call: chặn tên lạ, so khớp phân biệt hoa thường', async () => {
     const { handler, gate } = setup()
-    for (const toolName of ['Bash', 'multiedit', 'get_node ', ...names, 'read', 'grep', 'find', 'ls']) {
-      const blocked = toolName === 'Bash' || toolName === 'multiedit' || toolName === 'get_node '
-      expect(await handler({ toolName, input: { path: 'a.txt' } }) !== undefined).toBe(blocked)
+    for (const toolName of ['bash', 'Bash', 'powershell', 'shell', 'terminal', 'run_command', 'codemode', 'multiedit', 'get_node ']) {
+      expect(await handler({ toolName, input: { command: 'printf test' } })).toMatchObject({ block: true })
     }
-    expect(gate.check).toHaveBeenCalledTimes(names.length + 4)
+    for (const toolName of [...names, 'read', 'grep', 'find', 'ls']) {
+      expect(await handler({ toolName, input: { path: 'a.txt' } })).toBeUndefined()
+    }
+    expect(gate.check).not.toHaveBeenCalled()
   })
 })
 

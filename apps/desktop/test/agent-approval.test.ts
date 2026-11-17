@@ -7,8 +7,7 @@ import type { AgentMode, ApprovalRequest } from '../src/shared/agent-types'
 
 const input: Record<string, unknown> = {
   edit: { path: 'a.ts', edits: [] },
-  write: { path: 'a.ts', content: '' },
-  bash: { command: 'ls' }
+  write: { path: 'a.ts', content: '' }
 }
 const flush = () => vi.advanceTimersByTimeAsync(0)
 
@@ -33,14 +32,20 @@ afterEach(() => {
 })
 
 describe('approval gate', () => {
-  it('tool đọc đi qua không hỏi', async () => {
-    expect(await gate.check('read', {})).toEqual({ allow: true })
+  it('cổng duyệt từ chối loại tool ngoài write/edit ở cả hai chế độ', async () => {
+    for (const nextMode of ['ask', 'edit'] as const) {
+      mode = nextMode
+      for (const tool of ['read', 'bash', 'powershell', 'shell', 'terminal', 'exec']) {
+        expect(await gate.check(tool, { command: 'printf test' })).toMatchObject({ allow: false })
+      }
+    }
     expect(ask).not.toHaveBeenCalled()
+    expect(preview).not.toHaveBeenCalled()
   })
-  it('chế độ Hỏi chặn edit/write/bash không hỏi', async () => {
+  it('chế độ Hỏi chặn edit/write không hỏi', async () => {
     mode = 'ask'
-    for (const t of ['edit', 'write', 'bash'])
-      expect(await gate.check(t, input[t])).toEqual({ allow: false, reason: 'Chế độ Hỏi không cho phép sửa tệp hoặc chạy lệnh' })
+    for (const t of ['edit', 'write'])
+      expect(await gate.check(t, input[t])).toEqual({ allow: false, reason: 'Chế độ Hỏi chỉ cho phép đọc' })
     expect(ask).not.toHaveBeenCalled()
   })
   it('đường dẫn ngoài dự án bị chặn không hỏi', async () => {
@@ -49,7 +54,7 @@ describe('approval gate', () => {
         expect(await gate.check(t, { path: p })).toEqual({ allow: false, reason: 'Đường dẫn nằm ngoài dự án' })
     const outside = join(root, '..', 'out')
     mkdirSync(outside)
-    symlinkSync(outside, join(root, 'link'))
+    symlinkSync(outside, join(root, 'link'), process.platform === 'win32' ? 'junction' : 'dir')
     expect(await gate.check('write', { path: 'link/a.txt' })).toMatchObject({ allow: false })
     expect(ask).not.toHaveBeenCalled()
   })
@@ -65,8 +70,8 @@ describe('approval gate', () => {
       }) // preview giả trả path nguyên văn
     }
   })
-  it('thiếu path/command → từ chối, không hỏi', async () => {
-    for (const [t, i] of [['edit', {}], ['write', { path: 1 }], ['bash', {}], ['bash', { command: 1 }], ['write', null]] as const)
+  it('thiếu path hợp lệ → từ chối, không hỏi', async () => {
+    for (const [t, i] of [['edit', {}], ['write', { path: 1 }], ['write', null]] as const)
       expect(await gate.check(t, i)).toMatchObject({ allow: false })
     expect(ask).not.toHaveBeenCalled()
   })
@@ -80,17 +85,17 @@ describe('approval gate', () => {
       allow: true, approved: { path: 'a.ts', before: 'B', after: 'A', assertCurrent: expect.any(Function) },
     })
 
-    const b = gate.check('bash', { command: 'rm x' })
+    const b = gate.check('write', { path: 'b.ts' })
     await flush()
-    expect(asked(1)).toMatchObject({ tool: 'bash', command: 'rm x' })
-    expect(preview).toHaveBeenCalledTimes(1)
+    expect(asked(1)).toMatchObject({ tool: 'write', path: 'b.ts', before: 'B', after: 'A' })
+    expect(preview).toHaveBeenCalledTimes(2)
     gate.resolve(asked(1).id, false)
     expect(await b).toEqual({ allow: false, reason: 'Người dùng từ chối thao tác này' })
     expect(gate.pending()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
   it('hết 5 phút → từ chối và dọn sạch', async () => {
-    const p = gate.check('bash', { command: 'ls' })
+    const p = gate.check('write', { path: 'a.ts' })
     await flush()
     await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS)
     expect(await p).toEqual({ allow: false, reason: 'Hết thời gian chờ duyệt' })
@@ -99,8 +104,8 @@ describe('approval gate', () => {
     gate.resolve(asked().id, true) // no-op
   })
   it('denyAll từ chối mọi yêu cầu đang treo', async () => {
-    const a = gate.check('bash', { command: 'a' })
-    const b = gate.check('bash', { command: 'b' })
+    const a = gate.check('write', { path: 'a.ts' })
+    const b = gate.check('edit', { path: 'b.ts' })
     await flush()
     expect(gate.pending()).toBe(2)
     gate.denyAll('Đã dừng')
@@ -118,23 +123,23 @@ describe('approval gate', () => {
     expect(gate.pending()).toBe(0)
   })
   it('hai yêu cầu đồng thời được giải quyết độc lập theo id', async () => {
-    const a = gate.check('bash', { command: 'a' })
-    const b = gate.check('bash', { command: 'b' })
+    const a = gate.check('write', { path: 'a.ts' })
+    const b = gate.check('edit', { path: 'b.ts' })
     await flush()
     expect(asked(0).id).not.toBe(asked(1).id)
     gate.resolve(asked(1).id, true)
     gate.resolve(asked(0).id, false)
     expect(await a).toMatchObject({ allow: false })
-    expect(await b).toEqual({ allow: true })
+    expect(await b).toMatchObject({ allow: true, approved: { path: 'b.ts' } })
   })
   it('resolve id lạ hoặc resolve hai lần không ném', async () => {
     gate.resolve('x', true)
-    const p = gate.check('bash', { command: 'a' })
+    const p = gate.check('write', { path: 'a.ts' })
     await flush()
     const id = asked().id
     gate.resolve(id, true)
     gate.resolve(id, false)
-    expect(await p).toEqual({ allow: true })
+    expect(await p).toMatchObject({ allow: true, approved: { path: 'a.ts' } })
   })
   it('preview ném lỗi → từ chối, không hỏi', async () => {
     preview.mockRejectedValueOnce(new Error('boom'))
@@ -144,7 +149,7 @@ describe('approval gate', () => {
   })
   it('ask ném lỗi → từ chối và dọn sạch', async () => {
     ask.mockImplementationOnce(() => { throw new Error('boom') })
-    expect(await gate.check('bash', { command: 'a' })).toMatchObject({ allow: false })
+    expect(await gate.check('write', { path: 'a.ts' })).toMatchObject({ allow: false })
     expect(gate.pending()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -161,13 +166,14 @@ describe('approval gate', () => {
   it('closed được gọi một lần cho mỗi yêu cầu đã giải quyết (duyệt, denyAll, hết giờ)', async () => {
     const closed = vi.fn()
     const g = createApprovalGate({ root, getMode: () => 'edit', ask, preview, closed } as never)
-    const a = g.check('bash', { command: 'a' })
-    const b = g.check('bash', { command: 'b' })
+    const a = g.check('write', { path: 'a.ts' })
+    const b = g.check('edit', { path: 'b.ts' })
     await flush()
     g.resolve(asked(0).id, true)
     g.denyAll('x')
     await Promise.all([a, b])
-    const c = g.check('bash', { command: 'c' })
+    const c = g.check('write', { path: 'c.ts' })
+    await flush()
     await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS)
     await c
     expect(closed.mock.calls.map((x) => x[0])).toEqual([asked(0).id, asked(1).id, asked(2).id])

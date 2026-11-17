@@ -38,10 +38,10 @@ node apps/desktop/scripts/fake-llm.mjs 8787
 
 1. Trong app, mở bản sao `flow_app` vừa tạo và dựng graph. Vào **Cài đặt → Tài khoản AI → Nhà cung cấp tuỳ chỉnh**, thêm nhà cung cấp với Base URL `http://127.0.0.1:8787/v1`, model `fake`, để trống API key. Lưu, chọn model và bấm **Kiểm tra kết nối**.
 2. Ở **Luồng**, tìm `login`. Mở Agent ở chế độ **Hỏi**, đồng ý gửi dữ liệu cho endpoint cục bộ rồi hỏi về luồng đăng nhập. Kiểm trích dẫn hợp lệ mở đúng dòng trong Monaco và **Tô luồng** tô các cạnh của graph. Máy chủ giả cố ý trả thêm một trích dẫn tới tệp không tồn tại để kiểm tra app không cho mở chip đó.
-3. Chuyển sang **Sửa**, gửi riêng `NEXGRAPH_DEMO_EDIT`. Kịch bản trả một đề xuất thêm comment vào dòng `return save_session(user)` trong `service.py`. Bấm **Từ chối**, xác nhận tệp giữ nguyên, gửi lại trên bản sao sạch và bấm **Duyệt**. Kiểm nội dung đã ghi và thẻ **Thay đổi**. Lệnh này dành cho fixture Python và dựa vào nội dung ban đầu của `service.py`.
+3. Chuyển sang **Sửa**, gửi riêng `NEXGRAPH_DEMO_EDIT`. Máy chủ giả trả một đề xuất thêm comment vào dòng `return save_session(user)` trong `service.py`. Bấm **Từ chối**, xác nhận tệp giữ nguyên, gửi lại trên bản sao sạch và bấm **Duyệt thay đổi**. Kiểm nội dung đã ghi và thẻ **Thay đổi**. Mẫu này dựa vào nội dung ban đầu của `service.py`.
 4. Dừng máy chủ bằng Ctrl+C. Trên PowerShell, đóng phiên đã đặt biến test hoặc chạy `Remove-Item Env:NEXGRAPH_ALLOW_HTTP_PROVIDER, Env:NEXGRAPH_USER_DATA_DIR, Env:NEXGRAPH_DATA_DIR`.
 
-Bằng chứng hiện có là [phiên kiểm Electron đóng gói trên macOS](benchmarks/2026-11-15-editor-agent.md) với fixture này. Ghi riêng kết quả của Windows, của phiên bản app đang chạy và của nhà cung cấp AI thật.
+[Phiên kiểm Electron đóng gói trên macOS ngày 15/11](benchmarks/2026-11-15-editor-agent.md) ghi lại lượt thử fixture trước khi bỏ công cụ chạy lệnh. Ghi riêng kết quả của bản đang dùng và loại nhà cung cấp đã thử.
 
 ## Demo NestJS trong 5 phút
 
@@ -63,4 +63,5 @@ Tổng mục tiêu là 4:30, còn 0:30 dự phòng. Các số của H6 cho demo 
 - [ ] Lượt 2: lặp trên bản sao sạch, kiểm **Duyệt** đổi nội dung, **Từ chối** giữ nguyên tệp.
 - [ ] Lượt 3: mất mạng ở lượt **Hỏi**, chạy phương án dự phòng và kiểm nháp chưa lưu khi đổi thẻ.
 - [ ] Kiểm Windows theo [checklist](windows-checklist.md), ghi riêng kết quả provider thật/OAuth và client MCP khi đã thử.
+- [ ] Trên Windows và macOS, kiểm bộ công cụ của **Hỏi** và **Sửa** bằng mô hình giả lập. Thử gọi shell, xác nhận yêu cầu bị từ chối trước bước duyệt và tệp đánh dấu vẫn vắng mặt. Duyệt một diff hợp lệ để kiểm luồng chỉnh sửa vẫn hoạt động. [Smoke qua giao diện và IPC](../apps/desktop/src/main/smoke-desktop.ts) · [Kiểm thử phiên Pi](../apps/desktop/test/agent-session-pi.test.ts)
 - [ ] Gắn ảnh hoặc video và log với commit, artifact, hệ điều hành và cấu hình máy.

@@ -30,6 +30,15 @@ function errorMessage(e: unknown): string {
   return vi.chat.errors[errorCode(e)] || (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
 }
 
+function isFileApproval(value: unknown): value is ApprovalRequest {
+  if (!value || typeof value !== 'object') return false
+  const request = value as Partial<ApprovalRequest>
+  return (request.tool === 'edit' || request.tool === 'write')
+    && typeof request.id === 'string' && request.id.trim() !== ''
+    && typeof request.path === 'string' && request.path.trim() !== ''
+    && typeof request.before === 'string' && typeof request.after === 'string'
+}
+
 export function AgentPanel(props: Props) {
   return <ProjectAgentPanel key={props.projectId} {...props} />
 }
@@ -46,11 +55,14 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
   const [openTools, setOpenTools] = useState<number | null>(null)
   const [draft, setDraft] = useState('') // chữ đang chảy về của lượt hiện tại
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
-  const [mode, setMode] = useState<AgentMode>('ask')
-  const turn = useRef<{ id: number; q: string; tools: string[] } | null>(null) // lượt đang chạy; kết thúc bằng sự kiện done/error
+  const [mode, setMode] = useState<AgentMode | null>(null)
+  const [changingMode, setChangingMode] = useState(true)
+  const modeRef = useRef<AgentMode | null>(null)
+  const modePending = useRef(true)
+  const turn = useRef<{ id: number; q: string; tools: string[]; mode: AgentMode } | null>(null)
   const turnSeq = useRef(0)
   const failedTurns = useRef(new Set<number>())
-  const editWarned = useRef(false) // lần đầu sang Sửa phải cảnh báo sandbox
+  const editWarned = useRef(false) // lần đầu sang Sửa giải thích việc duyệt từng tệp
   const mounted = useRef(true)
   const visible = useRef(!hidden)
   visible.current = !hidden
@@ -73,6 +85,7 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
 
   const end = () => {
     turn.current = null
+    setApprovals([])
     setBusy(false)
     setTool(null)
     setDraft('')
@@ -110,13 +123,22 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
     window.nexgraph.agent.getMode(projectId).then((m) => {
       if (!alive) return
       if (m === 'edit') editWarned.current = true // phiên đã ở Sửa từ trước thì không hỏi lại
+      modeRef.current = m
       setMode(m)
-    }).catch(() => {})
+    }).catch(() => {
+      if (alive) setError(vi.agent.modeFailed)
+    }).finally(() => {
+      if (!alive) return
+      modePending.current = false
+      setChangingMode(false)
+    })
     const off = window.nexgraph.agent.onEvent((pid, e) => {
       const t = turn.current
       if (!mounted.current || pid !== projectId) return
       if (e.type === 'approval') {
-        setApprovals((cur) => (cur.some((a) => a.id === e.request.id) ? cur : [...cur, e.request]))
+        const { request } = e
+        if (t?.mode !== 'edit' || modeRef.current !== 'edit' || modePending.current || !isFileApproval(request)) return
+        setApprovals((cur) => (cur.some((a) => a.id === request.id) ? cur : [...cur, request]))
         return
       }
       if (e.type === 'approval_closed') {
@@ -125,7 +147,7 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
       }
       if (!t) return
       if (e.type === 'write_conflict') {
-        setError(e.message)
+        if (t.mode === 'edit') setError(e.message)
         return
       }
       if (e.type === 'tool' && e.status === 'start') {
@@ -159,7 +181,7 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
 
   const isCurrent = (id: number) => mounted.current && visible.current && operation.current === id
   const begin = () => {
-    if (!visible.current || operation.current !== null || turn.current) return null
+    if (!visible.current || operation.current !== null || turn.current || modePending.current || !modeRef.current) return null
     const id = ++operationSeq.current
     operation.current = id
     setChecking(true)
@@ -173,19 +195,39 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
     setChecking(false)
   }
 
-  const pickMode = (m: AgentMode) => {
-    if (m === mode) return
+  const pickMode = async (m: AgentMode) => {
+    if (m === modeRef.current || modePending.current || operation.current !== null || consent || !visible.current) return
+    if (m === 'edit' && turn.current) return
     if (m === 'edit' && !editWarned.current) {
       if (!window.confirm(vi.agent.editWarn)) return
       editWarned.current = true
     }
-    setMode(m)
-    void window.nexgraph.agent.setMode(projectId, m).catch(() => {})
+    modePending.current = true
+    setChangingMode(true)
+    setError(null)
+    try {
+      await window.nexgraph.agent.setMode(projectId, m)
+      if (!mounted.current) return
+      modeRef.current = m
+      setMode(m)
+      if (m === 'ask') setApprovals([])
+    } catch {
+      if (!mounted.current) return
+      modeRef.current = null
+      setMode(null)
+      setApprovals([])
+      setError(vi.agent.modeFailed)
+    } finally {
+      modePending.current = false
+      if (mounted.current) setChangingMode(false)
+    }
   }
 
   const run = async (question: string, target: AiConsentTarget) => {
+    const mode = modeRef.current
+    if (!mode) return
     const id = ++turnSeq.current
-    turn.current = { id, q: question, tools: [] }
+    turn.current = { id, q: question, tools: [], mode }
     setMsgs((cur) => [...cur, { id, role: 'user', content: question }])
     setText('')
     setError(null)
@@ -276,17 +318,24 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
     }
   }
 
-  const decide = (id: string, allow: boolean) => void window.nexgraph.agent.approve(projectId, id, allow).catch(() => {})
+  const decide = (id: string, allow: boolean) => {
+    if (!visible.current || modePending.current || modeRef.current !== 'edit' || turn.current?.mode !== 'edit') return
+    void window.nexgraph.agent.approve(projectId, id, allow).catch((e) => {
+      if (mounted.current) setError(errorMessage(e))
+    })
+  }
+  const modeLocked = changingMode || checking || !!consent
 
   return (
     <aside className="chat" aria-label={vi.chat.title} hidden={hidden}>
       <header>
         <b>{vi.chat.title}</b>
         <span className="mode" role="group" aria-label={vi.agent.modeTitle}>
-          <button type="button" aria-pressed={mode === 'ask'} onClick={() => pickMode('ask')}>{vi.agent.ask}</button>
-          <button type="button" aria-pressed={mode === 'edit'} onClick={() => pickMode('edit')}>{vi.agent.edit}</button>
+          <button type="button" disabled={modeLocked} aria-pressed={mode === 'ask'} onClick={() => void pickMode('ask')}>{vi.agent.ask}</button>
+          <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'edit'} onClick={() => void pickMode('edit')}>{vi.agent.edit}</button>
         </span>
       </header>
+      {mode && <p className="mode-description muted small">{mode === 'edit' ? vi.agent.editHint : vi.agent.askHint}</p>}
       {error && <p role="alert" className="error">{error}</p>}
       {cfg && !configured ? (
         <div className="chat-empty">
@@ -323,16 +372,16 @@ function ProjectAgentPanel({ projectId, projectName = projectId, hidden, onOpenC
           </div>
           {approvals.length > 0 && (
             <div className="approvals">
-              {approvals.map((a) => <ApprovalCard key={a.id} request={a} onDecide={(allow) => decide(a.id, allow)} />)}
+              {approvals.map((a) => <ApprovalCard key={a.id} request={a} disabled={changingMode} onDecide={(allow) => decide(a.id, allow)} />)}
             </div>
           )}
           <div className="compose">
-            <textarea value={text} placeholder={vi.chat.placeholder} rows={2} disabled={!cfg || busy || checking || !!consent} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
+            <textarea value={text} placeholder={vi.chat.placeholder} rows={2} disabled={!cfg || !mode || busy || modeLocked} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
             <div className="row">
               <small className="muted">{vi.chat.hint}</small>
               {busy
                 ? <button type="button" onClick={() => void window.nexgraph.agent.abort(projectId)}>{vi.chat.stop}</button>
-                : <button type="button" className="primary" disabled={checking || !!consent} onClick={() => void submit()}>{vi.chat.send}</button>}
+                : <button type="button" className="primary" disabled={!mode || modeLocked} onClick={() => void submit()}>{vi.chat.send}</button>}
             </div>
           </div>
         </>

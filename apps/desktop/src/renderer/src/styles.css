@@ -1593,6 +1593,10 @@ button.card:hover:not(:disabled) {
   font-weight: 600;
 }
 
+.chat .mode-description {
+  padding: 5px 12px;
+}
+
 .approvals {
   padding: 8px 12px;
   display: grid;

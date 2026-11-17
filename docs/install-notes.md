@@ -54,7 +54,7 @@ Trong **Cài đặt → Tài khoản AI**, chọn nhà cung cấp có sẵn và 
 
 - Base URL custom mặc định dùng HTTPS và phải qua kiểm tra địa chỉ mạng. Để thử máy chủ HTTP loopback cục bộ, khởi động app với `NEXGRAPH_ALLOW_HTTP_PROVIDER=1` theo [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Custom endpoint không có API key vẫn nhận `Authorization: Bearer unused` do SDK pi.
 - API key và token OAuth dùng kho mã hóa của NexGraph. Token OAuth nằm trong `agent/oauth-secrets.json` dưới thư mục dữ liệu engine. NexGraph thử di trú `agent/auth.json` của bản cũ khi kho khóa an toàn khả dụng. Các phiên hội thoại của Agent giữ trong bộ nhớ và tách theo dự án, nhà cung cấp, URL đích.
-- Lần gửi đầu cho mỗi cặp dự án và máy chủ yêu cầu đồng ý. **Hỏi** mặc định chỉ đọc. **Sửa** đòi xác nhận từng lần ghi, sửa hoặc chạy lệnh. Lệnh `bash` chạy bằng quyền người dùng, không có sandbox.
+- Lần gửi đầu cho mỗi dự án và đích gửi yêu cầu đồng ý. **Hỏi** mặc định chỉ đọc. **Sửa** cho xem diff và đòi xác nhận từng lần tạo, sửa hoặc ghi đè tệp. Cả hai chế độ từ chối yêu cầu chạy lệnh shell.
 - Trên Electron, Monaco giữ CRLF/BOM khi lưu. Thẻ có thay đổi chưa lưu được giữ lại nếu tệp trên đĩa đổi. Editor đánh dấu chỉ đọc khi tệp vượt 5 MiB hoặc không phải UTF-8.
 
 ## Git hook cập nhật sau commit

@@ -41,9 +41,9 @@ Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi 
 - [ ] Dùng hai máy chủ mô phỏng. Mở xác nhận gửi mã ở dự án A rồi đổi nhà cung cấp, kiểm câu hỏi còn trong ô nhập. Sau khi xác nhận ở nhà cung cấp mới, kiểm payload đầu tiên và đối chiếu lịch sử.
 - [ ] Tạo `.env` giả và liên kết nội bộ tới tệp đã bị loại. Dùng `read`, `grep`, `find`, `get_context` và MCP để kiểm tệp bị loại, cùng một tệp công khai để kiểm luồng đọc bình thường.
 - [ ] Hỏi: xem streaming, bấm **Dừng**, mở trích dẫn và **Tô luồng**. Ghi loại provider (giả hoặc thật).
-- [ ] Chuyển **Sửa** thấy cảnh báo quyền chạy lệnh. Duyệt diff làm đổi tệp, từ chối giữ nguyên byte. Khi đang chờ duyệt, thử **Dừng**, đổi **Hỏi** hoặc tải lại cửa sổ, xác nhận đề xuất cũ không thực thi và lượt sau dùng được.
+- [ ] Chuyển **Sửa** và xem mô tả quyền tạo hoặc chỉnh sửa tệp. Duyệt diff làm đổi tệp, từ chối giữ nguyên byte. Khi đang chờ duyệt, thử **Dừng**, đổi **Hỏi** hoặc tải lại cửa sổ, xác nhận đề xuất cũ hết hiệu lực và lượt sau dùng được.
 - [ ] Trong lúc chờ duyệt diff, sửa tệp từ VS Code hoặc Monaco. Duyệt và kiểm agent báo xung đột, bản đã lưu trên đĩa giữ nguyên. Lặp lại với đề xuất tạo tệp và một tệp vừa xuất hiện ở cùng đường dẫn.
-- [ ] Thử duyệt lệnh vô hại `echo NexGraph`, ghi shell Windows thực tế và kết quả.
+- [ ] Trong cả **Hỏi** và **Sửa**, kiểm danh sách công cụ gửi cho mô hình giả và thử phản hồi giả gọi shell để tạo tệp đánh dấu. Yêu cầu phải bị từ chối trước bước duyệt, và tệp đánh dấu vẫn vắng mặt. Lưu log cùng commit đã kiểm. [Smoke qua giao diện và IPC](../apps/desktop/src/main/smoke-desktop.ts) · [Kiểm thử phiên Pi](../apps/desktop/test/agent-session-pi.test.ts)
 - [ ] Nếu kiểm OAuth, ghi provider, kết quả đăng nhập và hủy. Thử di trú `auth.json`, mở lại, làm mới token và đăng xuất với credential thử nghiệm. Ghi rõ khi dùng adapter/provider giả.
 - [ ] Xem trước rồi áp dụng cấu hình MCP/skill trong bản sao, xác nhận phần cấu hình cũ được giữ. Nếu client đã cài, mở dự án và gọi `graph_stats` để xác nhận kết nối runtime.
 

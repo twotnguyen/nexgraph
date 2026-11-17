@@ -161,19 +161,22 @@ sequenceDiagram
             API-->>Pi: Kết quả cùng vị trí nguồn
             Pi->>Model: Trả kết quả công cụ
         end
-        opt Chế độ Sửa có yêu cầu edit, write hoặc bash
+        opt Chế độ Sửa có yêu cầu edit hoặc write
             Pi->>Host: Yêu cầu duyệt từng thao tác
-            Host-->>UI: Bản xem trước hoặc lệnh chờ duyệt
+            Host-->>UI: Diff chờ duyệt
             User->>UI: Cho phép hoặc từ chối
             UI->>Host: Trả quyết định
             Host-->>Pi: Cho thực hiện hoặc chặn
+        end
+        opt Mô hình gọi công cụ shell
+            Pi-->>Model: Yêu cầu bị từ chối
         end
         Pi-->>Host: Sự kiện và lời đáp
         Host-->>UI: Hiện lời đáp và trích dẫn
     end
 ```
 
-Chế độ Hỏi cấp các công cụ đọc. Chế độ Sửa cấp thêm `edit`, `write`, `bash` qua cổng duyệt theo từng thao tác. `edit` và `write` kiểm lại đường dẫn và nội dung đã duyệt trước khi ghi. `bash` sau duyệt chạy với quyền người dùng và chưa có sandbox lệnh. Pi tắt nạp extension, skill, mẫu và tệp ngữ cảnh của dự án. Công cụ tệp áp dụng phạm vi đọc trước khi tìm hoặc trả dữ liệu. Engine kiểm cùng phạm vi cho đồ thị và đoạn mã cung cấp cho AI hoặc MCP. Quyền gửi dữ liệu gắn với dự án, nhà cung cấp và URL đích. Việc duyệt sửa tệp và chạy lệnh dùng cổng duyệt riêng. [Phiên agent](../../apps/desktop/src/main/agent/session.ts) · [Cổng duyệt](../../apps/desktop/src/main/agent/approval.ts) · [Phạm vi tệp](../../apps/desktop/src/main/agent/file-scope.ts) · [Tài khoản và consent](../../apps/desktop/src/main/agent/accounts.ts) · [Lọc dữ liệu đồ thị](../../engine/src/nexgraph_engine/query/model_view.py)
+Chế độ Hỏi cấp công cụ đọc tệp và tra cứu đồ thị. Chế độ Sửa cấp thêm `edit` và `write`. Hai thao tác này cần duyệt từng diff, rồi kiểm lại đường dẫn và phiên bản tệp trước khi ghi. Lời gọi công cụ shell bị từ chối ở cả hai chế độ. Pi tắt nạp extension, skill, mẫu và tệp ngữ cảnh của dự án. Công cụ tệp áp dụng phạm vi đọc trước khi tìm hoặc trả dữ liệu. Engine kiểm cùng phạm vi cho đồ thị và đoạn mã cung cấp cho AI hoặc MCP. Quyền gửi dữ liệu gắn với dự án, nhà cung cấp và URL đích. [Phiên agent](../../apps/desktop/src/main/agent/session.ts) · [Cổng duyệt](../../apps/desktop/src/main/agent/approval.ts) · [Phạm vi tệp](../../apps/desktop/src/main/agent/file-scope.ts) · [Tài khoản và consent](../../apps/desktop/src/main/agent/accounts.ts) · [Lọc dữ liệu đồ thị](../../engine/src/nexgraph_engine/query/model_view.py)
 
 ## Phạm vi đã có và phần cần kiểm chứng
 

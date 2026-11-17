@@ -44,7 +44,7 @@ async function smoke(bin, temp) {
       child.on('error', (err) => { clearTimeout(timer); reject(err) })
       child.on('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }) })
     })
-    const line = result.stdout.split('\n').find((s) => s.includes('SMOKE OK') && s.includes('fs=OK agent=OK index=OK'))
+    const line = result.stdout.split('\n').find((s) => s.includes('SMOKE OK') && s.includes('fs=OK agent=OK index=OK edit_policy=OK'))
     if (result.code !== 0 || !line) {
       console.error('SMOKE không đạt', result)
       throw new Error(`Smoke thất bại khi chạy ${bin}`)

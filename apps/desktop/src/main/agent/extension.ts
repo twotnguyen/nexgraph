@@ -2,14 +2,18 @@ import { relative, resolve, sep } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { Type } from 'typebox'
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent' // chỉ kiểu: pi là ESM, không import tĩnh giá trị
+import type { AgentMode } from '../../shared/agent-types'
 import type { EngineApi } from '../engine/api'
 import { FsError, isProtectedRel, readProjectFile, resolveInside, writeProjectFile } from '../fs/project-fs'
 import { TOOL_DEFS, runTool } from '../ai/tools'
 import { toProjectRelative, type ApprovedWrite, type ApprovalGate, type WritePreview } from './approval'
 import { registerScopedFileTools } from './file-tools'
 
-const GRAPH_TOOLS: string[] = TOOL_DEFS.map((t) => t.function.name)
-const ALLOWED = new Set([...GRAPH_TOOLS, 'read', 'grep', 'find', 'ls', 'edit', 'write', 'bash'])
+const GRAPH_TOOLS = TOOL_DEFS.map((t) => t.function.name)
+export const ASK_TOOLS = ['read', 'grep', 'find', 'ls']
+export const EDIT_TOOLS = [...ASK_TOOLS, 'edit', 'write']
+export const toolsFor = (mode: AgentMode): string[] => [...(mode === 'edit' ? EDIT_TOOLS : ASK_TOOLS), ...GRAPH_TOOLS]
+const ALLOWED = new Set(toolsFor('edit'))
 
 export function createNexgraphExtension(deps: {
   api: EngineApi
@@ -71,7 +75,7 @@ export function createNexgraphExtension(deps: {
       execute: (id, params) => executeApprovedWrite(deps, approvedWrites, id, params)
     })
 
-    // Không chuẩn hoá, không tin: cổng duyệt cho qua tên lạ nên chặn ở đây trước.
+    // Dùng đúng allowlist cho cả tool do mô hình gọi trực tiếp.
     pi.on('tool_call', async (event) => {
       if (!ALLOWED.has(event.toolName)) return { block: true, reason: `Tool "${event.toolName}" không được phép dùng trong NexGraph` }
       const writing = event.toolName === 'write' || event.toolName === 'edit'
@@ -82,6 +86,7 @@ export function createNexgraphExtension(deps: {
           const blocked = pinPath(deps.root, event.toolName, event.input)
           if (blocked) return { block: true, reason: blocked }
         }
+        if (event.toolName !== 'write' && event.toolName !== 'edit') return
         const d = await deps.gate.check(event.toolName, event.input)
         if (!d.allow) return { block: true, reason: d.reason || 'Thao tác bị từ chối' }
         if (d.approved) {

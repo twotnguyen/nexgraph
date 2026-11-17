@@ -32,7 +32,7 @@ CI đặt tên theo phiên bản và kiến trúc của lượt build. Có thể
 
 ![Màn Kiến trúc của dự án NestJS và quan hệ phụ thuộc từ test sang src](screenshots/architecture.png)
 
-**Monaco và trợ lý.** Hai ảnh chụp bản Electron đóng gói trên macOS arm64 với fixture Python và mô hình giả lập. Ảnh Hỏi minh họa trích dẫn mở đúng dòng và vùng ảnh hưởng. Ảnh Sửa minh họa diff cùng hai lựa chọn Duyệt và Từ chối. [Biên bản chụp ảnh](../benchmarks/2026-11-15-editor-agent.md#kiểm-trên-bản-đóng-gói-electron-thật)
+**Monaco và trợ lý.** Hai ảnh chụp bản Electron đóng gói trên macOS arm64 với fixture Python và mô hình giả lập ngày 15/11. Ảnh Hỏi minh họa trích dẫn mở đúng dòng và vùng ảnh hưởng. Ảnh Sửa minh họa diff cùng hai lựa chọn Duyệt và Từ chối. [Biên bản chụp ảnh](../benchmarks/2026-11-15-editor-agent.md#kiểm-trên-bản-đóng-gói-electron-thật)
 
 ![Trình soạn thảo Monaco mở trích dẫn từ chế độ Hỏi](../benchmarks/2026-11-15-editor-ask.png)
 
@@ -47,6 +47,7 @@ CI cài chính tệp NSIS vào thư mục tạm trên Windows. Trên macOS, CI g
 | Build và smoke | Windows/macOS, kiến trúc, tên artifact, commit, lượt CI và dòng kết quả. Dùng log của lượt thực tế. |
 | Cài trên máy đích | Mở app từ bộ cài, engine sẵn sàng, index bản sao có đường dẫn chứa dấu và khoảng trắng, mở bằng chứng. Ghi cảnh báo và xác nhận thoát app sạch. |
 | Demo và AI | Ba lượt NestJS, thời gian từng lượt. Kiểm Hỏi/Sửa, Duyệt/Từ chối/Dừng với provider dự định trình diễn và một truy vấn MCP từ client thật. Ghi rõ provider giả hay thật. |
+| Quyền của trợ lý | Trên Windows và macOS, ghi kết quả mô hình giả thử gọi shell ở cả Hỏi và Sửa, cùng kết quả Duyệt, Từ chối và Dừng khi chờ diff. [Smoke qua giao diện và IPC](../../apps/desktop/src/main/smoke-desktop.ts) · [Ca nghiệm thu UC15](../srs/use-cases/UC15.md#tiêu-chí-nghiệm-thu) |
 
 Người phát triển có thể dựng từ checkout sạch theo hướng dẫn cài đặt. Kết quả CI và biên bản nghiệm thu máy đích được ghi theo từng lượt kiểm. [Cài đặt từ mã nguồn](../install-notes.md) · [Smoke đóng gói](../../apps/desktop/scripts/smoke-packaged.mjs) · [Checklist Windows](../windows-checklist.md) · [Kịch bản NestJS](../demo-script.md) · [Báo cáo editor và agent](../benchmarks/2026-11-15-editor-agent.md)
 

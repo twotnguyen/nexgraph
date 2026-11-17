@@ -4,24 +4,21 @@ import { join } from 'node:path'
 import type { AgentSession, AgentSessionEvent, ExtensionAPI, ModelRuntime } from '@earendil-works/pi-coding-agent'
 import { normalizeConsentTarget, sameConsentTarget, type AgentEvent, type AgentMode, type AiConsentTarget } from '../../shared/agent-types'
 import { verifyCitations } from '../ai/citations'
-import { TOOL_DEFS } from '../ai/tools'
 import type { EngineApi } from '../engine/api'
 import { createApprovalGate, type ApprovalGate } from './approval'
-import { createNexgraphExtension, previewWrite } from './extension'
+import { createNexgraphExtension, previewWrite, toolsFor } from './extension'
 import { NEXGRAPH_RULES } from './skill'
 
 /** Module bọc duy nhất nạp pi. */
 export const loadPi = () => import('@earendil-works/pi-coding-agent')
 
-const GRAPH_TOOLS = TOOL_DEFS.map((t) => t.function.name)
 // Các adapter này nhận fetch theo request. Google dùng transport SDK riêng.
 const GUARDED_HTTP_APIS = new Set([
   'openai-completions', 'openai-responses', 'openai-codex-responses', 'azure-openai-responses',
   'anthropic-messages', 'mistral-conversations', 'pi-messages'
 ])
-export const ASK_TOOLS = ['read', 'grep', 'find', 'ls']
-export const EDIT_TOOLS = [...ASK_TOOLS, 'edit', 'write', 'bash']
-const toolsFor = (mode: AgentMode): string[] => [...(mode === 'edit' ? EDIT_TOOLS : ASK_TOOLS), ...GRAPH_TOOLS]
+const SYSTEM_PROMPT = 'Bạn là trợ lý mã nguồn NexGraph. Chế độ Hỏi chỉ đọc và phân tích dự án. Khi dùng công cụ sửa tệp trong chế độ Sửa, người dùng phải duyệt bản xem trước của từng thay đổi.'
+const TOOL_EXTENSION = 'nexgraph'
 
 /** Lỗi có mã mà toIpcResult chuyển nguyên về renderer. */
 export class AgentError extends Error {
@@ -60,22 +57,32 @@ export type AgentDeps = {
 }
 
 /** Phiên pi thật: không đọc ~/.pi, không nạp extension/skill/cài đặt của dự án (mở repo lạ không được chạy mã của nó). */
-export async function createPiSession(spec: SessionSpec): Promise<PiSession> {
+export async function createPiSession(spec: SessionSpec): Promise<AgentSession> {
   const { createAgentSession, DefaultResourceLoader, SessionManager, SettingsManager } = await loadPi()
   const settingsManager = SettingsManager.inMemory({ cacheWarming: 'off' }, { projectTrusted: false })
   const resourceLoader = new DefaultResourceLoader({
     cwd: spec.cwd, agentDir: spec.agentDir, settingsManager,
     // noContextFiles: pi đọc AGENTS.md/CLAUDE.md từ gốc dự án lên tận / và agentDir; tệp ngoài dự án không được gửi đi.
-    noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
-    extensionFactories: [spec.extension],
-    appendSystemPromptOverride: (base) => [...base, NEXGRAPH_RULES]
+    noExtensions: true, disabledBuiltinExtensions: ['mcp', 'codemode'],
+    noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
+    extensionFactories: [{ name: TOOL_EXTENSION, factory: spec.extension }],
+    systemPrompt: SYSTEM_PROMPT,
+    appendSystemPrompt: [NEXGRAPH_RULES]
   })
   await resourceLoader.reload()
   const { session } = await createAgentSession({
     cwd: spec.cwd, agentDir: spec.agentDir, settingsManager, resourceLoader,
     sessionManager: SessionManager.inMemory(spec.cwd),
-    modelRuntime: spec.modelRuntime, model: spec.model, tools: spec.tools
+    modelRuntime: spec.modelRuntime, model: spec.model,
+    noTools: 'all', tools: spec.tools, excludeTools: ['mcp__*']
   })
+  // Nếu extension tải thiếu, Pi có thể thay bằng công cụ dựng sẵn cùng tên.
+  const registered = session.getAllTools()
+  if (registered.length !== spec.tools.length ||
+      registered.some((tool) => !spec.tools.includes(tool.name) || tool.sourceInfo.path !== `<inline:${TOOL_EXTENSION}>`)) {
+    await session.dispose()
+    throw new AgentError('ai_error', 'Không nạp được bộ công cụ an toàn của NexGraph')
+  }
   const stream = session.agent.streamFunction
   session.agent.streamFunction = (model, context, options) => {
     spec.assertDispatch(model)
@@ -268,7 +275,7 @@ export class AgentService {
       }
       if (closed()) return CANCELLED
       if (!entry.isCurrent()) return PROVIDER_CHANGED
-      await session.prompt(text)
+      await session.prompt(text, { expandPromptTemplates: false })
       if (closed()) return CANCELLED
       if (entry.dispatchBlocked || !entry.isCurrent()) return PROVIDER_CHANGED
       const last = session.messages.filter((m) => m.role === 'assistant').at(-1) as { stopReason?: string; errorMessage?: string } | undefined

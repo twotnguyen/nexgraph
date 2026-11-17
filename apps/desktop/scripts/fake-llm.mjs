@@ -8,6 +8,33 @@ const toolCall = (name, args) => ({ role: 'assistant', content: null,
   tool_calls: [{ id: `call_${name}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] })
 const text = (m) => (typeof m.content === 'string' ? m.content : (m.content ?? []).map((p) => p.text ?? '').join(''))
 
+// Các tình huống ép tool call chỉ dùng trong hồ sơ tạm của smoke Electron.
+const readOnlyTools = [
+  'get_context', 'search', 'get_node', 'get_neighbors', 'read_code', 'list_flows', 'trace_flow',
+  'get_architecture', 'get_impact', 'read', 'grep', 'find', 'ls'
+]
+const shellCall = toolCall('bash', { command: 'printf NEXGRAPH_SMOKE > smoke-shell-should-not-run.txt' })
+const smokeCalls = {
+  NEXGRAPH_SMOKE_ASK_WRITE: { editing: false, call: toolCall('write', {
+    path: 'smoke-read-should-not-write.txt', content: 'NEXGRAPH_SMOKE'
+  }) },
+  NEXGRAPH_SMOKE_ASK_SHELL: { editing: false, call: shellCall },
+  NEXGRAPH_SMOKE_EDIT_SHELL: { editing: true, call: shellCall },
+  NEXGRAPH_SMOKE_EDIT_FILE: { editing: true, call: toolCall('edit', {
+    path: 'smoke.ts', edits: [{ oldText: '  return true', newText: '  return false' }]
+  }) }
+}
+
+function smokePolicy(scenario, advertised, results) {
+  if (results.length) return { role: 'assistant', content: 'NEXGRAPH_SMOKE_POLICY_OK' }
+  const expected = scenario.editing ? [...readOnlyTools, 'edit', 'write'] : readOnlyTools
+  const names = (advertised ?? []).map((item) => item.function?.name)
+  if (names.length !== expected.length || expected.some((name) => !names.includes(name))) {
+    throw new Error('Bộ công cụ quảng bá của agent không đúng chế độ')
+  }
+  return scenario.call
+}
+
 /** Trả một tin nhắn dạng JSON thường, hoặc SSE khi client xin `stream: true` (harness pi luôn stream). */
 function reply(res, stream, msg) {
   if (!stream) {
@@ -33,12 +60,13 @@ function readToolResult(message, name) {
   return JSON.parse(payload)
 }
 
-function complete(messages, maxTokens) {
+function complete(messages, maxTokens, advertised) {
   const lastUser = messages.findLastIndex((m) => m.role === 'user')
   const question = text(messages[lastUser] ?? {})
-  if (question.includes('NEXGRAPH_SMOKE')) return { role: 'assistant', content: 'NEXGRAPH_SMOKE_OK' }
+  if (question === 'NEXGRAPH_SMOKE') return { role: 'assistant', content: 'NEXGRAPH_SMOKE_OK' }
   if (maxTokens === 1) return { role: 'assistant', content: 'pong' }
   const tools = messages.slice(lastUser).filter((m) => m.role === 'tool')
+  if (Object.hasOwn(smokeCalls, question)) return smokePolicy(smokeCalls[question], advertised, tools)
   if (tools.length === 0) return toolCall('list_flows', { query: 'login' })
   if (tools.length === 1) {
     const flows = readToolResult(tools[0], 'list_flows').flows ?? []
@@ -70,7 +98,7 @@ export function createFakeLlm() {
       let msg, stream
       try {
         const payload = JSON.parse(body || '{}')
-        msg = complete(payload.messages ?? [], payload.max_tokens)
+        msg = complete(payload.messages ?? [], payload.max_tokens, payload.tools)
         stream = payload.stream
       } catch {
         return send(400, { error: { message: 'Yêu cầu LLM giả hoặc kết quả tool không hợp lệ' } })

@@ -88,18 +88,75 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
   if (settings.provider !== 'smoke' || !settings.baseUrl) throw new Error('agent IPC did not expose the selected smoke provider')
   const target = { provider: settings.provider, baseUrl: settings.baseUrl }
   await api.ai.grantConsent(pid, target)
-  let result = ''
-  const off = api.agent.onEvent((eventPid, event) => {
-    if (eventPid !== pid) return
-    if (event.type === 'done') result = event.text
-    if (event.type === 'error') result = `ERROR: ${event.code}`
-  })
+  const expectedEdit = source.replace('  return true', '  return false')
+  const original = await api.fs.read(pid, filename)
+
+  async function prompt(question: string, decision?: 'deny' | 'stop' | 'approve'): Promise<void> {
+    let result = ''
+    let approvals = 0
+    let unexpectedDiff = false
+    const actions: Promise<void>[] = []
+    const off = api.agent.onEvent((eventPid, event) => {
+      if (eventPid !== pid) return
+      if (event.type === 'done') result = event.text
+      if (event.type === 'error') result = `ERROR: ${event.code}`
+      if (event.type !== 'approval') return
+      approvals++
+      const diff = event.request
+      if (!decision || diff.tool !== 'edit' || diff.path !== filename || diff.before !== source || diff.after !== expectedEdit) {
+        unexpectedDiff = true
+        actions.push(api.agent.approve(pid, diff.id, false))
+      } else if (decision === 'stop') {
+        actions.push(api.agent.abort(pid))
+      } else {
+        actions.push(api.agent.approve(pid, diff.id, decision === 'approve'))
+      }
+    })
+    try {
+      await api.agent.prompt(pid, question, target)
+      await Promise.all(actions)
+    } finally {
+      off()
+    }
+    const expected = question === 'NEXGRAPH_SMOKE' ? 'NEXGRAPH_SMOKE_OK' : 'NEXGRAPH_SMOKE_POLICY_OK'
+    if (unexpectedDiff || approvals !== (decision ? 1 : 0) || (decision !== 'stop' && result !== expected)) {
+      throw new Error(`agent IPC policy failed for ${question}: approvals=${approvals}, result=${result}`)
+    }
+  }
+
+  async function checkUnchanged(): Promise<void> {
+    const current = await api.fs.read(pid, filename)
+    if (current.text !== source || current.version !== original.version) {
+      throw new Error('agent IPC modified the file before its diff was approved')
+    }
+  }
+
   try {
-    await api.agent.prompt(pid, 'NEXGRAPH_SMOKE', target)
-    if (result !== 'NEXGRAPH_SMOKE_OK') throw new Error(`agent IPC failed: ${result}`)
+    await api.agent.setMode(pid, 'ask')
+    await prompt('NEXGRAPH_SMOKE')
+    await prompt('NEXGRAPH_SMOKE_ASK_WRITE')
+    await prompt('NEXGRAPH_SMOKE_ASK_SHELL')
+
+    await api.agent.setMode(pid, 'edit')
+    await prompt('NEXGRAPH_SMOKE_EDIT_SHELL')
+    for (const sentinel of ['smoke-read-should-not-write.txt', 'smoke-shell-should-not-run.txt']) {
+      const [probe] = await Promise.allSettled([api.fs.read(pid, sentinel)])
+      if (probe.status !== 'rejected' || probe.reason?.code !== 'file_not_found') {
+        throw new Error(`agent IPC policy allowed a forbidden side effect: ${sentinel}`)
+      }
+    }
+
+    await prompt('NEXGRAPH_SMOKE_EDIT_FILE', 'deny')
+    await checkUnchanged()
+    await prompt('NEXGRAPH_SMOKE_EDIT_FILE', 'stop')
+    await checkUnchanged()
+    await prompt('NEXGRAPH_SMOKE_EDIT_FILE', 'approve')
+    const revised = await api.fs.read(pid, filename)
+    if (revised.text !== expectedEdit || revised.eol !== format.eol || !revised.bom) {
+      throw new Error('agent IPC did not save exactly the approved diff and original format')
+    }
   } finally {
-    off()
     await api.agent.close(pid)
   }
-  return 'fs=OK agent=OK index=OK'
+  return 'fs=OK agent=OK index=OK edit_policy=OK'
 }

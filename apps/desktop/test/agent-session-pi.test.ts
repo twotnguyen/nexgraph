@@ -4,7 +4,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpath
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { AgentService } from '../src/main/agent/session'
+import { toolsFor } from '../src/main/agent/extension'
+import { AgentService, createPiSession } from '../src/main/agent/session'
 import { AccountService } from '../src/main/agent/accounts'
 import { SecretStore } from '../src/main/ai/settings'
 import type { EngineApi } from '../src/main/engine/api'
@@ -13,7 +14,12 @@ import type { AgentEvent, AiConsentTarget } from '../src/shared/agent-types'
 const KEY = 'sk-test-khong-duoc-ghi-ra-dia'
 const OUTSIDE = `/tmp/x-outside-${process.pid}-${Date.now()}`
 const OUTSIDE_READ = join(realpathSync.native(tmpdir()), `ng-outside-read-${process.pid}-${Date.now()}.txt`)
-const MARK = { root: 'MARKER-AGENTS-GOC-7f3a', parent: 'MARKER-AGENTS-CHA-91c2', outside: 'MARKER-NGOAI-DU-AN-55e0' }
+const MARK = {
+  root: 'MARKER-AGENTS-GOC-7f3a', parent: 'MARKER-AGENTS-CHA-91c2', outside: 'MARKER-NGOAI-DU-AN-55e0',
+  system: 'MARKER-SYSTEM-DU-AN-8173', append: 'MARKER-APPEND-DU-AN-7220', template: 'MARKER-TEMPLATE-DU-AN-3441'
+}
+const SHELL_ALIASES = ['bash', 'Bash', 'powershell', 'terminal', 'shell', 'run_command', 'codemode']
+const SHELL_OUTPUT = 'shell-would-write.txt'
 
 type Msg = { role: string; content?: unknown }
 /** Kịch bản theo câu hỏi cuối: lượt đầu gọi tool, sau khi có kết quả tool thì trả lời. */
@@ -25,11 +31,14 @@ const SCRIPT: Record<string, [string, object]> = {
   'viết d.txt': ['write', { path: 'd.txt', content: 'bị dừng' }],
   'ghi e.txt': ['write', { path: 'e.txt', content: 'độc hại' }],
   'sửa f.txt': ['edit', { path: 'f.txt', edits: [{ oldText: 'gốc', newText: 'bản AI' }] }],
+  'sửa h.txt': ['edit', { path: 'h.txt', edits: [{ oldText: 'bản gốc', newText: 'bản đã duyệt' }] }],
   'đọc marker.txt': ['read', { path: 'marker.txt' }],
   'viết g.txt': ['write', { path: 'g.txt', content: 'không được ghi' }],
   'đọc ngoài': ['read', { path: OUTSIDE_READ }],
-  'đọc nháy': ['read', { path: "a'b.txt" }]
+  'đọc nháy': ['read', { path: "a'b.txt" }],
+  'thử ghi khi đang hỏi': ['write', { path: 'ask-would-write.txt', content: 'không được ghi' }]
 }
+for (const name of SHELL_ALIASES) SCRIPT[`tool giả lập ${name}!`] = [name, { command: `echo sentinel > ${SHELL_OUTPUT}` }]
 
 function fakeLlm(seen: { auth: string[]; tools: string[][]; bodies: string[] }, redirectTo?: string): Promise<{ url: string; close: () => Promise<void> }> {
   const srv = http.createServer((req, res) => {
@@ -96,6 +105,10 @@ describe('AgentService + pi SDK thật', () => {
     writeFileSync(join(root, 'a.py'), 'print(1)\n')
     writeFileSync(join(root, 'AGENTS.md'), `# Quy ước\n${MARK.root}\n`)
     writeFileSync(join(base, 'AGENTS.md'), `# Ngoài dự án\n${MARK.parent}\n`)
+    mkdirSync(join(root, '.pi', 'prompts'), { recursive: true })
+    writeFileSync(join(root, '.pi', 'SYSTEM.md'), MARK.system)
+    writeFileSync(join(root, '.pi', 'APPEND_SYSTEM.md'), MARK.append)
+    writeFileSync(join(root, '.pi', 'prompts', 'nexgraph-run.md'), MARK.template)
     writeFileSync(OUTSIDE_READ, MARK.outside)
     accounts = await AccountService.create({
       dataDir, prefsFile: join(base, 'prefs.json'),
@@ -153,13 +166,54 @@ describe('AgentService + pi SDK thật', () => {
     expect(seen.auth[0]).toBe(`Bearer ${KEY}`)
   }, 30_000)
 
+  it('Pi thiếu extension NexGraph thì không dùng công cụ dựng sẵn thay thế', async () => {
+    const model = accounts.modelRuntime.getModel('fake', 'fake-1')!
+    await expect(createPiSession({
+      cwd: root, agentDir: join(dataDir, 'agent'), tools: toolsFor('edit'),
+      modelRuntime: accounts.modelRuntime, model, extension: () => {},
+      assertDispatch: () => {}, assertRequest: () => {}
+    })).rejects.toMatchObject({ code: 'ai_error', message: 'Không nạp được bộ công cụ an toàn của NexGraph' })
+  }, 30_000)
+
+  it('tool chạy lệnh không khai báo, không xin duyệt và không ghi tệp trong Hỏi hoặc Sửa', async () => {
+    for (const mode of ['ask', 'edit'] as const) {
+      svc.setMode('p1', mode)
+      for (const name of SHELL_ALIASES) {
+        const evs = await turn(`tool giả lập ${name}!`)
+        expect(evs).toContainEqual({ type: 'tool', name, status: 'end', error: true })
+        expect(evs.some((event) => event.type === 'approval')).toBe(false)
+        expect(seen.tools.at(-1)?.slice().sort()).toEqual(toolsFor(mode).sort())
+      }
+      expect(existsSync(join(root, SHELL_OUTPUT))).toBe(false)
+    }
+    svc.setMode('p1', 'ask')
+    const evs = await turn('thử ghi khi đang hỏi')
+    expect(evs).toContainEqual({ type: 'tool', name: 'write', status: 'end', error: true })
+    expect(evs.some((event) => event.type === 'approval')).toBe(false)
+    expect(existsSync(join(root, 'ask-would-write.txt'))).toBe(false)
+  }, 30_000)
+
+  it('gửi nguyên văn dấu ! và câu hỏi có dấu / ở cả hai chế độ', async () => {
+    for (const mode of ['ask', 'edit'] as const) {
+      svc.setMode('p1', mode)
+      for (const prompt of [`!echo sentinel > ${SHELL_OUTPUT}`, '/nexgraph-run', '/skill:nexgraph']) {
+        const evs = await turn(prompt)
+        expect(evs.some((event) => event.type === 'approval' || event.type === 'tool')).toBe(false)
+        const body = JSON.parse(seen.bodies.at(-1)!) as { messages: Msg[] }
+        const lastUser = body.messages.findLast((message) => message.role === 'user')
+        expect(JSON.stringify(lastUser?.content)).toContain(prompt)
+      }
+      expect(existsSync(join(root, SHELL_OUTPUT))).toBe(false)
+    }
+  }, 30_000)
+
   it('(b) chế độ Sửa: write trong dự án → approval → duyệt → tệp có trên đĩa', async () => {
     svc.setMode('p1', 'edit')
     const evs = await turn('viết b.txt', true)
     expect(evs.find((e) => e.type === 'approval')).toMatchObject({ request: { tool: 'write', path: 'b.txt', before: '', after: 'nội dung mới' } })
     expect(evs.some((e) => e.type === 'approval_closed')).toBe(true)
     expect(readFileSync(join(root, 'b.txt'), 'utf8')).toBe('nội dung mới')
-    expect(seen.tools.at(-1)).toEqual(expect.arrayContaining(['edit', 'write', 'bash']))
+    expect(seen.tools.at(-1)?.slice().sort()).toEqual(toolsFor('edit').sort())
     expect(lastEnd()).toMatchObject({ type: 'done' })
     expect(svc.pending('p1')).toBe(0)
   }, 30_000)
@@ -169,6 +223,24 @@ describe('AgentService + pi SDK thật', () => {
     expect(existsSync(join(root, 'c.txt'))).toBe(false)
     expect(lastEnd()).toMatchObject({ type: 'done' })
     expect(svc.pending('p1')).toBe(0)
+  }, 30_000)
+
+  it('edit chờ duyệt từng bản diff, từ chối giữ nguyên và duyệt ghi bản đang xem', async () => {
+    svc.setMode('p1', 'edit')
+    const file = join(root, 'h.txt')
+    writeFileSync(file, 'bản gốc\n')
+    const rejected = await turn('sửa h.txt', false)
+    expect(rejected).toContainEqual({ type: 'tool', name: 'edit', status: 'end', error: true })
+    expect(readFileSync(file, 'utf8')).toBe('bản gốc\n')
+
+    let beforeApproval = ''
+    const approved = await turn('sửa h.txt', true, () => { beforeApproval = readFileSync(file, 'utf8') })
+    expect(beforeApproval).toBe('bản gốc\n')
+    expect(approved.find((event) => event.type === 'approval')).toMatchObject({
+      request: { tool: 'edit', path: 'h.txt', before: 'bản gốc\n', after: 'bản đã duyệt\n' }
+    })
+    expect(approved).toContainEqual({ type: 'tool', name: 'edit', status: 'end', error: false })
+    expect(readFileSync(file, 'utf8')).toBe('bản đã duyệt\n')
   }, 30_000)
 
   it('tệp được lưu trong lúc chờ duyệt diff → báo xung đột trong chat và giữ bản trên đĩa', async () => {
@@ -215,11 +287,15 @@ describe('AgentService + pi SDK thật', () => {
     expect(lastEnd()).toMatchObject({ type: 'done', text: 'Xong [[a.py:1-1]]' })
   }, 30_000)
 
-  it('không gửi AGENTS.md (của dự án hay thư mục cha) cho nhà cung cấp', () => {
+  it('không tự nạp chỉ dẫn bên ngoài ứng dụng vào system prompt', () => {
     expect(seen.bodies.length).toBeGreaterThan(0)
     for (const b of seen.bodies) {
       expect(b).not.toContain(MARK.root)
       expect(b).not.toContain(MARK.parent)
+      expect(b).not.toContain(MARK.system)
+      expect(b).not.toContain(MARK.append)
+      expect(b).not.toContain(MARK.template)
+      expect(b).not.toContain('run commands')
     }
   })
 

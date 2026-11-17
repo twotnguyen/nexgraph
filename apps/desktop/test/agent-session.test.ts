@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { AgentService, ASK_TOOLS, EDIT_TOOLS, rememberSecret, scrub, type AgentAccounts, type PiSession, type SessionSpec } from '../src/main/agent/session'
+import { AgentService, rememberSecret, scrub, type AgentAccounts, type PiSession, type SessionSpec } from '../src/main/agent/session'
+import { ASK_TOOLS, EDIT_TOOLS } from '../src/main/agent/extension'
 import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
 import type { AgentEvent } from '../src/shared/agent-types'
@@ -110,7 +111,7 @@ describe('AgentService (phiên giả)', () => {
     expect(spec.agentDir.startsWith(join(base, 'data'))).toBe(true)
     expect(sessions[0].active.sort()).toEqual([...ASK_TOOLS, ...GRAPH].sort())
     expect(ASK_TOOLS).toEqual(['read', 'grep', 'find', 'ls'])
-    expect(EDIT_TOOLS).toEqual(['read', 'grep', 'find', 'ls', 'edit', 'write', 'bash'])
+    expect(EDIT_TOOLS).toEqual(['read', 'grep', 'find', 'ls', 'edit', 'write'])
     expect(sessions[0].model).toEqual({ ...TARGET, id: 'm1' })
   })
 

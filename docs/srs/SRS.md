@@ -1,6 +1,6 @@
 # Đặc tả yêu cầu phần mềm NexGraph
 
-Đặc tả này mô tả NexGraph theo phạm vi đã điều chỉnh ở tuần 5 và mã nguồn tại `6687fc9`. Dùng tài liệu này cùng [ma trận truy vết](traceability.md) để phát triển và nghiệm thu. Mỗi yêu cầu tách tiêu chí cần đạt khỏi bằng chứng đã có. Các bản thiết kế theo tuần trước đó được giữ trong [kho lưu trữ](../superpowers/).
+Đặc tả này mô tả phạm vi bàn giao NexGraph 0.1.0 dựa trên các yêu cầu đã điều chỉnh ở tuần 5. Dùng tài liệu này cùng [ma trận truy vết](traceability.md) để phát triển và nghiệm thu. Mỗi yêu cầu tách tiêu chí cần đạt khỏi bằng chứng đã có. Các bản thiết kế theo tuần trước đó được giữ trong [kho lưu trữ](../superpowers/).
 
 ## Mục tiêu và đối tượng
 
@@ -40,7 +40,7 @@ Theo phạm vi tuần 5, nhóm xếp F1–F4, F6, F8, F10 và F11 là bắt bu�
 | F11 | Luồng | Tìm điểm vào, phát từng bước, xem caller và mở mã từ cạnh lời gọi có bằng chứng. |
 | F12 | Bản đồ toàn cảnh | Xem đồ thị cấp tệp/khối, đi sâu theo phạm vi và dùng thẻ Kiến trúc khi WebGL không khả dụng. |
 | F13 | Trình soạn thảo | Mở đúng vị trí, sửa/lưu và xử lý tệp thay đổi bên ngoài, giữ nội dung chưa lưu. |
-| F14 | Agent Hỏi và Sửa có duyệt | Hỏi dùng công cụ đọc. Sửa cho xem diff hoặc lệnh, chờ quyết định cho từng thao tác và cho phép dừng lượt. |
+| F14 | Agent Hỏi và Sửa có duyệt | Hỏi dùng công cụ đọc. Sửa hiển thị diff, chờ duyệt từng đề xuất tạo hoặc chỉnh sửa tệp và cho phép dừng lượt. Cả hai chế độ từ chối yêu cầu chạy lệnh shell. |
 | F15 | Tích hợp Codex | Xem trước cấu hình MCP và skill cấp dự án, áp dụng sau khi người dùng xác nhận và giữ cấu hình hiện có. |
 
 ### Tác nhân và ca sử dụng
@@ -73,7 +73,7 @@ flowchart LR
 
 - Cạnh quan hệ dùng để giải thích phải có căn cứ từ cây cú pháp hoặc bộ phân giải. Khi graph chưa xong, đã cũ hoặc kết quả bị cắt, ứng dụng cần hiển thị giới hạn tương ứng.
 - **Tiêu chí cần nghiệm thu cho bản bàn giao:** hủy hoặc lỗi khi dựng lại giữ được bản đồ thị hoàn tất gần nhất. Sau khi chạy lại, dữ liệu phải nhất quán giữa UI, API và MCP. Xem [luồng hiện tại và điểm cần kiểm](architecture.md).
-- Chế độ Hỏi và truy vấn đồ thị đọc dự án. Chế độ Sửa yêu cầu duyệt thao tác, kiểm tra lại trạng thái tệp trước khi ghi và từ chối bản xem trước đã cũ. Lệnh shell hiện có cổng duyệt và chạy với quyền của người dùng. Tính cô lập shell là hạng mục cần chốt trước khi phát hành rộng.
+- Chế độ Hỏi chỉ có công cụ đọc và truy vấn đồ thị. Chế độ Sửa yêu cầu duyệt từng thao tác `edit` hoặc `write`, kiểm tra lại trạng thái tệp trước khi ghi và từ chối bản xem trước đã cũ.
 - Khi dịch vụ AI gặp lỗi, người dùng vẫn mở được chỉ mục cục bộ, tìm kiếm, đọc kiến trúc và xem luồng.
 
 ### Bảo mật và riêng tư
@@ -98,7 +98,7 @@ Kết quả đo ở [báo cáo thực nghiệm](../benchmarks/2026-12-danh-gia.m
 
 1. Với [bản cài Electron 0.1.0](../release/README.md), chạy mạch mở dự án → kiến trúc/tìm kiếm → luồng → mở mã trong Monaco → sửa → xem ảnh hưởng và test liên quan.
 2. Kiểm luồng lỗi trên bản cài gồm chưa cấu hình AI, mất mạng, không có Git, dự án lớn chọn thư mục con và ngôn ngữ ở mức đồ thị chung.
-3. Kiểm AI Hỏi/Sửa bằng provider sẽ trình diễn, gồm mở trích dẫn, Duyệt, Từ chối và Dừng. Kiểm MCP bằng client thật.
+3. Kiểm AI Hỏi/Sửa bằng provider sẽ trình diễn, gồm mở trích dẫn, Duyệt, Từ chối và Dừng. Trên Windows và macOS, dùng provider giả để kiểm yêu cầu chạy lệnh bị từ chối ở cả hai chế độ. Kiểm MCP bằng client thật.
 4. Chạy ba lượt [kịch bản bảo vệ](../demo-script.md), ghi thời gian và tình huống dự phòng. Duyệt lại nhãn đồ thị, đánh giá có/không MCP và khảo sát người dùng theo [kế hoạch thực nghiệm](../benchmarks/2026-12-danh-gia.md).
 
 Xem [kiến trúc](architecture.md), [mô hình dữ liệu](data-model.md) và [ma trận truy vết](traceability.md) để xác định đường chạy, hợp đồng và bằng chứng cho từng chức năng.
