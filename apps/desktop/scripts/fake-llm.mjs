@@ -88,8 +88,12 @@ function complete(messages, maxTokens, advertised) {
   return { role: 'assistant', content: `${lines.join('\n')}\n${steps.length + 1}. Bước không có thật [[khong-co.ts:1-2]]` }
 }
 
-export function createFakeLlm() {
+export function createFakeLlm({ dropRequest } = {}) {
   return http.createServer((req, res) => {
+    if (dropRequest?.(req.url)) {
+      req.socket.destroy()
+      return
+    }
     let body = ''
     req.on('data', (c) => (body += c))
     req.on('end', () => {

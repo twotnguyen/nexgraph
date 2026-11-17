@@ -1,56 +1,49 @@
-# Danh sách nghiệm thu Windows
+# Checklist nghiệm thu bộ cài trên Windows và macOS
 
-Bản phát hành **NexGraph 0.1.0** dùng **Electron độc lập với Monaco**. [CI tại `6687fc9`](https://github.com/twotnguyen/nexgraph/actions/runs/44065280698) đã build và smoke bản Electron trên Windows. **Nhóm 8** còn phải cài và thao tác trên máy Windows của nhóm bằng đúng bộ cài phát hành. [Hướng dẫn phát hành](release/README.md) · [Hướng dẫn cài đặt](install-notes.md).
+Dùng NexGraph Electron độc lập với Monaco. Chọn bộ cài NSIS và DMG từ cùng commit dự kiến bàn giao. Điền **Đạt**, **Lỗi** hoặc **Chưa chạy** cho từng phép thử. Với lỗi, ghi bước tái hiện, mã hoặc thông báo lỗi và đính kèm log hoặc ảnh. [Hướng dẫn chọn bộ cài](release/README.md) · [Biên bản nghiệm thu](release/acceptance/2026-11-18.md).
 
-Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi bước tái hiện, nội dung lỗi, log hoặc ảnh. Ghi OS/build Windows, CPU, RAM, GPU, commit NexGraph, URL run/artifact, dung lượng và ngày kiểm.
+## A. Chốt bản kiểm và mở ứng dụng
 
-## A. Cài và khởi động
+- [ ] Ghi phiên bản, commit đầy đủ, URL lượt chạy, hệ điều hành, bản build, kiến trúc và ngày kiểm. Ghi CPU, RAM và GPU của máy dùng cho demo.
+- [ ] Tải artifact đúng hệ điều hành và kiến trúc từ lượt chạy đã ghi. Lưu tên bộ cài, kích thước theo byte và SHA-256 của tệp thực tế rồi đối chiếu với tệp `.build.json` đi kèm.
+- [ ] **Windows**. Chạy NSIS, ghi thư mục đã cài và mở `NexGraph.exe` từ thư mục đó. Kiểm tệp `resources\engine\nexgraph-engine.exe`.
+- [ ] **macOS**. Gắn DMG, chép NexGraph vào **Applications**, tháo ảnh đĩa và mở bản vừa chép. Kiểm tệp `NexGraph.app/Contents/Resources/engine/nexgraph-engine`.
+- [ ] Ghi mọi cảnh báo hoặc chặn từ SmartScreen, Application Control hay Gatekeeper nếu xuất hiện. Khi app mở được, ghi trạng thái **Engine: sẵn sàng** và nút **Mở thư mục…** ở màn **Dự án**.
+- [ ] Ở dòng kiểm CI của từng hệ điều hành, lưu log smoke từ job đã cài chính artifact đó. Ở dòng máy đích, ghi kết quả khởi động và thao tác trên bản đã cài tại máy.
 
-- [ ] Tải artifact từ job đóng gói Windows của commit cần kiểm, giải nén và chọn bộ cài NSIS. Ví dụ cho Windows x64 là `NexGraph-0.1.0-windows-x64.exe`. Nếu tự build, lấy bộ cài trong `apps/desktop/dist/` theo [hướng dẫn đóng gói](install-notes.md#đóng-gói-electron). Ghi đúng tên và kiến trúc của tệp thực tế.
-- [ ] Ghi đường dẫn tệp `.exe` đã tải, kích thước và SHA-256. Ví dụ từ thư mục chứa bộ cài x64, chạy `Get-FileHash -Algorithm SHA256 -LiteralPath '.\NexGraph-0.1.0-windows-x64.exe'`.
-- [ ] Chạy installer NSIS và ghi đường dẫn cài thực tế. Ghi cảnh báo SmartScreen nếu xuất hiện và kết quả mở NexGraph.
-- [ ] Mở `NexGraph.exe` từ thư mục vừa cài. Kiểm tệp `resources\engine\nexgraph-engine.exe`, trạng thái **Engine: sẵn sàng** và nút **Mở thư mục…** ở màn **Dự án**.
-- [ ] Xem job package Windows của commit cần kiểm. CI chạy NSIS và smoke app đã cài vào thư mục tạm. Lưu dòng `SMOKE OK` kèm `fs=OK`, `agent=OK` và `index=OK`. Khi tự build, `pnpm --filter @nexgraph/desktop run smoke:packaged` dùng bản `win-unpacked` để kiểm nhanh. Ghi kết quả cài NSIS trên máy đích ở các bước trên.
+## B. Luồng chính trên bản đã cài
 
-## B. Luồng dự án và demo
+- [ ] Chạy [fixture Python với hồ sơ riêng và mô hình giả](demo-script.md#kiểm-nhanh-bằng-fixture-python). Ghi kết quả lập chỉ mục, tìm kiếm và mở mã đúng dòng.
+- [ ] Mở bản sao NestJS có dấu và khoảng trắng, chẳng hạn `Đồ án/nestjs demo`. Ghi mã commit dự án, thời gian lập chỉ mục mới, số tệp, nút và cạnh trong **Tổng quan**.
+- [ ] Tìm một symbol trong **Tìm kiếm**. Mở **Kiến trúc**, chọn một quan hệ có bằng chứng, mở tệp và đối chiếu đúng dòng trong Monaco. Mở **Bản đồ** rồi chọn luồng `signIn` trong **Luồng**.
+- [ ] Sửa một tệp mẫu, lưu bằng `Ctrl+S` hoặc `⌘S`, rồi xem **Thay đổi** và vùng ảnh hưởng. Với repo Git, kiểm thêm đổi nhánh và làm mới graph.
+- [ ] Trên bản sao Git, bật **Cập nhật sau mỗi commit**. Commit một thay đổi và kiểm ứng dụng cập nhật graph. Gỡ tích hợp rồi kiểm khối NexGraph được bỏ khỏi `.git/hooks/post-commit`.
+- [ ] Chạy [ba lượt demo NestJS](demo-script.md#nghiệm-thu). Ghi thời gian thao tác, ảnh các điểm mốc và kết quả của lượt dùng phương án dự phòng.
+- [ ] Trước khi thoát, ghi PID của engine và worker của lượt kiểm. Đóng app và kiểm các PID đó đã thoát trong Task Manager hoặc Activity Monitor.
 
-- [ ] Chạy [fixture Python ngắn](demo-script.md#kiểm-nhanh-bằng-fixture-python) với LLM giả để kiểm luồng cơ bản.
-- [ ] Chạy [demo NestJS](demo-script.md#demo-nestjs-trong-5-phút) từ bản sao có dấu và khoảng trắng, chẳng hạn `Đồ án\nestjs demo`. Ghi tổng thời gian.
-- [ ] Mở **Kiến trúc** và **Bản đồ**. Nếu WebGL không dùng được, app có báo trạng thái và vẫn xem được **Kiến trúc**.
-- [ ] Chọn luồng `signIn`, thử **Tô luồng** và mở trích dẫn đúng dòng trong Monaco.
-- [ ] Sửa rồi Ctrl+S, kiểm **Thay đổi** và kiểm thử liên quan; đổi nhánh Git và kiểm graph làm mới.
-- [ ] Bật **Cập nhật sau mỗi commit**, commit một thay đổi trên bản sao, kiểm trạng thái hết “Graph cũ”. Gỡ rồi kiểm khối NexGraph trong `.git/hooks/post-commit` đã được bỏ.
-- [ ] Thoát app, Task Manager không còn tiến trình `nexgraph-engine.exe` của phiên vừa kiểm.
+## C. Tình huống cần đối chiếu
 
-## C. Các kịch bản lỗi
-
-- [ ] Chưa cấu hình AI: các thẻ đồ thị vẫn dùng được và Agent hướng dẫn vào **Tài khoản AI**.
-- [ ] Dự án lớn chưa lập chỉ mục: app cho chọn thư mục con.
-- [ ] Đã có đồ thị: bấm **Index lại**, mở đồ thị hiện có, quay lại tiến độ rồi **Hủy**. Mở lại dự án và kiểm tìm kiếm, Kiến trúc và Luồng giữ kết quả đã công bố.
-- [ ] Trên bản sao thử nghiệm, dừng engine khi đang dựng lại. Mở app và kiểm đồ thị đã công bố vẫn đọc được. Chạy lại rồi đối chiếu số tệp, nút, cạnh và truy vấn với bản dựng sạch.
-- [ ] Dự án Go hoặc Java nhỏ: graph chung được dựng, app hiển thị mức hỗ trợ.
-- [ ] Mất mạng với provider online: mở lại được dự án đã lập chỉ mục; Agent báo lỗi kết nối.
-- [ ] Dự án không có `.git`: thẻ **Thay đổi** so với lần lập chỉ mục trước.
+- [ ] **Không có Git**. Lập chỉ mục một bản sao nằm ngoài cây thư mục Git. Sửa tệp, mở **Thay đổi** và kiểm chênh lệch so với mốc lập chỉ mục.
+- [ ] **Thiếu WebGL**. Thêm `--disable-webgl` vào cuối lệnh mở app đã cài trong [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Mở **Bản đồ**, kiểm thông báo hướng người dùng sang **Kiến trúc**, rồi mở thẻ đó và xem bằng chứng.
+- [ ] **AI chưa cấu hình hoặc không kết nối được**. Kiểm Agent hướng dẫn vào **Tài khoản AI** khi chưa có model. Sau khi có kết nối, thử mất mạng hoặc dừng máy chủ giả theo [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Ghi cách tạo lỗi, thông báo Agent và kết quả mở lại đồ thị đã lập chỉ mục.
+- [ ] **Dựng lại bị hủy**. Khi đã có graph, bấm **Index lại**, mở bản hiện có rồi quay lại tiến độ và bấm **Hủy**. Mở lại dự án, xác nhận tìm kiếm, Kiến trúc và Luồng giữ kết quả đã công bố.
+- [ ] **Engine dừng trong lúc dựng lại**. Trên bản sao thử nghiệm, dừng riêng engine của lượt kiểm. Mở app và kiểm đồ thị đã công bố vẫn đọc được. Chạy lại rồi đối chiếu số tệp, nút, cạnh và một truy vấn với bản dựng sạch.
+- [ ] Với dự án lớn chưa được lập chỉ mục, thử chọn thư mục con. Với một dự án Go hoặc Java nhỏ, kiểm mức hỗ trợ được hiển thị.
 
 ## D. Editor, Agent và MCP
 
-- [ ] Mở tệp CRLF có BOM, sửa giữa hai lần Ctrl+S liên tiếp, kiểm nội dung cuối cùng và EOL/BOM theo byte.
-- [ ] Đổi thẻ khi có thay đổi chưa lưu. Đóng thẻ/thoát app hiện xác nhận.
-- [ ] Sửa từ ngoài: thẻ sạch nạp lại; thẻ bẩn hiện lựa chọn xử lý xung đột và giữ nháp.
-- [ ] Thêm nhà cung cấp tuỳ chỉnh, chọn model, kiểm kết nối. Key đã lưu không xuất hiện lại trong ô nhập.
-- [ ] Dùng hai máy chủ mô phỏng. Mở xác nhận gửi mã ở dự án A rồi đổi nhà cung cấp, kiểm câu hỏi còn trong ô nhập. Sau khi xác nhận ở nhà cung cấp mới, kiểm payload đầu tiên và đối chiếu lịch sử.
-- [ ] Tạo `.env` giả và liên kết nội bộ tới tệp đã bị loại. Dùng `read`, `grep`, `find`, `get_context` và MCP để kiểm tệp bị loại, cùng một tệp công khai để kiểm luồng đọc bình thường.
-- [ ] Hỏi: xem streaming, bấm **Dừng**, mở trích dẫn và **Tô luồng**. Ghi loại provider (giả hoặc thật).
-- [ ] Chuyển **Sửa** và xem mô tả quyền tạo hoặc chỉnh sửa tệp. Duyệt diff làm đổi tệp, từ chối giữ nguyên byte. Khi đang chờ duyệt, thử **Dừng**, đổi **Hỏi** hoặc tải lại cửa sổ, xác nhận đề xuất cũ hết hiệu lực và lượt sau dùng được.
-- [ ] Trong lúc chờ duyệt diff, sửa tệp từ VS Code hoặc Monaco. Duyệt và kiểm agent báo xung đột, bản đã lưu trên đĩa giữ nguyên. Lặp lại với đề xuất tạo tệp và một tệp vừa xuất hiện ở cùng đường dẫn.
-- [ ] Trong cả **Hỏi** và **Sửa**, kiểm danh sách công cụ gửi cho mô hình giả và thử phản hồi giả gọi shell để tạo tệp đánh dấu. Yêu cầu phải bị từ chối trước bước duyệt, và tệp đánh dấu vẫn vắng mặt. Lưu log cùng commit đã kiểm. [Smoke qua giao diện và IPC](../apps/desktop/src/main/smoke-desktop.ts) · [Kiểm thử phiên Pi](../apps/desktop/test/agent-session-pi.test.ts)
-- [ ] Nếu kiểm OAuth, ghi provider, kết quả đăng nhập và hủy. Thử di trú `auth.json`, mở lại, làm mới token và đăng xuất với credential thử nghiệm. Ghi rõ khi dùng adapter/provider giả.
-- [ ] Xem trước rồi áp dụng cấu hình MCP/skill trong bản sao, xác nhận phần cấu hình cũ được giữ. Nếu client đã cài, mở dự án và gọi `graph_stats` để xác nhận kết nối runtime.
+- [ ] Mở tệp CRLF có BOM. Sửa giữa hai lần lưu liên tiếp rồi so nội dung cuối và EOL/BOM theo byte. Đổi thẻ, đóng thẻ hoặc thoát khi có nháp để kiểm lựa chọn lưu hoặc giữ nháp.
+- [ ] Sửa từ ngoài. Thẻ sạch nạp lại. Thẻ có nháp hiển thị xung đột và giữ bản đang sửa.
+- [ ] Thêm provider tùy chỉnh, chọn model và thử kết nối. Nếu dùng API key, kiểm ô nhập không hiển thị lại key đã lưu.
+- [ ] Ẩn và mở lại Agent. Với **Hỏi**, xem streaming, thử **Dừng**, mở trích dẫn và **Tô luồng** nếu provider hỗ trợ.
+- [ ] Với **Sửa**, kiểm diff trước khi **Duyệt thay đổi**. So nội dung sau khi duyệt. Lặp lại với **Từ chối**, **Dừng**, chuyển sang **Hỏi** và tải lại cửa sổ khi đang chờ duyệt. Kiểm đề xuất cũ hết hiệu lực.
+- [ ] Trong lúc chờ duyệt, lưu bản khác của tệp từ editor. Duyệt diff cũ và kiểm thông báo xung đột cùng nội dung giữ trên đĩa. Lặp với đề xuất tạo tệp ở đường dẫn vừa có tệp.
+- [ ] Với mô hình giả, thử gọi shell trong cả **Hỏi** và **Sửa**. Kiểm danh sách tool gửi đi, không có thẻ duyệt lệnh và tệp đánh dấu không xuất hiện. [Smoke qua IPC](../apps/desktop/src/main/smoke-desktop.ts) · [Kiểm thử phiên Pi](../apps/desktop/test/agent-session-pi.test.ts).
+- [ ] Với hai máy chủ giả, đổi provider trong khi hộp đồng ý gửi mã đang mở. Kiểm câu hỏi được giữ lại và payload đầu tiên sau khi xác nhận ở đích mới không mang lịch sử cũ.
+- [ ] Dùng `.env` giả và liên kết tới tệp đã bị loại để kiểm phạm vi dữ liệu của `read`, `grep`, `find`, `get_context` và MCP. Thử cùng một truy vấn trên tệp công khai để kiểm luồng đọc bình thường.
+- [ ] Khi có client MCP thật, mở bản sao dự án đã lập chỉ mục, xem trước và áp dụng cấu hình rồi thử `graph_stats`. Ghi client và kết quả bảo toàn cấu hình có sẵn.
+- [ ] Khi có provider thật hoặc tài khoản OAuth thử nghiệm, ghi tên provider và model, kết quả kết nối, đăng nhập, hủy, mở lại và đăng xuất nếu đã thử. Kiểm di trú `auth.json` bằng credential dành cho thử nghiệm nếu phù hợp.
 
 ## E. Bằng chứng
 
-- Máy, ngày, commit, kiến trúc và URL run/artifact:
-- Tên bộ cài, đường dẫn tải, byte, SHA-256 và thư mục sau cài:
-- Fixture/dự án, nhà cung cấp AI, client MCP:
-- Log, ảnh hoặc video:
-- Lỗi và mục còn chờ:
+Điền [biên bản nghiệm thu](release/acceptance/2026-11-18.md) cho từng máy và từng lượt. Gắn commit, URL run/artifact, hệ điều hành, loại provider, fixture và video hoặc ảnh vào kết quả tương ứng. Ẩn khóa, token và thông tin cá nhân trong ảnh hoặc log. [Mẫu trường cần ghi](srs/traceability.md#biên-bản-cho-bản-bàn-giao).

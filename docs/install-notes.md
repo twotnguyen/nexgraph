@@ -36,13 +36,13 @@ pnpm --filter @nexgraph/desktop run package
 pnpm --filter @nexgraph/desktop run smoke:packaged
 ```
 
-Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<arch>.dmg` hoặc `NexGraph-<version>-windows-<arch>.exe`. Lệnh `smoke:packaged` ở trên dùng app đã giải nén để kiểm nhanh khi phát triển. Trong CI, cùng script chạy từ app do chính tệp NSIS cài vào thư mục tạm hoặc do CI chép từ DMG vừa gắn. Kết quả đạt có `SMOKE OK`, `fs=OK`, `agent=OK` và `index=OK`. Script dùng thư mục dữ liệu tạm, engine đi kèm và LLM giả cục bộ. Ghi kết quả trên máy đích theo [hướng dẫn bản bàn giao](release/README.md) và [danh sách kiểm Windows](windows-checklist.md).
+Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<arch>.dmg` hoặc `NexGraph-<version>-windows-<arch>.exe`. Lệnh `smoke:packaged` ở trên dùng app đã giải nén để kiểm nhanh khi phát triển. Trong CI, script mở app do chính tệp NSIS cài vào thư mục tạm hoặc app được chép từ DMG vừa gắn. Lượt này dùng thư mục dữ liệu tạm, engine đi kèm và mô hình giả cục bộ. Tải bộ cài và tệp `.build.json` đối chiếu theo [hướng dẫn bản bàn giao](release/README.md#tải-đúng-bộ-cài).
 
 | Bằng chứng | Phạm vi |
 | --- | --- |
 | [Kiểm trên macOS ngày 15/11/2026](benchmarks/2026-11-15-editor-agent.md) | Bản Electron arm64 chưa ký, DMG khoảng 239,2 MB. Đã bấm thử editor và Agent trên fixture Python với engine thật và LLM giả. |
-| [CI Electron](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) | Xem theo đúng commit bàn giao. Job desktop kiểm setup và chạy dev. Job package kiểm bộ cài tương ứng trước khi tải artifact lên. Kho riêng tư, cần quyền xem log và artifact. |
-| Còn chờ nghiệm thu | Cài artifact trên máy Windows của nhóm, chạy đủ ba lượt demo NestJS trên bản đóng gói, kiểm nhà cung cấp AI thật và client MCP ngoài app. |
+| [CI Electron](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) | Job desktop kiểm setup và chạy dev. Job package kiểm bộ cài của checkout ghi trong tệp `.build.json` trước khi tải artifact lên. Kho riêng tư, cần quyền xem log và artifact. |
+| [Nghiệm thu trên máy đích](release/acceptance/2026-11-18.md) | Ghi cài đặt và thao tác trên bộ cài Windows và macOS theo [checklist](windows-checklist.md), kèm thời gian từng lượt demo NestJS. Ghi loại provider và client MCP nếu đã thử. |
 
 ## Chạy Code-OSS
 

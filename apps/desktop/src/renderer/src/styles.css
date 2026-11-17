@@ -294,6 +294,16 @@ button:disabled {
   border-bottom: 1px solid var(--color-border);
   overflow: hidden;
   white-space: nowrap;
+}
+
+.ws-head > .link {
+  flex: none;
+}
+
+.ws-name > span,
+.ws-path {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
 }
 
@@ -678,6 +688,9 @@ button:disabled {
 }
 
 .ws-head .ws-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
   margin-left: auto;
 }
 
@@ -1959,6 +1972,11 @@ button.card:hover:not(:disabled) .card-icon {
   align-items: center;
   gap: 6px;
   font-size: 15px;
+  min-width: 0;
+}
+
+.ws-name svg {
+  flex: none;
 }
 
 .sidebar {

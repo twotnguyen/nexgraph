@@ -4,22 +4,24 @@ Bản bàn giao chính 0.1.0 là **NexGraph độc lập trên Electron, với t
 
 ## Tải đúng bộ cài
 
-1. Mở lượt [GitHub Actions](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) của commit được bàn giao. Ở **Artifacts**, tải gói `NexGraph-${version}-<hệ-điều-hành>-${arch}` rồi giải nén để lấy bộ cài. Repo private nên tài khoản tải cần có quyền đọc.
+1. Mở lượt [GitHub Actions](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) của commit dự kiến bàn giao. Chọn cả hai bộ cài từ cùng commit đó. Ở **Artifacts**, tải gói `NexGraph-${version}-<hệ-điều-hành>-${arch}` rồi giải nén để lấy bộ cài. Kho riêng tư nên tài khoản tải cần có quyền đọc.
 2. Kiểm hệ điều hành và kiến trúc của máy, rồi đối chiếu tên tệp trong artifact. Trên Windows xem **Settings → System → About → System type**. Trên macOS xem **About This Mac** để phân biệt Apple silicon và Intel. Chỉ dùng kiến trúc có trong lượt build và khớp với máy đích.
-3. Lưu tên tệp, commit, URL lượt chạy và hash SHA-256 vào [biên bản nghiệm thu](../srs/traceability.md#biên-bản-cho-bản-bàn-giao). Khi bên bàn giao có công bố SHA-256, so khớp trước khi cài.
+3. Trong artifact, mở tệp cùng tên gốc với bộ cài và có đuôi `.build.json`, ví dụ `NexGraph-0.1.0-windows-x64.build.json`. Dùng `version`, `platform`, `arch`, `filename`, `bytes`, `sha256`, `commit` và `run` để đối chiếu tệp thực tế trước khi cài. Ghi hash và nguồn vào [biên bản nghiệm thu](acceptance/2026-11-18.md).
 
 | Hệ điều hành | Tệp trong artifact 0.1.0 | Cách cài |
 |---|---|---|
 | Windows x64 | `NexGraph-0.1.0-windows-x64.exe` | Mở trình cài NSIS, chọn nơi cài, sau đó mở NexGraph từ Start. |
 | macOS Apple silicon | `NexGraph-0.1.0-macos-arm64.dmg` | Mở ảnh đĩa, kéo NexGraph vào **Applications**, tháo ảnh đĩa rồi mở ứng dụng. |
 
-CI đặt tên theo phiên bản và kiến trúc của lượt build. Có thể tính SHA-256 bằng `Get-FileHash -Algorithm SHA256 <tệp>` trong PowerShell hoặc `shasum -a 256 <tệp>` trên macOS. Bản dựng hiện dùng cấu hình chưa ký số. Nếu hệ điều hành cảnh báo, kiểm lại nguồn artifact và ghi kết quả vào checklist. Nếu máy quản lý chặn cài, báo người phụ trách máy để xử lý theo quy định tại máy đó. [Workflow và artifact](../../.github/workflows/ci.yml) · [Kiểm tên bộ cài](../../apps/desktop/scripts/check-installer.mjs) · [Ghi chú cài đặt](../install-notes.md)
+Tính SHA-256 của tệp bộ cài đã giải nén bằng `Get-FileHash -Algorithm SHA256 -LiteralPath '<tệp>'` trong PowerShell hoặc `shasum -a 256 '<tệp>'` trên macOS. So hash không phân biệt chữ hoa và thường. Trường `commit` ghi đúng checkout mà runner đã dùng. Khi kiểm pull request, GitHub có thể dựng từ commit hợp nhất của lượt chạy.
+
+Bản dựng CI hiện dùng cấu hình chưa ký số. Nếu hệ điều hành cảnh báo hoặc chặn trình cài hoặc engine đã cài, ghi rõ thành phần và thông báo trong checklist. Với máy được quản lý, báo người phụ trách máy. [Workflow và artifact](../../.github/workflows/ci.yml) · [Kiểm tên bộ cài](../../apps/desktop/scripts/check-installer.mjs).
 
 ## Chạy lần đầu
 
 1. Mở NexGraph và chờ trạng thái engine sẵn sàng. Bộ cài dùng engine kèm theo. Git giúp đọc thay đổi theo HEAD. Khi dự án thiếu Git phù hợp, Changes dùng mốc lập chỉ mục.
-2. Tại màn **Dự án**, chọn **Mở thư mục…** và chọn bản sao mã nguồn. Có thể dùng [fixture Python ngắn](../demo-script.md#kiểm-nhanh-bằng-fixture-python) để thử trước, rồi chạy demo NestJS.
-3. Chọn phạm vi và lập chỉ mục. Khi hoàn tất, mở **Tổng quan** hoặc **Kiến trúc**, chọn quan hệ có bằng chứng rồi mở mã đúng dòng trong Monaco.
+2. Tại màn **Dự án**, chọn **Mở thư mục…** và chọn bản sao mã nguồn có dấu và khoảng trắng. Có thể chạy [fixture Python trên app đã cài](../demo-script.md#kiểm-nhanh-bằng-fixture-python) trước khi chuẩn bị bản sao NestJS.
+3. Chọn phạm vi và lập chỉ mục. Khi hoàn tất, thử **Tìm kiếm** rồi vào **Kiến trúc**, chọn một quan hệ có bằng chứng và mở mã đúng dòng trong Monaco.
 4. Thử sửa một tệp trong bản sao, lưu rồi mở **Thay đổi**. Phần lập chỉ mục, tìm kiếm và xem graph chạy cục bộ. Cấu hình AI khi cần kiểm Hỏi hoặc Sửa.
 
 ## Ảnh giao diện
@@ -40,16 +42,14 @@ CI đặt tên theo phiên bản và kiến trúc của lượt build. Có thể
 
 ## Bằng chứng và nghiệm thu
 
-CI cài chính tệp NSIS vào thư mục tạm trên Windows. Trên macOS, CI gắn chính tệp DMG và chép app vào thư mục tạm. Smoke khởi động app vừa lấy từ bộ cài, lập chỉ mục dự án mẫu với engine đi kèm, kiểm đọc, ghi tệp và trợ lý với LLM giả cục bộ. Điều kiện đạt là `SMOKE OK` cùng `fs=OK`, `agent=OK` và `index=OK`. Khi nghiệm thu trên máy đích, dùng bản cài đúng commit và ghi **Đạt**, **Lỗi** hoặc **Chưa chạy** cho từng phép thử.
-
-| Phép thử | Kết quả cần ghi |
+| Nơi kiểm | Phép thử và bằng chứng |
 |---|---|
-| Build và smoke | Windows/macOS, kiến trúc, tên artifact, commit, lượt CI và dòng kết quả. Dùng log của lượt thực tế. |
-| Cài trên máy đích | Mở app từ bộ cài, engine sẵn sàng, index bản sao có đường dẫn chứa dấu và khoảng trắng, mở bằng chứng. Ghi cảnh báo và xác nhận thoát app sạch. |
-| Demo và AI | Ba lượt NestJS, thời gian từng lượt. Kiểm Hỏi/Sửa, Duyệt/Từ chối/Dừng với provider dự định trình diễn và một truy vấn MCP từ client thật. Ghi rõ provider giả hay thật. |
-| Quyền của trợ lý | Trên Windows và macOS, ghi kết quả mô hình giả thử gọi shell ở cả Hỏi và Sửa, cùng kết quả Duyệt, Từ chối và Dừng khi chờ diff. [Smoke qua giao diện và IPC](../../apps/desktop/src/main/smoke-desktop.ts) · [Ca nghiệm thu UC15](../srs/use-cases/UC15.md#tiêu-chí-nghiệm-thu) |
+| CI trên GitHub | Windows cài NSIS vào thư mục tạm. macOS gắn DMG rồi chép app vào thư mục tạm. Smoke dùng engine đi kèm và AI giả để kiểm đường dẫn có dấu, lập chỉ mục, sửa tệp, vùng ảnh hưởng trên fixture không Git và truy vấn sau gián đoạn endpoint AI. Lưu tệp `.build.json`, dòng `SMOKE OK` có `fs=OK agent=OK index=OK edit_policy=OK acceptance=OK workspace_controls=OK webgl_fallback=OK` và dòng `SMOKE ENGINE STOPPED pid=…`. |
+| Máy Windows đích | Cài bản NSIS đã đối chiếu, ghi thư mục cài và trạng thái engine. Làm checklist trên bản sao nguồn Unicode có khoảng trắng. Lưu kết quả thao tác, cảnh báo hệ điều hành, ảnh, log và tình trạng tiến trình khi thoát. |
+| Máy macOS đích | Chép app từ DMG đã đối chiếu vào **Applications**, ghi kiến trúc và trạng thái engine. Làm cùng checklist trên bản sao nguồn Unicode có khoảng trắng. Lưu ảnh, log và tình trạng tiến trình khi thoát. |
+| Demo NestJS | Ghi kết quả ba lượt trên bản đã cài, thời gian thực tế, kết quả Duyệt/Từ chối và thao tác dự phòng khi AI gián đoạn. Ghi provider hoặc mô hình giả được dùng. Ghi kết nối MCP riêng nếu đã thử bằng client thật. |
 
-Người phát triển có thể dựng từ checkout sạch theo hướng dẫn cài đặt. Kết quả CI và biên bản nghiệm thu máy đích được ghi theo từng lượt kiểm. [Cài đặt từ mã nguồn](../install-notes.md) · [Smoke đóng gói](../../apps/desktop/scripts/smoke-packaged.mjs) · [Checklist Windows](../windows-checklist.md) · [Kịch bản NestJS](../demo-script.md) · [Báo cáo editor và agent](../benchmarks/2026-11-15-editor-agent.md)
+Trong [biên bản nghiệm thu](acceptance/2026-11-18.md), điền **Đạt**, **Lỗi** hoặc **Chưa chạy** theo từng phép thử. Việc cài và thao tác trên máy đích dùng cùng commit với artifact đã kiểm trên CI. [Checklist Windows và macOS](../windows-checklist.md) · [Kịch bản fixture và NestJS](../demo-script.md) · [Smoke đóng gói](../../apps/desktop/scripts/smoke-packaged.mjs) · [Cài đặt từ mã nguồn](../install-notes.md).
 
 ## Bản xem trước Code-OSS
 

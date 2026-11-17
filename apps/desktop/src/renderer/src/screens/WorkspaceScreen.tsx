@@ -287,8 +287,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       <section className="center">
         <header className="ws-head">
           {onBack && <button type="button" className="link" onClick={guardLeave(onBack)}>{backLabel}</button>}
-          <b className="ws-name"><Logo size={18} /> {project.name}</b>
-          <span className="muted mono">{project.path}</span>
+          <b className="ws-name"><Logo size={18} /> <span title={project.name}>{project.name}</span></b>
+          <span className="ws-path muted mono" title={project.path}>{project.path}</span>
           <span className="ws-actions">
             <button type="button" aria-label={vi.chat.toggle} aria-pressed={chatOpen} onClick={() => setChatOpen((v) => !v)}>{vi.chat.title}</button>
             <button type="button" onClick={() => openExport(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })}>
