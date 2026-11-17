@@ -1,3 +1,5 @@
+> ⚠️ **Bản lưu trữ ngày 18/10/2026 — KHÔNG phải nguồn sự thật.** Nguồn hiện hành: [../../../../docs/superpowers/plans/2026-10-18-nexgraph-roadmap.md](../../../../docs/superpowers/plans/2026-10-18-nexgraph-roadmap.md) (trong workspace cha, nằm ngoài repo `nexgraph`). Bản này còn ghi Flutter MVP, Dart ưu tiên 1 và lộ trình tuần 7 Flutter; đã bị thay bởi ADR 0009 (TS/JS + Python), ADR 0011 (H0–H6) và ADR 0012/0013 (F13–F15, Monaco, pi). Xem thêm [kế hoạch editor + agent hiện hành](../../../../docs/superpowers/plans/2026-11-15-nexgraph-editor-agent.md). Bản này giữ nguyên để tra lịch sử; không dùng để lập kế hoạch.
+
 # NexGraph — Lộ trình triển khai (kế hoạch tổng)
 
 > **Hợp đồng H0–H6 hiện hành (2026-11-13):** adapter API key, không ACP; giao diện tiếng Việt; chat không streaming/không lưu ra đĩa, giữ state khi ẩn. `GET /flows` có `limit` và `offset`, UI có “Xem thêm”; `/neighbors` có `total` (null nếu depth > 1); `/tour` sinh tại lúc gọi. Tài liệu này chứa lịch sử kế hoạch; chưa được dùng test xanh để kết luận nghiệm thu toàn bộ. Kết quả kiểm chứng sau review: `docs/benchmarks/2026-11-13-sua-sau-review.md`.
