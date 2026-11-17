@@ -2,19 +2,20 @@ import { randomUUID } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { isAbsolute, relative, sep } from 'node:path'
 import type { AgentMode, ApprovalDecision, ApprovalRequest } from '../../shared/agent-types'
+import type { FileContent } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
 
 export const APPROVAL_TIMEOUT_MS = 5 * 60_000
 
-/** Bản xem trước đã duyệt cho write/edit; lúc execute phai revalidate đúng cái này roi moi ghi.
- * `file` là tình trang tep tai thoi diem preview (eol/bom/mtime) — execute dùng lam tien de ghi;
- * vang khi tep chua ton tai (write tao moi). */
-export type ApprovedWrite = {
+/** Bản xem trước và phiên bản tệp tại cùng lần đọc. `file` vắng khi tạo tệp mới. */
+export type WritePreview = {
   path: string
   before: string
   after: string
-  file?: { eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number }
+  file?: Pick<FileContent, 'eol' | 'bom' | 'version'>
 }
+
+export type ApprovedWrite = WritePreview & { assertCurrent(): void }
 
 export interface ApprovalGate {
   check(toolName: string, input: unknown): Promise<ApprovalDecision & { approved?: ApprovedWrite }>
@@ -27,7 +28,7 @@ export type ApprovalDeps = {
   root: string
   getMode(): AgentMode
   ask(req: ApprovalRequest): void
-  preview(tool: 'edit' | 'write', input: unknown): Promise<{ path: string; before: string; after: string; file?: { eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number } }>
+  preview(tool: 'edit' | 'write', input: unknown): Promise<WritePreview>
   /** Gọi khi một yêu cầu đã hỏi được giải quyết (duyệt, từ chối, hết giờ, denyAll). */
   closed?(id: string): void
 }
@@ -56,7 +57,8 @@ function insideRoot(root: string, p: string): boolean {
 
 export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
   const waiting = new Map<string, { settle(d: ApprovalDecision): void }>()
-  let epoch = 0 // denyAll tăng epoch để huỷ các check đang chờ preview
+  let epoch = 0
+  let revokedReason = 'Đã dừng'
 
   const settle = (id: string, d: ApprovalDecision) => waiting.get(id)?.settle(d)
 
@@ -92,22 +94,27 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
     if (typeof obj.path !== 'string') return deny('Thiếu đường dẫn tệp')
     if (!insideRoot(deps.root, obj.path)) return OUTSIDE
     const myEpoch = epoch
-    let pv
+    let preview: WritePreview
     try {
-      pv = await deps.preview(toolName, input)
+      preview = await deps.preview(toolName, input)
     } catch {
       return deny('Không tạo được bản xem trước thay đổi')
     }
-    if (myEpoch !== epoch) return deny('Đã dừng')
-    // pv chính là bản xem trước người dùng thấy: khi duyệt, gắn kèm quyết định để execute revalidate đúng nội dung này.
-    const d = await wait({ id, tool: toolName, path: pv.path, before: pv.before, after: pv.after })
-    return d.allow ? { ...d, approved: { path: pv.path, before: pv.before, after: pv.after, file: pv.file } } : d
+    if (myEpoch !== epoch) return deny(revokedReason)
+    const decision = await wait({ id, tool: toolName, path: preview.path, before: preview.before, after: preview.after })
+    if (!decision.allow) return decision
+    if (myEpoch !== epoch) return deny(revokedReason)
+    const assertCurrent = () => {
+      if (myEpoch !== epoch) throw new Error(revokedReason)
+    }
+    return { ...decision, approved: { ...preview, assertCurrent } }
   }
 
   return {
     check,
     resolve: (id, allow) => settle(id, allow ? { allow: true } : deny('Người dùng từ chối thao tác này')),
     denyAll(reason) {
+      revokedReason = reason
       epoch++
       for (const id of [...waiting.keys()]) settle(id, deny(reason))
     },

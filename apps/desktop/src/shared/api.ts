@@ -9,8 +9,21 @@ import type {
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from './graph-types'
 
-export type FileContent = { text: string; eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number; readOnly: boolean; reason?: 'too_large' | 'not_text' }
-export type WriteOpts = { eol: '\n' | '\r\n'; bom: boolean; expectedMtimeMs?: number }
+export type FileRevision = { mtimeMs: number; version: string }
+export type FileContent = FileRevision & {
+  text: string
+  eol: '\n' | '\r\n'
+  bom: boolean
+  readOnly: boolean
+  reason?: 'too_large' | 'not_text'
+}
+export type WriteOpts = {
+  eol: '\n' | '\r\n'
+  bom: boolean
+  /** Phiên bản từ lúc đọc hoặc `null` nếu tệp phải chưa tồn tại. */
+  expectedVersion?: string | null
+  expectedMtimeMs?: number
+}
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
 export interface NexGraphApi {
@@ -75,8 +88,8 @@ export interface NexGraphApi {
   fs: {
     /** Đọc tệp trong gốc dự án; lỗi có `code` là `outside_project` | `file_not_found`. */
     read(projectId: string, relPath: string): Promise<FileContent>
-    /** Ghi nguyên tử trong gốc dự án; `expectedMtimeMs` lệch với đĩa thì lỗi `conflict`. */
-    write(projectId: string, relPath: string, text: string, opts: WriteOpts): Promise<{ mtimeMs: number }>
+    /** Ghi nguyên tử trong gốc dự án. Nếu tệp lệch phiên bản yêu cầu thì báo `conflict`. */
+    write(projectId: string, relPath: string, text: string, opts: WriteOpts & { expectedVersion: string | null }): Promise<FileRevision>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

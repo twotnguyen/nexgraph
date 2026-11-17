@@ -2,6 +2,7 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
@@ -143,7 +144,13 @@ export function registerIpc(
   /** Mọi kênh nhận path đều phải suy root từ projectId đã đăng ký; id lạ → FsError('unknown_project'). */
   const rootOf = projectRoot(listProjects)
   on('fs:read', fsh.read)
-  on('fs:write', fsh.write)
+  on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
+    const version = opts?.expectedVersion
+    if (version !== null && (typeof version !== 'string' || !version)) {
+      throw new FsError('conflict', 'Cần đọc lại tệp trước khi lưu')
+    }
+    return fsh.write(pid, relPath, text, opts)
+  })
   on('index:scan', (pid: string) => api().scan(pid))
   on('index:start', async (pid: string, opts?: IndexOptions) => {
     try {

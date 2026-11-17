@@ -42,5 +42,6 @@ export type AgentEvent =
   | { type: 'tool'; name: string; status: 'start' | 'end'; error?: boolean }
   | { type: 'approval'; request: ApprovalRequest }
   | { type: 'approval_closed'; id: string }
+  | { type: 'write_conflict'; message: string }
   | { type: 'done'; text: string; citations: Citation[] }
   | { type: 'error'; code: string; message: string }

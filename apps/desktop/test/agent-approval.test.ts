@@ -60,7 +60,9 @@ describe('approval gate', () => {
       await flush()
       expect(ask).toHaveBeenCalledTimes(1)
       gate.resolve(asked().id, true)
-      expect(await p).toEqual({ allow: true, approved: { path: abs, before: 'B', after: 'A' } }) // preview giả trả path nguyên văn
+      expect(await p).toEqual({
+        allow: true, approved: { path: abs, before: 'B', after: 'A', assertCurrent: expect.any(Function) },
+      }) // preview giả trả path nguyên văn
     }
   })
   it('thiếu path/command → từ chối, không hỏi', async () => {
@@ -74,7 +76,9 @@ describe('approval gate', () => {
     expect(asked()).toMatchObject({ tool: 'edit', path: 'a.ts', before: 'B', after: 'A' })
     expect(typeof asked().id).toBe('string')
     gate.resolve(asked().id, true)
-    expect(await a).toEqual({ allow: true, approved: { path: 'a.ts', before: 'B', after: 'A' } })
+    expect(await a).toEqual({
+      allow: true, approved: { path: 'a.ts', before: 'B', after: 'A', assertCurrent: expect.any(Function) },
+    })
 
     const b = gate.check('bash', { command: 'rm x' })
     await flush()
@@ -104,6 +108,14 @@ describe('approval gate', () => {
     expect(await b).toEqual({ allow: false, reason: 'Đã dừng' })
     expect(gate.pending()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
+  })
+  it('Dừng ngay sau Duyệt vô hiệu hóa yêu cầu trước khi gate trả snapshot', async () => {
+    const result = gate.check('write', { path: 'a.ts' })
+    await flush()
+    gate.resolve(asked().id, true)
+    gate.denyAll('Đã dừng')
+    expect(await result).toEqual({ allow: false, reason: 'Đã dừng' })
+    expect(gate.pending()).toBe(0)
   })
   it('hai yêu cầu đồng thời được giải quyết độc lập theo id', async () => {
     const a = gate.check('bash', { command: 'a' })

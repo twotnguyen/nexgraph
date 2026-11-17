@@ -15,6 +15,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0))
 /** Phiên pi giả: chạy extension thật trên một `pi` giả, prompt() chạy kịch bản của test. */
 class FakeSession {
   handler!: ToolCallHandler
+  startTurn?: () => void
   listeners: Listener[] = []
   active: string[]
   messages: { role: string; stopReason?: string; errorMessage?: string }[] = []
@@ -25,7 +26,13 @@ class FakeSession {
   decisions: ({ block: true; reason: string } | undefined)[] = []
   constructor(public spec: SessionSpec) {
     this.active = [...spec.tools]
-    spec.extension({ registerTool: () => {}, on: (ev: string, h: ToolCallHandler) => { if (ev === 'tool_call') this.handler = h } } as never)
+    spec.extension({
+      registerTool: () => {},
+      on: (event: string, handler: ToolCallHandler | (() => void)) => {
+        if (event === 'tool_call') this.handler = handler as ToolCallHandler
+        if (event === 'agent_start') this.startTurn = handler as () => void
+      },
+    } as never)
   }
   subscribe(l: Listener) { this.listeners.push(l); return () => { this.listeners = this.listeners.filter((x) => x !== l) } }
   emit(e: unknown) { for (const l of this.listeners) l(e) }
@@ -40,7 +47,11 @@ class FakeSession {
   finish(stopReason = 'stop', errorMessage?: string) {
     this.messages.push({ role: 'assistant', stopReason: this.aborted ? 'aborted' : stopReason, errorMessage })
   }
-  async prompt(text: string): Promise<void> { this.messages.push({ role: 'user' }); await this.script(this, text) }
+  async prompt(text: string): Promise<void> {
+    this.startTurn?.()
+    this.messages.push({ role: 'user' })
+    await this.script(this, text)
+  }
   async abort() { this.aborted = true }
   dispose() { this.disposed = true; this.aborted = true }
   setActiveToolsByName(names: string[]) { this.active = names }

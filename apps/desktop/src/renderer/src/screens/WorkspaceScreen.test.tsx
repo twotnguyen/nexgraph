@@ -161,7 +161,7 @@ describe('WorkspaceScreen: changes', () => {
 })
 
 describe('WorkspaceScreen: editor tabs', () => {
-  const read = () => vi.fn(async () => ({ text: 'one\ntwo\nthree', eol: '\n' as const, bom: false, mtimeMs: 1, readOnly: false }))
+  const read = () => vi.fn(async () => ({ text: 'one\ntwo\nthree', eol: '\n' as const, bom: false, mtimeMs: 1, version: 'initial', readOnly: false }))
 
   async function openFromSearch() {
     const code = read()

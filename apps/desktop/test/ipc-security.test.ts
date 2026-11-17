@@ -1,5 +1,5 @@
 // Test bảo mật IPC: mọi handler nhận path phải suy gốc từ projectId đã đăng ký trong main.
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -107,6 +107,23 @@ describe('IPC: path thô từ renderer bị từ chối', () => {
     expect(await invoke('mcp:start-http', 'p1', '/etc/evil')).toMatchObject({ ok: true })
     expect(h.mcpStarts.at(-1)).toEqual(['p1', root])
   })
+})
+
+it('fs:write yêu cầu phiên bản tệp và giữ thay đổi mới trên đĩa khi nhận bản cũ', async () => {
+  const name = 'versioned.ts'
+  const path = join(root, name)
+  const format = { eol: '\n', bom: false }
+  writeFileSync(path, 'bản gốc')
+  const { version } = dataOf<{ version: string }>(await invoke('fs:read', 'p1', name))
+  expect(version).toBeTruthy()
+  const creation = await invoke('fs:write', 'p1', name, 'ghi đè', { ...format, expectedVersion: null })
+  const unversioned = await invoke('fs:write', 'p1', name, 'ghi đè', format)
+  expect(creation).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  expect(unversioned).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  writeFileSync(path, 'bản trên đĩa')
+  const stale = await invoke('fs:write', 'p1', name, 'ghi đè', { ...format, expectedVersion: version })
+  expect(stale).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  expect(readFileSync(path, 'utf8')).toBe('bản trên đĩa')
 })
 
 describe('IPC: xuất chỉ dùng thư mục đã chọn trong main', () => {

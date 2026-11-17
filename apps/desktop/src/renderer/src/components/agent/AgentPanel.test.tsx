@@ -162,6 +162,18 @@ describe('AgentPanel', () => {
     expect(screen.getByRole('button', { name: 'Gửi' })).toBeInTheDocument()
   })
 
+  it('xung đột khi ghi vẫn hiện sau câu trả lời và được xóa khi gửi câu hỏi mới', async () => {
+    const { emitAgent } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
+    render(<AgentPanel {...props()} />)
+    await ask('sửa hàm login')
+    const message = 'Tệp đã thay đổi. Chưa ghi thay đổi. Hãy đọc lại tệp và duyệt bản xem trước mới.'
+    act(() => emitAgent('p1', { type: 'write_conflict', message }))
+    act(() => emitAgent('p1', done))
+    expect(await screen.findByRole('alert')).toHaveTextContent(message)
+    await ask('đọc lại tệp')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('chưa đồng ý gửi mã → hiện ConsentDialog trước khi gửi; Huỷ thì không gửi', async () => {
     const { api } = installNexgraph({ ai: { getSettings: configured, hasConsent: vi.fn(async () => false) } })
     render(<AgentPanel {...props()} />)

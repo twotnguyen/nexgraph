@@ -16,11 +16,33 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
     '}',
     ''
   ].join('\n')
-  await api.fs.write(pid, filename, source, { eol: '\r\n', bom: true })
+  const format = { eol: '\r\n', bom: true } as const
+  const created = await api.fs.write(pid, filename, source, { ...format, expectedVersion: null })
   const file = await api.fs.read(pid, filename)
-  if (file.text !== source || file.eol !== '\r\n' || !file.bom || file.readOnly) {
+  if (file.text !== source || file.eol !== format.eol || !file.bom || file.readOnly ||
+    !created.version || file.version !== created.version) {
     throw new Error('fs IPC roundtrip failed')
   }
+  const [duplicate] = await Promise.allSettled([
+    api.fs.write(pid, filename, 'should not replace the source', { ...format, expectedVersion: null })
+  ])
+  if (duplicate.status !== 'rejected' || duplicate.reason?.code !== 'conflict') {
+    throw new Error('fs IPC allowed a conflicting file creation')
+  }
+
+  const edits = [source + '// save A\n', source + '// save B\n']
+  const saves = await Promise.allSettled(edits.map((text) =>
+    api.fs.write(pid, filename, text, { ...format, expectedVersion: file.version })
+  ))
+  const saved = await api.fs.read(pid, filename)
+  const winner = saves.findIndex((result) => result.status === 'fulfilled')
+  const success = saves[winner]
+  const rejected = saves[1 - winner]
+  if (success?.status !== 'fulfilled' || rejected?.status !== 'rejected' || rejected.reason?.code !== 'conflict' ||
+    saved.text !== edits[winner] || saved.version !== success.value.version || saved.eol !== format.eol || !saved.bom) {
+    throw new Error('fs IPC failed the concurrent save check')
+  }
+  await api.fs.write(pid, filename, source, { ...format, expectedVersion: saved.version })
 
   // SSE báo lỗi sớm nếu đã nối. Kiểm mốc hoàn tất qua IPC để không lỡ job ngắn khi SSE nối muộn.
   if (project.last_indexed_at != null) throw new Error('index smoke requires a fresh project')

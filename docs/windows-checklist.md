@@ -34,12 +34,13 @@ Mỗi mục ghi **Đạt**, **Lỗi** hoặc **Chưa kiểm**. Với lỗi, ghi 
 
 ## D. Editor, Agent và MCP
 
-- [ ] Mở tệp CRLF có BOM, sửa và Ctrl+S, xác nhận EOL/BOM giữ nguyên.
+- [ ] Mở tệp CRLF có BOM, sửa giữa hai lần Ctrl+S liên tiếp, kiểm nội dung cuối cùng và EOL/BOM theo byte.
 - [ ] Đổi thẻ khi có thay đổi chưa lưu. Đóng thẻ/thoát app hiện xác nhận.
 - [ ] Sửa từ ngoài: thẻ sạch nạp lại; thẻ bẩn hiện lựa chọn xử lý xung đột và giữ nháp.
 - [ ] Thêm nhà cung cấp tuỳ chỉnh, chọn model, kiểm kết nối. Key đã lưu không xuất hiện lại trong ô nhập.
 - [ ] Hỏi: xem streaming, bấm **Dừng**, mở trích dẫn và **Tô luồng**. Ghi loại provider (giả hoặc thật).
 - [ ] Chuyển **Sửa** thấy cảnh báo quyền chạy lệnh. Duyệt diff làm đổi tệp, từ chối giữ nguyên byte. Khi đang chờ duyệt, thử **Dừng**, đổi **Hỏi** hoặc tải lại cửa sổ, xác nhận đề xuất cũ không thực thi và lượt sau dùng được.
+- [ ] Trong lúc chờ duyệt diff, sửa tệp từ VS Code hoặc Monaco. Duyệt và kiểm agent báo xung đột, bản đã lưu trên đĩa giữ nguyên. Lặp lại với đề xuất tạo tệp và một tệp vừa xuất hiện ở cùng đường dẫn.
 - [ ] Thử duyệt lệnh vô hại `echo NexGraph`, ghi shell Windows thực tế và kết quả.
 - [ ] Nếu kiểm OAuth, ghi provider, kết quả đăng nhập và hủy. Ghi rõ khi dùng adapter/provider giả.
 - [ ] Xem trước rồi áp dụng cấu hình MCP/skill trong bản sao, xác nhận phần cấu hình cũ được giữ. Nếu client đã cài, mở dự án và gọi `graph_stats` để xác nhận kết nối runtime.

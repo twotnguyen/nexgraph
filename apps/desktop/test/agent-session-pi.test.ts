@@ -24,6 +24,7 @@ const SCRIPT: Record<string, [string, object]> = {
   'viết ngoài': ['write', { path: `@${OUTSIDE}`, content: 'x' }],
   'viết d.txt': ['write', { path: 'd.txt', content: 'bị dừng' }],
   'ghi e.txt': ['write', { path: 'e.txt', content: 'độc hại' }],
+  'sửa f.txt': ['edit', { path: 'f.txt', edits: [{ oldText: 'gốc', newText: 'bản AI' }] }],
   'đọc ngoài': ['read', { path: OUTSIDE_READ }],
   'đọc nháy': ['read', { path: "a'b.txt" }]
 }
@@ -114,7 +115,7 @@ describe('AgentService + pi SDK thật', () => {
 
   const lastEnd = () => events.filter((e) => e.type === 'done' || e.type === 'error').at(-1)
   /** Chạy một lượt; khi có yêu cầu duyệt thì trả lời bằng `answer`. */
-  async function turn(text: string, answer?: boolean) {
+  async function turn(text: string, answer?: boolean, beforeApproval?: () => void) {
     const from = events.length
     const run = svc.prompt('p1', text)
     if (answer !== undefined) {
@@ -124,6 +125,7 @@ describe('AgentService + pi SDK thật', () => {
         await new Promise((r) => setTimeout(r, 10))
       }
       const req = events.slice(from).find((e) => e.type === 'approval') as Extract<AgentEvent, { type: 'approval' }>
+      beforeApproval?.()
       svc.approve('p1', req.request.id, answer)
     }
     await run
@@ -153,6 +155,24 @@ describe('AgentService + pi SDK thật', () => {
   it('(c) từ chối → tệp không được tạo, lượt vẫn kết thúc', async () => {
     await turn('viết c.txt', false)
     expect(existsSync(join(root, 'c.txt'))).toBe(false)
+    expect(lastEnd()).toMatchObject({ type: 'done' })
+    expect(svc.pending('p1')).toBe(0)
+  }, 30_000)
+
+  it('tệp được lưu trong lúc chờ duyệt diff → báo xung đột trong chat và giữ bản trên đĩa', async () => {
+    svc.setMode('p1', 'edit')
+    const file = join(root, 'f.txt')
+    writeFileSync(file, 'gốc\n')
+    const evs = await turn('sửa f.txt', true, () => writeFileSync(file, 'bản editor\n'))
+    expect(evs.find((e) => e.type === 'approval')).toMatchObject({
+      request: { tool: 'edit', path: 'f.txt', before: 'gốc\n', after: 'bản AI\n' },
+    })
+    expect(evs).toContainEqual({ type: 'tool', name: 'edit', status: 'end', error: true })
+    expect(evs).toContainEqual({
+      type: 'write_conflict',
+      message: expect.stringContaining('Chưa ghi thay đổi. Hãy đọc lại tệp và duyệt bản xem trước mới.'),
+    })
+    expect(readFileSync(file, 'utf8')).toBe('bản editor\n')
     expect(lastEnd()).toMatchObject({ type: 'done' })
     expect(svc.pending('p1')).toBe(0)
   }, 30_000)

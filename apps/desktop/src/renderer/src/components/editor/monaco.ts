@@ -56,7 +56,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
   })
   const hit = editor.createDecorationsCollection()
   return {
-    getValue: () => editor.getValue(),
+    getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
     setValue: (v) => editor.setValue(v),
     onChange: (cb) => void editor.onDidChangeModelContent(() => cb()),
     revealLines: (start, end = start) => {

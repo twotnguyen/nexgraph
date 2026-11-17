@@ -253,7 +253,12 @@ export class AgentService {
       agentDir: join(this.deps.dataDir, 'agent'),
       // Allowlist gồm cả tool sửa để đổi chế độ tại chỗ được; tool đang bật do chế độ quyết định, cổng duyệt vẫn chặn sửa ở chế độ Hỏi.
       tools: toolsFor('edit'),
-      extension: createNexgraphExtension({ api: this.deps.api, projectId, root, gate: entry.gate }),
+      extension: createNexgraphExtension({
+        api: this.deps.api, projectId, root, gate: entry.gate,
+        onWriteConflict: (message) => {
+          if (this.entries.get(projectId) === entry && !entry.stopped) emit({ type: 'write_conflict', message })
+        }
+      }),
       modelRuntime,
       model
     }).then((s) => {

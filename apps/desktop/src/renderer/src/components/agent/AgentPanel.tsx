@@ -72,6 +72,10 @@ export function AgentPanel({ projectId, hidden, onOpenCode, onHighlight, onOpenS
         return
       }
       if (!t) return
+      if (e.type === 'write_conflict') {
+        setError(e.message)
+        return
+      }
       if (e.type === 'tool' && e.status === 'start') {
         t.tools.push(e.name)
         setTool(e.name)
