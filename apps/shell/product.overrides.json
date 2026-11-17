@@ -1,0 +1,24 @@
+{
+  "nameShort": "NexGraph",
+  "nameLong": "NexGraph",
+  "applicationName": "nexgraph",
+  "dataFolderName": ".nexgraph-editor",
+  "sharedDataFolderName": ".nexgraph-editor-shared",
+  "win32MutexName": "nexgraph",
+  "win32DirName": "NexGraph",
+  "win32NameVersion": "NexGraph",
+  "win32RegValueName": "NexGraph",
+  "win32AppUserModelId": "NexGraph.NexGraph",
+  "win32ShellNameShort": "&NexGraph",
+  "darwinBundleIdentifier": "vn.edu.hutech.nexgraph",
+  "linuxIconName": "nexgraph",
+  "urlProtocol": "nexgraph",
+  "extensionsGallery": {
+    "serviceUrl": "https://open-vsx.org/vscode/gallery",
+    "itemUrl": "https://open-vsx.org/vscode/item"
+  },
+  "win32x64AppId": "{{AB4F9485-6234-45E0-AAF3-4B011AAFD3E0}",
+  "win32arm64AppId": "{{DA907E8B-1EFE-4FCE-984D-854A2E1DA653}",
+  "win32x64UserAppId": "{{B7E70604-7DDA-41DC-8E7C-191EF6546F6A}",
+  "win32arm64UserAppId": "{{499FC367-145F-4336-8470-3C7977763E93}"
+}

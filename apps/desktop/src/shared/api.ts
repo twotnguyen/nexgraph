@@ -14,6 +14,17 @@ export type WriteOpts = { eol: '\n' | '\r\n'; bom: boolean; expectedMtimeMs?: nu
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
 export interface NexGraphApi {
+  /** Chỉ có khi chạy trong extension (nền Code-OSS): thư mục đang mở và lệnh mở tệp bằng editor của nền. */
+  host?: {
+    folder: string | null
+    openFile(file: string, line?: number, lineEnd?: number): Promise<void>
+    /** Thẻ cần mở đầu tiên (do lệnh của nền chọn). */
+    initialView?: string
+    /** Lệnh từ giao diện của nền hoặc từ view khác: `view:<thẻ>`, `panel:<tên>`, `export`, `overview`, `settings`, `highlight` (kèm `arg`). Trả về hàm huỷ đăng ký. */
+    onCommand(cb: (name: string, arg?: unknown) => void): () => void
+    /** Gửi một lệnh sang tab NexGraph chính (dùng từ view Trợ lý AI). */
+    emit(name: string, arg?: unknown): Promise<void>
+  }
   engine: {
     status(): Promise<EngineStatus>
     restart(): Promise<void>

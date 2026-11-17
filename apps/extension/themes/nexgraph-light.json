@@ -1,0 +1,27 @@
+{
+  "name": "NexGraph Light", "type": "light",
+  "colors": {
+    "focusBorder": "#3257f0", "foreground": "#1a2142", "descriptionForeground": "#5d6685",
+    "editor.background": "#ffffff", "editor.foreground": "#1a2142", "editorLineNumber.foreground": "#a9b3e6", "editorLineNumber.activeForeground": "#3257f0",
+    "editor.selectionBackground": "#ebefff", "editor.lineHighlightBackground": "#f3f5fc", "editorIndentGuide.activeBackground1": "#b9c1e0",
+    "titleBar.activeBackground": "#12183a", "titleBar.activeForeground": "#ffffff", "titleBar.inactiveBackground": "#12183a", "titleBar.inactiveForeground": "#a9b3e6",
+    "activityBar.background": "#12183a", "activityBar.foreground": "#ffffff", "activityBar.inactiveForeground": "#a9b3e6", "activityBar.activeBorder": "#3257f0", "activityBarBadge.background": "#3257f0",
+    "activityBarTop.foreground": "#1a2142", "activityBarTop.inactiveForeground": "#5d6685", "activityBarTop.activeBorder": "#3257f0",
+    "sideBar.background": "#eceffa", "sideBar.foreground": "#1a2142", "sideBar.border": "#dce1f0", "sideBarSectionHeader.background": "#eceffa", "sideBarTitle.foreground": "#5d6685",
+    "list.activeSelectionBackground": "#ebefff", "list.activeSelectionForeground": "#1a2142", "list.inactiveSelectionBackground": "#e2e6f5", "list.hoverBackground": "#e2e6f5",
+    "editorGroupHeader.tabsBackground": "#f3f5fc", "editorGroupHeader.tabsBorder": "#dce1f0", "tab.activeBackground": "#ffffff", "tab.inactiveBackground": "#f3f5fc",
+    "tab.activeForeground": "#1a2142", "tab.inactiveForeground": "#5d6685", "tab.border": "#dce1f0", "tab.activeBorderTop": "#3257f0",
+    "statusBar.background": "#12183a", "statusBar.foreground": "#a9b3e6", "statusBar.noFolderBackground": "#12183a", "statusBar.border": "#12183a",
+    "panel.background": "#ffffff", "panel.border": "#dce1f0", "button.background": "#3257f0", "button.foreground": "#ffffff",
+    "input.background": "#ffffff", "input.border": "#dce1f0", "badge.background": "#3257f0", "badge.foreground": "#ffffff",
+    "charts.blue": "#3257f0", "charts.green": "#1c9a5b", "charts.orange": "#e07a00", "charts.purple": "#7a4df2", "charts.red": "#e23d94", "charts.yellow": "#0a9c99"
+  },
+  "tokenColors": [
+    { "scope": ["comment"], "settings": { "foreground": "#5d6685", "fontStyle": "italic" } },
+    { "scope": ["keyword", "storage"], "settings": { "foreground": "#7a4df2" } },
+    { "scope": ["string"], "settings": { "foreground": "#1c9a5b" } },
+    { "scope": ["constant.numeric", "constant.language"], "settings": { "foreground": "#e07a00" } },
+    { "scope": ["entity.name.function", "support.function"], "settings": { "foreground": "#0a9c99" } },
+    { "scope": ["entity.name.type", "entity.name.class", "support.class"], "settings": { "foreground": "#3257f0" } }
+  ]
+}

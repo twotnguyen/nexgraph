@@ -1,0 +1,17 @@
+diff --git a/build/lib/extensions.ts b/build/lib/extensions.ts
+index 66482395..c018c4ca 100644
+--- a/build/lib/extensions.ts
++++ b/build/lib/extensions.ts
+@@ -324,6 +324,12 @@ const nativeExtensions = [
+ 
+ const excludedExtensions = [
+ 	'copilot',
++	// NexGraph: không đóng gói các extension không phục vụ sản phẩm
++	'github',
++	'github-authentication',
++	'tunnel-forwarding',
++	'ipynb',
++	'notebook-renderers',
+ 	'vscode-api-tests',
+ 	'vscode-colorize-tests',
+ 	'vscode-colorize-perf-tests',

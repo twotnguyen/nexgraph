@@ -1,0 +1,129 @@
+/* Ghi đè giao diện khi app React chạy trong tab của nền. Nền đã có thanh tiêu đề, thanh trạng thái và thanh hoạt động,
+   nên trong tab chỉ giữ nội dung: bộ chuyển thẻ, khung đồ thị, bảng công cụ và khung trợ lý. */
+
+/* Đầu trang cũ (tên dự án, đường dẫn, nút) đã chuyển lên thanh công cụ của tab. */
+.hosted .ws-head { display: none; }
+
+/* Trạng thái engine đã có ở thanh trạng thái của nền; chỉ hiện lại khi đang khởi động hoặc lỗi (cần nút Khởi động lại). */
+.hosted .status-bar[data-state='ready'] { display: none; }
+
+.hosted body { font-size: 13px; }
+
+/* Dải công cụ: sáng và mảnh, đọc như một phần của bảng bên cạnh chứ không phải thanh hoạt động thứ hai. */
+.hosted .activity-bar {
+  width: 40px;
+  padding-top: 10px;
+  gap: 2px;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+}
+.hosted .activity-bar button {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--color-muted);
+}
+.hosted .activity-bar button svg { width: 17px; height: 17px; }
+.hosted .activity-bar button:hover { background: var(--track); color: var(--color-text); }
+.hosted .activity-bar button[aria-pressed='true'] { background: var(--accent-soft); color: var(--blue); }
+
+.hosted .sidebar { width: 248px; padding: 12px; }
+.hosted .sidebar.wide { width: 320px; }
+
+/* Bộ chuyển thẻ: gọn hơn, cùng nền với khung đồ thị để không thành tầng tab thứ hai dưới tab của nền. */
+.hosted .tabs {
+  padding: 4px 8px 0;
+  background: var(--color-bg);
+}
+.hosted .tab { padding: 6px 12px 7px; font-size: 13px; }
+
+/* Ô nhập: viền xanh và quầng nhạt thay cho khung viền kép. */
+.hosted input:focus-visible,
+.hosted textarea:focus-visible {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.hosted .chat { width: clamp(280px, 28vw, 380px); }
+
+/* Nền chèn sẵn kiểu cho <code> trong webview (chữ đỏ, nền nhạt); trả lại màu của khối chứa nó. */
+.hosted code { color: inherit; background: none; padding: 0; font-family: var(--font-mono); }
+
+/* Thẻ Luồng: ba cột co lại ở khung hẹp. */
+@media (max-width: 1000px) {
+  .hosted .flows-view { grid-template-columns: 216px minmax(0, 1fr) 256px; }
+}
+
+/* View Trợ lý AI ở thanh bên phụ: khung trợ lý chiếm trọn view. */
+.agent-view #root { height: 100vh; display: flex; }
+.agent-view .chat { flex: 1; width: auto; border-left: 0; }
+.agent-view .chat > header { border-top: 0; }
+.agent-view .agent-wait { padding: 16px; }
+
+.agent-view .chat > header b { display: none; } /* tiêu đề đã có ở đầu view của nền */
+.agent-view .chat > header { justify-content: flex-end; }
+
+/* --- Theme tối: nền gắn lớp vscode-dark lên body khi người dùng chọn theme tối. Chỉ đổi token; thành phần giữ nguyên. --- */
+.hosted body.vscode-dark {
+  --night: #0b0f2a;
+  --night-2: #232c63;
+  --color-bg: #0f1432;
+  --color-surface: #151b40;
+  --panel: #12183a;
+  --track: #232c63;
+  --color-text: #e4e8fb;
+  --color-muted: #98a1cc;
+  --color-border: #2a3368;
+  --blue: #7189ff;
+  --violet: #a488ff;
+  --teal: #2ec4c0;
+  --magenta: #f26bb1;
+  --green: #46c98b;
+  --amber: #f0bb3a;
+  --orange: #f59b3d;
+  --color-error-red: #ff6f66;
+  --accent-soft: #222b63;
+  --amber-soft: #3a3214;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  /* Token dẫn xuất được tính sẵn ở :root theo bản sáng nên phải khai lại ở đây. */
+  --color-fg: var(--color-text);
+  --color-map-blue: var(--blue);
+  --tone: var(--blue);
+  color-scheme: dark;
+}
+/* Nút chính giữ xanh đậm để chữ trắng đủ tương phản. */
+.hosted body.vscode-dark button.primary { background: linear-gradient(135deg, #3257f0, #7a4df2); }
+/* Các chỗ pha màu với trắng viết cứng: pha với bề mặt tối. */
+.hosted body.vscode-dark .react-flow__node-default { background: color-mix(in srgb, var(--node-c, var(--color-surface)) 16%, var(--color-surface)); color: var(--color-text); }
+.hosted body.vscode-dark .kind-chip.active,
+.hosted body.vscode-dark .flow-card.selected,
+.hosted body.vscode-dark .flow-item.active,
+.hosted body.vscode-dark .step-row.current,
+.hosted body.vscode-dark .flow-step[aria-current='step'] { background: color-mix(in srgb, var(--tone) 16%, var(--color-surface)); }
+/* React Flow: biến màu mặc định là bản sáng. */
+.hosted body.vscode-dark .react-flow {
+  --xy-background-color-default: var(--color-bg);
+  --xy-background-pattern-dots-color-default: #2a3368;
+  --xy-node-background-color-default: var(--color-surface);
+  --xy-node-color-default: var(--color-text);
+  --xy-node-border-default: 1px solid var(--color-border);
+  --xy-edge-stroke-default: #5f6aa3;
+  --xy-edge-label-background-color-default: var(--color-bg);
+  --xy-edge-label-color-default: var(--color-text);
+  --xy-controls-button-background-color-default: var(--color-surface);
+  --xy-controls-button-background-color-hover-default: var(--track);
+  --xy-controls-button-color-default: var(--color-text);
+  --xy-controls-button-border-color-default: var(--color-border);
+}
+.hosted body.vscode-dark .legend,
+.hosted body.vscode-dark .map-status { background: color-mix(in srgb, var(--color-surface) 82%, transparent); }
+/* Chữ và nền viết cứng cho bản sáng. */
+.hosted body.vscode-dark .stale-banner,
+.hosted body.vscode-dark .warn,
+.hosted body.vscode-dark .badge { color: var(--amber); }
+.hosted body.vscode-dark .cite.bad { background: color-mix(in srgb, var(--color-error-red) 18%, var(--color-surface)); }
+.hosted body.vscode-dark .card > .card-icon,
+.hosted body.vscode-dark .flow-card-kind { background: color-mix(in srgb, var(--tone) 18%, var(--color-surface)); }
+/* Nền đặt sẵn nền xám cho <select> trong webview; dùng bề mặt của theme. */
+.hosted select { background: var(--color-surface); color: var(--color-text); }

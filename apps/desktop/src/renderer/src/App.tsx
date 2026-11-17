@@ -52,6 +52,27 @@ export default function App() {
     }
   }, [])
 
+  // Chạy trong extension: thư mục do nền mở sẵn, bỏ qua bước chọn dự án.
+  const hostFolder = window.nexgraph.host?.folder
+  useEffect(() => {
+    if (!hostFolder || status.state !== 'ready' || screen.name !== 'projects') return
+    let alive = true
+    window.nexgraph.project.open(hostFolder)
+      .then((project) => alive && setScreen(project.last_indexed_at ? { name: 'workspace', project, tab: window.nexgraph.host?.initialView as WorkspaceTab | undefined } : { name: 'scan', project }))
+      .catch(() => {}) // lỗi mở: ở lại màn Dự án để người dùng thấy và thử lại
+    return () => { alive = false }
+  }, [hostFolder, status.state]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Lệnh chọn thẻ từ nền khi đang ở màn Tổng quan: vào không gian làm việc đúng thẻ đó.
+  // Lệnh từ nền khi không ở không gian làm việc (màn đó tự xử lý lệnh của nó): chọn thẻ, mở Cài đặt, về Tổng quan.
+  useEffect(() => window.nexgraph.host?.onCommand((c) => {
+    if (screen.name === 'workspace') return
+    const at = screen.name === 'settings' ? screen.back : screen // màn nằm dưới Cài đặt
+    if (c === 'settings' && screen.name !== 'settings') setScreen({ name: 'settings', back: screen })
+    else if (c === 'overview' && screen.name === 'settings') setScreen(screen.back)
+    else if (c.startsWith('view:') && (at.name === 'overview' || at.name === 'workspace')) setScreen({ name: 'workspace', project: at.project, tab: c.slice(5) as WorkspaceTab })
+  }), [screen])
+
   return (
     <div className="app">
       {screen.name === 'projects' && (

@@ -1,0 +1,161 @@
+<svg opacity="0.22" xmlns="http://www.w3.org/2000/svg" viewBox="90 50 332 412" width="210" height="260" fill="none">
+  <defs>
+    <!-- Edge Gradients -->
+    <linearGradient id="markNPathGlow" x1="148" y1="364" x2="364" y2="148" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a9c99" />
+      <stop offset="25%" stop-color="#3257f0" />
+      <stop offset="50%" stop-color="#7a4df2" />
+      <stop offset="75%" stop-color="#e23d94" />
+      <stop offset="100%" stop-color="#e0a100" />
+    </linearGradient>
+
+    <linearGradient id="markLeftPillar" x1="148" y1="364" x2="148" y2="148" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a9c99" />
+      <stop offset="100%" stop-color="#3257f0" />
+    </linearGradient>
+
+    <linearGradient id="markDiagBridge" x1="148" y1="148" x2="364" y2="364" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3257f0" />
+      <stop offset="50%" stop-color="#7a4df2" />
+      <stop offset="100%" stop-color="#e23d94" />
+    </linearGradient>
+
+    <linearGradient id="markRightPillar" x1="364" y1="364" x2="364" y2="148" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#e23d94" />
+      <stop offset="100%" stop-color="#e0a100" />
+    </linearGradient>
+
+    <linearGradient id="markTopRoofLeft" x1="148" y1="148" x2="256" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3257f0" />
+      <stop offset="100%" stop-color="#7a4df2" />
+    </linearGradient>
+
+    <linearGradient id="markTopRoofRight" x1="256" y1="92" x2="364" y2="148" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7a4df2" />
+      <stop offset="100%" stop-color="#e0a100" />
+    </linearGradient>
+
+    <linearGradient id="markBottomFloorLeft" x1="148" y1="364" x2="256" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a9c99" />
+      <stop offset="100%" stop-color="#1c9a5b" />
+    </linearGradient>
+
+    <linearGradient id="markBottomFloorRight" x1="256" y1="420" x2="364" y2="364" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1c9a5b" />
+      <stop offset="100%" stop-color="#e23d94" />
+    </linearGradient>
+
+    <!-- Node Radial Gradients -->
+    <radialGradient id="markNodeBlue" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#7aa3ff" />
+      <stop offset="50%" stop-color="#3257f0" />
+      <stop offset="100%" stop-color="#1a35a0" />
+    </radialGradient>
+
+    <radialGradient id="markNodeTeal" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#3fe0dd" />
+      <stop offset="50%" stop-color="#0a9c99" />
+      <stop offset="100%" stop-color="#065f5d" />
+    </radialGradient>
+
+    <radialGradient id="markNodeMagenta" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ff7ebc" />
+      <stop offset="50%" stop-color="#e23d94" />
+      <stop offset="100%" stop-color="#931358" />
+    </radialGradient>
+
+    <radialGradient id="markNodeAmber" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#ffde59" />
+      <stop offset="50%" stop-color="#e0a100" />
+      <stop offset="100%" stop-color="#8a5e00" />
+    </radialGradient>
+
+    <radialGradient id="markNodeViolet" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#d4adfc" />
+      <stop offset="50%" stop-color="#7a4df2" />
+      <stop offset="100%" stop-color="#4a22aa" />
+    </radialGradient>
+
+    <radialGradient id="markNodeGreen" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#4fe391" />
+      <stop offset="50%" stop-color="#1c9a5b" />
+      <stop offset="100%" stop-color="#0d5731" />
+    </radialGradient>
+
+    <!-- Glow Filters -->
+    <filter id="markSoftGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="7" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+    <filter id="markBloomGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="14" result="blur1" />
+      <feGaussianBlur stdDeviation="5" result="blur2" />
+      <feMerge>
+        <feMergeNode in="blur1" />
+        <feMergeNode in="blur2" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Ambient Micro Mesh -->
+  <g opacity="0.18" stroke="#7a4df2" stroke-width="1.5" stroke-dasharray="3,3">
+    <line x1="256" y1="92" x2="256" y2="420" />
+  </g>
+
+  <!-- Secondary Hypergraph Dimensional Edges (Top Roof & Bottom Floor) -->
+  <g stroke-linecap="round" opacity="0.75">
+    <line x1="148" y1="148" x2="256" y2="92" stroke="url(#markTopRoofLeft)" stroke-width="4.5" />
+    <line x1="256" y1="92" x2="364" y2="148" stroke="url(#markTopRoofRight)" stroke-width="4.5" />
+    <line x1="148" y1="364" x2="256" y2="420" stroke="url(#markBottomFloorLeft)" stroke-width="4.5" stroke-dasharray="8,5" />
+    <line x1="256" y1="420" x2="364" y2="364" stroke="url(#markBottomFloorRight)" stroke-width="4.5" stroke-dasharray="8,5" />
+  </g>
+
+  <!-- Primary Graph Edges forming the Capital 'N' -->
+  <path d="M 148 364 L 148 148 L 364 364 L 364 148" fill="none" stroke="url(#markNPathGlow)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity="0.35" filter="url(#markBloomGlow)" />
+  <line x1="148" y1="364" x2="148" y2="148" stroke="url(#markLeftPillar)" stroke-width="15" stroke-linecap="round" />
+  <line x1="148" y1="148" x2="364" y2="364" stroke="url(#markDiagBridge)" stroke-width="17" stroke-linecap="round" />
+  <line x1="364" y1="364" x2="364" y2="148" stroke="url(#markRightPillar)" stroke-width="15" stroke-linecap="round" />
+
+  <!-- Flow Evidence Pulses -->
+  <circle cx="206" cy="206" r="4.5" fill="#ffffff" opacity="0.9" />
+  <circle cx="306" cy="306" r="4.5" fill="#ffffff" opacity="0.9" />
+
+  <!-- Knowledge Graph Nodes -->
+  <!-- Top Satellite Node (Insight / Cloud AI - Violet) -->
+  <circle cx="256" cy="92" r="22" fill="#7a4df2" opacity="0.25" filter="url(#markSoftGlow)" />
+  <circle cx="256" cy="92" r="14" fill="url(#markNodeViolet)" stroke="#ffffff" stroke-width="2.5" stroke-opacity="0.95" />
+  <circle cx="256" cy="92" r="5" fill="#ffffff" />
+
+  <!-- Bottom Satellite Node (Verification / Test - Green) -->
+  <circle cx="256" cy="420" r="22" fill="#1c9a5b" opacity="0.25" filter="url(#markSoftGlow)" />
+  <circle cx="256" cy="420" r="14" fill="url(#markNodeGreen)" stroke="#ffffff" stroke-width="2.5" stroke-opacity="0.95" />
+  <circle cx="256" cy="420" r="5" fill="#ffffff" />
+
+  <!-- Node 1: Bottom-Left (Source Code / AST - Teal) -->
+  <circle cx="148" cy="364" r="30" fill="#0a9c99" opacity="0.28" filter="url(#markSoftGlow)" />
+  <circle cx="148" cy="364" r="21" fill="url(#markNodeTeal)" stroke="#ffffff" stroke-width="3" stroke-opacity="0.95" />
+  <circle cx="148" cy="364" r="7" fill="#ffffff" />
+
+  <!-- Node 2: Top-Left (Architecture / Class Structure - Blue) -->
+  <circle cx="148" cy="148" r="32" fill="#3257f0" opacity="0.32" filter="url(#markSoftGlow)" />
+  <circle cx="148" cy="148" r="23" fill="url(#markNodeBlue)" stroke="#ffffff" stroke-width="3.5" stroke-opacity="0.95" />
+  <circle cx="148" cy="148" r="8" fill="#ffffff" />
+
+  <!-- Node 3: Bottom-Right (Flow & Blast Radius / Impact - Magenta) -->
+  <circle cx="364" cy="364" r="32" fill="#e23d94" opacity="0.32" filter="url(#markSoftGlow)" />
+  <circle cx="364" cy="364" r="23" fill="url(#markNodeMagenta)" stroke="#ffffff" stroke-width="3.5" stroke-opacity="0.95" />
+  <circle cx="364" cy="364" r="8" fill="#ffffff" />
+
+  <!-- Node 4: Top-Right (Knowledge / Report / Overview - Amber) -->
+  <circle cx="364" cy="148" r="30" fill="#e0a100" opacity="0.28" filter="url(#markSoftGlow)" />
+  <circle cx="364" cy="148" r="21" fill="url(#markNodeAmber)" stroke="#ffffff" stroke-width="3" stroke-opacity="0.95" />
+  <circle cx="364" cy="148" r="7" fill="#ffffff" />
+
+  <!-- Center Node: The "Nexus" Hub (Graph Center - Violet Core Spark) -->
+  <circle cx="256" cy="256" r="38" fill="#7a4df2" opacity="0.38" filter="url(#markBloomGlow)" />
+  <circle cx="256" cy="256" r="26" fill="url(#markNodeViolet)" stroke="#ffffff" stroke-width="4" stroke-opacity="1" />
+  <circle cx="256" cy="256" r="9" fill="#ffffff" />
+  <!-- Center Nexus 4-point star -->
+  <path d="M 256 244 Q 256 256 268 256 Q 256 256 256 268 Q 256 256 244 256 Q 256 256 256 244 Z" fill="#ffffff" opacity="0.95" />
+</svg>
