@@ -53,6 +53,8 @@ jobs:
           grep -F 'SMOKE OK nodes=' nexgraph-dev-smoke.log
       - run: pnpm --filter @nexgraph/desktop typecheck
       - run: pnpm --filter @nexgraph/desktop test
+        env:
+          NEXGRAPH_E2E: '1'
 
   package:
     name: package (${{ matrix.os }})
