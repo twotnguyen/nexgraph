@@ -245,7 +245,7 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
         observer.disconnect()
         reject(new Error(`workspace smoke did not find ${label}`))
       }, 7_000)
-      observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true })
+      observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true })
       check()
     })
   }
@@ -264,16 +264,29 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
     return button
   }
 
-  const themeButton = await waitFor(() => document.querySelector<HTMLButtonElement>('.theme-toggle'), 'chuyển giao diện')
+  const themeLabel = (theme: string) => theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'
+  const themePainted = () => {
+    const style = getComputedStyle(document.body)
+    const expected = document.createElement('span')
+    expected.style.backgroundColor = style.getPropertyValue('--color-bg').trim()
+    return expected.style.backgroundColor !== '' && style.backgroundColor === expected.style.backgroundColor
+  }
+  const themeButton = await waitFor(() => {
+    const button = document.querySelector<HTMLButtonElement>('.theme-toggle')
+    const theme = document.documentElement.dataset.theme
+    return button && (theme === 'light' || theme === 'dark') &&
+      button.getAttribute('aria-label') === themeLabel(theme) && themePainted() ? button : null
+  }, 'nút giao diện đồng bộ với màu nền ban đầu')
   const initialTheme = document.documentElement.dataset.theme
   if (initialTheme !== 'light' && initialTheme !== 'dark') throw new Error('Workbench did not initialize its theme')
   const nextTheme = initialTheme === 'light' ? 'dark' : 'light'
   const initialBackground = getComputedStyle(document.body).backgroundColor
   hit(themeButton, 'Chuyển giao diện').click()
-  if (document.documentElement.dataset.theme !== nextTheme ||
-    localStorage.getItem('nexgraph.theme') !== nextTheme || getComputedStyle(document.body).backgroundColor === initialBackground) {
-    throw new Error('Workbench theme toggle did not persist or repaint the application')
-  }
+  await waitFor(() => document.documentElement.dataset.theme === nextTheme &&
+    localStorage.getItem('nexgraph.theme') === nextTheme &&
+    themeButton.getAttribute('aria-label') === themeLabel(nextTheme) &&
+    getComputedStyle(document.body).backgroundColor !== initialBackground && themePainted() ? themeButton : null,
+  'giao diện mới được lưu và vẽ đúng màu nền')
 
   const recent = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('ul.recent button')).find((item) =>
     !item.disabled && item.querySelector('b')?.textContent?.normalize('NFC') === projectName.normalize('NFC')), projectName)
