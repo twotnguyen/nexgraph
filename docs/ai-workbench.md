@@ -1,6 +1,6 @@
 # Trợ lý AI trong không gian làm việc NexGraph
 
-NexGraph dùng `@earendil-works/pi-coding-agent` 1.5.2 trong Electron main process. Cây tệp ở bên trái, Monaco và sơ đồ ở giữa, trợ lý ở bên phải. Pi thực hiện hội thoại và vòng gọi công cụ; NexGraph quản lý quyền, phạm vi mã nguồn, lịch sử và checkpoint. Nút **OpenCode** cấu hình một client OpenCode bên ngoài kết nối MCP của NexGraph; nó không chạy một OpenCode server thứ hai bên trong khung chat.
+NexGraph dùng `@earendil-works/pi-coding-agent` 1.5.2 cho API key, ChatGPT và Ollama; kết nối tài khoản Google dùng Antigravity CLI chính thức qua ACP. Cây tệp ở bên trái, Monaco và sơ đồ ở giữa, trợ lý ở bên phải. Hai runtime cùng dùng công cụ, quyền, phạm vi mã nguồn và checkpoint của NexGraph. Nút **OpenCode** cấu hình một client OpenCode bên ngoài kết nối MCP của NexGraph; nó không chạy một OpenCode server thứ hai bên trong khung chat.
 
 ## Chạy từ mã nguồn
 
@@ -21,12 +21,30 @@ Bấm **Kết nối** trong khung trợ lý. Chọn một phương thức, hoàn
 | --- | --- | --- |
 | ChatGPT | **Tài khoản → ChatGPT → Tiếp tục đăng nhập**, hoàn tất trình duyệt | Dùng nhà cung cấp OpenAI của Pi cùng adapter Sign in with ChatGPT của NexGraph. Hiện cần Plus/Pro đủ điều kiện, workspace cho phép và còn hạn mức chia sẻ. Hoàn tất trang web chưa có nghĩa bước đổi token hoặc gọi model đã thành công. |
 | Claude | **API key → Anthropic** | Dùng Anthropic API key. Đăng nhập Claude Pro/Max bằng OAuth không được cung cấp cho chat tích hợp. |
-| Gemini | **API key → Google**, dùng key từ Google AI Studio | Hạn mức miễn phí phụ thuộc tài khoản, dự án và model; không bảo đảm mọi yêu cầu đều miễn phí. |
+| Gemini · Tài khoản Google | **Gemini → Tài khoản Google**, thiết lập Antigravity CLI rồi đăng nhập Google trong trình duyệt | Dùng quyền và hạn mức Antigravity của tài khoản. Hỗ trợ tài khoản cá nhân/Google AI Pro đủ điều kiện; NexGraph không tự xác nhận gói Pro chỉ từ việc đăng nhập. |
+| Gemini · API key | **Gemini → API key**, dùng key từ Google AI Studio | Đây là Gemini API qua Pi, với quota/billing riêng. Gói Google AI Pro không thay thế API key hoặc cấp sẵn ngân sách Gemini API. |
 | OpenRouter | **API key → OpenRouter** | Có cả model miễn phí và trả phí. Chọn đúng mục có giá phù hợp; model phải hỗ trợ gọi công cụ để sửa/test tự động. |
 | Ollama | **Ollama local**, địa chỉ mặc định `http://localhost:11434/v1` | Ollama phải đang chạy và đã tải model. NexGraph tìm model từ máy chủ local; khả năng tool calling và cửa sổ ngữ cảnh phụ thuộc model/cấu hình Ollama. |
 | OpenAI-compatible | **Cài đặt → Tài khoản AI → Nhà cung cấp tùy chỉnh** | Nhập Base URL, model và key nếu có. Endpoint phải hỗ trợ giao thức và công cụ cần dùng. Giá tùy chỉnh chưa khai báo được hiển thị là chưa xác định. |
 
-API key và token được lưu bằng kho khóa mã hóa của NexGraph trên máy, không gửi qua renderer dưới dạng khóa thuần. Khi kho an toàn không khả dụng, đăng nhập OAuth báo lỗi thay vì tự lưu token thuần. Đổi key, đăng nhập hoặc đăng xuất làm danh tính kết nối và sự đồng ý cũ hết hiệu lực; lịch sử của kết nối khác không tự ghép vào phiên mới.
+API key và token OAuth của Pi được lưu bằng kho khóa mã hóa của NexGraph trên máy, không gửi qua renderer dưới dạng khóa thuần. Khi kho an toàn không khả dụng, OAuth của Pi báo lỗi thay vì tự lưu token thuần. Đổi key, đăng nhập hoặc xóa kết nối làm danh tính kết nối và sự đồng ý cũ hết hiệu lực; lịch sử của kết nối khác không tự ghép vào phiên mới.
+
+### Gemini với tài khoản Google
+
+Gemini CLI cũ đã ngừng phục vụ tài khoản cá nhân và Google AI Pro/Ultra từ **18/6/2026**. Đường được Google hỗ trợ cho các tài khoản này là **Antigravity CLI**, với server `agy acp` dành cho ứng dụng/editor bên ngoài. Không tiếp tục dùng Gemini CLI cũ hoặc đổi giả danh client để vượt lỗi `UNSUPPORTED_CLIENT`. [Thông báo chuyển đổi](https://developers.googleblog.com/an-important-update-transitioning-gemini-cli-to-antigravity-cli/) · [Tích hợp ACP chính thức](https://antigravity.google/docs/ide/extensions/acp/).
+
+1. Chọn **Gemini → Tài khoản Google → Thiết lập Antigravity CLI**. NexGraph tải binary chính thức đã ghim và kiểm hash trước khi cài vào thư mục dữ liệu. CLI này là chương trình native, không yêu cầu cài Node riêng. Máy chạy mã nguồn NexGraph vẫn cần môi trường dev như trên.
+2. Chọn **Đăng nhập Google**, hoàn tất trình duyệt rồi quay lại NexGraph. CLI chính thức tự quản lý OAuth và refresh. NexGraph không đọc token Google để đưa sang Pi hoặc tự gọi backend riêng của Google.
+3. Chọn model được CLI cung cấp, chạy **Kiểm tra kết nối và công cụ**. Phép kiểm chỉ dùng công cụ thử, chưa gửi mã nguồn dự án. Đăng nhập xong vẫn có thể bị thiếu quyền, model hoặc quota.
+4. Đồng ý gửi ngữ cảnh dự án khi cần rồi chọn **Dùng tài khoản Google**. Header phân biệt **Gemini · Tài khoản Google** và **Gemini · API key**. Mỗi thay đổi model cần kiểm tra lại trước khi kích hoạt từ luồng kết nối.
+
+CLI dùng thư mục cấu hình và thư mục làm việc do NexGraph quản lý dưới `antigravity/` trong dữ liệu engine. Token do CLI quản lý theo cơ chế lưu của nó, **không thuộc kho token mã hóa của Pi**. Không nhập hoặc sao chép token từ hồ sơ Google bên ngoài. Không coi thư mục cấu hình riêng là bảo đảm tài khoản OAuth riêng: CLI có thể dùng kho xác thực của hệ điều hành cùng với Antigravity đã cài. **Ngắt kết nối NexGraph** dừng runtime trong ứng dụng, không đăng xuất hoặc thu hồi tài khoản Google dùng bởi công cụ khác.
+
+Sau mỗi lần mở NexGraph, kết nối Google phải được kiểm tra và kích hoạt lại; quyền gửi ngữ cảnh và lịch sử cũng phải được xác nhận lại cho dự án. Lịch sử cục bộ được giữ cùng kết nối, nhưng mã kết nối không phải danh tính Google đã được xác minh. Nếu đổi tài khoản trong Antigravity bên ngoài, ngắt kết nối NexGraph rồi kết nối lại trước khi gửi câu hỏi; ứng dụng không cung cấp bộ chuyển nhiều tài khoản Google độc lập.
+
+CLI được cấp thư mục làm việc riêng, không phải gốc dự án. Các công cụ đọc/ghi tệp, shell và subagent mặc định bị loại bỏ; hook, skill, tệp ngữ cảnh và MCP của dự án nguồn không tự được nạp. Các tiện ích resource của CLI chỉ thấy MCP NexGraph, và cổng này không cung cấp resource để đọc tệp trực tiếp. Mã nguồn được đọc/ghi qua MCP loopback có token riêng của NexGraph, áp dụng cùng phạm vi tệp, duyệt thay đổi và quyền chạy lệnh. Đường đọc/ghi/terminal ACP trực tiếp bị từ chối. Không dùng chế độ yolo toàn cục.
+
+Khi Google báo lỗi hoặc hết hạn mức, NexGraph giữ kết nối đã chọn và báo lỗi; không tự chuyển sang API key có thể phát sinh phí. Xem [xác thực](https://antigravity.google/docs/authentication) và [ACP](https://antigravity.google/docs/ide/extensions/acp/) của Antigravity.
 
 Adapter ChatGPT dùng callback HTTP loopback trên `127.0.0.1` với cổng trống, PKCE và state/nonce riêng cho từng lần xác nhận. Nó kiểm chữ ký ID token qua JWKS của OpenAI, issuer, audience, hạn dùng, nonce, danh tính `sub` và quyền `chatgpt.tokens.use.direct` trước khi chấp nhận token. Nếu đổi code trả `invalid_grant`, lần xác nhận mới dùng code/PKCE mới và client ID vừa được cấp; không gửi lại code cũ. Pi tiếp tục quản lý refresh và gọi Responses API. [Giao thức đăng ký và xác nhận chính thức](https://developers.openai.com/siwc/token-sharing-open-source/sign-in)
 
@@ -52,11 +70,11 @@ Tệp có bản nháp Monaco chưa lưu được bảo vệ trước thao tác g
 
 ## 4. Lịch sử và tiếp tục tác vụ
 
-**+ Phiên mới** tạo một hội thoại riêng. **Lịch sử** cho mở lại, đổi tên hoặc xóa hội thoại của kết nối đang chọn. Đóng rồi mở ứng dụng khôi phục phiên đang chọn và transcript Pi; không tự chạy lại tác vụ dở dang. Tác vụ bị gián đoạn được đánh dấu đã dừng.
+**+ Phiên mới** tạo một hội thoại riêng. **Lịch sử** cho mở lại, đổi tên hoặc xóa hội thoại của kết nối đang chọn. Đóng rồi mở ứng dụng khôi phục phiên đang chọn; không tự chạy lại tác vụ dở dang. Tác vụ bị gián đoạn được đánh dấu đã dừng. Gemini dùng `session/load` với mã phiên native do CLI cấp; NexGraph chỉ liệt kê các phiên do ứng dụng tạo. Đổi tên và xóa là thao tác trên chỉ mục/lịch sử cục bộ NexGraph, không phải xóa dữ liệu phía Google hoặc toàn bộ phiên lưu bởi CLI.
 
-Lịch sử được tách theo dự án, gốc thư mục thực, nhà cung cấp, endpoint và danh tính kết nối. Đổi model trong cùng kết nối có thể tiếp tục hội thoại; đổi tài khoản hoặc endpoint không đưa lịch sử cũ sang đích mới. Không nhập lịch sử từ `~/.pi` hay thư mục dự án.
+Lịch sử được tách theo dự án, gốc thư mục thực, runtime, nhà cung cấp, endpoint hoặc kết nối Google. Đổi model trong cùng kết nối có thể tiếp tục hội thoại; đổi kết nối hoặc endpoint không đưa lịch sử cũ sang đích mới. Không nhập lịch sử từ `~/.pi`, `~/.gemini` hay thư mục dự án.
 
-Dữ liệu hội thoại nằm dưới `agent/sessions/<scope>/` trong thư mục dữ liệu engine của máy. JSONL của SDK là nguồn hội thoại; `index.json` lưu tên và phiên đang chọn, `tasks/` lưu trạng thái/ngân sách tác vụ, `checkpoints/` lưu bản trước/sau. Hội thoại và mã nguồn đính kèm là dữ liệu cục bộ trên đĩa; cơ chế mã hóa token không đồng nghĩa transcript đã được mã hóa. Bản ghi hỏng hoặc không khớp gốc dự án báo lỗi và được giữ lại để khôi phục, không bị âm thầm thay bằng lịch sử trống.
+Dữ liệu Pi nằm dưới `agent/sessions/<scope>/`; tài khoản Google có chỉ mục, transcript, tác vụ và checkpoint riêng dưới `antigravity/sessions/`, cùng kho phiên native của CLI. Hội thoại và mã nguồn đính kèm là dữ liệu cục bộ trên đĩa; cơ chế mã hóa token không đồng nghĩa transcript đã được mã hóa. Bản ghi hỏng hoặc không khớp gốc dự án báo lỗi và được giữ lại để khôi phục, không bị âm thầm thay bằng lịch sử trống.
 
 ## 5. Sửa, xem diff và hoàn tác
 
@@ -78,11 +96,13 @@ Không kế thừa key của provider từ môi trường NexGraph vào tiến t
 
 Khung trợ lý hiển thị tác vụ đang chạy/chờ duyệt/hoàn tất/thất bại/đã dừng, số lượt mô hình và các công cụ với args, kết quả cùng thời lượng. **Mở ở vùng làm việc** đưa kết quả dài sang giữa. Thông tin công cụ được giới hạn kích thước và che các khóa đã nhận diện.
 
-Mặc định một tác vụ có 30 lượt gọi mô hình, 10 phút và 120.000 token. Có thể đổi trong **Quyền & giới hạn** khi không có tác vụ đang chạy. Đạt giới hạn thời gian/lượt gọi sẽ dừng công việc; **Dừng** hủy suy luận, từ chối yêu cầu duyệt còn chờ và dừng cây tiến trình của tác vụ.
+Với Pi, mặc định một tác vụ có 30 lượt gọi mô hình, 10 phút và 120.000 token. Có thể đổi trong **Quyền & giới hạn** khi không có tác vụ đang chạy. Đạt giới hạn thời gian/lượt gọi sẽ dừng công việc; **Dừng** hủy suy luận, từ chối yêu cầu duyệt còn chờ và dừng cây tiến trình của tác vụ.
 
 Token được cộng từ usage nhà cung cấp báo sau mỗi phản hồi. Khi API hỗ trợ, NexGraph đặt giới hạn output còn lại; một request đang chạy vẫn có thể vượt tổng ngân sách do input và quy tắc API. Sign in with ChatGPT không nhận trường `max_output_tokens`, nên SDK bỏ trường này; ngân sách token không phải trần thanh toán cứng của nhà cung cấp. Các lượt gọi đã hoàn tất vẫn được ghi usage nếu phần còn lại của tác vụ bị hủy.
 
 Chi phí chỉ là ước tính khi có bảng giá model. Model tùy chỉnh không có giá, tài khoản subscription và Ollama local hiển thị **Chi phí: chưa xác định**, không giả thành `$0`. Model có giá miễn phí được khai báo rõ mới hiển thị 0; hạn mức tài khoản vẫn có thể áp dụng.
+
+Với Antigravity CLI, NexGraph thực thi giới hạn thời gian và nút Dừng. Không áp dụng giả giới hạn số lượt/token của Pi cho CLI khi giao thức không hỗ trợ. Khi ACP không báo số lượt hoặc token thực tế, giao diện không suy ra chúng từ số lần gọi công cụ. `usage_update.used/size` là mức dùng cửa sổ ngữ cảnh, không phải quota ngày. Chi phí và quota Google không được tự ước lượng; usage CLI báo không phải trần thanh toán cứng của tài khoản.
 
 ## 8. Lỗi và cách kiểm chứng
 
@@ -93,7 +113,9 @@ Chi phí chỉ là ước tính khi có bảng giá model. Model tùy chỉnh kh
 - **Đích nhận đã thay đổi**: kiểm tra lại tài khoản/endpoint và xác nhận gửi dữ liệu tới đích mới. Lượt cũ bị dừng.
 - **Checkpoint xung đột**: giữ thay đổi hiện tại, đọc diff và đối chiếu thủ công; không ghi đè bản người dùng chỉ để khôi phục tự động.
 - **Lịch sử hỏng/thiếu tệp**: giữ bản sao dữ liệu trước khi xử lý; không xóa kho token hoặc toàn bộ dữ liệu chỉ để bỏ thông báo lỗi.
+- **Antigravity CLI chưa thiết lập**: dùng nút thiết lập trong kết nối Gemini, cần mạng để tải binary đã ghim. Lỗi kiểm hash không được bỏ qua bằng cách chạy gói chưa xác minh.
+- **Google đã đăng nhập nhưng kiểm tra thất bại**: đọc lỗi quyền, quota hoặc mạng rồi thử lại; chưa kích hoạt cho dự án khi công cụ chưa được xác nhận. Nếu CLI yêu cầu xác thực lại, đăng nhập lại trong luồng Google.
 
-Các kiểm thử tự động dùng Pi SDK thật với máy chủ LLM giả và provider/OAuth giả, cùng kiểm thử tiến trình trên máy. Chúng xác nhận giao thức, lưu/khôi phục lịch sử, cách ly tài khoản, quyền ghi/chạy lệnh, checkpoint và giới hạn. Chúng không thay thế nghiệm thu token/model thật của từng nhà cung cấp. Đăng nhập và gọi ChatGPT thật cần kiểm riêng trên tài khoản của người dùng; chưa được coi là đạt chỉ vì test giả lập đã qua.
+Các kiểm thử tự động dùng Pi SDK, ACP transport, broker MCP và CLI chính thức được ghim. Chúng xác nhận giao thức, lưu/khôi phục lịch sử, cách ly kết nối, quyền ghi/chạy lệnh, checkpoint và giới hạn. Chúng không thay thế nghiệm thu token/model thật của từng nhà cung cấp. Đăng nhập Google hoặc ChatGPT thật cần kiểm riêng trên tài khoản của người dùng; chưa được coi là đạt chỉ vì test giả lập đã qua.
 
 Các tệp kiểm thử chính: `apps/desktop/test/agent-session-pi.test.ts`, `agent-session.test.ts`, `agent-session-store.test.ts`, `task-execution.test.ts`, cùng smoke Electron trong `apps/desktop/src/main/smoke-desktop.ts`.

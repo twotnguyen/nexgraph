@@ -2,7 +2,7 @@
 
 NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ mục thư mục mã nguồn cục bộ, khám phá kiến trúc, tìm ký hiệu và xem vùng ảnh hưởng khi sửa mã. Đề tài ưu tiên **TypeScript/JavaScript và Python**. Đồ thị dẫn đến vị trí mã nguồn, hỗ trợ truy vết luồng thực thi và cung cấp ngữ cảnh cho trợ lý AI qua MCP.
 
-Ứng dụng có trình soạn thảo tích hợp và trợ lý dùng Pi coding-agent SDK. **Hỏi** và **Kế hoạch** chỉ đọc. **Sửa** hỗ trợ duyệt từng thay đổi hoặc tự động trong phiên đã cấp quyền; quyền chạy lệnh build/test được bật riêng. Hội thoại, kết quả công cụ và checkpoint được lưu để mở lại và tiếp tục. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
+Ứng dụng có trình soạn thảo tích hợp và trợ lý hỗ trợ Pi coding-agent SDK cùng Antigravity CLI chính thức qua ACP. Gemini có hai lựa chọn riêng: **Tài khoản Google** qua Antigravity và **API key** qua Pi. **Hỏi** và **Kế hoạch** chỉ đọc. **Sửa** hỗ trợ duyệt từng thay đổi hoặc tự động trong phiên đã cấp quyền; quyền chạy lệnh build/test được bật riêng. Hội thoại, kết quả công cụ và checkpoint được lưu để mở lại và tiếp tục. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
 
 ## Bắt đầu
 

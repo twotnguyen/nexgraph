@@ -2,6 +2,13 @@
 
 Mỗi mục ghi nguồn, giấy phép, commit được dùng và phần nào của NexGraph dùng nó. Cập nhật trong cùng PR với việc chép hoặc port mã.
 
+## Antigravity CLI
+
+- Nguồn: https://antigravity.google/download và manifest tải xuống chính thức của Google.
+- Phiên bản: `1.5.11`, binary chính thức không sửa đổi, tải theo yêu cầu khi thiết lập tài khoản Google. URL và SHA-512 từng nền tảng được ghim trong `apps/desktop/src/main/gemini/installation.ts`.
+- Đây là phần mềm riêng của Google; giấy phép Apache-2.0 của NexGraph không áp dụng cho binary CLI. NexGraph không chép mã CLI vào nguồn ứng dụng.
+- Dùng ở: `apps/desktop/src/main/gemini/` khởi chạy `agy acp` theo [giao diện tích hợp được Google hỗ trợ](https://antigravity.google/docs/ide/extensions/acp/), kết nối công cụ NexGraph bằng MCP HTTP có xác thực. OAuth và vòng suy luận do CLI chính thức thực hiện.
+
 ## Graphify
 
 - Nguồn: https://github.com/Graphify-Labs/graphify

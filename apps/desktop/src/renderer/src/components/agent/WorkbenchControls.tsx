@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AgentMode } from '@shared/agent-types'
 import type { AgentInspection, AgentWorkbench } from './useAgentWorkbench'
 
-export function WorkbenchControls({ projectId, work, busy, mode, onInspect, onSuggest }: { projectId: string; work: AgentWorkbench; busy: boolean; mode: AgentMode | null; onInspect?: (inspection: AgentInspection) => void; onSuggest?: (text: string) => void }) {
+export function WorkbenchControls({ projectId, work, busy, mode, runtime, onInspect, onSuggest }: { projectId: string; work: AgentWorkbench; busy: boolean; mode: AgentMode | null; runtime?: 'pi' | 'antigravity-cli'; onInspect?: (inspection: AgentInspection) => void; onSuggest?: (text: string) => void }) {
   const [pane, setPane] = useState<'history' | 'settings' | null>(null)
   const [commands, setCommands] = useState<import('@shared/agent-types').ProjectCommands | null>(null)
   const [localError, setLocalError] = useState('')
@@ -17,6 +17,7 @@ export function WorkbenchControls({ projectId, work, busy, mode, onInspect, onSu
     return () => { commandRead.current++ }
   }, [projectId])
   const locked = busy || work.pending || work.loading
+  const googleAccount = runtime === 'antigravity-cli'
   const loadCommands = async () => {
     const read = ++commandRead.current
     setCommandsLoading(true); setLocalError('')
@@ -59,21 +60,22 @@ export function WorkbenchControls({ projectId, work, busy, mode, onInspect, onSu
         if (event.target.checked && !window.confirm('Cho phép chạy script/lệnh của dự án bằng quyền tài khoản Windows/macOS hiện tại? Chỉ bật với dự án bạn tin cậy. Checkpoint lưu mã nguồn văn bản được phép; không hoàn tác mọi tác động bên ngoài của lệnh.')) return
         void work.saveExecution({ ...work.execution, allowCommands: event.target.checked })
       }} />Cho phép chạy lệnh build/test</label>
-      <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void work.saveLimits({ maxTurns: Number(data.get('turns')), maxDurationMs: Number(data.get('minutes')) * 60_000, maxTokens: Number(data.get('tokens')) }) }}>
+      <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); void work.saveLimits({ maxTurns: googleAccount ? work.limits.maxTurns : Number(data.get('turns')), maxDurationMs: Number(data.get('minutes')) * 60_000, maxTokens: googleAccount ? work.limits.maxTokens : Number(data.get('tokens')) }) }}>
         <div className="agent-limits" key={`${work.limits.maxTurns}/${work.limits.maxDurationMs}/${work.limits.maxTokens}`}>
-          <label>Lượt mô hình<input type="number" name="turns" min="1" max="200" defaultValue={work.limits.maxTurns} disabled={locked} required /></label>
+          <label>Lượt mô hình{googleAccount ? <input type="text" value="Chưa hỗ trợ" disabled /> : <input type="number" name="turns" min="1" max="200" defaultValue={work.limits.maxTurns} disabled={locked} required />}</label>
           <label>Phút / tác vụ<input type="number" name="minutes" min="1" max="60" defaultValue={work.limits.maxDurationMs / 60_000} disabled={locked} required /></label>
-          <label>Token / tác vụ<input type="number" name="tokens" min="1000" max="2000000" step="1000" defaultValue={work.limits.maxTokens} disabled={locked} required /></label>
-        </div><button type="submit" disabled={locked}>Lưu giới hạn</button>
+          <label>Token / tác vụ{googleAccount ? <input type="text" value="Chưa hỗ trợ" disabled /> : <input type="number" name="tokens" min="1000" max="2000000" step="1000" defaultValue={work.limits.maxTokens} disabled={locked} required />}</label>
+        </div><button type="submit" disabled={locked}>{googleAccount ? 'Lưu thời gian' : 'Lưu giới hạn'}</button>
       </form>
       <p className="muted small">Hỏi và Lập kế hoạch luôn chỉ đọc. Quyền chạy lệnh không được bật lại tự động khi mở ứng dụng.</p>
+      {googleAccount && <p className="muted small">NexGraph dừng tác vụ khi hết thời gian. Antigravity chưa cung cấp trần lượt mô hình hoặc token cho kết nối này. Token chỉ hiển thị khi CLI báo, không phải số dư tài khoản hay trần thanh toán.</p>}
       <button type="button" disabled={locked || commandsLoading} onClick={() => void loadCommands()}>{commandsLoading ? 'Đang nhận diện lệnh…' : 'Nhận diện lệnh dự án'}</button>
       {commands && <div className="agent-command-suggestions">{commands.commands.map((command) => <button type="button" key={command.id} disabled={locked} title={`${command.executable} ${command.args.join(' ')}`} onClick={() => onSuggest?.(`Hãy chạy ${command.executable} ${command.args.join(' ')} và phân tích kết quả. Nếu thất bại, tìm nguyên nhân và đề xuất hoặc thực hiện sửa phù hợp với chế độ hiện tại.`)}>{command.label}</button>)}{commands.warnings.map((warning) => <p className="muted small" key={warning}>{warning}</p>)}</div>}
     </section>}
     {work.error && <p role="alert" className="error">{work.error}</p>}
     {localError && <p role="alert" className="error">{localError}</p>}
     {work.notice && <p role="status" className="agent-notice">{work.notice}</p>}
-    {work.task && <div className="agent-task-status" role="status"><span>{taskLabels[work.task.status]} · {work.task.turns}/{work.task.limits.maxTurns} lượt</span>
+    {work.task && <div className="agent-task-status" role="status"><span>{taskLabels[work.task.status]}{work.task.turnsKnown === false ? ' · Antigravity CLI' : ` · ${work.task.turns}/${work.task.limits.maxTurns} lượt`}</span>
       {!busy && !!work.task.checkpointIds?.length && <>
         <button type="button" disabled={work.pending || work.loading} onClick={() => {
           const taskId = work.task!.id

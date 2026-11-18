@@ -10,6 +10,25 @@ const model = { provider: 'openai', id: 'm', label: 'ChatGPT model', contextWind
 const settings = { provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'm', accountId: 'account-a', hasKey: true }
 
 describe('ConnectionDialog', () => {
+  it('giữ tab trong hộp thoại, hỗ trợ Escape và trả tiêu điểm về nút mở', async () => {
+    installNexgraph()
+    const opener = document.createElement('button')
+    document.body.appendChild(opener)
+    opener.focus()
+    const close = vi.fn()
+    const view = render(<ConnectionDialog onConnected={vi.fn()} onClose={close} />)
+    expect(screen.getByRole('button', { name: 'Đóng kết nối AI' })).toHaveFocus()
+    await userEvent.tab({ shift: true })
+    expect(screen.getByRole('button', { name: 'Đóng' })).toHaveFocus()
+    await userEvent.tab()
+    expect(screen.getByRole('button', { name: 'Đóng kết nối AI' })).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    expect(close).toHaveBeenCalledOnce()
+    view.unmount()
+    expect(opener).toHaveFocus()
+    opener.remove()
+  })
+
   it('đăng nhập ChatGPT, chọn model, kiểm tra và cấp consent đúng tài khoản cho dự án', async () => {
     const { api } = installNexgraph({
       auth: {
@@ -21,7 +40,7 @@ describe('ConnectionDialog', () => {
       ai: { getSettings: vi.fn(async () => settings) }
     })
     const connected = vi.fn()
-    render(<ConnectionDialog projectId="project" onConnected={connected} onClose={vi.fn()} />)
+    render(<ConnectionDialog initialProvider="openai" projectId="project" onConnected={connected} onClose={vi.fn()} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Tiếp tục đăng nhập' }))
     expect(api.auth.login).toHaveBeenCalledWith('openai')
     expect(await screen.findByLabelText('Model')).toHaveValue('m')
@@ -48,7 +67,7 @@ describe('ConnectionDialog', () => {
       event = handler
       return vi.fn()
     })
-    const { unmount } = render(<ConnectionDialog onConnected={vi.fn()} onClose={vi.fn()} />)
+    const { unmount } = render(<ConnectionDialog initialProvider="openai" onConnected={vi.fn()} onClose={vi.fn()} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Tiếp tục đăng nhập' }))
     act(() => event({ type: 'auth_url', url: 'https://auth.openai.com/', instructions: 'Hoàn tất ở trình duyệt' }))
     expect(await screen.findByRole('status')).toHaveTextContent('Hoàn tất ở trình duyệt')
@@ -59,7 +78,7 @@ describe('ConnectionDialog', () => {
 
   it('cho chọn tài khoản hoặc workspace ChatGPT khác trước khi đăng nhập', async () => {
     const { api } = installNexgraph({ auth: { list: vi.fn(async () => [account]) } })
-    render(<ConnectionDialog onConnected={vi.fn()} onClose={vi.fn()} />)
+    render(<ConnectionDialog initialProvider="openai" onConnected={vi.fn()} onClose={vi.fn()} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Dùng tài khoản hoặc workspace khác' }))
     expect(api.auth.forgetRegistration).toHaveBeenCalledOnce()
     expect(api.auth.login).not.toHaveBeenCalled()
@@ -97,7 +116,7 @@ describe('ConnectionDialog', () => {
       },
       ai: { getSettings: readSettings }
     })
-    render(<ConnectionDialog projectId="project" onConnected={vi.fn()} onClose={vi.fn()} />)
+    render(<ConnectionDialog initialProvider="openai" projectId="project" onConnected={vi.fn()} onClose={vi.fn()} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Dùng kết nối đã lưu' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Kiểm tra kết nối và công cụ' }))
     await screen.findByText('ok')

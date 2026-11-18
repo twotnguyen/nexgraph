@@ -34,7 +34,7 @@ function asText(bytes: Buffer): string {
 }
 
 /** Dùng cùng tên tool của Pi. Tất cả tệp đọc và mọi đường dẫn trả về đều qua chính sách của NexGraph. */
-export function registerScopedFileTools(pi: ExtensionAPI, root: string, excludes: () => Promise<string[]>): void {
+export function registerScopedFileTools(pi: Pick<ExtensionAPI, 'registerTool'>, root: string, excludes: () => Promise<string[]>): void {
   const scope = async (signal?: AbortSignal) => {
     signal?.throwIfAborted()
     let files

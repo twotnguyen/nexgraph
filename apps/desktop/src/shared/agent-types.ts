@@ -33,9 +33,11 @@ export type ProviderInfo = {
   description?: string
 }
 
-export type AiConsentTarget = { provider: string; baseUrl: string; accountId?: string }
+export type PiConsentTarget = { runtime?: 'pi'; provider: string; baseUrl: string; accountId?: string }
+export type GeminiConsentTarget = { runtime: 'antigravity-cli'; provider: 'google-antigravity'; connectionId: string; accountId?: string; baseUrl?: never }
+export type AiConsentTarget = PiConsentTarget | GeminiConsentTarget
 
-export function normalizeConsentTarget(provider: string, baseUrl: string, accountId?: string): AiConsentTarget | null {
+export function normalizeConsentTarget(provider: string, baseUrl: string, accountId?: string): PiConsentTarget | null {
   try {
     const url = new URL(baseUrl)
     if (!provider || (url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) return null
@@ -47,8 +49,20 @@ export function normalizeConsentTarget(provider: string, baseUrl: string, accoun
 }
 
 export function sameConsentTarget(left: AiConsentTarget | null | undefined, right: AiConsentTarget | null | undefined): boolean {
-  return !!left && !!right && left.provider === right.provider && left.baseUrl === right.baseUrl
-    && left.accountId === right.accountId
+  if (!left || !right || left.provider !== right.provider || left.accountId !== right.accountId) return false
+  if (left.runtime === 'antigravity-cli' || right.runtime === 'antigravity-cli')
+    return left.runtime === 'antigravity-cli' && right.runtime === 'antigravity-cli' && !!left.connectionId && left.connectionId === right.connectionId
+  return left.baseUrl === right.baseUrl
+}
+
+export function consentTargetForSettings(settings: { runtime?: 'pi' | 'antigravity-cli'; provider?: string; baseUrl?: string; model?: string; accountId?: string; connectionId?: string }): AiConsentTarget | null {
+  if (!settings.model) return null
+  if (settings.runtime === 'antigravity-cli') return settings.connectionId ? {
+    runtime: 'antigravity-cli', provider: 'google-antigravity', connectionId: settings.connectionId,
+    ...(settings.accountId ? { accountId: settings.accountId } : {})
+  } : null
+  // Preserve the exact canonical destination supplied by the main process.
+  return settings.provider && settings.baseUrl ? { provider: settings.provider, baseUrl: settings.baseUrl, ...(settings.accountId ? { accountId: settings.accountId } : {}) } : null
 }
 
 export type CustomProvider = {
@@ -61,6 +75,7 @@ export type CustomProvider = {
 }
 
 export type ModelInfo = {
+  runtime?: 'pi' | 'antigravity-cli'
   provider: string; id: string; label: string
   contextWindow?: number
   maxTokens?: number
@@ -88,6 +103,8 @@ export type AgentToolRun = {
   startedAt: number; durationMs?: number
 }
 export type AgentTask = {
+  runtime?: 'pi' | 'antigravity-cli'
+  turnsKnown?: boolean
   id: string; sessionId: string
   status: 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
   startedAt: number; finishedAt?: number; turns: number; limits: AgentRunLimits; error?: string; checkpointIds?: string[]
@@ -100,6 +117,7 @@ export type AgentTranscriptMessage = {
   id: string; role: 'user' | 'assistant'; text: string; timestamp: number; citations: Citation[]; tools: AgentToolRun[]
 }
 export type AgentSessionSnapshot = {
+  runtime?: 'pi' | 'antigravity-cli'
   session: AgentSessionInfo | null; messages: AgentTranscriptMessage[]; task: AgentTask | null
   mode: AgentMode; policy: AgentExecutionPolicy; execution: AgentExecutionSettings; limits: AgentRunLimits; usage: AgentUsage
 }

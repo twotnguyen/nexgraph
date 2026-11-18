@@ -3,6 +3,16 @@ import type { AiConsentTarget } from '../shared/agent-types'
 
 /** Chạy nguyên hàm trong renderer của bản cài để kiểm cả contextBridge và IPC. */
 export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: string): Promise<string> {
+  // Exercise the shipped preload/IPC path without installing a CLI, opening OAuth, or contacting Google.
+  const google = await api.gemini.status()
+  if (!['not_installed', 'unsupported_platform', 'installing', 'signed_out', 'authenticating', 'checking', 'connected', 'error'].includes(google.state) ||
+      !google.version || !google.connectionId || google.authenticated) {
+    throw new Error('Gemini status IPC did not expose a fresh isolated Google connection')
+  }
+  const [activation] = await Promise.allSettled([api.gemini.activate()])
+  if (activation.status !== 'rejected' || activation.reason?.code !== 'ai_not_configured') {
+    throw new Error('Gemini IPC allowed activation without a verified Google connection')
+  }
   const project = await api.project.open(root)
   if (!project.path.normalize('NFC').includes('Đồ án') || project.is_git !== false) {
     throw new Error('acceptance fixture must use a source path with spaces, Vietnamese characters, and no Git repository')
@@ -284,7 +294,7 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
   } finally {
     await api.agent.close(pid)
   }
-  return 'fs=OK agent=OK index=OK edit_policy=OK acceptance=OK sessions=OK plan=OK process=OK rollback=OK draft_context=OK'
+  return 'fs=OK agent=OK index=OK edit_policy=OK acceptance=OK sessions=OK plan=OK process=OK rollback=OK draft_context=OK gemini_status=OK'
 }
 
 /** Chạy trong UI đã nạp lại sau khi fixture được công bố bằng IPC thật. */
@@ -376,6 +386,39 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
   if (!open) throw new Error('workspace smoke did not find the AI toggle')
   if (!shown(true)) hit(open, 'Mở trợ lý AI khi bảng Thay đổi đang mở').click()
   const dismiss = await waitFor(() => shown(true), 'nút đóng trợ lý AI')
+  const previousConnection = await api.ai.getSettings()
+  const connect = await button('.agent-actions .agent-connect', 'Kết nối')
+  hit(connect, 'Mở kết nối AI').click()
+  const gemini = await waitFor(() => document.querySelector<HTMLButtonElement>('.connection-provider-card[aria-label="Gemini"]'), 'nhà cung cấp Gemini')
+  hit(gemini, 'Chọn Gemini').click()
+  const googleAccount = await waitFor(() => document.querySelector<HTMLButtonElement>('.connection-method-choice button[aria-label="Gemini bằng tài khoản Google"]'), 'tài khoản Google')
+  const googleApi = await waitFor(() => document.querySelector<HTMLButtonElement>('.connection-method-choice button[aria-label="Gemini bằng API key"]'), 'Gemini API key')
+  const accountFinish = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('.connection-footer button')).find((item) => item.textContent?.trim() === 'Dùng tài khoản Google'), 'thiết lập Google riêng')
+  if (document.querySelectorAll('.gemini-steps li').length !== 4 || !accountFinish.disabled ||
+      googleAccount.getAttribute('aria-pressed') !== 'true') {
+    throw new Error('Google onboarding did not show its unverified four-step state')
+  }
+  hit(googleApi, 'Chọn Gemini API key').click()
+  const key = await waitFor(() => document.querySelector<HTMLInputElement>('#connect-api-key'), 'ô Gemini API key')
+  const provider = await waitFor(() => {
+    const select = document.querySelector<HTMLSelectElement>('#connect-provider')
+    return select?.value === 'google' ? select : null
+  }, 'nhà cung cấp API Google')
+  if (key.type !== 'password' || key.value || provider.options.length !== 1) {
+    throw new Error('Gemini API key lane exposed a credential or mixed another provider')
+  }
+  hit(googleAccount, 'Trở về tài khoản Google').click()
+  const dialog = await waitFor(() => document.querySelector<HTMLElement>('.connection-dialog .gemini-steps')?.closest<HTMLElement>('.connection-dialog'), 'lối đăng nhập Google')
+  if (dialog.scrollWidth > dialog.clientWidth + 1) throw new Error('Gemini connection dialog overflowed horizontally')
+  const closeConnection = await waitFor(() => document.querySelector<HTMLButtonElement>('.connection-dialog [aria-label="Đóng kết nối AI"]'), 'đóng kết nối AI')
+  hit(closeConnection, 'Đóng kết nối AI').click()
+  await waitFor(() => document.querySelector('.connection-dialog') ? null : connect, 'hộp thoại AI đã đóng')
+  const unchangedConnection = await api.ai.getSettings()
+  if (unchangedConnection.runtime !== previousConnection.runtime || unchangedConnection.provider !== previousConnection.provider ||
+      unchangedConnection.model !== previousConnection.model || unchangedConnection.connectionId !== previousConnection.connectionId ||
+      unchangedConnection.baseUrl !== previousConnection.baseUrl || unchangedConnection.accountId !== previousConnection.accountId) {
+    throw new Error('Viewing Gemini connection methods changed the active AI provider')
+  }
   const exportButton = await button('.ws-head button', 'Xuất')
   hit(exportButton, 'Xuất khi Thay đổi và trợ lý AI đang mở')
   hit(dismiss, 'Đóng trợ lý AI khi bảng Thay đổi đang mở').click()
@@ -403,5 +446,5 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
   if (restored.files !== 2 || !(await api.fs.read(reopened.project_id, 'smoke.ts')).text.includes('return false')) {
     throw new Error('Reopening a project did not restore its graph and source')
   }
-  return `workspace_controls=OK${expectWebglDisabled ? ' webgl_fallback=OK' : ''} theme=OK project_remove=OK`
+  return `workspace_controls=OK${expectWebglDisabled ? ' webgl_fallback=OK' : ''} theme=OK project_remove=OK gemini_ui=OK`
 }

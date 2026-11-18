@@ -60,6 +60,7 @@ async function smoke(bin, temp, disableWebgl, launchArgs = []) {
     const line = result.stdout.split('\n').find((s) => s.includes('SMOKE OK') &&
       s.includes('fs=OK agent=OK index=OK edit_policy=OK acceptance=OK') && s.includes('workspace_controls=OK') &&
       s.includes('sessions=OK plan=OK process=OK rollback=OK draft_context=OK') &&
+      s.includes('gemini_status=OK') && s.includes('gemini_ui=OK') &&
       (!disableWebgl || s.includes('webgl_fallback=OK')))
     const stopped = /^SMOKE ENGINE STOPPED pid=([1-9]\d*)\r?$/m.exec(result.stdout)
     if (result.code !== 0 || !line || !stopped || droppedRequests === 0) {

@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { AuthEventView, AuthPromptView, LocalModelInfo, ModelInfo, ProviderInfo } from '@shared/agent-types'
-import { sameConsentTarget } from '@shared/agent-types'
+import { consentTargetForSettings, sameConsentTarget } from '@shared/agent-types'
 import type { AiSettings } from '@shared/graph-types'
 import { Icon } from '../common/icons'
 import { AuthLinks } from './AuthLinks'
+import { ConnectionProviderPicker, type ConnectionProvider } from './ConnectionProviderPicker'
+import { GeminiConnectionPane } from './GeminiConnectionPane'
 import './connection-dialog.css'
 
 type Method = 'oauth' | 'api_key' | 'local'
@@ -12,15 +14,57 @@ const messageOf = (error: unknown): string =>
 const labelFor = (provider: ProviderInfo): string =>
   ({ openai: 'OpenAI / ChatGPT', 'openai-codex': 'Codex qua ChatGPT', google: 'Google AI Studio', openrouter: 'OpenRouter', anthropic: 'Anthropic / Claude' } as Record<string, string>)[provider.id] ?? provider.label
 
-export function ConnectionDialog({ projectId, onConnected, onClose, initialMethod = 'oauth' }: {
+type Props = {
   projectId?: string
   onConnected(): void
   onClose(): void
   initialMethod?: Method
+  initialProvider?: ConnectionProvider
+}
+
+export function ConnectionDialog({ projectId, onConnected, onClose, initialMethod, initialProvider }: Props) {
+  const [provider, setProvider] = useState<ConnectionProvider>(initialProvider ?? (initialMethod === 'local' ? 'local' : 'gemini'))
+  const [geminiMethod, setGeminiMethod] = useState<'account' | 'api_key'>(initialMethod === 'api_key' ? 'api_key' : 'account')
+  const [busy, setBusy] = useState(false)
+  const dialog = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialog.current?.querySelector<HTMLElement>('button:not(:disabled)')?.focus()
+    return () => { if (previous?.isConnected) previous.focus() }
+  }, [])
+  const keyboard = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); return }
+    if (event.key !== 'Tab') return
+    const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]') ?? [])
+    const first = controls[0], last = controls.at(-1)
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+  }
+  return <div className="modal-backdrop"><section ref={dialog} role="dialog" aria-modal="true" aria-labelledby="connection-title" className="modal connection-dialog" onKeyDown={keyboard}>
+    <header className="connection-heading"><div><h2 id="connection-title">Kết nối trợ lý AI</h2><p className="muted">Chọn nhà cung cấp phù hợp với tài khoản của bạn.</p></div>
+      <button type="button" className="icon-button" aria-label="Đóng kết nối AI" onClick={onClose}><Icon name="close" size={18} /></button></header>
+    <ConnectionProviderPicker value={provider} disabled={busy} onChange={(next) => { setProvider(next); setGeminiMethod('account') }} />
+    <div className="connection-provider-detail">
+      {provider === 'gemini' && <div className="connection-method-choice" role="group" aria-label="Cách dùng Gemini">
+        <button type="button" aria-label="Gemini bằng tài khoản Google" aria-pressed={geminiMethod === 'account'} disabled={busy} onClick={() => setGeminiMethod('account')}><strong>Tài khoản Google</strong><small>Antigravity CLI chính thức<br />Hạn mức theo tài khoản</small></button>
+        <button type="button" aria-label="Gemini bằng API key" aria-pressed={geminiMethod === 'api_key'} disabled={busy} onClick={() => setGeminiMethod('api_key')}><strong>API key</strong><small>Google AI Studio<br />Hạn mức API riêng</small></button>
+      </div>}
+      {provider === 'gemini' && geminiMethod === 'account'
+        ? <GeminiConnectionPane projectId={projectId} onConnected={onConnected} onClose={onClose} onBusyChange={setBusy} />
+        : <PiConnectionForm key={provider} projectId={projectId} onConnected={onConnected} onClose={onClose} providerGroup={provider}
+          initialMethod={provider === 'local' ? 'local' : provider === 'gemini' || provider === 'other' ? 'api_key' : initialMethod === 'api_key' ? 'api_key' : 'oauth'} onBusyChange={setBusy} />}
+    </div>
+  </section></div>
+}
+
+function PiConnectionForm({ projectId, onConnected, onClose, initialMethod = 'oauth', providerGroup, onBusyChange }: Props & {
+  providerGroup: ConnectionProvider
+  onBusyChange: (busy: boolean) => void
 }) {
+  const preferredProvider = providerGroup === 'gemini' ? 'google' : providerGroup === 'openai' ? 'openai' : 'anthropic'
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [method, setMethod] = useState<Method>(initialMethod)
-  const [provider, setProvider] = useState(initialMethod === 'api_key' ? 'google' : 'openai')
+  const [provider, setProvider] = useState(preferredProvider)
   const [key, setKey] = useState('')
   const [models, setModels] = useState<ModelInfo[]>([])
   const [model, setModel] = useState('')
@@ -48,7 +92,7 @@ export function ConnectionDialog({ projectId, onConnected, onClose, initialMetho
     void window.nexgraph.auth.list().then((items) => {
       if (!alive.current) return
       setProviders(items)
-      const available = items.filter((p) => initialMethod === 'oauth' ? p.oauth && p.id !== 'anthropic' : p.authMethods?.includes('api_key') ?? true)
+      const available = items.filter((p) => inGroup(p) && (initialMethod === 'oauth' ? p.oauth && p.id !== 'anthropic' : p.authMethods?.includes('api_key') ?? true))
       setProvider((current) => available.some((p) => p.id === current) ? current : available[0]?.id ?? '')
     }).catch((e) => { if (alive.current) setError(messageOf(e)) })
     const offEvent = window.nexgraph.auth.onEvent(setEvent)
@@ -60,6 +104,7 @@ export function ConnectionDialog({ projectId, onConnected, onClose, initialMetho
       if (loginPending.current) void window.nexgraph.auth.loginCancel()
     }
   }, [])
+  useEffect(() => { onBusyChange(busy); return () => onBusyChange(false) }, [busy, onBusyChange])
 
   const run = async (action: () => Promise<void>) => {
     if (operation.current) return
@@ -74,7 +119,8 @@ export function ConnectionDialog({ projectId, onConnected, onClose, initialMetho
   }
   const reset = (next: Method) => {
     setMethod(next)
-    setProvider(next === 'api_key' ? 'google' : 'openai')
+    const options = providers.filter((item) => inGroup(item) && (next === 'oauth' ? item.oauth && item.id !== 'anthropic' : item.authMethods?.includes('api_key') ?? true))
+    setProvider(options.find((item) => item.id === preferredProvider)?.id ?? options[0]?.id ?? '')
     setKey('')
     setModels([])
     setModel('')
@@ -122,16 +168,11 @@ export function ConnectionDialog({ projectId, onConnected, onClose, initialMetho
   })
   const finish = () => void run(async () => {
     const settings = await window.nexgraph.ai.getSettings()
-    if (!settings.provider || !testedSettings?.provider) throw new Error('Chưa xác định được nhà cung cấp đang chọn')
-    if (settings.model !== testedSettings.model || !sameConsentTarget(
-      { provider: settings.provider, baseUrl: settings.baseUrl, accountId: settings.accountId },
-      { provider: testedSettings.provider, baseUrl: testedSettings.baseUrl, accountId: testedSettings.accountId }))
+    const target = consentTargetForSettings(settings)
+    if (!target || !testedSettings) throw new Error('Chưa xác định được nhà cung cấp đang chọn')
+    if (settings.model !== testedSettings.model || !sameConsentTarget(target, consentTargetForSettings(testedSettings)))
       throw new Error('Kết nối đã thay đổi. Hãy kiểm tra lại model đang chọn.')
-    if (projectId) {
-      await window.nexgraph.ai.grantConsent(projectId, {
-        provider: settings.provider, baseUrl: settings.baseUrl, ...(settings.accountId ? { accountId: settings.accountId } : {})
-      })
-    }
+    if (projectId) await window.nexgraph.ai.grantConsent(projectId, target)
     onConnected()
   })
   const reply = (value: string | null) => {
@@ -143,23 +184,21 @@ export function ConnectionDialog({ projectId, onConnected, onClose, initialMetho
     if (loginPending.current) void window.nexgraph.auth.loginCancel()
     onClose()
   }
-  const oauthProviders = providers.filter((p) => p.oauth && p.id !== 'anthropic')
-  const apiProviders = providers.filter((p) => !p.custom && (p.authMethods?.includes('api_key') ?? true))
+  function inGroup(p: ProviderInfo) {
+    return providerGroup === 'gemini' ? p.id === 'google' : providerGroup === 'openai' ? p.id === 'openai' || p.id === 'openai-codex'
+      : p.id !== 'google' && p.id !== 'openai' && p.id !== 'openai-codex'
+  }
+  const oauthProviders = providers.filter((p) => inGroup(p) && p.oauth && p.id !== 'anthropic')
+  const apiProviders = providers.filter((p) => inGroup(p) && !p.custom && (p.authMethods?.includes('api_key') ?? true))
   const options = method === 'oauth' ? oauthProviders : apiProviders
   const modelAvailable = method === 'local' ? localModels.some((m) => m.id === model) : !!selectedModel
 
   return (
-    <div className="modal-backdrop">
-      <section role="dialog" aria-modal="true" aria-labelledby="connection-title" className="modal connection-dialog">
-        <header className="connection-heading">
-          <div><h2 id="connection-title">Kết nối trợ lý AI</h2><p className="muted">Chọn tài khoản, API key hoặc model chạy trên máy.</p></div>
-          <button type="button" className="icon-button" aria-label="Đóng kết nối AI" onClick={close}><Icon name="close" size={18} /></button>
-        </header>
-        <div className="connection-methods" role="group" aria-label="Cách kết nối">
+    <>
+        {providerGroup !== 'gemini' && providerGroup !== 'local' && <div className="connection-methods" role="group" aria-label="Cách kết nối">
           <button type="button" aria-pressed={method === 'oauth'} disabled={busy} onClick={() => reset('oauth')}>Tài khoản</button>
           <button type="button" aria-pressed={method === 'api_key'} disabled={busy} onClick={() => reset('api_key')}>API key</button>
-          <button type="button" aria-pressed={method === 'local'} disabled={busy} onClick={() => reset('local')}>Ollama local</button>
-        </div>
+        </div>}
         {error && <p role="alert" className="inline-message error">{error}</p>}
         {method === 'local' ? (
           <div className="field">
@@ -235,7 +274,6 @@ export function ConnectionDialog({ projectId, onConnected, onClose, initialMetho
           <button type="button" onClick={close}>Đóng</button>
           <button type="button" className="primary" disabled={busy || !result?.ok || !!projectId && !consent} onClick={finish}>{busy ? 'Đang xử lý…' : 'Dùng kết nối'}</button>
         </footer>
-      </section>
-    </div>
+    </>
   )
 }

@@ -44,3 +44,73 @@
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
 }
+
+.connection-provider-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.connection-provider-card {
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 10px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-radius: 9px;
+}
+.connection-provider-card > span:nth-child(2) { min-width: 0; padding-right: 10px; }
+.connection-provider-card strong { display: block; font-size: 12px; font-weight: 650; line-height: 1.4; }
+.connection-provider-card small { display: block; margin-top: 4px; color: var(--color-muted); font-size: 10px; font-weight: 400; line-height: 1.5; }
+.connection-provider-card[aria-pressed=true] { border-color: var(--blue); background: color-mix(in srgb, var(--blue) 7%, var(--color-surface)); }
+.connection-provider-card:hover:not(:disabled) { border-color: var(--blue); }
+.connection-provider-icon { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; border-radius: 8px; background: var(--track); color: var(--color-muted); }
+.connection-provider-gemini .connection-provider-icon { color: var(--violet); background: color-mix(in srgb, var(--violet) 12%, var(--color-surface)); }
+.connection-provider-openai .connection-provider-icon { color: var(--teal, var(--blue)); background: color-mix(in srgb, var(--blue) 10%, var(--color-surface)); }
+.connection-provider-local .connection-provider-icon { color: var(--green); background: color-mix(in srgb, var(--green) 10%, var(--color-surface)); }
+.connection-provider-selected { position: absolute; right: 7px; top: 7px; display: inline-flex; color: var(--blue); }
+.connection-provider-detail { padding: 16px; border: 1px solid var(--color-border); border-radius: 9px; background: var(--color-surface); }
+.connection-provider-detail > .connection-methods { margin-bottom: 15px; background: var(--panel); }
+.connection-method-choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+.connection-method-choice button { text-align: left; padding: 10px 12px; border-radius: 7px; min-width: 0; }
+.connection-method-choice strong { display: block; font-size: 12px; }
+.connection-method-choice small { display: block; margin-top: 5px; color: var(--color-muted); font-size: 10px; line-height: 1.5; }
+.connection-method-choice button[aria-pressed=true] { border-color: var(--blue); background: var(--accent-soft); }
+.gemini-setup { display: grid; gap: 14px; }
+.gemini-setup p { margin: 0; line-height: 1.6; }
+.gemini-setup h3 { margin: 0 0 5px; font-size: 13px; }
+.gemini-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; list-style: none; padding: 0; margin: 2px 0 0; }
+.gemini-steps li { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 10px; color: var(--color-muted); border-top: 2px solid var(--color-border); padding-top: 8px; }
+.gemini-steps li[aria-current=step] { color: var(--blue); border-top-color: var(--blue); }
+.gemini-steps li[data-complete=true] { border-top-color: var(--green); }
+.gemini-step-number { display: inline-grid; place-items: center; flex: 0 0 17px; width: 17px; height: 17px; border-radius: 50%; background: var(--track); font-size: 9px; }
+.gemini-setup-status { display: flex; align-items: flex-start; gap: 10px; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px; background: var(--panel); }
+.gemini-setup-status > svg { flex: none; color: var(--color-muted); margin-top: 2px; }
+.gemini-setup-status[data-ready=true] > svg { color: var(--green); }
+.gemini-setup-status small { display: block; margin-top: 4px; color: var(--color-muted); font-size: 11px; line-height: 1.55; }
+.gemini-setup .row { flex-wrap: wrap; }
+.gemini-setup .inline-message { margin: 0; overflow-wrap: anywhere; }
+.gemini-setup-privacy { color: var(--color-muted); font-size: 11px; }
+.gemini-setup-progress { display: grid; gap: 6px; }
+.gemini-setup-progress progress { width: 100%; height: 5px; accent-color: var(--blue); }
+.gemini-setup .connection-footer { margin-top: 4px; }
+.gemini-settings-card { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; }
+.gemini-settings-card .row { flex-wrap: wrap; }
+.gemini-settings-card p { margin: 5px 0 0; }
+.agent-connection-label { display: flex; gap: 5px; align-items: center; padding: 5px 12px 0; font-size: 10px; color: var(--color-muted); }
+.agent-connection-label[data-runtime=antigravity-cli] { color: var(--violet); }
+@media (max-width: 520px) {
+  .connection-provider-picker { gap: 6px; }
+  .connection-provider-card { gap: 7px; padding: 9px; min-height: 77px; }
+  .connection-provider-icon { flex-basis: 27px; width: 27px; height: 27px; }
+  .connection-provider-card small { font-size: 9px; }
+  .connection-provider-detail { padding: 12px; }
+  .connection-method-choice { gap: 6px; }
+  .connection-method-choice button { padding: 9px; }
+  .gemini-steps li { display: grid; font-size: 9px; }
+}
