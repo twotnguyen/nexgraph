@@ -11,7 +11,7 @@ export const vi = {
     saveKey: 'Lưu key',
     removeKey: 'Gỡ key',
     saved: 'Đã lưu',
-    noKeychain: 'Máy này không có kho khoá an toàn nên không lưu được API key.',
+    noKeychain: 'Kho khoá an toàn của hệ điều hành không khả dụng. Không thể lưu thông tin đăng nhập AI.',
     customTitle: 'Nhà cung cấp tuỳ chỉnh',
     customLead: 'Thêm endpoint tương thích OpenAI (Ollama, OpenRouter, vLLM…). Dùng lại ID để cập nhật.',
     customSecurityNote: 'Chỉ nhận Base URL HTTPS trong môi trường chính thức. NexGraph từ chối địa chỉ IP riêng/link-local để tránh gửi API key tới máy chủ nội bộ. HTTP chỉ dùng được cho 127.0.0.1/localhost khi bật cờ dev NEXGRAPH_ALLOW_HTTP_PROVIDER=1.',
@@ -38,11 +38,13 @@ export const vi = {
   },
   agent: {
     ask: 'Hỏi', edit: 'Sửa', modeTitle: 'Chế độ',
-    editWarn: 'Chuyển sang Sửa: lệnh sẽ chạy với quyền của bạn, không có sandbox.',
-    approve: 'Duyệt', reject: 'Từ chối',
+    askHint: 'Chỉ đọc mã và đồ thị dự án.',
+    editHint: 'Duyệt bản diff của từng tệp trước khi ghi.',
+    editWarn: 'Trong chế độ Sửa, trợ lý có thể đề xuất tạo hoặc sửa tệp trong dự án. Hãy xem bản diff và duyệt từng thay đổi trước khi ghi.',
+    modeFailed: 'Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.',
+    approve: 'Duyệt thay đổi', reject: 'Từ chối',
     editPath: (path: string) => `Sửa tệp ${path}`,
-    writePath: (path: string) => `Tạo tệp ${path}`,
-    bash: 'Chạy lệnh'
+    writePath: (path: string) => `Ghi tệp ${path}`
   },
   integration: {
     skillExisting: 'Tệp SKILL.md đã có nội dung khác nên NexGraph không ghi đè. Hãy sao chép nội dung mới và cập nhật tệp bằng tay.',
@@ -52,7 +54,6 @@ export const vi = {
     codexTrusted: 'Codex chỉ đọc .codex/config.toml của dự án khi dự án đã được đánh dấu tin cậy trong Codex.',
     codexExisting: 'Tệp .codex/config.toml đã có nên NexGraph không sửa (TOML). Hãy sao chép cấu hình và dán vào tệp của dự án hoặc ~/.codex/config.toml.'
   },
-  appTagline: 'Kết nối mã nguồn. Khám phá tri thức.',
   projects: {
     title: 'Dự án',
     settings: 'Cài đặt',
@@ -65,15 +66,24 @@ export const vi = {
   indexing: {
     title: (name: string) => `Đang lập chỉ mục: ${name}`,
     titleDone: (name: string) => `Đã lập chỉ mục: ${name}`,
+    titleCancelled: (name: string) => `Đã hủy lập chỉ mục: ${name}`,
+    titleFailed: (name: string) => `Lập chỉ mục thất bại: ${name}`,
+    titleUnavailable: (name: string) => `Không đọc được tiến độ: ${name}`,
     preparing: 'Đang chuẩn bị…',
     phase1: 'Đọc cấu trúc',
     phase2: 'Nối quan hệ',
-    phase2Hint: 'Chạy nền, đồ thị cập nhật dần',
+    phase2Hint: 'Đang nối quan hệ để hoàn tất đồ thị',
     cancel: 'Hủy',
     back: 'Quay lại',
-    cleaning: 'Đang quét tệp và dọn dẹp dữ liệu cũ…',
+    preparingFiles: 'Đang chuẩn bị danh sách tệp…',
     explore: 'Bắt đầu khám phá',
     cancelled: 'Đã hủy lập chỉ mục',
+    failed: 'Lập chỉ mục thất bại.',
+    unavailable: 'Không đọc được tiến độ lập chỉ mục.',
+    existingGraph: 'Đồ thị từ lần lập chỉ mục thành công trước vẫn khả dụng.',
+    openExisting: 'Mở đồ thị hiện có',
+    backToProgress: '← Tiến độ lập chỉ mục',
+    newGraphReady: 'Đồ thị mới đã sẵn sàng. Quay lại màn hình tiến độ để mở đồ thị mới.',
     done: 'Hoàn tất',
     error: (message: string) => `Lỗi: ${message}`
   },
@@ -202,6 +212,15 @@ export const vi = {
   },
   chat: {
     title: 'Trợ lý AI',
+    close: 'Đóng trợ lý AI', settings: 'Cài đặt trợ lý AI', message: 'Tin nhắn cho trợ lý AI',
+    startTitle: 'Hỏi về mã nguồn',
+    starters: ['Giải thích kiến trúc dự án', 'Các điểm vào chính nằm ở đâu?'],
+    setupTitle: 'Thiết lập trợ lý Pi',
+    setupDescription: 'Chọn nhà cung cấp và model để hỏi về mã nguồn hoặc đề xuất thay đổi.',
+    connectOpenCode: 'Kết nối OpenCode',
+    openCodeHint: 'Sau khi lưu cấu hình MCP, mở OpenCode trong thư mục dự án để dùng các công cụ đồ thị của NexGraph.',
+    attachFile: 'Thêm tệp đang mở', removeFile: 'Bỏ tệp tham chiếu', noActiveFile: 'Mở một tệp để thêm vào câu hỏi',
+    filePrompt: (ref: string) => `Tệp tham chiếu trong dự án: @${ref}`,
     placeholder: 'Hỏi về dự án, ví dụ: luồng đăng nhập chạy thế nào?',
     send: 'Gửi', stop: 'Dừng', hint: 'Ctrl+L để ẩn/hiện', toggle: 'Ẩn/hiện trợ lý AI',
     notConfigured: 'Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.',
@@ -215,13 +234,14 @@ export const vi = {
     highlightNone: 'Cần ít nhất hai trích dẫn hợp lệ để tô luồng',
     tools: (n: number) => `Đã gọi ${n} công cụ`,
     consentTitle: 'Gửi dữ liệu tới nhà cung cấp AI',
-    consentBody: (host: string, model: string) =>
-      `Câu hỏi của bạn và mọi tệp văn bản trong dự án mà trợ lý đọc sẽ được gửi tới ${host} (model ${model}). NexGraph không gửi gì khác và không lưu nội dung này ở nơi nào ngoài máy bạn.`,
+    consentBody: (project: string, provider: string, endpoint: string, model: string) =>
+      `Câu hỏi, ngữ cảnh đồ thị và nội dung tệp mà trợ lý đọc trong dự án ${project} có thể được gửi đến ${provider} tại ${endpoint} (model ${model}).`,
     consentOk: 'Đồng ý và gửi', consentCancel: 'Huỷ',
     errors: {
       ai_not_configured: 'Chưa cấu hình trợ lý AI.', ai_unauthorized: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.',
       ai_unreachable: 'Không kết nối được tới nhà cung cấp AI.', ai_bad_response: 'Nhà cung cấp AI trả về dữ liệu không hợp lệ.',
-      ai_too_many_rounds: 'Trợ lý gọi công cụ quá nhiều lần mà chưa trả lời. Hãy hỏi cụ thể hơn.', ai_cancelled: 'Đã dừng.'
+      ai_too_many_rounds: 'Trợ lý gọi công cụ quá nhiều lần mà chưa trả lời. Hãy hỏi cụ thể hơn.', ai_cancelled: 'Đã dừng.',
+      ai_provider_changed: 'Nhà cung cấp hoặc model AI đã thay đổi. Hãy kiểm tra lại rồi gửi câu hỏi.'
     } as Record<string, string>
   },
   flows: {
@@ -349,6 +369,7 @@ export const vi = {
     readOnly: 'Tệp chỉ đọc nên không lưu được',
     changedOnDisk: 'Tệp đã đổi trên đĩa trong lúc bạn đang sửa.',
     deletedOnDisk: 'Tệp đã bị xoá hoặc đổi tên trên đĩa. Nội dung trong thẻ vẫn được giữ.',
+    reloadDiscards: 'Nạp lại sẽ bỏ các thay đổi chưa lưu trong thẻ.',
     reload: 'Nạp lại',
     keepMine: 'Giữ bản của tôi',
     confirmLeave: (n: number) => `Còn ${n} tệp có thay đổi chưa lưu. Rời khỏi dự án và bỏ các thay đổi này?`,

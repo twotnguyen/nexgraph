@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { EvidencePopover } from '../architecture/EvidencePopover'
+import { CanvasState } from '../common/CanvasState'
 import { CyclesPopover } from './CyclesPopover'
 import { SigmaView } from './SigmaView'
 
@@ -10,6 +11,7 @@ const EVIDENCE_LIMIT = 50
 
 interface Props {
   projectId: string
+  revision?: number
   onOpenNode: (nodeId: string) => void
   onOpenCode: (file: string, line: number) => void
   onOpenArch?: (blockId: string) => void
@@ -32,10 +34,11 @@ const inNode = (node: MapNode, file: string): boolean => {
   return node.kind === 'file' ? file === path : file.startsWith(`${path}/`)
 }
 
-export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props) {
+export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpenArch }: Props) {
   const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.map.root }])
   const [data, setData] = useState<ProjectMap | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   const [selected, setSelected] = useState<MapNode | null>(null)
   const [types, setTypes] = useState({ IMPORTS: true, CALLS: true })
   const [minWeight, setMinWeight] = useState(1)
@@ -49,6 +52,7 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
 
   useEffect(() => {
     let alive = true
+    setData(null)
     setError(null)
     setSelected(null)
     evidenceRequest.current += 1
@@ -60,24 +64,27 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
       alive = false
       evidenceRequest.current += 1
     }
-  }, [projectId, parent])
+  }, [projectId, parent, revision, retry])
 
   useEffect(() => {
     let alive = true
     window.nexgraph.graph.cycles(projectId, 20).then((c) => alive && setCycles(c)).catch(() => {})
     return () => { alive = false }
-  }, [projectId])
+  }, [projectId, revision])
 
-  const edges = useMemo(() => (data?.edges ?? []).filter((e) => {
-    const total = (Object.entries(e.types) as [string, number][])
+  const weightedEdges = useMemo(() => (data?.edges ?? []).flatMap((e) => {
+    const weight = Object.entries(e.types)
       .filter(([t]) => types[t as 'IMPORTS' | 'CALLS']).reduce((a, [, n]) => a + n, 0)
-    return total > 0 && total >= minWeight
-  }), [data, types, minWeight])
-  const maxWeight = useMemo(() => Math.max(1, ...(data?.edges ?? []).map((e) => e.weight)), [data])
+    return weight > 0 ? [{ ...e, weight }] : []
+  }), [data, types])
+  const maxWeight = useMemo(() => Math.max(1, ...weightedEdges.map((e) => e.weight)), [weightedEdges])
+  const minimum = Math.min(minWeight, maxWeight)
+  const edges = useMemo(() => weightedEdges.filter((e) => e.weight >= minimum), [weightedEdges, minimum])
 
   const dimmed = useMemo(() => {
     if (activeCycle == null || !cycles || !data) return undefined
-    const files = cycles.cycles[activeCycle].files
+    const files = cycles.cycles[activeCycle]?.files
+    if (!files) return undefined
     return new Set(data.nodes.filter((n) => !files.some((f) => inNode(n, f))).map((n) => n.id))
   }, [activeCycle, cycles, data])
 
@@ -94,10 +101,8 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
   const onNodeClick = useCallback((id: string) => setSelected(data?.nodes.find((n) => n.id === id) ?? null), [data])
   const drill = (n: MapNode) => setCrumbs((c) => [...c, { id: n.id, label: n.label }])
 
-  if (error) return <p role="alert" className="error">{error}</p>
-  if (!data) return null
   return (
-    <div className="map-view">
+    <div className="map-view" aria-busy={!data && !error}>
       <div className="map-toolbar">
         <nav className="breadcrumb" aria-label={vi.map.breadcrumb}>
           {crumbs.map((c, i) => (
@@ -114,16 +119,27 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
           ))}
         </fieldset>
         <label className="map-weight">{vi.map.minWeight}
-          <input type="range" min={1} max={maxWeight} value={minWeight} onChange={(e) => setMinWeight(Number(e.target.value))} />
+          <input type="range" min={1} max={maxWeight} value={minimum} onChange={(e) => setMinWeight(Number(e.target.value))} />
         </label>
         {cycles && cycles.total > 0 && (
           <button type="button" className="badge" onClick={() => setShowCycles(!showCycles)}>{vi.map.cycles(cycles.total)}</button>
         )}
       </div>
+      {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
+      {!data && !error && <CanvasState kind="loading" message="Đang tải bản đồ…" />}
+      {data && (
+      <>
       {showCycles && cycles && <CyclesPopover data={cycles} active={activeCycle} onPick={setActiveCycle} />}
       {data.nodes.length === 0 ? <p className="muted map-empty">{vi.map.empty}</p>
-        : unsupported ? <p role="alert" className="error map-empty">{vi.map.noWebgl}</p>
-        : <SigmaView nodes={data.nodes} edges={edges} dimmed={dimmed} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
+        : unsupported ? (
+          <div className="canvas-state" data-state="error">
+            <div className="canvas-state-content">
+              <p role="alert">{vi.map.noWebgl}</p>
+              {onOpenArch && <button type="button" onClick={() => onOpenArch(parent ?? '')}>{vi.map.openArch}</button>}
+            </div>
+          </div>
+        )
+        : <SigmaView nodes={data.nodes} edges={data.edges} visibleEdges={edges} dimmed={dimmed} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
             onStageClick={() => setSelected(null)} onUnsupported={() => setUnsupported(true)} />}
       <p role="status" className="map-status muted">
         {vi.map.status(data.totals.nodes, data.totals.files)}{data.truncated ? ` · ${vi.map.truncated}` : ''}
@@ -141,6 +157,8 @@ export function MapView({ projectId, onOpenNode, onOpenCode, onOpenArch }: Props
       {evidence && (
         <EvidencePopover title={evidence.title} items={evidence.items} loading={evidence.loading} error={evidence.error}
           onOpenNode={onOpenNode} onOpenCode={onOpenCode} onClose={() => { evidenceRequest.current += 1; setEvidence(null) }} />
+      )}
+      </>
       )}
     </div>
   )

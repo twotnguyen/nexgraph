@@ -11,6 +11,9 @@ interface Props {
   currentKind?: FlowKind
   onKindChange: (kind?: FlowKind) => void
   truncated: boolean
+  loading?: boolean
+  error?: string | null
+  onRetry?: () => void
   onLoadMore?: () => void
 }
 
@@ -33,6 +36,9 @@ export function FlowList({
   currentKind,
   onKindChange,
   truncated,
+  loading,
+  error,
+  onRetry,
   onLoadMore
 }: Props) {
   return (
@@ -40,16 +46,18 @@ export function FlowList({
       <div className="list-header">
         <input
           type="search"
+          aria-label={vi.flows.search}
           className="search-box"
           placeholder={vi.flows.search}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-        <div className="kind-filter" role="tablist">
+        <div className="kind-filter" role="group" aria-label="Loại luồng">
           {KINDS.map((k) => (
             <button
               key={`${k.key}:${k.label}`}
               type="button"
+              aria-pressed={currentKind === k.key}
               className={`kind-chip ${currentKind === k.key ? 'active' : ''}`}
               onClick={() => onKindChange(k.key)}
             >
@@ -59,8 +67,11 @@ export function FlowList({
         </div>
       </div>
 
-      <div className="flow-items">
-        {flows.length === 0 ? (
+      <div className="flow-items" aria-busy={loading}>
+        {loading && <p role="status" className="muted small flow-message">Đang tải danh sách luồng…</p>}
+        {error && <div className="flow-message"><p role="alert" className="error">{error}</p>
+          {onRetry && <button type="button" onClick={onRetry}>Thử lại</button>}</div>}
+        {flows.length === 0 && !loading && !error ? (
           <p className="muted small center" style={{ padding: 16 }}>
             {query || currentKind ? vi.flows.noMatch : vi.flows.empty}
           </p>
@@ -69,29 +80,27 @@ export function FlowList({
             const isSelected = f.id === selectedId
             const pct = Math.round(f.criticality * 100)
             return (
-              <div
+              <button
                 key={f.id}
-                role="button"
-                tabIndex={0}
+                type="button"
                 className={`flow-card ${isSelected ? 'selected' : ''}`}
                 onClick={() => onSelect(f.id)}
-                onKeyDown={(e) => e.key === 'Enter' && onSelect(f.id)}
                 aria-pressed={isSelected}
               >
-                <div className="flow-card-title">
+                <span className="flow-card-title">
                   <span>{f.name}</span>
                   <span className="flow-card-kind">{f.kind}</span>
-                </div>
-                {f.detail && <div className="flow-card-detail">{f.detail}</div>}
+                </span>
+                {f.detail && <span className="flow-card-detail">{f.detail}</span>}
                 {/* hai controller có thể cùng tên phương thức: tệp của điểm vào là thứ phân biệt chúng */}
-                {f.entry.file && <div className="flow-card-detail" title={f.entry.file}>{f.entry.file.split('/').pop()}</div>}
-                <div className="flow-card-meta">
+                {f.entry.file && <span className="flow-card-detail" title={f.entry.file}>{f.entry.file.split('/').pop()}</span>}
+                <span className="flow-card-meta">
                   <span>{vi.flows.meta(f.steps, f.files)}</span>
-                  <div className="crit-bar" title={vi.flows.criticality(pct)}>
-                    <div className="crit-fill" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              </div>
+                  <span className="crit-bar" title={vi.flows.criticality(pct)}>
+                    <span className="crit-fill" style={{ width: `${pct}%` }} />
+                  </span>
+                </span>
+              </button>
             )
           })
         )}
@@ -101,7 +110,7 @@ export function FlowList({
         <div className="list-footer">
           <span>{vi.flows.shown(flows.length, total)}</span>
           {truncated && onLoadMore && (
-            <button type="button" className="link small" onClick={onLoadMore} style={{ marginLeft: 8 }}>
+            <button type="button" className="link small" disabled={loading} onClick={onLoadMore} style={{ marginLeft: 8 }}>
               {vi.flows.more}
             </button>
           )}

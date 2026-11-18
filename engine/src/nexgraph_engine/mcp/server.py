@@ -46,7 +46,9 @@ from nexgraph_engine.query.contracts import (
     stats_json,
 )
 from nexgraph_engine.query.context import build_context
+from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.query.paths import find_paths
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.report.build import report_json
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
@@ -87,7 +89,7 @@ def resolve_graph_db(project: Path, data_dir: Path | None) -> Path:
     if in_project.is_file():
         return in_project
     if data_dir is not None and (data_dir / "app.db").is_file():
-        for info in ProjectRegistry(data_dir).list_projects():
+        for info in ProjectRegistry(data_dir, read_only=True).list_projects():
             if info.path.resolve() == root and info.graph_db.is_file():
                 return info.graph_db
     raise ProjectNotIndexed(f"Dự án chưa được lập chỉ mục trong NexGraph: {root}")
@@ -122,7 +124,10 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
             except (sqlite3.Error, OSError) as exc:
                 raise ToolError(f"Không mở được dữ liệu đồ thị: {exc}") from exc
             try:
-                return body(GraphStore(conn))
+                store = GraphStore(conn)
+                if not store.has_published_graph():
+                    raise ToolError("Dự án chưa được lập chỉ mục xong")
+                return ModelGraph(store, root).filter(body(store))
             except ApiError as exc:  # lỗi nghiệp vụ dùng chung với HTTP -> lỗi tool đọc được
                 raise ToolError(exc.message) from exc
             finally:
@@ -169,7 +174,8 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     @mcp.tool(annotations=READ_ONLY)
     async def read_code(file: str, start: int | None = None, end: int | None = None) -> dict:
         """Đọc mã của tệp đã lập chỉ mục (đường dẫn tương đối trong dự án), tối đa 2.000 dòng."""
-        return await run("read_code", lambda s: read_code_json(s, root, file, start, end))
+        return await run("read_code", lambda s: read_code_json(
+            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude())))
 
     @mcp.tool(annotations=READ_ONLY)
     async def query_graph(question: str, depth: int = 2, budget: int = 2000,

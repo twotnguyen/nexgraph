@@ -11,7 +11,8 @@ export class EngineApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
-    message: string
+    message: string,
+    public readonly jobId?: string
   ) {
     super(message)
     this.name = 'EngineApiError'
@@ -21,37 +22,52 @@ export class EngineApiError extends Error {
 type Target = Pick<EngineHandle, 'baseUrl' | 'token'>
 
 export class EngineApi {
-  constructor(private readonly h: Target) {}
+  constructor(private readonly h: Target, private readonly modelAudience = false) {}
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  forModel(): EngineApi {
+    return new EngineApi(this.h, true)
+  }
+
+  private async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`${this.h.baseUrl}${path}`, {
       method,
       headers: {
         Authorization: `Bearer ${this.h.token}`,
+        ...(this.modelAudience ? { 'X-NexGraph-Audience': 'model' } : {}),
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' })
       },
-      body: body === undefined ? undefined : JSON.stringify(body)
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal
+    }).catch((error: unknown) => {
+      if (signal?.aborted) throw new EngineApiError(504, 'engine_timeout', 'Engine không phản hồi kịp. Hãy thử lại.')
+      if (error instanceof TypeError) throw new EngineApiError(503, 'engine_unavailable', 'Không kết nối được engine.')
+      throw error
     })
     if (!res.ok) {
       let code = 'http_error'
       let message = `Engine trả về ${res.status} cho ${path}`
+      let jobId: string | undefined
       try {
-        const e = (await res.json()) as { error?: { code?: string; message?: string } }
+        const e = (await res.json()) as { error?: { code?: string; message?: string; job_id?: string } }
         code = e.error?.code ?? code
         message = e.error?.message ?? message
+        if (typeof e.error?.job_id === 'string') jobId = e.error.job_id
       } catch {
         /* thân không phải JSON */
       }
-      throw new EngineApiError(res.status, code, message)
+      throw new EngineApiError(res.status, code, message, jobId)
     }
     return (await res.json()) as T
   }
 
   openProject(path: string): Promise<ProjectSummary> {
-    return this.request('POST', '/v1/projects', { path })
+    return this.request('POST', '/v1/projects', { path }, AbortSignal.timeout(15_000))
   }
   listProjects(): Promise<ProjectSummary[]> {
-    return this.request('GET', '/v1/projects')
+    return this.request('GET', '/v1/projects', undefined, AbortSignal.timeout(15_000))
+  }
+  async removeProject(pid: string): Promise<void> {
+    await this.request('DELETE', `/v1/projects/${encodeURIComponent(pid)}`, undefined, AbortSignal.timeout(15_000))
   }
   startIndex(pid: string, o?: IndexOptions): Promise<{ job_id: string }> {
     const body = {
@@ -60,10 +76,21 @@ export class EngineApi {
       ...(o?.includeDocs !== undefined ? { include_docs: o.includeDocs } : {}),
       ...(o?.includeMedia !== undefined ? { include_media: o.includeMedia } : {})
     }
-    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, Object.keys(body).length ? body : undefined)
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, Object.keys(body).length ? body : undefined,
+      AbortSignal.timeout(15_000))
   }
   scan(pid: string): Promise<ScanInfo> {
-    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/scan`)
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/scan`, undefined, AbortSignal.timeout(20_000))
+  }
+  async aiSourceExcludes(pid: string): Promise<string[]> {
+    try {
+      const result = await this.request<{ exclude: string[] }>('GET', `/v1/projects/${encodeURIComponent(pid)}/ai/source-scope`,
+        undefined, AbortSignal.timeout(5_000))
+      return result.exclude
+    } catch (error) {
+      if (error instanceof EngineApiError && (error.code === 'not_indexed' || error.code === 'index_running')) return []
+      throw error
+    }
   }
   search(pid: string, q: string, o?: { kinds?: string[]; limit?: number }): Promise<SearchHit[]> {
     const p = new URLSearchParams({ q })
@@ -88,13 +115,13 @@ export class EngineApi {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/changes${qs}`)
   }
   getJob(id: string): Promise<Job> {
-    return this.request('GET', `/v1/jobs/${encodeURIComponent(id)}`)
+    return this.request('GET', `/v1/jobs/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(5_000))
   }
   cancelJob(id: string): Promise<{ cancelled: boolean }> {
-    return this.request('DELETE', `/v1/jobs/${encodeURIComponent(id)}`)
+    return this.request('DELETE', `/v1/jobs/${encodeURIComponent(id)}`, undefined, AbortSignal.timeout(5_000))
   }
   stats(pid: string): Promise<GraphStats> {
-    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/stats`)
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/stats`, undefined, AbortSignal.timeout(20_000))
   }
   getNode(pid: string, id: string): Promise<GraphNode> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/nodes/${encodeURIComponent(id)}`)

@@ -21,6 +21,12 @@ const PATHS = {
   export: <path d="M12 15V4M8 8l4-4 4 4M5 14v5h14v-5" />,
   plug: <path d="M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4" />,
   spark: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16v4M17 18h4" />,
+  folder: <path d="M3 6a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
+  sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M19 5l-1.5 1.5m-11 11L5 19" /></>,
+  moon: <path d="M20.4 15A8.5 8.5 0 1 1 9 3.6 8 8 0 0 0 20.4 15z" />,
+  close: <path d="m6 6 12 12M18 6 6 18" />,
+  chevron: <path d="m9 6 6 6-6 6" />,
+  check: <path d="m5 12 4 4L19 6" />,
   commit: <><circle cx="12" cy="12" r="3.5" /><path d="M3 12h5.5M15.5 12H21" /></>
 } satisfies Record<string, ReactNode>
 
@@ -47,33 +53,6 @@ export function Logo({ size = 22 }: { size?: number }) {
       <circle cx="12" cy="12" r="2.6" fill="var(--violet)" />
       <circle cx="12" cy="3" r="1.3" fill="var(--violet)" />
       <circle cx="12" cy="21" r="1.3" fill="var(--green)" />
-    </svg>
-  )
-}
-
-// [x, y, bán kính, màu]; cạnh nối theo chỉ số. Toạ độ vẽ tay cho khung 460×240.
-const ART_NODES: [number, number, number, string][] = [
-  [60, 150, 7, 'blue'], [128, 78, 11, 'violet'], [150, 186, 6, 'teal'], [214, 128, 15, 'blue'], [232, 40, 6, 'amber'],
-  [288, 196, 8, 'magenta'], [304, 84, 9, 'teal'], [366, 142, 12, 'magenta'], [384, 44, 6, 'green'], [428, 204, 6, 'violet'],
-  [438, 98, 8, 'amber'], [18, 70, 5, 'green']
-]
-const ART_EDGES: [number, number][] = [
-  [0, 1], [0, 2], [1, 3], [2, 3], [1, 4], [3, 5], [3, 6], [4, 6], [6, 7], [5, 7], [6, 8], [7, 9], [7, 10], [8, 10], [11, 1], [11, 0]
-]
-
-/** Hình trang trí ở đầu trang: một mảnh đồ thị, màu theo loại nút. */
-export function GraphArt() {
-  return (
-    <svg className="graph-art" viewBox="0 0 460 240" aria-hidden="true">
-      {ART_EDGES.map(([a, b]) => (
-        <line key={`${a}-${b}`} x1={ART_NODES[a][0]} y1={ART_NODES[a][1]} x2={ART_NODES[b][0]} y2={ART_NODES[b][1]} />
-      ))}
-      {ART_NODES.map(([x, y, r, c], i) => (
-        <g key={i} style={{ color: `var(--${c})` }}>
-          <circle cx={x} cy={y} r={r + 6} fill="currentColor" opacity=".18" />
-          <circle cx={x} cy={y} r={r} fill="currentColor" />
-        </g>
-      ))}
     </svg>
   )
 }

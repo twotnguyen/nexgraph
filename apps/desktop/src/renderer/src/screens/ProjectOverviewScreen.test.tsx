@@ -24,10 +24,18 @@ describe('ProjectOverviewScreen', () => {
 
   it('hiện số liệu graph và huy hiệu khi graph cũ hơn mã nguồn', async () => {
     renderOverview({ graph: { stats: vi.fn(async () => ({ ...stats, stale: true, changed_files: 1 })) } })
-    expect(await screen.findByText(/12 tệp/)).toBeInTheDocument()
-    expect(screen.getByText(/42 node/)).toBeInTheDocument()
-    expect(screen.getByText(/48 cạnh/)).toBeInTheDocument()
+    expect(await screen.findByLabelText('12 tệp · 42 node · 48 cạnh')).toBeInTheDocument()
     expect(await screen.findByText('Graph cũ hơn mã nguồn')).toBeInTheDocument()
+  })
+
+  it('shows a failed stats request and lets the user reload it', async () => {
+    const get = vi.fn(async () => ({ ...stats, changed_files: null }))
+      .mockRejectedValueOnce(new Error('engine indisponible'))
+    renderOverview({ graph: { stats: get } })
+    expect(await screen.findByRole('alert')).toHaveTextContent('engine indisponible')
+    await userEvent.click(screen.getByRole('button', { name: 'Tải lại số liệu' }))
+    expect(await screen.findByText('Chưa xác minh được đồ thị có khớp với mã nguồn hiện tại.')).toBeInTheDocument()
+    expect(get).toHaveBeenCalledTimes(2)
   })
 
   it('thẻ Xem mở workspace đúng tab', async () => {

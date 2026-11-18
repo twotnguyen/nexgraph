@@ -1,12 +1,15 @@
-"""Lập chỉ mục hai giai đoạn: cấu trúc (nhanh, dùng được ngay) rồi phân giải tham chiếu."""
+"""Lập chỉ mục hai giai đoạn: đọc cấu trúc rồi phân giải tham chiếu."""
 from __future__ import annotations
 
 import os
+import sqlite3
 import subprocess
 import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, wait
+from concurrent.futures.process import BrokenProcessPool
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -25,8 +28,12 @@ from nexgraph_engine.index.resolver import _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, FileRec, Node, RunState, UnresolvedRef
+from nexgraph_engine.subprocesses import run_captured
 
 COMMIT_EVERY = 100
+EXTRACTION_BATCH_SIZE = 16
+WORKER_PROGRESS_TIMEOUT_SECONDS = 20
+IS_WINDOWS = os.name == "nt"
 
 
 @dataclass(frozen=True)
@@ -59,23 +66,25 @@ def index_workers(n_files: int, include_media: bool) -> int:
                 return val
         except ValueError:
             pass
+    # Windows spawn có thể trì hoãn cả lô đầu đến hết timeout; đọc ngay trong tiến trình engine mặc định.
+    if IS_WINDOWS:
+        return 1
     cpus = os.cpu_count() or 1
     if cpus <= 2:
         return 1
     return min(cpus - 1, 8)
 
 
-def _extract_worker(args: tuple[Path, DiscoveredFile, Path | None]) -> ExtractedFile:
-    root, f, transcript_dir = args
-    return extract_file(root, f, transcript_dir=transcript_dir, cancel=None)
+def _extract_batch(root: Path, files: list[DiscoveredFile], transcript_dir: Path | None) -> list[ExtractedFile]:
+    return [extract_file(root, f, transcript_dir=transcript_dir, cancel=None) for f in files]
 
 
 def _git_head(root: Path) -> str | None:
     if not (root / ".git").exists():
         return None
     try:
-        out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, timeout=10)
-        sha = out.stdout.strip()
+        out = run_captured(["git", "rev-parse", "HEAD"], cwd=root, timeout=10)
+        sha = out.stdout.decode("ascii", "replace").strip()
         return sha if out.returncode == 0 and 40 <= len(sha) <= 64 else None
     except (OSError, subprocess.SubprocessError):
         return None
@@ -141,6 +150,7 @@ class Indexer:
         store = self.store
         run_id = store.begin_run(commit_sha=_git_head(self.root), subdir=self.subdir, exclude=self.exclude,
                                  include_docs=self.include_docs, include_media=self.include_media)
+        total = 0
         try:
             files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
                                   include_docs=self.include_docs, include_media=self.include_media))
@@ -160,11 +170,15 @@ class Indexer:
             derive_tested_by(store)
             try:
                 rebuild_flows(store, self.root)
+            except sqlite3.Error:
+                raise
             except Exception as exc:
                 store.conn.rollback()
                 self.on_progress(ProgressEvent("resolve", total, total, f"Không dựng được luồng: {exc}"))
             try:
                 detect_communities(store)
+            except sqlite3.Error:
+                raise
             except Exception as exc:  # khối cộng đồng chỉ là phần phụ: lỗi ở đây không làm hỏng lần lập chỉ mục
                 store.conn.rollback()
                 self.on_progress(ProgressEvent("resolve", total, total, f"Không phát hiện được cụm: {exc}"))
@@ -199,7 +213,10 @@ class Indexer:
                               qualified_name=".")])
         dirs: set[str] = set()
         contains: list[tuple[str, str]] = []
-        workers = index_workers(total, self.include_media)
+        batch_count = (total + EXTRACTION_BATCH_SIZE - 1) // EXTRACTION_BATCH_SIZE
+        workers = min(index_workers(total, self.include_media), batch_count)
+        if IS_WINDOWS:
+            workers = min(workers, 61)  # giới hạn ProcessPoolExecutor trên Windows
 
         def _consume(i: int, f: DiscoveredFile, x: ExtractedFile) -> None:
             store.add_file(run_id, x.rec)
@@ -224,30 +241,46 @@ class Indexer:
                 store.commit()
             self.on_progress(ProgressEvent("structure", i, total))
 
-        if workers == 1:
-            for i, f in enumerate(files, start=1):
-                if self.cancel.is_set():
-                    return False
-                x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
-                _consume(i, f, x)
-        else:
-            executor = ProcessPoolExecutor(max_workers=workers)
+        consumed = 0
+        if workers > 1:
+            executor: ProcessPoolExecutor | None = None
             try:
-                tasks = [(self.root, f, self.transcript_dir) for f in files]
-                for i, (f, x) in enumerate(zip(files, executor.map(_extract_worker, tasks, chunksize=16)), start=1):
-                    if self.cancel.is_set():
-                        for p in list(getattr(executor, '_processes', {}).values()):
-                            try: p.terminate()
-                            except Exception: pass
-                        executor.shutdown(wait=False, cancel_futures=True)
-                        return False
-                    _consume(i, f, x)
+                executor = ProcessPoolExecutor(max_workers=workers)
+                batches = [executor.submit(_extract_batch, self.root, files[offset:offset + EXTRACTION_BATCH_SIZE],
+                                           self.transcript_dir) for offset in range(0, total, EXTRACTION_BATCH_SIZE)]
+                for batch in batches:
+                    deadline = time.monotonic() + WORKER_PROGRESS_TIMEOUT_SECONDS
+                    while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
+                        wait((batch,), timeout=0.2)
+                    if not batch.done() or self.cancel.is_set():
+                        break
+                    for extracted in batch.result():
+                        if self.cancel.is_set():
+                            return False
+                        _consume(consumed + 1, files[consumed], extracted)
+                        consumed += 1
+            except (BrokenProcessPool, OSError):
+                # Worker có thể không khởi động được hoặc bị hệ điều hành chặn.
+                pass
             finally:
-                if self.cancel.is_set():
-                    for p in list(getattr(executor, '_processes', {}).values()):
-                        try: p.terminate()
-                        except Exception: pass
-                executor.shutdown(wait=False, cancel_futures=True)
+                if executor is not None and consumed < total:
+                    # Python 3.12 chưa có terminate_workers() trên executor.
+                    for process in list((executor._processes or {}).values()):
+                        with suppress(OSError):
+                            process.terminate()
+                if executor is not None:
+                    executor.shutdown(wait=False, cancel_futures=True)
+            if consumed < total and not self.cancel.is_set():
+                self.on_progress(ProgressEvent("structure", consumed, total,
+                                               "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
+
+        # Nếu worker treo, tiếp tục đọc tuần tự từ tệp đầu tiên chưa ghi.
+        for i in range(consumed, total):
+            if self.cancel.is_set():
+                return False
+            f = files[i]
+            x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
+            _consume(i + 1, f, x)
 
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)
         store.commit()

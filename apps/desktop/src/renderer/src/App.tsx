@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { vi } from './strings'
+import type { HostCommand } from '@shared/api'
 import type { EngineStatus } from '@shared/engine-status'
 import type { IndexOptions, ProjectSummary, ScanInfo } from '@shared/graph-types'
 import { EngineStatusBar } from './components/EngineStatusBar'
+import { WorkbenchBar } from './components/layout/WorkbenchBar'
+import { Icon } from './components/common/icons'
 import { LargeProjectScreen } from './screens/LargeProjectScreen'
 import { IndexingScreen } from './screens/IndexingScreen'
 import { ProjectOverviewScreen, type WorkspaceTab } from './screens/ProjectOverviewScreen'
@@ -14,16 +17,16 @@ type Screen =
   | { name: 'projects' }
   | { name: 'scan'; project: ProjectSummary }
   | { name: 'large'; project: ProjectSummary; scan: ScanInfo }
-  | { name: 'indexing'; project: ProjectSummary; subdir: string | null; options?: IndexOptions }
+  | { name: 'indexing'; project: ProjectSummary; subdir: string | null; options?: IndexOptions; rebuild?: boolean; exploring?: boolean; attempt?: number }
   | { name: 'overview'; project: ProjectSummary }
-  | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab }
+  | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab; initialCommand?: HostCommand }
   | { name: 'settings'; back: Screen }
 
 /** Kiểm tra kích thước trước khi lập chỉ mục. Lỗi khi quét không chặn: coi như dự án không lớn. */
 function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan: ScanInfo | null) => void }) {
   useEffect(() => {
     const api = window.nexgraph
-    if (!api) return // preload chưa kịp inject (dev reload): không crash, chờ lần render sau
+    if (!api) return
     let alive = true
     api.index
       .scan(project.project_id)
@@ -34,8 +37,15 @@ function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan:
     }
   }, [project.project_id]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <main className="screen">
-      <p className="muted">{vi.large.scanning}</p>
+    <main className="screen task-screen" aria-busy="true">
+      <div className="page-title">
+        <span className="page-icon"><Icon name="folder" /></span>
+        <div><h1>{project.name}</h1><p className="muted">{vi.large.scanning}</p></div>
+      </div>
+      <div className="task-panel" role="status" aria-label={vi.large.scanning}>
+        <div className="bar indeterminate"><div className="bar-fill" /></div>
+        <div className="skeleton-line" /><div className="skeleton-line short" />
+      </div>
     </main>
   )
 }
@@ -43,13 +53,22 @@ function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan:
 export default function App() {
   const [status, setStatus] = useState<EngineStatus>({ state: 'starting' })
   const [screen, setScreen] = useState<Screen>({ name: 'projects' })
+  const initialHostCommand = useRef(window.nexgraph?.host?.initialCommand)
+  const [hostError, setHostError] = useState<string | null>(null)
 
   useEffect(() => {
     const api = window.nexgraph
-    if (!api) return // preload chưa kịp inject (dev reload): đợi, không crash renderer
+    if (!api) return
     let alive = true
-    void api.engine.status().then((s) => alive && setStatus(s))
-    const off = api.engine.onStatus(setStatus)
+    let eventReceived = false
+    const off = api.engine.onStatus((status) => {
+      eventReceived = true
+      setStatus(status)
+    })
+    const failed = (e: unknown) => {
+      if (alive && !eventReceived) setStatus({ state: 'error', message: e instanceof Error ? e.message : String(e) })
+    }
+    void api.engine.status().then((s) => alive && !eventReceived && setStatus(s), failed)
     return () => {
       alive = false
       off()
@@ -59,31 +78,81 @@ export default function App() {
   // Chạy trong extension: thư mục do nền mở sẵn, bỏ qua bước chọn dự án.
   const hostFolder = window.nexgraph?.host?.folder
   useEffect(() => {
+    if (hostFolder || initialHostCommand.current?.name !== 'settings') return
+    initialHostCommand.current = undefined
+    setScreen({ name: 'settings', back: { name: 'projects' } })
+  }, [hostFolder])
+
+  useEffect(() => {
     const api = window.nexgraph
     if (!api || !hostFolder || status.state !== 'ready' || screen.name !== 'projects') return
     let alive = true
     api.project.open(hostFolder)
-      .then((project) => alive && setScreen(project.last_indexed_at ? { name: 'workspace', project, tab: api.host?.initialView as WorkspaceTab | undefined } : { name: 'scan', project }))
-      .catch(() => {}) // lỗi mở: ở lại màn Dự án để người dùng thấy và thử lại
+      .then((project) => {
+        if (!alive) return
+        setHostError(null)
+        const command = initialHostCommand.current
+        const tab = api.host?.initialView as WorkspaceTab | undefined
+        const hasGraph = project.last_indexed_at != null
+        const base: Screen = hasGraph
+          ? { name: 'workspace', project, tab, initialCommand: command?.name === 'settings' ? undefined : command }
+          : { name: 'scan', project }
+        if (hasGraph || command?.name === 'settings') initialHostCommand.current = undefined
+        setScreen((current) => {
+          if (current.name === 'settings') return { ...current, back: base }
+          if (current.name !== 'projects') return current
+          if (command?.name === 'settings') return { name: 'settings', back: base }
+          if (command?.name === 'overview' && hasGraph) return { name: 'overview', project }
+          return base
+        })
+      })
+      .catch((error: { message?: string }) => { if (alive) setHostError(error?.message ?? String(error)) })
     return () => { alive = false }
   }, [hostFolder, status.state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lệnh chọn thẻ từ nền khi đang ở màn Tổng quan: vào không gian làm việc đúng thẻ đó.
   // Lệnh từ nền khi không ở không gian làm việc (màn đó tự xử lý lệnh của nó): chọn thẻ, mở Cài đặt, về Tổng quan.
-  useEffect(() => window.nexgraph?.host?.onCommand((c) => {
-    if (screen.name === 'workspace') return
+  useEffect(() => window.nexgraph?.host?.onCommand((c, arg) => {
+    if (screen.name === 'workspace' || (screen.name === 'indexing' && screen.exploring)) return
     const at = screen.name === 'settings' ? screen.back : screen // màn nằm dưới Cài đặt
     if (c === 'settings' && screen.name !== 'settings') setScreen({ name: 'settings', back: screen })
     else if (c === 'overview' && screen.name === 'settings') setScreen(screen.back)
     else if (c.startsWith('view:') && (at.name === 'overview' || at.name === 'workspace')) setScreen({ name: 'workspace', project: at.project, tab: c.slice(5) as WorkspaceTab })
+    else if (c.startsWith('panel:') || c === 'export' || c === 'highlight' || c.startsWith('view:')) {
+      if (at.name === 'overview' || at.name === 'workspace') setScreen({ name: 'workspace', project: at.project, initialCommand: { name: c, arg } })
+      else initialHostCommand.current = { name: c, arg }
+    }
   }), [screen])
+
+  const indexing = screen.name === 'indexing' ? screen
+    : screen.name === 'settings' && screen.back.name === 'indexing' ? screen.back
+    : undefined
+
+  const showCompletedGraph = (project: ProjectSummary, name: 'workspace' | 'overview') => {
+    const pending = { ...project, last_indexed_at: null, last_index_commit: null }
+    const command = initialHostCommand.current
+    initialHostCommand.current = undefined
+    setScreen(name === 'workspace' && command?.name !== 'overview'
+      ? { name: 'workspace', project: pending, initialCommand: command } : { name: 'overview', project: pending })
+    void window.nexgraph.project.list().then((projects) => {
+      const latest = projects.find((p) => p.project_id === project.project_id && p.last_indexed_at != null)
+      if (latest) setScreen((current) =>
+        (current.name === 'workspace' || current.name === 'overview') && current.project === pending
+          ? { ...current, project: latest } : current)
+    }).catch(() => {}) // Tổng quan đọc thêm mốc lập chỉ mục từ số liệu đồ thị.
+  }
 
   return (
     <div className="app">
+      {!window.nexgraph?.host && <WorkbenchBar />}
+      {hostError && screen.name === 'projects' && <p role="alert" className="inline-message error">{hostError}</p>}
       {screen.name === 'projects' && (
         <ProjectsScreen engineReady={status.state === 'ready'}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
-          onOpened={(project) => setScreen(project.last_indexed_at ? { name: 'overview', project } : { name: 'scan', project })} />
+          onOpened={(project) => {
+            setHostError(null)
+            setScreen(project.last_indexed_at != null ? { name: 'workspace', project } : { name: 'scan', project })
+          }} />
       )}
       {screen.name === 'scan' && (
         <ScanStep
@@ -101,10 +170,19 @@ export default function App() {
           onCancel={() => setScreen({ name: 'projects' })}
         />
       )}
-      {screen.name === 'indexing' && (
-        <IndexingScreen project={screen.project} subdir={screen.subdir} options={screen.options}
-          onExplore={() => setScreen({ name: 'workspace', project: screen.project })}
-          onBack={() => setScreen(screen.project.last_indexed_at ? { name: 'overview', project: screen.project } : { name: 'projects' })} />
+      {indexing && (
+        <IndexingScreen key={indexing.attempt ?? 0} project={indexing.project} subdir={indexing.subdir} options={indexing.options}
+          rebuild={indexing.rebuild} hidden={screen.name === 'settings'}
+          onRetry={() => setScreen({ ...indexing, exploring: false, attempt: (indexing.attempt ?? 0) + 1 })}
+          onExplore={() => showCompletedGraph(indexing.project, 'workspace')}
+          onBack={(completed) => completed ? showCompletedGraph(indexing.project, 'overview')
+            : setScreen(indexing.rebuild ? { name: 'overview', project: indexing.project } : { name: 'projects' })}
+          onShowExisting={() => setScreen({ ...indexing, exploring: true })}
+          renderExisting={indexing.exploring ? (notice) => (
+            <WorkspaceScreen project={indexing.project} indexNotice={notice} backLabel={vi.indexing.backToProgress}
+              onOpenSettings={() => setScreen({ name: 'settings', back: indexing })}
+              onBack={() => setScreen({ ...indexing, exploring: false })} />
+          ) : undefined} />
       )}
       {screen.name === 'overview' && (
         <ProjectOverviewScreen
@@ -112,13 +190,13 @@ export default function App() {
           onBack={() => setScreen({ name: 'projects' })}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
           onOpenWorkspace={(tab) => setScreen({ name: 'workspace', project: screen.project, tab })}
-          onReindex={(options) => setScreen({ name: 'indexing', project: screen.project, subdir: null, options })}
+          onReindex={(options) => setScreen({ name: 'indexing', project: screen.project, subdir: null, options, rebuild: true })}
         />
       )}
       {screen.name === 'workspace' && (
-        <WorkspaceScreen key={screen.tab ?? 'arch'} project={screen.project} initialTab={screen.tab}
+        <WorkspaceScreen key={screen.tab ?? 'arch'} project={screen.project} initialTab={screen.tab} initialCommand={screen.initialCommand}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
-          onBack={() => setScreen({ name: 'overview', project: { ...screen.project, last_indexed_at: screen.project.last_indexed_at ?? Math.floor(Date.now() / 1000) } })} />
+          onBack={() => setScreen({ name: 'overview', project: screen.project })} />
       )}
       {screen.name === 'settings' && <SettingsScreen onBack={() => setScreen(screen.back)} />}
       <EngineStatusBar status={status} onRestart={() => void window.nexgraph.engine.restart()} />

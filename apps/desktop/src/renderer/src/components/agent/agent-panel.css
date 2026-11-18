@@ -1,0 +1,174 @@
+.chat.agent-panel {
+  background: var(--panel);
+}
+
+.agent-panel > header {
+  min-height: var(--ws-header, 44px);
+  flex: none;
+  padding: 0 10px 0 12px;
+}
+
+.agent-panel h2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.agent-panel h2 svg { color: var(--violet); }
+
+.agent-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.agent-panel :is(.agent-icon-button, .agent-connect, .agent-attach) {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 6px;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--color-muted);
+  background: transparent;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.agent-panel .agent-icon-button { width: 26px; padding: 0; }
+.agent-panel :is(.agent-connect, .agent-attach) { border-color: var(--color-border); }
+.agent-panel :is(.agent-icon-button, .agent-connect, .agent-attach):hover:not(:disabled) {
+  background: var(--track);
+  color: var(--color-text);
+}
+
+.agent-panel .agent-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 9px 11px 0;
+}
+
+.agent-model {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.agent-panel .mode { flex: none; border-radius: 5px; }
+.agent-panel .mode button { padding-block: 4px; }
+.agent-panel .mode button[aria-pressed='true'] { color: var(--blue); }
+.agent-panel .mode-description { margin: 0; padding: 7px 12px 8px; }
+.agent-panel > .error { margin: 0; padding: 6px 12px; overflow-wrap: anywhere; }
+
+.agent-panel .msgs {
+  min-height: 0;
+  padding: 12px;
+  border-top: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--panel) 55%, var(--color-surface));
+  overscroll-behavior: contain;
+}
+
+.agent-panel :is(.me, .ai) { overflow-wrap: anywhere; line-height: 1.55; }
+.agent-panel .me { max-width: min(94%, 38rem); font-size: 13px; }
+.agent-sent-file {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.agent-welcome {
+  width: 100%;
+  max-width: 330px;
+  margin: auto;
+  padding: 14px 5px;
+  text-align: center;
+}
+
+.agent-welcome-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border: 1px solid color-mix(in srgb, var(--violet) 24%, var(--color-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--violet) 10%, var(--color-surface));
+  color: var(--violet);
+}
+
+.agent-welcome h3 { margin: 12px 0 6px; font-size: 15px; }
+.agent-welcome p { margin: 0 auto 12px; max-width: 230px; font-size: 12px; line-height: 1.55; }
+.agent-welcome button { font-size: 12px; }
+
+.agent-starters { display: grid; gap: 6px; margin: 12px auto 0; }
+.agent-starters button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 9px;
+  border-radius: 5px;
+  background: var(--color-surface);
+  text-align: left;
+}
+
+.agent-starters button:hover { border-color: var(--blue); }
+.agent-starters button svg { flex: none; color: var(--color-muted); }
+
+.agent-panel .approvals { max-height: 55%; overflow: auto; }
+.agent-panel .compose { flex: none; padding: 9px 11px 11px; }
+.agent-compose-input {
+  display: grid;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+}
+
+.agent-compose-input:focus-within { border-color: var(--blue); }
+.agent-panel .compose textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  outline-offset: -2px;
+  border: 0;
+  background: transparent;
+  line-height: 1.45;
+}
+
+.agent-panel .compose textarea:focus-visible { outline: 0; }
+.agent-panel .compose textarea::placeholder { color: var(--color-muted); }
+.agent-panel .compose .row > button { font-size: 12px; }
+
+.agent-attachment {
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-width: 0;
+  max-width: calc(100% - 12px);
+  margin: 6px 6px 0;
+  padding-inline-start: 5px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--color-text);
+  font-size: 10px;
+}
+
+.agent-attachment .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-attachment .agent-icon-button { min-height: 20px; width: 20px; }

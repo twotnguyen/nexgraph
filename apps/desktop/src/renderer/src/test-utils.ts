@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
-import type { Changes, EngineEvent, ProjectSummary } from '@shared/graph-types'
+import type { Changes, EngineEvent, Job, JobState, ProjectSummary } from '@shared/graph-types'
 import type { AgentEvent } from '@shared/agent-types'
 
 export const project = (over: Partial<ProjectSummary> = {}): ProjectSummary => ({
@@ -21,15 +21,16 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       restart: vi.fn(async () => {}),
       tools: vi.fn(async () => ({ ffmpeg: true, faster_whisper: true, git: true, gh: true, yt_dlp: true })), onStatus: vi.fn(() => () => {}), ...over.engine },
     project: { pickFolder: vi.fn(async () => '/Đồ án/demo'), open: vi.fn(async () => project()),
-      list: vi.fn(async () => []), ...over.project },
+      list: vi.fn(async () => []), remove: vi.fn(async () => {}), ...over.project },
     index: {
       scan: vi.fn(async () => ({ files: 10, by_language: {}, large: false, threshold: 5000, top_dirs: [] })),
-      start: vi.fn(async () => ({ jobId: 'j1' })), cancel: vi.fn(async () => {}),
+      start: vi.fn(async () => ({ jobId: 'j1' })), status: vi.fn(async () => progress('queued', 0, 0)), cancel: vi.fn(async () => {}),
       refresh: vi.fn(async () => ({ status: 'ok' as const, reason: null, added: 0, changed: 0, removed: 0, seconds: 0 })),
       onEvent: vi.fn((cb: (e: EngineEvent) => void) => { handlers.add(cb); return () => handlers.delete(cb) }),
       ...over.index
     },
-    graph: { stats: vi.fn(async () => ({ files: 0, nodes_by_kind: {}, edges_by_type: {}, languages: {}, unresolved: 0 })), neighbors: vi.fn(), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
+    graph: { stats: vi.fn(async () => ({ files: 0, nodes_by_kind: {}, edges_by_type: {}, languages: {}, unresolved: 0 })),
+      neighbors: vi.fn(async () => ({ nodes: [], edges: [], truncated: false })), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
       language: null, file: null, line_start: null, line_end: null, is_test: false, origin: 'ast', signature: null, community: null })), code: vi.fn(), search: vi.fn(async () => []),
       architecture: vi.fn(async () => ({ parent: null, blocks: [], links: [] })), archEvidence: vi.fn(async () => []),
       changes: vi.fn(async () => emptyChanges()), report: vi.fn(), paths: vi.fn(), impactOf: vi.fn(), ask: vi.fn(),
@@ -39,8 +40,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       map: vi.fn(async () => ({ parent: null, nodes: [], edges: [], truncated: false, totals: { files: 0, nodes: 0 } })),
       cycles: vi.fn(async () => ({ cycles: [], total: 0 })),
       ...over.graph },
-    fs: { read: vi.fn(async () => ({ text: '', eol: '\n' as const, bom: false, mtimeMs: 1, readOnly: false })),
-      write: vi.fn(async () => ({ mtimeMs: 2 })), ...over.fs },
+    fs: { read: vi.fn(async () => ({ text: '', eol: '\n' as const, bom: false, mtimeMs: 1, version: 'initial', readOnly: false })),
+      write: vi.fn(async () => ({ mtimeMs: 2, version: 'saved' })), ...over.fs },
     exporter: { pickDir: vi.fn(async () => '/Đồ án/xuất'), run: vi.fn(async () => ({ files: [], truncated: false })),
       push: vi.fn(async () => ({ nodes: 0, edges: 0, truncated: false })), png: vi.fn(async () => null),
       reveal: vi.fn(async () => {}), ...over.exporter },
@@ -64,5 +65,5 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)) }
 }
 
-export const progress = (state: string, done: number, total: number, extra: object = {}): EngineEvent =>
-  ({ type: 'job_progress', job_id: 'j1', project_id: 'p1', state, files_done: done, files_total: total, message: null, ...extra }) as EngineEvent
+export const progress = (state: JobState, done: number, total: number, extra: Partial<Job> = {}): Extract<EngineEvent, { type: 'job_progress' }> =>
+  ({ type: 'job_progress', job_id: 'j1', project_id: 'p1', state, files_done: done, files_total: total, message: null, ...extra })

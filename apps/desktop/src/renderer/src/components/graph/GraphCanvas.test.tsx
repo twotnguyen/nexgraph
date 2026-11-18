@@ -54,11 +54,11 @@ describe('GraphCanvas', () => {
 
   it('shows a notice when the neighborhood was truncated', async () => {
     renderCanvas(vi.fn(async () => hood(['.#repository', 'a'], true)))
-    expect(await screen.findByRole('status')).toHaveTextContent('Đã cắt bớt')
+    expect(await screen.findByText(/Đã cắt bớt/)).toHaveAttribute('role', 'status')
   })
   it('shows total count when truncated with total', async () => {
     renderCanvas(vi.fn(async () => ({ ...hood(['.#repository', 'a'], true), total: 12345 })))
-    expect(await screen.findByRole('status')).toHaveTextContent('12345')
+    expect(await screen.findByText(/12345/)).toHaveAttribute('role', 'status')
   })
 
   it('shows a message instead of a blank screen when the node is unknown', async () => {
@@ -101,19 +101,19 @@ describe('GraphCanvas highlights', () => {
   it('tags and colours highlighted nodes by meaning', async () => {
     renderWith({ a: 'changed', b: 'impacted', c: 'test', d: 'gap' })
     await screen.findByText('a')
-    expect(colorOf('a')).toBe('#e07a00')
+    expect(colorOf('a')).toBe('var(--orange)')
     expect(within(nodeEl('a')).getByText('đã đổi')).toBeInTheDocument()
     expect(within(nodeEl('b')).getByText('ảnh hưởng')).toBeInTheDocument()
-    expect(colorOf('c')).toBe('#1c9a5b')
+    expect(colorOf('c')).toBe('var(--green)')
     expect(within(nodeEl('c')).getByText('test')).toBeInTheDocument()
-    expect(colorOf('d')).toBe('#d93a2f')
+    expect(colorOf('d')).toBe('var(--color-error-red)')
     expect(within(nodeEl('d')).getByText('chưa có test')).toBeInTheDocument()
   })
 
   it('leaves the look unchanged without highlights', async () => {
     renderWith()
     await screen.findByText('a')
-    expect(colorOf('a')).toBe('#3257f0')
+    expect(colorOf('a')).toBe('var(--blue)')
     expect(document.querySelectorAll('.tag')).toHaveLength(0)
   })
 })
@@ -121,7 +121,7 @@ describe('GraphCanvas highlights', () => {
 describe('kindStyle cho tài liệu', () => {
   it('nút document và concept có màu riêng', async () => {
     const { kindStyle } = await import('./kindStyle')
-    expect(kindStyle('document').color).toBe('#c27c00')
-    expect(kindStyle('concept').color).toBe('#c27c00')
+    expect(kindStyle('document').color).toBe('var(--amber)')
+    expect(kindStyle('concept').color).toBe('var(--amber)')
   })
 })

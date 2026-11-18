@@ -10,6 +10,8 @@ import { resolveEngineCommand } from '../../desktop/src/main/engine/resolve-comm
 import { EngineSupervisor } from '../../desktop/src/main/engine/supervisor'
 import { isWithin } from '../../desktop/src/main/fs/project-fs'
 import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers } from '../../desktop/src/main/ipc'
+import type { HostCommand } from '../../desktop/src/shared/api'
+import { createHostCommandRelay } from './host-command'
 
 const folder = (): string | null => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null
 
@@ -53,6 +55,7 @@ const navTree: vscode.TreeDataProvider<Nav> = {
 }
 
 let panel: vscode.WebviewPanel | undefined
+let postPanelCommand: ((command: HostCommand) => void) | undefined
 let supervisor: EngineSupervisor | undefined
 let stopEvents: (() => void) | null = null
 let retry: NodeJS.Timeout | null = null
@@ -80,39 +83,49 @@ function followEvents(handle: EngineHandle | null): void {
 const views = new Set<vscode.Webview>() // mọi webview đang mở: sự kiện từ host phát tới tất cả
 
 /** Gắn một webview vào lớp nối: nạp bundle, nhận lời gọi kênh, nhận sự kiện từ host. */
-function attach(ctx: vscode.ExtensionContext, view: vscode.Webview, mode: 'main' | 'agent', view0 = ''): void {
+function attach(ctx: vscode.ExtensionContext, view: vscode.Webview, mode: 'main' | 'agent', initial?: HostCommand): (command: HostCommand) => void {
   const dist = vscode.Uri.joinPath(ctx.extensionUri, 'dist', 'webview')
   view.options = { enableScripts: true, localResourceRoots: [dist] }
   const src = view.cspSource
   const res = (name: string): vscode.Uri => view.asWebviewUri(vscode.Uri.joinPath(dist, name))
+  const view0 = initial?.name.startsWith('view:') ? initial.name.slice(5) : ''
+  const startup = initial ? attr(JSON.stringify(initial)) : ''
+  const commands = createHostCommandRelay((command) => void view.postMessage({ event: 'host:command', payload: command }))
   view.html = `<!doctype html><html lang="vi"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${src}; style-src ${src} 'unsafe-inline'; font-src ${src} data:; img-src ${src} data: blob:; connect-src ${src}; worker-src ${src} blob:;">
 <link rel="stylesheet" href="${res('index.css')}"><style>body{padding:0}</style></head>
-<body><div id="root" data-mode="${mode}" data-folder="${attr(folder() ?? '')}" data-view="${attr(view0)}"></div><script type="module" src="${res('index.js')}"></script></body></html>`
+<body><div id="root" data-mode="${mode}" data-folder="${attr(folder() ?? '')}" data-view="${attr(view0)}" data-command="${startup}"></div><script type="module" src="${res('index.js')}"></script></body></html>`
   views.add(view)
   view.onDidReceiveMessage(async (m: { id: number; channel: string; args: unknown[] }) => {
     try {
+      if (mode === 'main' && m.channel === 'host:ready') {
+        commands.ready()
+        await view.postMessage({ id: m.id, ok: true, value: null })
+        return
+      }
       await view.postMessage({ id: m.id, ok: true, value: await dispatch(m.channel, m.args ?? []) })
     } catch (e) {
       await view.postMessage({ id: m.id, ok: false, message: e instanceof Error ? e.message : String(e) })
     }
   })
+  return commands.post
 }
 
-/** Mở (hoặc đưa lên trước) tab NexGraph. `command` gửi vào tab đang mở; tab mới thì `view:<thẻ>` thành thẻ mở đầu. */
-// shortcut: lệnh khác `view:` gửi lúc tab chưa mở sẽ mất (tab mở ra ở thẻ mặc định); cần hàng đợi nếu thành vấn đề.
+/** Mở tab với lệnh khởi động hoặc gửi lệnh đến tab đang có. */
 function openPanel(ctx: vscode.ExtensionContext, command?: string, arg?: unknown): void {
+  const action = command ? { name: command, arg } : undefined
   if (panel) {
     panel.reveal()
-    if (command) void panel.webview.postMessage({ event: 'host:command', payload: { name: command, arg } })
+    if (action) postPanelCommand?.(action)
     return
   }
   panel = vscode.window.createWebviewPanel('nexgraph', 'NexGraph', vscode.ViewColumn.One, { retainContextWhenHidden: true })
   panel.iconPath = vscode.Uri.joinPath(ctx.extensionUri, 'media', 'mark.svg')
   const view = panel.webview
-  attach(ctx, view, 'main', command?.startsWith('view:') ? command.slice(5) : '')
+  postPanelCommand = attach(ctx, view, 'main', action)
   panel.onDidDispose(() => {
     panel = undefined
+    postPanelCommand = undefined
     views.delete(view)
     stopAllWatchers()
   })
@@ -169,7 +182,13 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     vscode.window.registerWebviewViewProvider('nexgraph.agent', {
       resolveWebviewView(v) {
         attach(ctx, v.webview, 'agent')
-        v.onDidDispose(() => views.delete(v.webview))
+        const visibility = v.onDidChangeVisibility(() => {
+          void v.webview.postMessage({ event: 'host:command', payload: { name: 'agent:visibility', arg: v.visible } })
+        })
+        v.onDidDispose(() => {
+          visibility.dispose()
+          views.delete(v.webview)
+        })
       }
     }, { webviewOptions: { retainContextWhenHidden: true } }),
     vscode.commands.registerCommand('nexgraph.open', () => openPanel(ctx)),
@@ -177,7 +196,10 @@ export async function activate(ctx: vscode.ExtensionContext): Promise<void> {
     ...NAV.flatMap((g) => g.items).map((i) => vscode.commands.registerCommand(`nexgraph.go.${i.id}`, () =>
       i.id === 'agent' ? vscode.commands.executeCommand('nexgraph.agent.focus') : openPanel(ctx, i.command))),
     vscode.window.registerTreeDataProvider('nexgraph.home', navTree),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => navChanged.fire())
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      navChanged.fire()
+      host.send('host:command', { name: 'agent:folder', arg: folder() })
+    })
   )
   void sup.startEngine()
   // Thanh bên phụ của nền chỉ chứa khung Chat đã tắt; đóng một lần ở lần chạy đầu, sau đó tôn trọng lựa chọn của người dùng.

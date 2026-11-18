@@ -1,0 +1,48 @@
+.tree-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 29px;
+  padding: 0 2px 2px 7px;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tree-tools span { flex: 1; }
+.tree-tools .ws-icon-button { width: 23px; height: 23px; }
+
+.tree-compact .tree-row { position: relative; }
+.tree-compact .tree-indent {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(to right, transparent 7px, var(--color-border) 7px 8px, transparent 8px 12px);
+}
+
+.tree-compact .tree-row .twisty {
+  display: inline-grid;
+  place-items: center;
+  min-height: 20px;
+  color: var(--color-muted);
+}
+
+.tree-compact .tree-row[aria-expanded='true'] .twisty svg { transform: rotate(90deg); }
+.workspace-shell .tree-compact .tree-icon-file[data-tone='amber'] { color: var(--amber); }
+.workspace-shell .tree-compact .tree-icon-file[data-tone='orange'] { color: var(--orange); }
+.workspace-shell .tree-compact .tree-icon-file[data-tone='teal'] { color: var(--teal); }
+.workspace-shell .tree-compact .tree-icon-file[data-tone='default'] { color: var(--color-muted); }
+
+.tree-error {
+  margin: 4px 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--error-soft);
+  color: var(--color-error-red);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.tree-error button { padding: 2px 6px; font-size: inherit; }
+.tree-branch-empty { margin: 2px 0 4px; font-size: 11px; }

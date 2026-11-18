@@ -15,8 +15,12 @@ const AGENTS: { id: AgentId; label: string }[] = [
 ]
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
-export function IntegrationsDialog({ project, onClose }: { project: ProjectSummary; onClose: () => void }) {
-  const [agent, setAgent] = useState<AgentId>('claude')
+export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }: {
+  project: ProjectSummary
+  onClose: () => void
+  initialAgent?: AgentId
+}) {
+  const [agent, setAgent] = useState<AgentId>(initialAgent)
   const [plan, setPlan] = useState<IntegrationPlan | null>(null)
   const [done, setDone] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -70,6 +74,7 @@ export function IntegrationsDialog({ project, onClose }: { project: ProjectSumma
           </>
         )}
         {agent === 'codex' && <p className="muted small">{vi.integration.codexTrusted}</p>}
+        {agent === 'opencode' && <p className="muted small">{vi.chat.openCodeHint}</p>}
         {done && <p role="status">{done}</p>}
         {error && <p role="alert" className="error">{error}</p>}
         <p className="muted small">{vi.integrate.note}</p>

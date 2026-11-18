@@ -13,8 +13,8 @@ it('packaged win32', () =>
     resolveEngineCommand({ isPackaged: true, resourcesPath: 'C:\\R', repoRoot: 'C:\\X', platform: 'win32' }).command
   ).toBe(join('C:\\R', 'engine', 'nexgraph-engine.exe')))
 
-it('dev uses uv', () =>
+it('dev uses the Python module in the locked uv project', () =>
   expect(resolveEngineCommand({ isPackaged: false, resourcesPath: '', repoRoot: '/X' })).toEqual({
     command: 'uv',
-    args: ['run', '--project', join('/X', 'engine'), 'nexgraph-engine']
+    args: ['run', '--project', join('/X', 'engine'), '--locked', 'python', '-m', 'nexgraph_engine.cli']
   }))

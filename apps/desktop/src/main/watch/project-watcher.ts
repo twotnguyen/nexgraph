@@ -4,7 +4,7 @@ import { shouldIgnore } from './ignore'
 export interface WatcherOptions {
   root: string
   /** Gọi sau khi các sự kiện đã được gộp; thường là `EngineApi.refresh`. */
-  onFlush: () => Promise<void>
+  onFlush: () => Promise<void | 'retry'>
   onError?: (e: Error) => void
   debounceMs?: number
   maxWaitMs?: number
@@ -68,7 +68,7 @@ export class ProjectWatcher {
     if (this.stopped || this.running) return
     this.running = true
     try {
-      await this.o.onFlush()
+      if (await this.o.onFlush() === 'retry') this.again = true
     } catch (e) {
       this.o.onError?.(e instanceof Error ? e : new Error(String(e)))
     } finally {

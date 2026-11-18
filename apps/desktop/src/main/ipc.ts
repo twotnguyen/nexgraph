@@ -2,14 +2,15 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import type { WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
-import { EngineApi } from './engine/api'
+import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
 import { FsError, fsHandlers, isWithin, projectRoot } from './fs/project-fs'
 import { AgentError, AgentService } from './agent/session'
 import { AccountService } from './agent/accounts'
-import type { AgentMode, AuthEventView, AuthPromptView } from '../shared/agent-types'
+import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView } from '../shared/agent-types'
 import type { AiSettings } from '../shared/graph-types'
 import { SecretStore, writeJson } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
@@ -19,6 +20,7 @@ import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } f
 import { ProjectWatcher } from './watch/project-watcher'
 
 const watchers = new Map<string, ProjectWatcher>()
+const watchStarts = new Map<string, symbol>()
 let mcpHttp: McpHttpManager | null = null
 let agents: AgentService | null = null
 
@@ -56,7 +58,7 @@ const savedExportDir = (pid: string): string | null => {
 
 /** Box mã hoá safeStorage (Keychain/DPAPI) dùng chung cho key MCP và key AI provider. */
 const secretBox = {
-  available: () => safeStorage.isEncryptionAvailable(),
+  available: () => safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend?.() !== 'basic_text'),
   encrypt: (s: string) => safeStorage.encryptString(s).toString('base64'),
   decrypt: (b64: string) => safeStorage.decryptString(Buffer.from(b64, 'base64'))
 }
@@ -108,6 +110,7 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promi
   }))
 
 export function stopAllWatchers(): void {
+  watchStarts.clear()
   for (const w of watchers.values()) w.stop()
   watchers.clear()
 }
@@ -123,7 +126,7 @@ export function registerIpc(
   const mcp = mcpHttp
   const handle = (): EngineHandle => {
     const h = getHandle()
-    if (!h) throw new Error('Engine chưa sẵn sàng')
+    if (!h) throw new EngineApiError(503, 'engine_unavailable', 'Engine chưa sẵn sàng.')
     return h
   }
   const api = (): EngineApi => new EngineApi(handle())
@@ -138,31 +141,69 @@ export function registerIpc(
   })
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
+  const removalVersions = new Map<string, symbol>()
+  const stopWatch = (pid: string): void => {
+    watchStarts.delete(pid)
+    watchers.get(pid)?.stop()
+    watchers.delete(pid)
+  }
+  on('project:remove', async (pid: string) => {
+    await api().removeProject(pid)
+    removalVersions.set(pid, Symbol())
+    stopWatch(pid)
+    agents?.close(pid)
+    await mcp.stop(pid)
+  })
   const listProjects = (): Promise<{ project_id: string; path: string }[]> => api().listProjects()
   const fsh = fsHandlers(listProjects)
   /** Mọi kênh nhận path đều phải suy root từ projectId đã đăng ký; id lạ → FsError('unknown_project'). */
   const rootOf = projectRoot(listProjects)
+  on('fs:list', fsh.list)
   on('fs:read', fsh.read)
-  on('fs:write', fsh.write)
+  on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
+    const version = opts?.expectedVersion
+    if (version !== null && (typeof version !== 'string' || !version)) {
+      throw new FsError('conflict', 'Cần đọc lại tệp trước khi lưu')
+    }
+    return fsh.write(pid, relPath, text, opts)
+  })
   on('index:scan', (pid: string) => api().scan(pid))
-  on('index:start', async (pid: string, opts?: IndexOptions) => ({ jobId: (await api().startIndex(pid, opts)).job_id }))
+  on('index:start', async (pid: string, opts?: IndexOptions) => {
+    try {
+      return { jobId: (await api().startIndex(pid, opts)).job_id }
+    } catch (error) {
+      if (error instanceof EngineApiError && error.code === 'index_running' && error.jobId) return { jobId: error.jobId }
+      throw error
+    }
+  })
+  on('index:status', (jobId: string) => api().getJob(jobId))
   on('index:cancel', async (jobId: string) => void (await api().cancelJob(jobId)))
   on('index:refresh', (pid: string) => api().refresh(pid))
   on('graph:changes', (pid: string, opts?: { refresh?: boolean }) => api().changes(pid, opts))
   on('watch:start', async (pid: string) => {
-    watchers.get(pid)?.stop()
-    const w = new ProjectWatcher({
-      root: await rootOf(pid),
-      onFlush: async () => void (await api().refresh(pid)),
-      onError: (e) => console.warn(`[watch] ${pid}: ${e.message}`)
-    })
-    w.start()
-    watchers.set(pid, w)
+    const generation = Symbol()
+    watchStarts.set(pid, generation)
+    try {
+      const root = await rootOf(pid)
+      if (watchStarts.get(pid) !== generation) return
+      watchers.get(pid)?.stop()
+      const w = new ProjectWatcher({
+        root,
+        onFlush: async () => {
+          const result = await api().refresh(pid)
+          if (result.status === 'skipped' && (result.reason === 'index_running' || result.reason === 'refresh_running')) {
+            return 'retry'
+          }
+        },
+        onError: (e) => console.warn(`[watch] ${pid}: ${e.message}`)
+      })
+      w.start()
+      watchers.set(pid, w)
+    } finally {
+      if (watchStarts.get(pid) === generation) watchStarts.delete(pid)
+    }
   })
-  on('watch:stop', async (pid: string) => {
-    watchers.get(pid)?.stop()
-    watchers.delete(pid)
-  })
+  on('watch:stop', async (pid: string) => stopWatch(pid))
   on('graph:stats', (pid: string) => api().stats(pid))
   on('graph:neighbors', (pid: string, q: NeighborQuery) => api().neighbors(pid, q))
   on('graph:node', (pid: string, id: string) => api().getNode(pid, id))
@@ -188,23 +229,31 @@ export function registerIpc(
   const acc = (): Promise<AccountService> => accounts(win, dataDir)
   const derivedSettings = async (): Promise<AiSettings> => {
     const a = await acc()
-    const sel = a.getSelectedModel()
-    const p = sel && a.modelRuntime.getProvider(sel.provider)
+    const target = await a.getConsentTarget()
+    const model = a.getSelectedModel()
     return {
-      baseUrl: p?.baseUrl ?? '',
-      model: sel?.id ?? '',
-      hasKey: !!sel && a.hasKey(sel.provider),
-      provider: sel?.provider
+      baseUrl: target?.baseUrl ?? '',
+      model: model?.id ?? '',
+      hasKey: !!target && a.hasKey(target.provider),
+      provider: target?.provider
     }
   }
   on('ai:get-settings', () => derivedSettings())
-  on('ai:has-consent', async (pid: string) => (await acc()).hasConsent(pid))
-  on('ai:grant-consent', async (pid: string) => void (await acc()).grantConsent(pid))
+  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => (await acc()).hasConsent(pid, target))
+  on('ai:grant-consent', async (pid: string, target: AiConsentTarget) => {
+    await rootOf(pid)
+    await (await acc()).grantConsent(pid, target)
+  })
   on('auth:list', async () => (await acc()).listProviders())
   on('auth:set-key', async (providerId: string, key: string) => (await acc()).setApiKey(providerId, key))
   on('auth:remove-key', async (providerId: string) => (await acc()).removeApiKey(providerId))
-  on('auth:save-custom', async (p: Parameters<AccountService['saveCustomProvider']>[0], apiKey?: string) => (await acc()).saveCustomProvider(p, apiKey))
-  on('auth:remove-custom', async (id: string) => (await acc()).removeCustomProvider(id))
+  on('auth:save-custom', async (p: Parameters<AccountService['saveCustomProvider']>[0], apiKey?: string) => {
+    try { await (await acc()).saveCustomProvider(p, apiKey) } finally { agent.selectionChanged() }
+  })
+  on('auth:remove-custom', async (id: string) => {
+    await (await acc()).removeCustomProvider(id)
+    agent.selectionChanged()
+  })
   on('auth:login', async (providerId: string) => (await acc()).loginOAuth(providerId))
   on('auth:login-cancel', async () => {
     cancelPendingAuthPrompts()
@@ -218,21 +267,20 @@ export function registerIpc(
   })
   on('auth:logout', async (providerId: string) => (await acc()).logout(providerId))
   on('auth:models', async () => (await acc()).listModels())
-  on('auth:select-model', async (provider: string, id: string) => (await acc()).selectModel(provider, id))
+  on('auth:select-model', async (provider: string, id: string) => {
+    (await acc()).selectModel(provider, id)
+    agent.selectionChanged()
+  })
   on('auth:test', async () => (await acc()).test())
   // EngineApi đọc baseUrl/token mỗi lần gọi nên theo kịp engine khởi động lại.
   const liveApi = new EngineApi({ get baseUrl() { return handle().baseUrl }, get token() { return handle().token } })
   const agent = (agents = new AgentService({
     api: liveApi, dataDir,
-    models: async () => {
-      const a = await acc()
-      return { modelRuntime: a.modelRuntime, selected: a.getSelectedModel() }
-    },
-    hasConsent: async (pid) => (await acc()).hasConsent(pid),
-    rootOf: projectRoot(() => api().listProjects()),
+    accounts: acc,
+    rootOf,
     emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
   }))
-  on('agent:prompt', (pid: string, text: string) => agent.prompt(pid, text))
+  on('agent:prompt', (pid: string, text: string, target: AiConsentTarget) => agent.prompt(pid, text, target))
   on('agent:abort', (pid: string) => agent.abort(pid))
   on('agent:set-mode', async (pid: string, mode: AgentMode) => agent.setMode(pid, mode === 'edit' ? 'edit' : 'ask'))
   on('agent:get-mode', async (pid: string) => agent.getMode(pid))
@@ -241,7 +289,6 @@ export function registerIpc(
 
   on('export:pick-dir', async (pid: string) => {
     await rootOf(pid) // chỉ dự án đã đăng ký mới có thể chọn thư mục xuất
-    const prefs = readJson(prefsFile())
     const win = getWindow()
     const opts = {
       properties: ['openDirectory' as const, 'createDirectory' as const],
@@ -250,7 +297,8 @@ export function registerIpc(
     }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || r.filePaths.length === 0) return null
-    writeJson(prefsFile(), { ...prefs, [exportDirKey(pid)]: r.filePaths[0] })
+    const file = prefsFile()
+    writeJson(file, { ...readJson(file), [exportDirKey(pid)]: r.filePaths[0] })
     return r.filePaths[0]
   })
   on('export:run', async (pid: string, format: ExportFormat, scope: ExportScope) => {
@@ -290,7 +338,12 @@ export function registerIpc(
   on('hook:uninstall', async (pid: string) => uninstallHook(await rootOf(pid)))
   on('mcp:plan', async (agent: AgentId, pid: string) => planIntegration(agent, await rootOf(pid), getCommand(), dataDir))
   on('mcp:apply', async (agent: AgentId, pid: string) => applyIntegration(agent, await rootOf(pid), getCommand(), dataDir))
-  on('mcp:start-http', async (pid: string) => mcp.start(pid, await rootOf(pid)))
+  on('mcp:start-http', async (pid: string) => {
+    const version = removalVersions.get(pid)
+    const root = await rootOf(pid)
+    if (removalVersions.get(pid) !== version) throw new EngineApiError(404, 'unknown_project', 'Đăng ký dự án đã thay đổi.')
+    return mcp.start(pid, root)
+  })
   on('mcp:stop-http', (pid: string) => mcp.stop(pid))
   on('mcp:http-status', async (pid: string) => mcp.status(pid))
 }

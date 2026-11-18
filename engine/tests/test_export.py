@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from nexgraph_engine.bridge.to_nx import Scope
@@ -44,6 +46,43 @@ def test_export_route_ok(api, copy_fixture, tmp_path):
     pid = _indexed(api, copy_fixture)
     r = api.post(f"/v1/projects/{pid}/export", json={"format": "json", "scope": {"kind": "all"}, "out_dir": str(tmp_path)})
     assert r.status_code == 200 and r.json()["files"] and r.json()["truncated"] is False
+
+
+def test_markdown_export_uses_requested_node_scope(api, tmp_path):
+    root = tmp_path / "Đồ án nguồn"
+    root.mkdir()
+    (root / "left.py").write_text("def selected_symbol():\n    return 1\n", encoding="utf-8")
+    (root / "right.py").write_text("def unrelated_symbol():\n    return 2\n", encoding="utf-8")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    base = f"/v1/projects/{pid}"
+    search = api.get(f"{base}/search", params={"q": "selected_symbol", "kinds": "function"})
+    selected = next(row["node"]["id"] for row in search.json() if row["node"]["label"] == "selected_symbol")
+
+    def export(scope):
+        result = api.post(f"{base}/export", json={"format": "markdown", "scope": scope, "out_dir": str(tmp_path)})
+        assert result.status_code == 200, result.text
+        return Path(result.json()["files"][0]).read_text(encoding="utf-8")
+
+    full = export({"kind": "all"})
+    assert "unrelated_symbol" in full and "- 2 files" in full
+    scoped = export({"kind": "node", "value": selected})
+    assert "selected_symbol" in scoped and "- 1 files" in scoped
+    assert "unrelated_symbol" not in scoped and "right.py" not in scoped
+
+
+@pytest.mark.parametrize("scope", [
+    {"kind": "node", "value": "unknown-node"},
+    {"kind": "community", "value": "com:999999"},
+    {"kind": "community", "value": "com:" + "9" * 30},
+])
+def test_invalid_markdown_scope_does_not_write_full_report(api, copy_fixture, tmp_path, scope):
+    pid = _indexed(api, copy_fixture)
+    output = tmp_path / "exports"
+    output.mkdir()
+    result = api.post(f"/v1/projects/{pid}/export", json={"format": "markdown", "scope": scope, "out_dir": str(output)})
+    assert result.status_code == 404 and result.json()["error"]["code"] == "unknown_scope"
+    assert list(output.iterdir()) == []
 
 
 @pytest.mark.parametrize("out_dir", ["relative/dir", "/nonexistent/nexgraph-x"])

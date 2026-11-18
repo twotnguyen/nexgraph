@@ -6,6 +6,7 @@ import { kindStyle } from '../graph/kindStyle'
 
 interface Props {
   projectId: string
+  revision?: number
   onOpen: (node: GraphNode) => void
   /** Khi có: bật chế độ "Hỏi graph", bấm "Xem trên graph" vẽ vùng con trả về. */
   onShowSubgraph?: (g: { nodes: GraphNode[]; edges: GraphEdge[] }) => void
@@ -19,38 +20,43 @@ const errMessage = (err: unknown): string =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
 
 function NodeButton({ node, onOpen }: { node: GraphNode; onOpen: (n: GraphNode) => void }) {
+  const source = node.file && (node.line_start ? `${node.file}:${node.line_start}` : node.file)
   return (
     <button type="button" onClick={() => onOpen(node)}>
       <b>{node.label}</b>
       <span className="kind" style={{ color: kindStyle(node.kind).color }}>{node.kind}</span>
-      {node.file && <span className="mono muted">{node.line_start ? `${node.file}:${node.line_start}` : node.file}</span>}
+      {source && <span className="mono muted" title={source}>{source}</span>}
     </button>
   )
 }
 
-function SymbolSearch({ projectId, onOpen }: Props) {
+type SymbolResponse = { projectId: string; query: string; revision: number; hits: SearchHit[] | null; error: string | null }
+
+function SymbolSearch({ projectId, revision = 0, onOpen }: Props) {
   const [text, setText] = useState('')
-  const query = useDebounced(text.trim(), DEBOUNCE_MS)
-  const [hits, setHits] = useState<SearchHit[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const latest = useRef(0)
+  const draft = text.trim()
+  const query = useDebounced(draft, DEBOUNCE_MS)
+  const [response, setResponse] = useState<SymbolResponse | null>(null)
+  const [retry, setRetry] = useState(0)
+  const shown = response?.query === draft && response.projectId === projectId && response.revision === revision ? response : null
+  const hits = shown?.hits
+  const error = shown?.error
+  const loading = !!draft && !shown
 
   useEffect(() => {
-    const seq = ++latest.current // mỗi lần gõ có một số thứ tự; trả lời của lần cũ đến muộn bị bỏ
-    setError(null)
+    let alive = true
+    setResponse(null)
     if (!query) {
-      setHits(null)
       return
     }
     window.nexgraph.graph
       .search(projectId, query, { limit: LIMIT })
-      .then((r) => seq === latest.current && setHits(r))
+      .then((r) => alive && setResponse({ projectId, query, revision, hits: r, error: null }))
       .catch((err: unknown) => {
-        if (seq !== latest.current) return
-        setHits(null)
-        setError(errMessage(err))
+        if (alive) setResponse({ projectId, query, revision, hits: null, error: errMessage(err) })
       })
-  }, [projectId, query])
+    return () => { alive = false }
+  }, [projectId, query, retry, revision])
 
   return (
     <>
@@ -65,7 +71,9 @@ function SymbolSearch({ projectId, onOpen }: Props) {
         }}
         autoFocus
       />
-      {error && <p role="alert" className="error">{error}</p>}
+      {loading && <p role="status" className="muted small">Đang tìm ký hiệu…</p>}
+      {error && <div className="panel-error"><p role="alert" className="error">{error}</p>
+        <button type="button" onClick={() => setRetry((value) => value + 1)}>Thử lại</button></div>}
       {hits && hits.length === 0 && !error && <p className="muted">{vi.search.empty}</p>}
       {hits && hits.length > 0 && (
         <ul className="search-results">
@@ -78,24 +86,34 @@ function SymbolSearch({ projectId, onOpen }: Props) {
   )
 }
 
-function AskGraph({ projectId, onOpen, onShowSubgraph, onOpenFlow }: Props) {
+function AskGraph({ projectId, revision, onOpen, onShowSubgraph, onOpenFlow }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<AskResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const requestId = useRef(0)
+
+  useEffect(() => {
+    setBusy(false)
+    setResult(null)
+    setError(null)
+    return () => { requestId.current++ }
+  }, [projectId, revision])
 
   const ask = async () => {
     const q = text.trim()
     if (!q || busy) return
+    const next = ++requestId.current
     setBusy(true)
+    setResult(null)
     setError(null)
     try {
-      setResult(await window.nexgraph.graph.ask(projectId, q))
+      const answer = await window.nexgraph.graph.ask(projectId, q)
+      if (next === requestId.current) setResult(answer)
     } catch (err) {
-      setResult(null)
-      setError(errMessage(err))
+      if (next === requestId.current) setError(errMessage(err))
     } finally {
-      setBusy(false)
+      if (next === requestId.current) setBusy(false)
     }
   }
 
@@ -110,7 +128,8 @@ function AskGraph({ projectId, onOpen, onShowSubgraph, onOpenFlow }: Props) {
         onKeyDown={(e) => e.key === 'Enter' && void ask()}
         autoFocus
       />
-      <p className="muted small">{busy ? vi.search.asking : vi.search.askHint}</p>
+      <button type="button" className="primary" disabled={busy || !text.trim()} onClick={() => void ask()}>{vi.search.modeAsk}</button>
+      {busy && <p role="status" className="muted small">{vi.search.asking}</p>}
       {error && <p role="alert" className="error">{error}</p>}
       {result && (
         <div className="ask-result">

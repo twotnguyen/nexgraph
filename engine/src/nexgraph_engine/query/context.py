@@ -11,6 +11,8 @@ from pathlib import Path
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.query import flow_json, flows_for_nodes
 from nexgraph_engine.query.contracts import node_json, read_code
+from nexgraph_engine.query.model_view import ModelGraph
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.search import search
@@ -31,8 +33,11 @@ def rrf(lists: dict[str, list[str]], weights: dict[str, float], k: int = 60) -> 
     return sorted(((i, s, why[i]) for i, s in score.items()), key=lambda t: (-t[1], t[0]))
 
 
-def build_context(store: GraphStore, root: Path, question: str, budget: int = 4000) -> dict:
-    hits = [n for n, _ in search(store.conn, question, limit=20, any_terms=True)]
+def build_context(store: GraphStore, root: Path, question: str, budget: int = 4000, *,
+                  source: SourcePolicy | None = None) -> dict:
+    source = source or SourcePolicy(root, store.last_exclude())
+    hits = [n for n, _ in search(store.conn, question, limit=20, any_terms=True)
+            if n.file is None or source.allows(n.file)]
     if not hits:
         raise ValueError("Câu hỏi không có từ nào tìm được")
     seeds = hits[:SEEDS]
@@ -62,7 +67,7 @@ def build_context(store: GraphStore, root: Path, question: str, budget: int = 40
             continue
         end = min(node.line_end, node.line_start + MAX_CODE_SPAN - 1)
         try:
-            code = read_code(store, root, node.file, node.line_start, end)
+            code = read_code(store, root, node.file, node.line_start, end, source=source)
         except ApiError:
             continue
         cost = len(code["text"]) // 4 + 20
@@ -73,7 +78,9 @@ def build_context(store: GraphStore, root: Path, question: str, budget: int = 40
         spans.setdefault(node.file, []).append((node.line_start, node.line_end))
         items.append({"node": node_json(node), "score": score, "reasons": sorted(reasons),
                       "code": {"file": node.file, "start": code["start"], "end": code["end"], "text": code["text"]}})
-    return {"items": items, "flows": flows_for_nodes(store, seed_pks, limit=3), "tokens": tokens, "truncated": truncated}
+    return ModelGraph(store, root, source=source).filter({
+        "items": items, "flows": flows_for_nodes(store, seed_pks, limit=3), "tokens": tokens, "truncated": truncated,
+    })
 
 
 def locate_json(store: GraphStore, file: str, line: int) -> dict:

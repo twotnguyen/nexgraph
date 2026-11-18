@@ -3,7 +3,7 @@
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;
 -- Khóa API KHÔNG nằm trong CSDL này; chỉ lưu tên mục trong kho khóa hệ điều hành (muc_keychain).
 
-PRAGMA user_version = 1;
+PRAGMA user_version = 2;
 
 -- 9. DU_AN_DA_MO ---------------------------------------------------------
 CREATE TABLE du_an_da_mo (
@@ -14,7 +14,8 @@ CREATE TABLE du_an_da_mo (
                                  OR duong_dan_tuyet_doi GLOB '[\][\]*')),               -- RB24
     ten                 TEXT    NOT NULL CHECK (length(ten) BETWEEN 1 AND 255),
     noi_luu             TEXT    NOT NULL CHECK (noi_luu IN ('trong_du_an', 'thu_muc_app')), -- RB24
-    mo_lan_cuoi         INTEGER NOT NULL
+    mo_lan_cuoi         INTEGER NOT NULL,
+    da_go               INTEGER NOT NULL DEFAULT 0 CHECK (da_go IN (0, 1))
 );
 
 -- 10. KET_NOI_AI ---------------------------------------------------------

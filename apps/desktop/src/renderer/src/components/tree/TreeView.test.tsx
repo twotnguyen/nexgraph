@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood, NodeKind } from '@shared/graph-types'
+import type { ProjectDirectory } from '@shared/api'
 import { installNexgraph } from '../../test-utils'
 import { TreeView } from './TreeView'
 
@@ -71,5 +72,38 @@ describe('TreeView', () => {
     await waitFor(() => expect(document.activeElement).toBe(first))
     fireEvent.keyDown(first, { key: 'ArrowLeft' })
     await waitFor(() => expect(screen.queryByRole('treeitem', { name: 'app.py' })).toBeNull())
+  })
+
+  it('mở tệp cấu hình ngoài chỉ mục và giữ nhánh đã mở khi cây làm mới', async () => {
+    let entries: ProjectDirectory['entries'] = [{ path: 'src/app.py', name: 'app.py', kind: 'file' }]
+    const list = vi.fn(async (_pid: string, path: string): Promise<ProjectDirectory> => ({
+      entries: path === '.' ? [
+        { path: 'src', name: 'src', kind: 'directory' },
+        { path: 'package.json', name: 'package.json', kind: 'file' }
+      ] : entries,
+      truncated: false
+    }))
+    const index = vi.fn(neighbors)
+    installNexgraph({ fs: { list }, graph: { neighbors: index } })
+    const onOpenCode = vi.fn()
+    const explorer = (revision: number) => (
+      <TreeView projectId="p1" compact revision={revision} onOpenNode={() => {}} onOpenCode={onOpenCode} activeFile="package.json" />
+    )
+    const tree = render(explorer(0))
+
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'package.json', selected: true }))
+    expect(onOpenCode).toHaveBeenCalledWith('package.json', 1)
+    await userEvent.click(screen.getByRole('treeitem', { name: 'src' }))
+    expect(await screen.findByRole('treeitem', { name: 'app.py' })).toBeVisible()
+    expect(index).not.toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mở app.py' }))
+    expect(await screen.findByRole('treeitem', { name: 'a' })).toBeVisible()
+    entries = [{ path: 'src/nest-cli.json', name: 'nest-cli.json', kind: 'file' }, ...entries]
+    tree.rerender(explorer(1))
+
+    expect(await screen.findByRole('treeitem', { name: 'nest-cli.json' })).toBeVisible()
+    expect(screen.getByRole('treeitem', { name: 'src', expanded: true })).toBeVisible()
+    expect(screen.getByRole('treeitem', { name: 'app.py', expanded: true })).toBeVisible()
   })
 })

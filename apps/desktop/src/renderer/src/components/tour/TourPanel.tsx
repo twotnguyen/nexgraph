@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { TourStep } from '@shared/graph-types'
 import { vi } from '../../strings'
 
 interface Props {
   projectId: string
+  revision?: number
   projectName: string
   onOpenFlow: (flowId: number) => void
   onOpenNode: (nodeId: string) => void
@@ -12,32 +13,41 @@ interface Props {
 
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
-export function TourPanel({ projectId, projectName, onOpenFlow, onOpenNode, onOpenArch }: Props) {
+export function TourPanel({ projectId, revision = 0, projectName, onOpenFlow, onOpenNode, onOpenArch }: Props) {
   const [steps, setSteps] = useState<TourStep[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [index, setIndex] = useState(0)
+  const [retry, setRetry] = useState(0)
+  const started = useRef<string | null>(null)
 
   useEffect(() => {
     let alive = true
+    setSteps(null)
+    setError(null)
     window.nexgraph.graph.tour(projectId).then((t) => {
       if (!alive) return
       setSteps(t.steps)
-      if (t.steps.length) go(t.steps, 0)
+      if (t.steps.length && started.current !== projectId) {
+        started.current = projectId
+        go(t.steps, 0)
+      } else setIndex((current) => Math.min(current, Math.max(0, t.steps.length - 1)))
     }).catch((e) => alive && setError(errMessage(e)))
     return () => { alive = false }
-  }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId, revision, retry]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // flow_id -> thẻ Luồng; block_id -> thẻ Kiến trúc; còn lại -> thẻ Graph ở nút của bước.
   function go(list: TourStep[], i: number): void {
-    setIndex(i)
     const s = list[i]
+    if (!s) return
+    setIndex(i)
     if (s.flow_id != null) onOpenFlow(s.flow_id)
     else if (s.block_id) onOpenArch(s.block_id)
     else if (s.node) onOpenNode(s.node.id)
   }
 
-  if (error) return <p role="alert" className="error">{error}</p>
-  if (!steps) return null
+  if (error) return <div className="panel-error"><p role="alert" className="error">{error}</p>
+    <button type="button" onClick={() => setRetry((n) => n + 1)}>Thử lại</button></div>
+  if (!steps) return <p role="status" className="muted">Đang chuẩn bị chuyến tham quan…</p>
   if (steps.length === 0) return <p className="muted">{vi.tour.empty}</p>
   const last = index === steps.length - 1
   return (

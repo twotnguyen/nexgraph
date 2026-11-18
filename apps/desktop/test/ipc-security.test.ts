@@ -1,5 +1,5 @@
 // Test bảo mật IPC: mọi handler nhận path phải suy gốc từ projectId đã đăng ký trong main.
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -10,12 +10,13 @@ const h = vi.hoisted(() => ({
   exports: [] as unknown[][],
   mcpStarts: [] as [string, string][],
   watcherRoots: [] as string[],
+  userData: '',
   showOpenDialog: vi.fn(async () => ({ canceled: false, filePaths: [] as string[] })),
   showItemInFolder: vi.fn(async (_path: string) => {})
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: (name: string) => (name === 'userData' ? join(tmpdir(), 'ng-ipc-userdata-test') : '/tmp') },
+  app: { getPath: (name: string) => (name === 'userData' ? h.userData : '/tmp') },
   ipcMain: { handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => Promise<unknown>) => { h.handlers.set(channel, fn) } },
   dialog: { showOpenDialog: h.showOpenDialog },
   shell: { showItemInFolder: h.showItemInFolder },
@@ -69,7 +70,8 @@ beforeAll(() => {
   root = join(base, 'proj')
   root2 = join(base, 'proj2')
   exportDir = join(base, 'export')
-  for (const dir of [root, root2, exportDir, join(root, '.git', 'hooks')]) mkdirSync(dir, { recursive: true })
+  h.userData = join(base, 'user-data')
+  for (const dir of [root, root2, exportDir, h.userData, join(root, '.git', 'hooks')]) mkdirSync(dir, { recursive: true })
   writeFileSync(join(root, 'a.ts'), 'x')
   h.projects = [{ project_id: 'p1', path: root }, { project_id: 'p2', path: root2 }]
   registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => null, () => ({ command: 'engine', args: [], cwd: base }), base)
@@ -109,6 +111,23 @@ describe('IPC: path thô từ renderer bị từ chối', () => {
   })
 })
 
+it('fs:write yêu cầu phiên bản tệp và giữ thay đổi mới trên đĩa khi nhận bản cũ', async () => {
+  const name = 'versioned.ts'
+  const path = join(root, name)
+  const format = { eol: '\n', bom: false }
+  writeFileSync(path, 'bản gốc')
+  const { version } = dataOf<{ version: string }>(await invoke('fs:read', 'p1', name))
+  expect(version).toBeTruthy()
+  const creation = await invoke('fs:write', 'p1', name, 'ghi đè', { ...format, expectedVersion: null })
+  const unversioned = await invoke('fs:write', 'p1', name, 'ghi đè', format)
+  expect(creation).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  expect(unversioned).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  writeFileSync(path, 'bản trên đĩa')
+  const stale = await invoke('fs:write', 'p1', name, 'ghi đè', { ...format, expectedVersion: version })
+  expect(stale).toMatchObject({ ok: false, error: { code: 'conflict' } })
+  expect(readFileSync(path, 'utf8')).toBe('bản trên đĩa')
+})
+
 describe('IPC: xuất chỉ dùng thư mục đã chọn trong main', () => {
   it('export:run bỏ outDir lạ; reveal chỉ cho path trong gốc dự án hoặc thư mục xuất', async () => {
     h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [exportDir] })
@@ -121,5 +140,25 @@ describe('IPC: xuất chỉ dùng thư mục đã chọn trong main', () => {
     expect(await invoke('export:reveal', 'p1', '/etc/passwd')).toMatchObject({ ok: false, error: { code: 'outside_project' } })
     expect(await invoke('export:reveal', 'nope', '/etc/passwd')).toMatchObject({ ok: false, error: { code: 'unknown_project' } })
     expect(h.showItemInFolder).toHaveBeenCalledTimes(2)
+  })
+
+  it('giữ tùy chọn đổi trong lúc hộp chọn thư mục xuất còn mở', async () => {
+    let choose!: (result: { canceled: boolean; filePaths: string[] }) => void
+    let opened!: () => void
+    const opening = new Promise<void>((resolve) => { opened = resolve })
+    h.showOpenDialog.mockImplementationOnce(() => new Promise((resolve) => {
+      choose = resolve
+      opened()
+    }))
+    const picking = invoke('export:pick-dir', 'p1')
+    await opening
+    const prefs = join(h.userData, 'prefs.json')
+    writeFileSync(prefs, JSON.stringify({ aiSelectedModel: { provider: 'example', id: 'm1' } }))
+    choose({ canceled: false, filePaths: [exportDir] })
+    expect(await picking).toMatchObject({ ok: true, data: exportDir })
+    expect(JSON.parse(readFileSync(prefs, 'utf8'))).toEqual({
+      aiSelectedModel: { provider: 'example', id: 'm1' },
+      'exportDir:p1': exportDir
+    })
   })
 })

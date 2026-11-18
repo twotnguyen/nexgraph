@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FlowDetail, FlowKind, FlowList as FlowListType, GraphEdge } from '@shared/graph-types'
 import type { HighlightKind } from '../graph/kindStyle'
 import { vi } from '../../strings'
+import { useDebounced } from '../../state/useDebounced'
+import { CanvasState } from '../common/CanvasState'
 import { GraphCanvas } from '../graph/GraphCanvas'
 import { FlowList } from './FlowList'
 import { FlowPlayer } from './FlowPlayer'
@@ -9,6 +11,7 @@ import { FlowStepPanel } from './FlowStepPanel'
 
 interface Props {
   projectId: string
+  revision?: number
   onOpenCode: (file: string, line: number, lineEnd?: number) => void
   onOpenNode: (nodeId: string) => void
   initialFlowId?: number
@@ -17,39 +20,46 @@ interface Props {
 const errMessage = (err: unknown): string =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
 
-export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: Props) {
+export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, initialFlowId }: Props) {
   const [list, setList] = useState<FlowListType>({ flows: [], total: 0, truncated: false })
-  const [offset, setOffset] = useState(0)
+  const [page, setPage] = useState<{ key: string; offset: number } | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(initialFlowId ?? null)
   const [detail, setDetail] = useState<FlowDetail | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [codeSlice, setCodeSlice] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const filter = useDebounced(query.trim(), 180)
   const [kind, setKind] = useState<FlowKind | undefined>(undefined)
-  const [error, setError] = useState<string | null>(null)
+  const [listError, setListError] = useState<string | null>(null)
+  const [detailError, setDetailError] = useState<string | null>(null)
+  const [listLoading, setListLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [listRetry, setListRetry] = useState(0)
+  const [detailRetry, setDetailRetry] = useState(0)
   const listRequest = useRef(0)
   const loadingMore = useRef(false)
+  const listKey = JSON.stringify([projectId, revision, filter, kind])
+  const offset = page?.key === listKey ? page.offset : 0
 
-  const resetList = useCallback(() => {
-    listRequest.current += 1
-    loadingMore.current = false
-    setList({ flows: [], total: 0, truncated: false })
-    setOffset(0)
-  }, [])
+  useEffect(() => {
+    setPage((current) => current?.key === listKey ? current : null)
+  }, [listKey])
 
   useEffect(() => {
     setSelectedId(initialFlowId ?? null)
   }, [initialFlowId])
 
-  useEffect(() => {
-    resetList()
-  }, [projectId, resetList])
-
   // Tải danh sách luồng
   useEffect(() => {
     let alive = true
     const request = ++listRequest.current
-    const opts = { q: query || undefined, kind, limit: 50, ...(offset > 0 ? { offset } : {}) }
+    const opts = { q: filter || undefined, kind, limit: 50, ...(offset > 0 ? { offset } : {}) }
+    setListLoading(true)
+    setListError(null)
+    if (offset === 0) {
+      loadingMore.current = false
+      setList({ flows: [], total: 0, truncated: false })
+    }
     ;(async () => {
       try {
         const res = await window.nexgraph.graph.flows(projectId, opts)
@@ -58,46 +68,52 @@ export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: 
           ? res
           : { ...res, flows: [...current.flows, ...res.flows] })
       } catch (err) {
-        if (alive && request === listRequest.current) setError(errMessage(err))
+        if (alive && request === listRequest.current) setListError(errMessage(err))
       } finally {
-        if (request === listRequest.current) loadingMore.current = false
+        if (alive && request === listRequest.current) {
+          loadingMore.current = false
+          setListLoading(false)
+        }
       }
     })()
     return () => {
       alive = false
     }
-  }, [projectId, query, kind, offset])
+  }, [projectId, filter, kind, offset, revision, listRetry])
 
   // Tải chi tiết luồng khi chọn
   useEffect(() => {
     setDetail(null)
     setCodeSlice(null)
+    setDetailError(null)
+    setDetailLoading(selectedId != null)
     if (selectedId == null) {
       return
     }
     let alive = true
     ;(async () => {
       try {
-        setError(null)
         const d = await window.nexgraph.graph.flow(projectId, selectedId)
         if (!alive) return
         setDetail(d)
         setStepIndex(0)
       } catch (err) {
-        if (alive) setError(errMessage(err))
+        if (alive) setDetailError(errMessage(err))
+      } finally {
+        if (alive) setDetailLoading(false)
       }
     })()
     return () => {
       alive = false
     }
-  }, [projectId, selectedId])
+  }, [projectId, selectedId, revision, detailRetry])
 
   // Tải đoạn mã khi chuyển bước
   useEffect(() => {
     const step = detail?.steps[stepIndex]
     const node = step?.node
+    setCodeSlice(null)
     if (!node?.file || node.line_start == null) {
-      setCodeSlice(null)
       return
     }
     let alive = true
@@ -119,28 +135,29 @@ export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: 
   // Tạo overlay và highlights cho GraphCanvas
   const overlay = useMemo(() => {
     if (!detail || detail.steps.length === 0) return null
-    const nodes = detail.steps.map((s) => s.node)
+    const nodesById = new Map(detail.steps.map((s) => [s.node.id, s.node]))
     const edges: GraphEdge[] = []
     detail.steps.forEach((s, idx) => {
-      if (s.caller && s.line != null) {
+      const caller = s.caller && nodesById.get(s.caller)
+      if (caller && s.line != null) {
         edges.push({
           id: idx,
-          source: s.caller,
+          source: caller.id,
           target: s.node.id,
           type: 'CALLS',
           subtype: null,
           confidence: 'EXTRACTED',
           confidence_score: 1.0,
           origin: 'ast',
-          evidence: {
-            file: s.node.file ?? '',
+          evidence: caller.file ? {
+            file: caller.file,
             line: s.line,
             col: 0
-          }
+          } : null
         })
       }
     })
-    return { nodes, edges }
+    return { nodes: [...nodesById.values()], edges }
   }, [detail])
 
   const highlights = useMemo<Record<string, HighlightKind>>(() => {
@@ -160,48 +177,43 @@ export function FlowsView({ projectId, onOpenCode, onOpenNode, initialFlowId }: 
     setSelectedId(id)
   }, [])
 
-  const handleQueryChange = useCallback((value: string) => {
-    setQuery(value)
-    resetList()
-  }, [resetList])
-
-  const handleKindChange = useCallback((value?: FlowKind) => {
-    setKind(value)
-    resetList()
-  }, [resetList])
-
   const loadMore = useCallback(() => {
-    if (!list.truncated || loadingMore.current) return
+    if (!list.truncated || loadingMore.current || listLoading) return
     loadingMore.current = true
-    setOffset(list.flows.length)
-  }, [list])
+    setPage({ key: listKey, offset: list.flows.length })
+  }, [list, listKey, listLoading])
 
   return (
     <div className="flows-view">
-      {error && <p role="alert" className="error" style={{ gridColumn: '1 / -1', margin: 8 }}>{error}</p>}
       <FlowList
         flows={list.flows}
         total={list.total}
         selectedId={selectedId}
         onSelect={handleSelectFlow}
         query={query}
-        onQueryChange={handleQueryChange}
+        onQueryChange={setQuery}
         currentKind={kind}
-        onKindChange={handleKindChange}
+        onKindChange={setKind}
         truncated={list.truncated}
+        loading={listLoading || query.trim() !== filter}
+        error={listError}
+        onRetry={() => setListRetry((n) => n + 1)}
         onLoadMore={loadMore}
       />
 
       <section className="canvas-col">
         {!detail ? (
-          <div className="canvas-area center muted" style={{ display: 'grid', placeItems: 'center' }}>
-            <p>{vi.flows.pick}</p>
+          <div className="canvas-area">
+            {detailLoading ? <CanvasState kind="loading" message="Đang tải các bước…" />
+              : detailError ? <CanvasState kind="error" message={detailError} onRetry={() => setDetailRetry((n) => n + 1)} />
+                : <CanvasState kind="empty" message={vi.flows.pick} />}
           </div>
         ) : (
           <>
             <div className="canvas-area" style={{ flex: 1, minHeight: 0 }}>
               <GraphCanvas
                 projectId={projectId}
+                revision={revision}
                 startNodeId={detail.flow.entry.id}
                 focusNodeId={detail.steps[stepIndex]?.node.id}
                 onSelect={(n) => {

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi, type Mock } from 'vitest'
@@ -6,39 +6,40 @@ import { createNexgraphExtension, previewWrite } from '../src/main/agent/extensi
 import { NEXGRAPH_RULES, NEXGRAPH_SKILL_NAME, skillMarkdown } from '../src/main/agent/skill'
 import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
-import type { ApprovalGate } from '../src/main/agent/approval'
+import { createApprovalGate, type ApprovalGate } from '../src/main/agent/approval'
+import { readProjectFile, writeProjectFile } from '../src/main/fs/project-fs'
 
 type Handler = (e: { toolName: string; toolCallId?: string; input: unknown }) => Promise<{ block: true; reason: string } | undefined>
 const names = TOOL_DEFS.map((t) => t.function.name)
+const directoryLink = (target: string, path: string) =>
+  symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir')
 
-const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-ext-h-')))
+const base = realpathSync.native(mkdtempSync(join(tmpdir(), 'ng-ext-h-')))
 const proj = join(base, 'p')
 mkdirSync(proj)
 writeFileSync(join(proj, 'a.txt'), 'x')
 
-function setup(check: ApprovalGate['check'] = async () => ({ allow: true })) {
+function setup(check: ApprovalGate['check'] = async () => ({ allow: true }), root = proj, exclude: string[] = []) {
   const search = vi.fn(async () => ({ hits: [] }))
+  const aiSourceExcludes = vi.fn(async () => exclude)
+  const api = { search, aiSourceExcludes, forModel: () => ({ search }) }
+  const onWriteConflict = vi.fn()
   const gate = { check: vi.fn(check) } as unknown as ApprovalGate
   const pi = { registerTool: vi.fn(), on: vi.fn() }
-  createNexgraphExtension({ api: { search } as unknown as EngineApi, projectId: 'p1', root: proj, gate })(pi as never)
+  createNexgraphExtension({ api: api as unknown as EngineApi, projectId: 'p1', root, gate, onWriteConflict })(pi as never)
   const handler = pi.on.mock.calls.find((c) => c[0] === 'tool_call')![1] as Handler
-  return { pi, search, gate, handler }
+  return { pi, search, aiSourceExcludes, gate, handler, onWriteConflict }
 }
 
-const fileMeta = (path: string) => {
-  const abs = join(proj, path)
-  if (!existsSync(abs)) return undefined
-  const raw = readFileSync(abs, 'utf8')
-  const bom = raw.charCodeAt(0) === 0xfeff
-  return { eol: (bom ? raw.slice(1) : raw).includes('\r\n') ? ('\r\n' as const) : ('\n' as const), bom, mtimeMs: statSync(abs).mtimeMs }
+const allowPreview: ApprovalGate['check'] = async (tool, input) => {
+  if (tool !== 'edit' && tool !== 'write') return { allow: true }
+  return { allow: true, approved: { ...await previewWrite(proj, tool, input), assertCurrent: () => {} } }
 }
-const allowApproved = (path: string, before: string, after: string) => async () =>
-  ({ allow: true as const, approved: { path, before, after, file: fileMeta(path) } })
 
 describe('extension NexGraph', () => {
-  it('đăng ký 9 tool trùng TOOL_DEFS cộng write/edit ghi đè builtin pi', () => {
+  it('đăng ký tool đồ thị và ghi đè các tool tệp dựng sẵn của Pi', () => {
     const { pi } = setup()
-    expect(pi.registerTool.mock.calls.map((c) => c[0].name)).toEqual([...names, 'write', 'edit'])
+    expect(pi.registerTool.mock.calls.map((c) => c[0].name)).toEqual([...names, 'read', 'ls', 'find', 'grep', 'write', 'edit'])
   })
 
   it('execute của search gọi runTool và trả content text', async () => {
@@ -53,21 +54,120 @@ describe('extension NexGraph', () => {
     const deny = setup(async () => ({ allow: false, reason: 'không' }))
     expect(await deny.handler({ toolName: 'edit', input: { path: 'a.txt' } })).toEqual({ block: true, reason: 'không' })
     expect(deny.gate.check).toHaveBeenCalledWith('edit', { path: join(proj, 'a.txt') })
-    const empty = setup((async () => ({ allow: false })) as never)
-    expect(await empty.handler({ toolName: 'bash', input: {} })).toMatchObject({ block: true, reason: expect.stringMatching(/\S/) })
+    const empty = setup(async () => ({ allow: false, reason: '' }))
+    expect(await empty.handler({ toolName: 'write', input: { path: 'a.txt' } })).toMatchObject({ block: true, reason: expect.stringMatching(/\S/) })
     const ok = setup()
-    expect(await ok.handler({ toolName: 'bash', input: {} })).toBeUndefined()
+    expect(await ok.handler({ toolName: 'read', input: { path: 'a.txt' } })).toBeUndefined()
+    expect(ok.gate.check).not.toHaveBeenCalled()
     const boom = setup(async () => { throw new Error('x') })
     expect(await boom.handler({ toolName: 'edit', input: { path: 'a.txt' } })).toMatchObject({ block: true })
   })
 
   it('tool_call: chặn tên lạ, so khớp phân biệt hoa thường', async () => {
     const { handler, gate } = setup()
-    for (const toolName of ['Bash', 'multiedit', 'get_node ', ...names, 'read', 'grep', 'find', 'ls']) {
-      const blocked = toolName === 'Bash' || toolName === 'multiedit' || toolName === 'get_node '
-      expect(await handler({ toolName, input: { path: 'a.txt' } }) !== undefined).toBe(blocked)
+    for (const toolName of ['bash', 'Bash', 'powershell', 'shell', 'terminal', 'run_command', 'codemode', 'multiedit', 'get_node ']) {
+      expect(await handler({ toolName, input: { command: 'printf test' } })).toMatchObject({ block: true })
     }
-    expect(gate.check).toHaveBeenCalledTimes(names.length + 4)
+    for (const toolName of [...names, 'read', 'grep', 'find', 'ls']) {
+      expect(await handler({ toolName, input: { path: 'a.txt' } })).toBeUndefined()
+    }
+    expect(gate.check).not.toHaveBeenCalled()
+  })
+})
+
+describe('phạm vi đọc tệp mỗi lượt tool', () => {
+  const syntheticSecret = 'NEXGRAPH_FAKE_SECRET_625'
+  function fixture() {
+    const root = mkdtempSync(join(base, 'read-scope-'))
+    const src = join(root, 'src')
+    mkdirSync(join(src, 'private'), { recursive: true })
+    writeFileSync(join(root, '.gitignore'), '\uFEFFuntracked/\n*.scratch\n')
+    writeFileSync(join(src, '.gitignore'), 'ignored.txt\nblocked-alias/\n')
+    writeFileSync(join(src, 'public.ts'), 'first\nvisible: match [example]\nlast\n')
+    writeFileSync(join(src, '.env.local'), syntheticSecret)
+    writeFileSync(join(src, 'private', '.env'), syntheticSecret)
+    writeFileSync(join(src, 'ignored.txt'), syntheticSecret)
+    writeFileSync(join(src, 'notes.scratch'), syntheticSecret)
+    writeFileSync(join(src, 'settings.private.ts'), syntheticSecret)
+    const hidden = join(root, 'untracked')
+    mkdirSync(hidden)
+    writeFileSync(join(hidden, 'hidden.ts'), syntheticSecret)
+    directoryLink(hidden, join(src, 'untracked-alias'))
+    directoryLink(src, join(src, 'blocked-alias'))
+    const keyDir = join(root, 'id_ed25519_keys')
+    mkdirSync(keyDir)
+    writeFileSync(join(keyDir, 'secrets.txt'), syntheticSecret)
+    directoryLink(keyDir, join(src, 'protected-alias'))
+    return { root, ...setup(undefined, root, ['**/*.private.ts']) }
+  }
+  const tool = (g: ReturnType<typeof setup>, name: string) => g.pi.registerTool.mock.calls.find(([t]) => t.name === name)![0]
+  const execute = async (g: ReturnType<typeof setup>, name: string, params: object) =>
+    (await tool(g, name).execute('scope', params, undefined, undefined, {})).content[0].text as string
+
+  it('đọc và tìm đúng văn bản được phép, giữ offset, glob, regex, literal và context', async () => {
+    const g = fixture()
+    expect(await execute(g, 'read', { path: 'src/public.ts', offset: 2, limit: 1 })).toContain('visible: match [example]')
+    expect(await execute(g, 'find', { pattern: '**/*.ts', path: 'src' })).toBe('public.ts')
+    const pattern = await execute(g, 'grep', { pattern: 'MATCH \\[example\\]', glob: '*.ts', ignoreCase: true, context: 1 })
+    expect(pattern).toContain('src/public.ts:2: visible: match [example]')
+    expect(pattern).toContain('src/public.ts-1- first')
+    expect(await execute(g, 'grep', { pattern: '[example]', path: 'src/public.ts', literal: true }))
+      .toContain('public.ts:2: visible: match [example]')
+    expect(g.aiSourceExcludes).toHaveBeenCalledWith('p1')
+  })
+
+  it('bỏ tệp bí mật lồng nhau, luật gốc/lồng nhau, loại trừ chỉ mục và alias của chúng', async () => {
+    const g = fixture()
+    const tree = await execute(g, 'ls', { path: 'src' })
+    expect(tree).toContain('public.ts')
+    for (const hidden of ['.env.local', 'ignored.txt', 'notes.scratch', 'settings.private.ts', 'untracked-alias', 'blocked-alias', 'protected-alias']) {
+      expect(tree).not.toContain(hidden)
+    }
+    expect(await execute(g, 'find', { pattern: '.env*' })).toBe('Không tìm thấy kết quả.')
+    expect(await execute(g, 'grep', { pattern: syntheticSecret, literal: true })).toBe('Không tìm thấy kết quả.')
+    expect(await execute(g, 'ls', {})).not.toContain('id_ed25519_keys')
+    for (const path of ['src/private/.env', 'src/ignored.txt', 'src/settings.private.ts', 'src/untracked-alias/hidden.ts', 'src/blocked-alias/public.ts', 'src/protected-alias/secrets.txt']) {
+      await expect(execute(g, 'read', { path })).rejects.toThrow('phạm vi truy cập của AI')
+    }
+    // Cổng duyệt giữ bí danh từ yêu cầu gốc, kể cả khi đích canonical riêng lẻ được phép.
+    const input = { path: 'src/blocked-alias/public.ts' }
+    expect(await g.handler({ toolName: 'read', input })).toBeUndefined()
+    await expect(execute(g, 'read', input)).rejects.toThrow('phạm vi truy cập của AI')
+    await expect(execute(g, 'grep', { path: 'src/untracked-alias', pattern: '.+' })).rejects.toThrow('phạm vi truy cập của AI')
+  })
+
+  it('không đọc khi lỗi lấy chính sách chỉ mục, trả lỗi chung không lộ dữ liệu', async () => {
+    const g = fixture()
+    g.aiSourceExcludes.mockRejectedValueOnce(new Error(syntheticSecret))
+    await expect(execute(g, 'read', { path: 'src/public.ts' })).rejects.toThrow('Không xác định được phạm vi')
+  })
+
+  it('không đọc nội dung khi tệp luật hỏng UTF-8 hoặc quá giới hạn 1 MiB', async () => {
+    const g = fixture()
+    const path = join(g.root, '.gitignore')
+    for (const invalid of [Buffer.from([0xff, 0xfe, 0x61]), Buffer.alloc(1024 * 1024 + 1, 0x61)]) {
+      writeFileSync(path, invalid)
+      await expect(execute(g, 'read', { path: 'src/public.ts' })).rejects.toThrow('phạm vi truy cập của AI')
+    }
+  })
+
+  it('kiểm tra lại nếu đường dẫn đổi sang đích nhạy cảm giữa cổng duyệt và khi đọc', async () => {
+    const g = fixture()
+    const source = join(g.root, 'open')
+    mkdirSync(source)
+    writeFileSync(join(source, 'secrets.txt'), 'Nội dung công khai cũ')
+    const input = { path: 'open/secrets.txt' }
+    expect(await g.handler({ toolName: 'read', input })).toBeUndefined()
+    renameSync(source, join(g.root, 'old-open'))
+    directoryLink(join(g.root, 'id_ed25519_keys'), source)
+    await expect(execute(g, 'read', input)).rejects.toThrow('phạm vi truy cập của AI')
+  })
+
+  it('giới hạn thời gian cho biểu thức chính quy chậm', async () => {
+    const g = fixture()
+    writeFileSync(join(g.root, 'slow.txt'), 'a'.repeat(512) + 'x\n')
+    await expect(execute(g, 'grep', { path: 'slow.txt', pattern: '(a+)+$' }))
+      .rejects.toThrow('vượt quá thời gian xử lý')
   })
 })
 
@@ -120,7 +220,7 @@ describe('deny-list tệp nhạy cảm ở cổng tool pi', () => {
   })
 
   it('ghi .git/hooks/post-commit bị chặn dù cổng duyệt đã đồng ý; preview cũng từ chối', async () => {
-    const g = setup(allowApproved('.git/hooks/post-commit', '', 'độc'))
+    const g = setup(allowPreview)
     expect(await g.handler({ toolName: 'write', input: { path: '.git/hooks/post-commit', content: 'độc' }, toolCallId: 'hook' }))
       .toMatchObject({ block: true })
     expect(g.gate.check).not.toHaveBeenCalled()
@@ -132,7 +232,7 @@ describe('deny-list tệp nhạy cảm ở cổng tool pi', () => {
 describe('generation snapshot duyệt', () => {
   it('agent_start (lượt mới) xoá bản duyệt của lượt trước', async () => {
     writeFileSync(join(proj, 'gen.txt'), 'x')
-    const g = setup(allowApproved('gen.txt', 'x', 'y'))
+    const g = setup(allowPreview)
     await g.handler({ toolName: 'write', input: { path: 'gen.txt', content: 'y' }, toolCallId: 'g1' })
     const onStart = g.pi.on.mock.calls.find((c) => c[0] === 'agent_start')?.[1] as (() => void) | undefined
     expect(onStart).toBeTypeOf('function')
@@ -146,84 +246,122 @@ describe('generation snapshot duyệt', () => {
 
 describe('write/edit an toàn (override builtin pi)', () => {
   const tool = (pi: { registerTool: Mock }, name: string) => pi.registerTool.mock.calls.map((c) => c[0]).find((t) => t.name === name)!
-  const fileOf = (path: string) => {
-    const abs = join(proj, path)
-    if (!existsSync(abs)) return undefined
-    const raw = readFileSync(abs, 'utf8')
-    const bom = raw.charCodeAt(0) === 0xfeff
-    return { eol: (bom ? raw.slice(1) : raw).includes('\r\n') ? ('\r\n' as const) : ('\n' as const), bom, mtimeMs: statSync(abs).mtimeMs }
-  }
-  const allow = (path: string, before: string, after: string) => async () => ({ allow: true as const, approved: { path, before, after, file: fileOf(path) } })
+
+  it('dùng cùng gốc canonical từ lúc ghim đường dẫn đến lúc ghi dù gốc đầu vào có bí danh', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ng-root-'))
+    const input = { path: join(root, 'new.txt'), content: 'đã duyệt' }
+    const ask = vi.fn()
+    const gate = createApprovalGate({ root, getMode: () => 'edit', ask, preview: (name, args) => previewWrite(root, name, args) })
+    const g = setup(gate.check, root)
+    const pending = g.handler({ toolName: 'write', toolCallId: 'canonical', input })
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledWith(expect.objectContaining({ path: 'new.txt', after: 'đã duyệt' })))
+    expect(input.path).toBe(join(realpathSync.native(root), 'new.txt'))
+    gate.resolve(ask.mock.calls[0][0].id, true)
+
+    expect(await pending).toBeUndefined()
+    await tool(g.pi, 'write').execute('canonical', input)
+    expect(readFileSync(join(root, 'new.txt'), 'utf8')).toBe('đã duyệt')
+  })
 
   it('duyệt xong execute ghi đúng after, consume snapshot; cùng id chạy lại thì lỗi', async () => {
     writeFileSync(join(proj, 'w1.txt'), 'x')
-    const g = setup(allow('w1.txt', 'x', 'y'))
+    const g = setup(allowPreview)
     expect(await g.handler({ toolName: 'write', input: { path: 'w1.txt', content: 'y' }, toolCallId: 't1' })).toBeUndefined()
-    const r = await tool(g.pi, 'write').execute('t1', { path: join(proj, 'w1.txt'), content: 'y' })
+    const r = await tool(g.pi, 'write').execute('t1', { path: join(proj, 'w1.txt'), content: 'nội dung chưa duyệt' })
     expect(r.content[0].text).toContain('w1.txt')
     expect(readFileSync(join(proj, 'w1.txt'), 'utf8')).toBe('y')
     await expect(tool(g.pi, 'write').execute('t1', { path: join(proj, 'w1.txt'), content: 'y' })).rejects.toThrow('Không còn bản duyệt')
   })
 
-  it('edit: ghi after đã duyệt (không fuzzy pi), revalidate before', async () => {
+  it('edit ghi đúng after đã duyệt dù tham số edit khi execute đã đổi', async () => {
     writeFileSync(join(proj, 'e1.txt'), 'one two\n')
-    const g = setup(allow('e1.txt', 'one two\n', 'ONE two\n'))
+    const g = setup(allowPreview)
     await g.handler({ toolName: 'edit', input: { path: 'e1.txt', edits: [{ oldText: 'one', newText: 'ONE' }] }, toolCallId: 't2' })
-    await tool(g.pi, 'edit').execute('t2', { path: join(proj, 'e1.txt'), edits: [{ oldText: 'one', newText: 'ONE' }] })
+    await tool(g.pi, 'edit').execute('t2', { path: join(proj, 'e1.txt'), edits: [{ oldText: 'two', newText: 'TWO' }] })
     expect(readFileSync(join(proj, 'e1.txt'), 'utf8')).toBe('ONE two\n')
   })
 
+  it('mã thao tác bị trùng không thể thay snapshot trước hoặc ảnh hưởng mã khác', async () => {
+    const first = { path: 'first.txt', content: 'bản đầu' }
+    const other = { path: 'other.txt', content: 'tệp khác' }
+    const g = setup(allowPreview)
+    expect(await g.handler({ toolName: 'write', input: first, toolCallId: 'first' })).toBeUndefined()
+    expect(await g.handler({
+      toolName: 'write', input: { ...first, content: 'bản ghi đè' }, toolCallId: 'first',
+    })).toMatchObject({ block: true })
+    expect(await g.handler({ toolName: 'write', input: other, toolCallId: 'other' })).toBeUndefined()
+    expect(g.gate.check).toHaveBeenCalledTimes(2)
+
+    await Promise.all([
+      tool(g.pi, 'write').execute('first', first),
+      tool(g.pi, 'write').execute('other', other),
+    ])
+    expect(readFileSync(join(proj, 'first.txt'), 'utf8')).toBe('bản đầu')
+    expect(readFileSync(join(proj, 'other.txt'), 'utf8')).toBe('tệp khác')
+  })
+
   it('nội dung đổi sau preview → từ chối, tệp giữ nguyên', async () => {
+    writeFileSync(join(proj, 'e2.txt'), 'gốc\n')
+    const g = setup(allowPreview)
+    const input = { path: 'e2.txt', edits: [{ oldText: 'gốc', newText: 'mới' }] }
+    await g.handler({ toolName: 'edit', input, toolCallId: 't3' })
     writeFileSync(join(proj, 'e2.txt'), 'đã đổi\n')
-    const g = setup(allow('e2.txt', 'gốc\n', 'mới\n'))
-    await g.handler({ toolName: 'edit', input: { path: 'e2.txt', edits: [] }, toolCallId: 't3' })
-    await expect(tool(g.pi, 'edit').execute('t3', { path: join(proj, 'e2.txt'), edits: [] })).rejects.toThrow('Tệp đã thay đổi')
+    await expect(tool(g.pi, 'edit').execute('t3', input)).rejects.toMatchObject({ code: 'conflict' })
     expect(readFileSync(join(proj, 'e2.txt'), 'utf8')).toBe('đã đổi\n')
+    expect(g.onWriteConflict).toHaveBeenCalledWith(expect.stringContaining('duyệt bản xem trước mới'))
   })
 
   it.each([true, false])('tệp rỗng đổi trạng thái tồn tại sau preview (ban đầu %s) → từ chối', async (existed) => {
     const name = `empty-${existed}.txt`
     const path = join(proj, name)
     if (existed) writeFileSync(path, '')
-    const g = setup(allow(name, '', 'không được ghi'))
+    const g = setup(allowPreview)
     await g.handler({ toolName: 'write', input: { path: name, content: 'không được ghi' }, toolCallId: 'empty' })
     if (existed) rmSync(path)
     else writeFileSync(path, '')
-    await expect(tool(g.pi, 'write').execute('empty', { path, content: 'không được ghi' })).rejects.toThrow('Tệp đã thay đổi')
+    await expect(tool(g.pi, 'write').execute('empty', { path, content: 'không được ghi' })).rejects.toMatchObject({ code: 'conflict' })
     expect(existsSync(path)).toBe(!existed)
     if (!existed) expect(readFileSync(path, 'utf8')).toBe('')
   })
 
-  it('tệp bị thay bằng symlink trỏ ngoài sau preview → từ chối, tệp ngoài nguyên vẹn', async () => {
-    const outsideFile = join(realpathSync(tmpdir()), `ng-ext-out-${Date.now()}`)
+  it('thư mục bị thay bằng symlink trỏ ngoài sau preview → từ chối, tệp ngoài nguyên vẹn', async () => {
+    const outside = mkdtempSync(join(base, 'outside-'))
+    const outsideFile = join(outside, 'w2.txt')
     writeFileSync(outsideFile, 'NGOAI\n')
-    writeFileSync(join(proj, 'w2.txt'), 'an toàn\n')
-    const g = setup(allow('w2.txt', 'an toàn\n', 'độc'))
-    await g.handler({ toolName: 'write', input: { path: 'w2.txt', content: 'độc' }, toolCallId: 't4' })
-    rmSync(join(proj, 'w2.txt'))
-    symlinkSync(outsideFile, join(proj, 'w2.txt'))
-    await expect(tool(g.pi, 'write').execute('t4', { path: join(proj, 'w2.txt'), content: 'độc' })).rejects.toThrow('Đường dẫn nằm ngoài dự án')
+    const source = join(proj, 'outside-switch')
+    const path = join(source, 'w2.txt')
+    mkdirSync(source)
+    writeFileSync(path, 'an toàn\n')
+    const g = setup(allowPreview)
+    await g.handler({ toolName: 'write', input: { path, content: 'độc' }, toolCallId: 't4' })
+    renameSync(source, join(proj, 'outside-switch-original'))
+    directoryLink(outside, source)
+    await expect(tool(g.pi, 'write').execute('t4', { path, content: 'độc' })).rejects.toThrow('Đường dẫn nằm ngoài dự án')
     expect(readFileSync(outsideFile, 'utf8')).toBe('NGOAI\n')
-    rmSync(join(proj, 'w2.txt'), { force: true })
-    rmSync(outsideFile, { force: true })
   })
 
   it('symlink tráo sang tệp KHÁC trong dự án nhưng nội dung before giống nhau → từ chối, tệp đích nguyên vẹn', async () => {
-    writeFileSync(join(proj, 's1.txt'), 'giống nhau\n')
-    writeFileSync(join(proj, 's2.txt'), 'giống nhau\n')
-    const g = setup(allow('s1.txt', 'giống nhau\n', 'độc'))
-    await g.handler({ toolName: 'write', input: { path: 's1.txt', content: 'độc' }, toolCallId: 't5' })
-    rmSync(join(proj, 's1.txt'))
-    symlinkSync(join(proj, 's2.txt'), join(proj, 's1.txt')) // trỏ vào trong dự án, before trùng khớp
-    await expect(tool(g.pi, 'write').execute('t5', { path: join(proj, 's1.txt'), content: 'độc' })).rejects.toThrow('Đường dẫn đã thay đổi')
-    expect(readFileSync(join(proj, 's2.txt'), 'utf8')).toBe('giống nhau\n')
-    expect(existsSync(join(proj, 's1.txt'))).toBe(true) // symlink còn, không có gì bị ghi
+    const first = join(proj, 'same-first')
+    const second = join(proj, 'same-second')
+    mkdirSync(first)
+    mkdirSync(second)
+    const path = join(first, 'same.txt')
+    const other = join(second, 'same.txt')
+    writeFileSync(path, 'giống nhau\n')
+    writeFileSync(other, 'giống nhau\n')
+    const g = setup(allowPreview)
+    await g.handler({ toolName: 'write', input: { path, content: 'độc' }, toolCallId: 't5' })
+    renameSync(first, join(proj, 'same-first-original'))
+    directoryLink(second, first)
+    await expect(tool(g.pi, 'write').execute('t5', { path, content: 'độc' })).rejects.toThrow('Đường dẫn đã thay đổi')
+    expect(readFileSync(other, 'utf8')).toBe('giống nhau\n')
+    expect(existsSync(path)).toBe(true)
   })
 
   it('giữ CRLF và BOM của tệp hiện hữu; after CRLF thô được chuẩn hoá LF trước khi ghi', async () => {
     const p = join(proj, 'c1.txt')
     writeFileSync(p, '﻿dòng một\r\ndòng hai\r\n') // BOM + CRLF
-    const g = setup(allow('c1.txt', 'dòng một\ndòng hai\n', 'dòng một\ndòng hai\nthem\r\n'))
+    const g = setup(allowPreview)
     await g.handler({ toolName: 'write', input: { path: 'c1.txt', content: 'dòng một\r\ndòng hai\r\nthem\r\n' }, toolCallId: 't6' })
     await tool(g.pi, 'write').execute('t6', { path: p, content: 'dòng một\r\ndòng hai\r\nthem\r\n' })
     const raw = readFileSync(p, 'utf8')
@@ -233,11 +371,66 @@ describe('write/edit an toàn (override builtin pi)', () => {
 
   it('tệp đổi trên đĩa giữa preview và execute (mtime khác) → conflict, tệp giữ nguyên', async () => {
     writeFileSync(join(proj, 'm1.txt'), 'x')
-    const g = setup(allow('m1.txt', 'x', 'y'))
+    const g = setup(allowPreview)
     await g.handler({ toolName: 'write', input: { path: 'm1.txt', content: 'y' }, toolCallId: 't7' })
     utimesSync(join(proj, 'm1.txt'), new Date(1e12), new Date(1e12)) // cùng nội dung, khác mtime → rơi vào mtime check
-    await expect(tool(g.pi, 'write').execute('t7', { path: join(proj, 'm1.txt'), content: 'y' })).rejects.toThrow('Tệp đã thay đổi trên đĩa')
+    await expect(tool(g.pi, 'write').execute('t7', { path: join(proj, 'm1.txt'), content: 'y' })).rejects.toMatchObject({ code: 'conflict' })
     expect(readFileSync(join(proj, 'm1.txt'), 'utf8')).toBe('x')
+  })
+
+  it('từ chối thay thế đích bằng tệp mới dù bytes và mtime giống hệt', async () => {
+    const path = join(proj, 'replace.txt')
+    const replacement = join(proj, 'replacement.txt')
+    const originalTime = new Date(1e12)
+    writeFileSync(path, 'same\n')
+    utimesSync(path, originalTime, originalTime)
+    const input = { path, content: 'đã duyệt\n' }
+    const g = setup(allowPreview)
+    await g.handler({ toolName: 'write', input, toolCallId: 'replace' })
+
+    writeFileSync(replacement, 'same\n')
+    utimesSync(replacement, originalTime, originalTime)
+    expect(statSync(replacement).mtimeMs).toBe(statSync(path).mtimeMs)
+    renameSync(replacement, path)
+    await expect(tool(g.pi, 'write').execute('replace', input)).rejects.toMatchObject({ code: 'conflict' })
+    expect(readFileSync(path, 'utf8')).toBe('same\n')
+  })
+
+  it('ghi từ editor và Agent cùng phiên bản chỉ có một thao tác thành công', async () => {
+    const name = 'editor-race.txt'
+    const path = join(proj, name)
+    writeFileSync(path, 'gốc\n')
+    const version = (await readProjectFile(proj, name)).version
+    const input = { path, content: 'Agent\n' }
+    const g = setup(allowPreview)
+    await g.handler({ toolName: 'write', input, toolCallId: 'race' })
+
+    const [edit, agent] = await Promise.allSettled([
+      writeProjectFile(proj, name, 'Editor\n', { eol: '\n', bom: false, expectedVersion: version }),
+      tool(g.pi, 'write').execute('race', input)
+    ])
+    const committed = edit.status === 'fulfilled' ? edit : agent
+    const conflicted = committed === edit ? agent : edit
+    expect(committed.status).toBe('fulfilled')
+    expect(conflicted).toMatchObject({ status: 'rejected', reason: { code: 'conflict' } })
+    expect(readFileSync(path, 'utf8')).toBe(committed === edit ? 'Editor\n' : 'Agent\n')
+  })
+
+  it('Dừng vô hiệu hóa bản đã duyệt còn chờ thực thi', async () => {
+    const path = join(proj, 'stopped.txt')
+    writeFileSync(path, 'gốc\n')
+    const ask = vi.fn()
+    const gate = createApprovalGate({ root: proj, getMode: () => 'edit', ask, preview: (tool, input) => previewWrite(proj, tool, input) })
+    const g = setup(gate.check)
+    const input = { path, content: 'không được ghi\n' }
+    const pending = g.handler({ toolName: 'write', input, toolCallId: 'stopped' })
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledTimes(1))
+    gate.resolve(ask.mock.calls[0][0].id, true)
+    expect(await pending).toBeUndefined()
+    gate.denyAll('Đã dừng')
+
+    await expect(tool(g.pi, 'write').execute('stopped', input)).rejects.toThrow('Đã dừng')
+    expect(readFileSync(path, 'utf8')).toBe('gốc\n')
   })
 
   it('gate cho qua nhưng không có snapshot (hook chưa lưu) → lỗi, không ghi', async () => {
@@ -253,14 +446,16 @@ describe('previewWrite', () => {
   mkdirSync(root)
   writeFileSync(join(root, 'a.txt'), 'one two\nthree\n')
 
-  it('write: before là nội dung hiện tại (rỗng nếu chưa có), after là nội dung mới; kèm eol/bom/mtime của tệp', async () => {
-    expect(await previewWrite(root, 'write', { path: 'a.txt', content: 'x' })).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: 'x', file: { eol: '\n', bom: false, mtimeMs: statSync(join(root, 'a.txt')).mtimeMs } })
+  it('write: before và phiên bản cùng snapshot, after chuẩn hoá đúng nội dung sắp ghi', async () => {
+    const version = (await readProjectFile(root, 'a.txt')).version
+    expect(await previewWrite(root, 'write', { path: 'a.txt', content: 'x\r\ny\rz' })).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: 'x\ny\nz', file: { eol: '\n', bom: false, version } })
     expect(await previewWrite(root, 'write', { path: 'new.txt', content: 'y' })).toEqual({ path: 'new.txt', before: '', after: 'y', file: undefined })
   })
 
   it('edit: áp dụng edits[] lên bản gốc; nhận đường dẫn tuyệt đối trong root', async () => {
+    const version = (await readProjectFile(root, 'a.txt')).version
     const r = await previewWrite(root, 'edit', { path: join(root, 'a.txt'), edits: [{ oldText: 'one', newText: '1' }, { oldText: 'three', newText: '3' }] })
-    expect(r).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: '1 two\n3\n', file: { eol: '\n', bom: false, mtimeMs: statSync(join(root, 'a.txt')).mtimeMs } })
+    expect(r).toEqual({ path: 'a.txt', before: 'one two\nthree\n', after: '1 two\n3\n', file: { eol: '\n', bom: false, version } })
   })
 
   it('edit: CRLF trong oldText/newText được chuẩn hoá như pi, before/after là văn bản LF', async () => {

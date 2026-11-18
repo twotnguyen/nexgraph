@@ -40,20 +40,22 @@ def test_report_route_ok(api, copy_fixture):
     assert r.status_code == 200 and r.json()["god_nodes"]
 
 
-def test_report_refused_while_reindexing_or_after_cancelled_reindex(api, copy_fixture, monkeypatch):
-    # Index lại đầy đủ xoá đồ thị trước: không được trả báo cáo/xuất từ đồ thị rỗng hoặc dở dang (Review Focus #1).
+def test_report_uses_published_graph_during_reindex(api, copy_fixture, monkeypatch):
     from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.store.graph_store import GraphStore
     pid = api.open(copy_fixture("py_mini"))["project_id"]
     assert api.index(pid)["state"] == "done"
+    url = f"/v1/projects/{pid}/report"
+    published = api.get(url).json()
     jobs = api.app.state.services.jobs
     monkeypatch.setattr(jobs, "is_active", lambda p: p == pid)
-    r = api.get(f"/v1/projects/{pid}/report")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "index_running"
+    r = api.get(url)
+    assert r.status_code == 200 and r.json() == published
     monkeypatch.undo()
+    # Lần lập chỉ mục tại chỗ từ một bản cũ có thể đã làm mất đồ thị tốt.
     conn = open_graph_db(api.app.state.services.registry.get(pid).graph_db)
     store = GraphStore(conn)
     store.set_run_state(store.begin_run(3), "huy")
     conn.close()
-    r = api.get(f"/v1/projects/{pid}/report")
+    r = api.get(url)
     assert r.status_code == 409 and r.json()["error"]["code"] == "not_indexed"

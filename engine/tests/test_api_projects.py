@@ -42,6 +42,30 @@ def test_index_then_stats_nonzero(api, copy_fixture):
     assert api.open(listed["path"])["last_indexed_at"] == listed["last_indexed_at"]  # mở lại: app biết đã index
 
 
+def test_remove_registered_project_keeps_source_and_published_graph(api, copy_fixture):
+    root = copy_fixture("bookstore_app")
+    source = root / "lib/main.dart"
+    original = source.read_bytes()
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    route = f"/v1/projects/{pid}"
+    initial = api.get(f"{route}/stats").json()
+
+    assert api.client.delete(route).status_code == 401
+    assert api.delete(route).json() == {"removed": True}
+    assert api.get("/v1/projects").json() == []
+    assert api.get(f"{route}/stats").json()["error"]["code"] == "unknown_project"
+    assert api.post(f"{route}/index").status_code == 404
+    assert api.post(f"{route}/refresh").status_code == 404
+    assert api.delete(route).status_code == 404
+    assert source.read_bytes() == original and (root / ".nexgraph/graph.db").is_file()
+
+    reopened = api.open(root)
+    assert reopened["project_id"] == pid
+    assert reopened["last_indexed_at"] == initial["indexed_at"]
+    assert api.get(f"{route}/stats").json()["nodes_by_kind"] == initial["nodes_by_kind"]
+
+
 def test_index_twice_409_while_running(api, copy_fixture):
     p = api.open(copy_fixture("bookstore_app"))
     Blocking.gate = threading.Event()
@@ -52,6 +76,10 @@ def test_index_twice_409_while_running(api, copy_fixture):
         second = api.post(f"/v1/projects/{p['project_id']}/index")
         assert second.status_code == 409 and second.json()["error"]["code"] == "index_running"
         job_id = first.json()["job_id"]
+        assert second.json()["error"]["job_id"] == job_id
+        removal = api.delete(f"/v1/projects/{p['project_id']}")
+        assert removal.status_code == 409 and removal.json()["error"]["code"] == "project_busy"
+        assert api.get("/v1/projects").json()[0]["project_id"] == p["project_id"]
         assert api.delete(f"/v1/jobs/{job_id}").json() == {"cancelled": True}
     finally:
         Blocking.gate.set()

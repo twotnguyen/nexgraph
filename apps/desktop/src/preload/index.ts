@@ -30,11 +30,13 @@ const api: NexGraphApi = {
   project: {
     pickFolder: () => call('project:pick-folder'),
     open: (path) => call('project:open', path),
-    list: () => call('project:list')
+    list: () => call('project:list'),
+    remove: (pid) => call('project:remove', pid)
   },
   index: {
     scan: (projectId) => call('index:scan', projectId),
     start: (projectId, opts) => call('index:start', projectId, opts),
+    status: (jobId) => call('index:status', jobId),
     cancel: (jobId) => call('index:cancel', jobId),
     refresh: (projectId) => call('index:refresh', projectId),
     onEvent: (cb) => subscribe<EngineEvent>('engine:event', cb)
@@ -62,6 +64,7 @@ const api: NexGraphApi = {
     cycles: (pid, limit) => call('graph:cycles', pid, limit)
   },
   fs: {
+    list: (pid, directory) => call('fs:list', pid, directory),
     read: (pid, relPath) => call('fs:read', pid, relPath),
     write: (pid, relPath, text, opts) => call('fs:write', pid, relPath, text, opts)
   },
@@ -80,8 +83,8 @@ const api: NexGraphApi = {
   },
   ai: {
     getSettings: () => call('ai:get-settings'),
-    hasConsent: (pid) => call('ai:has-consent', pid),
-    grantConsent: (pid) => call('ai:grant-consent', pid)
+    hasConsent: (pid, target) => call('ai:has-consent', pid, target),
+    grantConsent: (pid, target) => call('ai:grant-consent', pid, target)
   },
   auth: {
     list: () => call('auth:list'),
@@ -100,7 +103,7 @@ const api: NexGraphApi = {
     onPrompt: (cb) => subscribe<AuthPromptView>('auth:login-prompt', cb)
   },
   agent: {
-    prompt: (pid, text) => call('agent:prompt', pid, text),
+    prompt: (pid, text, target) => call('agent:prompt', pid, text, target),
     abort: (pid) => call('agent:abort', pid),
     setMode: (pid, mode) => call('agent:set-mode', pid, mode),
     getMode: (pid) => call('agent:get-mode', pid),

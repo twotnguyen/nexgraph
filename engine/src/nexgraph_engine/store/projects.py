@@ -30,12 +30,16 @@ class ProjectInfo:
 
 
 class ProjectRegistry:
-    def __init__(self, app_data_dir: Path) -> None:
+    def __init__(self, app_data_dir: Path, *, read_only: bool = False) -> None:
         self.app_data_dir = Path(app_data_dir)
         self._app_db = self.app_data_dir / "app.db"
-        open_app_db(self._app_db).close()  # tạo sẵn
+        self._read_only = read_only
+        if not read_only:
+            open_app_db(self._app_db).close()  # tạo sẵn
 
     def open_project(self, path: Path) -> ProjectInfo:
+        if self._read_only:
+            raise RuntimeError("Danh bạ dự án đang mở chỉ đọc")
         root = Path(path).expanduser()
         if not root.is_dir():
             raise ProjectPathError(f"Không phải thư mục: {root}")
@@ -63,30 +67,49 @@ class ProjectRegistry:
         return self._remember(project_id, root, storage, graph_db, is_git)
 
     def list_projects(self) -> list[ProjectInfo]:
-        conn = self._conn()
+        conn = open_app_db(self._app_db, read_only=True)
         try:
-            rows = conn.execute("SELECT * FROM du_an_da_mo ORDER BY mo_lan_cuoi DESC, rowid DESC").fetchall()
+            visible = self._visible(conn)
+            rows = conn.execute(f"SELECT * FROM du_an_da_mo WHERE {visible} ORDER BY mo_lan_cuoi DESC, rowid DESC").fetchall()
         finally:
             conn.close()
         return [self._info(r) for r in rows]
 
     def get(self, project_id: str) -> ProjectInfo | None:
-        conn = self._conn()
+        conn = open_app_db(self._app_db, read_only=True)
         try:
-            row = conn.execute("SELECT * FROM du_an_da_mo WHERE ma_du_an = ?", (project_id,)).fetchone()
+            visible = self._visible(conn)
+            row = conn.execute(f"SELECT * FROM du_an_da_mo WHERE ma_du_an = ? AND {visible}", (project_id,)).fetchone()
         finally:
             conn.close()
         return self._info(row) if row else None
 
+    def remove(self, project_id: str) -> bool:
+        """Gỡ đăng ký khỏi ứng dụng, giữ đồ thị và ID để mở lại cùng đường dẫn."""
+        if self._read_only:
+            raise RuntimeError("Danh bạ dự án đang mở chỉ đọc")
+        conn = self._conn()
+        try:
+            result = conn.execute("UPDATE du_an_da_mo SET da_go = 1 WHERE ma_du_an = ? AND da_go = 0", (project_id,))
+            conn.commit()
+            return result.rowcount == 1
+        finally:
+            conn.close()
+
     # --- nội bộ -------------------------------------------------------------------
     def _conn(self) -> sqlite3.Connection:
-        return open_app_db(self._app_db)
+        return open_app_db(self._app_db, read_only=self._read_only)
+
+    @staticmethod
+    def _visible(conn: sqlite3.Connection) -> str:
+        # MCP có thể mở kho AppData cũ ở chế độ chỉ đọc trước khi desktop nâng cấp.
+        return "da_go = 0" if conn.execute("PRAGMA user_version").fetchone()[0] >= 2 else "1"
 
     def _app_dir_db(self, project_id: str) -> Path:
         return self.app_data_dir / "projects" / project_id / "graph.db"
 
     def _id_for_path(self, root: Path) -> str | None:
-        conn = self._conn()
+        conn = open_app_db(self._app_db, read_only=True)
         try:
             row = conn.execute("SELECT ma_du_an FROM du_an_da_mo WHERE duong_dan_tuyet_doi = ?", (str(root),)).fetchone()
         finally:
@@ -128,7 +151,7 @@ class ProjectRegistry:
             conn.execute(
                 "INSERT INTO du_an_da_mo (ma_du_an, duong_dan_tuyet_doi, ten, noi_luu, mo_lan_cuoi) VALUES (?, ?, ?, ?, ?)"
                 " ON CONFLICT (ma_du_an) DO UPDATE SET duong_dan_tuyet_doi = excluded.duong_dan_tuyet_doi,"
-                " ten = excluded.ten, noi_luu = excluded.noi_luu, mo_lan_cuoi = excluded.mo_lan_cuoi",
+                " ten = excluded.ten, noi_luu = excluded.noi_luu, mo_lan_cuoi = excluded.mo_lan_cuoi, da_go = 0",
                 (project_id, str(root), root.name[:255] or "project",
                  "trong_du_an" if storage == "in_project" else "thu_muc_app", now),
             )

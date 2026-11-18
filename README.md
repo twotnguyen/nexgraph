@@ -1,31 +1,50 @@
 # NexGraph
 
-Ứng dụng desktop (macOS + Windows) biến một thư mục mã nguồn thành đồ thị tri thức để khám phá kiến trúc, tìm kiếm, xem vùng ảnh hưởng khi sửa code; có trình soạn thảo tích hợp (F13) và trợ lý AI với hai chế độ Hỏi (chỉ đọc) và Sửa (mỗi thao tác ghi/chạy lệnh phải được người dùng duyệt) (F14). Đồ án chuyên ngành HUTECH, HK1 2026–2027.
+NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ mục thư mục mã nguồn cục bộ, khám phá kiến trúc, tìm ký hiệu và xem vùng ảnh hưởng khi sửa mã. Đề tài ưu tiên **TypeScript/JavaScript và Python**. Đồ thị dẫn đến vị trí mã nguồn, hỗ trợ truy vết luồng thực thi và cung cấp ngữ cảnh cho trợ lý AI qua MCP.
 
-> Kết nối mã nguồn. Khám phá tri thức.
+Ứng dụng có trình soạn thảo tích hợp và hai chế độ trợ lý. **Hỏi** chỉ đọc. **Sửa** cho xem diff và yêu cầu duyệt từng đề xuất tạo, sửa hoặc ghi đè tệp. Cả hai chế độ từ chối lời gọi công cụ chạy lệnh shell. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
 
-**Trạng thái nghiệm thu (2026-11-17):** `main` tại commit `9a68761` (repo GitHub `twotnguyen/nexgraph`, **private**), đã đẩy kèm các sửa sau review. **488 test engine + 429 test desktop đạt**, typecheck sạch; đã bấm thử trên cửa sổ Electron thật với engine thật và LLM giả. **CI xanh cả sáu job** (engine/desktop/package × macOS/Windows, run `44224110346`), gồm smoke test bản đóng gói trên cả hai hệ điều hành. Đây là bằng chứng build/chạy tự động trên Windows, **chưa phải nghiệm thu Windows trên máy thật của nhóm**. Chưa thử nhà cung cấp AI thật và chưa chạy đủ ba lượt demo.
+## Bắt đầu
 
-## Cấu trúc
+Cần Git, Node.js 22.19.0 trở lên (khuyến nghị Node.js 24), pnpm `11.24.0` và uv trong `PATH`. Với checkout mới, chạy từ thư mục gốc repo.
 
-| Thư mục | Nội dung |
-|---|---|
-| `engine/` | Engine phân tích bằng Python 3.12 (FastAPI, SQLite, mã bên thứ ba đã vendor, xem `NOTICE`) |
-| `apps/desktop/` | Ứng dụng Electron + React + TypeScript: F13 trình soạn thảo (Monaco), F14 agent Hỏi/Sửa có duyệt, F15 gói tích hợp Codex + skill |
-| `docs/` | Spec, kế hoạch, SRS, báo cáo spike |
-
-Thiết kế và kế hoạch trong `docs/superpowers/` là **bản lưu trữ 18/10/2026**; nguồn sự thật hiện hành (có F13–F15) nằm ở workspace cha, xem banner đầu mỗi file.
-
-## Chạy engine (dev)
-
-```bash
-cd engine
-uv sync
-NEXGRAPH_TOKEN=$(python3 -c "print('k'*40)") uv run nexgraph-engine serve --data-dir /tmp/ng --port 0
+```sh
+git clone https://github.com/twotnguyen/nexgraph.git
+cd nexgraph
+pnpm run setup:dev
+pnpm dev
 ```
 
-Engine in một dòng JSON `{"event":"ready","port":...,"pid":...}` rồi nghe tại `127.0.0.1`. Mọi route `/v1/*` cần `Authorization: Bearer <token>`.
+Nếu đã clone repo, sau khi nhóm hợp nhất thay đổi, chạy `git pull --ff-only` từ nhánh `main`, rồi chạy lại `pnpm run setup:dev` và `pnpm dev`. Kho riêng tư cần tài khoản GitHub có quyền đọc.
+
+Mở thư mục mã nguồn trong cửa sổ NexGraph. Dự án nhỏ được quét và lập chỉ mục tự động. Khi hoàn tất, bấm **Bắt đầu khám phá**. Cây tệp nằm bên trái, các thẻ mã nguồn và sơ đồ ở giữa, trợ lý AI ở bên phải. Mở dự án gần đây đã có chỉ mục sẽ vào thẳng không gian làm việc. Nút **← Tổng quan** mở thống kê, tùy chọn lập chỉ mục, Git hook và tích hợp MCP.
+
+- [Bản bàn giao Electron/Monaco 0.1.0, cách cài và ảnh giao diện](docs/release/README.md)
+- [Cài đặt và chạy từ mã nguồn trên Windows/macOS](docs/install-notes.md)
+- [Demo nhanh với mẫu Python và kịch bản bảo vệ trên NestJS](docs/demo-script.md)
+- [Danh sách kiểm trên Windows](docs/windows-checklist.md)
+
+**NexGraph 0.1.0 Electron/Monaco** là bản dùng để bàn giao và bảo vệ. Bộ cài có engine đi kèm. Lệnh `pnpm dev` khởi động cùng giao diện và chạy engine từ mã nguồn. Tích hợp **Code-OSS** là bản thử nghiệm, dùng chung engine và có quy trình build riêng. [Quy trình build Code-OSS](apps/shell/README.md)
+
+## Đặc tả và trạng thái
+
+- [Đặc tả hiện hành](docs/srs/SRS.md) ghi phạm vi và tiêu chí nghiệm thu.
+- [Ma trận truy vết F1–F15](docs/srs/traceability.md) liên kết yêu cầu với use case, thao tác, kiểm thử và bằng chứng.
+- [Kiến trúc và luồng xử lý](docs/srs/architecture.md), [ERD và lưu trữ hiện hành](docs/srs/data-model.md).
+- Các tài liệu trong [`docs/superpowers/`](docs/superpowers/) ghi lại lịch sử thiết kế và kế hoạch theo tuần.
+
+CI chạy setup từ checkout sạch rồi kiểm trên Windows và macOS. Job đóng gói mở ứng dụng từ chính bộ cài sẽ tải lên, lập chỉ mục dự án mẫu bằng engine đi kèm và kiểm đọc, ghi tệp cùng trợ lý giả lập. Biên bản nghiệm thu ghi riêng lần cài và chạy trên máy đích. [Workflow](.github/workflows/ci.yml) · [Biên bản thử editor và agent](docs/benchmarks/2026-11-15-editor-agent.md)
+
+## Cấu trúc repo
+
+| Đường dẫn | Vai trò |
+|---|---|
+| [`engine/`](engine/) | Python 3.12, FastAPI, SQLite, lập chỉ mục, truy vấn đồ thị và MCP |
+| [`apps/desktop/`](apps/desktop/) | Electron, React, Monaco, editor và trợ lý AI |
+| [`apps/extension/`](apps/extension/) | Adapter Code-OSS, webview đồ thị và tích hợp editor của workbench |
+| [`apps/shell/`](apps/shell/) | Cấu hình, patch và quy trình build Code-OSS theo commit ghim |
+| [`docs/`](docs/) | Đặc tả, use case, sơ đồ, tài liệu chạy và biên bản kiểm thử |
 
 ## Giấy phép
 
-Apache-2.0; repository GitHub ở chế độ private. Xem `LICENSE`, `NOTICE` và `THIRD_PARTY_LICENSES.md`. Các bản sao spec/kế hoạch trong `docs/superpowers/` là bản lưu trữ; nguồn sự thật hiện hành nằm ở workspace cha (xem banner đầu mỗi file).
+Apache-2.0. Xem [LICENSE](LICENSE), [NOTICE](NOTICE) và [thông tin mã bên thứ ba](THIRD_PARTY_LICENSES.md).

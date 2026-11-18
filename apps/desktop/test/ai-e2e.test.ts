@@ -9,6 +9,7 @@ import type { AgentEvent } from '../src/shared/agent-types'
 import { SecretStore } from '../src/main/ai/settings'
 import { EngineApi } from '../src/main/engine/api'
 import { startEngine, type EngineHandle } from '../src/main/engine/launcher'
+import { resolveEngineCommand } from '../src/main/engine/resolve-command'
 // @ts-expect-error mjs không có kiểu
 import { createFakeLlm } from '../scripts/fake-llm.mjs'
 
@@ -23,7 +24,8 @@ run('AI end-to-end (engine thật + LLM giả)', () => {
     process.env.NEXGRAPH_ALLOW_HTTP_PROVIDER = '1' // LLM giả chạy trên 127.0.0.1
     const root = mkdtempSync(join(tmpdir(), 'ng-e2e-'))
     cpSync(join(repo, 'engine/tests/fixtures/flow_app'), join(root, 'proj'), { recursive: true })
-    h = await startEngine({ command: 'uv', args: ['run', '--project', join(repo, 'engine'), 'nexgraph-engine'] }, { dataDir: join(root, 'data'), env: process.env })
+    h = await startEngine(resolveEngineCommand({ isPackaged: false, resourcesPath: '', repoRoot: repo }),
+      { dataDir: join(root, 'data'), env: process.env })
     const api = new EngineApi(h)
     pid = (await api.openProject(join(root, 'proj'))).project_id
     const { job_id } = await api.startIndex(pid)
@@ -46,12 +48,12 @@ run('AI end-to-end (engine thật + LLM giả)', () => {
     })
     await accounts.saveCustomProvider({ id: 'fake', label: 'Fake', baseUrl: `http://127.0.0.1:${llm.address().port}/v1`, model: 'fake' })
     accounts.selectModel('fake', 'fake')
-    accounts.grantConsent(pid)
+    const target = (await accounts.getConsentTarget())!
+    await accounts.grantConsent(pid, target)
     const events: AgentEvent[] = []
-    const svc = new AgentService({ api: new EngineApi(h), dataDir: dir, models: async () => ({ modelRuntime: accounts.modelRuntime, selected: accounts.getSelectedModel() }),
-      hasConsent: async (p) => accounts.hasConsent(p),
+    const svc = new AgentService({ api: new EngineApi(h), dataDir: dir, accounts: async () => accounts,
       rootOf: async () => (await new EngineApi(h).listProjects()).find((p) => p.project_id === pid)!.path, emit: (_p, e) => events.push(e) })
-    await svc.prompt(pid, 'luồng đăng nhập chạy thế nào?')
+    await svc.prompt(pid, 'luồng đăng nhập chạy thế nào?', target)
     svc.closeAll()
     expect(events.filter((e) => e.type === 'tool' && e.status === 'start').map((e) => (e as { name: string }).name)).toEqual(['list_flows', 'trace_flow'])
     const done = events.at(-1) as Extract<AgentEvent, { type: 'done' }>

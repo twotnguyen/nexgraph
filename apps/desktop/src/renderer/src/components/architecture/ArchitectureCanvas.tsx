@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ArchBlock, ArchEvidence, ArchLink, ArchView } from '@shared/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
 import { vi } from '../../strings'
+import { useTheme } from '../../state/useTheme'
 import { AutoFit } from '../common/AutoFit'
+import { CanvasState } from '../common/CanvasState'
 import { BOX_H, BOX_W, dotEdge, dotEdgeTypes, dotNodeTypes } from '../common/dotGraph'
 import { blockColor } from './blockStyle'
 import { EvidencePopover } from './EvidencePopover'
@@ -11,22 +13,25 @@ import { EvidencePopover } from './EvidencePopover'
 const EVIDENCE_LIMIT = 50
 
 interface Crumb { id: string | null; label: string }
-interface Props { projectId: string; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void; initialParent?: string }
+interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void; initialParent?: string }
 interface Laid { nodes: Node[]; edges: Edge[]; view: ArchView }
 interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
 
-export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialParent }: Props) {
+export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent }: Props) {
+  const theme = useTheme()
   const initialDirectory = initialParent?.startsWith('file:')
     ? (initialParent.slice(5).includes('/') ? `dir:${initialParent.slice(5, initialParent.lastIndexOf('/'))}` : undefined)
     : initialParent
   const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.arch.root }, ...(initialDirectory ? [{ id: initialDirectory, label: initialDirectory }] : [])])
   const [laid, setLaid] = useState<Laid | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   const [evidence, setEvidence] = useState<EvidenceState | null>(null)
   const current = crumbs[crumbs.length - 1].id
 
   useEffect(() => {
     let alive = true
+    setLaid(null)
     setError(null)
     setEvidence(null)
     ;(async () => {
@@ -54,11 +59,11 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
           points: routes[`${l.from}->${l.to}`]
         }))
       })
-    })().catch((err: Error) => alive && setError(err.message))
+    })().catch((err: Error) => alive && setError(err?.message ?? String(err)))
     return () => {
       alive = false
     }
-  }, [projectId, current, initialParent])
+  }, [projectId, current, initialParent, revision, retry])
 
   const openEvidence = useCallback(
     (link: ArchLink) => {
@@ -84,7 +89,7 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
   const labelOf = (id: string): string => laid?.view.blocks.find((b: ArchBlock) => b.id === id)?.label ?? id
 
   return (
-    <div className="arch-canvas">
+    <div className="arch-canvas" aria-busy={!laid && !error}>
       <nav className="breadcrumb" aria-label={vi.arch.breadcrumb}>
         {crumbs.map((c, i) => (
           <span key={`${c.id}-${i}`}>
@@ -94,8 +99,9 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
         ))}
       </nav>
       <div className="legend muted"><span>{vi.arch.legendArrow}</span><span>{vi.arch.legendCount}</span></div>
-      {error && <p role="alert" className="error">{error}</p>}
-      {laid && laid.view.blocks.length === 0 && !error && <p className="muted placeholder">{vi.arch.empty}</p>}
+      {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
+      {!laid && !error && <CanvasState kind="loading" message="Đang tải kiến trúc…" />}
+      {laid?.view.blocks.length === 0 && !error && <CanvasState kind="empty" message={vi.arch.empty} />}
       {laid && laid.view.links.length > 0 && (
         <ul className="relations" aria-label={vi.arch.relations}>
           {laid.view.links.map((l) => (
@@ -108,7 +114,7 @@ export function ArchitectureCanvas({ projectId, onOpenNode, onOpenCode, initialP
         </ul>
       )}
       {laid && laid.view.blocks.length > 0 && (
-        <ReactFlow className="dot-graph show-edge-labels" key={current ?? 'root'} nodes={laid.nodes} edges={laid.edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes} minZoom={0.2} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
+        <ReactFlow className="dot-graph show-edge-labels" colorMode={theme} key={current ?? 'root'} nodes={laid.nodes} edges={laid.edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes} minZoom={0.2} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
                    nodesDraggable={false} proOptions={{ hideAttribution: true }}>
           <Background />
           <Controls showInteractive={false} />

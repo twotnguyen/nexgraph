@@ -5,7 +5,7 @@ const RELOAD_MS = 300
 
 /**
  * Báo cáo thay đổi của project. Nạp khi gắn kết (nhờ engine làm mới đồ thị trước), rồi nạp lại khi engine báo
- * `changes_updated` (đồ thị đã mới nên không cần làm mới lần nữa). Một loạt sự kiện chỉ gây một lần nạp.
+ * một bản đồ thị được công bố hoặc cập nhật. Một loạt sự kiện chỉ gây một lần nạp.
  */
 export function useChanges(projectId: string): {
   changes: Changes | null
@@ -44,7 +44,7 @@ export function useChanges(projectId: string): {
     load()
     let timer: ReturnType<typeof setTimeout> | null = null
     const off = window.nexgraph.index.onEvent((e) => {
-      if (e.type !== 'changes_updated' || e.project_id !== projectId || timer) return
+      if ((e.type !== 'changes_updated' && e.type !== 'graph_updated') || e.project_id !== projectId || timer) return
       timer = setTimeout(() => {
         timer = null
         load({ refresh: false })

@@ -82,6 +82,21 @@ describe('SearchPanel', () => {
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'lib/a.dart::A.one#method' }))
   })
 
+  it('does not open the previous result when Enter precedes the new debounced request', async () => {
+    const search = vi.fn().mockImplementation(async (_project: string, q: string) => [hit(`lib/a.dart::A.${q}#method`)])
+    const { onOpen, user } = setup(search)
+    const input = screen.getByLabelText('Tìm kiếm')
+    await user.type(input, 'login')
+    await tick(250)
+    expect(screen.getByText('login')).toBeInTheDocument()
+    await user.clear(input)
+    await user.type(input, 'logout{Enter}')
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(screen.queryByText('login')).not.toBeInTheDocument()
+    await tick(250)
+    expect(await screen.findByText('logout')).toBeInTheDocument()
+  })
+
   it('shows "Không có kết quả" for an empty answer', async () => {
     const { user } = setup(vi.fn(async () => []))
     await user.type(screen.getByLabelText('Tìm kiếm'), 'zzz')
