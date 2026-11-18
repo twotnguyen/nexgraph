@@ -25,6 +25,9 @@ importers:
       graphology-layout-forceatlas2:
         specifier: ^0.10.1
         version: 0.10.1(graphology-types@0.24.8)
+      ignore:
+        specifier: 7.0.8
+        version: 7.0.8
       sigma:
         specifier: ^3.0.3
         version: 3.0.3(graphology-types@0.24.8)

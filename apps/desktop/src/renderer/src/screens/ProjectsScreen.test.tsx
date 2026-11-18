@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph, project } from '../test-utils'
@@ -43,7 +43,35 @@ describe('ProjectsScreen', () => {
     const { api } = installNexgraph({ project: { list: vi.fn(async () => recent) } })
     const onOpened = vi.fn()
     render(<ProjectsScreen engineReady onOpened={onOpened} />)
-    await userEvent.click(await screen.findByRole('button', { name: /ứng dụng/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^ứng dụng/ }))
     expect(api.project.open).toHaveBeenCalledWith('/b/ứng dụng')
+  })
+
+  it('shows the last index date and distinguishes unindexed projects', async () => {
+    const timestamp = 1_700_000_000
+    installNexgraph({ project: { list: vi.fn(async () => [
+      project({ name: 'Đã có đồ thị', last_indexed_at: timestamp }),
+      project({ project_id: 'p2', name: 'Dự án mới', last_indexed_at: null })
+    ]) } })
+    render(<ProjectsScreen engineReady onOpened={() => {}} />)
+    const indexed = await screen.findByRole('button', { name: /^Đã có đồ thị/ })
+    expect(indexed.querySelector('time')).toHaveAttribute('datetime', new Date(timestamp * 1000).toISOString())
+    expect(screen.getByRole('button', { name: /^Dự án mới/ })).toHaveTextContent('Chưa lập chỉ mục')
+  })
+
+  it('only removes a recent item after confirmation', async () => {
+    const item = project({ name: 'ứng dụng' })
+    const remove = vi.fn(async () => {})
+    installNexgraph({ project: { list: vi.fn(async () => [item]), remove } })
+    render(<ProjectsScreen engineReady onOpened={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Gỡ ứng dụng khỏi danh sách' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Gỡ dự án khỏi danh sách' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Hủy' }))
+    expect(remove).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Gỡ ứng dụng khỏi danh sách' }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Gỡ dự án' }))
+    expect(remove).toHaveBeenCalledWith(item.project_id)
+    expect(await screen.findByText('Đã gỡ ứng dụng khỏi danh sách gần đây.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^ứng dụng/ })).not.toBeInTheDocument()
   })
 })

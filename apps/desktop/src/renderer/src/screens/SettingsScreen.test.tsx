@@ -28,6 +28,24 @@ describe('SettingsScreen', () => {
     expect(await screen.findByText(/không cho phép dùng gói đăng ký trong ứng dụng bên thứ ba/)).toBeInTheDocument()
   })
 
+  it('giải thích kho khoá vắng và vô hiệu hoá đăng nhập OAuth', async () => {
+    const issue = 'Kho khoá an toàn của hệ điều hành không khả dụng.'
+    installNexgraph({ auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true, oauthStorageIssue: issue })]) } })
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('status')).toHaveTextContent(issue)
+    expect(screen.getByRole('button', { name: 'Đăng nhập' })).toBeDisabled()
+  })
+
+  it('vẫn cho đăng xuất khi không đọc được điểm đến OAuth', async () => {
+    const { api } = installNexgraph({
+      ai: { getSettings: vi.fn(async () => { throw new Error('Không xác minh được điểm đến OAuth') }) },
+      auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true, loggedIn: true })]) }
+    })
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Đăng xuất' }))
+    expect(api.auth.logout).toHaveBeenCalledWith('openai-codex')
+  })
+
   it('ô khoá không bao giờ hiển thị giá trị đã lưu (placeholder thay thế)', async () => {
     installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic', { hasKey: true })]) } })
     render(<SettingsScreen onBack={() => {}} />)
@@ -58,6 +76,31 @@ describe('SettingsScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Lưu nhà cung cấp' }))
     expect(api.auth.saveCustom).toHaveBeenCalledWith({ id: 'smoke', label: 'Smoke local', baseUrl: 'http://127.0.0.1:9/v1', model: 'fake' }, undefined)
     expect(api.auth.selectModel).toHaveBeenCalledWith('smoke', 'fake')
+  })
+
+  it('bỏ nháp key khi chọn một nhà cung cấp khác', async () => {
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic'), provider('openai')]) } })
+    render(<SettingsScreen onBack={() => {}} />)
+    await screen.findByRole('option', { name: 'openai' })
+    const key = screen.getByLabelText('API key')
+    await userEvent.type(key, 'sk-nhap')
+    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'openai')
+    expect(key).toHaveValue('')
+    expect(screen.getByRole('button', { name: 'Lưu key' })).toBeDisabled()
+    expect(api.auth.setKey).not.toHaveBeenCalled()
+  })
+
+  it('hiện lỗi kết nối và cho kiểm tra lại khi IPC từ chối', async () => {
+    const probe = vi.fn(async () => ({ ok: true, message: 'ok' }))
+      .mockRejectedValueOnce(new Error('endpoint mất kết nối'))
+    installNexgraph({ auth: { test: probe } })
+    render(<SettingsScreen onBack={() => {}} />)
+    const button = screen.getByRole('button', { name: 'Kiểm tra kết nối' })
+    await userEvent.click(button)
+    expect(await screen.findByRole('status')).toHaveTextContent('endpoint mất kết nối')
+    expect(button).toBeEnabled()
+    await userEvent.click(button)
+    expect(probe).toHaveBeenCalledTimes(2)
   })
 
   it('đăng nhập OAuth: sự kiện auth_url hiện hướng dẫn, Huỷ gọi loginCancel', async () => {

@@ -31,6 +31,31 @@ export class EngineStartError extends Error {
   }
 }
 
+/** Gửi tín hiệu theo PID/nhóm của tiến trình đã spawn, có phương án khi taskkill bị từ chối. */
+export function signalProcessTree(child: ChildProcess, signal: NodeJS.Signals): Promise<void> {
+  const pid = child.pid
+  if (pid === undefined || child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
+  if (process.platform === 'win32') {
+    return new Promise((resolve) => {
+      const fallback = () => {
+        if (child.exitCode === null && child.signalCode === null) {
+          if (signal === 'SIGTERM' && child.stdin) child.stdin.destroy() // Engine và tiến trình Python con nghe EOF.
+          else child.kill(signal)
+        }
+        resolve()
+      }
+      const taskkill = spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
+      taskkill.once('error', fallback)
+      taskkill.once('exit', (code) => {
+        if (code !== 0) fallback()
+        else resolve()
+      })
+    })
+  }
+  try { process.kill(-pid, signal) } catch { child.kill(signal) }
+  return Promise.resolve()
+}
+
 export function startEngine(
   cmd: EngineCommand,
   opts: { dataDir: string; readyTimeoutMs?: number; env?: NodeJS.ProcessEnv }
@@ -58,42 +83,41 @@ export function startEngine(
   let exited = false
   let exitInfo: [number | null, NodeJS.Signals | null] = [null, null]
   const exitCbs: Array<(code: number | null, signal: NodeJS.Signals | null) => void> = []
-  const exitPromise = new Promise<void>((resolve) => {
-    child.once('exit', (code, signal) => {
-      exited = true
-      exitInfo = [code, signal]
-      exitCbs.forEach((cb) => cb(code, signal))
-      resolve()
-    })
+  child.once('exit', (code, signal) => {
+    exited = true
+    exitInfo = [code, signal]
+    exitCbs.forEach((cb) => cb(code, signal))
+  })
+  // uv có thể thoát trước Python. close chờ cả các pipe mà tiến trình con vẫn đang giữ.
+  const closePromise = new Promise<void>((resolve) => {
+    child.once('close', () => resolve())
   })
 
-  const killTree = (signal: NodeJS.Signals): void => {
-    if (exited || pid < 0) return
-    if (isWin) {
-      spawn('taskkill', ['/pid', String(pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' })
-    } else {
+  let stopping: Promise<void> | undefined
+  const stop = (): Promise<void> => {
+    // Spawn thất bại không có PID và có thể không phát sự kiện exit.
+    if (pid < 0) return Promise.resolve()
+    stopping ??= (async () => {
+      let forced: Promise<void> | undefined
+      const timer = setTimeout(() => { forced = signalProcessTree(child, 'SIGKILL') }, KILL_GRACE_MS)
       try {
-        process.kill(-pid, signal)
-      } catch {
-        child.kill(signal)
+        // taskkill phải hoàn tất trước khi báo đã dừng cả cây, kể cả uv đã phát exit.
+        await signalProcessTree(child, 'SIGTERM')
+        await closePromise
+        await forced
+      } finally {
+        clearTimeout(timer)
       }
-    }
-  }
-
-  const stop = async (): Promise<void> => {
-    if (exited) return
-    killTree('SIGTERM')
-    const timer = setTimeout(() => killTree('SIGKILL'), KILL_GRACE_MS)
-    await exitPromise
-    clearTimeout(timer)
-    // Một số tiến trình con có thể còn sót trong nhóm sau khi tiến trình đầu đã thoát.
-    if (!isWin) {
-      try {
-        process.kill(-pid, 'SIGKILL')
-      } catch {
-        /* nhóm đã trống */
+      // Một số tiến trình con có thể còn sót trong nhóm sau khi tiến trình đầu đã thoát.
+      if (!isWin) {
+        try {
+          process.kill(-pid, 'SIGKILL')
+        } catch {
+          /* nhóm đã trống */
+        }
       }
-    }
+    })()
+    return stopping
   }
 
   return new Promise<EngineHandle>((resolve, reject) => {

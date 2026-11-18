@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { McpHttpManager, mcpStdioConfig } from '../src/main/mcp-http'
 
 const fake = {
@@ -29,6 +29,28 @@ describe('McpHttpManager', () => {
     expect((await mgr.start('p1', '/x')).key).toBe('a'.repeat(64))
     await mgr.stop('p1')
     expect(mgr.status('p1')).toBeNull()
+  })
+
+  it('coalesces concurrent starts and returns the single live endpoint', async () => {
+    const command = vi.fn(() => fake)
+    mgr = new McpHttpManager(command, '/data')
+    const [first, second] = await Promise.all([mgr.start('p1', '/x'), mgr.start('p1', '/x')])
+    expect(second).toEqual(first)
+    expect(command).toHaveBeenCalledOnce()
+    expect(mgr.status('p1')).toEqual({ url: first.url })
+  })
+
+  it('stopAll cancels a startup already spawning and a later explicit start works', async () => {
+    const command = vi.fn(() => fake)
+    mgr = new McpHttpManager(command, '/data')
+    const first = mgr.start('p1', '/x')
+    await Promise.resolve() // child đã spawn, vẫn chưa báo ready
+    expect(command).toHaveBeenCalledOnce()
+    await Promise.all([expect(first).rejects.toThrow('Đã dừng khởi động MCP HTTP'), mgr.stopAll()])
+    expect(mgr.status('p1')).toBeNull()
+    const next = await mgr.start('p1', '/x')
+    expect(command).toHaveBeenCalledTimes(2)
+    expect((await fetch(next.url, { headers: { 'X-API-Key': next.key } })).status).toBe(200)
   })
 })
 

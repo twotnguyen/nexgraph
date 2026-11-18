@@ -3,6 +3,10 @@ import http from 'node:http'
 
 const mode = process.env.FAKE_MODE ?? 'ok'
 const token = process.env.NEXGRAPH_TOKEN
+if (process.argv.includes('--exit-on-stdin-close')) {
+  process.stdin.once('end', () => process.exit(0))
+  process.stdin.resume()
+}
 
 // `mcp --http`: in dòng ready rồi trả lại key nhận qua biến môi trường (test McpHttpManager).
 if (process.argv.includes('mcp') && process.argv.includes('--http')) {

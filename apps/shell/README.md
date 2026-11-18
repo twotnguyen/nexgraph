@@ -1,28 +1,28 @@
-# apps/shell — lớp phủ NexGraph lên nền Code-OSS
+# Bảo trì và chạy thử Code-OSS
 
-NexGraph chạy trên nền Code-OSS (MIT). Repo này **không** giữ một bản fork đầy đủ; thư mục này chỉ chứa phần nhóm thay đổi so với nền:
+Lớp phủ này dùng để phát triển và thử nghiệm tích hợp NexGraph với Code-OSS (MIT). Bản phát hành **NexGraph 0.1.0** dùng Electron độc lập cùng editor Monaco. Xem [hướng dẫn phát hành 0.1.0](../../docs/release/README.md) để lấy và kiểm bộ cài.
 
 | Tệp | Nội dung |
-|---|---|
-| `upstream.json` | Commit nền được ghim và phiên bản Node/pnpm nền yêu cầu |
-| `product.overrides.json` | Các khoá `product.json` bị đổi: tên, id, thư mục dữ liệu, kho extension Open VSX |
-| `patches/` | Bản vá vào lõi: font giao diện, danh sách extension không đóng gói |
-| `overlay/` | Tệp chép đè: icon, logo nền vùng editor trống, font Be Vietnam Pro |
-| `build.mjs` | Lấy nền → áp bản vá → chép đè → gắn extension (`apps/extension`) và engine → build |
+| --- | --- |
+| `upstream.json` | Commit Code-OSS được ghim và phiên bản Node/pnpm mà nền yêu cầu |
+| `product.overrides.json` | Tên, ID, thư mục dữ liệu và kho extension Open VSX trong `product.json` |
+| `patches/` | Bản vá giao diện và danh sách extension của nền |
+| `overlay/` | Icon, hình nền vùng editor trống và font Be Vietnam Pro |
+| `build.mjs` | Lấy nền, áp bản vá, chép overlay, gắn extension NexGraph và dựng ứng dụng |
 
-## Dùng
+## Dựng bản thử
 
-Cần Node đúng phiên bản trong `upstream.json` và pnpm. Trên Windows cần thêm Visual Studio Build Tools (C++).
+Dùng đúng phiên bản Node trong `upstream.json` và pnpm theo từng workspace. Windows cần Visual Studio Build Tools với C++. Từ gốc repo, cài phụ thuộc NexGraph và chọn một lệnh dựng phù hợp.
 
 ```sh
-node apps/shell/build.mjs --dev    # biên dịch để chạy thử
-node apps/shell/build.mjs          # đóng gói app (kết quả ở apps/shell/VSCode-<hệ điều hành>-<kiến trúc>/)
+pnpm install --frozen-lockfile
+node apps/shell/build.mjs --dev
 ```
 
-Thêm `--src <đường dẫn>` để lấy nền từ một bản clone có sẵn thay vì tải từ mạng.
+Sau khi build dev, đặt `NEXGRAPH_REPO_ROOT` trỏ tới gốc repo rồi chạy `apps/shell/.upstream/scripts/code.bat` (Windows) hoặc `apps/shell/.upstream/scripts/code.sh` (macOS) với thư mục dự án cần mở. Extension gọi engine qua `uv` khi không có engine đóng gói. Xem [chuẩn bị uv và Python 3.12](../../docs/install-notes.md#chạy-electron-từ-checkout-sạch).
 
-Bản đóng gói chỉ có engine kèm theo khi đã chạy PyInstaller (`engine/dist/nexgraph-engine`). Lúc chạy thử chưa có engine đóng gói, đặt `NEXGRAPH_REPO_ROOT` trỏ tới gốc repo để extension chạy engine bằng `uv`.
+Chạy `node apps/shell/build.mjs` để tạo thư mục ứng dụng thử trong `apps/shell/VSCode-<hệ điều hành>-<kiến trúc>/`. Để kèm engine, chạy bước PyInstaller trong [hướng dẫn dựng engine](../../docs/install-notes.md#đóng-gói-electron) để tạo `engine/dist/nexgraph-engine` trước. Dùng `--src <đường dẫn>` nếu muốn lấy commit ghim từ bản clone upstream đã có. Ghi bằng chứng build và smoke riêng theo từng hệ điều hành.
 
-## Nâng phiên bản nền
+## Nâng phiên bản Code-OSS
 
-Đổi `commit` trong `upstream.json`, xoá `.upstream/`, chạy lại `build.mjs`. Bản vá nào không áp được thì sửa bản vá đó.
+Đổi `commit` trong `upstream.json`, xóa checkout dựng `apps/shell/.upstream/` và chạy lại `build.mjs`. Rà soát bản vá nào không còn áp được trên commit mới.

@@ -11,6 +11,6 @@ export function resolveEngineCommand(o: {
     const exe = (o.platform ?? process.platform) === 'win32' ? 'nexgraph-engine.exe' : 'nexgraph-engine'
     return { command: join(o.resourcesPath, 'engine', exe), args: [] }
   }
-  // Lúc dev: chạy engine từ mã nguồn bằng uv.
-  return { command: 'uv', args: ['run', '--project', join(o.repoRoot, 'engine'), 'nexgraph-engine'] }
+  // Chạy module Python trực tiếp để dev dùng cùng đường chạy trên Windows và macOS.
+  return { command: 'uv', args: ['run', '--project', join(o.repoRoot, 'engine'), '--locked', 'python', '-m', 'nexgraph_engine.cli'] }
 }

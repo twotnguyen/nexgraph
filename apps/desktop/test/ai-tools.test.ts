@@ -11,7 +11,7 @@ const payload = (s: string): string => {
 
 const api = () => ({ code: vi.fn(async () => ({})), neighbors: vi.fn(async () => ({})), search: vi.fn(), getNode: vi.fn(), flow: vi.fn(),
   flows: vi.fn(), context: vi.fn(), architecture: vi.fn(), impactOf: vi.fn() })
-const as = (a: ReturnType<typeof api>): EngineApi => a as unknown as EngineApi
+const as = (a: ReturnType<typeof api>): EngineApi => ({ forModel: () => a }) as unknown as EngineApi
 
 describe('AI tools', () => {
   it('chín tool, không tool nào có tên gợi ý ghi', () => {

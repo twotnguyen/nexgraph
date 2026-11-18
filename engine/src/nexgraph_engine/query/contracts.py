@@ -5,7 +5,9 @@ Route chỉ bọc các hàm này bằng `open_store`, còn MCP gọi trực ti�
 """
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath, PureWindowsPath
+import hashlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from nexgraph_engine.arch.builder import UnknownBlock, build_view
 from nexgraph_engine.arch.evidence import evidence_between
@@ -14,6 +16,7 @@ from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.impact.analyze import analyze
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file
+from nexgraph_engine.query.source_policy import SourcePolicy, safe_project_path
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
@@ -69,23 +72,9 @@ def neighbors_json(store: GraphStore, node: str, types: set[EdgeType] | None, di
             "truncated": hood.truncated, "total": hood.total}
 
 
-def _safe_file(root: Path, file: str) -> Path:
-    if (not file or file.startswith("/") or "\\" in file or PureWindowsPath(file).drive
-            or PurePosixPath(file).is_absolute() or ".." in PurePosixPath(file).parts):
-        raise ApiError(400, "bad_path", "Đường dẫn phải là đường dẫn tương đối nằm trong dự án")
-    try:
-        resolved = (root / file).resolve()
-        root_resolved = root.resolve()
-    except (ValueError, OSError) as exc:  # NUL byte, tên tệp quá dài, v.v. -> 400 thay vì 500
-        raise ApiError(400, "bad_path", f"Đường dẫn không hợp lệ: {exc}") from exc
-    if not resolved.is_relative_to(root_resolved):
-        raise ApiError(403, "outside_project", "Tệp nằm ngoài thư mục dự án")
-    return resolved
-
-
 def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None, *,
-              transcript_dir: Path | None = None) -> dict:
-    path = _safe_file(root, file)
+              transcript_dir: Path | None = None, source: SourcePolicy | None = None) -> dict:
+    path = source.resolve(file) if source else safe_project_path(root, file)
     record = store.file_record(file)
     if record is None:  # chỉ phục vụ tệp đã được lập chỉ mục (không đọc .git, .nexgraph, khóa bí mật...)
         raise ApiError(404, "file_not_found", f"Tệp chưa được lập chỉ mục: {file}")
@@ -94,18 +83,27 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
     first = 1 if start is None else start
     if first < 1 or (end is not None and (end < first or end - first + 1 > MAX_CODE_LINES)):
         raise ApiError(400, "bad_param", f"start >= 1, end >= start, tối đa {MAX_CODE_LINES} dòng mỗi lần")
+    snapshot = source.read(file, path) if source and record.language != "media" else None
     if record.language == "media":  # audio/video: phục vụ bản chép lời đã lưu, không đọc tệp nhị phân
         cached = transcript_dir / f"{record.sha256}.txt" if transcript_dir else None
         if cached is None or not cached.is_file():
             raise ApiError(404, "no_text", f"Chưa có bản chép lời cho {file}")
         lines = cached.read_text(encoding="utf-8").splitlines()
     elif record.language in CONVERTED_LANGUAGES:  # docx/xlsx/PDF: chuyển lại sang chữ, cùng hàm lúc index
-        lines = doc_text(path, record.language).splitlines()
+        if snapshot is None:
+            lines = doc_text(path, record.language).splitlines()
+        else:
+            # Bộ chuyển đổi mở tên tệp. Chỉ đưa cho nó các byte đã xác nhận từ handle.
+            with TemporaryDirectory(prefix="nexgraph-ai-doc-") as tmp:
+                document = Path(tmp) / f"document.{record.language}"
+                document.write_bytes(snapshot)
+                lines = doc_text(document, record.language).splitlines()
     else:
-        lines = path.read_bytes().decode("utf-8", errors="replace").splitlines()
+        lines = (snapshot if snapshot is not None else path.read_bytes()).decode("utf-8", errors="replace").splitlines()
     last = min(len(lines), end if end is not None else first + MAX_CODE_LINES - 1)
+    digest = hashlib.sha256(snapshot).hexdigest() if snapshot is not None else sha256_file(path)
     return {"file": file, "start": first, "end": last, "text": "\n".join(lines[first - 1:last]),
-            "language": language_of(file) or record.language, "stale": sha256_file(path) != record.sha256}
+            "language": language_of(file) or record.language, "stale": digest != record.sha256}
 
 
 def search_json(store: GraphStore, q: str, kinds, limit: int) -> list[dict]:

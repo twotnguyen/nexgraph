@@ -4,17 +4,33 @@ export type AgentMode = 'ask' | 'edit'
 
 export type ApprovalRequest = {
   id: string
-  tool: 'edit' | 'write' | 'bash'
-  path?: string
-  before?: string
-  after?: string
-  command?: string
+  tool: 'edit' | 'write'
+  path: string
+  before: string
+  after: string
 }
 
 export type ApprovalDecision = { allow: true } | { allow: false; reason: string }
 
 /** Nhà cung cấp AI trong màn Tài khoản; renderer không bao giờ nhận key, chỉ `hasKey`. */
-export type ProviderInfo = { id: string; label: string; hasKey: boolean; oauth: boolean; loggedIn: boolean; custom: boolean }
+export type ProviderInfo = { id: string; label: string; hasKey: boolean; oauth: boolean; loggedIn: boolean; custom: boolean; oauthStorageIssue?: string }
+
+export type AiConsentTarget = { provider: string; baseUrl: string }
+
+export function normalizeConsentTarget(provider: string, baseUrl: string): AiConsentTarget | null {
+  try {
+    const url = new URL(baseUrl)
+    if (!provider || (url.protocol !== 'https:' && url.protocol !== 'http:') || url.username || url.password) return null
+    url.hash = ''
+    return { provider, baseUrl: url.href }
+  } catch {
+    return null
+  }
+}
+
+export function sameConsentTarget(left: AiConsentTarget | null | undefined, right: AiConsentTarget | null | undefined): boolean {
+  return !!left && !!right && left.provider === right.provider && left.baseUrl === right.baseUrl
+}
 
 export type CustomProvider = { id: string; label: string; baseUrl: string; model: string }
 
@@ -42,5 +58,6 @@ export type AgentEvent =
   | { type: 'tool'; name: string; status: 'start' | 'end'; error?: boolean }
   | { type: 'approval'; request: ApprovalRequest }
   | { type: 'approval_closed'; id: string }
+  | { type: 'write_conflict'; message: string }
   | { type: 'done'; text: string; citations: Citation[] }
   | { type: 'error'; code: string; message: string }

@@ -1,0 +1,504 @@
+.workspace-shell {
+  --ws-rail: 46px;
+  --ws-tools: clamp(194px, 18vw, 266px);
+  --ws-chat: clamp(286px, 25vw, 384px);
+  --ws-header: 44px;
+  position: relative;
+  background: var(--color-bg);
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.workspace-shell > .activity-bar {
+  width: var(--ws-rail);
+  flex: 0 0 var(--ws-rail);
+  gap: 0;
+  padding: 5px 0 0;
+  border-right: 1px solid var(--color-border);
+  background: var(--panel);
+  z-index: 4;
+}
+
+.workspace-shell > .activity-bar button {
+  position: relative;
+  width: 100%;
+  height: 44px;
+  border: 0;
+  border-radius: 0;
+  color: var(--color-muted);
+  background: transparent;
+}
+
+.workspace-shell > .activity-bar button:hover,
+.workspace-shell > .activity-bar button[aria-pressed='true'] {
+  color: var(--color-text);
+  background: var(--track);
+}
+
+.workspace-shell > .activity-bar button[aria-pressed='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--blue);
+}
+
+.workspace-shell > .ws-tools {
+  width: var(--ws-tools);
+  flex: 0 0 var(--ws-tools);
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+  word-break: normal;
+  background: var(--panel);
+}
+
+.ws-tools-head {
+  display: flex;
+  flex: 0 0 var(--ws-header);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 12px 0 15px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.ws-tools-head h2 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.ws-project-root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin: 7px 7px 0;
+  padding: 0 7px;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.ws-project-root svg { flex: none; color: var(--blue); }
+.ws-project-root span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.ws-icon-button {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--color-muted);
+  background: transparent;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.ws-icon-button:hover {
+  color: var(--color-text);
+  background: var(--track);
+}
+
+.ws-tools-body {
+  flex: 1;
+  min-height: 0;
+  padding: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.ws-tools-explorer .ws-tools-body { padding: 2px 0 6px; }
+.ws-tools-body .mono { overflow-wrap: anywhere; word-break: normal; }
+.ws-tools-body .search-results button { border-radius: 3px; }
+.ws-tools-body .search-results .mono {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ws-tools-body .segmented { border-radius: 4px; }
+.workspace-shell .ws-tools-body .segmented button.active {
+  color: var(--blue);
+  background: var(--accent-soft);
+}
+.ws-tools-body .search-panel input { width: 100%; min-width: 0; }
+
+.workspace-shell .tree-compact {
+  position: static;
+  padding: 0 5px;
+  background: transparent;
+}
+
+.workspace-shell .tree-row {
+  min-height: 26px;
+  min-width: 0;
+  border-radius: 2px;
+}
+
+.workspace-shell .tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-shell .tree-compact .kind { display: none; }
+.workspace-shell .tree-compact .link { flex: none; }
+.workspace-shell .tree-compact > p { margin-inline: 10px; }
+.workspace-shell .tree-compact .tree-row { cursor: pointer; padding-inline-end: 6px; gap: 5px; }
+.workspace-shell .tree-compact .tree-row[aria-selected='true'] {
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 var(--blue);
+}
+.workspace-shell .tree-compact .twisty { flex: 0 0 16px; }
+.workspace-shell .tree-icon {
+  display: inline-grid;
+  flex: 0 0 15px;
+  place-items: center;
+  color: var(--color-muted);
+}
+.workspace-shell .tree-icon-folder { color: var(--amber); }
+.workspace-shell .tree-icon-file { color: var(--blue); }
+
+.workspace-shell > .center {
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-bg);
+}
+
+.workspace-shell .ws-head {
+  min-height: var(--ws-header);
+  flex: 0 0 var(--ws-header);
+  gap: 10px;
+  padding: 0 12px;
+  background: var(--panel-raised, var(--color-surface));
+}
+
+.workspace-shell .ws-head .ws-name { font-size: 13px; max-width: 45%; }
+.workspace-shell .ws-head .ws-path { font-size: 11px; }
+.workspace-shell .ws-head .ws-actions { gap: 5px; }
+.workspace-shell .ws-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.workspace-shell .ws-actions button:hover,
+.workspace-shell .ws-actions button[aria-pressed='true'] {
+  border-color: var(--blue);
+  background: var(--accent-soft);
+}
+
+.workspace-shell .ws-tabs {
+  flex: none;
+  gap: 0;
+  min-height: 35px;
+  padding: 0;
+  background: var(--panel);
+  scrollbar-width: thin;
+  overscroll-behavior-inline: contain;
+}
+
+.workspace-shell .ws-tabs .tab {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-width: 2px 1px 0 0;
+  border-right-color: var(--color-border);
+  border-radius: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.workspace-shell .ws-tabs .tab[data-tone]::before { display: none; }
+.workspace-shell .ws-tabs .tab > svg { color: var(--tone); }
+.workspace-shell .ws-tabs .tab:hover { color: var(--color-text); background: var(--track); }
+.workspace-shell .ws-tabs .tab.active {
+  border-top-color: var(--blue);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: none;
+}
+
+.workspace-shell .ws-tabs .file-tab {
+  gap: 4px;
+  max-width: 210px;
+  padding: 0 4px 0 8px;
+}
+
+.workspace-shell .ws-tabs .file-tab .tab-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 2px;
+  color: inherit;
+}
+
+.workspace-shell .ws-tabs .tab-name > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-shell .ws-tabs .tab-name svg { flex: none; color: var(--teal); }
+.workspace-shell .ws-tabs .tab-close { min-width: 20px; border-radius: 3px; }
+.workspace-shell .ws-tabs .tab-close:hover { color: var(--color-text); background: var(--track); }
+.workspace-shell .canvas-wrap { background: var(--color-surface); }
+.workspace-shell :is(.activity-bar button, .tab, .tab-name, .tab-close, .tree-row):focus-visible {
+  outline: 2px solid var(--focus-ring, var(--blue));
+  outline-offset: -2px;
+}
+
+.workspace-shell .ws-index-status { font-size: 12px; background: var(--panel); }
+.workspace-shell .pick-banner { flex-wrap: wrap; }
+
+.ws-feedback {
+  position: absolute;
+  z-index: 12;
+  right: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 28px);
+  padding: 6px 8px 6px 12px;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-error-red);
+  border-radius: 4px;
+  background: var(--panel-raised, var(--color-surface));
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  animation: workspace-panel-in .14s ease-out;
+}
+
+.workspace-shell .react-flow {
+  --xy-background-color: var(--color-bg);
+  --xy-background-pattern-dots-color: color-mix(in srgb, var(--color-muted) 45%, var(--color-bg));
+  --xy-edge-label-background-color: var(--color-surface);
+  --xy-edge-label-color: var(--color-text);
+  --xy-controls-button-background-color: var(--color-surface);
+  --xy-controls-button-background-color-hover: var(--track);
+  --xy-controls-button-color: var(--color-text);
+  --xy-controls-button-border-color: var(--color-border);
+  --xy-background-color-default: var(--color-bg);
+  --xy-background-pattern-dots-color-default: color-mix(in srgb, var(--color-muted) 45%, var(--color-bg));
+  --xy-node-background-color-default: var(--color-surface);
+  --xy-node-color-default: var(--color-text);
+  --xy-node-border-default: 1px solid var(--color-border);
+  --xy-edge-stroke-default: var(--color-muted);
+  --xy-edge-label-background-color-default: var(--color-surface);
+  --xy-edge-label-color-default: var(--color-text);
+  --xy-controls-button-background-color-default: var(--color-surface);
+  --xy-controls-button-background-color-hover-default: var(--track);
+  --xy-controls-button-color-default: var(--color-text);
+  --xy-controls-button-border-color-default: var(--color-border);
+}
+
+.workspace-shell .react-flow__node-default {
+  background: color-mix(in srgb, var(--node-c, var(--color-border)) 10%, var(--color-surface));
+  color: var(--color-text);
+}
+
+.workspace-shell :is(.graph-toolbar, .map-toolbar, .breadcrumb) {
+  max-width: calc(100% - 20px);
+  flex-wrap: wrap;
+}
+
+.workspace-shell :is(.inspector, .evidence-popover) {
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 35px);
+  overflow: auto;
+  border-radius: 5px;
+  background: var(--panel-raised, var(--color-surface));
+}
+
+.workspace-shell :is(.legend, .map-status) {
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.workspace-shell .path-notice { max-width: calc(100% - 32px); text-align: center; }
+.workspace-shell .canvas-area { position: relative; }
+.workspace-shell .canvas-state {
+  position: absolute;
+  z-index: 4;
+  inset: 36px 0 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.canvas-state-content {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--panel-raised, var(--color-surface));
+  color: var(--color-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.canvas-state-content p { margin: 0; overflow-wrap: anywhere; }
+.canvas-state-content button { pointer-events: auto; white-space: nowrap; }
+.canvas-state[data-state='error'] p { color: var(--color-error-red); }
+.canvas-spinner {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: workspace-spin .8s linear infinite;
+}
+
+.workspace-shell .code-head { min-height: 34px; gap: 8px; background: var(--panel); }
+.workspace-shell .code-head .mono { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; word-break: normal; }
+.workspace-shell .ws-editor-actions { display: flex; align-items: center; flex: none; gap: 5px; white-space: nowrap; }
+.workspace-shell .ws-editor-actions button { padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+.workspace-shell .ws-save-state { color: var(--color-muted); font-size: 11px; }
+.workspace-shell .ws-save-state[data-state='saving'] { color: var(--blue); }
+.workspace-shell .ws-editor-loading { margin: 0; padding: 8px 14px; font-size: 12px; }
+.workspace-shell .ws-editor-error { display: flex; align-items: center; gap: 10px; padding: 0 14px; font-size: 12px; }
+.workspace-shell .ws-editor-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 20px;
+  text-align: center;
+}
+.workspace-shell .ws-editor-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--blue);
+}
+.workspace-shell .ws-editor-empty-icon svg { width: 23px; height: 23px; }
+.workspace-shell .ws-editor-empty h2 { margin: 4px 0 0; font-size: 16px; }
+.workspace-shell .ws-editor-empty p { max-width: 320px; margin: 0; font-size: 13px; }
+.workspace-shell .ws-editor-empty button { margin-top: 5px; }
+.workspace-shell .editor-hit { background: color-mix(in srgb, var(--blue) 18%, transparent); }
+.workspace-shell .report-view { padding: clamp(14px, 2vw, 24px); }
+.workspace-shell .report-head { gap: 12px; flex-wrap: wrap; }
+.workspace-shell .report-view section { padding-top: 12px; border-top: 1px solid var(--color-border); }
+.workspace-shell .report-view table { min-width: 0; overflow-wrap: anywhere; }
+
+.workspace-shell .canvas-wrap:has(> .flows-view) { container-type: inline-size; }
+.workspace-shell .flows-view { grid-template-columns: minmax(155px, .23fr) minmax(0, 1fr) minmax(185px, .26fr); }
+.workspace-shell .flows-view > .canvas-col { grid-column: 2 / -1; min-width: 0; min-height: 0; }
+.workspace-shell .flows-view:has(> :nth-child(3)) > .canvas-col { grid-column: 2; }
+.workspace-shell .flow-card { text-align: left; }
+.workspace-shell .flow-card-detail,
+.workspace-shell .crit-bar,
+.workspace-shell .crit-fill { display: block; }
+.workspace-shell .flow-message { padding: 8px; }
+.workspace-shell .flows-view :is(.kind-chip.active, .flow-card.selected, .flow-item.active, .step-row.current,
+  .flow-step[aria-current='step'], .flow-card-kind) {
+  background: color-mix(in srgb, var(--tone) 12%, var(--color-surface));
+}
+
+.workspace-shell > .chat:not([hidden]) {
+  flex: 0 0 var(--ws-chat);
+  width: var(--ws-chat);
+  min-width: 0;
+}
+
+@keyframes workspace-panel-in { from { opacity: 0; translate: 0 3px; } to { opacity: 1; translate: 0 0; } }
+@keyframes workspace-spin { to { transform: rotate(360deg); } }
+
+@container (max-width: 740px) {
+  .workspace-shell .flows-view { grid-template-columns: minmax(125px, 30%) minmax(0, 1fr); }
+  .workspace-shell .flows-view:has(> :nth-child(3)) { grid-template-rows: minmax(0, 1fr) minmax(96px, 34%); }
+  .workspace-shell .flows-view > :first-child { grid-row: 1 / -1; }
+  .workspace-shell .flows-view > :nth-child(3) { grid-column: 2; grid-row: 2; border-top: 1px solid var(--color-border); }
+}
+
+@container (max-width: 440px) {
+  .workspace-shell .flows-view { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(120px, 27%) minmax(0, 1fr); }
+  .workspace-shell .flows-view:has(> :nth-child(3)) { grid-template-rows: minmax(120px, 27%) minmax(0, 1fr) minmax(94px, 26%); }
+  .workspace-shell .flows-view > :first-child { grid-row: 1; grid-column: 1; border-right: 0; border-bottom: 1px solid var(--color-border); }
+  .workspace-shell .flows-view > .canvas-col,
+  .workspace-shell .flows-view:has(> :nth-child(3)) > .canvas-col { grid-column: 1; grid-row: 2; }
+  .workspace-shell .flows-view > :nth-child(3) { grid-column: 1; grid-row: 3; }
+}
+
+@media (max-width: 979px) {
+  .workspace-shell > .chat:not([hidden]) {
+    position: absolute;
+    z-index: 9;
+    inset: var(--ws-header) 0 0 auto;
+    width: min(390px, calc(100% - var(--ws-rail)));
+    background: var(--panel-raised, var(--color-surface));
+    box-shadow: var(--shadow);
+  }
+}
+
+@media (max-width: 1120px) {
+  .workspace-shell .arch-canvas:has(.relations) .react-flow { width: 100% !important; }
+  .workspace-shell .arch-canvas .relations { inset: auto 10px 10px; width: auto; max-height: 30%; }
+  .workspace-shell .arch-canvas:has(.relations) .evidence-popover { right: 10px; }
+}
+
+@media (max-width: 780px) {
+  .workspace-shell { --ws-rail: 42px; }
+  .workspace-shell > .ws-tools {
+    position: absolute;
+    z-index: 8;
+    inset: 0 auto 0 var(--ws-rail);
+    width: min(272px, calc(100% - var(--ws-rail)));
+    box-shadow: var(--shadow);
+    animation: workspace-panel-in .14s ease-out;
+  }
+  .workspace-shell[data-hosted] > .ws-tools { inset-inline-start: 0; }
+  .workspace-shell > .ws-tools.ws-tools-explorer {
+    position: relative;
+    inset: auto;
+    width: clamp(132px, 32vw, 218px);
+    flex: 0 0 clamp(132px, 32vw, 218px);
+    box-shadow: none;
+  }
+  .workspace-shell .ws-head .ws-path,
+  .workspace-shell .ws-actions button > span { display: none; }
+  .workspace-shell .ws-head .ws-name { max-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell :is(.ws-feedback, .ws-tools, .chat, .canvas-spinner, .react-flow__edge-path) { animation: none !important; }
+}

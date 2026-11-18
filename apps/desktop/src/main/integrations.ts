@@ -9,6 +9,9 @@ import { resolveInside } from './fs/project-fs'
 export type { AgentId, IntegrationPlan, SkillTarget }
 
 type Json = Record<string, unknown>
+const OPENCODE_CONFIG_PATHS = [join('.opencode', 'opencode.jsonc'), join('.opencode', 'opencode.json'), 'opencode.jsonc', 'opencode.json']
+const openCodeConfigFile = (root: string): string =>
+  resolveInside(root, OPENCODE_CONFIG_PATHS.find((path) => existsSync(join(root, path))) ?? 'opencode.json')
 
 // Đối chiếu nguồn chính thức và giới hạn schema: docs/install-notes.md §Tích hợp trợ lý AI.
 const SPECS: Record<'claude' | 'cursor' | 'vscode' | 'opencode', { file: (root: string) => string; key: string; entry: (cmd: EngineCommand, args: string[]) => Json }> = {
@@ -16,7 +19,7 @@ const SPECS: Record<'claude' | 'cursor' | 'vscode' | 'opencode', { file: (root: 
   cursor: { file: (r) => join(r, '.cursor', 'mcp.json'), key: 'mcpServers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a }) },
   vscode: { file: (r) => join(r, '.vscode', 'mcp.json'), key: 'servers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a }) },
   opencode: {
-    file: (r) => (existsSync(join(r, 'opencode.jsonc')) && !existsSync(join(r, 'opencode.json')) ? join(r, 'opencode.jsonc') : join(r, 'opencode.json')),
+    file: openCodeConfigFile,
     key: 'mcp',
     entry: (c, a) => ({ type: 'local', command: [c.command, ...a] })
   }
@@ -77,25 +80,38 @@ export function planIntegration(agent: AgentId, projectPath: string, cmd: Engine
   const spec = SPECS[agent]
   const path = spec.file(projectPath)
   const entry = spec.entry(cmd, [...cmd.args, 'mcp', '--project', projectPath, '--data-dir', dataDir])
-  const snippet = JSON.stringify({ [spec.key]: { nexgraph: entry } }, null, 2)
+  const snippetFor = (nested: boolean): string =>
+    JSON.stringify({ [spec.key]: nested ? { servers: { nexgraph: entry } } : { nexgraph: entry } }, null, 2)
+  const defaultSnippet = snippetFor(agent === 'opencode')
   if (!existsSync(path)) {
-    return { agent, path, exists: false, status: 'new', after: `${snippet}\n`, snippet }
+    return { agent, path, exists: false, status: 'new', after: `${defaultSnippet}\n`, snippet: defaultSnippet }
   }
   const text = readFileSync(path, 'utf8')
   let root: unknown
   try {
     root = text.trim() === '' ? {} : JSON.parse(text)
   } catch {
-    return invalid(agent, path, snippet) // JSON hỏng hoặc có chú thích: không đoán, không ghi
+    return invalid(agent, path, defaultSnippet) // JSON hỏng hoặc có chú thích: không đoán, không ghi
   }
-  if (!isObject(root)) return invalid(agent, path, snippet)
-  const container = root[spec.key]
+  if (!isObject(root)) return invalid(agent, path, defaultSnippet)
+  const settings = root[spec.key]
+  if (settings !== undefined && !isObject(settings)) return invalid(agent, path, defaultSnippet)
+  // V2 đặt server trong mcp.servers. Giữ cấu trúc V1 khi tệp đã có các server dạng trực tiếp.
+  const legacy = agent === 'opencode' && settings?.servers === undefined &&
+    Object.keys(settings ?? {}).some((key) => key !== 'timeout')
+  const nested = agent === 'opencode' && !legacy
+  const snippet = snippetFor(nested)
+  const container = nested ? settings?.servers : settings
   if (container !== undefined && !isObject(container)) return invalid(agent, path, snippet)
   const current = container?.nexgraph
-  if (current !== undefined && isDeepStrictEqual(current, entry)) return { agent, path, exists: true, status: 'up_to_date', after: text, snippet }
+  const legacyNexgraph = nested ? settings?.nexgraph : undefined
+  if (legacyNexgraph === undefined && isDeepStrictEqual(current, entry)) return { agent, path, exists: true, status: 'up_to_date', after: text, snippet }
   // Gán vào đối tượng có sẵn: khoá cũ giữ nguyên giá trị và thứ tự, nexgraph thêm cuối (hoặc thay tại chỗ).
-  root[spec.key] = { ...(container ?? {}), nexgraph: entry }
-  return { agent, path, exists: true, status: current === undefined ? 'add' : 'update', after: `${JSON.stringify(root, null, 2)}\n`, snippet }
+  const servers = { ...container, nexgraph: entry }
+  root[spec.key] = nested ? { ...settings, servers } : servers
+  // Cấu hình lẫn hai dạng chỉ giữ một mục NexGraph để OpenCode không nhận cùng server hai lần.
+  if (legacyNexgraph !== undefined) delete (root[spec.key] as Json).nexgraph
+  return { agent, path, exists: true, status: current === undefined && legacyNexgraph === undefined ? 'add' : 'update', after: `${JSON.stringify(root, null, 2)}\n`, snippet }
 }
 
 export function applyIntegration(agent: AgentId, projectPath: string, cmd: EngineCommand, dataDir: string): IntegrationPlan {

@@ -4,6 +4,9 @@ import urllib.parse
 
 import pytest
 
+from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.store.graph_store import GraphStore
+
 
 @pytest.fixture
 def indexed(api, copy_fixture):
@@ -15,6 +18,35 @@ def indexed(api, copy_fixture):
 
 def q(s: str) -> str:
     return urllib.parse.quote(s, safe="")
+
+
+def test_unpublished_graph_rejects_readers(api, copy_fixture):
+    pid = api.open(copy_fixture("bookstore_app"))["project_id"]
+    for endpoint in ("stats", "search?q=main", "nodes/main", "neighbors?node=main",
+                     "code?file=lib/main.dart", "architecture", "changes?refresh=false",
+                     "report", "map", "flows"):
+        response = api.get(f"/v1/projects/{pid}/{endpoint}")
+        assert response.status_code == 409, endpoint
+        assert response.json()["error"]["code"] == "not_indexed", endpoint
+
+
+def test_legacy_cancelled_rebuild_does_not_report_old_success_as_ready(indexed):
+    api, pid, root = indexed
+    conn = open_graph_db(root / ".nexgraph" / "graph.db")
+    try:
+        store = GraphStore(conn)
+        run = store.begin_run()
+        store.clear_graph()
+        store.set_run_state(run, "huy")
+        assert store.last_completed_run() is not None
+    finally:
+        conn.close()
+
+    response = api.get(f"/v1/projects/{pid}/stats")
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "not_indexed"
+    (project,) = api.get("/v1/projects").json()
+    assert project["last_indexed_at"] is None
 
 
 def test_neighbors_of_file_node(indexed):

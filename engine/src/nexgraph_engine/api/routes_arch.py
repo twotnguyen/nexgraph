@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query, Request
 
-from nexgraph_engine.api.routes_graph import open_store
+from nexgraph_engine.api.routes_graph import model_payload, open_store
 from nexgraph_engine.query.contracts import architecture_json, evidence_json
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
@@ -8,8 +8,8 @@ router = APIRouter(prefix="/v1/projects/{project_id}")
 
 @router.get("/architecture")
 def architecture(project_id: str, request: Request, parent: str | None = None) -> dict:
-    with open_store(request, project_id) as (store, _):
-        return architecture_json(store.conn, parent)
+    with open_store(request, project_id) as (store, info):
+        return model_payload(request, store, info, architecture_json(store.conn, parent))
 
 
 @router.get("/architecture/evidence")

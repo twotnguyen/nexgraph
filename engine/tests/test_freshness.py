@@ -38,6 +38,15 @@ def test_fresh_right_after_index(git_project):
     assert f["stale"] is False and f["changed_files"] == 0 and f["head_commit"] == f["index_commit"]
 
 
+def test_source_change_is_detected_without_git_metadata(git_project, monkeypatch):
+    store, root = git_project
+    monkeypatch.setattr("nexgraph_engine.store.freshness._git_head", lambda _root: None)
+    (root / "util.py").write_text("def helper(x):\n    return x + 3\n")
+    result = freshness(store, root)
+    assert result["head_commit"] is None
+    assert result["stale"] and result["changed_files"] == 1
+
+
 def test_stale_after_edit_and_after_new_commit(git_project):
     store, root = git_project
     (root / "util.py").write_text("def helper(x):\n    return x + 2\n")

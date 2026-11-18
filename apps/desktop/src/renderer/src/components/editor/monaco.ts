@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference path="./monaco-json.d.ts" />
 // Gói tối thiểu: lõi soạn thảo + vài tính năng soạn thảo + tô cú pháp Monarch (không worker ngôn ngữ, không LSP).
 import * as monaco from 'monaco-editor/editor/editor.api.js'
 import 'monaco-editor/editor/contrib/find/browser/findController.js'
@@ -20,14 +21,36 @@ import 'monaco-editor/languages/definitions/markdown/register.js'
 import 'monaco-editor/languages/definitions/html/register.js'
 import 'monaco-editor/languages/definitions/css/register.js'
 import 'monaco-editor/languages/definitions/yaml/register.js'
-// JSON không có Monarch: chỉ bật tokenize trong luồng chính, tắt mọi tính năng dùng worker (không language server).
-import { jsonDefaults } from 'monaco-editor/languages/features/json/register.js'
-
-jsonDefaults.setDiagnosticsOptions({ validate: false, allowComments: true, schemas: [], enableSchemaRequest: false, schemaValidation: 'ignore', comments: 'ignore', trailingCommas: 'ignore' })
-jsonDefaults.setModeConfiguration({ documentFormattingEdits: false, documentRangeFormattingEdits: false, completionItems: false, hovers: false, documentSymbols: false, tokens: true, colors: false, foldingRanges: false, diagnostics: false, selectionRanges: false })
+import { createTokenizationSupport } from 'monaco-editor/languages/features/json/tokenization.js'
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
+import { currentTheme, observeTheme } from '../../state/useTheme'
 
 ;(self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = { getWorker: () => new EditorWorker() }
+
+// Đăng ký trực tiếp bộ tô cú pháp JSON. JSON mode của Monaco nạp thêm các dịch vụ IDE sau khi editor độc lập đã khởi tạo.
+monaco.languages.register({
+  id: 'json',
+  extensions: ['.json', '.jsonc', '.bowerrc', '.jshintrc', '.jscsrc', '.eslintrc', '.babelrc', '.har'],
+  aliases: ['JSON', 'json'],
+  mimetypes: ['application/json']
+})
+monaco.languages.onLanguage('json', () => {
+  monaco.languages.setTokensProvider('json', createTokenizationSupport(true))
+  monaco.languages.setLanguageConfiguration('json', {
+    wordPattern: /-?\d*\.\d\w*|[^\[\]{}:",\s]+/g,
+    comments: { lineComment: '//', blockComment: ['/*', '*/'] },
+    brackets: [['{', '}'], ['[', ']']],
+    autoClosingPairs: [
+      { open: '{', close: '}', notIn: ['string'] },
+      { open: '[', close: ']', notIn: ['string'] },
+      { open: '"', close: '"', notIn: ['string'] }
+    ]
+  })
+})
+
+const editorTheme = () => currentTheme() === 'dark' ? 'vs-dark' : 'vs'
+const stopObservingTheme = observeTheme(() => monaco.editor.setTheme(editorTheme()))
+import.meta.hot?.dispose(stopObservingTheme)
 
 export interface EditorHandle {
   getValue(): string
@@ -50,13 +73,13 @@ export function languageFor(file: string): string {
 export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean }): EditorHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const editor = monaco.editor.create(el, {
-    value: opts.value, language: opts.language, readOnly: opts.readOnly, theme: 'vs',
+    value: opts.value, language: opts.language, readOnly: opts.readOnly, theme: editorTheme(),
     automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
     ...(font ? { fontFamily: font } : {})
   })
   const hit = editor.createDecorationsCollection()
   return {
-    getValue: () => editor.getValue(),
+    getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
     setValue: (v) => editor.setValue(v),
     onChange: (cb) => void editor.onDidChangeModelContent(() => cb()),
     revealLines: (start, end = start) => {
@@ -80,7 +103,7 @@ export interface DiffHandle {
 export function createDiffEditor(el: HTMLElement, opts: { before: string; after: string; language: string }): DiffHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const diff = monaco.editor.createDiffEditor(el, {
-    readOnly: true, theme: 'vs', automaticLayout: true, renderSideBySide: false,
+    readOnly: true, theme: editorTheme(), automaticLayout: true, renderSideBySide: false,
     minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
     ...(font ? { fontFamily: font } : {})
   })

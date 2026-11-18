@@ -1,17 +1,27 @@
-import { isAbsolute, relative, sep } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { Type } from 'typebox'
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent' // chỉ kiểu: pi là ESM, không import tĩnh giá trị
+import type { AgentMode } from '../../shared/agent-types'
 import type { EngineApi } from '../engine/api'
-import type { FileContent } from '../../shared/api'
 import { FsError, isProtectedRel, readProjectFile, resolveInside, writeProjectFile } from '../fs/project-fs'
 import { TOOL_DEFS, runTool } from '../ai/tools'
-import type { ApprovedWrite, ApprovalGate } from './approval'
+import { toProjectRelative, type ApprovedWrite, type ApprovalGate, type WritePreview } from './approval'
+import { registerScopedFileTools } from './file-tools'
 
-const GRAPH_TOOLS: string[] = TOOL_DEFS.map((t) => t.function.name)
-const ALLOWED = new Set([...GRAPH_TOOLS, 'read', 'grep', 'find', 'ls', 'edit', 'write', 'bash'])
+const GRAPH_TOOLS = TOOL_DEFS.map((t) => t.function.name)
+export const ASK_TOOLS = ['read', 'grep', 'find', 'ls']
+export const EDIT_TOOLS = [...ASK_TOOLS, 'edit', 'write']
+export const toolsFor = (mode: AgentMode): string[] => [...(mode === 'edit' ? EDIT_TOOLS : ASK_TOOLS), ...GRAPH_TOOLS]
+const ALLOWED = new Set(toolsFor('edit'))
 
-export function createNexgraphExtension(deps: { api: EngineApi; projectId: string; root: string; gate: ApprovalGate }): (pi: ExtensionAPI) => void {
+export function createNexgraphExtension(deps: {
+  api: EngineApi
+  projectId: string
+  root: string
+  gate: ApprovalGate
+  onWriteConflict?: (message: string) => void
+}): (pi: ExtensionAPI) => void {
   return (pi) => {
     for (const { function: f } of TOOL_DEFS) {
       pi.registerTool({
@@ -25,6 +35,7 @@ export function createNexgraphExtension(deps: { api: EngineApi; projectId: strin
         }
       })
     }
+    registerScopedFileTools(pi, deps.root, () => deps.api.aiSourceExcludes(deps.projectId))
 
     // Ghi đè write/edit dựng sẵn của pi (registry đặt tool extension LÊN TRÊN builtin cùng tên:
     // agent-session.ts _refreshToolRegistry — builtin trước, extension sau). Execute revalidate đúng
@@ -64,19 +75,23 @@ export function createNexgraphExtension(deps: { api: EngineApi; projectId: strin
       execute: (id, params) => executeApprovedWrite(deps, approvedWrites, id, params)
     })
 
-    // Không chuẩn hoá, không tin: cổng duyệt cho qua tên lạ nên chặn ở đây trước.
+    // Dùng đúng allowlist cho cả tool do mô hình gọi trực tiếp.
     pi.on('tool_call', async (event) => {
       if (!ALLOWED.has(event.toolName)) return { block: true, reason: `Tool "${event.toolName}" không được phép dùng trong NexGraph` }
+      const writing = event.toolName === 'write' || event.toolName === 'edit'
+      const duplicate = { block: true, reason: 'Mã thao tác ghi bị trùng' }
+      if (writing && approvedWrites.has(event.toolCallId)) return duplicate
       try {
         if (PATH_TOOLS.has(event.toolName)) {
           const blocked = pinPath(deps.root, event.toolName, event.input)
           if (blocked) return { block: true, reason: blocked }
         }
+        if (event.toolName !== 'write' && event.toolName !== 'edit') return
         const d = await deps.gate.check(event.toolName, event.input)
         if (!d.allow) return { block: true, reason: d.reason || 'Thao tác bị từ chối' }
         if (d.approved) {
-          // Giới hạn rò rỉ bộ nhớ nếu lượt bị hủy giữa hook và execute: giữ tối đa 64 bản duyệt gần nhất.
-          if (approvedWrites.size >= 64) approvedWrites.delete(approvedWrites.keys().next().value!)
+          if (approvedWrites.has(event.toolCallId)) return duplicate
+          if (approvedWrites.size >= 64) return { block: true, reason: 'Quá nhiều thao tác ghi đang chờ thực thi' }
           approvedWrites.set(event.toolCallId, d.approved)
         }
         return undefined
@@ -90,13 +105,11 @@ export function createNexgraphExtension(deps: { api: EngineApi; projectId: strin
 /**
  * Execute write/edit an toàn: consume đúng bản duyệt (toolCallId trùng với tool_call hook đã lưu),
  * revalidate tại thời điểm ghi — đường dẫn canonical sau realpath lại phải trùng đường dẫn đã duyệt
- * (bắt cả symlink trỏ ngoài lẫn tráo sang tệp khác trong dự án, kể cả khi nội dung `before` giống
- * nhau), nội dung hiện tại phải còn đúng `before` đã duyệt, rồi ghi `after` (chuẩn hoá LF) qua
- * writeProjectFile giữ eol/bom/mtime của tệp hiện hữu (ghi nguyên tử, mkdir cha, expectedMtimeMs).
- * Không dùng fuzzy matching của pi sau preview.
+ * (kể cả khi tệp khác có cùng nội dung). Dịch vụ tệp đối chiếu phiên bản đã duyệt,
+ * hoặc yêu cầu tệp vẫn chưa tồn tại, rồi ghi đúng `after` của bản xem trước.
  */
 async function executeApprovedWrite(
-  deps: { root: string; gate: ApprovalGate },
+  deps: { root: string; onWriteConflict?: (message: string) => void },
   approvedWrites: Map<string, ApprovedWrite>,
   toolCallId: string,
   params: unknown
@@ -106,45 +119,47 @@ async function executeApprovedWrite(
   approvedWrites.delete(toolCallId)
   const p = (params as { path?: unknown } | null)?.path
   if (typeof p !== 'string') throw new Error('Thiếu đường dẫn hợp lệ')
-  let absReal: string
-  try {
-    // resolveInside trả realpath tuyệt đối; phải DÙNG kết quả: so đường dẫn canonical hiện tại với
-    // đường dẫn đã duyệt (snap.path posix) — symlink tráo sang tệp khác TRONG dự án nhưng cùng
-    // nội dung `before` cũng bị từ chối, chứ không chỉ symlink trỏ ra ngoài dự án.
-    absReal = resolveInside(deps.root, toRel(deps.root, p))
-  } catch {
-    throw new Error('Đường dẫn nằm ngoài dự án')
+  const assertApprovedPath = (rel: string) => {
+    const abs = resolveInside(deps.root, rel)
+    if (relative(realpathSync.native(deps.root), abs).split(sep).join('/') !== snap.path) {
+      throw new FsError('conflict', 'Đường dẫn đã thay đổi từ lúc xem trước duyệt')
+    }
   }
-  const relReal = relative(realpathSync(deps.root), absReal).split(sep).join('/')
-  if (relReal !== snap.path) throw new Error('Đường dẫn đã thay đổi từ lúc xem trước duyệt; hãy chạy lại thao tác')
-  let file: FileContent | null = null
   try {
-    const f = await readProjectFile(deps.root, snap.path)
-    if (f.readOnly) throw new Error(`Tệp không thể sửa (${f.reason ?? 'chỉ đọc'})`)
-    file = f
+    snap.assertCurrent()
+    assertApprovedPath(toProjectRelative(deps.root, p))
+    await writeProjectFile(deps.root, snap.path, snap.after, {
+      eol: snap.file?.eol ?? '\n',
+      bom: snap.file?.bom ?? false,
+      expectedVersion: snap.file?.version ?? null
+    }, { assertNotCancelled: () => {
+      snap.assertCurrent()
+      assertApprovedPath(snap.path)
+    } })
   } catch (e) {
-    if (!(e instanceof FsError && e.code === 'file_not_found')) throw e
+    if (e instanceof FsError && (e.code === 'conflict' || e.code === 'outside_project' || e.code === 'protected_path')) {
+      const reason = e.code === 'outside_project' ? 'Đường dẫn nằm ngoài dự án'
+        : e.code === 'protected_path' ? 'Đường dẫn dẫn tới tệp hoặc thư mục được bảo vệ' : e.message
+      const message = `${reason}. Chưa ghi thay đổi. Hãy đọc lại tệp và duyệt bản xem trước mới.`
+      deps.onWriteConflict?.(message)
+      throw new FsError('conflict', message)
+    }
+    throw e
   }
-  if (!!file !== !!snap.file || (file?.text ?? '') !== snap.before) throw new Error('Tệp đã thay đổi từ lúc xem trước duyệt; hãy chạy lại thao tác')
-  // after có thể là CRLF thô (previewWrite trả content nguyên văn cho write): chuẩn hoá LF rồi ghi.
-  // eol/bom/mtime lấy từ SNAPSHOT thời điểm preview (snap.file), không phải lần đọc execute — nên
-  // tệp đổi trên đĩa (kể cả cùng nội dung) giữa preview và execute bị writeProjectFile từ chối
-  // (conflict theo expectedMtimeMs). Vắng snap.file = write tạo tệp mới → LF, không BOM.
-  await writeProjectFile(deps.root, snap.path, toLF(snap.after), snap.file ? { eol: snap.file.eol, bom: snap.file.bom, expectedMtimeMs: snap.file.mtimeMs } : { eol: '\n', bom: false })
-  return { content: [{ type: 'text', text: `Đã ghi ${relReal}` }], details: {} }
+  return { content: [{ type: 'text', text: `Đã ghi ${snap.path}` }], details: {} }
 }
 
 // Các tool dựng sẵn của pi có trường `path` (edit/write/read bắt buộc; ls/grep/find tuỳ chọn). Đều qua resolveToCwd
 // (coding-agent/src/core/tools/path-utils.ts:46-48 → utils/paths.ts:120-150) nên cùng bị viết lại.
 const PATH_TOOLS = new Set(['read', 'write', 'edit', 'ls', 'grep', 'find'])
 const OPTIONAL_PATH = new Set(['ls', 'grep', 'find'])
+const PROTECTED_PATH = 'Đường dẫn tới tệp hoặc thư mục được bảo vệ (.git, .nexgraph, .env, khoá…), thao tác bị chặn'
 // Chép từ utils/paths.ts:7 (UNICODE_SPACES); pi đổi các ký tự này thành dấu cách thường.
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/
 
 /**
  * Trả lý do chặn (tiếng Việt) hoặc undefined. Chặn path mà pi sẽ viết lại (@, ~, file:, dấu cách Unicode) thay vì tự chuẩn hoá,
- * chặn path ngoài root, rồi ghi path tuyệt đối đã kiểm vào input: pi chạy đúng chuỗi đó (agent-loop.ts:742,770 dùng chung một args;
- * path tuyệt đối đi qua resolveToCwd nguyên vẹn, paths.ts:150).
+ * chặn path ngoài root. Tool đọc giữ tên alias để kiểm tra luật bỏ qua trên cả alias và đích thật.
  */
 function pinPath(root: string, tool: string, input: unknown): string | undefined {
   const i = input as { path?: unknown } | null
@@ -155,33 +170,23 @@ function pinPath(root: string, tool: string, input: unknown): string | undefined
   if (p.startsWith('@') || p.startsWith('~') || /^file:/i.test(p) || UNICODE_SPACES.test(p)) return 'Đường dẫn chứa ký tự mà pi sẽ viết lại (@, ~, file:, dấu cách Unicode), thao tác bị chặn'
   let rel: string
   try {
-    rel = toRel(root, p)
+    rel = toProjectRelative(root, p)
   } catch {
     return 'Đường dẫn nằm ngoài dự án'
   }
-  if (isProtectedRel(rel)) return 'Đường dẫn tới tệp hoặc thư mục được bảo vệ (.git, .nexgraph, .env, khoá…), thao tác bị chặn'
+  if (isProtectedRel(rel)) return PROTECTED_PATH
   let abs: string
   try {
     abs = resolveInside(root, rel)
-  } catch {
+  } catch (error) {
+    if (error instanceof FsError && error.code === 'protected_path') return PROTECTED_PATH
     return 'Đường dẫn nằm ngoài dự án'
   }
   if (UNICODE_SPACES.test(abs)) return 'Đường dẫn tuyệt đối chứa dấu cách Unicode, thao tác bị chặn'
-  // read: path phải tồn tại. pi resolveReadPathAsync (path-utils.ts:72-101) thử biến thể dấu nháy thẳng→cong và NFD
-  // khi path vắng — chặn ở đây để không bao giờ đọc tệp khác mà gate chưa kiểm (ví dụ a'b vắng nhưng a’b là symlink ngoài).
+  // Không thử biến thể chính tả của tệp chưa tồn tại.
   if (tool === 'read' && !existsSync(abs)) return 'Tệp không tồn tại'
-  i.path = abs
+  i.path = tool === 'write' || tool === 'edit' ? abs : resolve(realpathSync.native(root), rel)
   return undefined
-}
-
-/** Đường dẫn tuyệt đối nằm trong root thì đổi sang tương đối (resolveInside từ chối tuyệt đối); ngoài root thì ném. */
-function toRel(root: string, p: string): string {
-  if (!isAbsolute(p)) return p
-  for (const r of [root, realpathSync(root)]) {
-    const rel = relative(r, p)
-    if (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel)) return rel
-  }
-  throw new FsError('outside_project', `Đường dẫn nằm ngoài dự án: ${p}`)
 }
 
 // Như normalizeToLF của pi (edit-diff.ts:11-13). before/after của bản xem trước là văn bản đã chuẩn hoá LF; UI diff hiển thị LF là chấp nhận được.
@@ -215,25 +220,24 @@ function applyEdits(before: string, edits: Edit[]): string {
   return out
 }
 
-export async function previewWrite(root: string, tool: 'edit' | 'write', input: unknown): Promise<{ path: string; before: string; after: string; file?: Pick<FileContent, 'eol' | 'bom' | 'mtimeMs'> }> {
+export async function previewWrite(root: string, tool: 'edit' | 'write', input: unknown): Promise<WritePreview> {
   const i = (input ?? {}) as { path?: unknown; content?: unknown; edits?: unknown }
   if (typeof i.path !== 'string') throw new Error('Thiếu đường dẫn tệp')
-  const rel = toRel(root, i.path)
-  resolveInside(root, rel)
+  const abs = resolveInside(root, toProjectRelative(root, i.path))
+  const path = relative(realpathSync.native(root), abs).split(sep).join('/')
   let before = ''
-  let file: Pick<FileContent, 'eol' | 'bom' | 'mtimeMs'> | undefined
+  let file: WritePreview['file']
   try {
-    const f = await readProjectFile(root, rel)
+    const f = await readProjectFile(root, path)
     if (f.readOnly) throw new Error(`Không xem trước được tệp (${f.reason ?? 'chỉ đọc'})`)
     before = toLF(f.text)
-    file = { eol: f.eol, bom: f.bom, mtimeMs: f.mtimeMs }
+    file = { eol: f.eol, bom: f.bom, version: f.version }
   } catch (e) {
     if (!(tool === 'write' && e instanceof FsError && e.code === 'file_not_found')) throw e
   }
-  const path = rel.split(sep).join('/')
   if (tool === 'write') {
     if (typeof i.content !== 'string') throw new Error('Thiếu nội dung')
-    return { path, before, after: i.content, file }
+    return { path, before, after: toLF(i.content), file }
   }
   if (!Array.isArray(i.edits)) throw new Error('Thiếu edits')
   return { path, before, after: applyEdits(before, i.edits as Edit[]), file }

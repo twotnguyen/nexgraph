@@ -4,9 +4,10 @@
   "version": "0.1.0",
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.19.0"
   },
   "scripts": {
+    "setup:dev": "uv sync --project engine --locked && uv run --project engine --locked python -X utf8 -m nexgraph_engine.cli --help && pnpm install --frozen-lockfile && pnpm --filter @nexgraph/desktop exec install-electron",
     "dev": "pnpm --filter @nexgraph/desktop dev",
     "test": "pnpm --filter @nexgraph/desktop test",
     "typecheck": "pnpm --filter @nexgraph/desktop typecheck"

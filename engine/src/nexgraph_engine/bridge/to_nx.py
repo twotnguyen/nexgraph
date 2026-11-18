@@ -49,10 +49,17 @@ def _candidate_pks(store: GraphStore, scope: Scope) -> list[int]:
     if scope.kind == "all":
         return [r[0] for r in conn.execute(f"SELECT ma_nut FROM nut WHERE {skip}", _SKIP_KINDS)]
     if scope.kind == "community":
-        if not scope.value or not scope.value.startswith("com:") or not scope.value[4:].isdigit():
+        if not scope.value or not scope.value.startswith("com:"):
+            raise KeyError(scope.value)
+        raw = scope.value[4:]
+        if not raw.isascii() or not raw.isdecimal() or len(raw) > 19:
+            raise KeyError(scope.value)
+        community = int(raw)
+        if community > 2**63 - 1 or not conn.execute(
+                "SELECT 1 FROM khoi_kien_truc WHERE ma_khoi = ?", (community,)).fetchone():
             raise KeyError(scope.value)
         return [r[0] for r in conn.execute(f"SELECT ma_nut FROM nut WHERE ma_khoi = ? AND {skip}",
-                                           (int(scope.value[4:]), *_SKIP_KINDS))]
+                                           (community, *_SKIP_KINDS))]
     hood = store.neighbors(scope.value or "", depth=2, limit=max(scope.limit, 1))  # KeyError khi nút lạ
     ids = [n.id for n in hood.nodes if n.kind.value not in _SKIP_KINDS]
     if not ids:

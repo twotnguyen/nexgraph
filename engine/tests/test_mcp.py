@@ -100,6 +100,41 @@ def test_not_indexed_project(tmp_path):
         build_server(tmp_path, None)
 
 
+def test_mcp_tools_require_a_published_graph(api, copy_fixture, tmp_path):
+    root = copy_fixture("bookstore_app")
+    pid = api.open(root)["project_id"]
+    server = build_server(root, tmp_path / "appdata")
+
+    before = call(server, "graph_stats", {})
+    assert before.isError and "chưa được lập chỉ mục xong" in before.content[0].text
+
+    assert api.index(pid)["state"] == "done"
+    assert payload(call(server, "graph_stats", {}))["files"] == 9
+
+
+def test_mcp_app_dir_fallback_reads_registry_read_only(api, copy_fixture, tmp_path, monkeypatch):
+    from nexgraph_engine.store import projects
+
+    root = copy_fixture("bookstore_app")
+
+    def app_dir_storage(registry, _root, project_id, _in_project_db):
+        return registry._app_dir_db(project_id), "app_dir"
+
+    monkeypatch.setattr(projects.ProjectRegistry, "_create_storage", app_dir_storage)
+    project = api.open(root)
+    assert project["storage"] == "app_dir"
+    assert api.index(project["project_id"])["state"] == "done"
+    open_db = projects.open_app_db
+
+    def read_only(path, *, read_only=False):
+        assert read_only
+        return open_db(path, read_only=read_only)
+
+    with monkeypatch.context() as m:
+        m.setattr(projects, "open_app_db", read_only)
+        assert payload(call(build_server(root, tmp_path / "appdata"), "graph_stats", {}))["files"] == 9
+
+
 def test_stdio_cli(indexed):
     root, data_dir = indexed
     params = StdioServerParameters(command=sys.executable,

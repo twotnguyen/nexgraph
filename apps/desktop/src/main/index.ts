@@ -3,12 +3,13 @@ import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
 import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers } from './ipc'
 import { closesAgents, confirmUnload } from './unload-guard'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
 import { getHealth } from './engine/client'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { createConnection } from 'node:net'
 import { tmpdir } from 'node:os'
-import { runRendererSmoke } from './smoke-desktop'
+import { runRendererSmoke, runWorkspaceAcceptanceSmoke } from './smoke-desktop'
 import { EngineSupervisor } from './engine/supervisor'
 import { runSmoke } from './smoke'
 
@@ -61,7 +62,8 @@ async function createWindow(show = true): Promise<void> {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      webgl: !app.commandLine.hasSwitch('disable-webgl')
     }
   })
   const win = mainWindow
@@ -85,7 +87,7 @@ registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataD
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
-// NEXGRAPH_SMOKE=1: kiểm engine; script smoke:packaged còn kiểm fs/agent qua preload + IPC thật.
+// NEXGRAPH_SMOKE=1: kiểm engine; script smoke:packaged còn kiểm index/fs/agent qua preload và IPC thật.
 async function smoke(): Promise<void> {
   const watchdog = setTimeout(() => {
     console.log('SMOKE FAIL timeout 90s')
@@ -94,24 +96,56 @@ async function smoke(): Promise<void> {
   try {
     await supervisor.startEngine()
     const handle = supervisor.getHandle()
-    if (!handle) throw new Error('engine not ready')
-    const root = mkdtempSync(join(tmpdir(), 'nexgraph-smoke-project-'))
+    if (!handle) {
+      const status = supervisor.getStatus()
+      throw new Error(status.state === 'error' ? status.message : 'engine not ready')
+    }
+    let root: string | undefined
+    let engineExited = false
+    handle.onExit(() => { engineExited = true })
+    let result: string
     try {
+      root = mkdtempSync(join(process.env.NEXGRAPH_SMOKE_SOURCE_PARENT ?? tmpdir(), 'nexgraph-smoke-Đồ án-'))
       await getHealth(handle)
       const engine = await runSmoke(handle)
       const url = process.env.NEXGRAPH_SMOKE_LLM_URL
       let desktop = ''
       if (url) {
         await createWindow(false)
+        const win = mainWindow!
         const script = `(${runRendererSmoke.toString()})(window.nexgraph, ${JSON.stringify(root)}, ${JSON.stringify(url)})`
-        desktop = await mainWindow!.webContents.executeJavaScript(script) as string
+        desktop = await win.webContents.executeJavaScript(script) as string
+        await win.loadURL(win.webContents.getURL())
+        const check = `(${runWorkspaceAcceptanceSmoke.toString()})(${JSON.stringify(basename(root))}, ${app.commandLine.hasSwitch('disable-webgl')}, window.nexgraph)`
+        desktop += ` ${await win.webContents.executeJavaScript(check) as string}`
       }
-      console.log(`${engine}${desktop ? ` ${desktop}` : ''}`)
+      result = `${engine}${desktop ? ` ${desktop}` : ''}`
     } finally {
+      stopAllWatchers()
       closeAllAgents()
-      await supervisor.stop()
-      rmSync(root, { recursive: true, force: true })
+      try {
+        await supervisor.stop()
+      } finally {
+        if (root) rmSync(root, { recursive: true, force: true, maxRetries: 3 })
+      }
     }
+    if (!engineExited) throw new Error(`engine did not exit (PID ${handle.pid})`)
+    await new Promise<void>((resolve, reject) => {
+      const address = new URL(handle.baseUrl)
+      const connection = createConnection({ host: address.hostname, port: Number(address.port) })
+      connection.setTimeout(2_000)
+      connection.once('connect', () => {
+        connection.destroy()
+        reject(new Error('engine still accepts connections on its loopback port'))
+      })
+      connection.once('error', (error: NodeJS.ErrnoException) => error.code === 'ECONNREFUSED' ? resolve() : reject(error))
+      connection.once('timeout', () => {
+        connection.destroy()
+        reject(new Error('engine shutdown loopback probe timed out'))
+      })
+    })
+    console.log(result)
+    console.log(`SMOKE ENGINE STOPPED pid=${handle.pid}`)
     clearTimeout(watchdog)
     app.exit(0)
   } catch (err) {

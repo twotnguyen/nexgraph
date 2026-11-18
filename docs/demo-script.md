@@ -1,26 +1,72 @@
-# Kịch bản demo NexGraph (≤ 5 phút)
+# Kịch bản demo NexGraph
 
-Dự án demo: bản sao `ecommerce-backend-nestjs` (TypeScript, 268 tệp), lập chỉ mục sẵn trước khi vào phòng. Bản sao có `git init` + một commit để thẻ Thay đổi chạy theo HEAD. Máy demo: macOS. Chuẩn bị 10 phút trước: mở app, kiểm tra **Cài đặt → Tài khoản AI** bằng API key hoặc nhà cung cấp tuỳ chỉnh, chọn model, kiểm tra kết nối, tắt thông báo hệ thống. Không dùng OAuth làm đường demo chính.
+Dùng **NexGraph 0.1.0 Electron/Monaco** từ [bộ cài đúng commit bàn giao](release/README.md). Chạy trên bản sao dự án. Ghi tên và hash bộ cài, commit NexGraph, commit hoặc tên fixture của dự án, hệ điều hành và provider trước mỗi lượt. [Biên bản nghiệm thu](release/acceptance/2026-11-18.md).
 
-| # | Bước (spec §1.2) | Thao tác cụ thể | Mục tiêu | Dự phòng |
-|---|---|---|---|---|
-| 1 | Mở app, chọn thư mục | Màn **Dự án** → `Mở thư mục…` → chọn bản sao NestJS. Dự án đã lập chỉ mục nên vào thẳng **Tổng quan**: đọc số tệp · node · cạnh. | 0:30 | Dự án không có trong danh sách "Dự án gần đây" → mở lại thư mục; nếu hỏi lập chỉ mục, bấm `Dựng graph` (≈ 1 s với tầng S, đã đo 0,98 s). |
-| 2 | Bản đồ kiến trúc | Thẻ **Kiến trúc** → `Xem`: màn gốc có các khối `src`, `test` và hai tệp cấu hình; bấm `src` rồi `apps` để đi xuống các module; bấm một mũi tên xem bằng chứng. Quay lại, mở thẻ **Bản đồ** để cho thấy toàn cảnh. | 1:00 | Bản đồ không hiện (WebGL lỗi) → app báo `onUnsupported` và dùng thẻ Kiến trúc; chỉ nói về Kiến trúc. |
-| 3 | Hỏi "luồng đăng nhập chạy thế nào?" | Mở thẻ **Luồng** → chọn `signIn` → Phát qua các cạnh thật. Mở **Agent** (Ctrl/Cmd+L), giữ chế độ **Hỏi**, đồng ý gửi mã rồi hỏi. Bấm chip trích dẫn: tệp mở trong Monaco đúng dòng; bấm Tô luồng để xem đường đi trên graph. | 1:30 | AI mất mạng: dùng thẻ Luồng, không suy diễn mũi tên. Khi kiểm thử có thể chạy `node apps/desktop/scripts/fake-llm.mjs` rồi thêm provider tuỳ chỉnh với URL `/v1`; phải nói rõ đó là LLM giả, không coi là kết quả AI thật. |
-| 4 | Sửa trong NexGraph, có duyệt | Mở `src/common/utils/string-util/string-util.service.ts` từ Cây, sửa một dòng không đổi hành vi và Cmd/Ctrl+S. Sang Agent → **Sửa**, đọc cảnh báo không có sandbox; nhờ sửa một hàm nhỏ. Đọc diff và vùng ảnh hưởng agent trình bày, bấm **Duyệt**. Tệp mở tự nạp lại nếu sạch; **Thay đổi** hiện vùng ảnh hưởng + test liên quan. Yêu cầu sửa lần nữa, bấm **Từ chối** và xác nhận tệp không đổi. | 1:00 | Agent lỗi: chỉ sửa tay trong Monaco. Thay đổi chưa hiện → Làm mới; không ghi đè thẻ đang sửa khi có thanh xung đột. Trước mỗi lần demo dùng bản sao sạch; không hoàn tác tự động trên dự án thật. |
-| 5 | Slide số liệu đánh giá | Chuyển sang slide: bảng độ đúng, hiệu năng, agent có/không MCP (số từ `2026-12-danh-gia.md`). | 0:30 | Slide PDF xuất sẵn trong máy. |
+## Kiểm nhanh bằng fixture Python
 
-Tổng mục tiêu: 4:30, còn 0:30 dư.
+Fixture `engine/tests/fixtures/flow_app` dùng để thử Monaco, luồng, trích dẫn và duyệt chỉnh sửa với engine kèm bộ cài và mô hình giả. Cài NexGraph trước theo [hướng dẫn phát hành](release/README.md#tải-đúng-bộ-cài). Dùng checkout cùng commit để lấy fixture và script máy chủ giả. Tạo bản sao và hồ sơ thử riêng mỗi lượt.
 
-## Phương án khi hội đồng yêu cầu dự án khác
-Lập chỉ mục trực tiếp một dự án nhỏ (tầng S, < 60 s): bấm `Mở thư mục…` chọn dự án, theo dõi thanh tiến độ hai giai đoạn rồi đi lại bước 2–4. Dự án có ngôn ngữ ngoài ưu tiên → app chạy ở mức "graph chung" và có thông báo mức hỗ trợ.
+Mở một terminal ở gốc repo và khởi động máy chủ giả cục bộ. Giữ terminal này mở trong các lượt cần AI.
 
-## Kết quả kiểm (ghi sau khi chạy)
-Xem mục "Kịch bản demo" trong `docs/benchmarks/2026-12-danh-gia.md`: những gì đã chạy bằng engine thật, những gì **chưa** chạy trên cửa sổ Electron.
+```sh
+node apps/desktop/scripts/fake-llm.mjs 8787
+```
 
-### Kiểm bản editor + agent
+Trong terminal thứ hai, cũng ở gốc repo, tạo bản sao có đường dẫn tiếng Việt và khoảng trắng rồi mở executable đã cài. Ghi lại đường dẫn fixture mà lệnh in ra.
 
-- [ ] Chạy đủ năm bước trên bản đóng gói macOS lần 1, ghi thời gian và ảnh.
-- [ ] Lần 2: thử cả Duyệt/Từ chối, kiểm tệp trên đĩa.
-- [ ] Lần 3: tắt mạng ở lượt Hỏi, dùng phương án dự phòng; kiểm nội dung chưa lưu còn nguyên khi đổi thẻ.
-- [ ] Kiểm riêng provider thật/OAuth khi có tài khoản; LLM giả chỉ chứng minh luồng tích hợp.
+**Windows (PowerShell)**
+
+```powershell
+$app = (Get-Item -LiteralPath (Read-Host 'Đường dẫn đầy đủ đến NexGraph.exe đã cài')).FullName
+$demo = Join-Path ([System.IO.Path]::GetTempPath()) ('nexgraph-demo-' + [guid]::NewGuid())
+$fixture = Join-Path $demo 'Đồ án\flow app'
+New-Item -ItemType Directory -Path (Split-Path $fixture -Parent) -Force | Out-Null
+Copy-Item -LiteralPath 'engine\tests\fixtures\flow_app' -Destination $fixture -Recurse
+$env:NEXGRAPH_USER_DATA_DIR = Join-Path $demo 'user-data'
+$env:NEXGRAPH_DATA_DIR = Join-Path $demo 'engine-data'
+$env:NEXGRAPH_ALLOW_HTTP_PROVIDER = '1'
+$fixture
+& $app
+```
+
+**macOS**
+
+```sh
+app='/Applications/NexGraph.app'
+demo=$(mktemp -d)
+fixture="$demo/Đồ án/flow app"
+mkdir -p "$demo/Đồ án"
+cp -R engine/tests/fixtures/flow_app "$fixture"
+printf '%s\n' "$fixture"
+NEXGRAPH_USER_DATA_DIR="$demo/user-data" NEXGRAPH_DATA_DIR="$demo/engine-data" \
+  NEXGRAPH_ALLOW_HTTP_PROVIDER=1 "$app/Contents/MacOS/NexGraph"
+```
+
+1. Trong app, kiểm engine sẵn sàng, mở bản sao fixture và lập chỉ mục. Xem **Tìm kiếm**, **Kiến trúc** và **Luồng** trước khi cấu hình AI. Vào **Cài đặt → Tài khoản AI → Nhà cung cấp tuỳ chỉnh**, thêm Base URL `http://127.0.0.1:8787/v1` và model `fake`, để trống API key. Lưu, chọn model và bấm **Kiểm tra kết nối**.
+2. Ở **Luồng**, tìm `login`. Mở Agent ở chế độ **Hỏi**, đồng ý gửi dữ liệu cho endpoint cục bộ rồi hỏi về luồng đăng nhập. Kiểm trích dẫn hợp lệ mở đúng dòng trong Monaco và **Tô luồng** tô các cạnh của graph. Máy chủ giả cố ý trả thêm một trích dẫn tới tệp không tồn tại để kiểm tra app không cho mở chip đó.
+3. Chuyển sang **Sửa**, gửi `NEXGRAPH_DEMO_EDIT`. Máy chủ giả đề xuất thêm comment vào dòng `return save_session(user)` trong `service.py`. Bấm **Từ chối**, xác nhận tệp giữ nguyên, gửi lại và bấm **Duyệt thay đổi**. Kiểm nội dung đã ghi và thẻ **Thay đổi**.
+4. Quay về **Hỏi**. Dừng máy chủ giả bằng Ctrl+C rồi gửi một câu hỏi. Ghi lỗi kết nối và kiểm **Tìm kiếm**, **Kiến trúc** và **Luồng** vẫn mở được. Ghi phép thử này là gián đoạn endpoint AI cục bộ.
+5. Thoát ứng dụng, kiểm engine của lượt thử đã dừng rồi đóng terminal đã đặt biến thử trên Windows.
+
+[Phiên kiểm Electron đóng gói trên macOS ngày 15/11](benchmarks/2026-11-15-editor-agent.md) ghi lại lượt thử fixture trước khi bỏ công cụ chạy lệnh. Ghi riêng kết quả của bản đang dùng và loại nhà cung cấp đã thử.
+
+## Demo NestJS trong 5 phút
+
+Chuẩn bị bản sao `ecommerce-backend-nestjs`, baseline đã dùng tại commit `d11f4ef7d906ba514cf9e3c2234116ad49789ee7` (268 tệp được lập chỉ mục). Giữ lịch sử Git hoặc tạo một commit mốc trong bản sao để **Thay đổi** so với HEAD. Lập chỉ mục trước, mở app và thử kết nối model hỗ trợ tool calling nếu trình bày phần AI thật. Chuẩn bị bản sao sạch cho từng lượt. Nếu mất kết nối, dùng thẻ **Luồng** và thao tác chỉnh sửa tay.
+
+| Bước | Thao tác | Thời lượng |
+| --- | --- | --- |
+| 1. Mở dự án | Từ màn **Dự án**, mở bản sao NestJS đã lập chỉ mục để vào không gian làm việc. Chỉ ra cây tệp bên trái, các thẻ mã và sơ đồ ở giữa, trợ lý AI bên phải. Nếu cần trình bày số tệp, nút và cạnh, bấm **← Tổng quan** rồi trở lại **Kiến trúc**. | 0:30 |
+| 2. Khám phá kiến trúc | Mở **Kiến trúc**, đi xuống `src/apps`, bấm mũi tên xem bằng chứng. Mở **Bản đồ** để xem toàn cục. Nếu máy thiếu WebGL, dùng **Kiến trúc**. | 1:00 |
+| 3. Theo luồng đăng nhập | Chọn `signIn` ở **Luồng** và phát qua các cạnh. Nếu model sẵn sàng, hỏi “Luồng đăng nhập chạy thế nào?”, mở chip trích dẫn đúng dòng và thử **Tô luồng**. | 1:30 |
+| 4. Sửa và xem ảnh hưởng | Chọn tệp `src/common/utils/string-util/string-util.service.ts` ở cây bên trái để mở Monaco ở giữa, thêm một comment rồi lưu bằng `Ctrl+S` hoặc `⌘S`. Mở **Thay đổi** để xem ảnh hưởng và kiểm thử liên quan. Nếu dùng AI thật, yêu cầu một thay đổi nhỏ trên bản sao, xem diff trước khi duyệt, rồi kiểm **Từ chối** ở một đề xuất khác. | 1:00 |
+| 5. Trình bày đánh giá | Trình bày độ đúng và hiệu năng đã đo trong [báo cáo H6](benchmarks/2026-12-danh-gia.md). Ghi rõ các phép đo có/không MCP và khảo sát nếu vẫn đang chờ dữ liệu. | 0:30 |
+
+Tổng mục tiêu là 4:30, còn 0:30 dự phòng. Các số của H6 cho demo là thời gian engine; ghi riêng tổng thời gian có thao tác giao diện.
+
+## Nghiệm thu
+
+- [ ] **Lượt 1**. Chạy đủ năm bước trên bản đã cài, ghi thời gian, commit và ảnh. Ghi thời gian index mới bên cạnh thời gian trình bày sau khi graph đã sẵn sàng.
+- [ ] **Lượt 2**. Dùng bản sao sạch, kiểm **Duyệt** đổi nội dung và **Từ chối** giữ nguyên tệp. Ghi provider, model và diff đã quan sát.
+- [ ] **Lượt 3**. Gián đoạn kết nối AI trong **Hỏi**, dùng thẻ **Luồng** để trình bày tiếp và kiểm nháp chưa lưu khi đổi thẻ. Ghi cách gián đoạn và nội dung lỗi.
+- [ ] Điền [checklist cho Windows và macOS](windows-checklist.md) và cập nhật [biên bản nghiệm thu](release/acceptance/2026-11-18.md). Gắn ảnh hoặc video, log, artifact, hệ điều hành và cấu hình máy theo từng lượt.

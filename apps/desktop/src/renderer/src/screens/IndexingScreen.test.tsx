@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph, progress, project } from '../test-utils'
 import { IndexingScreen } from './IndexingScreen'
@@ -34,7 +35,7 @@ describe('IndexingScreen', () => {
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1'))
   })
 
-  it('shows structure progress and keeps "Bắt đầu khám phá" disabled until phase 1 is done', async () => {
+  it('shows structure progress and keeps "Bắt đầu khám phá" disabled', async () => {
     const h = setup()
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())
     emit(h, progress('structure', 40, 100))
@@ -43,20 +44,29 @@ describe('IndexingScreen', () => {
     expect(screen.getByRole('progressbar', { name: 'Đọc cấu trúc' })).toHaveAttribute('aria-valuenow', '40')
   })
 
-  it('enables exploring once phase 2 starts, and calls onExplore', async () => {
+  it('enables exploring only after the initial graph is published', async () => {
     const h = setup()
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())
     emit(h, progress('resolve', 100, 100))
-    const btn = await screen.findByRole('button', { name: 'Bắt đầu khám phá' })
+    const btn = screen.getByRole('button', { name: 'Bắt đầu khám phá' })
+    expect(btn).toBeDisabled()
+    emit(h, progress('done', 100, 100))
+    await waitFor(() => expect(btn).toBeEnabled())
     expect(btn).toBeEnabled()
     await userEvent.click(btn)
     expect(h.onExplore).toHaveBeenCalled()
   })
 
-  it('shows cancelled and error states', async () => {
+  it('keeps a cancelled job terminal even if an older progress event arrives', async () => {
     const h = setup()
     emit(h, progress('cancelled', 3, 100))
-    expect(await screen.findByText('Đã hủy lập chỉ mục')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Đã hủy lập chỉ mục: demo' })).toBeInTheDocument()
+    emit(h, progress('structure', 4, 100))
+    expect(screen.getByRole('heading', { name: 'Đã hủy lập chỉ mục: demo' })).toBeInTheDocument()
+  })
+
+  it('shows a terminal error from the engine', async () => {
+    const h = setup()
     emit(h, progress('error', 0, 0, { message: 'boom' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('boom')
   })
@@ -75,12 +85,57 @@ describe('IndexingScreen', () => {
     expect(screen.queryByText('99 / 100')).not.toBeInTheDocument()
   })
 
-  it('tolerates index_running (job already started) without showing an error', async () => {
-    const h = setup({ index: { start: vi.fn(async () => { throw Object.assign(new Error('x'), { code: 'index_running' }) }) } })
-    await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())
-    emit(h, progress('structure', 5, 10))
-    expect(await screen.findByText('5 / 10')).toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  it('opens a completed job without SSE, including when start returns an existing job', async () => {
+    const h = setup({ index: {
+      start: vi.fn(async () => ({ jobId: 'already-started' })),
+      status: vi.fn(async () => progress('done', 10, 10, { job_id: 'already-started' }))
+    } })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Bắt đầu khám phá' })).toBeEnabled())
+    expect(h.api.index.status).toHaveBeenCalledWith('already-started')
+    expect(screen.getByText('10 / 10')).toBeInTheDocument()
+  })
+
+  it('starts only one job when StrictMode resubscribes the effect', async () => {
+    const h = installNexgraph()
+    render(<StrictMode><IndexingScreen project={project()} onExplore={() => {}} /></StrictMode>)
+    await waitFor(() => expect(h.api.index.status).toHaveBeenCalledWith('j1'))
+    expect(h.api.index.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores same-project SSE for another job and stale poll snapshots', async () => {
+    let finishRead!: (value: ReturnType<typeof progress>) => void
+    const h = setup({ index: { status: vi.fn(() => new Promise((resolve) => { finishRead = resolve })) } })
+    await waitFor(() => expect(h.api.index.status).toHaveBeenCalledWith('j1'))
+    emit(h, progress('resolve', 10, 10, { job_id: 'previous-job' }))
+    expect(screen.getByRole('button', { name: 'Bắt đầu khám phá' })).toBeDisabled()
+    emit(h, progress('resolve', 10, 10))
+    expect(screen.getByText('Đang nối quan hệ để hoàn tất đồ thị')).toBeInTheDocument()
+    await act(async () => finishRead(progress('structure', 1, 10)))
+    expect(screen.getByText('Đang nối quan hệ để hoàn tất đồ thị')).toBeInTheDocument()
+  })
+
+  it('shows a lost job instead of waiting indefinitely', async () => {
+    const h = installNexgraph({ index: { status: vi.fn(async () => {
+      throw Object.assign(new Error('Không có công việc j1'), { code: 'unknown_job' })
+    }) } })
+    const onBack = vi.fn()
+    render(<IndexingScreen project={project()} onExplore={() => {}} onBack={onBack} />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không có công việc j1')
+    expect(screen.getByRole('button', { name: 'Quay lại' })).toBeEnabled()
+    expect(h.api.index.status).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a bounded number of times when status requests hang', async () => {
+    vi.useFakeTimers()
+    try {
+      const h = setup({ index: { status: vi.fn(() => new Promise(() => {})) } })
+      await act(async () => vi.advanceTimersByTimeAsync(17_000))
+      expect(screen.getByRole('alert')).toHaveTextContent('Engine không trả trạng thái lập chỉ mục kịp thời')
+      await act(async () => vi.advanceTimersByTimeAsync(30_000))
+      expect(h.api.index.status).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows the start error when index cannot start', async () => {
@@ -88,11 +143,12 @@ describe('IndexingScreen', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Engine chưa sẵn sàng')
   })
 
-  it('shows cleaning message when files_total is 0', async () => {
+  it('only shows preparation while queued, including when no files are found', async () => {
     const h = setup()
-    await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())
+    expect(await screen.findByText('Đang chuẩn bị danh sách tệp…')).toBeInTheDocument()
     emit(h, progress('structure', 0, 0))
-    expect(await screen.findByText('Đang quét tệp và dọn dẹp dữ liệu cũ…')).toBeInTheDocument()
+    expect(await screen.findByText('Không có tệp phù hợp')).toBeInTheDocument()
+    expect(screen.queryByText('Đang chuẩn bị danh sách tệp…')).not.toBeInTheDocument()
   })
 
   it('shows "Quay lại" and calls onBack when job is cancelled and onBack is provided', async () => {

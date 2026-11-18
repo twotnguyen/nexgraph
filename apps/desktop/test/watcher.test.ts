@@ -10,7 +10,7 @@ class FakeFsWatcher extends EventEmitter {
   }
 }
 
-function setup(onFlush: () => Promise<void>, extra: { onError?: (e: Error) => void } = {}) {
+function setup(onFlush: () => Promise<void | 'retry'>, extra: { onError?: (e: Error) => void } = {}) {
   let listener: (event: string, name: string | null) => void = () => {}
   const fsw = new FakeFsWatcher()
   const watch = vi.fn((_root: string, _opts: unknown, cb: typeof listener) => {
@@ -102,6 +102,16 @@ describe('ProjectWatcher', () => {
     expect(onError).toHaveBeenCalledTimes(1)
     emit('lib/a.dart')
     await vi.advanceTimersByTimeAsync(600)
+    expect(onFlush).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a change skipped while the engine is publishing without another file event', async () => {
+    const onFlush = vi.fn<() => Promise<void | 'retry'>>().mockResolvedValueOnce('retry').mockResolvedValue(undefined)
+    const { emit } = setup(onFlush)
+    emit('lib/a.dart')
+    await vi.advanceTimersByTimeAsync(600)
+    expect(onFlush).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1600)
     expect(onFlush).toHaveBeenCalledTimes(2)
   })
 

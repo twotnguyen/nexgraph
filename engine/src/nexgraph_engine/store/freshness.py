@@ -4,8 +4,8 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from nexgraph_engine.changes.model import read_changes
 from nexgraph_engine.index.discovery import discover, sha256_file
+from nexgraph_engine.index.indexer import _git_head
 from nexgraph_engine.index.refresh import RACY_SECONDS
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -37,16 +37,13 @@ def _disk_changes(store: GraphStore, root: Path) -> int:
 def freshness(store: GraphStore, root: Path) -> dict:
     run = store.last_completed_run()
     out: dict = {"indexed_at": run[0] if run else None, "index_commit": run[1] if run else None,
-                 "head_commit": None, "changed_files": None, "stale": False}
-    try:
-        cs = read_changes(root, store)
-    except Exception:  # Git hỏng, hết giờ...: không biết thì không báo cũ
-        return out
-    out["head_commit"] = cs.base_commit
+                 "head_commit": _git_head(root), "changed_files": None, "stale": False}
+    # Theo dõi HEAD bằng một lệnh. Phạm vi mã nguồn đối chiếu trực tiếp với bản công bố.
+    moved = bool(out["head_commit"] and out["index_commit"] and out["head_commit"] != out["index_commit"])
     try:
         out["changed_files"] = _disk_changes(store, root)
     except OSError:
+        out["stale"] = moved
         return out
-    moved = bool(out["head_commit"] and out["index_commit"] and out["head_commit"] != out["index_commit"])
     out["stale"] = moved or out["changed_files"] > 0
     return out

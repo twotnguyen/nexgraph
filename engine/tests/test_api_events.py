@@ -10,10 +10,10 @@ def test_events_stream_receives_progress(api, copy_fixture):
         for line in r.iter_lines():
             if line.startswith("data: "):
                 seen.append(json.loads(line[6:]))
-                if sum(1 for e in seen if e["type"] == "graph_updated") == 2:
+                if seen[-1]["type"] == "graph_updated":
                     break
     states = [e["state"] for e in seen if e["type"] == "job_progress"]
-    assert states[0] == "queued" and "structure" in states and "resolve" in states and states[-1] in ("resolve", "done")
+    assert states[0] == "queued" and "structure" in states and "resolve" in states and states[-1] == "done"
     assert all(e["project_id"] == p["project_id"] for e in seen)
 
 

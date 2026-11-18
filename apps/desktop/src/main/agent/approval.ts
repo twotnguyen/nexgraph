@@ -2,19 +2,20 @@ import { randomUUID } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { isAbsolute, relative, sep } from 'node:path'
 import type { AgentMode, ApprovalDecision, ApprovalRequest } from '../../shared/agent-types'
-import { resolveInside } from '../fs/project-fs'
+import type { FileContent } from '../../shared/api'
+import { FsError, resolveInside } from '../fs/project-fs'
 
 export const APPROVAL_TIMEOUT_MS = 5 * 60_000
 
-/** Bản xem trước đã duyệt cho write/edit; lúc execute phai revalidate đúng cái này roi moi ghi.
- * `file` là tình trang tep tai thoi diem preview (eol/bom/mtime) — execute dùng lam tien de ghi;
- * vang khi tep chua ton tai (write tao moi). */
-export type ApprovedWrite = {
+/** Bản xem trước và phiên bản tệp tại cùng lần đọc. `file` vắng khi tạo tệp mới. */
+export type WritePreview = {
   path: string
   before: string
   after: string
-  file?: { eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number }
+  file?: Pick<FileContent, 'eol' | 'bom' | 'version'>
 }
+
+export type ApprovedWrite = WritePreview & { assertCurrent(): void }
 
 export interface ApprovalGate {
   check(toolName: string, input: unknown): Promise<ApprovalDecision & { approved?: ApprovedWrite }>
@@ -27,7 +28,7 @@ export type ApprovalDeps = {
   root: string
   getMode(): AgentMode
   ask(req: ApprovalRequest): void
-  preview(tool: 'edit' | 'write', input: unknown): Promise<{ path: string; before: string; after: string; file?: { eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number } }>
+  preview(tool: 'edit' | 'write', input: unknown): Promise<WritePreview>
   /** Gọi khi một yêu cầu đã hỏi được giải quyết (duyệt, từ chối, hết giờ, denyAll). */
   closed?(id: string): void
 }
@@ -35,19 +36,21 @@ export type ApprovalDeps = {
 const deny = (reason: string): ApprovalDecision => ({ allow: false, reason })
 const OUTSIDE = deny('Đường dẫn nằm ngoài dự án')
 
-const isUp = (rel: string) => rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)
+/** Chuẩn hóa đầu vào của Pi trước khi chuyển cho resolveInside kiểm tra đích thật. */
+export function toProjectRelative(root: string, path: string): string {
+  if (!isAbsolute(path)) return path
+  // Dùng cùng realpath với resolveInside, kể cả khi Windows trả về gốc dạng 8.3.
+  for (const base of [root, realpathSync.native(root)]) {
+    const rel = relative(base, path)
+    if (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel)) return rel
+  }
+  throw new FsError('outside_project', `Đường dẫn nằm ngoài dự án: ${path}`)
+}
 
 /** true khi `p` (tương đối hoặc tuyệt đối) nằm trong root sau realpath; mọi lỗi đều coi là ngoài. */
 function insideRoot(root: string, p: string): boolean {
   try {
-    let rel = p
-    if (isAbsolute(p)) {
-      // SDK không chuẩn hoá path: tuyệt đối trong root thì đổi sang tương đối rồi để resolveInside kiểm symlink.
-      const found = [root, realpathSync(root)].map((r) => relative(r, p)).find((r) => !isUp(r))
-      if (found === undefined) return false
-      rel = found
-    }
-    resolveInside(root, rel)
+    resolveInside(root, toProjectRelative(root, p))
     return true
   } catch {
     return false
@@ -56,7 +59,8 @@ function insideRoot(root: string, p: string): boolean {
 
 export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
   const waiting = new Map<string, { settle(d: ApprovalDecision): void }>()
-  let epoch = 0 // denyAll tăng epoch để huỷ các check đang chờ preview
+  let epoch = 0
+  let revokedReason = 'Đã dừng'
 
   const settle = (id: string, d: ApprovalDecision) => waiting.get(id)?.settle(d)
 
@@ -79,35 +83,33 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
     })
 
   async function check(toolName: string, input: unknown): Promise<ApprovalDecision & { approved?: ApprovedWrite }> {
-    if (toolName !== 'edit' && toolName !== 'write' && toolName !== 'bash') return { allow: true }
-    if (deps.getMode() !== 'edit') return deny('Chế độ Hỏi không cho phép sửa tệp hoặc chạy lệnh')
+    if (toolName !== 'edit' && toolName !== 'write') return deny('Chỉ có thể duyệt thao tác sửa tệp')
+    if (deps.getMode() !== 'edit') return deny('Chế độ Hỏi chỉ cho phép đọc')
     const obj = (input && typeof input === 'object' ? input : {}) as Record<string, unknown>
-    const id = randomUUID()
-
-    if (toolName === 'bash') {
-      if (typeof obj.command !== 'string') return deny('Thiếu lệnh cần chạy')
-      return wait({ id, tool: 'bash', command: obj.command })
-    }
-
     if (typeof obj.path !== 'string') return deny('Thiếu đường dẫn tệp')
     if (!insideRoot(deps.root, obj.path)) return OUTSIDE
     const myEpoch = epoch
-    let pv
+    let preview: WritePreview
     try {
-      pv = await deps.preview(toolName, input)
+      preview = await deps.preview(toolName, input)
     } catch {
       return deny('Không tạo được bản xem trước thay đổi')
     }
-    if (myEpoch !== epoch) return deny('Đã dừng')
-    // pv chính là bản xem trước người dùng thấy: khi duyệt, gắn kèm quyết định để execute revalidate đúng nội dung này.
-    const d = await wait({ id, tool: toolName, path: pv.path, before: pv.before, after: pv.after })
-    return d.allow ? { ...d, approved: { path: pv.path, before: pv.before, after: pv.after, file: pv.file } } : d
+    if (myEpoch !== epoch) return deny(revokedReason)
+    const decision = await wait({ id: randomUUID(), tool: toolName, path: preview.path, before: preview.before, after: preview.after })
+    if (!decision.allow) return decision
+    if (myEpoch !== epoch) return deny(revokedReason)
+    const assertCurrent = () => {
+      if (myEpoch !== epoch) throw new Error(revokedReason)
+    }
+    return { ...decision, approved: { ...preview, assertCurrent } }
   }
 
   return {
     check,
     resolve: (id, allow) => settle(id, allow ? { allow: true } : deny('Người dùng từ chối thao tác này')),
     denyAll(reason) {
+      revokedReason = reason
       epoch++
       for (const id of [...waiting.keys()]) settle(id, deny(reason))
     },

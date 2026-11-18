@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_graph import open_store, require_indexed
+from nexgraph_engine.api.routes_graph import open_store
 from nexgraph_engine.bridge.to_nx import Scope
 from nexgraph_engine.export.run import ExportFormat, export_graph, push_graph, validate_push_uri
 
@@ -59,7 +59,6 @@ def _scope(body: ScopeBody) -> Scope:
 def export(project_id: str, request: Request, body: ExportBody) -> dict:
     out_dir = _writable_dir(body.out_dir)
     with open_store(request, project_id) as (store, info):
-        require_indexed(store, request, project_id)
         try:
             r = export_graph(store, body.format, _scope(body.scope), out_dir, info.name)
         except KeyError as exc:
@@ -76,7 +75,6 @@ def push(project_id: str, request: Request, body: PushBody) -> dict:
     except ValueError as exc:
         raise ApiError(400, "bad_param", str(exc)) from exc
     with open_store(request, project_id) as (store, _):
-        require_indexed(store, request, project_id)
         try:
             return push_graph(store, body.target, body.uri, body.user, body.password, _scope(body.scope))
         except KeyError as exc:

@@ -47,12 +47,14 @@ def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Pa
     if fmt not in FORMATS:
         raise ValueError(f"Định dạng không hỗ trợ: {fmt}")
     target = Path(out_dir) / _TARGETS[fmt].format(p=safe_name(project_name))
-    if fmt == "markdown":
-        from nexgraph_engine.report.build import report_markdown
-        target.write_text(report_markdown(store, project_name), encoding="utf-8")
-        return ExportResult([str(target)], build_nx(store, scope).truncated)
     bg = build_nx(store, scope)
-    if fmt == "html":
+    if fmt == "markdown":
+        from nexgraph_engine.report.build import render_report_markdown
+        files = store.stats()["files"] if scope.kind == "all" else len({
+            node["source_file"] for _, node in bg.G.nodes(data=True) if node["source_file"]
+        })
+        target.write_text(render_report_markdown(bg, project_name, files), encoding="utf-8")
+    elif fmt == "html":
         from graphify.exporters.html import to_html
         to_html(bg.G, bg.communities, str(target), community_labels=bg.labels, node_limit=scope.limit)
     elif fmt == "callflow_html":

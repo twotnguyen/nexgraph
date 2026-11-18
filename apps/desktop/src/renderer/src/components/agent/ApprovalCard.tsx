@@ -5,30 +5,28 @@ import { vi } from '../../strings'
 
 interface Props {
   request: ApprovalRequest
+  disabled?: boolean
   onDecide: (allow: boolean) => void
 }
 
-const title = (r: ApprovalRequest): string =>
-  r.tool === 'bash' ? `${vi.agent.bash}: ${r.command ?? ''}` : r.tool === 'write' ? vi.agent.writePath(r.path ?? '') : vi.agent.editPath(r.path ?? '')
-
-/** Một yêu cầu duyệt: bash hiện nguyên lệnh, edit/write hiện diff chỉ đọc trước/sau. */
-export function ApprovalCard({ request, onDecide }: Props) {
+/** Mỗi thẻ cho duyệt bản diff chỉ đọc của một tệp. */
+export function ApprovalCard({ request, disabled, onDecide }: Props) {
   const host = useRef<HTMLDivElement>(null)
-  const isDiff = request.tool !== 'bash'
+  const title = request.tool === 'write' ? vi.agent.writePath(request.path) : vi.agent.editPath(request.path)
   useEffect(() => {
-    if (!isDiff || !host.current) return
+    if (!host.current) return
     const diff = createDiffEditor(host.current, {
-      before: request.before ?? '', after: request.after ?? '', language: languageFor(request.path ?? 'a.txt')
+      before: request.before, after: request.after, language: languageFor(request.path)
     })
     return () => diff.dispose()
-  }, [request, isDiff])
+  }, [request])
   return (
-    <div className="approval" aria-label={title(request)}>
-      <p className="mono">{title(request)}</p>
-      {isDiff && <div ref={host} className="approval-diff" />}
+    <div className="approval" role="group" aria-label={title}>
+      <p className="mono">{title}</p>
+      <div ref={host} className="approval-diff" />
       <div className="row">
-        <button type="button" className="primary" onClick={() => onDecide(true)}>{vi.agent.approve}</button>
-        <button type="button" onClick={() => onDecide(false)}>{vi.agent.reject}</button>
+        <button type="button" className="primary" disabled={disabled} onClick={() => onDecide(true)}>{vi.agent.approve}</button>
+        <button type="button" disabled={disabled} onClick={() => onDecide(false)}>{vi.agent.reject}</button>
       </div>
     </div>
   )

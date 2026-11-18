@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ProjectSummary } from '@shared/graph-types'
-import { GraphArt, Logo, type Tone } from '../components/common/icons'
+import { Icon } from '../components/common/icons'
+import { Toast } from '../components/common/Toast'
 import { vi } from '../strings'
-
-const TONES: Tone[] = ['blue', 'teal', 'magenta', 'violet', 'green', 'amber']
-const toneOf = (name: string) => TONES[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % TONES.length]
+import './projects.css'
 
 interface Props {
   engineReady: boolean
@@ -12,61 +11,176 @@ interface Props {
   onOpenSettings?: () => void
 }
 
+function message(err: unknown) {
+  const failure = err as { code?: string; message?: string } | null
+  if (failure?.code === 'bad_path') return vi.projects.openFailed
+  if (failure?.code === 'project_busy') return 'Dự án đang cập nhật đồ thị. Đợi hoàn tất hoặc hủy lập chỉ mục rồi thử lại.'
+  return failure?.message ?? String(err)
+}
+
+const dateFormat = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' })
+
+function RemoveProjectDialog({ project, busy, onCancel, onRemove }: {
+  project: ProjectSummary
+  busy: boolean
+  onCancel: () => void
+  onRemove: () => void
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const el = dialog.current
+    if (!el || el.open) return
+    if (typeof el.showModal === 'function') el.showModal()
+    else el.open = true
+  }, [])
+  return (
+    <dialog className="modal" ref={dialog} aria-labelledby="remove-project-title"
+      onCancel={(e) => { e.preventDefault(); if (!busy) onCancel() }}>
+      <h2 id="remove-project-title">Gỡ dự án khỏi danh sách</h2>
+      <p><strong>{project.name}</strong> sẽ biến mất khỏi danh sách dự án gần đây. Mã nguồn và đồ thị đã lưu vẫn được giữ để mở lại sau.</p>
+      <footer>
+        <button type="button" autoFocus disabled={busy} onClick={onCancel}>Hủy</button>
+        <button type="button" className="danger" disabled={busy} onClick={onRemove}>{busy ? 'Đang gỡ…' : 'Gỡ dự án'}</button>
+      </footer>
+    </dialog>
+  )
+}
+
 export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props) {
   const [recent, setRecent] = useState<ProjectSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refresh, setRefresh] = useState(0)
+  const [listError, setListError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [pending, setPending] = useState<'open' | 'remove' | null>(null)
+  const [removing, setRemoving] = useState<ProjectSummary | null>(null)
+  const operation = useRef(false)
+  const mounted = useRef(false)
+  const openButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
 
   useEffect(() => {
     if (!engineReady) return
     let alive = true
-    window.nexgraph.project.list().then((l) => alive && setRecent(l)).catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [engineReady])
+    setLoading(true)
+    setListError(null)
+    void window.nexgraph.project.list().then(
+      (projects) => { if (alive) setRecent(projects) },
+      (err) => { if (alive) setListError(message(err)) }
+    ).finally(() => { if (alive) setLoading(false) })
+    return () => { alive = false }
+  }, [engineReady, refresh])
 
-  async function open(path: string | null) {
-    if (!path) return // người dùng huỷ hộp thoại
+  async function run(kind: 'open' | 'remove', action: () => Promise<void>) {
+    if (operation.current || !engineReady) return
+    operation.current = true
+    setPending(kind)
+    setError(null)
+    setNotice(null)
     try {
-      setError(null)
-      onOpened(await window.nexgraph.project.open(path))
+      await action()
     } catch (err) {
-      const code = (err as { code?: string }).code
-      setError(code === 'bad_path' ? vi.projects.openFailed : (err as Error).message)
+      if (mounted.current) setError(message(err))
+    } finally {
+      operation.current = false
+      if (mounted.current) setPending(null)
     }
   }
 
+  function open(knownPath?: string) {
+    void run('open', async () => {
+      const path = knownPath ?? await window.nexgraph.project.pickFolder()
+      if (!path || !mounted.current) return
+      const project = await window.nexgraph.project.open(path)
+      if (mounted.current) onOpened(project)
+    })
+  }
+
+  function remove(project: ProjectSummary) {
+    void run('remove', async () => {
+      try {
+        await window.nexgraph.project.remove(project.project_id)
+      } finally {
+        if (mounted.current) setRemoving(null)
+      }
+      if (!mounted.current) return
+      setRecent((projects) => projects.filter((item) => item.project_id !== project.project_id))
+      setNotice(`Đã gỡ ${project.name} khỏi danh sách gần đây.`)
+      window.requestAnimationFrame(() => openButton.current?.focus())
+    })
+  }
+
   return (
-    <main className="screen">
-      <header className="hero">
-        <GraphArt />
-        <p className="brand"><Logo size={26} /> NexGraph</p>
-        <h1>{vi.projects.title}</h1>
-        <p className="lead">{vi.appTagline}</p>
-        <div className="actions">
-          <button type="button" className="primary" disabled={!engineReady} onClick={async () => open(await window.nexgraph.project.pickFolder())}>
-            {vi.projects.open}
-          </button>
-          {onOpenSettings && <button type="button" className="link" onClick={onOpenSettings}>{vi.projects.settings}</button>}
+    <main className="screen projects-page">
+      <header className="projects-hero">
+        <div className="projects-hero-content">
+          <span className="projects-hero-icon"><Icon name="folder" size={24} /></span>
+          <h1>{vi.projects.title}</h1>
+          <p>Khám phá kiến trúc, luồng thực thi và vùng ảnh hưởng từ mã nguồn của bạn.</p>
+          <div className="projects-hero-actions">
+            <button ref={openButton} type="button" className="primary" disabled={!engineReady || pending !== null} onClick={() => open()}>
+              <Icon name="folder" size={17} /> {pending === 'open' ? 'Đang mở…' : vi.projects.open}
+            </button>
+            {onOpenSettings && <button type="button" onClick={onOpenSettings}><Icon name="sliders" size={16} /> {vi.projects.settings}</button>}
+          </div>
+        </div>
+        <div className="projects-hero-diagram" aria-hidden="true">
+          <span className="projects-diagram-branch">
+            <span><Icon name="folder" size={19} /></span>
+            <span><Icon name="flows" size={19} /></span>
+          </span>
+          <span className="projects-diagram-main"><Icon name="graph" size={30} /></span>
+          <span className="projects-diagram-branch">
+            <span><Icon name="arch" size={19} /></span>
+            <span><Icon name="tree" size={19} /></span>
+          </span>
         </div>
       </header>
-      {!engineReady && <p className="muted">{vi.projects.engineWaiting}</p>}
-      {error && <p role="alert" className="error">{error}</p>}
-      <h2>{vi.projects.recent}</h2>
-      {recent.length === 0 ? (
-        <p className="muted">{vi.projects.noRecent}</p>
-      ) : (
-        <ul className="recent">
-          {recent.map((p) => (
-            <li key={p.project_id}>
-              <button type="button" disabled={!engineReady} onClick={() => open(p.path)}>
-                <span className="avatar" data-tone={toneOf(p.name)} aria-hidden="true">{p.name.slice(0, 1).toUpperCase()}</span>
-                <b>{p.name}</b> <span className="muted mono">{p.path}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {!engineReady && <p role="status" className="inline-message">{vi.projects.engineWaiting}</p>}
+      {error && <p role="alert" className="inline-message error">{error}</p>}
+      {notice && <Toast message={notice} onDismiss={() => setNotice(null)} />}
+
+      <section className="workbench-panel projects-panel" aria-labelledby="recent-heading" aria-busy={engineReady && loading}>
+        <header className="projects-recent-heading">
+          <h2 id="recent-heading">{vi.projects.recent}</h2>
+          {recent.length > 0 && <span>Lập chỉ mục lần cuối</span>}
+        </header>
+        {engineReady && loading && <div className="panel-empty"><div className="skeleton-line" /><div className="skeleton-line short" /></div>}
+        {listError && (
+          <div className="panel-empty"><p role="alert" className="error">{listError}</p>
+            <button type="button" disabled={pending !== null} onClick={() => setRefresh((v) => v + 1)}>Tải lại danh sách</button>
+          </div>
+        )}
+        {recent.length === 0 && !listError && !(engineReady && loading) && <p className="panel-empty muted">{vi.projects.noRecent}</p>}
+        {recent.length > 0 && (
+          <ul className="recent">
+            {recent.map((project) => {
+              const date = project.last_indexed_at != null ? new Date(project.last_indexed_at * 1000) : null
+              return (
+                <li className="projects-recent-row" key={project.project_id}>
+                  <button className="recent-open" type="button" disabled={!engineReady || pending !== null} onClick={() => open(project.path)}>
+                    <span className="recent-icon"><Icon name="folder" size={19} /></span>
+                    <span className="recent-identity"><b>{project.name}</b><span className="muted mono" title={project.path}>{project.path}</span></span>
+                    <span className="projects-recent-date">
+                      {date ? <time dateTime={date.toISOString()}>{dateFormat.format(date)}</time> : 'Chưa lập chỉ mục'}
+                    </span>
+                    <Icon name="chevron" size={16} />
+                  </button>
+                  <button type="button" className="icon-button recent-remove" title="Gỡ khỏi danh sách"
+                    aria-label={`Gỡ ${project.name} khỏi danh sách`} disabled={!engineReady || loading || pending !== null}
+                    onClick={() => setRemoving(project)}><Icon name="close" size={16} /></button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+      {removing && <RemoveProjectDialog project={removing} busy={pending === 'remove'} onCancel={() => setRemoving(null)}
+        onRemove={() => remove(removing)} />}
     </main>
   )
 }

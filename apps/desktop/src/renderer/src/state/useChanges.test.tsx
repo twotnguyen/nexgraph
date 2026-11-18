@@ -51,7 +51,7 @@ describe('useChanges', () => {
       .mockResolvedValue(changed('new'))
     const { emit } = installNexgraph({ graph: { changes } })
     const { result } = renderHook(() => useChanges('p1'))
-    act(() => emit({ type: 'changes_updated', project_id: 'p1' }))
+    act(() => emit({ type: 'graph_updated', project_id: 'p1' }))
     await act(async () => void (await vi.advanceTimersByTimeAsync(400)))
     await waitFor(() => expect(result.current.changes?.changed_files[0].path).toBe('lib/new.dart'))
     await act(async () => first(changed('old')))

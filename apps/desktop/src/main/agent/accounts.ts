@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { lookup } from 'node:dns/promises'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import type { ModelRuntime } from '@earendil-works/pi-coding-agent'
-import type { AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from '../../shared/agent-types'
+import { readFileSync, unlinkSync } from 'node:fs'
+import { join } from 'node:path'
+import type { CredentialSynchronizationError, ModelRuntime } from '@earendil-works/pi-coding-agent'
+import { normalizeConsentTarget, sameConsentTarget, type AiConsentTarget, type AuthEventView, type AuthPromptView, type CustomProvider, type ModelInfo, type ProviderInfo } from '../../shared/agent-types'
 import { readJson, writeJson, type SecretStore } from '../ai/settings'
 import { AgentError, loadPi, rememberSecret, scrub } from './session'
 
@@ -14,57 +14,119 @@ type AuthPrompt = Parameters<AuthInteraction['prompt']>[0]
 type Credential = Awaited<ReturnType<ModelRuntime['login']>>
 type CredentialInfo = Awaited<ReturnType<ModelRuntime['listCredentials']>>[number]
 
-/**
- * CredentialStore dạng tệp cho ModelRuntime: `auth.json` = `{ [providerId]: Credential }`, 0600.
- * `modify` trả lại đúng credential của provider được sửa; mọi lần ghi xếp hàng tuần tự trên
- * cùng một tệp nên hai provider đổi cùng lúc không ghi đè mất thay đổi của nhau.
- */
-class FileCredentialStore {
-  private chain: Promise<unknown> = Promise.resolve()
+const VAULT_KEY = 'credentials'
 
-  constructor(private readonly file: string) {}
+function credentialMap(raw: string): Record<string, Credential> {
+  const data: unknown = JSON.parse(raw)
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid credential storage')
+  for (const c of Object.values(data)) {
+    if (!c || (c.type !== 'oauth' && c.type !== 'api_key')) throw new Error('invalid credential entry')
+  }
+  return data as Record<string, Credential>
+}
+
+function storageError(e: unknown): AgentError {
+  return (e as { code?: string })?.code === 'no_keychain'
+    ? new AgentError('no_keychain', 'Kho khoá an toàn của hệ điều hành không khả dụng. Không thể sử dụng đăng nhập OAuth.')
+    : new AgentError('oauth_storage', 'Không mở được kho đăng nhập OAuth hoặc chưa di trú xong thông tin đăng nhập cũ.')
+}
+
+function rememberCredential(c?: Credential): Credential | undefined {
+  if (c?.type === 'oauth') {
+    rememberSecret(c.access)
+    rememberSecret(c.refresh)
+  } else if (c?.type === 'api_key') rememberSecret(c.key)
+  return c
+}
+
+/** Pi dùng chung kho mã hoá cho đăng nhập lẫn làm mới OAuth. Mọi cập nhật được xếp hàng. */
+class SecureCredentialStore {
+  private chain: Promise<unknown> = Promise.resolve()
+  private migrated = false
+
+  constructor(private readonly secrets: SecretStore, private readonly legacyFile: string) {}
+
+  private readVault(): Record<string, Credential> {
+    const raw = this.secrets.readStrict(VAULT_KEY)
+    return raw === null ? {} : credentialMap(raw)
+  }
 
   private all(): Record<string, Credential> {
     try {
-      const v = JSON.parse(readFileSync(this.file, 'utf8'))
-      return v && typeof v === 'object' ? (v as Record<string, Credential>) : {}
-    } catch {
-      return {}
+      const existing = this.readVault()
+      if (this.migrated) return existing
+      let raw: string
+      try {
+        raw = readFileSync(this.legacyFile, 'utf8')
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e
+        this.migrated = true
+        return existing
+      }
+      // Nếu đã ghi bản mã nhưng chưa xoá được bản cũ, giữ phiên bản mã hoá khi thử lại.
+      const combined = { ...credentialMap(raw), ...existing }
+      const payload = JSON.stringify(combined)
+      this.secrets.set(VAULT_KEY, payload)
+      if (this.secrets.readStrict(VAULT_KEY) !== payload) throw new Error('credential migration verification failed')
+      unlinkSync(this.legacyFile)
+      this.migrated = true
+      return combined
+    } catch (e) {
+      throw storageError(e)
     }
   }
 
   private write(all: Record<string, Credential>): void {
-    mkdirSync(dirname(this.file), { recursive: true })
-    const tmp = `${this.file}.${randomUUID()}.tmp`
-    writeFileSync(tmp, JSON.stringify(all), { mode: 0o600 })
-    renameSync(tmp, this.file)
+    try { this.secrets.set(VAULT_KEY, JSON.stringify(all)) } catch (e) { throw storageError(e) }
+  }
+
+  requireReady(): void {
+    this.all()
+  }
+
+  issue(): string | undefined {
+    try { this.requireReady() } catch (e) { return (e as Error).message }
   }
 
   async read(providerId: string): Promise<Credential | undefined> {
-    return this.all()[providerId]
+    try {
+      const all = this.all()
+      return Object.hasOwn(all, providerId) ? rememberCredential(all[providerId]) : undefined
+    } catch { return undefined }
   }
 
   async list(): Promise<readonly CredentialInfo[]> {
-    return Object.entries(this.all()).map(([providerId, c]) => ({ providerId, type: c.type }))
+    try { return Object.entries(this.all()).map(([providerId, c]) => ({ providerId, type: c.type })) } catch { return [] }
   }
 
   async modify(providerId: string, fn: (current: Credential | undefined) => Promise<Credential | undefined>): Promise<Credential | undefined> {
     return this.enqueue(async () => {
-      const next = await fn(this.all()[providerId])
-      if (next === undefined) return undefined // hợp đồng CredentialStore: undefined = giữ nguyên mục
       const all = this.all()
-      all[providerId] = next
-      this.write(all)
-      return next
+      const next = await fn(Object.hasOwn(all, providerId) ? rememberCredential(all[providerId]) : undefined)
+      if (next === undefined) return undefined // hợp đồng CredentialStore: undefined = giữ nguyên mục
+      this.write({ ...all, [providerId]: next })
+      return rememberCredential(next)
     })
   }
 
   async delete(providerId: string): Promise<void> {
     await this.enqueue(async () => {
       const all = this.all()
-      if (!(providerId in all)) return
+      if (!Object.hasOwn(all, providerId)) return
       delete all[providerId]
       this.write(all)
+    })
+  }
+
+  restore(providerId: string, written: Credential, before?: Credential): Promise<void> {
+    return this.enqueue(async () => {
+      const all = this.all()
+      if (JSON.stringify(all[providerId]) !== JSON.stringify(written)) return
+      if (before) this.write({ ...all, [providerId]: before })
+      else {
+        delete all[providerId]
+        this.write(all)
+      }
     })
   }
 
@@ -131,6 +193,7 @@ function isBlockedIp(address: string): boolean {
 export async function validateBaseUrl(raw: string): Promise<string> {
   let url: URL
   try { url = new URL(raw.trim()) } catch { throw badUrl('Base URL không hợp lệ') }
+  if (url.username || url.password) throw badUrl('Base URL không được chứa thông tin đăng nhập')
   const local = isLocalHost(url.hostname)
   if (url.protocol === 'http:') {
     if (!devHttpAllowed() || !local) throw badUrl('Base URL phải dùng HTTPS (HTTP chỉ cho localhost khi bật cờ dev)')
@@ -154,20 +217,22 @@ const toAgentError = (e: unknown): AgentError => {
 
 /**
  * Tài khoản AI: nhà cung cấp có sẵn + tuỳ chỉnh, key mã hoá safeStorage (chỉ runtime),
- * OAuth qua `modelRuntime.login` (auth.json do pi ghi, 0600), chọn model và consent theo host.
+ * OAuth qua `modelRuntime.login` với kho mã hoá, và consent theo dự án + điểm đến của model.
  */
 export class AccountService {
   private loginAbort: AbortController | null = null
+  private loginProvider: string | null = null
 
   private constructor(
     readonly modelRuntime: ModelRuntime,
     private readonly deps: AccountDeps,
-    private readonly credentials: FileCredentialStore
+    private readonly credentials: SecureCredentialStore
   ) {}
 
   static async create(deps: AccountDeps): Promise<AccountService> {
     let rt: ModelRuntime
-    const credentials = new FileCredentialStore(join(deps.dataDir, 'agent', 'auth.json'))
+    const credentials = new SecureCredentialStore(deps.secrets.withFile(join(deps.dataDir, 'agent', 'oauth-secrets.json')),
+      join(deps.dataDir, 'agent', 'auth.json'))
     try {
       const { ModelRuntime } = await loadPi()
       rt = await ModelRuntime.create({
@@ -272,13 +337,15 @@ export class AccountService {
 
   async listProviders(): Promise<ProviderInfo[]> {
     const customs = new Set(this.customs().map((c) => c.id))
+    const oauthStorageIssue = this.credentials.issue()
     return this.modelRuntime.getProviders()
       .filter((p) => p.auth.apiKey || p.auth.oauth || customs.has(p.id))
       .map((p) => ({
         id: p.id, label: p.name,
         hasKey: this.hasKey(p.id),
         oauth: !!p.auth.oauth,
-        loggedIn: !!p.auth.oauth && this.modelRuntime.isUsingOAuth(p.id),
+        loggedIn: !!p.auth.oauth && !oauthStorageIssue && this.modelRuntime.isUsingOAuth(p.id),
+        ...(p.auth.oauth && oauthStorageIssue ? { oauthStorageIssue } : {}),
         custom: customs.has(p.id)
       }))
   }
@@ -312,15 +379,16 @@ export class AccountService {
     if (this.loginAbort) throw new AgentError('bad_param', 'Đang có đăng nhập khác đang chạy')
     const p = this.modelRuntime.getProvider(providerId)
     if (!p?.auth.oauth) throw new AgentError('bad_param', 'Nhà cung cấp này không hỗ trợ đăng nhập bằng gói đăng ký')
-    // Chỉ chụp credential của provider đang đăng nhập; provider khác đổi trong lúc chờ vẫn được giữ.
-    const before = await this.credentials.read(providerId)
+    this.credentials.requireReady()
     const ac = new AbortController()
     this.loginAbort = ac
+    this.loginProvider = providerId
+    const promptId = randomUUID()
     let seq = 0
     const interaction: AuthInteraction = {
       signal: ac.signal,
       prompt: (prompt: AuthPrompt): Promise<string> => {
-        const id = `${providerId}#${++seq}`
+        const id = `${promptId}#${++seq}`
         const view: AuthPromptView = {
           id, kind: prompt.type, message: prompt.message,
           ...(prompt.type === 'select'
@@ -345,15 +413,23 @@ export class AccountService {
         else this.deps.notify({ type: 'info', message: event.message, links: event.links })
       }
     }
+    const before = await this.credentials.read(providerId)
     try {
       await this.modelRuntime.login(providerId, 'oauth', interaction, { agentName: 'NexGraph' })
     } catch (e) {
-      // Không để lại trạng thái dở: trả credential của riêng provider này như trước khi đăng nhập.
-      if (before === undefined) await this.credentials.delete(providerId).catch(() => {})
-      else await this.credentials.modify(providerId, async () => before).catch(() => {})
+      // Pi chỉ ghi khi lấy được token. Nếu đã ghi nhưng đồng bộ runtime thất bại,
+      // hoàn tác đúng phiên bản vừa ghi, tránh đè token được làm mới sau đó.
+      if (e instanceof Error && e.name === 'CredentialSynchronizationError') {
+        const { credential } = e as CredentialSynchronizationError
+        if (credential) {
+          await this.credentials.restore(providerId, credential, before)
+          await this.modelRuntime.refresh({ allowNetwork: false, providers: [providerId] }).catch(() => {})
+        }
+      }
       throw toAgentError(e)
     } finally {
       this.loginAbort = null
+      this.loginProvider = null
     }
   }
 
@@ -365,7 +441,15 @@ export class AccountService {
   async logout(providerId: string): Promise<void> {
     const p = this.modelRuntime.getProvider(providerId)
     if (!p?.auth.oauth) throw new AgentError('bad_param', 'Nhà cung cấp này không đăng nhập bằng gói đăng ký')
-    await this.modelRuntime.logout(providerId)
+    if (this.loginProvider === providerId) throw new AgentError('bad_param', 'Hãy hủy đăng nhập đang chạy trước khi đăng xuất')
+    this.credentials.requireReady()
+    try {
+      await this.modelRuntime.logout(providerId)
+    } catch (e) {
+      if (!(e instanceof Error) || e.name !== 'CredentialSynchronizationError') throw e
+      const result = await this.modelRuntime.refresh({ allowNetwork: false, providers: [providerId] }).catch(() => null)
+      if (!result || result.errors.has(providerId)) throw new AgentError('ai_error', 'Đã xóa thông tin đăng nhập. Mở lại ứng dụng để đồng bộ danh sách tài khoản.')
+    }
   }
 
   // ----- kiểm tra kết nối: gọi provider thật với model đang chọn -----
@@ -383,32 +467,56 @@ export class AccountService {
     }
   }
 
-  // ----- consent theo host của provider đang chọn -----
-
-  private consentHost(): string | null {
+  private consentModel() {
     const sel = this.getSelectedModel()
-    if (!sel) return null
-    const base = this.modelRuntime.getProvider(sel.provider)?.baseUrl
-    if (!base) return null
-    try {
-      return new URL(base).host || null
-    } catch {
-      return null
+    const model = sel && this.modelRuntime.getModel(sel.provider, sel.id)
+    return model && (model.type === undefined || model.type === 'chat') ? model : null
+  }
+
+  private consentSelection(): string {
+    const model = this.consentModel()
+    return model ? JSON.stringify([model.provider, model.id, model.baseUrl, this.modelRuntime.isUsingOAuth(model.provider)]) : ''
+  }
+
+  async getConsentTarget(): Promise<AiConsentTarget | null> {
+    const model = this.consentModel()
+    if (!model) return null
+    const selection = this.consentSelection()
+    let baseUrl = model.baseUrl
+    if (this.modelRuntime.isUsingOAuth(model.provider)) {
+      this.credentials.requireReady()
+      const resolved = await this.modelRuntime.getAuth(model, { signal: AbortSignal.timeout(10_000) })
+      if (!resolved) throw new AgentError('ai_not_configured', 'Không xác minh được điểm đến OAuth. Hãy kiểm tra tài khoản trong Cài đặt.')
+      baseUrl = resolved.auth.baseUrl ?? baseUrl
     }
+    this.ensureSelection(selection)
+    return normalizeConsentTarget(model.provider, baseUrl)
   }
 
-  hasConsent(projectId: string): boolean {
-    const host = this.consentHost()
+  private ensureSelection(selection: string): void {
+    if (this.consentSelection() !== selection)
+      throw new AgentError('ai_provider_changed', 'Nhà cung cấp AI đã thay đổi. Hãy kiểm tra lại trước khi gửi.')
+  }
+
+  private consentKey(projectId: string, selected: string, requested: AiConsentTarget, active: AiConsentTarget | null): string {
+    this.ensureSelection(selected)
+    if (!sameConsentTarget(requested, active))
+      throw new AgentError('ai_provider_changed', 'Nhà cung cấp AI đã thay đổi. Hãy kiểm tra lại trước khi gửi.')
+    return JSON.stringify([projectId, requested.provider, requested.baseUrl])
+  }
+
+  async hasConsent(projectId: string, target: AiConsentTarget): Promise<boolean> {
+    const selection = this.consentSelection()
+    const entry = this.consentKey(projectId, selection, target, await this.getConsentTarget())
     const list = readJson(this.deps.prefsFile).aiConsent
-    return host != null && Array.isArray(list) && list.includes(`${projectId}|${host}`)
+    return Array.isArray(list) && list.includes(entry)
   }
 
-  grantConsent(projectId: string): void {
-    const host = this.consentHost()
-    if (!host) return
+  async grantConsent(projectId: string, target: AiConsentTarget): Promise<void> {
+    const selection = this.consentSelection()
+    const entry = this.consentKey(projectId, selection, target, await this.getConsentTarget())
     const prefs = readJson(this.deps.prefsFile)
     const list = Array.isArray(prefs.aiConsent) ? (prefs.aiConsent as string[]) : []
-    const entry = `${projectId}|${host}`
     if (!list.includes(entry)) writeJson(this.deps.prefsFile, { ...prefs, aiConsent: [...list, entry] })
   }
 

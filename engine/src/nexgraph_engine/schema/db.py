@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 GRAPH_SCHEMA_VERSION = 5
-APP_SCHEMA_VERSION = 1
+APP_SCHEMA_VERSION = 2
 MIN_SQLITE = (3, 43, 0)  # FTS5 contentless_delete
 
 
@@ -25,13 +25,15 @@ def load_sql(name: Literal["graph", "app"]) -> str:
     return resources.files("nexgraph_engine.schema").joinpath(f"{name}.sql").read_text(encoding="utf-8")
 
 
-def _migrate(conn: sqlite3.Connection, version: int, target: int) -> None:
-    """Nâng cấp từng bậc trong một giao dịch: migrate_{v}_to_{v+1}.sql."""
+def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app"], target: int) -> None:
+    """Nâng cấp từng bậc trong một giao dịch."""
     conn.isolation_level = None
     conn.execute("BEGIN IMMEDIATE")
     try:
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
         for v in range(version, target):
-            script = resources.files("nexgraph_engine.schema").joinpath(f"migrate_{v}_to_{v + 1}.sql")
+            prefix = "migrate_app" if sql_name == "app" else "migrate"
+            script = resources.files("nexgraph_engine.schema").joinpath(f"{prefix}_{v}_to_{v + 1}.sql")
             for stmt in _split_statements(script.read_text(encoding="utf-8")):
                 conn.execute(stmt)
         conn.execute("COMMIT")
@@ -68,15 +70,19 @@ def _open(
         conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    if read_only:
+        # Một truy vấn HTTP/MCP có thể đọc nhiều bảng khi graph mới được công bố.
+        conn.execute("BEGIN")
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version > current:
         conn.close()
         raise SchemaVersionError(f"CSDL phiên bản {version}, ứng dụng chỉ hỗ trợ đến {current}")
     if 0 < version < current:
-        if read_only:
+        if read_only and sql_name == "graph":
             conn.close()
             raise SchemaOutdatedError(f"CSDL phiên bản {version} cũ hơn {current}. Mở dự án bằng ứng dụng để nâng cấp")
-        _migrate(conn, version, current)
+        if not read_only:
+            _migrate(conn, sql_name, current)
     if version == 0 and not read_only:
         conn.executescript(load_sql(sql_name))
     if wal and not read_only:
@@ -88,5 +94,5 @@ def open_graph_db(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
     return _open(path, "graph", read_only=read_only, wal=True, current=GRAPH_SCHEMA_VERSION)
 
 
-def open_app_db(path: Path) -> sqlite3.Connection:
-    return _open(path, "app", read_only=False, wal=True, current=APP_SCHEMA_VERSION)
+def open_app_db(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
+    return _open(path, "app", read_only=read_only, wal=True, current=APP_SCHEMA_VERSION)

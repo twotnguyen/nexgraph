@@ -1,16 +1,36 @@
 import type { EngineStatus } from './engine-status'
 import type { AgentId, IntegrationPlan } from './integration-types'
-import type { AgentEvent, AgentMode, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from './agent-types'
+import type { AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from './agent-types'
 import type {
   AiSettings,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
   ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
-  GraphNode, GraphReport, GraphStats, IndexOptions, NeighborQuery, Neighborhood, NodeImpact, PathResult,
+  GraphNode, GraphReport, GraphStats, IndexOptions, Job, NeighborQuery, Neighborhood, NodeImpact, PathResult,
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from './graph-types'
 
-export type FileContent = { text: string; eol: '\n' | '\r\n'; bom: boolean; mtimeMs: number; readOnly: boolean; reason?: 'too_large' | 'not_text' }
-export type WriteOpts = { eol: '\n' | '\r\n'; bom: boolean; expectedMtimeMs?: number }
+export type FileRevision = { mtimeMs: number; version: string }
+export type FileContent = FileRevision & {
+  text: string
+  eol: '\n' | '\r\n'
+  bom: boolean
+  readOnly: boolean
+  reason?: 'too_large' | 'not_text'
+}
+export type WriteOpts = {
+  eol: '\n' | '\r\n'
+  bom: boolean
+  /** Phiên bản từ lúc đọc hoặc `null` nếu tệp phải chưa tồn tại. */
+  expectedVersion?: string | null
+  expectedMtimeMs?: number
+}
+
+export type ProjectDirectory = {
+  entries: { path: string; name: string; kind: 'directory' | 'file' }[]
+  truncated: boolean
+}
+
+export type HostCommand = { name: string; arg?: unknown }
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
 export interface NexGraphApi {
@@ -20,6 +40,8 @@ export interface NexGraphApi {
     openFile(file: string, line?: number, lineEnd?: number): Promise<void>
     /** Thẻ cần mở đầu tiên (do lệnh của nền chọn). */
     initialView?: string
+    /** Lệnh đã mở webview Code-OSS, gồm cả lệnh chuyển thẻ và công cụ. */
+    initialCommand?: HostCommand
     /** Lệnh từ giao diện của nền hoặc từ view khác: `view:<thẻ>`, `panel:<tên>`, `export`, `overview`, `settings`, `highlight` (kèm `arg`). Trả về hàm huỷ đăng ký. */
     onCommand(cb: (name: string, arg?: unknown) => void): () => void
     /** Gửi một lệnh sang tab NexGraph chính (dùng từ view Trợ lý AI). */
@@ -38,10 +60,13 @@ export interface NexGraphApi {
     pickFolder(): Promise<string | null>
     open(path: string): Promise<ProjectSummary>
     list(): Promise<ProjectSummary[]>
+    /** Gỡ đăng ký tại ứng dụng. Mở lại cùng thư mục sẽ dùng lại đồ thị đã lưu. */
+    remove(projectId: string): Promise<void>
   }
   index: {
     scan(projectId: string): Promise<ScanInfo>
     start(projectId: string, opts?: IndexOptions): Promise<{ jobId: string }>
+    status(jobId: string): Promise<Job>
     cancel(jobId: string): Promise<void>
     /** Lập chỉ mục tăng dần; `status: 'skipped'` khi đang lập chỉ mục đầy đủ hoặc đang refresh. */
     refresh(projectId: string): Promise<RefreshResult>
@@ -72,10 +97,12 @@ export interface NexGraphApi {
     cycles(projectId: string, limit?: number): Promise<ImportCycles>
   }
   fs: {
+    /** Liệt kê một cấp trong thư mục dự án, dùng đường dẫn tương đối hoặc `.` cho gốc. */
+    list?(projectId: string, directory: string): Promise<ProjectDirectory>
     /** Đọc tệp trong gốc dự án; lỗi có `code` là `outside_project` | `file_not_found`. */
     read(projectId: string, relPath: string): Promise<FileContent>
-    /** Ghi nguyên tử trong gốc dự án; `expectedMtimeMs` lệch với đĩa thì lỗi `conflict`. */
-    write(projectId: string, relPath: string, text: string, opts: WriteOpts): Promise<{ mtimeMs: number }>
+    /** Ghi nguyên tử trong gốc dự án. Nếu tệp lệch phiên bản yêu cầu thì báo `conflict`. */
+    write(projectId: string, relPath: string, text: string, opts: WriteOpts & { expectedVersion: string | null }): Promise<FileRevision>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */
@@ -95,10 +122,10 @@ export interface NexGraphApi {
     uninstall(projectId: string): Promise<void>
   }
   ai: {
-    /** Cấu hình dẫn xuất của provider đang chọn, cho các panel hiển thị "chưa cấu hình" và host consent. */
+    /** Cấu hình của đích nhận dữ liệu đang chọn. */
     getSettings(): Promise<AiSettings>
-    hasConsent(projectId: string): Promise<boolean>
-    grantConsent(projectId: string): Promise<void>
+    hasConsent(projectId: string, target: AiConsentTarget): Promise<boolean>
+    grantConsent(projectId: string, target: AiConsentTarget): Promise<void>
   }
   /** Tài khoản AI: key chỉ ở main (safeStorage), renderer chỉ nhận `hasKey`. */
   auth: {
@@ -119,10 +146,10 @@ export interface NexGraphApi {
     onEvent(cb: (e: AuthEventView) => void): () => void
     onPrompt(cb: (p: AuthPromptView) => void): () => void
   }
-  /** Phiên agent theo dự án (giữ hội thoại trong bộ nhớ). Lỗi có `code`: `consent_required` | `ai_not_configured` | `agent_busy`. */
+  /** Phiên agent giữ hội thoại trong bộ nhớ cho cùng dự án và đích nhận dữ liệu. */
   agent: {
     /** Gửi một lượt; kết quả đến qua `onEvent` (`text`… rồi `done` hoặc `error`). Resolve khi lượt kết thúc. */
-    prompt(projectId: string, text: string): Promise<void>
+    prompt(projectId: string, text: string, target: AiConsentTarget): Promise<void>
     abort(projectId: string): Promise<void>
     /** Đổi chế độ; yêu cầu duyệt đang chờ bị từ chối. */
     setMode(projectId: string, mode: AgentMode): Promise<void>

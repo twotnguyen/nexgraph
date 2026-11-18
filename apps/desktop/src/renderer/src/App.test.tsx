@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ScanInfo } from '@shared/graph-types'
-import { installNexgraph, project } from './test-utils'
+import { installNexgraph, progress, project } from './test-utils'
 import App from './App'
 
 const small: ScanInfo = { files: 120, by_language: { dart: 120 }, large: false, threshold: 5000, top_dirs: [] }
@@ -60,17 +60,65 @@ describe('App flow after opening a project', () => {
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1'))
   })
 
-  it('mở dự án đã index thì vào Tổng quan, thẻ Báo cáo mở workspace ở tab Báo cáo, có nút về Tổng quan', async () => {
+  it('mở dự án đã index vào workspace và vẫn có thể lập chỉ mục lại từ Tổng quan', async () => {
     const h = installNexgraph({ project: { open: vi.fn(async () => project({ last_indexed_at: 1_700_000_000 })) },
       graph: { report: vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], questions: [], benchmark: null, truncated: false })) } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'Mở thư mục…' }))
-    await userEvent.click(await screen.findByRole('button', { name: /^Báo cáo/ }))
+    expect(await screen.findByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Báo cáo' }))
     expect(await screen.findByRole('tab', { name: 'Báo cáo', selected: true })).toBeInTheDocument()
     expect(h.api.index.start).not.toHaveBeenCalled()
     await userEvent.click(screen.getByRole('button', { name: '← Tổng quan' }))
     await userEvent.click(await screen.findByRole('button', { name: /^Index lại/ }))
     expect(await screen.findByText('Đang lập chỉ mục: demo')).toBeInTheDocument()
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1'))
+  })
+
+  it.each(['cancelled', 'error'] as const)('cho xem đồ thị hiện có và quay lại cùng tác vụ index lại (%s)', async (state) => {
+    const indexed = project({ last_indexed_at: 1_700_000_000 })
+    const h = installNexgraph({ project: { open: vi.fn(async () => indexed) } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở thư mục…' }))
+    await userEvent.click(await screen.findByRole('button', { name: '← Tổng quan' }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Index lại/ }))
+    await waitFor(() => expect(h.api.index.status).toHaveBeenCalledWith('j1'))
+    act(() => h.emit(progress('resolve', 4, 4)))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở đồ thị hiện có' }))
+    expect(await screen.findByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()
+    expect(await screen.findByText('Đồ thị từ lần lập chỉ mục thành công trước vẫn khả dụng.')).toBeInTheDocument()
+
+    act(() => h.emit(progress(state, 4, 4, { message: state === 'error' ? 'Không ghi được đồ thị mới' : null })))
+    await userEvent.click(screen.getByRole('button', { name: '← Tiến độ lập chỉ mục' }))
+    if (state === 'error') expect(screen.getByRole('alert')).toHaveTextContent('Không ghi được đồ thị mới')
+    else expect(screen.getByRole('heading', { name: 'Đã hủy lập chỉ mục: demo' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mở đồ thị hiện có' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Quay lại' }))
+    expect(await screen.findByRole('button', { name: /^Index lại/ })).toBeInTheDocument()
+    expect(h.api.index.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('dùng mốc lập chỉ mục đã công bố sau lần thành công đầu tiên', async () => {
+    const indexedAt = 1_700_000_000
+    const list = vi.fn(async () => [project({ last_indexed_at: indexedAt })]).mockResolvedValueOnce([])
+    const h = installNexgraph({ project: { list } })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở thư mục…' }))
+    await waitFor(() => expect(h.api.index.status).toHaveBeenCalledWith('j1'))
+    act(() => h.emit(progress('done', 10, 10)))
+    await userEvent.click(screen.getByRole('button', { name: 'Bắt đầu khám phá' }))
+    await userEvent.click(await screen.findByRole('button', { name: '← Tổng quan' }))
+    expect(await screen.findByText(`Index lần cuối: ${new Date(indexedAt * 1000).toLocaleString('vi-VN')}`)).toBeInTheDocument()
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('quay lại danh sách dự án khi lần lập chỉ mục đầu tiên thất bại', async () => {
+    const h = await openProject(async () => small)
+    await waitFor(() => expect(h.api.index.status).toHaveBeenCalledWith('j1'))
+    act(() => h.emit(progress('error', 3, 10, { message: 'Không ghi được đồ thị' })))
+    expect(screen.getByRole('button', { name: 'Bắt đầu khám phá' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Mở đồ thị hiện có' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Quay lại' }))
+    expect(await screen.findByRole('button', { name: 'Mở thư mục…' })).toBeInTheDocument()
   })
 })

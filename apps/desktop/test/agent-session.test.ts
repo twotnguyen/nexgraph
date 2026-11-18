@@ -2,12 +2,14 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { AgentService, ASK_TOOLS, EDIT_TOOLS, rememberSecret, scrub, type ModelChoice, type PiSession, type SessionSpec } from '../src/main/agent/session'
+import { AgentService, rememberSecret, scrub, type AgentAccounts, type PiSession, type SessionSpec } from '../src/main/agent/session'
+import { ASK_TOOLS, EDIT_TOOLS } from '../src/main/agent/extension'
 import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
 import type { AgentEvent } from '../src/shared/agent-types'
 
 const GRAPH = TOOL_DEFS.map((t) => t.function.name)
+const TARGET = { provider: 'nexgraph-custom', baseUrl: 'https://test.example/v1' }
 type ToolCallHandler = (e: { type: 'tool_call'; toolName: string; toolCallId: string; input: Record<string, unknown> }) => Promise<{ block: true; reason: string } | undefined>
 type Listener = (e: unknown) => void
 const tick = () => new Promise((r) => setTimeout(r, 0))
@@ -15,6 +17,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0))
 /** Phiên pi giả: chạy extension thật trên một `pi` giả, prompt() chạy kịch bản của test. */
 class FakeSession {
   handler!: ToolCallHandler
+  startTurn?: () => void
   listeners: Listener[] = []
   active: string[]
   messages: { role: string; stopReason?: string; errorMessage?: string }[] = []
@@ -25,7 +28,13 @@ class FakeSession {
   decisions: ({ block: true; reason: string } | undefined)[] = []
   constructor(public spec: SessionSpec) {
     this.active = [...spec.tools]
-    spec.extension({ registerTool: () => {}, on: (ev: string, h: ToolCallHandler) => { if (ev === 'tool_call') this.handler = h } } as never)
+    spec.extension({
+      registerTool: () => {},
+      on: (event: string, handler: ToolCallHandler | (() => void)) => {
+        if (event === 'tool_call') this.handler = handler as ToolCallHandler
+        if (event === 'agent_start') this.startTurn = handler as () => void
+      },
+    } as never)
   }
   subscribe(l: Listener) { this.listeners.push(l); return () => { this.listeners = this.listeners.filter((x) => x !== l) } }
   emit(e: unknown) { for (const l of this.listeners) l(e) }
@@ -40,7 +49,11 @@ class FakeSession {
   finish(stopReason = 'stop', errorMessage?: string) {
     this.messages.push({ role: 'assistant', stopReason: this.aborted ? 'aborted' : stopReason, errorMessage })
   }
-  async prompt(text: string): Promise<void> { this.messages.push({ role: 'user' }); await this.script(this, text) }
+  async prompt(text: string): Promise<void> {
+    this.startTurn?.()
+    this.messages.push({ role: 'user' })
+    await this.script(this, text)
+  }
   async abort() { this.aborted = true }
   dispose() { this.disposed = true; this.aborted = true }
   setActiveToolsByName(names: string[]) { this.active = names }
@@ -48,8 +61,8 @@ class FakeSession {
   async setModel(m: { provider: string; id: string }) { this.model = m }
 }
 
-function setup(over: { consent?: boolean; selected?: null; models?: () => Promise<ModelChoice>; rootOf?: (pid: string) => Promise<string> } = {}) {
-  const base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-sess-')))
+function setup(over: { consent?: boolean; selected?: null; accounts?: () => Promise<AgentAccounts>; rootOf?: (pid: string) => Promise<string> } = {}) {
+  const base = mkdtempSync(join(tmpdir(), 'ng-sess-'))
   const roots: Record<string, string> = { p1: join(base, 'p1'), p2: join(base, 'p2') }
   for (const r of Object.values(roots)) { mkdirSync(r); writeFileSync(join(r, 'a.py'), 'x\n') }
   const events: { pid: string; e: AgentEvent }[] = []
@@ -58,12 +71,15 @@ function setup(over: { consent?: boolean; selected?: null; models?: () => Promis
     if (file !== 'a.py') throw Object.assign(new Error('no'), { code: 'file_not_found' })
     return { file, start, end, text: 'x' }
   })
-  const fakeModel = { provider: 'nexgraph-custom', id: 'm1' }
+  const fakeModel = { ...TARGET, id: 'm1' }
   const svc = new AgentService({
     api: { code } as unknown as EngineApi,
     dataDir: join(base, 'data'),
-    models: over.models ?? (async () => ({ modelRuntime: { getModel: () => fakeModel } as never, selected: over.selected === null ? null : { provider: 'nexgraph-custom', id: 'm1' } })),
-    hasConsent: async () => over.consent ?? true,
+    accounts: over.accounts ?? (async () => ({
+      modelRuntime: { getModel: () => fakeModel } as never,
+      getSelectedModel: () => over.selected === null ? null : fakeModel,
+      hasConsent: async () => over.consent ?? true,
+    })),
     rootOf: over.rootOf ?? (async (pid) => { if (!roots[pid]) throw new Error('unknown'); return roots[pid] }),
     emit: (pid, e) => events.push({ pid, e }),
     createSession: async (spec) => { const s = new FakeSession(spec); sessions.push(s); return s as unknown as PiSession }
@@ -89,21 +105,21 @@ describe('AgentService (phiên giả)', () => {
   it('chế độ mặc định là ask; phiên tạo ở gốc dự án (realpath), agentDir riêng, tool đọc + 9 tool đồ thị', async () => {
     const { svc, sessions, roots, base } = setup()
     expect(svc.getMode('p1')).toBe('ask')
-    await svc.prompt('p1', 'chào')
+    await svc.prompt('p1', 'chào', TARGET)
     const spec = sessions[0].spec
-    expect(spec.cwd).toBe(realpathSync(roots.p1))
+    expect(spec.cwd).toBe(realpathSync.native(roots.p1))
     expect(spec.agentDir.startsWith(join(base, 'data'))).toBe(true)
     expect(sessions[0].active.sort()).toEqual([...ASK_TOOLS, ...GRAPH].sort())
     expect(ASK_TOOLS).toEqual(['read', 'grep', 'find', 'ls'])
-    expect(EDIT_TOOLS).toEqual(['read', 'grep', 'find', 'ls', 'edit', 'write', 'bash'])
-    expect(sessions[0].model).toEqual({ provider: 'nexgraph-custom', id: 'm1' })
+    expect(EDIT_TOOLS).toEqual(['read', 'grep', 'find', 'ls', 'edit', 'write'])
+    expect(sessions[0].model).toEqual({ ...TARGET, id: 'm1' })
   })
 
   it('text_delta → sự kiện text; kết thúc → done có citations đã kiểm chứng (trích dẫn sai bị đánh dấu)', async () => {
     const { svc, sessions, of } = setup()
-    await svc.prompt('p1', 'hỏi') // phiên được tạo ở lượt đầu; kịch bản đặt cho lượt sau
+    await svc.prompt('p1', 'hỏi', TARGET) // phiên được tạo ở lượt đầu; kịch bản đặt cho lượt sau
     sessions[0].script = async (s) => { s.delta('Xem [[a.py:1-1]] '); s.delta('và [[sai.py:1-2]]'); s.finish() }
-    await svc.prompt('p1', 'hỏi tiếp')
+    await svc.prompt('p1', 'hỏi tiếp', TARGET)
     expect(of('p1', 'text')).toEqual([{ type: 'text', delta: 'Xem [[a.py:1-1]] ' }, { type: 'text', delta: 'và [[sai.py:1-2]]' }])
     const done = of('p1', 'done').at(-1) as Extract<AgentEvent, { type: 'done' }>
     expect(done.text).toBe('Xem [[a.py:1-1]] và [[sai.py:1-2]]')
@@ -112,15 +128,15 @@ describe('AgentService (phiên giả)', () => {
 
   it('tool_execution_start/end → sự kiện tool', async () => {
     const { svc, sessions, of } = setup()
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     sessions[0].script = async (s) => { await s.call('search', { query: 'x' }); s.finish() }
-    await svc.prompt('p1', 'b')
+    await svc.prompt('p1', 'b', TARGET)
     expect(of('p1', 'tool')).toEqual([{ type: 'tool', name: 'search', status: 'start' }, { type: 'tool', name: 'search', status: 'end', error: false }])
   })
 
   it('setMode("edit") cấu hình lại phiên tại chỗ với tool sửa, giữ nguyên phiên', async () => {
     const { svc, sessions } = setup()
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     svc.setMode('p1', 'edit')
     expect(svc.getMode('p1')).toBe('edit')
     await tick()
@@ -134,17 +150,17 @@ describe('AgentService (phiên giả)', () => {
   it('chế độ đặt trước khi có phiên được áp dụng khi tạo phiên', async () => {
     const { svc, sessions } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     expect(sessions[0].active.sort()).toEqual([...EDIT_TOOLS, ...GRAPH].sort())
   })
 
   it('lượt Sửa: write → approval; approve(true) cho qua, approve(false) chặn kèm lý do cho mô hình', async () => {
     const { svc, sessions, of } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     const s = sessions[0]
     s.script = writeScript()
-    let run = svc.prompt('p1', 'viết b.txt')
+    let run = svc.prompt('p1', 'viết b.txt', TARGET)
     await vi.waitFor(() => expect(of('p1', 'approval')).toHaveLength(1))
     const req = (of('p1', 'approval')[0] as Extract<AgentEvent, { type: 'approval' }>).request
     expect(req).toMatchObject({ tool: 'write', path: 'b.txt', before: '', after: 'mới' })
@@ -154,7 +170,7 @@ describe('AgentService (phiên giả)', () => {
     expect(s.decisions.at(-1)).toBeUndefined()
     expect(of('p1', 'approval_closed')).toEqual([{ type: 'approval_closed', id: req.id }])
 
-    run = svc.prompt('p1', 'viết lại')
+    run = svc.prompt('p1', 'viết lại', TARGET)
     await vi.waitFor(() => expect(of('p1', 'approval')).toHaveLength(2))
     const req2 = (of('p1', 'approval')[1] as Extract<AgentEvent, { type: 'approval' }>).request
     svc.approve('p1', req2.id, false)
@@ -166,9 +182,9 @@ describe('AgentService (phiên giả)', () => {
   it('abort khi đang chờ duyệt → approval_closed, yêu cầu bị từ chối, prompt() kết thúc, không còn yêu cầu treo', async () => {
     const { svc, sessions, of } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     sessions[0].script = writeScript()
-    const run = svc.prompt('p1', 'viết')
+    const run = svc.prompt('p1', 'viết', TARGET)
     await vi.waitFor(() => expect(svc.pending('p1')).toBe(1))
     await svc.abort('p1')
     await run
@@ -181,9 +197,9 @@ describe('AgentService (phiên giả)', () => {
   it('setMode("ask") khi đang chờ duyệt → từ chối', async () => {
     const { svc, sessions } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     sessions[0].script = writeScript()
-    const run = svc.prompt('p1', 'viết')
+    const run = svc.prompt('p1', 'viết', TARGET)
     await vi.waitFor(() => expect(svc.pending('p1')).toBe(1))
     svc.setMode('p1', 'ask')
     await run
@@ -194,9 +210,9 @@ describe('AgentService (phiên giả)', () => {
   it('setMode("edit") khi đang chờ duyệt cũng từ chối yêu cầu cũ', async () => {
     const { svc, sessions } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     sessions[0].script = writeScript()
-    const run = svc.prompt('p1', 'viết')
+    const run = svc.prompt('p1', 'viết', TARGET)
     await vi.waitFor(() => expect(svc.pending('p1')).toBe(1))
     svc.setMode('p1', 'edit')
     await run
@@ -209,39 +225,39 @@ describe('AgentService (phiên giả)', () => {
     ['fetch failed: ECONNREFUSED', 'ai_unreachable', 'Không kết nối được tới nhà cung cấp AI']
   ])('nhà cung cấp lỗi "%s" → sự kiện error tiếng Việt, prompt() không ném, lượt sau vẫn chạy', async (raw, code, message) => {
     const { svc, sessions, of } = setup()
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     sessions[0].script = async (s) => { s.finish('error', raw) }
-    await expect(svc.prompt('p1', 'b')).resolves.toBeUndefined()
+    await expect(svc.prompt('p1', 'b', TARGET)).resolves.toBeUndefined()
     expect(of('p1', 'error').at(-1)).toEqual({ type: 'error', code, message })
     sessions[0].script = async (s) => { s.delta('ok'); s.finish() }
-    await svc.prompt('p1', 'c')
+    await svc.prompt('p1', 'c', TARGET)
     expect(of('p1', 'done').at(-1)).toMatchObject({ type: 'done', text: 'ok' })
   })
 
   it('session.prompt ném lỗi → sự kiện error, prompt() vẫn resolve', async () => {
     const { svc, sessions, of } = setup()
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     sessions[0].script = async () => { throw new Error('fetch failed') }
-    await expect(svc.prompt('p1', 'b')).resolves.toBeUndefined()
+    await expect(svc.prompt('p1', 'b', TARGET)).resolves.toBeUndefined()
     expect(of('p1', 'error').at(-1)).toMatchObject({ code: 'ai_unreachable' })
   })
 
   it('chưa đồng ý gửi mã → consent_required; chưa cấu hình → ai_not_configured; không tạo phiên', async () => {
     const a = setup({ consent: false })
-    await expect(a.svc.prompt('p1', 'x')).rejects.toMatchObject({ code: 'consent_required' })
+    await expect(a.svc.prompt('p1', 'x', TARGET)).rejects.toMatchObject({ code: 'consent_required' })
     const b = setup({ selected: null })
-    await expect(b.svc.prompt('p1', 'x')).rejects.toMatchObject({ code: 'ai_not_configured' })
+    await expect(b.svc.prompt('p1', 'x', TARGET)).rejects.toMatchObject({ code: 'ai_not_configured' })
     expect(a.sessions.length + b.sessions.length).toBe(0)
   })
 
   it('đang trả lời thì lượt mới bị từ chối với agent_busy', async () => {
     const { svc, sessions } = setup()
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     let release = () => {}
     sessions[0].script = (s) => new Promise<void>((r) => { release = () => { s.finish(); r() } })
-    const run = svc.prompt('p1', 'b')
+    const run = svc.prompt('p1', 'b', TARGET)
     await tick()
-    await expect(svc.prompt('p1', 'c')).rejects.toMatchObject({ code: 'agent_busy' })
+    await expect(svc.prompt('p1', 'c', TARGET)).rejects.toMatchObject({ code: 'agent_busy' })
     release()
     await run
   })
@@ -249,12 +265,12 @@ describe('AgentService (phiên giả)', () => {
   it('hai dự án có phiên riêng; close(pid) dispose phiên và từ chối yêu cầu treo', async () => {
     const { svc, sessions, of } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
-    await svc.prompt('p2', 'a')
+    await svc.prompt('p1', 'a', TARGET)
+    await svc.prompt('p2', 'a', TARGET)
     expect(sessions).toHaveLength(2)
     expect(svc.getMode('p2')).toBe('ask')
     sessions[0].script = writeScript()
-    const run = svc.prompt('p1', 'viết')
+    const run = svc.prompt('p1', 'viết', TARGET)
     await vi.waitFor(() => expect(svc.pending('p1')).toBe(1))
     svc.close('p1')
     await run
@@ -263,7 +279,7 @@ describe('AgentService (phiên giả)', () => {
     expect(sessions[0].decisions.at(-1)).toMatchObject({ block: true })
     expect(of('p1', 'approval_closed')).toHaveLength(1)
     expect(svc.pending('p1')).toBe(0)
-    await svc.prompt('p1', 'mở lại')
+    await svc.prompt('p1', 'mở lại', TARGET)
     expect(sessions).toHaveLength(3)
     svc.closeAll()
     await tick()
@@ -279,11 +295,11 @@ describe('AgentService (phiên giả)', () => {
   it('sau khi abort bắt đầu, tool_call write đến muộn bị từ chối ngay, không có sự kiện approval', async () => {
     const { svc, sessions, of } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     let release = () => {}
     const gateOpen = new Promise<void>((r) => { release = r })
     sessions[0].script = async (s) => { await gateOpen; await s.call('write', { path: 'b.txt', content: 'x' }); s.finish() }
-    const run = svc.prompt('p1', 'viết')
+    const run = svc.prompt('p1', 'viết', TARGET)
     await tick()
     await svc.abort('p1')
     release()
@@ -293,7 +309,7 @@ describe('AgentService (phiên giả)', () => {
     expect(svc.pending('p1')).toBe(0)
     // lượt mới bỏ cờ dừng: lại hỏi duyệt bình thường
     sessions[0].script = writeScript()
-    const next = svc.prompt('p1', 'viết lại')
+    const next = svc.prompt('p1', 'viết lại', TARGET)
     await vi.waitFor(() => expect(of('p1', 'approval')).toHaveLength(1))
     svc.close('p1')
     await next
@@ -302,7 +318,7 @@ describe('AgentService (phiên giả)', () => {
   it('sau close() không phát sự kiện approval cho tool_call đến muộn', async () => {
     const { svc, sessions, of } = setup()
     svc.setMode('p1', 'edit')
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     const s = sessions[0]
     svc.close('p1')
     expect(await s.handler({ type: 'tool_call', toolName: 'write', toolCallId: 'c', input: { path: 'b.txt', content: 'x' } })).toMatchObject({ block: true })
@@ -312,15 +328,15 @@ describe('AgentService (phiên giả)', () => {
   it('abort khi tạo phiên thất bại không ném', async () => {
     const { svc } = setup()
     ;(svc as unknown as { deps: { createSession: () => Promise<never> } }).deps.createSession = async () => { throw new Error('nạp pi lỗi') }
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     await expect(svc.abort('p1')).resolves.toBeUndefined()
   })
 
   it('ai_error không chứa nguyên văn lỗi nhà cung cấp có dạng khoá, chi tiết bị cắt ngắn', async () => {
     const { svc, sessions, of } = setup()
-    await svc.prompt('p1', 'a')
+    await svc.prompt('p1', 'a', TARGET)
     sessions[0].script = async (s) => { s.finish('error', `weird failure sk-abcdef1234567890 Bearer xyz.secret ${'z'.repeat(500)}`) }
-    await svc.prompt('p1', 'b')
+    await svc.prompt('p1', 'b', TARGET)
     const e = of('p1', 'error').at(-1) as Extract<AgentEvent, { type: 'error' }>
     expect(e.code).toBe('ai_error')
     expect(e.message).toMatch(/^Trợ lý AI gặp lỗi/)
@@ -343,15 +359,37 @@ describe('scrub', () => {
 })
 
 describe('AgentService (huỷ lượt đang khởi động)', () => {
-  const modelChoice = {
-    modelRuntime: { getModel: (): { provider: string; id: string } => ({ provider: 'x', id: 'm' }) } as unknown as ModelChoice['modelRuntime'],
-    selected: { provider: 'x', id: 'm' }
+  const modelChoice: AgentAccounts = {
+    modelRuntime: { getModel: () => ({ ...TARGET, id: 'm1' }) } as unknown as AgentAccounts['modelRuntime'],
+    getSelectedModel: () => ({ provider: TARGET.provider, id: 'm1' }),
+    hasConsent: async () => true,
   }
+
+  it('đổi đích nhận lúc chờ kết quả đồng ý cũ → không tạo phiên', async () => {
+    const checked = deferred<void>()
+    const consent = deferred<boolean>()
+    let selection = { ...TARGET, id: 'm1' }
+    const { svc, sessions, events } = setup({
+      accounts: async () => ({
+        modelRuntime: { getModel: () => selection } as unknown as AgentAccounts['modelRuntime'],
+        getSelectedModel: () => selection,
+        hasConsent: async () => { checked.resolve(undefined); return consent.promise },
+      }),
+    })
+    const run = svc.prompt('p1', 'hỏi', TARGET)
+    await checked.promise
+    selection = { ...selection, baseUrl: 'https://test.example/another-endpoint' }
+    consent.resolve(true)
+
+    await expect(run).rejects.toMatchObject({ code: 'ai_provider_changed' })
+    expect(sessions).toHaveLength(0)
+    expect(events).toHaveLength(0)
+  })
 
   it('closeAll trong lúc nạp model: lượt cũ không tạo phiên, không phát done/error', async () => {
     const gate = deferred<typeof modelChoice>()
-    const { svc, events, sessions, base } = setup({ models: () => gate.promise })
-    const run = svc.prompt('p1', 'hỏi')
+    const { svc, events, sessions, base } = setup({ accounts: () => gate.promise })
+    const run = svc.prompt('p1', 'hỏi', TARGET)
     svc.closeAll()
     gate.resolve(modelChoice)
     await expect(run).resolves.toBeUndefined()
@@ -366,7 +404,7 @@ describe('AgentService (huỷ lượt đang khởi động)', () => {
     const { svc, events, sessions, roots, base } = setup({
       rootOf: () => { asked.resolve(undefined); return gate.promise }
     })
-    const run = svc.prompt('p1', 'hỏi')
+    const run = svc.prompt('p1', 'hỏi', TARGET)
     await asked.promise
     svc.close('p1')
     gate.resolve(roots.p1)
@@ -378,8 +416,8 @@ describe('AgentService (huỷ lượt đang khởi động)', () => {
 
   it('abort trong lúc nạp model: panel nhận ai_cancelled ngay, phiên không được tạo', async () => {
     const gate = deferred<typeof modelChoice>()
-    const { svc, of, sessions, base } = setup({ models: () => gate.promise })
-    const run = svc.prompt('p1', 'hỏi')
+    const { svc, of, sessions, base } = setup({ accounts: () => gate.promise })
+    const run = svc.prompt('p1', 'hỏi', TARGET)
     await svc.abort('p1')
     expect(of('p1', 'error').at(-1)).toMatchObject({ type: 'error', code: 'ai_cancelled' })
     gate.resolve(modelChoice)
@@ -391,13 +429,13 @@ describe('AgentService (huỷ lượt đang khởi động)', () => {
 
   it('lượt mới sau closeAll không nhận done/error trễ của lượt cũ', async () => {
     const gate = deferred<typeof modelChoice>()
-    const { svc, of, base } = setup({ models: () => gate.promise })
-    const old = svc.prompt('p1', 'cũ')
+    const { svc, of, base } = setup({ accounts: () => gate.promise })
+    const old = svc.prompt('p1', 'cũ', TARGET)
     svc.closeAll()
     gate.resolve(modelChoice)
     await old
-    await svc.prompt('p1', 'mới')
-    await svc.prompt('p1', 'mới nữa')
+    await svc.prompt('p1', 'mới', TARGET)
+    await svc.prompt('p1', 'mới nữa', TARGET)
     expect(of('p1', 'done')).toHaveLength(2) // chỉ hai lượt mới, lượt cũ bị huỷ không phát gì
     expect(of('p1', 'error')).toHaveLength(0)
     rmSync(base, { recursive: true, force: true })

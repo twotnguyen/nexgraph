@@ -7,11 +7,11 @@ import { installNexgraph } from '../../test-utils'
 import { MapView } from './MapView'
 
 vi.mock('./SigmaView', () => ({
-  SigmaView: (p: { nodes: MapNode[]; edges: MapEdge[]; dimmed?: Set<string>; onNodeClick: (id: string) => void;
+  SigmaView: (p: { nodes: MapNode[]; edges: MapEdge[]; visibleEdges?: MapEdge[]; dimmed?: Set<string>; onNodeClick: (id: string) => void;
     onEdgeClick: (s: string, t: string) => void; onUnsupported: () => void }) => (
     <div data-testid="sigma" data-dimmed={p.dimmed?.size ?? 0}>
       {p.nodes.map((n) => <button key={n.id} type="button" onClick={() => p.onNodeClick(n.id)}>{n.label}</button>)}
-      {p.edges.map((e) => <button key={e.source + e.target} data-testid="e" type="button" onClick={() => p.onEdgeClick(e.source, e.target)}>{`${e.source}>${e.target}`}</button>)}
+      {(p.visibleEdges ?? p.edges).map((e) => <button key={e.source + e.target} data-testid="e" type="button" onClick={() => p.onEdgeClick(e.source, e.target)}>{`${e.source}>${e.target}`}</button>)}
       <button type="button" data-testid="unsupported" onClick={p.onUnsupported}>x</button>
     </div>
   )

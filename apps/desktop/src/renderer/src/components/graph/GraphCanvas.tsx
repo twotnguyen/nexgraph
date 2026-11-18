@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } fr
 import type { GraphEdge, GraphNode, Neighborhood } from '@shared/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
 import { vi } from '../../strings'
+import { useTheme } from '../../state/useTheme'
 import { AutoFit } from '../common/AutoFit'
+import { CanvasState } from '../common/CanvasState'
 import { BOX_H, BOX_W, dotEdge, dotEdgeTypes, dotNodeTypes, dotSize, radialLayout, type DotData } from '../common/dotGraph'
 import { HIGHLIGHT_COLORS, kindStyle, type HighlightKind } from './kindStyle'
 
@@ -11,6 +13,7 @@ const LIMIT = 2000 // không bao giờ vẽ quá ~2.000 nút (spec §5.9)
 
 interface Props {
   projectId: string
+  revision?: number
   startNodeId: string
   /** Khi đổi sang một id khác null thì chuyển tâm sang nút đó (dùng khi mở kết quả tìm kiếm). */
   focusNodeId?: string | null
@@ -22,6 +25,7 @@ interface Props {
   /** Vùng con cần vẽ thay cho láng giềng (đường đi, kết quả Hỏi graph); cạnh được tô nổi. */
   overlay?: { nodes: GraphNode[]; edges: GraphEdge[] } | null
   onClearOverlay?: () => void
+  onBackToRoot?: () => void
 }
 
 const toFlowEdges = (edges: GraphEdge[], strong: boolean, routes: Record<string, { x: number; y: number }[]> = {}): Edge[] =>
@@ -40,10 +44,12 @@ function sizes(nodes: GraphNode[], edges: GraphEdge[]): Record<string, number> {
 
 interface View { boxes: boolean; pos: Record<string, { x: number; y: number }>; size: Record<string, number>; edges: Edge[]; raw: Map<string, GraphNode>; truncated: boolean; total?: number | null }
 
-export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, highlights, onNodeContextMenu, overlay, onClearOverlay }: Props) {
+export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId, onSelect, highlights, onNodeContextMenu, overlay, onClearOverlay, onBackToRoot }: Props) {
+  const theme = useTheme()
   const [center, setCenter] = useState(focusNodeId ?? startNodeId)
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
   const box = useRef<HTMLDivElement>(null)
   /** Khung cao hơn rộng (thẻ Luồng ba cột): xếp chuỗi bước từ trên xuống để ô đủ to mà đọc. */
   const tall = (): boolean => !!box.current && box.current.clientHeight > box.current.clientWidth
@@ -56,7 +62,9 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
 
   useEffect(() => {
     let alive = true
+    setView(null)
     setError(null)
+    setHover(null)
     ;(async () => {
       const hood = overlay ?? (await window.nexgraph.graph.neighbors(projectId, { node: center, depth: 1, limit: LIMIT }))
       const size = sizes(hood.nodes, hood.edges)
@@ -86,19 +94,19 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
         size,
         edges: toFlowEdges(hood.edges, overlay != null, routes)
       })
-    })().catch((err: Error) => alive && setError(err.message))
+    })().catch((err: Error) => alive && setError(err?.message ?? String(err)))
     return () => {
       alive = false
     }
-  }, [projectId, center, overlay])
+  }, [projectId, center, overlay, revision, retry])
 
   const onNodeClick = useCallback(
     (_: unknown, n: Node) => {
       const raw = view?.raw.get(n.id)
       if (raw) onSelect?.(raw)
-      setCenter(n.id)
+      if (!overlay) setCenter(n.id)
     },
-    [view, onSelect]
+    [view, onSelect, overlay]
   )
   const onContextMenu = useCallback(
     (e: MouseEvent, n: Node) => {
@@ -150,24 +158,26 @@ export function GraphCanvas({ projectId, startNodeId, focusNodeId, onSelect, hig
   const toolbar = useMemo(
     () => (
       <div className="graph-toolbar">
-        <button type="button" onClick={() => { onClearOverlay?.(); setCenter(startNodeId) }}>{vi.graph.backToRoot}</button>
+        <button type="button" onClick={() => { onClearOverlay?.(); setCenter(startNodeId); onBackToRoot?.() }}>{vi.graph.backToRoot}</button>
         {overlay && onClearOverlay && <button type="button" onClick={onClearOverlay}>{vi.path.clear}</button>}
       </div>
     ),
-    [startNodeId, overlay, onClearOverlay]
+    [startNodeId, overlay, onClearOverlay, onBackToRoot]
   )
 
   return (
-    <div className="graph-canvas" ref={box}>
+    <div className="graph-canvas" ref={box} aria-busy={!view && !error}>
       {toolbar}
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
+      {!view && !error && <CanvasState kind="loading" message="Đang tải đồ thị…" />}
+      {view?.raw.size === 0 && <CanvasState kind="empty" message="Không có nút trong vùng đã chọn." />}
       {view?.truncated && (
         <p role="status" className="muted">
           {view.total != null ? vi.graph.truncatedOf(view.raw.size, view.total) : vi.graph.truncated}
         </p>
       )}
-      {view && (
-        <ReactFlow className="dot-graph" key={overlay ? 'overlay' : center} nodes={nodes} edges={edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes}
+      {view && view.raw.size > 0 && (
+        <ReactFlow className="dot-graph" colorMode={theme} key={overlay ? 'overlay' : center} nodes={nodes} edges={edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes}
           onNodeMouseEnter={(_, n) => setHover(n.id)} onNodeMouseLeave={() => setHover(null)} onNodeClick={onNodeClick} onNodeContextMenu={onContextMenu}
           nodesDraggable={false} minZoom={0.2} proOptions={{ hideAttribution: true }}>
           <Background />

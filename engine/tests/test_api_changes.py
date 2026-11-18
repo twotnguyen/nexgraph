@@ -174,6 +174,22 @@ def test_changes_without_git_uses_last_index(api, opened):
 
 
 @needs_git
+def test_project_without_git_does_not_inherit_the_parent_repository(api, copy_fixture):
+    root = copy_fixture("bookstore_app")
+    parent = root.parent
+    (parent / "outer.py").write_text("outer = True\n", encoding="utf-8")
+    make_repo(parent)
+    project = api.open(root)
+    pid = project["project_id"]
+    assert not project["is_git"]
+    assert api.index(pid)["state"] == "done"
+    edit(root, AUTH, "'/auth/csrf'", "'/auth/csrf2'")
+    changes = api.get(f"/v1/projects/{pid}/changes").json()
+    assert changes["base"] == "last_index" and changes["base_commit"] is None
+    assert [entry["path"] for entry in changes["changed_files"]] == [AUTH]
+
+
+@needs_git
 def test_changes_does_not_touch_git(api, copy_fixture):
     root = copy_fixture("bookstore_app")
     make_repo(root)

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import type { GraphReport } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { kindStyle } from '../graph/kindStyle'
+import { CanvasState } from '../common/CanvasState'
 
 interface Props {
   projectId: string
+  revision?: number
   onOpenNode: (id: string) => void
   onAsk: (question: string) => void
   onExportMarkdown: () => void
@@ -12,9 +14,10 @@ interface Props {
 
 const num = (n: number) => n.toLocaleString('vi-VN')
 
-export function ReportView({ projectId, onOpenNode, onAsk, onExportMarkdown }: Props) {
+export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExportMarkdown }: Props) {
   const [report, setReport] = useState<GraphReport | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retry, setRetry] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -23,14 +26,14 @@ export function ReportView({ projectId, onOpenNode, onAsk, onExportMarkdown }: P
     window.nexgraph.graph
       .report(projectId)
       .then((r) => alive && setReport(r))
-      .catch((e: { message?: string }) => alive && setError(e.message ?? String(e)))
+      .catch((e: { message?: string }) => alive && setError(e?.message ?? String(e)))
     return () => {
       alive = false
     }
-  }, [projectId])
+  }, [projectId, revision, retry])
 
-  if (error) return <div className="report-view"><p role="alert" className="error">{error}</p></div>
-  if (!report) return <div className="report-view"><p className="muted">{vi.report.loading}</p></div>
+  if (error) return <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />
+  if (!report) return <CanvasState kind="loading" message={vi.report.loading} />
 
   return (
     <div className="report-view">
@@ -46,6 +49,7 @@ export function ReportView({ projectId, onOpenNode, onAsk, onExportMarkdown }: P
         <table>
           <thead><tr><th>{vi.report.colName}</th><th>{vi.report.colKind}</th><th>{vi.report.colFile}</th><th>{vi.report.colDegree}</th></tr></thead>
           <tbody>
+            {report.god_nodes.length === 0 && <tr><td colSpan={4} className="muted">Chưa có nút phù hợp.</td></tr>}
             {report.god_nodes.map(({ node, degree }) => (
               <tr key={node.id}>
                 <td><button type="button" className="link" onClick={() => onOpenNode(node.id)}>{node.label}</button></td>
@@ -63,6 +67,7 @@ export function ReportView({ projectId, onOpenNode, onAsk, onExportMarkdown }: P
         <table>
           <thead><tr><th>{vi.report.colName}</th><th>{vi.report.colSize}</th><th>{vi.report.colCohesion}</th></tr></thead>
           <tbody>
+            {report.communities.length === 0 && <tr><td colSpan={3} className="muted">Chưa có dữ liệu nhóm.</td></tr>}
             {report.communities.map((c) => (
               <tr key={c.id}><td>{c.label}</td><td>{num(c.size)}</td><td>{c.cohesion.toFixed(2)}</td></tr>
             ))}

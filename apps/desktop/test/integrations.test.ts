@@ -7,6 +7,8 @@ import { skillMarkdown } from '../src/main/agent/skill'
 
 const cmd = { command: '/Apps/NexGraph/engine', args: [] as string[] }
 const dataDir = '/data dir'
+// Junction trên Windows kiểm cùng đường resolveInside và không đòi quyền tạo symlink.
+const linkType = process.platform === 'win32' ? 'junction' : 'dir'
 let root: string
 beforeEach(() => {
   root = join(mkdtempSync(join(tmpdir(), 'ng-int-')), 'Đồ án', 'demo app')
@@ -20,9 +22,63 @@ describe('integrations', () => {
     expect(p).toMatchObject({ path: join(root, '.mcp.json'), exists: false, status: 'new' })
     expect(JSON.parse(p.after)).toEqual({ mcpServers: { nexgraph: { type: 'stdio', command: '/Apps/NexGraph/engine', args: args(root) } } })
     expect(JSON.parse(planIntegration('vscode', root, cmd, dataDir).after).servers.nexgraph.type).toBe('stdio')
-    expect(JSON.parse(planIntegration('opencode', root, cmd, dataDir).after).mcp.nexgraph)
+    expect(JSON.parse(planIntegration('opencode', root, cmd, dataDir).after).mcp.servers.nexgraph)
       .toEqual({ type: 'local', command: ['/Apps/NexGraph/engine', ...args(root)] })
     expect(existsSync(join(root, '.mcp.json'))).toBe(false)
+  })
+
+  it('OpenCode V2: dùng cấu hình .opencode hiện có, giữ server và timeout, thay cấu hình NexGraph cũ', () => {
+    const file = join(root, '.opencode', 'opencode.jsonc')
+    const lowerPriority = join(root, '.opencode', 'opencode.json')
+    mkdirSync(join(root, '.opencode'))
+    writeFileSync(lowerPriority, '{"model":"provider/default"}\n')
+    const other = { type: 'remote', url: 'https://example.com/mcp' }
+    writeFileSync(file, JSON.stringify({
+      model: 'provider/model',
+      mcp: { timeout: { startup: 7000 }, servers: { other }, nexgraph: { type: 'local', command: ['old'] } }
+    }))
+    const plan = applyIntegration('opencode', root, cmd, dataDir)
+    expect(plan).toMatchObject({ status: 'update', path: file })
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({
+      model: 'provider/model',
+      mcp: {
+        timeout: { startup: 7000 },
+        servers: { other, nexgraph: { type: 'local', command: [cmd.command, ...args(root)] } }
+      }
+    })
+    expect(planIntegration('opencode', root, cmd, dataDir).status).toBe('up_to_date')
+    expect(readFileSync(lowerPriority, 'utf8')).toBe('{"model":"provider/default"}\n')
+    expect(existsSync(join(root, 'opencode.json'))).toBe(false)
+  })
+
+  it('OpenCode V1: thêm NexGraph trực tiếp vào cấu hình đang có và giữ server khác', () => {
+    const file = join(root, 'opencode.json')
+    const other = { type: 'remote', url: 'https://example.com/mcp', enabled: false }
+    writeFileSync(file, JSON.stringify({ mcp: { other } }))
+    const plan = applyIntegration('opencode', root, cmd, dataDir)
+    expect(plan.status).toBe('add')
+    expect(JSON.parse(plan.snippet)).toEqual({ mcp: { nexgraph: { type: 'local', command: [cmd.command, ...args(root)] } } })
+    expect(JSON.parse(readFileSync(file, 'utf8')).mcp).toEqual({ other, ...JSON.parse(plan.snippet).mcp })
+  })
+
+  it('OpenCode: không ghi đè cấu hình JSONC có chú thích và cho sao chép mục V2', () => {
+    const file = join(root, 'opencode.jsonc')
+    const text = '{ // dùng tài khoản riêng\n "mcp": { "servers": {} },\n}\n'
+    writeFileSync(file, text)
+    const plan = planIntegration('opencode', root, cmd, dataDir)
+    expect(plan).toMatchObject({ status: 'invalid', path: file })
+    expect(JSON.parse(plan.snippet).mcp.servers.nexgraph.type).toBe('local')
+    expect(() => applyIntegration('opencode', root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'invalid_config' }))
+    expect(readFileSync(file, 'utf8')).toBe(text)
+  })
+
+  it('OpenCode: thư mục cấu hình trỏ ra ngoài dự án bị chặn', () => {
+    const external = mkdtempSync(join(tmpdir(), 'ng-int-opencode-out-'))
+    const file = join(external, 'opencode.json')
+    writeFileSync(file, '{}')
+    symlinkSync(external, join(root, '.opencode'), linkType)
+    expect(() => applyIntegration('opencode', root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'outside_project' }))
+    expect(readFileSync(file, 'utf8')).toBe('{}')
   })
 
   it('tệp đã có server khác: giữ nguyên mọi khoá và thứ tự, chỉ thêm nexgraph', () => {
@@ -131,21 +187,21 @@ describe('integrations', () => {
     const outDir = join(tmpdir(), 'ng-int-codex-out')
     mkdirSync(outDir, { recursive: true })
     writeFileSync(join(outDir, 'config.toml'), '[x]\n')
-    symlinkSync(outDir, join(root, '.codex'))
+    symlinkSync(outDir, join(root, '.codex'), linkType)
     expect(() => planIntegration('codex', root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'outside_project' }))
     expect(() => applyIntegration('codex', root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'outside_project' }))
     expect(readFileSync(join(outDir, 'config.toml'), 'utf8')).toBe('[x]\n')
     rmSync(join(root, '.codex'))
-    symlinkSync(join(tmpdir(), 'ng-int-codex-dangling'), join(root, '.codex'))
+    symlinkSync(join(tmpdir(), 'ng-int-codex-dangling'), join(root, '.codex'), linkType)
     expect(() => planIntegration('codex', root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'outside_project' }))
   })
 
   it('skill: symlink thoát dự án bị chặn theo resolveInside, plan lẫn apply đều ném', () => {
     mkdirSync(join(root, '.claude'), { recursive: true })
-    symlinkSync(join(tmpdir(), 'ng-int-outside'), join(root, '.claude', 'skills'))
+    symlinkSync(join(tmpdir(), 'ng-int-outside'), join(root, '.claude', 'skills'), linkType)
     expect(() => planSkill('claude', root)).toThrow(expect.objectContaining({ code: 'outside_project' }))
     expect(() => applySkill('claude', root)).toThrow(expect.objectContaining({ code: 'outside_project' }))
-    symlinkSync(join(tmpdir(), 'ng-int-outside'), join(root, 'AGENTS.md'))
+    symlinkSync(join(tmpdir(), 'ng-int-outside'), join(root, 'AGENTS.md'), linkType)
     expect(() => planSkill('agents-md', root)).toThrow(expect.objectContaining({ code: 'outside_project' }))
   })
 })

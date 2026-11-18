@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Changes, ExportFormat, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
+import type { HostCommand } from '@shared/api'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { EditorTab } from '../components/editor/EditorTab'
 import { ExportDialog } from '../components/export/ExportDialog'
@@ -15,16 +16,26 @@ import { SearchPanel } from '../components/search/SearchPanel'
 import { FlowsView } from '../components/flows/FlowsView'
 import { TourPanel } from '../components/tour/TourPanel'
 import { AgentPanel } from '../components/agent/AgentPanel'
+import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { MapView } from '../components/map/MapView'
 import { useChanges } from '../state/useChanges'
-import { Logo, VIEW_TONE } from '../components/common/icons'
+import { Icon, Logo, VIEW_TONE } from '../components/common/icons'
 import { vi } from '../strings'
+import './workspace.css'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}`
 const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
+const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
+  graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }
 interface OpenFile { file: string; line: number; lineEnd?: number }
-const baseName = (p: string): string => p.split('/').pop() as string
+const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
+type Panel = 'explorer' | 'search' | 'changes' | 'tour'
+const PANEL_TITLES: Record<Panel, string> = {
+  explorer: 'Duyệt tệp', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
+}
+const messageOf = (e: unknown): string =>
+  e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
 
 /** Ảnh hưởng của một nút hiển thị bằng chính ChangesPanel (nút nguồn đứng ở mục "đã đổi"). */
 const impactAsChanges = (i: NodeImpact): Changes => ({
@@ -55,9 +66,51 @@ const ChangesIcon = (
   </svg>
 )
 
-export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings }: { project: ProjectSummary; initialTab?: Tab; initialFlowId?: number; onBack?: () => void; onOpenSettings?: () => void }) {
-  const [chatOpen, setChatOpen] = useState(false)
+const FilesIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M8 3h8l4 4v12H8zM15 3v5h5M4 7v14h12" />
+  </svg>
+)
+
+const FileIcon = (
+  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M6 3h8l4 4v14H6zM13 3v5h5M9.5 12l-1.5 1.5 1.5 1.5M14.5 12l1.5 1.5-1.5 1.5" />
+  </svg>
+)
+
+const ACTIVITIES = [
+  { id: 'explorer', title: PANEL_TITLES.explorer, icon: FilesIcon },
+  { id: 'search', title: PANEL_TITLES.search, icon: SearchIcon },
+  { id: 'changes', title: PANEL_TITLES.changes, icon: ChangesIcon },
+  { id: 'tour', title: PANEL_TITLES.tour, icon: TourIcon }
+] satisfies { id: Panel; title: string; icon: typeof SearchIcon }[]
+
+interface Props {
+  project: ProjectSummary
+  initialTab?: Tab
+  initialFlowId?: number
+  onBack?: () => void
+  onOpenSettings?: () => void
+  backLabel?: string
+  indexNotice?: string
+  initialCommand?: HostCommand
+}
+
+export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, backLabel = vi.workspace.back, indexNotice, initialCommand }: Props) {
+  const hosted = !!window.nexgraph.host
+  const id = useId()
+  const tabList = useRef<HTMLDivElement>(null)
+  const focusTabAfterClose = useRef(false)
+  const graphRequest = useRef(0)
+  const nodeRequest = useRef(0)
+  const impactRequest = useRef(0)
+  const hostInitialHandled = useRef(false)
+  const [revision, setRevision] = useState(0)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [chatOpen, setChatOpen] = useState(() => !hosted && (window.matchMedia?.('(min-width: 980px)').matches ?? true))
+  const [connectOpenCode, setConnectOpenCode] = useState(false)
   useEffect(() => {
+    if (hosted) return
     const onKey = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
         e.preventDefault()
@@ -66,23 +119,28 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [hosted])
   const [archParent, setArchParent] = useState<string | undefined>(undefined)
   const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
   const openFlow = (id: number) => {
     setFlowId(id)
     setTab('flows')
   }
-  // Trong extension bảng công cụ đóng sẵn: thanh bên của nền đã có điều hướng, nhường chỗ cho đồ thị.
-  const [panel, setPanel] = useState<string | null>(window.nexgraph.host ? null : 'search')
+  // Cây dùng cùng bảng duyệt tệp ở cả ứng dụng độc lập và Code-OSS.
+  const [panel, setPanel] = useState<Panel | null>(!hosted || initialTab === 'tree' ? 'explorer' : null)
   const live = useChanges(project.project_id)
   const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
-  const changes = nodeImpact ? impactAsChanges(nodeImpact) : live.changes
+  const [impactPending, setImpactPending] = useState(false)
+  const changes = impactPending ? null : nodeImpact ? impactAsChanges(nodeImpact) : live.changes
 
   // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp. Rời đi cũng đóng phiên agent.
   useEffect(() => {
-    void window.nexgraph.watch.start(project.project_id).catch(() => {})
+    let current = true
+    void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
+      if (current) setFeedback(`Không theo dõi được thay đổi của tệp. ${messageOf(error)}`)
+    })
     return () => {
+      current = false
       void window.nexgraph.watch.stop(project.project_id).catch(() => {})
       // Trong extension, trợ lý sống ở view riêng của nền nên rời màn này không đóng phiên của nó.
       if (!window.nexgraph.host) void window.nexgraph.agent.close(project.project_id).catch(() => {})
@@ -100,6 +158,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     return h
   }, [changes])
   const [tab, setTab] = useState<Tab>(initialTab ?? 'arch')
+  const activeFile = tab.startsWith('file:') ? tab.slice('file:'.length) : undefined
   const [lastMain, setLastMain] = useState<Tab>(initialTab ?? 'arch')
   useEffect(() => {
     if (!tab.startsWith('file:')) setLastMain(tab)
@@ -107,12 +166,34 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [files, setFiles] = useState<OpenFile[]>([])
+  const chatFile = files.find(({ file }) => file === activeFile)
   const [exportScope, setExportScope] = useState<ExportScope | null>(null)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('html')
   const [menu, setMenu] = useState<{ node: GraphNode; x: number; y: number } | null>(null)
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null)
   const [overlay, setOverlay] = useState<Overlay | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  useEffect(() => window.nexgraph.index.onEvent((event) => {
+    if (event.type !== 'graph_updated' || event.project_id !== project.project_id) return
+    graphRequest.current++
+    nodeRequest.current++
+    impactRequest.current++
+    setRevision((value) => value + 1)
+    setSelected(null)
+    setOverlay(null)
+    setNotice(null)
+    setNodeImpact(null)
+    setImpactPending(false)
+    setPathFrom(null)
+    setMenu(null)
+  }), [project.project_id])
+
+  useEffect(() => {
+    if (!focusTabAfterClose.current) return
+    focusTabAfterClose.current = false
+    tabList.current?.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')?.focus()
+  }, [tab])
 
   useEffect(() => {
     if (!pathFrom) return
@@ -124,32 +205,48 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }, [pathFrom])
 
   const clearOverlay = () => {
+    graphRequest.current++
     setOverlay(null)
     setNotice(null)
   }
   const findPath = async (from: GraphNode, to: GraphNode) => {
+    const request = ++graphRequest.current
+    setTab('graph')
     setPathFrom(null)
+    setOverlay(null)
+    setNotice('Đang tìm đường nối…')
     try {
       const r = await window.nexgraph.graph.paths(project.project_id, [from.id, to.id])
+      if (request !== graphRequest.current) return
       // Không nối được: chỉ tô hai nút, không vẽ mũi tên (spec gốc §5.8).
       setOverlay({ nodes: r.nodes, edges: r.unconnected.length ? [] : r.edges })
       setNotice(r.unconnected.length ? vi.path.noLink : vi.path.found(r.edges.length))
     } catch (e) {
-      setNotice((e as { message?: string }).message ?? String(e))
+      if (request === graphRequest.current) {
+        setFeedback(messageOf(e))
+        setNotice(null)
+      }
     }
-    setTab('graph')
   }
   const askOnGraph = async (question: string) => {
+    const request = ++graphRequest.current
+    setTab('graph')
+    setOverlay(null)
+    setNotice(vi.search.asking)
     try {
       const r = await window.nexgraph.graph.ask(project.project_id, question)
+      if (request !== graphRequest.current) return
       setOverlay(r.nodes.length ? { nodes: r.nodes, edges: r.edges } : null)
       setNotice(!r.nodes.length ? vi.search.askNone : r.truncated ? vi.search.askTruncated : null)
     } catch (e) {
-      setNotice((e as { message?: string }).message ?? String(e))
+      if (request === graphRequest.current) {
+        setFeedback(messageOf(e))
+        setNotice(null)
+      }
     }
-    setTab('graph') // thông báo chỉ hiện ở tab Graph
   }
   const highlightFromChat = (nodes: GraphNode[], edges: GraphEdge[], note: string | null) => {
+    graphRequest.current++
     setOverlay(nodes.length ? { nodes, edges } : null)
     setNotice(note)
     setTab('graph')
@@ -162,18 +259,27 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setExportFormat(format)
     setExportScope(scope)
   }
+  const exportCurrent = () => {
+    const node = selected?.id ?? (overlay ? null : focus)
+    openExport(tab === 'graph' && node ? { kind: 'node', value: node } : { kind: 'all' })
+  }
   const showImpact = async (node: GraphNode) => {
+    const request = ++impactRequest.current
+    setPanel('changes')
+    setImpactPending(true)
     try {
-      setNodeImpact(await window.nexgraph.graph.impactOf(project.project_id, node.id))
-      setPanel('changes')
+      const impact = await window.nexgraph.graph.impactOf(project.project_id, node.id)
+      if (request === impactRequest.current) setNodeImpact(impact)
     } catch (e) {
-      setNotice((e as { message?: string }).message ?? String(e))
+      if (request === impactRequest.current) setFeedback(messageOf(e))
+    } finally {
+      if (request === impactRequest.current) setImpactPending(false)
     }
   }
 
   const openCode = (file: string, line = 1, lineEnd?: number) => {
     // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.
-    if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e) => setNotice((e as Error).message))
+    if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(messageOf(e)))
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd } : f)) : [...cur, { file, line, lineEnd }]))
     setTab(`file:${file}`)
   }
@@ -201,26 +307,52 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     if (dirtyFiles.has(file) && !window.confirm(vi.editor.confirmClose(baseName(file)))) return
     const order: Tab[] = [lastMain, ...files.map((f) => `file:${f.file}` as Tab)] // về tab chính dùng gần nhất
     const at = order.indexOf(`file:${file}`)
+    const next = order[Math.max(0, at - 1)]
+    if (tab === `file:${file}`) {
+      focusTabAfterClose.current = true
+      if (next === 'tree') setPanel('explorer')
+    }
     setFiles((cur) => cur.filter((f) => f.file !== file))
-    setTab((cur) => (cur === `file:${file}` ? order[Math.max(0, at - 1)] : cur))
+    setTab((cur) => (cur === `file:${file}` ? next : cur))
+  }
+  const selectView = (view: (typeof MAIN_TABS)[number]) => {
+    if (view === 'tree') {
+      setPanel('explorer')
+      if (activeFile) {
+        setLastMain('tree')
+        return
+      }
+    }
+    if (view === 'arch') setArchParent(undefined)
+    setTab(view)
   }
   // Trong extension, thanh công cụ và cây điều hướng của nền gửi lệnh vào đây. Không có mảng phụ thuộc: luôn dùng trạng thái mới nhất.
-  useEffect(() => window.nexgraph.host?.onCommand((c, arg) => {
-    if (c.startsWith('view:')) {
-      if (c === 'view:arch') setArchParent(undefined)
-      setTab(c.slice(5) as Tab)
-    } else if (c.startsWith('panel:')) setPanel((cur) => (cur === c.slice(6) ? null : c.slice(6))) // bấm lại mục đang mở thì đóng
-    else if (c === 'highlight') {
-      const h = arg as { nodes: GraphNode[]; edges: GraphEdge[]; note: string | null }
-      highlightFromChat(h.nodes, h.edges, h.note)
+  useEffect(() => {
+    const applyCommand = (c: string, arg?: unknown) => {
+      if (c.startsWith('view:')) {
+        const view = c.slice(5) as (typeof MAIN_TABS)[number]
+        if (!MAIN_TABS.includes(view)) return
+        selectView(view)
+      } else if (c.startsWith('panel:')) {
+        const tool = c.slice(6)
+        if (Object.hasOwn(PANEL_TITLES, tool)) setPanel((cur) => cur === tool ? null : tool as Panel)
+      } else if (c === 'highlight') {
+        const h = arg as { nodes: GraphNode[]; edges: GraphEdge[]; note: string | null } | undefined
+        if (Array.isArray(h?.nodes) && Array.isArray(h?.edges)) highlightFromChat(h.nodes, h.edges, h.note)
+      } else if (c === 'export') exportCurrent()
+      else if (c === 'overview') guardLeave(onBack)?.()
+      else if (c === 'settings') guardLeave(onOpenSettings)?.()
     }
-    else if (c === 'export') openExport(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })
-    else if (c === 'overview') guardLeave(onBack)?.()
-    else if (c === 'settings') guardLeave(onOpenSettings)?.()
-  }))
+    if (hosted && initialCommand && !hostInitialHandled.current) {
+      hostInitialHandled.current = true
+      applyCommand(initialCommand.name, initialCommand.arg)
+    }
+    return window.nexgraph.host?.onCommand(applyCommand)
+  })
 
   const openNode = (node: GraphNode) => {
     if (pathFrom) return void findPath(pathFrom, node)
+    nodeRequest.current++
     clearOverlay()
     setSelected(node)
     setFocus(node.id)
@@ -228,64 +360,101 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
   // Mở theo id (từ khối tệp hoặc bằng chứng của mũi tên): lấy chi tiết nút để thẻ thông tin có nội dung.
   const openNodeId = (id: string) => {
+    const request = ++nodeRequest.current
     clearOverlay()
     setFocus(id)
     setTab('graph')
     setSelected(null)
-    window.nexgraph.graph.node(project.project_id, id).then(setSelected).catch(() => {})
+    void window.nexgraph.graph.node(project.project_id, id)
+      .then((node) => { if (request === nodeRequest.current) setSelected(node) })
+      .catch((error: unknown) => { if (request === nodeRequest.current) setFeedback(messageOf(error)) })
   }
 
-  const hosted = !!window.nexgraph.host
-  const closePanel = hosted && <button type="button" className="panel-close" aria-label={vi.workspace.closePanel} onClick={() => setPanel(null)}>×</button>
+  const onTabKeys = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || !(event.target instanceof HTMLButtonElement)) return
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=tab]'))
+    const index = buttons.indexOf(event.target)
+    if (index < 0) return
+    let next
+    if (event.key === 'Home') next = 0
+    else if (event.key === 'End') next = buttons.length - 1
+    else if (event.key === 'ArrowRight') next = (index + 1) % buttons.length
+    else if (event.key === 'ArrowLeft') next = (index + buttons.length - 1) % buttons.length
+    else return
+    event.preventDefault()
+    buttons[next]?.focus()
+    buttons[next]?.click()
+  }
+  const tabId = (name: Tab) => `${id}-${encodeURIComponent(name)}`
+  const viewId = `${id}-view`
+  const toolsId = `${id}-tools`
+  const chatId = `${id}-chat`
+  const togglePanel = (key: string) => {
+    if (Object.hasOwn(PANEL_TITLES, key)) setPanel((cur) => cur === key ? null : key as Panel)
+  }
 
   return (
-    <div className="workspace">
+    <div className="workspace workspace-shell" data-hosted={hosted || undefined}>
       {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
       {!hosted && (
         <ActivityBar
-          items={[
-            { id: 'search', title: vi.activity.search, icon: SearchIcon },
-            { id: 'changes', title: vi.activity.changes, icon: ChangesIcon },
-            { id: 'tour', title: vi.activity.tour, icon: TourIcon }
-          ]}
+          items={ACTIVITIES}
           active={panel}
-          onToggle={(id) => setPanel((cur) => (cur === id ? null : id))}
+          panelId={toolsId}
+          onToggle={togglePanel}
         />
       )}
-      {panel === 'search' && (
-        <aside className="sidebar">
-          {closePanel}
-          <SearchPanel projectId={project.project_id} onOpen={openNode} onShowSubgraph={(g) => { setOverlay(g); setNotice(null); setTab('graph') }} onOpenFlow={openFlow} />
-        </aside>
-      )}
-      {panel === 'tour' && (
-        <aside className="sidebar wide">
-          {closePanel}
-          <TourPanel projectId={project.project_id} projectName={project.name} onOpenFlow={openFlow} onOpenNode={openNodeId} onOpenArch={openArch} />
-        </aside>
-      )}
-      {panel === 'changes' && (
-        <aside className="sidebar wide">
-          {closePanel}
-          {nodeImpact && (
-            <button type="button" className="link back" onClick={() => setNodeImpact(null)}>{vi.impact.back}</button>
+      {panel && (
+        <aside id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={PANEL_TITLES[panel]}>
+          <div className="ws-tools-head">
+            <h2>{PANEL_TITLES[panel]}</h2>
+            <button type="button" className="ws-icon-button" aria-label={vi.workspace.closePanel} title={vi.workspace.closePanel}
+              onClick={() => setPanel(null)}><Icon name="close" size={15} /></button>
+          </div>
+          {panel === 'explorer' && (
+            <div className="ws-project-root" title={project.path}>
+              <Icon name="folder" size={16} /><span>{project.name}</span>
+            </div>
           )}
-          <ChangesPanel changes={changes} loading={!nodeImpact && live.loading} error={nodeImpact ? null : live.error}
-            onReload={nodeImpact ? () => void showImpact(nodeImpact.node) : live.reload} onOpenNode={openNodeId} onOpenCode={openCode} />
+          <div className="ws-tools-body">
+            {panel === 'explorer' && (
+              <TreeView projectId={project.project_id} activeFile={activeFile} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} compact />
+            )}
+            {panel === 'search' && (
+              <SearchPanel projectId={project.project_id} revision={revision} onOpen={openNode}
+                onShowSubgraph={(g) => highlightFromChat(g.nodes, g.edges, null)} onOpenFlow={openFlow} />
+            )}
+            {panel === 'tour' && (
+              <TourPanel projectId={project.project_id} revision={revision} projectName={project.name} onOpenFlow={openFlow} onOpenNode={openNodeId} onOpenArch={openArch} />
+            )}
+            {panel === 'changes' && (
+              <>
+                {nodeImpact && !impactPending && (
+                  <button type="button" className="link back" onClick={() => setNodeImpact(null)}>{vi.impact.back}</button>
+                )}
+                <ChangesPanel changes={changes} loading={impactPending || (!nodeImpact && live.loading)} error={nodeImpact || impactPending ? null : live.error}
+                  onReload={nodeImpact ? () => void showImpact(nodeImpact.node) : live.reload} onOpenNode={openNodeId} onOpenCode={openCode} />
+              </>
+            )}
+          </div>
         </aside>
       )}
       <section className="center">
         <header className="ws-head">
-          {onBack && <button type="button" className="link" onClick={guardLeave(onBack)}>{vi.workspace.back}</button>}
-          <b className="ws-name"><Logo size={18} /> {project.name}</b>
-          <span className="muted mono">{project.path}</span>
+          {onBack && <button type="button" className="ws-icon-button ws-back" title={backLabel} aria-label={backLabel} onClick={guardLeave(onBack)}>←</button>}
+          <b className="ws-name"><Logo size={18} /> <span title={project.name}>{project.name}</span></b>
+          <span className="ws-path muted mono" title={project.path}>{project.path}</span>
           <span className="ws-actions">
-            <button type="button" aria-label={vi.chat.toggle} aria-pressed={chatOpen} onClick={() => setChatOpen((v) => !v)}>{vi.chat.title}</button>
-            <button type="button" onClick={() => openExport(tab === 'graph' && focus ? { kind: 'node', value: focus } : { kind: 'all' })}>
-              {vi.workspace.export}
+            {!hosted && <button type="button" aria-label={vi.chat.toggle} title={`${vi.chat.toggle} · Ctrl+L`} aria-pressed={chatOpen}
+              aria-controls={chatId} onClick={() => setChatOpen((v) => !v)}>
+              <Icon name="spark" size={16} /><span>{vi.chat.title}</span>
+            </button>}
+            <button type="button" aria-label={vi.workspace.export} title={vi.workspace.export} onClick={exportCurrent}>
+              <Icon name="export" size={16} /><span>{vi.workspace.export}</span>
             </button>
           </span>
         </header>
+        {indexNotice && <div role="status" className="ws-index-status muted">{indexNotice}</div>}
         {exportScope && (
           <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} initialFormat={exportFormat}
             onClose={() => setExportScope(null)} />
@@ -296,32 +465,43 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <button type="button" onClick={() => setPathFrom(null)}>{vi.path.cancel}</button>
           </div>
         )}
-        <div className="tabs" role="tablist">
+        <div className="tabs ws-tabs" role="tablist" aria-label="Các thẻ không gian làm việc" ref={tabList} onKeyDown={onTabKeys}>
           {MAIN_TABS.map((t) => (
-            <button key={t} type="button" role="tab" aria-selected={tab === t} data-tone={VIEW_TONE[t]} className={`tab${tab === t ? ' active' : ''}`} onClick={() => { if (t === 'arch') setArchParent(undefined); setTab(t) }}>
-              {{ arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab, graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }[t]}
+            <button key={t} id={tabId(t)} type="button" role="tab" aria-selected={tab === t} aria-controls={viewId} tabIndex={tab === t ? 0 : -1}
+              data-tone={VIEW_TONE[t]} className={`tab${tab === t ? ' active' : ''}`} onClick={() => selectView(t)}>
+              <Icon name={t} size={16} /><span>{TAB_LABELS[t]}</span>
             </button>
           ))}
           {files.map((f) => (
             <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`}>
-              <button type="button" role="tab" aria-selected={tab === `file:${f.file}`} title={f.file} className="tab-name" onClick={() => setTab(`file:${f.file}`)}>
-                {baseName(f.file)}
+              <button id={tabId(`file:${f.file}`)} type="button" role="tab" aria-selected={tab === `file:${f.file}`} aria-controls={viewId}
+                aria-label={baseName(f.file)} tabIndex={tab === `file:${f.file}` ? 0 : -1}
+                title={f.file} className="tab-name" onClick={() => setTab(`file:${f.file}`)}>
+                {FileIcon}<span>{baseName(f.file)}</span>
                 {dirtyFiles.has(f.file) && <span className="dirty-dot" aria-hidden="true"> ●</span>}
               </button>
               <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}>×</button>
             </span>
           ))}
         </div>
-        <div className="canvas-wrap">
-          {tab === 'arch' && <ArchitectureCanvas key={archParent ?? 'root'} projectId={project.project_id} initialParent={archParent} onOpenNode={openNodeId} onOpenCode={openCode} />}
-          {tab === 'map' && <MapView projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
-          {tab === 'flows' && <FlowsView projectId={project.project_id} initialFlowId={flowId} onOpenCode={openCode} onOpenNode={openNodeId} />}
+        <div className="canvas-wrap" id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
+          {tab === 'arch' && <ArchitectureCanvas key={archParent ?? 'root'} projectId={project.project_id} revision={revision} initialParent={archParent} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
+          {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (
             <>
-              <GraphCanvas projectId={project.project_id} startNodeId=".#repository" focusNodeId={focus} highlights={highlights}
-                onSelect={(n) => (pathFrom ? void findPath(pathFrom, n) : setSelected(n))}
+              <GraphCanvas projectId={project.project_id} revision={revision} startNodeId=".#repository" focusNodeId={focus} highlights={highlights}
+                onSelect={(n) => {
+                  nodeRequest.current++
+                  if (pathFrom) void findPath(pathFrom, n)
+                  else {
+                    setSelected(n)
+                    if (!overlay) setFocus(n.id)
+                  }
+                }}
                 onNodeContextMenu={(node, x, y) => setMenu({ node, x, y })}
-                overlay={overlay} onClearOverlay={clearOverlay} />
+                overlay={overlay} onClearOverlay={clearOverlay}
+                onBackToRoot={() => { nodeRequest.current++; setFocus(null); setSelected(null) }} />
               {notice && <p role="status" className="path-notice">{notice}</p>}
               <NodeInspector node={selected} onOpenCode={openCode} projectId={project.project_id} onOpenNode={openNode} />
               {menu && (
@@ -332,18 +512,38 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               )}
             </>
           )}
-          {tab === 'tree' && <TreeView projectId={project.project_id} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'tree' && (
+            <div className="ws-editor-empty">
+              <span className="ws-editor-empty-icon">{FileIcon}</span>
+              <h2>{hosted ? 'Xem mã nguồn' : 'Chưa mở tệp'}</h2>
+              <p className="muted">{hosted
+                ? 'Chọn một tệp trong cây để mở bằng trình soạn thảo của nền.'
+                : 'Chọn một tệp trong cây bên trái để xem và chỉnh sửa mã.'}</p>
+              {panel !== 'explorer' && (
+                <button type="button" onClick={() => setPanel('explorer')}>Mở cây tệp</button>
+              )}
+            </div>
+          )}
           {tab === 'report' && (
-            <ReportView projectId={project.project_id} onOpenNode={openNodeId} onAsk={(q) => void askOnGraph(q)}
+            <ReportView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onAsk={(q) => void askOnGraph(q)}
               onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
           )}
           {files.map((f) => (
             <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} active={tab === `file:${f.file}`}
               onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} />
           ))}
+          {feedback && (
+            <div className="ws-feedback">
+              <span role="alert">{feedback}</span>
+              <button type="button" className="ws-icon-button" aria-label="Đóng thông báo" onClick={() => setFeedback(null)}>×</button>
+            </div>
+          )}
         </div>
       </section>
-      {!window.nexgraph.host && <AgentPanel hidden={!chatOpen} projectId={project.project_id} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />}
+      {!hosted && <AgentPanel id={chatId} hidden={!chatOpen} projectId={project.project_id} projectName={project.name}
+        activeFile={chatFile} onClose={() => setChatOpen(false)} onConnectOpenCode={() => setConnectOpenCode(true)}
+        onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />}
+      {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
     </div>
   )
 }

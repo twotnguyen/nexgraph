@@ -1,10 +1,18 @@
+import { spawn, type ChildProcess } from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { mkdtempSync } from 'node:fs'
+import { createConnection } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { getHealth } from '../src/main/engine/client'
 import { EngineStartError, startEngine, type EngineCommand } from '../src/main/engine/launcher'
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  return { ...actual, spawn: vi.fn(actual.spawn) }
+})
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'ng-'))
 const isAlive = (pid: number) => {
@@ -74,6 +82,14 @@ describe('startEngine', () => {
     expect(err.stderrTail).toContain('boom')
   })
 
+  it('reports a failed spawn without waiting for an exit event', async () => {
+    const dataDir = tmp()
+    const command = join(dataDir, 'missing-engine')
+    await expect(startEngine({ command, args: [] }, { dataDir })).rejects.toMatchObject({
+      name: 'EngineStartError', pid: -1, message: expect.stringContaining('ENOENT')
+    })
+  }, 2000)
+
   it('reports exit after ready', async () => {
     const h = await run('crash-after-ready')
     const code = await new Promise((resolve) => h.onExit((c) => resolve(c)))
@@ -84,5 +100,55 @@ describe('startEngine', () => {
     const h = await run('ok')
     await h.stop()
     expect(isAlive(h.pid)).toBe(false)
+  })
+
+  it.skipIf(process.platform !== 'win32')('stop closes engine stdin when Windows denies taskkill', async () => {
+    const h = await run('ok')
+    const denied = new EventEmitter() as ChildProcess
+    vi.mocked(spawn).mockImplementationOnce(() => {
+      queueMicrotask(() => denied.emit('exit', 1))
+      return denied
+    })
+    await h.stop()
+    expect(spawn).toHaveBeenLastCalledWith('taskkill', ['/pid', String(h.pid), '/T', '/F'], expect.anything())
+    expect(isAlive(h.pid)).toBe(false)
+  })
+
+  it.skipIf(process.platform !== 'win32').each([0, 300])('stop waits for worker closure and taskkill completion delayed by %i ms', async (helperDelay) => {
+    const h = await startEngine({
+      command: process.execPath,
+      args: [fileURLToPath(new URL('./fixtures/wrapper-engine.mjs', import.meta.url))]
+    }, { dataDir: tmp() })
+    const wrapper = vi.mocked(spawn).mock.results.at(-1)!.value as ChildProcess
+    const wrapperClosed = new Promise<void>((resolve) => wrapper.once('close', () => resolve()))
+    const helper = new EventEmitter() as ChildProcess
+    let treeStopped = false
+    const helperDone = new Promise<void>((resolve) => {
+      vi.mocked(spawn).mockImplementationOnce(() => {
+        wrapper.stdin!.end()
+        setTimeout(() => {
+          treeStopped = true
+          helper.emit('exit', 0)
+          helper.emit('close', 0)
+          resolve()
+        }, helperDelay)
+        return helper
+      })
+    })
+    try {
+      const stopping = h.stop()
+      expect(h.stop()).toBe(stopping)
+      await stopping
+      expect(treeStopped).toBe(true)
+      const address = new URL(h.baseUrl)
+      const connection = await new Promise<string>((resolve) => {
+        const socket = createConnection({ host: address.hostname, port: Number(address.port) })
+        socket.once('connect', () => { socket.destroy(); resolve('connected') })
+        socket.once('error', (error: NodeJS.ErrnoException) => resolve(error.code ?? 'error'))
+      })
+      expect(connection).toBe('ECONNREFUSED')
+    } finally {
+      await Promise.all([helperDone, wrapperClosed])
+    }
   })
 })

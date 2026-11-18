@@ -1,62 +1,75 @@
-# Ghi chú cài đặt bản chưa ký số
+# Cài đặt và chạy NexGraph
 
-Bản cài của NexGraph **chưa ký số**, nên macOS (Gatekeeper) và Windows (SmartScreen) sẽ cảnh báo. Bảng dưới ghi những gì đã kiểm tra thật và những gì chưa.
+Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.1.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản bàn giao](release/README.md). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng.
 
-| Nền tảng | Đã kiểm tra | Kết quả |
-|---|---|---|
-| macOS 15 (Darwin 24.6), Apple Silicon, build cục bộ 2026-10-27 | Build `.dmg` và `NexGraph.app` bằng `pnpm --filter @nexgraph/desktop run package`; chạy `scripts/smoke-packaged.mjs` trên `.app` đã giải nén | `SMOKE OK nodes=2`; không còn tiến trình engine sau khi thoát; đường dẫn dữ liệu có dấu tiếng Việt (`Đồ án/data`) chạy được. `NexGraph-0.1.0-arm64.dmg` nặng **155 MB** (mục tiêu < 300 MB) |
-| macOS: cài từ `.dmg` tải về từ CI, vượt Gatekeeper | **Chưa** | Chưa có CI chạy (chưa có remote GitHub); chưa thử mở app đã tải qua trình duyệt |
-| Windows 10/11 (cài `.exe` NSIS, SmartScreen) | **Chưa** | Chưa có máy Windows trong phiên này. Việc của P3: tải `.exe` từ artifact CI, cài, ghi kết quả vào bảng này |
-| Windows: kiểm thử `taskkill /T /F` diệt cả cây tiến trình | **Chưa** | Chỉ được kiểm bằng giá trị giả ở macOS |
+## Chạy Electron từ checkout sạch
 
-## Cách vượt cảnh báo (theo tài liệu của từng hệ điều hành, chưa thử trên máy của nhóm)
+Cần Git, Node.js 22.19.0 trở lên (khuyến nghị Node.js 24), pnpm `11.24.0` theo `package.json` và uv trong `PATH`. Kiểm bằng `git --version`, `node --version`, `pnpm --version` và `uv --version` trong terminal sẽ dùng để chạy dự án. Kho riêng tư cần tài khoản GitHub có quyền đọc. Với máy mới, clone repo trước bằng `git clone https://github.com/twotnguyen/nexgraph.git` rồi `cd nexgraph`. Thực hiện các lệnh sau từ thư mục gốc repo trong PowerShell trên Windows hoặc terminal trên macOS.
 
-- **macOS:** chuột phải vào `NexGraph.app`, chọn **Open**, rồi **Open** lần nữa. Nếu app tải qua trình duyệt bị chặn, có thể gỡ thuộc tính cách ly: `xattr -dr com.apple.quarantine /Applications/NexGraph.app`.
-- **Windows:** ở cảnh báo SmartScreen chọn **More info**, rồi **Run anyway**.
+```sh
+pnpm run setup:dev
+pnpm dev
+```
 
-## Việc còn lại để đóng Task 4
+`setup:dev` đồng bộ Python 3.12 và dependency từ `engine/uv.lock`, thử nạp CLI engine, cài dependency JavaScript từ `pnpm-lock.yaml` rồi tải binary Electron bằng `install-electron`. Lần đầu cần kết nối mạng để tải các phụ thuộc. `pnpm dev` tự khởi động engine qua uv. Khi thấy **Engine: sẵn sàng**, chọn **Mở thư mục…** và chọn bản sao dự án. Dự án nhỏ được lập chỉ mục tự động, dự án vượt ngưỡng hiển thị lựa chọn phạm vi. Khi hoàn tất, bấm **Bắt đầu khám phá** để mở không gian làm việc. Dự án gần đây đã có chỉ mục mở thẳng vào không gian làm việc. Lập chỉ mục và khám phá graph dùng được khi chưa cấu hình AI. [Chi tiết bước tải Electron](https://www.electronjs.org/docs/latest/tutorial/installation#binary-download-step) · [Dự án mẫu](demo-script.md)
 
-1. Tạo remote GitHub `nexgraph` (công khai), đẩy `main` và mở một PR để CI (`.github/workflows/ci.yml`) chạy trên macOS và Windows. Workflow chưa từng chạy.
-2. P3 cài `.exe` trên Windows thật; P1 cài `.dmg` từ artifact CI; cập nhật bảng trên.
+- Nếu gặp `Electron uninstall`, chạy lại `pnpm run setup:dev` và kiểm phần tải binary. Nếu máy mới cài uv, mở lại terminal rồi thử `uv --version` trong chính terminal dùng để chạy `pnpm dev`.
+- Nếu Windows báo Application Control khi nạp Python, dùng bản Python 3.12 đã được cho phép trên máy. Đặt `$env:UV_PYTHON` thành đường dẫn đầy đủ đến `python.exe` đó, rồi chạy lại cả hai lệnh trong cùng phiên PowerShell.
 
-## Kế hoạch con 2: kiểm tra trên Windows (chưa làm)
+Với checkout đã có, sau khi thay đổi được hợp nhất và nhánh `main` cục bộ sạch, chạy `git pull --ff-only`, rồi chạy lại hai lệnh trên. Dependency được tái tạo từ các lockfile, dữ liệu gần đây và khóa AI được lưu riêng trên từng máy.
 
-Việc của P3 (kế hoạch con 2, Task 13 Step 4): chạy `uv run pytest` trong `engine/` và `pnpm --filter @nexgraph/desktop test`; mở `engine/tests/fixtures/bookstore_app` ở đường dẫn có dấu tiếng Việt và khoảng trắng, lập chỉ mục xong, mở thẻ Graph. Ghi kết quả vào bảng ở đầu tệp. Hai test dùng symlink (`test_symlink_*`) và một test quyền chỉ đọc tự bỏ qua trên Windows. Chưa có kết quả.
+Trong không gian làm việc, cây bên trái duyệt tệp trong dự án, kể cả tệp cấu hình và tài liệu ngoài chỉ mục. Các thẻ ở giữa hiển thị Monaco hoặc sơ đồ, trợ lý AI nằm bên phải. `Ctrl+L` hoặc `⌘L` bật/tắt trợ lý và `Ctrl+S` hoặc `⌘S` lưu tệp đang mở. Nút **← Tổng quan** mở số liệu, tùy chọn index, Git hook và tích hợp MCP. Cổng Vite in ra terminal phục vụ renderer Electron, thao tác đầy đủ trong cửa sổ NexGraph.
 
-## Kế hoạch con 3: kiểm tra trên Windows (chưa làm)
+Từ gốc kho, kiểm tra mã bằng
 
-Việc của P3 (kế hoạch con 3, Task 11 Step 5): chạy `uv run pytest` trong `engine/` và `pnpm --filter @nexgraph/desktop test`; mở `engine/tests/fixtures/bookstore_app` ở đường dẫn có dấu tiếng Việt và khoảng trắng, thử tìm kiếm (gõ có dấu và không dấu), thẻ Kiến trúc, bấm mũi tên xem bằng chứng, và thử một project lớn (tạo bằng `uv run python scripts/bench_search_arch.py --synthetic 6000` rồi mở thư mục sinh ra) để xem cảnh báo và chọn thư mục con. Ghi kết quả vào bảng ở đầu tệp. Chưa có kết quả.
+```sh
+uv run --project engine --locked pytest engine/tests -q
+pnpm --filter @nexgraph/desktop typecheck
+pnpm --filter @nexgraph/desktop test
+```
 
+## Đóng gói Electron
 
-## Kế hoạch con 4: kiểm trên Windows (P3, chưa làm)
+Chạy trên hệ điều hành cần đóng gói, sau khi cài phụ thuộc như trên:
 
-Chưa kiểm trên Windows. Cần: `uv run pytest` ở `engine/` (cần `git` trong `PATH`; các test Git tự bỏ qua nếu thiếu), `pnpm --filter @nexgraph/desktop test`, mở `bookstore_app` ở đường dẫn có dấu và khoảng trắng, bật theo dõi và sửa tệp bằng trình soạn thảo thật (VS Code, Notepad), xem panel "Thay đổi", thử `git checkout` đổi nhánh (bão sự kiện), thử project không phải Git. Điểm có rủi ro riêng: `fs.watch` đệ quy trên NTFS, đường dẫn dùng `\` ở sự kiện (đã chuẩn hoá trong `shouldIgnore`), và `core.autocrlf` làm Git báo cả tệp là đã đổi.
+```sh
+cd engine
+uv run --locked pyinstaller packaging/nexgraph-engine.spec --noconfirm
+cd ..
+pnpm --filter @nexgraph/desktop run package
+pnpm --filter @nexgraph/desktop run smoke:packaged
+```
 
-## Trợ lý AI (H4)
+Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<arch>.dmg` hoặc `NexGraph-<version>-windows-<arch>.exe`. Lệnh `smoke:packaged` ở trên dùng app đã giải nén để kiểm nhanh khi phát triển. Trong CI, script mở app do chính tệp NSIS cài vào thư mục tạm hoặc app được chép từ DMG vừa gắn. Lượt này dùng thư mục dữ liệu tạm, engine đi kèm và mô hình giả cục bộ. Tải bộ cài và tệp `.build.json` đối chiếu theo [hướng dẫn bản bàn giao](release/README.md#tải-đúng-bộ-cài).
 
-Cài đặt → "Trợ lý AI": Base URL, model, API key (lưu bằng kho khoá của hệ điều hành, không bao giờ sang giao diện). Chỉ có adapter API key tương thích OpenAI (`POST <Base URL>/chat/completions` có `tools`).
+| Bằng chứng | Phạm vi |
+| --- | --- |
+| [Kiểm trên macOS ngày 15/11/2026](benchmarks/2026-11-15-editor-agent.md) | Bản Electron arm64 chưa ký, DMG khoảng 239,2 MB. Đã bấm thử editor và Agent trên fixture Python với engine thật và LLM giả. |
+| [CI Electron](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) | Job desktop kiểm setup và chạy dev. Job package kiểm bộ cài của checkout ghi trong tệp `.build.json` trước khi tải artifact lên. Kho riêng tư, cần quyền xem log và artifact. |
+| [Nghiệm thu trên máy đích](release/acceptance/2026-11-18.md) | Ghi cài đặt và thao tác trên bộ cài Windows và macOS theo [checklist](windows-checklist.md), kèm thời gian từng lượt demo NestJS. Ghi loại provider và client MCP nếu đã thử. |
 
-| Nhà cung cấp | Base URL | Ghi chú |
-|---|---|---|
-| OpenRouter | `https://openrouter.ai/api/v1` | model có hỗ trợ tool calling |
-| Ollama cục bộ | `http://localhost:11434/v1` | không cần key; model phải hỗ trợ tool calling (ví dụ `qwen2.5-coder`, `llama3.1`) |
-| Máy chủ thử | `node apps/desktop/scripts/fake-llm.mjs` | LLM giả để kiểm không cần key |
+## Chạy Code-OSS
 
-Giới hạn: không streaming; lịch sử trong Workspace được gửi làm ngữ cảnh cho câu tiếp theo. Hội thoại và nháp giữ trong RAM khi ẩn/hiện chat, mất khi rời Workspace; lúc đó lượt đang chạy bị huỷ. Tối đa 8 vòng gọi tool mỗi câu hỏi. Lần gửi đầu cho mỗi cặp (dự án, máy chủ) có hộp thoại đồng ý. Kiểm đầu-cuối không cần key: `NEXGRAPH_E2E=1 pnpm --filter @nexgraph/desktop test ai-e2e` (engine Python thật + LLM giả).
+`apps/shell/` ghim upstream Code-OSS. `apps/extension/` dùng lại engine và giao diện graph của NexGraph. Thao tác mở mã chuyển sang editor của Code-OSS, Agent nằm ở thanh bên phụ. Làm theo [hướng dẫn dựng shell](../apps/shell/README.md), gồm phiên bản Node/pnpm riêng trong `upstream.json`, Visual Studio Build Tools C++ trên Windows và cấu hình engine khi chạy dev. Script chỉ kèm engine trong bản đóng gói nếu có kết quả PyInstaller trước đó. Workflow [CI hiện hành](../.github/workflows/ci.yml) kiểm bản Electron độc lập. Trạng thái bộ cài và nghiệm thu Code-OSS cần bằng chứng riêng.
 
-Chọn **Thay**, để key rỗng rồi **Lưu** là xoá key đã lưu. Đổi origin (scheme/hostname/port) tự xoá key cũ nếu không nhập key mới; đổi model/path trong cùng origin giữ key.
+## Cài đặt tài khoản AI
 
-## Git hook cập nhật sau commit (H5)
+Trong **Cài đặt → Tài khoản AI**, chọn nhà cung cấp có sẵn và nhập API key, hoặc thêm **Nhà cung cấp tuỳ chỉnh** với tên, Base URL và model. Chọn model có tool calling và bấm **Kiểm tra kết nối**. Với nhà cung cấp có OAuth, màn hình có thể mở trình duyệt, hiện device code hoặc hỏi mã. Các test OAuth dùng provider giả qua SDK pi.
 
-Tổng quan dự án → "Cập nhật sau mỗi commit" ghi một khối vào `.git/hooks/post-commit` giữa hai dòng `# >>> nexgraph >>>` và `# <<< nexgraph <<<`, chạy `nexgraph-engine refresh` ở nền. **Gỡ bằng tay:** xoá đúng khối giữa hai dòng đó (nếu tệp chỉ còn `#!/bin/sh` thì xoá tệp). Không hỗ trợ `core.hooksPath` (husky…) và worktree (`.git` là tệp): thẻ báo "không phải kho Git".
+- Base URL custom mặc định dùng HTTPS và phải qua kiểm tra địa chỉ mạng. Để thử máy chủ HTTP loopback cục bộ, khởi động app với `NEXGRAPH_ALLOW_HTTP_PROVIDER=1` theo [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Custom endpoint không có API key vẫn nhận `Authorization: Bearer unused` do SDK pi.
+- API key và token OAuth dùng kho mã hóa của NexGraph. Token OAuth nằm trong `agent/oauth-secrets.json` dưới thư mục dữ liệu engine. NexGraph thử di trú `agent/auth.json` của bản cũ khi kho khóa an toàn khả dụng. Các phiên hội thoại của Agent giữ trong bộ nhớ và tách theo dự án, nhà cung cấp, URL đích.
+- Lần gửi đầu cho mỗi dự án và đích gửi yêu cầu đồng ý. **Hỏi** mặc định chỉ đọc. **Sửa** cho xem diff và đòi xác nhận từng lần tạo, sửa hoặc ghi đè tệp. Cả hai chế độ từ chối yêu cầu chạy lệnh shell.
+- Trên Electron, Monaco giữ CRLF/BOM khi lưu. Thẻ có thay đổi chưa lưu được giữ lại nếu tệp trên đĩa đổi. Editor đánh dấu chỉ đọc khi tệp vượt 5 MiB hoặc không phải UTF-8.
 
-Installer từ chối `post-commit` hiện có dùng Python/Node hoặc interpreter không xác định; không ghi/chmod tệp đó. Chỉ ghép vào hook có shebang shell tương thích (`sh`, `bash`, `dash`, `ksh`, `zsh`, trực tiếp hoặc qua `env`).
+## Git hook cập nhật sau commit
 
-## Tích hợp trợ lý AI (H5)
+Trong **Tổng quan dự án → Cập nhật sau mỗi commit**, NexGraph thêm khối giữa `# >>> nexgraph >>>` và `# <<< nexgraph <<<` vào `.git/hooks/post-commit`; khối gọi `nexgraph-engine refresh` ở nền. Có thể gỡ qua giao diện hoặc xóa đúng khối đó bằng tay. Hiện luồng này không hỗ trợ `core.hooksPath` và Git worktree có `.git` là tệp. Hook có sẵn cần shebang shell tương thích (`sh`, `bash`, `dash`, `ksh` hoặc `zsh`). NexGraph giữ nguyên hook có interpreter khác.
+
+## Tích hợp trợ lý AI ngoài NexGraph
 
 Ghi `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code), `opencode.json` (OpenCode), `.codex/config.toml` (Codex) sau khi bạn xem trước và xác nhận. Chỉ thêm mục `nexgraph`; tệp không phân tích được (JSON hỏng hoặc có chú thích `//`, TOML đã có sẵn) thì không ghi, dùng nút "Sao chép cấu hình".
 
-### Skill nexgraph cho agent ngoài (F15)
+### Skill nexgraph cho agent ngoài
 
 Tổng quan dự án → "Tích hợp trợ lý AI" có thêm hai mục skill, nội dung sinh từ cùng nguồn với phần "Quy tắc dùng đồ thị NexGraph" trong app (gồm danh sách tool chỉ đọc của MCP):
 
@@ -71,27 +84,13 @@ Tổng quan dự án → "Tích hợp trợ lý AI" có thêm hai mục skill, n
 | Claude Code | `.mcp.json`, `mcpServers.nexgraph`, `type: stdio`, `command` và `args`; skill: `.claude/skills/nexgraph/SKILL.md` | [Project scope và stdio](https://code.claude.com/docs/en/mcp) |
 | Cursor | `.cursor/mcp.json`, `mcpServers.nexgraph`, `type: stdio`, `command` và `args` | [MCP](https://cursor.com/docs/mcp), [vị trí tệp](https://cursor.com/help/customization/mcp) |
 | VS Code | `.vscode/mcp.json`, `servers.nexgraph`, `type: stdio`, `command` và `args` | [Editor-managed configuration](https://code.visualstudio.com/docs/agents/reference/mcp-configuration#_editor-managed-configuration-for-local-harness-compatibility) |
-| OpenCode | `opencode.json` (hoặc `.jsonc` có sẵn), `mcp.nexgraph`, `type: local`, `command` là mảng | [JSON schema chính thức](https://opencode.ai/config.json), [MCP](https://opencode.ai/docs/mcp-servers/) |
+| OpenCode | `opencode.json` hoặc tệp `opencode.json(c)` có sẵn, `mcp.servers.nexgraph`, `type: local`, `command` là mảng | [JSON schema chính thức](https://opencode.ai/config.json), [MCP](https://opencode.ai/docs/mcp-servers/) |
 | Codex | `.codex/config.toml` của dự án (tạo khi chưa có), `[mcp_servers.nexgraph]`, `command` và `args`, định dạng TOML | [Model Context Protocol](https://learn.chatgpt.com/docs/extend/mcp), [config.toml](https://learn.chatgpt.com/docs/config-file/config-advanced) (tra 2026-11-15) |
 
 Codex (tài liệu OpenAI tra ngày 2026-11-15): MCP cấu hình bằng bảng `[mcp_servers.<tên>]` với `command`, `args` (stdio); Codex đọc thêm `.codex/config.toml` của dự án nhưng **chỉ khi dự án được đánh dấu tin cậy trong Codex** — cấu hình dự án không được tin cậy sẽ bị bỏ qua, kể cả layer `.codex/`. NexGraph không bao giờ ghi `~/.codex/config.toml` toàn cục. Nếu `.codex/config.toml` đã có trong dự án, NexGraph không phân tích/sửa TOML: sao chép mục `[mcp_servers.nexgraph]` rồi dán vào tệp dự án hoặc tệp toàn cục bằng tay.
 
-OpenCode hiện mô tả dạng mới `mcp.servers`; schema chính thức vẫn nhận dạng trực tiếp `mcp.<tên>` nhưng đánh dấu deprecated. NexGraph giữ dạng đang được schema nhận, không tự di chuyển server khác của người dùng. Đã kiểm binary có trên máy: `opencode v2.2.7`; không còn là 2.1.4 trong ghi chú spike cũ.
+NexGraph tạo mục `mcp.servers.nexgraph` theo OpenCode V2. Nếu tệp hiện có đặt các server trực tiếp dưới `mcp` theo V1, NexGraph dùng cùng cấu trúc. Khi dự án đã có cấu hình trong `.opencode/`, NexGraph ưu tiên tệp đó theo thứ tự của OpenCode. Sau khi xác nhận ghi cấu hình, chạy `opencode mcp list` từ thư mục dự án. Nếu OpenCode đang khởi động và hiện `pending` hoặc chưa liệt kê server, đợi vài giây rồi chạy lại.
 
 VS Code đánh dấu Local harness/editor-managed là deprecated; `.vscode/mcp.json` vẫn là cấu hình hợp lệ của editor và có thể forward sang Copilot. Copilot native dùng `.mcp.json`/`mcpServers`; không đồng nhất hai schema. Chọn Claude Code trong NexGraph nếu cần xuất dạng workspace-root `.mcp.json` rồi đối chiếu hướng dẫn Copilot.
 
-Đây là đối chiếu schema, không phải bằng chứng đã kết nối bằng cả bốn client. JSONC có chú thích vẫn chỉ sao chép cấu hình để ghép tay: không ghi lại làm mất chú thích.
-
-## Editor và agent tích hợp (F13–F15, 2026-11-15)
-
-- Monaco mở nhiều thẻ tệp, Cmd/Ctrl+S lưu qua main; thẻ bẩn không tự nạp lại khi tệp đổi bên ngoài. Tệp lớn hơn 5 MB hoặc không phải UTF-8 chỉ đọc. Giữ CRLF, BOM và quyền tệp.
-- Agent mặc định **Hỏi** (13 tool chỉ đọc: 9 tool đồ thị và read/grep/find/ls). **Sửa** thêm write/edit/bash; mỗi thao tác phải được duyệt. Diff bị cũ hoặc đích bị tráo symlink thì từ chối, không tự áp lại.
-- `bash` **không có sandbox**, chạy bằng quyền người dùng sau khi duyệt; không có "luôn cho phép". Windows chưa kiểm shell thực tế, xem `windows-checklist.md`.
-- Tài khoản AI ưu tiên API key và custom provider; key mã hoá qua safeStorage, chỉ nạp vào runtime. OAuth có thể mở trình duyệt, hiện device code hoặc hỏi mã trong Settings; huỷ/rời màn thì huỷ lượt đăng nhập. Token OAuth lưu trong `agent/auth.json` của thư mục dữ liệu ứng dụng, quyền 0600 trên Unix. Không dùng chung `~/.pi`.
-- Endpoint custom không cần key nhận sentinel `Bearer unused` do SDK OpenAI của pi yêu cầu key; server phải bỏ qua header này (như Ollama). Không phải API key thật. Nếu server từ chối header dư thì hiện chưa hỗ trợ endpoint đó.
-- API key/OAuth với nhà cung cấp thật và Windows **chưa kiểm**; các test OAuth dùng provider giả đăng ký qua SDK pi thật, không chứng minh nhà cung cấp cho phép đăng nhập bên thứ ba.
-- `smoke:packaged` dùng engine đóng gói, một máy chủ LLM giả cục bộ và renderer thật để kiểm `fs:write/read` cùng `agent:prompt → done`. Kho userData và dự án đều tạm; không đọc/ghi tài khoản người dùng. Kiểm giao diện với dữ liệu tạm có thể đặt `NEXGRAPH_USER_DATA_DIR` và `NEXGRAPH_DATA_DIR`; mặc định sản phẩm không đổi.
-
-### Bản macOS editor + agent đã kiểm ngày 2026-11-15
-
-`apps/desktop/dist/NexGraph-0.1.0-arm64.dmg`: **239.223.266 byte (~239,2 MB)**, dưới ngưỡng 400 MB sau khi giới hạn ngữ pháp Monaco. Typecheck sạch, 409 test desktop và 466 test engine đạt; smoke bản cài `SMOKE OK nodes=2 fs=OK agent=OK`. Đã bấm thử Monaco, hỏi có trích dẫn, tô luồng, duyệt/từ chối/dừng trên bản `.app` với engine thật và LLM giả cục bộ. Bằng chứng, ảnh và phần **chưa** nghiệm thu: [kiểm editor + agent](benchmarks/2026-11-15-editor-agent.md).
+Đây là đối chiếu schema. Để nghiệm thu runtime, mở một dự án đã lập chỉ mục bằng client cần dùng và gọi tool NexGraph như `graph_stats`. JSONC có chú thích vẫn chỉ sao chép cấu hình để ghép tay: không ghi lại làm mất chú thích.

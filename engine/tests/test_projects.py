@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.store.projects import ProjectPathError, ProjectRegistry
+from nexgraph_engine.schema.db import open_app_db
 
 
 @pytest.fixture
@@ -51,6 +52,48 @@ def test_renamed_folder_keeps_id(tmp_path, registry):
 def test_reopen_same_path_same_id(tmp_path, registry):
     root = make_project(tmp_path)
     assert registry.open_project(root).project_id == registry.open_project(root).project_id
+
+
+def test_remove_preserves_cache_for_app_data_projects(tmp_path, registry, monkeypatch):
+    root = make_project(tmp_path)
+    meta = root.resolve() / ".nexgraph"
+    make_dir = Path.mkdir
+
+    def mkdir(path, *args, **kwargs):
+        if path == meta:
+            raise PermissionError(path)
+        return make_dir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", mkdir)
+    first = registry.open_project(root)
+    assert first.storage == "app_dir"
+    assert registry.remove(first.project_id)
+    assert registry.get(first.project_id) is None and registry.list_projects() == []
+    assert not registry.remove(first.project_id)
+    assert first.graph_db.is_file()
+    monkeypatch.undo()
+    reopened = registry.open_project(root)
+    assert reopened.project_id == first.project_id and reopened.graph_db == first.graph_db
+
+
+def test_v1_registry_can_be_read_and_upgrades_without_losing_projects(tmp_path, registry):
+    registered = registry.open_project(make_project(tmp_path))
+    file = registry.app_data_dir / "app.db"
+    with sqlite3.connect(file) as conn:
+        conn.execute("ALTER TABLE du_an_da_mo DROP COLUMN da_go")
+        conn.execute("PRAGMA user_version = 1")
+    conn.close()
+
+    legacy = ProjectRegistry(registry.app_data_dir, read_only=True)
+    assert legacy.get(registered.project_id) == registered
+    assert [info.project_id for info in legacy.list_projects()] == [registered.project_id]
+
+    upgraded = ProjectRegistry(registry.app_data_dir)
+    with open_app_db(file, read_only=True) as conn:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+    conn.close()
+    assert upgraded.remove(registered.project_id)
+    assert legacy.list_projects() == []
 
 
 @pytest.mark.skipif(sys.platform == "win32" or (hasattr(os, "geteuid") and os.geteuid() == 0),
