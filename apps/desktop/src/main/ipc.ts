@@ -20,11 +20,17 @@ import type { AgentId } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
 import { EditorStateRegistry } from './agent/editor-state'
+import { AgentRouter } from './agent-router'
+import { GeminiConnectionManager } from './gemini/connection'
+import { GeminiAgentService } from './gemini/service'
+import { GeminiConsentStore } from './gemini-consent'
+import type { GeminiConsentTarget } from '../shared/agent-types'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
 let mcpHttp: McpHttpManager | null = null
-let agents: AgentService | null = null
+let agents: AgentRouter | null = null
+let geminiConnection: GeminiConnectionManager | null = null
 let editors: EditorStateRegistry | null = null
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
@@ -33,6 +39,8 @@ export const closeAllAgents = (): void => {
   agents?.closeAll()
   cancelPendingAuthPrompts()
   void accountsPromise?.then((a) => a.cancelLogin()).catch(() => {})
+  geminiConnection?.cancelLogin()
+  void geminiConnection?.shutdown().catch(() => {})
 }
 
 export const stopAllMcpHttp = (): Promise<void> => mcpHttp?.stopAll() ?? Promise.resolve()
@@ -232,7 +240,39 @@ export function registerIpc(
 
   const win = (): BrowserWindow | null => getWindow()
   const acc = (): Promise<AccountService> => accounts(win, dataDir)
+  // A local connection ID cannot verify a shared native Google account after restart.
+  // Keep history local until the user explicitly checks and activates the connection again.
+  const startupPrefs = readJson(prefsFile())
+  if (startupPrefs.aiRuntime === 'antigravity-cli' || startupPrefs.aiRuntime === 'gemini-cli')
+    writeJson(prefsFile(), { ...startupPrefs, aiRuntime: 'antigravity-cli', aiGeminiEnabled: '0' })
+  let runtimeVersion = 0
+  let googleProbe: string | null = null
+  let googleProbeVersion = 0
+  const invalidateGoogleProbe = () => { googleProbe = null; googleProbeVersion++ }
+  const selectedRuntime = (): 'pi' | 'antigravity-cli' => readJson(prefsFile()).aiRuntime === 'antigravity-cli' ? 'antigravity-cli' : 'pi'
+  const geminiEnabled = (): boolean => selectedRuntime() === 'antigravity-cli' && readJson(prefsFile()).aiGeminiEnabled === '1'
+  const selectRuntime = (runtime: 'pi' | 'antigravity-cli', enabled = runtime === 'antigravity-cli') => {
+    runtimeVersion++
+    invalidateGoogleProbe()
+    agent.selectionChanged()
+    writeJson(prefsFile(), { ...readJson(prefsFile()), aiRuntime: runtime, aiGeminiEnabled: enabled ? '1' : '0' })
+  }
+  const google = (geminiConnection = new GeminiConnectionManager({
+    dataDir,
+    binaryPath: !app.isPackaged ? process.env.NEXGRAPH_ANTIGRAVITY_BINARY_PATH : undefined,
+    notify: (event) => win()?.webContents.send('gemini:event', { type: 'auth', event }),
+    onStatus: (status) => win()?.webContents.send('gemini:event', { type: 'status', status })
+  }))
+  const googleTarget = async (): Promise<GeminiConsentTarget | null> => {
+    const status = await google.status()
+    return status.authenticated && status.connectionId ? { runtime: 'antigravity-cli', provider: 'google-antigravity', connectionId: status.connectionId } : null
+  }
+  const googleConsent = new GeminiConsentStore(join(dataDir, 'google-consent.json'), rootOf, googleTarget)
   const derivedSettings = async (): Promise<AiSettings> => {
+    if (selectedRuntime() === 'antigravity-cli') {
+      const status = await google.status()
+      return { runtime: 'antigravity-cli', provider: 'google-antigravity', baseUrl: '', model: status.authenticated && geminiEnabled() ? google.selectedModel() : '', hasKey: false, connectionId: status.connectionId }
+    }
     const a = await acc()
     const target = await a.getConsentTarget()
     const model = a.getSelectedModel()
@@ -245,10 +285,11 @@ export function registerIpc(
     }
   }
   on('ai:get-settings', () => derivedSettings())
-  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => (await acc()).hasConsent(pid, target))
+  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => target?.runtime === 'antigravity-cli' ? googleConsent.hasConsent(pid, target) : (await acc()).hasConsent(pid, target))
   on('ai:grant-consent', async (pid: string, target: AiConsentTarget) => {
     await rootOf(pid)
-    await (await acc()).grantConsent(pid, target)
+    if (target?.runtime === 'antigravity-cli') await googleConsent.grantConsent(pid, target)
+    else await (await acc()).grantConsent(pid, target)
   })
   on('auth:list', async () => (await acc()).listProviders())
   on('auth:set-key', async (providerId: string, key: string) => {
@@ -284,26 +325,88 @@ export function registerIpc(
   on('auth:forget-registration', async () => {
     try { await (await acc()).forgetOpenAiRegistration() } finally { agent.selectionChanged() }
   })
-  on('auth:models', async () => (await acc()).listModels())
-  on('auth:select-model', async (provider: string, id: string) => {
-    (await acc()).selectModel(provider, id)
-    agent.selectionChanged()
+  on('auth:models', async () => {
+    const results = await Promise.allSettled([(async () => (await acc()).listModels())(), google.models()])
+    return results.flatMap((result) => result.status === 'fulfilled' ? result.value : [])
   })
-  on('auth:test', async () => (await acc()).test())
+  on('auth:select-model', async (provider: string, id: string) => {
+    if (provider === 'google-antigravity') {
+      if (!geminiEnabled()) throw new AgentError('ai_not_configured', 'Kết nối và kiểm tra Gemini qua mục Tài khoản Google trước khi dùng.')
+      const version = runtimeVersion
+      const identity = google.connectionIdentity()
+      agent.selectionChanged()
+      await google.selectModel(id)
+      const status = await google.status()
+      if (!geminiEnabled() || version !== runtimeVersion || identity !== google.connectionIdentity() || status.connectionId !== identity || status.model !== id || !status.authenticated)
+        throw new AgentError('ai_not_configured', 'Kết nối Google đã thay đổi. Hãy kiểm tra lại kết nối Gemini.')
+      selectRuntime('antigravity-cli')
+    } else {
+      (await acc()).selectModel(provider, id)
+      selectRuntime('pi')
+    }
+  })
+  on('auth:test', async () => selectedRuntime() === 'antigravity-cli' ? googleAgent.testConnection() : (await acc()).test())
   on('auth:discover-local', async (baseUrl?: string) => (await acc()).discoverLocal(baseUrl))
   on('auth:connect-local', async (baseUrl: string, modelId: string) => {
-    try { await (await acc()).connectLocal(baseUrl, modelId) } finally { agent.selectionChanged() }
+    try { await (await acc()).connectLocal(baseUrl, modelId); selectRuntime('pi') } finally { agent.selectionChanged() }
   })
   // EngineApi đọc baseUrl/token mỗi lần gọi nên theo kịp engine khởi động lại.
   const liveApi = new EngineApi({ get baseUrl() { return handle().baseUrl }, get token() { return handle().token } })
   const editorStates = (editors = new EditorStateRegistry(rootOf))
-  const agent = (agents = new AgentService({
+  const piAgent = new AgentService({
     api: liveApi, dataDir,
     accounts: acc,
     rootOf,
     editorState: (projectId) => editorStates.get(projectId),
     emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
-  }))
+  })
+  const googleAgent = new GeminiAgentService({
+    api: liveApi, dataDir, rootOf, connection: google,
+    consentTarget: () => geminiEnabled() ? googleTarget() : null,
+    hasConsent: (pid, target) => googleConsent.hasConsent(pid, target),
+    editorState: (pid) => editorStates.get(pid),
+    emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
+  })
+  const agent = (agents = new AgentRouter(piAgent, googleAgent, selectedRuntime))
+  const probeKey = () => JSON.stringify([google.connectionIdentity(), google.selectedModel()])
+  on('gemini:status', () => google.status())
+  on('gemini:setup', () => google.setup())
+  on('gemini:login', async () => {
+    agent.selectionChanged(); invalidateGoogleProbe()
+    if (selectedRuntime() === 'antigravity-cli') selectRuntime('antigravity-cli', false)
+    return google.login()
+  })
+  on('gemini:login-cancel', async () => { invalidateGoogleProbe(); google.cancelLogin() })
+  on('gemini:disconnect', async () => {
+    agent.selectionChanged(); invalidateGoogleProbe()
+    if (selectedRuntime() === 'antigravity-cli') selectRuntime('antigravity-cli', false)
+    await google.disconnect()
+  })
+  on('gemini:forget', async () => {
+    agent.selectionChanged(); invalidateGoogleProbe()
+    if (selectedRuntime() === 'antigravity-cli') selectRuntime('antigravity-cli', false)
+    await google.forget()
+  })
+  on('gemini:models', () => google.models())
+  on('gemini:select-model', async (id: string) => { agent.selectionChanged(); invalidateGoogleProbe(); await google.selectModel(id) })
+  on('gemini:test', async () => {
+    invalidateGoogleProbe()
+    const version = googleProbeVersion
+    const key = probeKey()
+    const result = await googleAgent.testConnection()
+    if (version === googleProbeVersion)
+      googleProbe = result.ok && result.capabilities?.streaming === true && result.capabilities.tools === true && key === probeKey() ? key : null
+    return result
+  })
+  on('gemini:activate', async () => {
+    const key = probeKey()
+    const version = runtimeVersion
+    const probeVersion = googleProbeVersion
+    const status = await google.status()
+    if (googleProbe !== key || key !== probeKey() || version !== runtimeVersion || probeVersion !== googleProbeVersion || !status.authenticated || status.connectionId !== google.connectionIdentity() || status.model !== google.selectedModel())
+      throw new AgentError('ai_not_configured', 'Kiểm tra kết nối và công cụ thành công trước khi dùng Gemini.')
+    selectRuntime('antigravity-cli')
+  })
   on('agent:prompt', async (pid: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions) => {
     await editorStates.wait(pid)
     return agent.prompt(pid, text, target, options)

@@ -7,7 +7,7 @@ import {
   normalizeConsentTarget, sameConsentTarget, type AgentEvent, type AgentMode, type AiConsentTarget,
   type AgentExecutionSettings, type AgentExecutionPolicy, type AgentRunLimits, type AgentUsage, type AgentToolRun,
   type AgentTask, type AgentSessionInfo, type AgentSessionSnapshot, type AgentPromptOptions,
-  type AgentCheckpointInfo, type AgentRollbackResult
+  type AgentCheckpointInfo, type AgentRollbackResult, type PiConsentTarget
 } from '../../shared/agent-types'
 import { verifyCitations } from '../ai/citations'
 import type { EngineApi } from '../engine/api'
@@ -128,7 +128,7 @@ export async function createPiSession(spec: SessionSpec): Promise<AgentSession> 
 }
 
 type Recipient = {
-  target: AiConsentTarget
+  target: PiConsentTarget
   model: Model
   modelRuntime: ModelRuntime
   isCurrent(): boolean
@@ -140,7 +140,7 @@ type Recipient = {
 type Entry = {
   gate: ApprovalGate
   session: Promise<PiSession>
-  target: AiConsentTarget
+  target: PiConsentTarget
   isCurrent(): boolean
   busy: boolean
   text: string
@@ -294,7 +294,7 @@ export class AgentService {
     const model = selectedModel(accounts)
     if (!model) return
     const target = accounts.getConsentTarget ? await accounts.getConsentTarget() : targetFor(model)
-    if (!target) return
+    if (!target || target.runtime === 'antigravity-cli') return
     const identity = accounts.sessionIdentity?.() ?? 'legacy-local-account'
     // The sync identity detects save/login/logout while a run is active. The
     // resolved consent account also covers keys supplied by the provider runtime.

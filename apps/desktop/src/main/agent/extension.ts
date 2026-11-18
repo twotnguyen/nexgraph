@@ -16,7 +16,14 @@ export const EDIT_TOOLS = [...ASK_TOOLS, 'edit', 'write', 'run_process']
 export const toolsFor = (mode: AgentMode): string[] => [...(mode === 'edit' ? EDIT_TOOLS : ASK_TOOLS), ...GRAPH_TOOLS]
 const ALLOWED = new Set(toolsFor('edit'))
 
-export function createNexgraphExtension(deps: {
+export type NexgraphToolCall = { toolName: string; toolCallId: string; input: unknown }
+export type NexgraphToolGateResult = { block: true; reason: string } | undefined
+/** Registration surface shared by Pi and the controlled Gemini MCP bridge. */
+export interface NexgraphToolPort extends Pick<ExtensionAPI, 'registerTool'> {
+  on(event: 'agent_start', callback: () => void): unknown
+  on(event: 'tool_call', callback: (event: NexgraphToolCall) => Promise<NexgraphToolGateResult>): unknown
+}
+export type NexgraphToolDeps = {
   api: EngineApi
   projectId: string
   root: string
@@ -26,8 +33,13 @@ export function createNexgraphExtension(deps: {
   assertEditable?: (path: string) => void
   onCheckpoint?: (taskId: string) => void
   onWriteConflict?: (message: string) => void
-}): (pi: ExtensionAPI) => void {
-  return (pi) => {
+}
+
+export function createNexgraphExtension(deps: NexgraphToolDeps): (pi: ExtensionAPI) => void {
+  return (pi) => registerNexgraphTools(pi, deps)
+}
+
+export function registerNexgraphTools(pi: NexgraphToolPort, deps: NexgraphToolDeps): void {
     for (const { function: f } of TOOL_DEFS) {
       pi.registerTool({
         name: f.name,
@@ -102,7 +114,7 @@ export function createNexgraphExtension(deps: {
     pi.on('tool_call', async (event) => {
       if (!ALLOWED.has(event.toolName)) return { block: true, reason: `Tool "${event.toolName}" không được phép dùng trong NexGraph` }
       const writing = event.toolName === 'write' || event.toolName === 'edit'
-      const duplicate = { block: true, reason: 'Mã thao tác ghi bị trùng' }
+      const duplicate = { block: true as const, reason: 'Mã thao tác ghi bị trùng' }
       if (writing && approvedWrites.has(event.toolCallId)) return duplicate
       try {
         if ((writing || event.toolName === 'run_process') && deps.getMode && deps.getMode() !== 'edit') {
@@ -125,7 +137,6 @@ export function createNexgraphExtension(deps: {
         return { block: true, reason: 'Cổng duyệt gặp lỗi nên thao tác bị từ chối' }
       }
     })
-  }
 }
 
 /**

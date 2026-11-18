@@ -6,6 +6,7 @@ import { Icon } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
+import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
 
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
@@ -155,11 +156,14 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       <button type="button" className="link page-back" onClick={onBack}>{vi.settings.back}</button>
       <div className="page-title"><span className="page-icon"><Icon name="sliders" size={23} /></span><h1>{vi.accounts.title}</h1></div>
       <div className="row">
-        <button type="button" className="primary" onClick={() => setConnecting('oauth')}>Kết nối nhanh</button>
-        <button type="button" onClick={() => setConnecting('local')}>Kết nối Ollama local</button>
+        <button type="button" className="primary" disabled={busy} onClick={() => setConnecting('oauth')}>Kết nối nhanh</button>
+        <button type="button" disabled={busy} onClick={() => setConnecting('local')}>Kết nối Ollama local</button>
       </div>
       {error && <p role="alert" className="inline-message error">{error}</p>}
       {status && <Toast message={status} onDismiss={() => setStatus(null)} />}
+
+      <GeminiAccountSettingsCard active={settings?.runtime === 'antigravity-cli' && !!settings.model} disabled={busy} onConnect={() => setConnecting('oauth')}
+        onApiKey={() => setConnecting('api_key')} onDisconnected={() => void load()} />
 
       <section className="workbench-panel settings-section">
         <h2>{vi.accounts.apiKeyTitle}</h2>
@@ -266,7 +270,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             if (m) void run(() => window.nexgraph.auth.selectModel(m.provider, m.id))
           }}>
             <option value="">{vi.accounts.modelPlaceholder}</option>
-            {models.map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.label} ({m.provider})</option>)}
+            {models.filter((m) => settings?.runtime === 'antigravity-cli' ? m.runtime === 'antigravity-cli' || m.provider === 'google-antigravity' : m.runtime !== 'antigravity-cli' && m.provider !== 'google-antigravity').map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.id === 'auto' ? 'Tự động' : m.label} ({m.provider === 'google-antigravity' ? 'Tài khoản Google' : m.provider})</option>)}
           </select>
         </label>
         {selectedModel && <p className="muted small">

@@ -8,7 +8,10 @@ export function ConsentDialog({ project, target, model, onOk, onCancel }: {
     <div className="modal-backdrop">
       <div role="dialog" aria-modal="true" aria-label={vi.chat.consentTitle} className="modal">
         <h2>{vi.chat.consentTitle}</h2>
-        <p>{vi.chat.consentBody(project, target.provider, target.baseUrl, model)}</p>
+        <p>{target.runtime === 'antigravity-cli'
+          ? `Cho phép Antigravity CLI chính thức gửi ngữ cảnh và lịch sử hội thoại của dự án “${project}” tới Google bằng tài khoản Google hiện đang được Antigravity quản lý trên máy này? Trợ lý sử dụng ${model === 'auto' ? 'model được chọn tự động' : model}.`
+          : vi.chat.consentBody(project, target.provider, target.baseUrl, model)}</p>
+        {target.runtime === 'antigravity-cli' && <p className="muted small">Nếu bạn đổi tài khoản Google ngoài NexGraph, hãy ngắt kết nối NexGraph rồi kết nối lại trước khi tiếp tục.</p>}
         <div className="row">
           <button type="button" className="primary" onClick={onOk}>{vi.chat.consentOk}</button>
           <button type="button" onClick={onCancel}>{vi.chat.consentCancel}</button>

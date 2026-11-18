@@ -2,7 +2,7 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { installNexgraph } from '../test-utils'
+import { emptyGeminiStatus, installNexgraph } from '../test-utils'
 import type { NexGraphApi } from '@shared/api'
 import { SettingsScreen } from './SettingsScreen'
 
@@ -10,10 +10,28 @@ const provider = (id: string, over: Record<string, unknown> = {}) =>
   ({ id, label: id, hasKey: false, oauth: false, loggedIn: false, custom: false, ...over })
 
 describe('SettingsScreen', () => {
+  it('ngắt Gemini không còn báo đang dùng dù vẫn giữ runtime Google và hồ sơ đăng nhập', async () => {
+    const settings = { runtime: 'antigravity-cli' as const, provider: 'google-antigravity', baseUrl: '', model: 'auto', connectionId: 'account-a', hasKey: false }
+    const { api } = installNexgraph({
+      ai: { getSettings: vi.fn(async () => ({ ...settings })) },
+      gemini: {
+        status: vi.fn(async () => emptyGeminiStatus({ state: 'connected', authenticated: true, installed: true })),
+        disconnect: vi.fn(async () => { settings.model = '' })
+      }
+    })
+    render(<SettingsScreen onBack={vi.fn()} />)
+    expect(await screen.findByText('Đang dùng tài khoản Google')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Ngắt kết nối NexGraph' }))
+    expect(await screen.findByText('Đã có kết nối Google')).toBeInTheDocument()
+    expect(screen.queryByText('Đang dùng tài khoản Google')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ngắt kết nối NexGraph' })).not.toBeInTheDocument()
+    expect(api.gemini.forget).not.toHaveBeenCalled()
+  })
+
   it('thứ tự ba mục từ trên xuống: key theo nhà cung cấp → nhà cung cấp tuỳ chỉnh → đăng nhập gói đăng ký', async () => {
     installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic', { oauth: true, hasKey: true }), provider('smoke', { custom: true })]) } })
     const { container } = render(<SettingsScreen onBack={() => {}} />)
-    const headings = await screen.findAllByRole('heading', { level: 2 })
+    const headings = (await screen.findAllByRole('heading', { level: 2 })).filter((heading) => !heading.textContent?.includes('Gemini'))
     expect(headings[0]).toHaveTextContent('API key')
     expect(headings[1]).toHaveTextContent('tuỳ chỉnh')
     expect(headings[2]).toHaveTextContent('gói đăng ký')

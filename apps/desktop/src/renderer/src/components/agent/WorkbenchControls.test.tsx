@@ -13,9 +13,9 @@ const pending = <T,>() => {
   return { promise, resolve }
 }
 const info = { id: 's1', title: 'Hội thoại một', createdAt: 1, updatedAt: 2, provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'm', messageCount: 1 }
-function Controls({ projectId = 'p1' }: { projectId?: string }) {
+function Controls({ projectId = 'p1', runtime }: { projectId?: string; runtime?: 'pi' | 'antigravity-cli' }) {
   const work = useAgentWorkbench(projectId, () => {})
-  return <WorkbenchControls projectId={projectId} work={work} busy={false} mode="edit" />
+  return <WorkbenchControls projectId={projectId} work={work} busy={false} mode="edit" runtime={runtime} />
 }
 const openSettings = async () => {
   const settings = screen.getByRole('button', { name: 'Quyền & giới hạn' })
@@ -25,6 +25,31 @@ const openSettings = async () => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('WorkbenchControls', () => {
+  it('không hiển thị số lượt hoặc số dư Pro giả khi CLI không cung cấp thống kê', async () => {
+    installNexgraph({ agent: { snapshot: vi.fn(async () => ({ ...emptyAgentSnapshot(), runtime: 'antigravity-cli' as const, task: {
+      id: 'task', sessionId: 'session', status: 'completed' as const, startedAt: 1, finishedAt: 2, turns: 0, turnsKnown: false,
+      runtime: 'antigravity-cli' as const, limits: emptyAgentSnapshot().limits, checkpointIds: []
+    } })) } })
+    render(<Controls runtime="antigravity-cli" />)
+    expect(await screen.findByText('Hoàn tất · Antigravity CLI')).toBeInTheDocument()
+    expect(screen.queryByText(/0\/20 lượt/)).not.toBeInTheDocument()
+    await openSettings()
+    expect(screen.getByText(/không phải số dư tài khoản hay trần thanh toán/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Lượt mô hình')).toBeDisabled()
+    expect(screen.getByLabelText('Token / tác vụ')).toBeDisabled()
+  })
+
+  it('Google chỉ sửa giới hạn thời gian và không gửi giá trị 0 từ ô lượt/token bị khóa', async () => {
+    const { api } = installNexgraph()
+    render(<Controls runtime="antigravity-cli" />)
+    await openSettings()
+    const minutes = screen.getByLabelText('Phút / tác vụ')
+    await userEvent.clear(minutes)
+    await userEvent.type(minutes, '5')
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thời gian' }))
+    expect(api.agent.setLimits).toHaveBeenCalledWith('p1', { maxTurns: 20, maxDurationMs: 300000, maxTokens: 100000 })
+  })
+
   it('đợi snapshot và danh sách phiên trước khi bật thao tác', async () => {
     const initial = pending<AgentSessionSnapshot>()
     const { api } = installNexgraph({ agent: { snapshot: vi.fn(() => initial.promise) } })

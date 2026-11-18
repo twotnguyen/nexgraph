@@ -1,5 +1,6 @@
 import type { EngineStatus } from './engine-status'
 import type { AgentId, IntegrationPlan } from './integration-types'
+import type { GeminiCliApi } from './gemini-types'
 import type {
   AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo,
   LocalModelInfo, AgentPromptOptions, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot,
@@ -38,6 +39,7 @@ export type HostCommand = { name: string; arg?: unknown }
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
 export interface NexGraphApi {
+  gemini: GeminiCliApi
   /** Chỉ có khi chạy trong extension (nền Code-OSS): thư mục đang mở và lệnh mở tệp bằng editor của nền. */
   host?: {
     folder: string | null

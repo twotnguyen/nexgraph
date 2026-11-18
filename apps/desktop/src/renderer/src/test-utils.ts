@@ -2,6 +2,12 @@ import { vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
 import type { Changes, EngineEvent, Job, JobState, ProjectSummary } from '@shared/graph-types'
 import type { AgentEvent, AgentSessionSnapshot } from '@shared/agent-types'
+import type { GeminiCliEvent, GeminiCliStatus } from '@shared/gemini-types'
+
+export const emptyGeminiStatus = (over: Partial<GeminiCliStatus> = {}): GeminiCliStatus => ({
+  state: 'not_installed', version: '1.5.11', installed: false, platformSupported: true, authenticated: false,
+  model: 'auto', connectionId: 'gemini-test-connection', ...over
+})
 
 export const emptyAgentSnapshot = (): AgentSessionSnapshot => ({
   session: null, messages: [], task: null, mode: 'ask', policy: 'review',
@@ -23,6 +29,7 @@ export const emptyChanges = (over: Partial<Changes> = {}): Changes => ({
 export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGraphApi[K]> } = {}) {
   const handlers = new Set<(e: EngineEvent) => void>()
   const agentHandlers = new Set<(pid: string, e: AgentEvent) => void>()
+  const geminiHandlers = new Set<(event: GeminiCliEvent) => void>()
   const api = {
     engine: { status: vi.fn(async () => ({ state: 'ready' as const, engineVersion: '0.1.0', vendorCommit: 'x' })),
       restart: vi.fn(async () => {}),
@@ -62,6 +69,14 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       discoverLocal: vi.fn(async () => []), connectLocal: vi.fn(async () => {}),
       onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), ...over.auth
     },
+    gemini: {
+      status: vi.fn(async () => emptyGeminiStatus()), setup: vi.fn(async () => emptyGeminiStatus({ state: 'signed_out', installed: true })),
+      login: vi.fn(async () => emptyGeminiStatus({ state: 'connected', installed: true, authenticated: true })),
+      loginCancel: vi.fn(async () => {}), disconnect: vi.fn(async () => {}), forget: vi.fn(async () => {}), activate: vi.fn(async () => {}),
+      models: vi.fn(async () => []), selectModel: vi.fn(async () => {}),
+      test: vi.fn(async () => ({ ok: true, message: 'Kết nối Gemini đã sẵn sàng', capabilities: { streaming: true, tools: true } })),
+      onEvent: vi.fn((cb: (event: GeminiCliEvent) => void) => { geminiHandlers.add(cb); return () => geminiHandlers.delete(cb) }), ...over.gemini
+    },
     agent: { prompt: vi.fn(async () => {}), abort: vi.fn(async () => {}), setMode: vi.fn(async () => {}), getMode: vi.fn(async () => 'ask' as const),
       approve: vi.fn(async () => {}), close: vi.fn(async () => {}),
       snapshot: vi.fn(async () => emptyAgentSnapshot()), listSessions: vi.fn(async () => []),
@@ -78,7 +93,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}), ...over.watch }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
-  return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)) }
+  return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }
 }
 
 export const progress = (state: JobState, done: number, total: number, extra: Partial<Job> = {}): Extract<EngineEvent, { type: 'job_progress' }> =>

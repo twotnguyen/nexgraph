@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
+import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { Icon } from '../common/icons'
@@ -39,7 +39,14 @@ function fileReference(context: FileContext): string {
 }
 
 function targetOf(settings: AiSettings): AiConsentTarget | null {
-  return settings.provider && settings.baseUrl && settings.model ? { provider: settings.provider, baseUrl: settings.baseUrl, ...(settings.accountId ? { accountId: settings.accountId } : {}) } : null
+  return consentTargetForSettings(settings)
+}
+
+function connectionLabel(settings: AiSettings | null): string {
+  return settings?.runtime === 'antigravity-cli' ? `${settings.model === 'auto' || settings.model.toLowerCase().startsWith('gemini') ? 'Gemini' : 'Antigravity'} · Tài khoản Google` : settings?.provider === 'google' ? 'Gemini · API key'
+    : settings?.provider === 'ollama-local' ? 'Ollama · Trên máy' : settings?.provider === 'openai' ? 'ChatGPT / OpenAI'
+      : settings?.provider === 'openai-codex' ? 'Codex · ChatGPT' : settings?.provider === 'anthropic' ? 'Claude · API key'
+        : settings?.provider === 'openrouter' ? 'OpenRouter · API key' : settings?.provider ?? 'Chưa có kết nối'
 }
 
 function errorCode(e: unknown): string {
@@ -238,6 +245,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   }, [hidden])
 
   const configured = !!cfg && !!targetOf(cfg)
+  const availableModels = models.filter((model) => cfg?.runtime === 'antigravity-cli'
+    ? model.runtime === 'antigravity-cli' || model.provider === 'google-antigravity' : model.provider === cfg?.provider && model.runtime !== 'antigravity-cli')
   const toolsUnavailable = models.find((model) => model.provider === cfg?.provider && model.id === cfg?.model)?.supportsTools === false
 
   const isCurrent = (id: number) => mounted.current && visible.current && operation.current === id
@@ -441,19 +450,20 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         </div>
       </header>
       <div className="agent-toolbar">
-        {models.length > 0 && configured ? <select className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
-          {!models.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model}</option>}
-          {models.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.label} · {model.provider}</option>)}
-        </select> : <span className="agent-model" title={configured ? `${cfg?.provider} · ${cfg?.model}` : undefined}>Pi{configured && ` · ${cfg?.model}`}</span>}
+        {availableModels.length > 0 && configured ? <select className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
+          {!availableModels.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model === 'auto' ? 'Tự động' : cfg?.model}</option>}
+          {availableModels.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.id === 'auto' ? 'Tự động' : model.label}</option>)}
+        </select> : <span className="agent-model" title={configured ? `${connectionLabel(cfg)} · ${cfg?.model}` : undefined}>{configured ? cfg?.model === 'auto' ? 'Tự động' : cfg?.model : 'Chưa chọn model'}</span>}
         <span className="mode" role="group" aria-label={vi.agent.modeTitle}>
           <button type="button" disabled={modeLocked} aria-pressed={mode === 'ask'} onClick={() => void pickMode('ask')}>{vi.agent.ask}</button>
           <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan'} onClick={() => void pickMode('plan')}>Kế hoạch</button>
           <button type="button" disabled={modeLocked || busy || toolsUnavailable} aria-pressed={mode === 'edit'} onClick={() => void pickMode('edit')}>{vi.agent.edit}</button>
         </span>
       </div>
+      {configured && <div className="agent-connection-label" data-runtime={cfg?.runtime}><Icon name="plug" size={11} /><span>{connectionLabel(cfg)}</span></div>}
       {mode && <p className="mode-description muted small">{mode === 'edit' ? work.execution.policy === 'auto' ? 'Tự động sửa mã trong phạm vi đã cấp quyền.' : vi.agent.editHint : mode === 'plan' ? 'Phân tích đồ thị và lập kế hoạch triển khai, chỉ đọc.' : vi.agent.askHint}</p>}
       {toolsUnavailable && <p className="agent-notice">Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.</p>}
-      <div className="agent-workbench-controls"><WorkbenchControls projectId={projectId} work={work} busy={busy || checking} mode={mode} onInspect={onInspect} onSuggest={(suggestion) => { setText(suggestion); input.current?.focus() }} /></div>
+      <div className="agent-workbench-controls"><WorkbenchControls projectId={projectId} work={work} busy={busy || checking} mode={mode} runtime={cfg?.runtime} onInspect={onInspect} onSuggest={(suggestion) => { setText(suggestion); input.current?.focus() }} /></div>
       {error && <p role="alert" className="error">{error}</p>}
       <div className="msgs" ref={messages} onScroll={(event) => {
         const el = event.currentTarget
@@ -532,7 +542,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         </div>
       </div>
       {attachedFile?.kind === 'file' && attachedFile.dirty && <span className="sr-only">Ngữ cảnh gồm bản nháp chưa lưu.</span>}
-      {connect && !hidden && <ConnectionDialog projectId={projectId} onClose={() => setConnect(false)} onConnected={() => {
+      {connect && !hidden && <ConnectionDialog projectId={projectId} initialProvider={cfg?.runtime === 'antigravity-cli' || cfg?.provider === 'google' ? 'gemini' : cfg?.provider?.startsWith('openai') ? 'openai' : cfg?.provider === 'ollama-local' ? 'local' : cfg?.provider ? 'other' : undefined} initialMethod={cfg?.provider === 'google' ? 'api_key' : undefined} onClose={() => setConnect(false)} onConnected={() => {
         setConnect(false)
         void Promise.all([window.nexgraph.ai.getSettings(), window.nexgraph.auth.models()]).then(async ([settings, available]) => { if (!mounted.current) return; applySettings(settings); setModels(available); await work.restore() }).catch((e) => setError(errorMessage(e)))
       }} />}

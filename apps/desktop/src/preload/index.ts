@@ -21,6 +21,19 @@ function subscribe<T>(channel: string, cb: (v: T) => void): () => void {
 }
 
 const api: NexGraphApi = {
+  gemini: {
+    status: () => call('gemini:status'),
+    setup: () => call('gemini:setup'),
+    login: () => call('gemini:login'),
+    loginCancel: () => call('gemini:login-cancel'),
+    disconnect: () => call('gemini:disconnect'),
+    forget: () => call('gemini:forget'),
+    activate: () => call('gemini:activate'),
+    models: () => call('gemini:models'),
+    selectModel: (id) => call('gemini:select-model', id),
+    test: () => call('gemini:test'),
+    onEvent: (cb) => subscribe('gemini:event', cb)
+  },
   engine: {
     status: () => ipcRenderer.invoke('engine:status'),
     restart: () => ipcRenderer.invoke('engine:restart'),
