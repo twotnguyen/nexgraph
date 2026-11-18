@@ -13,11 +13,11 @@ import { EvidencePopover } from './EvidencePopover'
 const EVIDENCE_LIMIT = 50
 
 interface Crumb { id: string | null; label: string }
-interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void; initialParent?: string }
+interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void; initialParent?: string; onParentChange?: (parent?: string) => void }
 interface Laid { nodes: Node[]; edges: Edge[]; view: ArchView }
 interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
 
-export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent }: Props) {
+export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent, onParentChange }: Props) {
   const theme = useTheme()
   const initialDirectory = initialParent?.startsWith('file:')
     ? (initialParent.slice(5).includes('/') ? `dir:${initialParent.slice(5, initialParent.lastIndexOf('/'))}` : undefined)
@@ -28,6 +28,8 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
   const [retry, setRetry] = useState(0)
   const [evidence, setEvidence] = useState<EvidenceState | null>(null)
   const current = crumbs[crumbs.length - 1].id
+
+  useEffect(() => { onParentChange?.(current ?? undefined) }, [current, onParentChange])
 
   useEffect(() => {
     let alive = true

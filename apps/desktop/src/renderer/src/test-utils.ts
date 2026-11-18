@@ -1,7 +1,14 @@
 import { vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
 import type { Changes, EngineEvent, Job, JobState, ProjectSummary } from '@shared/graph-types'
-import type { AgentEvent } from '@shared/agent-types'
+import type { AgentEvent, AgentSessionSnapshot } from '@shared/agent-types'
+
+export const emptyAgentSnapshot = (): AgentSessionSnapshot => ({
+  session: null, messages: [], task: null, mode: 'ask', policy: 'review',
+  execution: { policy: 'review', allowCommands: false },
+  limits: { maxTurns: 20, maxDurationMs: 600000, maxTokens: 100000 },
+  usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: null }
+})
 
 export const project = (over: Partial<ProjectSummary> = {}): ProjectSummary => ({
   project_id: 'p1', path: '/Đồ án/demo', name: 'demo', storage: 'in_project', ...over
@@ -50,12 +57,21 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     auth: {
       list: vi.fn(async () => []), setKey: vi.fn(async () => {}), removeKey: vi.fn(async () => {}),
       saveCustom: vi.fn(async () => {}), removeCustom: vi.fn(async () => {}), login: vi.fn(async () => {}),
-      loginCancel: vi.fn(async () => {}), promptReply: vi.fn(async () => {}), logout: vi.fn(async () => {}),
+      forgetRegistration: vi.fn(async () => {}), loginCancel: vi.fn(async () => {}), promptReply: vi.fn(async () => {}), logout: vi.fn(async () => {}),
       models: vi.fn(async () => []), selectModel: vi.fn(async () => {}), test: vi.fn(async () => ({ ok: true, message: '' })),
+      discoverLocal: vi.fn(async () => []), connectLocal: vi.fn(async () => {}),
       onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), ...over.auth
     },
     agent: { prompt: vi.fn(async () => {}), abort: vi.fn(async () => {}), setMode: vi.fn(async () => {}), getMode: vi.fn(async () => 'ask' as const),
       approve: vi.fn(async () => {}), close: vi.fn(async () => {}),
+      snapshot: vi.fn(async () => emptyAgentSnapshot()), listSessions: vi.fn(async () => []),
+      newSession: vi.fn(async () => emptyAgentSnapshot()), switchSession: vi.fn(async () => emptyAgentSnapshot()),
+      renameSession: vi.fn(async () => {}), deleteSession: vi.fn(async () => {}),
+      setExecution: vi.fn(async () => {}), getExecution: vi.fn(async () => ({ policy: 'review' as const, allowCommands: false })),
+      setLimits: vi.fn(async () => {}), getLimits: vi.fn(async () => ({ maxTurns: 20, maxDurationMs: 600000, maxTokens: 100000 })),
+      projectCommands: vi.fn(async () => ({ commands: [], warnings: [] })),
+      checkpoints: vi.fn(async () => []), rollback: vi.fn(async () => ({ restored: [], conflicts: [] })),
+      editorState: vi.fn(async () => {}),
       onEvent: vi.fn((cb: (pid: string, e: AgentEvent) => void) => { agentHandlers.add(cb); return () => agentHandlers.delete(cb) }), ...over.agent },
     mcp: { config: vi.fn(async () => ({ stdio: '{}' })), plan: vi.fn(), apply: vi.fn(), startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:1/mcp', key: 'k' })),
       stopHttp: vi.fn(async () => {}), httpStatus: vi.fn(async () => null), ...over.mcp },

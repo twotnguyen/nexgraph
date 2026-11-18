@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileContent, FileRevision, NexGraphApi } from '@shared/api'
@@ -21,6 +21,11 @@ vi.mock('./monaco', () => ({
     el.appendChild(ta)
     return {
       getValue: () => ta.value,
+      getSelection: () => ta.selectionEnd > ta.selectionStart ? {
+        text: ta.value.slice(ta.selectionStart, ta.selectionEnd),
+        start: ta.value.slice(0, ta.selectionStart).split('\n').length,
+        end: ta.value.slice(0, ta.selectionEnd).replace(/\n$/, '').split('\n').length
+      } : null,
       setValue: (v: string) => { ta.value = v },
       onChange: (cb: () => void) => ta.addEventListener('input', cb),
       revealLines,
@@ -30,7 +35,7 @@ vi.mock('./monaco', () => ({
   }
 }))
 
-import { EditorTab } from './EditorTab'
+import { EditorTab, type EditorContextGetter } from './EditorTab'
 
 const revision = (mtimeMs: number): FileRevision => ({ mtimeMs, version: `version-${mtimeMs}` })
 const content = (over: Partial<FileContent> = {}): FileContent => ({
@@ -67,6 +72,28 @@ function pending<T>() {
 beforeEach(() => vi.clearAllMocks())
 
 describe('EditorTab', () => {
+  it('reads a live selection or unsaved buffer with the current disk version for AI context', async () => {
+    const write = vi.fn(async () => revision(200))
+    installNexgraph({ fs: { read: vi.fn(async () => content({ text: 'first\nsecond\nthird' })), write } })
+    const onContextReady = vi.fn()
+    const view = render(<EditorTab projectId="p1" file="lib/a.dart" line={1} onClose={vi.fn()}
+      onDirtyChange={vi.fn()} onContextReady={onContextReady} />)
+    const ta = await box()
+    const getter = onContextReady.mock.calls.findLast((call) => typeof call[1] === 'function')?.[1] as EditorContextGetter
+    expect(getter()).toMatchObject({ text: 'first\nsecond\nthird', start: 1, end: 3, version: 'version-100', dirty: false })
+    fireEvent.change(ta, { target: { value: 'first\nmodified second\nthird' } })
+    fireEvent.input(ta)
+    ta.setSelectionRange(6, 22)
+    expect(getter()).toMatchObject({ text: 'modified second\n', start: 2, end: 2, dirty: true, version: 'version-100' })
+    ta.setSelectionRange(0, 0)
+    expect(getter()?.text).toBe('first\nmodified second\nthird')
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(getter()).toMatchObject({ dirty: false, version: 'version-200' }))
+    view.unmount()
+    expect(onContextReady).toHaveBeenLastCalledWith('lib/a.dart', null)
+    expect(getter()).toBeNull()
+  })
+
   it('nạp tệp và cuộn tới dòng', async () => {
     const { read } = setup()
     const ta = await box()

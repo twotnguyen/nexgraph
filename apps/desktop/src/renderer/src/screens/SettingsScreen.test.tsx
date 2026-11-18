@@ -22,10 +22,10 @@ describe('SettingsScreen', () => {
     expect(container).toBeInTheDocument()
   })
 
-  it('câu cảnh báo OAuth hiện đúng nguyên văn', async () => {
+  it('giải thích tài khoản ChatGPT và Claude dùng API key trong NexGraph', async () => {
     installNexgraph({ auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true })]) } })
     render(<SettingsScreen onBack={() => {}} />)
-    expect(await screen.findByText(/không cho phép dùng gói đăng ký trong ứng dụng bên thứ ba/)).toBeInTheDocument()
+    expect(await screen.findByText(/Claude trong NexGraph dùng Anthropic API key/)).toBeInTheDocument()
   })
 
   it('giải thích kho khoá vắng và vô hiệu hoá đăng nhập OAuth', async () => {
@@ -114,6 +114,7 @@ describe('SettingsScreen', () => {
     expect(api.auth.login).toHaveBeenCalledWith('openai-codex')
     act(() => emitAuth({ type: 'auth_url', url: 'https://oauth.example/authorize', instructions: 'Mở liên kết' }))
     expect(await screen.findByText('Mở liên kết')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Mở lại trang xác nhận' })).toHaveAttribute('href', 'https://oauth.example/authorize')
     await userEvent.click(screen.getByRole('button', { name: 'Huỷ đăng nhập' }))
     expect(api.auth.loginCancel).toHaveBeenCalled()
   })
@@ -147,7 +148,7 @@ describe('SettingsScreen', () => {
 })
 
 /** Nối các sink onEvent/onPrompt của stub auth trong installNexgraph để bắn sự kiện từ main. */
-function installAuthSinks(api: NexGraphApi) {
+function installAuthSinks(api: { auth: Pick<NexGraphApi['auth'], 'onEvent' | 'onPrompt'> }) {
   const eventSinks = new Set<(e: unknown) => void>()
   const promptSinks = new Set<(p: unknown) => void>()
   const auth = api.auth

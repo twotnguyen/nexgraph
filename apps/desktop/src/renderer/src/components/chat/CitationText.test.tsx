@@ -24,4 +24,37 @@ describe('CitationText', () => {
     render(<CitationText onOpen={() => {}} text="[[x.py:7]]" citations={[{ raw: '[[x.py:7]]', file: 'x.py', start: 7, end: 7, valid: true, reason: null }]} />)
     expect(screen.getByRole('button', { name: 'x.py:7' })).toBeInTheDocument()
   })
+
+  it('Markdown hiển thị heading, danh sách, bảng và code fence cùng citation đã xác minh', () => {
+    const text = '# Kết quả\n\n- **Đã đọc** mã\n\n| Tệp | Kết quả |\n| --- | --- |\n| app.ts | Tốt |\n\n~~~ts\nconst value = 1\n~~~\n\nXem [[app.ts:2]].'
+    const { container } = render(<CitationText text={text} onOpen={vi.fn()} citations={[
+      { raw: '[[app.ts:2]]', file: 'app.ts', start: 2, end: 2, valid: true, reason: null }
+    ]} />)
+    expect(screen.getByRole('heading', { name: 'Kết quả' })).toBeInTheDocument()
+    expect(screen.getByRole('listitem')).toHaveTextContent('Đã đọc mã')
+    expect(screen.getByRole('table')).toBeInTheDocument()
+    expect(container.querySelector('pre code')).toHaveTextContent('const value = 1')
+    expect(screen.getByRole('button', { name: 'app.ts:2' })).toBeInTheDocument()
+  })
+
+  it('chặn HTML, ảnh từ xa và link script/file; link HTTPS có rel bảo vệ', () => {
+    const text = '<img src="https://tracking.example/pixel" onerror="alert(1)">\n\n![Biểu đồ](https://tracking.example/image.png)\n\n[Script](javascript:alert%281%29) [File](file:///etc/passwd) [Docs](https://example.com/docs)'
+    const { container } = render(<CitationText text={text} citations={[]} onOpen={vi.fn()} />)
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('script')).toBeNull()
+    expect(screen.getByText('Hình ảnh · Biểu đồ')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Script' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'File' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Docs' })).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('citation trong code giữ nguyên và link tự tạo không giả mạo chip', () => {
+    const text = '`[[a.ts:3]]`\n\n[Giả mạo](#nexgraph-citation)\n\n[[a.ts:3]]'
+    const { container } = render(<CitationText text={text} onOpen={vi.fn()} citations={[
+      { raw: '[[a.ts:3]]', file: 'a.ts', start: 3, end: 3, valid: true, reason: null }
+    ]} />)
+    expect(container.querySelector('code')).toHaveTextContent('[[a.ts:3]]')
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.queryByRole('link', { name: 'Giả mạo' })).not.toBeInTheDocument()
+  })
 })

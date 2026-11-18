@@ -307,7 +307,7 @@ export interface IndexOptions {
   includeMedia?: boolean
 }
 
-export interface AiSettings { baseUrl: string; model: string; hasKey: boolean; provider?: string }
+export interface AiSettings { baseUrl: string; model: string; hasKey: boolean; provider?: string; accountId?: string }
 export interface Citation { raw: string; file: string; start: number; end: number; valid: boolean; reason: null | 'file_not_found' | 'out_of_range' }
 export interface ContextItem { node: GraphNode; score: number; reasons: string[]; code: { file: string; start: number; end: number; text: string } | null }
 export interface ContextPack { items: ContextItem[]; flows: FlowSummary[]; tokens: number; truncated: boolean }

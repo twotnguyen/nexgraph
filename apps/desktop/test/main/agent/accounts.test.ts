@@ -23,6 +23,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   rmSync(base, { recursive: true, force: true })
 })
 
@@ -98,7 +100,7 @@ describe('AccountService', () => {
     await first.setApiKey('anthropic', 'sk-again')
     const { svc } = await make()
     const list = await svc.listProviders()
-    expect(list.find((p) => p.id === 'anthropic')).toMatchObject({ hasKey: true, oauth: true, custom: false })
+    expect(list.find((p) => p.id === 'anthropic')).toMatchObject({ hasKey: true, oauth: false, custom: false, authMethods: ['api_key'] })
   })
 
   it('saveCustomProvider baseUrl sai → bad_param; hợp lệ → listModels có model đó', async () => {
@@ -171,12 +173,12 @@ describe('AccountService', () => {
     expect(svc.getSelectedModel()).toEqual({ provider: 'c1', id: 'm1' })
     expect(() => svc.selectModel('c1', 'm-không')).toThrow(expect.objectContaining({ code: 'bad_param' }))
     const target = (await svc.getConsentTarget())!
-    expect(target).toEqual({ provider: 'c1', baseUrl: 'https://a.example/v1' })
+    expect(target).toMatchObject({ provider: 'c1', baseUrl: 'https://a.example/v1', accountId: expect.any(String) })
     await expect(svc.hasConsent('p1', target)).resolves.toBe(false)
     await svc.grantConsent('p1', target)
     await expect(svc.hasConsent('p1', target)).resolves.toBe(true)
     await expect(svc.hasConsent('p2', target)).resolves.toBe(false)
-    expect(JSON.parse(readFileSync(prefs, 'utf8')).aiConsent).toEqual([JSON.stringify(['p1', 'c1', 'https://a.example/v1'])])
+    expect(JSON.parse(readFileSync(prefs, 'utf8')).aiConsent).toEqual([JSON.stringify(['p1', 'c1', 'https://a.example/v1', target.accountId])])
 
     await svc.saveCustomProvider({ id: 'c2', label: 'C2', baseUrl: 'https://a.example/v1', model: 'm2' })
     svc.selectModel('c2', 'm2')
@@ -324,5 +326,196 @@ describe('AccountService', () => {
       id: 'openai', label: 'Endpoint khác', baseUrl: 'https://other.example/v1', model: 'm'
     })).rejects.toMatchObject({ code: 'bad_param' })
     expect((await svc.listProviders()).find((p) => p.id === 'openai')).toMatchObject({ custom: false, hasKey: true })
+  })
+
+  it('ChatGPT nhận UUID cài đặt ổn định qua lần đăng nhập và khởi động lại', async () => {
+    const { svc } = await make()
+    const login = vi.spyOn(svc.modelRuntime, 'login').mockResolvedValue({ type: 'oauth', access: 'a', refresh: 'r', expires: Date.now() + 3600000 })
+    await svc.loginOAuth('openai')
+    const options = login.mock.calls[0][3]!
+    expect(options.agentName).toBe('NexGraph')
+    const installation = options.getDeviceId!()
+    expect(installation).toMatch(/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/)
+    const { svc: restarted } = await make()
+    const later = vi.spyOn(restarted.modelRuntime, 'login').mockResolvedValue({ type: 'oauth', access: 'b', refresh: 'r2', expires: Date.now() + 3600000 })
+    await restarted.loginOAuth('openai')
+    expect(later.mock.calls[0][3]!.getDeviceId!()).toBe(installation)
+  })
+
+  it('runtime OpenAI dùng adapter phục hồi đăng ký mới và giữ key đang hoạt động khi đăng nhập thất bại', async () => {
+    const realFetch = globalThis.fetch
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input) === 'https://auth.openai.com/api/accounts/oauth/token')
+        return Response.json({ error: 'invalid_grant' }, { status: 400 })
+      throw new Error('Test chỉ cho gọi endpoint đổi mã giả lập')
+    })
+    const authorizations: URLSearchParams[] = []
+    const callbacks: Promise<unknown>[] = []
+    const { svc } = await make({ notify: (raw) => {
+      const event = raw as { type: string; url?: string }
+      if (event.type !== 'auth_url' || !event.url) return
+      const authorization = new URL(event.url).searchParams
+      authorizations.push(authorization)
+      const callback = new URL(authorization.get('redirect_uri')!)
+      callback.searchParams.set('code', 'test-code')
+      callback.searchParams.set('state', authorization.get('state')!)
+      if (authorization.get('client_id') === 'dynamic_agent_client')
+        callback.searchParams.set('client_id', 'oaiapp_test_registration')
+      callbacks.push(realFetch(callback).then((response) => response.text()))
+    } })
+    await svc.setApiKey('openai', 'test-existing-key')
+    await expect(svc.loginOAuth('openai')).rejects.toMatchObject({ code: 'ai_error' })
+    await Promise.all(callbacks)
+    expect(authorizations).toHaveLength(2)
+    expect(authorizations[0].get('client_id')).toBe('dynamic_agent_client')
+    expect(authorizations[1].get('client_id')).toBe('oaiapp_test_registration')
+    expect(svc.hasKey('openai')).toBe(true)
+  })
+
+  it('đổi API key cùng endpoint làm consent cũ hết hiệu lực, accountId ổn định sau restart', async () => {
+    const { svc } = await make()
+    await svc.saveCustomProvider({ id: 'account-test', label: 'Account', baseUrl: 'https://example.com/v1', model: 'm' }, 'first-key-123456')
+    svc.selectModel('account-test', 'm')
+    const before = (await svc.getConsentTarget())!
+    const identity = svc.sessionIdentity()
+    await svc.grantConsent('project', before)
+    await svc.setApiKey('account-test', 'second-key-123456')
+    const after = (await svc.getConsentTarget())!
+    expect(after.accountId).not.toBe(before.accountId)
+    expect(svc.sessionIdentity()).not.toBe(identity)
+    expect(scan('first-key-123456')).toEqual([])
+    expect(scan('second-key-123456')).toEqual([])
+    await expect(svc.hasConsent('project', before)).rejects.toMatchObject({ code: 'ai_provider_changed' })
+    await expect(svc.hasConsent('project', after)).resolves.toBe(false)
+    const { svc: restarted } = await make()
+    expect((await restarted.getConsentTarget())!.accountId).toBe(after.accountId)
+  })
+
+  it('đăng xuất ChatGPT thu hồi phiên, giữ đăng ký mã hóa và không dùng id_token_hint sau khởi động lại', async () => {
+    mkdirSync(join(base, 'agent'), { recursive: true })
+    writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
+      expires: Date.now() + 3600000, clientId: 'oaiapp_saved_registration', sub: 'test-subject', idToken: 'test-previous-id-token' } }))
+    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).endsWith('openid-configuration')
+      ? Response.json({ revocation_endpoint: 'https://auth.openai.com/oauth/revoke' }) : new Response(null, { status: 200 }))
+    const { svc } = await make()
+    await expect(svc.forgetOpenAiRegistration()).rejects.toMatchObject({ code: 'bad_param' })
+    await svc.logout('openai')
+    expect((await svc.modelRuntime.listCredentials()).some((c) => c.providerId === 'openai')).toBe(false)
+    expect(request).toHaveBeenCalledWith('https://auth.openai.com/oauth/revoke', expect.objectContaining({ method: 'POST', body: new URLSearchParams({ token: 'test-refresh', token_type_hint: 'refresh_token', client_id: 'oaiapp_saved_registration' }) }))
+    expect(scan('test-subject')).toEqual([])
+    expect(scan('test-previous-id-token')).toEqual([])
+    const authorizations: URLSearchParams[] = []
+    const { svc: restarted } = await make({ notify: (raw) => {
+      const event = raw as { type: string; url?: string }
+      if (event.type !== 'auth_url' || !event.url) return
+      authorizations.push(new URL(event.url).searchParams)
+      restarted.cancelLogin()
+    } })
+    await expect(restarted.loginOAuth('openai')).rejects.toThrow()
+    expect(authorizations[0].get('client_id')).toBe('oaiapp_saved_registration')
+    expect(authorizations[0].has('id_token_hint')).toBe(false)
+    await restarted.forgetOpenAiRegistration()
+    await expect(restarted.loginOAuth('openai')).rejects.toThrow()
+    expect(authorizations[1].get('client_id')).toBe('dynamic_agent_client')
+  })
+
+  it('đăng xuất vẫn xóa token local và thông báo khi chưa xác nhận được thu hồi từ xa', async () => {
+    mkdirSync(join(base, 'agent'), { recursive: true })
+    writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
+      expires: Date.now() + 3600000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
+    const notify = vi.fn()
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({}, { status: 503 }))
+    const { svc } = await make({ notify })
+    await svc.logout('openai')
+    expect((await svc.modelRuntime.listCredentials()).some((c) => c.providerId === 'openai')).toBe(false)
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: expect.stringContaining('Chưa xác nhận được thu hồi phiên từ xa') }))
+  })
+
+  it('không cho đăng nhập Anthropic OAuth qua chat NexGraph', async () => {
+    const { svc } = await make()
+    await expect(svc.loginOAuth('anthropic')).rejects.toMatchObject({ code: 'bad_param' })
+    expect((await svc.listProviders()).find((p) => p.id === 'anthropic')?.oauth).toBe(false)
+  })
+
+  it('làm mới token OAuth giữ nguyên accountId và consent đã cấp', async () => {
+    const { svc } = await make()
+    fakeOauthProvider(svc, async () => ({ refresh: 'refresh-a', access: 'access-a', expires: Date.now() + 3600000 }),
+      'fakeoauth', async () => ({ refresh: 'refresh-b', access: 'access-b', expires: Date.now() + 7200000 }))
+    await svc.loginOAuth('fakeoauth')
+    svc.selectModel('fakeoauth', 'm')
+    const before = (await svc.getConsentTarget())!
+    await svc.grantConsent('project', before)
+    await svc.modelRuntime.getAuth('fakeoauth', { minOAuthValidityMs: 3700000 })
+    expect(await svc.getConsentTarget()).toEqual(before)
+    await expect(svc.hasConsent('project', before)).resolves.toBe(true)
+  })
+
+  it('Ollama local khám phá model, đọc context/công cụ, lưu và mở lại không cần cờ dev', async () => {
+    const { svc } = await make()
+    const request = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      return new Response(JSON.stringify(url.endsWith('/api/tags')
+        ? { models: [{ name: 'coder:7b', size: 4200000000 }] }
+        : { capabilities: ['completion', 'tools'], parameters: 'num_ctx 32768\n', model_info: { 'qwen3.context_length': 32768 } }))
+    })
+    expect(await svc.discoverLocal()).toEqual([{ id: 'coder:7b', label: 'coder:7b', sizeBytes: 4200000000 }])
+    await svc.connectLocal('http://127.0.0.1:11434/v1', 'coder:7b')
+    expect(svc.getSelectedModel()).toEqual({ provider: 'ollama-local', id: 'coder:7b' })
+    expect((await svc.listModels()).find((m) => m.provider === 'ollama-local')).toMatchObject({
+      contextWindow: 32768, maxTokens: 8192, supportsTools: true, pricing: 'local', cost: { input: null, output: null }
+    })
+    expect(request).toHaveBeenCalledWith('http://127.0.0.1:11434/api/show', expect.objectContaining({ method: 'POST', redirect: 'error' }))
+    const { svc: restarted } = await make()
+    expect((await restarted.listProviders()).find((p) => p.id === 'ollama-local')).toMatchObject({ kind: 'local', authMethods: ['none'] })
+    expect(restarted.selectedModelPricing()).toBe('local')
+  })
+
+  it('Ollama chỉ chấp nhận loopback, không dò IP riêng/public hoặc URL chứa credential', async () => {
+    const { svc } = await make()
+    const request = vi.spyOn(globalThis, 'fetch')
+    for (const url of ['http://10.0.0.2:11434/v1', 'http://169.254.169.254/v1', 'https://example.com/v1', 'http://u:p@localhost:11434/v1']) {
+      await expect(svc.discoverLocal(url)).rejects.toMatchObject({ code: 'bad_param' })
+    }
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it('custom provider giữ metadata chưa biết, không hiển thị giá 0 hoặc context giả', async () => {
+    const { svc } = await make()
+    await svc.saveCustomProvider({ id: 'unknown', label: 'Unknown', baseUrl: 'https://example.com/v1', model: 'm' })
+    svc.selectModel('unknown', 'm')
+    expect((await svc.listModels()).find((m) => m.provider === 'unknown')).toEqual({
+      provider: 'unknown', id: 'm', label: 'm', pricing: 'unknown', cost: { input: null, output: null }
+    })
+    expect(svc.selectedModelPricing()).toBe('unknown')
+  })
+
+  it('kiểm tra kết nối xác minh cả stream lẫn tool call có marker đúng', async () => {
+    const { svc } = await make()
+    await svc.saveCustomProvider({ id: 'probe', label: 'Probe', baseUrl: 'https://example.com/v1', model: 'm' })
+    svc.selectModel('probe', 'm')
+    const stream = vi.spyOn(svc.modelRuntime, 'streamSimple').mockImplementation((_model, context) => {
+      const text = context.messages[0].content
+      const marker = typeof text === 'string' ? /"([^"]+)"/.exec(text)?.[1] : ''
+      return {
+        async *[Symbol.asyncIterator]() { yield { type: 'toolcall_delta' } },
+        result: async () => ({ stopReason: 'toolUse', content: [{
+          type: 'toolCall', name: 'nexgraph_connection_check', arguments: { value: marker }, id: 'probe'
+        }] })
+      } as unknown as ReturnType<typeof svc.modelRuntime.streamSimple>
+    })
+    await expect(svc.test()).resolves.toMatchObject({ ok: true, capabilities: { streaming: true, tools: true } })
+    expect(stream).toHaveBeenCalledOnce()
+    expect(stream.mock.calls[0][1].tools?.[0].name).toBe('nexgraph_connection_check')
+  })
+
+  it('Ollama chưa cấu hình context dùng giới hạn bảo thủ 4K và báo model chưa hỗ trợ công cụ', async () => {
+    const { svc } = await make()
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => new Response(JSON.stringify(String(input).endsWith('/api/tags')
+      ? { models: [{ name: 'small' }] }
+      : { capabilities: ['completion'], model_info: { 'llama.context_length': 131072 } })))
+    await svc.connectLocal('http://localhost:11434', 'small')
+    expect((await svc.listModels()).find((m) => m.provider === 'ollama-local')).toMatchObject({
+      contextWindow: 4096, maxTokens: 1024, supportsTools: false
+    })
   })
 })

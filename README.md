@@ -2,7 +2,7 @@
 
 NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ mục thư mục mã nguồn cục bộ, khám phá kiến trúc, tìm ký hiệu và xem vùng ảnh hưởng khi sửa mã. Đề tài ưu tiên **TypeScript/JavaScript và Python**. Đồ thị dẫn đến vị trí mã nguồn, hỗ trợ truy vết luồng thực thi và cung cấp ngữ cảnh cho trợ lý AI qua MCP.
 
-Ứng dụng có trình soạn thảo tích hợp và hai chế độ trợ lý. **Hỏi** chỉ đọc. **Sửa** cho xem diff và yêu cầu duyệt từng đề xuất tạo, sửa hoặc ghi đè tệp. Cả hai chế độ từ chối lời gọi công cụ chạy lệnh shell. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
+Ứng dụng có trình soạn thảo tích hợp và trợ lý dùng Pi coding-agent SDK. **Hỏi** và **Kế hoạch** chỉ đọc. **Sửa** hỗ trợ duyệt từng thay đổi hoặc tự động trong phiên đã cấp quyền; quyền chạy lệnh build/test được bật riêng. Hội thoại, kết quả công cụ và checkpoint được lưu để mở lại và tiếp tục. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
 
 ## Bắt đầu
 
@@ -23,6 +23,7 @@ Mở thư mục mã nguồn trong cửa sổ NexGraph. Dự án nhỏ được q
 - [Cài đặt và chạy từ mã nguồn trên Windows/macOS](docs/install-notes.md)
 - [Demo nhanh với mẫu Python và kịch bản bảo vệ trên NestJS](docs/demo-script.md)
 - [Danh sách kiểm trên Windows](docs/windows-checklist.md)
+- [Trợ lý AI: tài khoản, ngữ cảnh, quyền thực thi, lịch sử và hoàn tác](docs/ai-workbench.md)
 
 **NexGraph 0.1.0 Electron/Monaco** là bản dùng để bàn giao và bảo vệ. Bộ cài có engine đi kèm. Lệnh `pnpm dev` khởi động cùng giao diện và chạy engine từ mã nguồn. Tích hợp **Code-OSS** là bản thử nghiệm, dùng chung engine và có quy trình build riêng. [Quy trình build Code-OSS](apps/shell/README.md)
 

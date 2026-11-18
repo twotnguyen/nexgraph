@@ -31,12 +31,12 @@ const CHILD = (id: string): ArchView => ({ parent: { id, label: id.split('/').po
 const ev = (line: number): ArchEvidence => ({ file: 'lib/a.dart', line, edge: { id: line, source: 'lib/a.dart::A.run#method', target: 'lib/b.dart#file',
   type: 'CALLS', subtype: null, confidence: 'INFERRED', confidence_score: 0.9, origin: 'resolver', evidence: { file: 'lib/a.dart', line, col: 0 } } })
 
-function setup(over: Partial<NexGraphApi['graph']> = {}) {
+function setup(over: Partial<NexGraphApi['graph']> = {}, onParentChange?: (parent?: string) => void) {
   const architecture = vi.fn(async (_p: string, parent?: string) => (parent ? CHILD(parent) : ROOT))
   const archEvidence = vi.fn(async () => [ev(12), ev(30)])
   installNexgraph({ graph: { architecture, archEvidence, ...over } })
   const onOpenNode = vi.fn()
-  render(<div style={{ width: 900, height: 600 }}><ArchitectureCanvas projectId="p1" onOpenNode={onOpenNode} /></div>)
+  render(<div style={{ width: 900, height: 600 }}><ArchitectureCanvas projectId="p1" onOpenNode={onOpenNode} onParentChange={onParentChange} /></div>)
   return { architecture, archEvidence, onOpenNode }
 }
 const nodeByText = (text: string) => screen.getByText(text, { selector: '.react-flow__node b' })
@@ -63,14 +63,17 @@ describe('ArchitectureCanvas', () => {
   })
 
   it('drills into a directory block, extends the breadcrumb and can go back', async () => {
-    const { architecture } = setup()
+    const onParentChange = vi.fn()
+    const { architecture } = setup({}, onParentChange)
     await waitFor(() => expect(document.querySelectorAll('.react-flow__node')).toHaveLength(4))
     fireEvent.click(nodeByText('lib'))
     await waitFor(() => expect(architecture).toHaveBeenLastCalledWith('p1', 'dir:lib'))
+    expect(onParentChange).toHaveBeenLastCalledWith('dir:lib')
     const crumbs = screen.getByRole('navigation', { name: 'Đường dẫn khối' })
     await waitFor(() => expect(within(crumbs).getAllByRole('button')).toHaveLength(2))
     await userEvent.click(within(crumbs).getByRole('button', { name: 'Dự án' }))
     await waitFor(() => expect(architecture).toHaveBeenLastCalledWith('p1', undefined))
+    expect(onParentChange).toHaveBeenLastCalledWith(undefined)
     expect(within(crumbs).getAllByRole('button')).toHaveLength(1)
   })
 

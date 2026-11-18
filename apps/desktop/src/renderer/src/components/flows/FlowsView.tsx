@@ -15,12 +15,13 @@ interface Props {
   onOpenCode: (file: string, line: number, lineEnd?: number) => void
   onOpenNode: (nodeId: string) => void
   initialFlowId?: number
+  onSelectedFlowChange?: (id?: number) => void
 }
 
 const errMessage = (err: unknown): string =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
 
-export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, initialFlowId }: Props) {
+export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, initialFlowId, onSelectedFlowChange }: Props) {
   const [list, setList] = useState<FlowListType>({ flows: [], total: 0, truncated: false })
   const [page, setPage] = useState<{ key: string; offset: number } | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(initialFlowId ?? null)
@@ -40,6 +41,10 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
   const loadingMore = useRef(false)
   const listKey = JSON.stringify([projectId, revision, filter, kind])
   const offset = page?.key === listKey ? page.offset : 0
+
+  useEffect(() => {
+    onSelectedFlowChange?.(detail?.flow.id === selectedId ? selectedId ?? undefined : undefined)
+  }, [detail, selectedId, onSelectedFlowChange])
 
   useEffect(() => {
     setPage((current) => current?.key === listKey ? current : null)

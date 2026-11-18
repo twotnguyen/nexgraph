@@ -1,6 +1,10 @@
 import type { EngineStatus } from './engine-status'
 import type { AgentId, IntegrationPlan } from './integration-types'
-import type { AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo } from './agent-types'
+import type {
+  AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo,
+  LocalModelInfo, AgentPromptOptions, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot,
+  ProjectCommands, AgentCheckpointInfo, AgentRollbackResult, AgentEditorState
+} from './agent-types'
 import type {
   AiSettings,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
@@ -139,17 +143,21 @@ export interface NexGraphApi {
     loginCancel(): Promise<void>
     promptReply(id: string, value: string | null): Promise<void>
     logout(providerId: string): Promise<void>
+    /** Quên đăng ký ChatGPT đã đăng xuất để chọn tài khoản/workspace khác. */
+    forgetRegistration(): Promise<void>
     models(): Promise<ModelInfo[]>
     selectModel(provider: string, id: string): Promise<void>
     /** Gọi provider thật với model đang chọn. */
-    test(): Promise<{ ok: boolean; message: string }>
+    test(): Promise<{ ok: boolean; message: string; capabilities?: { streaming: boolean; tools: boolean } }>
+    discoverLocal(baseUrl?: string): Promise<LocalModelInfo[]>
+    connectLocal(baseUrl: string, modelId: string): Promise<void>
     onEvent(cb: (e: AuthEventView) => void): () => void
     onPrompt(cb: (p: AuthPromptView) => void): () => void
   }
-  /** Phiên agent giữ hội thoại trong bộ nhớ cho cùng dự án và đích nhận dữ liệu. */
+  /** Phiên agent lưu theo dự án, tài khoản và đích nhận dữ liệu. */
   agent: {
     /** Gửi một lượt; kết quả đến qua `onEvent` (`text`… rồi `done` hoặc `error`). Resolve khi lượt kết thúc. */
-    prompt(projectId: string, text: string, target: AiConsentTarget): Promise<void>
+    prompt(projectId: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions): Promise<void>
     abort(projectId: string): Promise<void>
     /** Đổi chế độ; yêu cầu duyệt đang chờ bị từ chối. */
     setMode(projectId: string, mode: AgentMode): Promise<void>
@@ -157,6 +165,20 @@ export interface NexGraphApi {
     approve(projectId: string, id: string, allow: boolean): Promise<void>
     /** Rời dự án: từ chối yêu cầu đang chờ, huỷ phiên. */
     close(projectId: string): Promise<void>
+    snapshot(projectId: string): Promise<AgentSessionSnapshot>
+    listSessions(projectId: string): Promise<AgentSessionInfo[]>
+    newSession(projectId: string): Promise<AgentSessionSnapshot>
+    switchSession(projectId: string, sessionId: string): Promise<AgentSessionSnapshot>
+    renameSession(projectId: string, sessionId: string, title: string): Promise<void>
+    deleteSession(projectId: string, sessionId: string): Promise<void>
+    setExecution(projectId: string, settings: AgentExecutionSettings): Promise<void>
+    getExecution(projectId: string): Promise<AgentExecutionSettings>
+    setLimits(projectId: string, limits: AgentRunLimits): Promise<void>
+    getLimits(projectId: string): Promise<AgentRunLimits>
+    projectCommands(projectId: string): Promise<ProjectCommands>
+    checkpoints(projectId: string, taskId: string): Promise<AgentCheckpointInfo[]>
+    rollback(projectId: string, taskId: string): Promise<AgentRollbackResult>
+    editorState(projectId: string, states: AgentEditorState[]): Promise<void>
     onEvent(cb: (projectId: string, e: AgentEvent) => void): () => void
   }
   mcp: {

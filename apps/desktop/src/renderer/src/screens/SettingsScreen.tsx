@@ -4,6 +4,8 @@ import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@sh
 import { vi } from '../strings'
 import { Icon } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
+import { ConnectionDialog } from '../components/agent/ConnectionDialog'
+import { AuthLinks } from '../components/agent/AuthLinks'
 
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
@@ -27,6 +29,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [connecting, setConnecting] = useState<'oauth' | 'api_key' | 'local' | null>(null)
   const loginPending = useRef(false)
   const operation = useRef(false)
 
@@ -143,13 +146,18 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const keyTarget = providers.find((p) => p.id === keyProvider)
   const customs = providers.filter((p) => p.custom)
   const busy = working || testing
-  const oauthProviders = providers.filter((p) => p.oauth && !p.custom)
+  const oauthProviders = providers.filter((p) => p.oauth && !p.custom && p.id !== 'anthropic')
   const oauthStorageIssue = oauthProviders.find((p) => p.oauthStorageIssue)?.oauthStorageIssue
+  const selectedModel = models.find((m) => m.provider === settings?.provider && m.id === settings.model)
 
   return (
     <main className="screen settings">
       <button type="button" className="link page-back" onClick={onBack}>{vi.settings.back}</button>
       <div className="page-title"><span className="page-icon"><Icon name="sliders" size={23} /></span><h1>{vi.accounts.title}</h1></div>
+      <div className="row">
+        <button type="button" className="primary" onClick={() => setConnecting('oauth')}>Kết nối nhanh</button>
+        <button type="button" onClick={() => setConnecting('local')}>Kết nối Ollama local</button>
+      </div>
       {error && <p role="alert" className="inline-message error">{error}</p>}
       {status && <Toast message={status} onDismiss={() => setStatus(null)} />}
 
@@ -161,10 +169,11 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             setKeyProvider(e.target.value)
             setKeyInput('')
           }}>
-            {providers.filter((p) => !p.custom).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+            {providers.filter((p) => !p.custom && (p.authMethods?.includes('api_key') ?? true)).map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
         </label>
         {keyTarget?.hasKey && <p className="muted">{vi.accounts.keySaved}</p>}
+        {keyTarget?.description && <p className="muted small">{keyTarget.description}</p>}
         <div className="field">
           <label htmlFor="account-key">{vi.accounts.apiKey}</label>
           <input id="account-key" type="password" autoComplete="off" disabled={busy}
@@ -210,9 +219,10 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
 
       <section className="workbench-panel settings-section">
         <h2>{vi.accounts.oauthTitle}</h2>
-        <p className="muted">{vi.accounts.oauthWarning}</p>
+        <p className="muted">Đăng nhập ChatGPT và các tài khoản được nhà cung cấp hỗ trợ. Quyền dùng model và hạn mức tùy tài khoản. Claude trong NexGraph dùng Anthropic API key.</p>
         {oauthStorageIssue && <p role="status" className="muted">{oauthStorageIssue}</p>}
         {loginEvent && <p className="muted">{'userCode' in loginEvent ? `${vi.accounts.oauthUserCode}: ${loginEvent.userCode}` : 'url' in loginEvent ? loginEvent.instructions ?? loginEvent.url : loginEvent.message}</p>}
+        <AuthLinks event={loginEvent} />
         {loginProvider && <div className="row"><button type="button" onClick={loginCancel}>{vi.accounts.oauthCancel}</button></div>}
         {loginPrompt && (
           <div className="field">
@@ -241,6 +251,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             {p.loggedIn
               ? <button type="button" disabled={busy} onClick={() => void run(async () => { await window.nexgraph.auth.logout(p.id) }, vi.accounts.saved)}>{vi.accounts.oauthLogout}</button>
               : <button type="button" disabled={busy || !!p.oauthStorageIssue} onClick={() => login(p.id)}>{vi.accounts.oauthLogin}</button>}
+            {p.id === 'openai' && !p.loggedIn && <button type="button" disabled={busy} onClick={() => void run(async () => {
+              await window.nexgraph.auth.forgetRegistration()
+            }, 'Đã bỏ đăng ký ChatGPT đã lưu. Lần đăng nhập tiếp theo có thể chọn tài khoản hoặc workspace khác.')}>Dùng tài khoản hoặc workspace khác</button>}
           </div>
         ))}
       </section>
@@ -256,6 +269,12 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             {models.map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.label} ({m.provider})</option>)}
           </select>
         </label>
+        {selectedModel && <p className="muted small">
+          Context {selectedModel.contextWindow?.toLocaleString() ?? 'chưa xác định'} token · Đầu ra {selectedModel.maxTokens?.toLocaleString() ?? 'chưa xác định'} token
+          {' · '}{selectedModel.pricing === 'local' ? 'Chạy trên máy' : selectedModel.pricing === 'subscription' ? 'Theo hạn mức tài khoản'
+            : selectedModel.pricing === 'free' ? 'Miễn phí, có quota' : selectedModel.cost?.input != null && selectedModel.cost?.output != null
+              ? `USD / 1M token vào ${selectedModel.cost.input}, ra ${selectedModel.cost.output}` : 'Chi phí chưa xác định'}
+        </p>}
 
         <div className="row">
           <button type="button" disabled={busy} onClick={() => void test()}>{testing ? 'Đang kiểm tra…' : vi.accounts.test}</button>
@@ -268,6 +287,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
         <p>{vi.settings.privacy1}</p>
         <p>{vi.settings.privacy2}</p>
       </section>
+      {connecting && <ConnectionDialog initialMethod={connecting} onClose={() => setConnecting(null)}
+        onConnected={() => { setConnecting(null); void load() }} />}
     </main>
   )
 }

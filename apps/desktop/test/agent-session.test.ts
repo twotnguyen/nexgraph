@@ -23,11 +23,13 @@ class FakeSession {
   messages: { role: string; stopReason?: string; errorMessage?: string }[] = []
   model: { provider: string; id: string } | undefined
   aborted = false
+  output = ''
   disposed = false
   script: (s: FakeSession, text: string) => Promise<void> = async (s) => s.finish()
   decisions: ({ block: true; reason: string } | undefined)[] = []
   constructor(public spec: SessionSpec) {
     this.active = [...spec.tools]
+    this.messages = [...(spec.sessionManager?.buildSessionContext().messages ?? [])] as typeof this.messages
     spec.extension({
       registerTool: () => {},
       on: (event: string, handler: ToolCallHandler | (() => void)) => {
@@ -38,7 +40,7 @@ class FakeSession {
   }
   subscribe(l: Listener) { this.listeners.push(l); return () => { this.listeners = this.listeners.filter((x) => x !== l) } }
   emit(e: unknown) { for (const l of this.listeners) l(e) }
-  delta(t: string) { this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: t } }) }
+  delta(t: string) { this.output += t; this.emit({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: t } }) }
   async call(toolName: string, input: Record<string, unknown>) {
     this.emit({ type: 'tool_execution_start', toolName })
     const d = await this.handler({ type: 'tool_call', toolName, toolCallId: 'c1', input })
@@ -48,10 +50,19 @@ class FakeSession {
   }
   finish(stopReason = 'stop', errorMessage?: string) {
     this.messages.push({ role: 'assistant', stopReason: this.aborted ? 'aborted' : stopReason, errorMessage })
+    this.spec.sessionManager?.appendMessage({
+      role: 'assistant', content: [{ type: 'text', text: this.output }], api: 'openai-completions', provider: TARGET.provider,
+      model: 'm1', stopReason: this.aborted ? 'aborted' : stopReason, errorMessage, timestamp: Date.now(),
+      usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
+    } as never)
   }
   async prompt(text: string): Promise<void> {
+    this.output = ''
+    this.aborted = false
     this.startTurn?.()
     this.messages.push({ role: 'user' })
+    this.spec.sessionManager?.appendMessage({ role: 'user', content: text, timestamp: Date.now() })
+    this.spec.beforeModelTurn?.()
     await this.script(this, text)
   }
   async abort() { this.aborted = true }
@@ -111,7 +122,7 @@ describe('AgentService (phiên giả)', () => {
     expect(spec.agentDir.startsWith(join(base, 'data'))).toBe(true)
     expect(sessions[0].active.sort()).toEqual([...ASK_TOOLS, ...GRAPH].sort())
     expect(ASK_TOOLS).toEqual(['read', 'grep', 'find', 'ls'])
-    expect(EDIT_TOOLS).toEqual(['read', 'grep', 'find', 'ls', 'edit', 'write'])
+    expect(EDIT_TOOLS).toEqual(['read', 'grep', 'find', 'ls', 'edit', 'write', 'run_process'])
     expect(sessions[0].model).toEqual({ ...TARGET, id: 'm1' })
   })
 
@@ -221,7 +232,7 @@ describe('AgentService (phiên giả)', () => {
 
   it.each([
     ['401 Unauthorized', 'ai_unauthorized', 'API key bị từ chối'],
-    ['429 Too Many Requests', 'ai_unreachable', 'Nhà cung cấp AI trả về 429'],
+    ['429 Too Many Requests', 'ai_rate_limited', 'Đã chạm hạn mức hoặc giới hạn tốc độ của nhà cung cấp. Kiểm tra hạn mức rồi thử lại.'],
     ['fetch failed: ECONNREFUSED', 'ai_unreachable', 'Không kết nối được tới nhà cung cấp AI']
   ])('nhà cung cấp lỗi "%s" → sự kiện error tiếng Việt, prompt() không ném, lượt sau vẫn chạy', async (raw, code, message) => {
     const { svc, sessions, of } = setup()
@@ -343,6 +354,206 @@ describe('AgentService (phiên giả)', () => {
     expect(e.message).not.toContain('sk-abcdef1234567890')
     expect(e.message).not.toContain('xyz.secret')
     expect(e.message.length).toBeLessThanOrEqual(260)
+  })
+})
+
+describe('AgentService durable conversations and task limits', () => {
+  it('restores the selected Pi transcript after close/reopen, with original user text and verified citations', async () => {
+    const { svc, sessions } = setup()
+    await svc.prompt('p1', 'bắt đầu', TARGET)
+    sessions[0].script = async (session) => { session.delta('Xem [[a.py:1-1]]'); session.finish() }
+    await svc.prompt('p1', 'tìm hàm', TARGET)
+    const before = await svc.snapshot('p1')
+    const id = before.session!.id
+    svc.close('p1')
+    await tick()
+    const reopened = new AgentService((svc as unknown as { deps: ConstructorParameters<typeof AgentService>[0] }).deps)
+    const restored = await reopened.snapshot('p1')
+    expect(restored.session?.id).toBe(id)
+    expect(restored.messages.filter((message) => message.role === 'user').map((message) => message.text)).toEqual(['bắt đầu', 'tìm hàm'])
+    expect(restored.messages.at(-1)).toMatchObject({ role: 'assistant', text: 'Xem [[a.py:1-1]]', citations: [{ file: 'a.py', valid: true }] })
+    expect(restored.task).toMatchObject({ status: 'completed', sessionId: id, turns: 1 })
+    expect(restored.usage.costUsd).toBeNull()
+    reopened.closeAll()
+  })
+
+  it('new, rename, switch and delete operate on the canonical session without mixing projects or accounts', async () => {
+    let account = 'account-a'
+    const model = { ...TARGET, id: 'm1' }
+    const { svc } = setup({ accounts: async () => ({
+      modelRuntime: { getModel: () => model } as never, getSelectedModel: () => model,
+      hasConsent: async () => true, sessionIdentity: () => account
+    }) })
+    await svc.prompt('p1', 'private-first', TARGET)
+    const first = (await svc.snapshot('p1')).session!.id
+    const next = await svc.newSession('p1')
+    expect(next.session?.id).not.toBe(first)
+    expect(next.messages).toEqual([])
+    await svc.renameSession('p1', first, 'Phân tích đăng nhập')
+    expect((await svc.listSessions('p1')).find((item) => item.id === first)?.title).toBe('Phân tích đăng nhập')
+    await svc.switchSession('p1', first)
+    expect((await svc.snapshot('p1')).messages[0].text).toBe('private-first')
+    await expect(svc.switchSession('p2', first)).rejects.toMatchObject({ code: 'session_not_found' })
+    account = 'account-b'
+    svc.selectionChanged()
+    expect(await svc.listSessions('p1')).toEqual([])
+    await expect(svc.switchSession('p1', first)).rejects.toMatchObject({ code: 'session_not_found' })
+    account = 'account-a'
+    await svc.deleteSession('p1', first)
+    expect((await svc.listSessions('p1')).some((item) => item.id === first)).toBe(false)
+    await expect(svc.switchSession('p1', first)).rejects.toMatchObject({ code: 'session_not_found' })
+    svc.closeAll()
+  })
+
+  it('plan is read-only, and command/automatic execution grants reset when the project closes', async () => {
+    const { svc, sessions } = setup()
+    svc.setMode('p1', 'plan')
+    svc.setExecution('p1', { policy: 'auto', allowCommands: true })
+    await svc.prompt('p1', 'lập kế hoạch', TARGET)
+    expect(sessions[0].getActiveToolNames()).not.toContain('edit')
+    expect(sessions[0].getActiveToolNames()).not.toContain('run_process')
+    sessions[0].script = writeScript()
+    await svc.prompt('p1', 'đề xuất thay đổi', TARGET)
+    expect(sessions[0].decisions.at(-1)).toMatchObject({ block: true })
+    svc.close('p1')
+    expect(svc.getExecution('p1')).toEqual({ policy: 'review', allowCommands: false })
+  })
+
+  it('isolates history when resolved provider credentials change despite the same synchronous identity', async () => {
+    let accountId = 'runtime-credential-a'
+    const model = { ...TARGET, id: 'm1' }
+    const { svc } = setup({ accounts: async () => ({
+      modelRuntime: { getModel: () => model } as never, getSelectedModel: () => model,
+      getConsentTarget: async () => ({ ...TARGET, accountId }),
+      hasConsent: async () => true, sessionIdentity: () => 'stable-installed-account'
+    }) })
+    await svc.prompt('p1', 'private-runtime-history', { ...TARGET, accountId })
+    const first = (await svc.snapshot('p1')).session!.id
+    accountId = 'runtime-credential-b'
+    const rotated = await svc.snapshot('p1')
+    expect(rotated.session?.id).not.toBe(first)
+    expect(rotated.messages).toEqual([])
+    await expect(svc.switchSession('p1', first)).rejects.toMatchObject({ code: 'session_not_found' })
+    svc.closeAll()
+  })
+
+  it('bounded model turns end the task and a new prompt starts with a fresh budget', async () => {
+    const { svc, sessions, of } = setup()
+    await svc.prompt('p1', 'initialize', TARGET)
+    svc.setLimits('p1', { maxTurns: 1, maxDurationMs: 10_000, maxTokens: 1000 })
+    sessions[0].script = async (session) => { session.spec.beforeModelTurn!(); session.finish() }
+    await svc.prompt('p1', 'loop', TARGET)
+    expect(of('p1', 'error').at(-1)).toMatchObject({ code: 'agent_limit' })
+    expect((await svc.snapshot('p1')).task).toMatchObject({ status: 'failed', turns: 1 })
+    sessions[0].script = async (session) => { session.delta('finished'); session.finish() }
+    await svc.prompt('p1', 'retry', TARGET)
+    expect(of('p1', 'done').at(-1)).toMatchObject({ text: 'finished' })
+    expect((await svc.snapshot('p1')).task?.status).toBe('completed')
+    svc.closeAll()
+  })
+
+  it('duration cancellation ends waiting work and token usage stops an over-budget task', async () => {
+    const { svc, sessions, of } = setup()
+    await svc.prompt('p1', 'initialize', TARGET)
+    svc.setLimits('p1', { maxTurns: 3, maxDurationMs: 30, maxTokens: 1000 })
+    sessions[0].script = (session) => new Promise<void>((resolve) => {
+      session.abort = async () => { session.aborted = true; session.finish(); resolve() }
+    })
+    await svc.prompt('p1', 'wait', TARGET)
+    expect(of('p1', 'error').at(-1)).toMatchObject({ code: 'agent_limit', message: expect.stringContaining('thời gian') })
+    svc.setLimits('p1', { maxTurns: 3, maxDurationMs: 10_000, maxTokens: 10 })
+    sessions[0].script = async (session) => {
+      session.emit({ type: 'message_end', message: { role: 'assistant', usage: { input: 8, output: 3, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } } } })
+      session.finish()
+    }
+    await svc.prompt('p1', 'tokens', TARGET)
+    expect(of('p1', 'error').at(-1)).toMatchObject({ code: 'agent_limit', message: expect.stringContaining('token') })
+    expect((await svc.snapshot('p1')).usage).toMatchObject({ inputTokens: 8, outputTokens: 3, costUsd: null })
+    svc.closeAll()
+  })
+
+  it('tool arguments/results and retry telemetry are bounded and redact the active secret', async () => {
+    const { svc, sessions, of } = setup()
+    rememberSecret('telemetry-test-credential')
+    await svc.prompt('p1', 'initialize', TARGET)
+    sessions[0].script = async (session) => {
+      session.emit({ type: 'tool_execution_start', toolName: 'read', toolCallId: 'tool-a', args: { path: 'a.py', key: 'telemetry-test-credential' } })
+      session.emit({ type: 'tool_execution_end', toolName: 'read', toolCallId: 'tool-a', isError: false, result: { content: [{ type: 'text', text: 'telemetry-test-credential ' + 'x'.repeat(50_000) }] } })
+      session.emit({ type: 'auto_retry_start', attempt: 1, maxAttempts: 2, delayMs: 1000, errorMessage: 'telemetry-test-credential timeout' })
+      session.delta('done'); session.finish()
+    }
+    await svc.prompt('p1', 'inspect', TARGET)
+    const detail = of('p1', 'tool_detail').at(-1) as Extract<AgentEvent, { type: 'tool_detail' }>
+    expect(detail.tool).toMatchObject({ id: 'tool-a', status: 'completed', durationMs: expect.any(Number) })
+    expect(detail.tool.output.length).toBeLessThanOrEqual(32_000)
+    expect(detail.tool.input + detail.tool.output).not.toContain('telemetry-test-credential')
+    expect(JSON.stringify(of('p1', 'retry'))).not.toContain('telemetry-test-credential')
+    expect((await svc.snapshot('p1')).messages.at(-1)?.tools[0].id).toBe('tool-a')
+    svc.closeAll()
+  })
+
+  it.each([
+    ['known', 0.25], ['unknown', null], ['subscription', null], ['local', null], ['free', 0]
+  ] as const)('preserves honest %s pricing and accumulates each task only once', async (pricing, expectedCost) => {
+    const model = { ...TARGET, id: 'm1' }
+    const { svc, sessions, of } = setup({ accounts: async () => ({
+      modelRuntime: { getModel: () => model } as never, getSelectedModel: () => model,
+      hasConsent: async () => true, selectedModelPricing: () => pricing
+    }) })
+    await svc.prompt('p1', 'initialize', TARGET)
+    sessions[0].script = async (session) => {
+      for (let turn = 0; turn < 2; turn++) session.emit({ type: 'message_end', message: {
+        role: 'assistant', usage: { input: 4, output: 2, cacheRead: 1, cacheWrite: 0, cost: { total: 0.125 } }
+      } })
+      session.finish()
+    }
+    await svc.prompt('p1', 'first task', TARGET)
+    expect((await svc.snapshot('p1')).usage).toMatchObject({ inputTokens: 8, outputTokens: 4, cacheReadTokens: 2, costUsd: expectedCost })
+    await svc.prompt('p1', 'second task', TARGET)
+    expect((of('p1', 'usage').at(-1) as Extract<AgentEvent, { type: 'usage' }>).usage).toMatchObject({
+      inputTokens: 16, outputTokens: 8, cacheReadTokens: 4, costUsd: expectedCost === null ? null : expectedCost * 2
+    })
+    svc.closeAll()
+  })
+
+  it('retains completed model usage when cancellation interrupts the rest of a task', async () => {
+    const { svc, sessions } = setup()
+    await svc.prompt('p1', 'initialize', TARGET)
+    const received = deferred<void>()
+    sessions[0].script = (session) => new Promise<void>((resolve) => {
+      session.emit({ type: 'message_end', message: {
+        role: 'assistant', usage: { input: 9, output: 3, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } }
+      } })
+      session.abort = async () => { session.aborted = true; session.finish(); resolve() }
+      received.resolve()
+    })
+    const run = svc.prompt('p1', 'work then wait', TARGET)
+    await received.promise
+    await svc.abort('p1')
+    await run
+    svc.close('p1')
+    const restored = await svc.snapshot('p1')
+    expect(restored.task?.status).toBe('cancelled')
+    expect(restored.usage).toMatchObject({ inputTokens: 9, outputTokens: 3, costUsd: null })
+    svc.closeAll()
+  })
+
+  it('counts summarization usage against the same task and session budget', async () => {
+    const { svc, sessions, of } = setup()
+    await svc.prompt('p1', 'initialize', TARGET)
+    svc.setLimits('p1', { maxTurns: 5, maxDurationMs: 10_000, maxTokens: 10 })
+    sessions[0].script = async (session) => {
+      session.emit({ type: 'compaction_start', reason: 'threshold' })
+      session.emit({ type: 'compaction_end', reason: 'threshold', aborted: false, willRetry: false, result: {
+        summary: 'short context', usage: { input: 8, output: 4, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } }
+      } })
+      session.finish()
+    }
+    await svc.prompt('p1', 'summarize', TARGET)
+    expect(of('p1', 'error').at(-1)).toMatchObject({ code: 'agent_limit' })
+    expect((await svc.snapshot('p1')).usage).toMatchObject({ inputTokens: 8, outputTokens: 4, costUsd: null })
+    expect(of('p1', 'compaction')).toEqual([{ type: 'compaction', active: true }, { type: 'compaction', active: false }])
+    svc.closeAll()
   })
 })
 

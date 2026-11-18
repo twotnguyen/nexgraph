@@ -39,7 +39,7 @@ const allowPreview: ApprovalGate['check'] = async (tool, input) => {
 describe('extension NexGraph', () => {
   it('đăng ký tool đồ thị và ghi đè các tool tệp dựng sẵn của Pi', () => {
     const { pi } = setup()
-    expect(pi.registerTool.mock.calls.map((c) => c[0].name)).toEqual([...names, 'read', 'ls', 'find', 'grep', 'write', 'edit'])
+    expect(pi.registerTool.mock.calls.map((c) => c[0].name)).toEqual([...names, 'read', 'ls', 'find', 'grep', 'run_process', 'write', 'edit'])
   })
 
   it('execute của search gọi runTool và trả content text', async () => {

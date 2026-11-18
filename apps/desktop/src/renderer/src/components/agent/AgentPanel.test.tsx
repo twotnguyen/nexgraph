@@ -206,12 +206,13 @@ describe('AgentPanel', () => {
     expect(api.agent.abort).toHaveBeenCalledWith('p1')
   })
 
-  it('gõ /login mở Settings, không gửi cho mô hình', async () => {
+  it('gõ /login mở hộp thoại kết nối tại chỗ, không gửi cho mô hình', async () => {
     const { api } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
     const p = props()
     render(<AgentPanel {...p} />)
     await ask('/login')
-    expect(p.onOpenSettings).toHaveBeenCalled()
+    expect(await screen.findByRole('dialog', { name: 'Kết nối trợ lý AI' })).toBeInTheDocument()
+    expect(p.onOpenSettings).not.toHaveBeenCalled()
     expect(api.agent.prompt).not.toHaveBeenCalled()
   })
 

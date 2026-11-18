@@ -10,7 +10,8 @@ import { toIpcResult } from './ipc-result'
 import { FsError, fsHandlers, isWithin, projectRoot } from './fs/project-fs'
 import { AgentError, AgentService } from './agent/session'
 import { AccountService } from './agent/accounts'
-import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView } from '../shared/agent-types'
+import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentExecutionSettings, AgentRunLimits, AgentPromptOptions, AgentEditorState } from '../shared/agent-types'
+import { detectProjectCommands } from './agent/process-tools'
 import type { AiSettings } from '../shared/graph-types'
 import { SecretStore, writeJson } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
@@ -18,14 +19,17 @@ import { applyIntegration, planIntegration } from './integrations'
 import type { AgentId } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
+import { EditorStateRegistry } from './agent/editor-state'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
 let mcpHttp: McpHttpManager | null = null
 let agents: AgentService | null = null
+let editors: EditorStateRegistry | null = null
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
 export const closeAllAgents = (): void => {
+  editors?.clearAll()
   agents?.closeAll()
   cancelPendingAuthPrompts()
   void accountsPromise?.then((a) => a.cancelLogin()).catch(() => {})
@@ -152,6 +156,7 @@ export function registerIpc(
     removalVersions.set(pid, Symbol())
     stopWatch(pid)
     agents?.close(pid)
+    editors?.clear(pid)
     await mcp.stop(pid)
   })
   const listProjects = (): Promise<{ project_id: string; path: string }[]> => api().listProjects()
@@ -235,7 +240,8 @@ export function registerIpc(
       baseUrl: target?.baseUrl ?? '',
       model: model?.id ?? '',
       hasKey: !!target && a.hasKey(target.provider),
-      provider: target?.provider
+      provider: target?.provider,
+      accountId: target?.accountId
     }
   }
   on('ai:get-settings', () => derivedSettings())
@@ -245,8 +251,12 @@ export function registerIpc(
     await (await acc()).grantConsent(pid, target)
   })
   on('auth:list', async () => (await acc()).listProviders())
-  on('auth:set-key', async (providerId: string, key: string) => (await acc()).setApiKey(providerId, key))
-  on('auth:remove-key', async (providerId: string) => (await acc()).removeApiKey(providerId))
+  on('auth:set-key', async (providerId: string, key: string) => {
+    try { await (await acc()).setApiKey(providerId, key) } finally { agent.selectionChanged() }
+  })
+  on('auth:remove-key', async (providerId: string) => {
+    try { await (await acc()).removeApiKey(providerId) } finally { agent.selectionChanged() }
+  })
   on('auth:save-custom', async (p: Parameters<AccountService['saveCustomProvider']>[0], apiKey?: string) => {
     try { await (await acc()).saveCustomProvider(p, apiKey) } finally { agent.selectionChanged() }
   })
@@ -254,7 +264,9 @@ export function registerIpc(
     await (await acc()).removeCustomProvider(id)
     agent.selectionChanged()
   })
-  on('auth:login', async (providerId: string) => (await acc()).loginOAuth(providerId))
+  on('auth:login', async (providerId: string) => {
+    try { await (await acc()).loginOAuth(providerId) } finally { agent.selectionChanged() }
+  })
   on('auth:login-cancel', async () => {
     cancelPendingAuthPrompts()
     ;(await acc()).cancelLogin()
@@ -265,27 +277,75 @@ export function registerIpc(
     pendingPrompts.delete(id)
     resolve(typeof value === 'string' ? value : null)
   })
-  on('auth:logout', async (providerId: string) => (await acc()).logout(providerId))
+  on('auth:logout', async (providerId: string) => {
+    agent.selectionChanged()
+    try { await (await acc()).logout(providerId) } finally { agent.selectionChanged() }
+  })
+  on('auth:forget-registration', async () => {
+    try { await (await acc()).forgetOpenAiRegistration() } finally { agent.selectionChanged() }
+  })
   on('auth:models', async () => (await acc()).listModels())
   on('auth:select-model', async (provider: string, id: string) => {
     (await acc()).selectModel(provider, id)
     agent.selectionChanged()
   })
   on('auth:test', async () => (await acc()).test())
+  on('auth:discover-local', async (baseUrl?: string) => (await acc()).discoverLocal(baseUrl))
+  on('auth:connect-local', async (baseUrl: string, modelId: string) => {
+    try { await (await acc()).connectLocal(baseUrl, modelId) } finally { agent.selectionChanged() }
+  })
   // EngineApi đọc baseUrl/token mỗi lần gọi nên theo kịp engine khởi động lại.
   const liveApi = new EngineApi({ get baseUrl() { return handle().baseUrl }, get token() { return handle().token } })
+  const editorStates = (editors = new EditorStateRegistry(rootOf))
   const agent = (agents = new AgentService({
     api: liveApi, dataDir,
     accounts: acc,
     rootOf,
+    editorState: (projectId) => editorStates.get(projectId),
     emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
   }))
-  on('agent:prompt', (pid: string, text: string, target: AiConsentTarget) => agent.prompt(pid, text, target))
+  on('agent:prompt', async (pid: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions) => {
+    await editorStates.wait(pid)
+    return agent.prompt(pid, text, target, options)
+  })
   on('agent:abort', (pid: string) => agent.abort(pid))
-  on('agent:set-mode', async (pid: string, mode: AgentMode) => agent.setMode(pid, mode === 'edit' ? 'edit' : 'ask'))
+  on('agent:set-mode', async (pid: string, mode: AgentMode) => {
+    if (!['ask', 'plan', 'edit'].includes(mode)) throw new AgentError('bad_param', 'Chế độ trợ lý không hợp lệ')
+    await rootOf(pid)
+    return agent.setMode(pid, mode)
+  })
   on('agent:get-mode', async (pid: string) => agent.getMode(pid))
-  on('agent:approve', async (pid: string, id: string, allow: boolean) => agent.approve(pid, id, allow === true))
-  on('agent:close', async (pid: string) => agent.close(pid))
+  on('agent:approve', async (pid: string, id: string, allow: boolean) => {
+    if (allow === true) await editorStates.wait(pid)
+    return agent.approve(pid, id, allow === true)
+  })
+  on('agent:close', async (pid: string) => {
+    editorStates.clear(pid)
+    return agent.close(pid)
+  })
+  on('agent:snapshot', (pid: string) => agent.snapshot(pid))
+  on('agent:list-sessions', (pid: string) => agent.listSessions(pid))
+  on('agent:new-session', (pid: string) => agent.newSession(pid))
+  on('agent:switch-session', (pid: string, sessionId: string) => agent.switchSession(pid, sessionId))
+  on('agent:rename-session', (pid: string, sessionId: string, title: string) => agent.renameSession(pid, sessionId, title))
+  on('agent:delete-session', (pid: string, sessionId: string) => agent.deleteSession(pid, sessionId))
+  on('agent:set-execution', async (pid: string, settings: AgentExecutionSettings) => {
+    await rootOf(pid)
+    return agent.setExecution(pid, settings)
+  })
+  on('agent:get-execution', async (pid: string) => agent.getExecution(pid))
+  on('agent:set-limits', async (pid: string, limits: AgentRunLimits) => {
+    await rootOf(pid)
+    return agent.setLimits(pid, limits)
+  })
+  on('agent:get-limits', async (pid: string) => agent.getLimits(pid))
+  on('agent:project-commands', async (pid: string) => detectProjectCommands(await rootOf(pid)))
+  on('agent:checkpoints', (pid: string, taskId: string) => agent.checkpoints(pid, taskId))
+  on('agent:rollback', async (pid: string, taskId: string) => {
+    await editorStates.wait(pid)
+    return agent.rollback(pid, taskId)
+  })
+  on('agent:editor-state', (pid: string, states: AgentEditorState[]) => editorStates.update(pid, states))
 
   on('export:pick-dir', async (pid: string) => {
     await rootOf(pid) // chỉ dự án đã đăng ký mới có thể chọn thư mục xuất

@@ -8,10 +8,11 @@ import { FsError, isProtectedRel, readProjectFile, resolveInside, writeProjectFi
 import { TOOL_DEFS, runTool } from '../ai/tools'
 import { toProjectRelative, type ApprovedWrite, type ApprovalGate, type WritePreview } from './approval'
 import { registerScopedFileTools } from './file-tools'
+import type { TaskExecution, ProcessInput } from './process-tools'
 
 const GRAPH_TOOLS = TOOL_DEFS.map((t) => t.function.name)
 export const ASK_TOOLS = ['read', 'grep', 'find', 'ls']
-export const EDIT_TOOLS = [...ASK_TOOLS, 'edit', 'write']
+export const EDIT_TOOLS = [...ASK_TOOLS, 'edit', 'write', 'run_process']
 export const toolsFor = (mode: AgentMode): string[] => [...(mode === 'edit' ? EDIT_TOOLS : ASK_TOOLS), ...GRAPH_TOOLS]
 const ALLOWED = new Set(toolsFor('edit'))
 
@@ -20,6 +21,10 @@ export function createNexgraphExtension(deps: {
   projectId: string
   root: string
   gate: ApprovalGate
+  getMode?: () => AgentMode
+  getTask?: () => TaskExecution | null
+  assertEditable?: (path: string) => void
+  onCheckpoint?: (taskId: string) => void
   onWriteConflict?: (message: string) => void
 }): (pi: ExtensionAPI) => void {
   return (pi) => {
@@ -36,6 +41,24 @@ export function createNexgraphExtension(deps: {
       })
     }
     registerScopedFileTools(pi, deps.root, () => deps.api.aiSourceExcludes(deps.projectId))
+    pi.registerTool({
+      name: 'run_process', label: 'Chạy kiểm thử hoặc lệnh dự án',
+      description: 'Run an installed executable with structured arguments in a project directory. Requires explicit task permission to execute repository code. Commands have bounded time and output. Use project test, typecheck, lint or build scripts. Never install, publish, push, upload or download.',
+      parameters: Type.Object({
+        executable: Type.String(), args: Type.Array(Type.String()),
+        cwd: Type.Optional(Type.String({ description: 'Directory relative to project root, default .' })),
+        timeoutMs: Type.Optional(Type.Number({ minimum: 100, maximum: 300000 }))
+      }),
+      async execute(id, input: ProcessInput) {
+        if (deps.getMode?.() !== 'edit') throw new Error('Chế độ hiện tại chỉ cho phép đọc')
+        const task = deps.getTask?.()
+        if (!task) throw new Error('Không có tác vụ đang hoạt động')
+        const result = await task.run(input, id)
+        if (result.checkpointPaths?.length) deps.onCheckpoint?.(task.taskId)
+        if (result.exitCode !== 0 || result.timedOut || result.cancelled) throw new Error(JSON.stringify(result))
+        return { content: [{ type: 'text', text: JSON.stringify(result) }], details: result }
+      }
+    })
 
     // Ghi đè write/edit dựng sẵn của pi (registry đặt tool extension LÊN TRÊN builtin cùng tên:
     // agent-session.ts _refreshToolRegistry — builtin trước, extension sau). Execute revalidate đúng
@@ -82,6 +105,9 @@ export function createNexgraphExtension(deps: {
       const duplicate = { block: true, reason: 'Mã thao tác ghi bị trùng' }
       if (writing && approvedWrites.has(event.toolCallId)) return duplicate
       try {
+        if ((writing || event.toolName === 'run_process') && deps.getMode && deps.getMode() !== 'edit') {
+          return { block: true, reason: 'Chế độ hiện tại chỉ cho phép đọc' }
+        }
         if (PATH_TOOLS.has(event.toolName)) {
           const blocked = pinPath(deps.root, event.toolName, event.input)
           if (blocked) return { block: true, reason: blocked }
@@ -109,7 +135,7 @@ export function createNexgraphExtension(deps: {
  * hoặc yêu cầu tệp vẫn chưa tồn tại, rồi ghi đúng `after` của bản xem trước.
  */
 async function executeApprovedWrite(
-  deps: { root: string; onWriteConflict?: (message: string) => void },
+  deps: { root: string; getMode?: () => AgentMode; getTask?: () => TaskExecution | null; assertEditable?: (path: string) => void; onCheckpoint?: (taskId: string) => void; onWriteConflict?: (message: string) => void },
   approvedWrites: Map<string, ApprovedWrite>,
   toolCallId: string,
   params: unknown
@@ -126,16 +152,25 @@ async function executeApprovedWrite(
     }
   }
   try {
+    if (deps.getMode && deps.getMode() !== 'edit') throw new Error('Chế độ hiện tại chỉ cho phép đọc')
     snap.assertCurrent()
+    deps.assertEditable?.(snap.path)
     assertApprovedPath(toProjectRelative(deps.root, p))
-    await writeProjectFile(deps.root, snap.path, snap.after, {
+    const assertCurrent = () => {
+      snap.assertCurrent()
+      deps.assertEditable?.(snap.path)
+      assertApprovedPath(snap.path)
+    }
+    const task = deps.getTask?.()
+    if (deps.getTask && !task) throw new Error('Không còn tác vụ đang hoạt động')
+    if (task) {
+      await task.checkpoints.write(snap, assertCurrent)
+      deps.onCheckpoint?.(task.taskId)
+    } else await writeProjectFile(deps.root, snap.path, snap.after, {
       eol: snap.file?.eol ?? '\n',
       bom: snap.file?.bom ?? false,
       expectedVersion: snap.file?.version ?? null
-    }, { assertNotCancelled: () => {
-      snap.assertCurrent()
-      assertApprovedPath(snap.path)
-    } })
+    }, { assertNotCancelled: assertCurrent })
   } catch (e) {
     if (e instanceof FsError && (e.code === 'conflict' || e.code === 'outside_project' || e.code === 'protected_path')) {
       const reason = e.code === 'outside_project' ? 'Đường dẫn nằm ngoài dự án'
@@ -220,11 +255,12 @@ function applyEdits(before: string, edits: Edit[]): string {
   return out
 }
 
-export async function previewWrite(root: string, tool: 'edit' | 'write', input: unknown): Promise<WritePreview> {
+export async function previewWrite(root: string, tool: 'edit' | 'write', input: unknown, assertEditable?: (path: string) => void): Promise<WritePreview> {
   const i = (input ?? {}) as { path?: unknown; content?: unknown; edits?: unknown }
   if (typeof i.path !== 'string') throw new Error('Thiếu đường dẫn tệp')
   const abs = resolveInside(root, toProjectRelative(root, i.path))
   const path = relative(realpathSync.native(root), abs).split(sep).join('/')
+  assertEditable?.(path)
   let before = ''
   let file: WritePreview['file']
   try {

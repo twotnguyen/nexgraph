@@ -288,11 +288,11 @@ describe('WorkspaceScreen: changes', () => {
 describe('WorkspaceScreen: editor tabs', () => {
   const read = () => vi.fn(async () => ({ text: 'one\ntwo\nthree', eol: '\n' as const, bom: false, mtimeMs: 1, version: 'initial', readOnly: false }))
 
-  async function openFromSearch() {
+  async function openFromSearch(over: Parameters<typeof installNexgraph>[0] = {}) {
     const code = read()
     const neighbors = vi.fn(async (_p: string, q: { node: string }) => hood(q.node))
     const search = vi.fn(async () => [{ node: gnode('lib/a.dart::AuthService.login#method', 'login'), score: 2 }])
-    const { api } = installNexgraph({ fs: { read: code }, graph: { neighbors, search } })
+    const { api } = installNexgraph({ ...over, fs: { read: code }, graph: { neighbors, search } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
     await userEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }))
     await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'login')
@@ -300,6 +300,39 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
     return { api, code }
   }
+
+  it('sends the pinned unsaved editor snapshot and flushes dirty metadata before AI inference', async () => {
+    const target = { provider: 'openai', baseUrl: 'https://api.openai.com/v1', accountId: 'account-a' }
+    const prompt = vi.fn(async () => {})
+    const { api } = await openFromSearch({ ai: {
+      getSettings: vi.fn(async () => ({ ...target, model: 'test-model', hasKey: false })), hasConsent: vi.fn(async () => true)
+    }, agent: { prompt } })
+    const editor = await screen.findByLabelText('editor')
+    fireEvent.input(editor, { target: { value: 'draft\nselected source' } })
+    const attach = screen.getByRole('button', { name: 'Thêm tệp đang mở' })
+    await waitFor(() => expect(attach).toBeEnabled())
+    await userEvent.click(attach)
+    fireEvent.input(editor, { target: { value: 'later unsent changes' } })
+    await userEvent.type(screen.getByPlaceholderText(/Hỏi về dự án/), 'Explain this draft{Enter}')
+    await waitFor(() => expect(prompt).toHaveBeenCalledWith('p1', 'Explain this draft', target, { context: [{
+      kind: 'file', file: 'lib/a.dart', start: 1, end: 2, text: 'draft\nselected source', version: 'initial', dirty: true
+    }] }))
+    expect(api.agent.editorState).toHaveBeenLastCalledWith('p1', [{ file: 'lib/a.dart', version: 'initial', dirty: true }])
+    expect(vi.mocked(api.agent.editorState).mock.invocationCallOrder.at(-1)).toBeLessThan(prompt.mock.invocationCallOrder[0])
+    expect(editor).toHaveValue('later unsent changes')
+  })
+
+  it('resizes the AI pane with the keyboard and keeps the width when reopening chat', async () => {
+    await openFromSearch()
+    const handle = screen.getByRole('separator', { name: 'Độ rộng trợ lý AI' })
+    const before = Number(handle.getAttribute('aria-valuenow'))
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' })
+    expect(handle).toHaveAttribute('aria-valuenow', String(Math.min(640, before + 20)))
+    fireEvent.keyDown(document, { key: 'l', ctrlKey: true })
+    expect(screen.queryByRole('separator', { name: 'Độ rộng trợ lý AI' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'l', ctrlKey: true })
+    expect(screen.getByRole('separator', { name: 'Độ rộng trợ lý AI' })).toHaveAttribute('aria-valuenow', String(Math.min(640, before + 20)))
+  })
 
   it('opens a file tab from the inspector, once per file, and closes back to the previous tab', async () => {
     const { code } = await openFromSearch()

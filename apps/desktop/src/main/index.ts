@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
 import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers } from './ipc'
@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os'
 import { runRendererSmoke, runWorkspaceAcceptanceSmoke } from './smoke-desktop'
 import { EngineSupervisor } from './engine/supervisor'
 import { runSmoke } from './smoke'
+import { externalWebUrl, isSameDocument } from './external-links'
 
 // Kiểm bản cài dùng kho tài khoản riêng, không đọc/ghi cấu hình AI thật của người dùng.
 if (process.env.NEXGRAPH_USER_DATA_DIR) {
@@ -67,6 +68,19 @@ async function createWindow(show = true): Promise<void> {
     }
   })
   const win = mainWindow
+  const openExternal = (raw: string) => {
+    const url = externalWebUrl(raw)
+    if (url) void shell.openExternal(url).catch(() => {})
+  }
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    openExternal(url)
+    return { action: 'deny' }
+  })
+  win.webContents.on('will-navigate', (event, url) => {
+    if (isSameDocument(win.webContents.getURL(), url)) return
+    event.preventDefault()
+    openExternal(url)
+  })
   if (show) win.once('ready-to-show', () => win.show())
   // Renderer chặn unload khi còn tệp chưa lưu (beforeunload); preventDefault ở đây là cho phép đóng.
   win.webContents.on('will-prevent-unload', (e) => {

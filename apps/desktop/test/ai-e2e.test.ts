@@ -56,8 +56,18 @@ run('AI end-to-end (engine thật + LLM giả)', () => {
     await svc.prompt(pid, 'luồng đăng nhập chạy thế nào?', target)
     svc.closeAll()
     expect(events.filter((e) => e.type === 'tool' && e.status === 'start').map((e) => (e as { name: string }).name)).toEqual(['list_flows', 'trace_flow'])
-    const done = events.at(-1) as Extract<AgentEvent, { type: 'done' }>
-    expect(done.type).toBe('done')
+    // Usage/task telemetry may follow completion; inspect the terminal result,
+    // rather than coupling success to the last event in the stream.
+    const done = events.findLast((e) => e.type === 'done' || e.type === 'error')
+    expect(done?.type).toBe('done')
+    if (done?.type !== 'done') throw new Error('Lượt hỏi không hoàn tất thành công')
+    const usage = events.findLast((e) => e.type === 'usage')
+    expect(usage).toMatchObject({ type: 'usage', usage: { costUsd: null } })
+    if (usage?.type === 'usage') {
+      expect(Number.isFinite(usage.usage.inputTokens)).toBe(true)
+      expect(usage.usage.inputTokens).toBeGreaterThanOrEqual(0)
+      expect(usage.usage.outputTokens).toBeGreaterThanOrEqual(0)
+    }
     const valid = done.citations.filter((c) => c.valid)
     expect(valid.length).toBeGreaterThanOrEqual(3)
     expect(done.citations.find((c) => c.file === 'khong-co.ts')).toMatchObject({ valid: false, reason: 'file_not_found' })

@@ -22,11 +22,16 @@ export interface ApprovalGate {
   resolve(id: string, allow: boolean): void
   denyAll(reason: string): void
   pending(): number
+  checkCommand?(command: CommandPreview): Promise<ApprovalDecision>
 }
+
+export type CommandPreview = { executable: string; args: string[]; cwd: string; timeoutMs: number }
 
 export type ApprovalDeps = {
   root: string
   getMode(): AgentMode
+  getPolicy?(): 'review' | 'auto'
+  canRunCommands?(): boolean
   ask(req: ApprovalRequest): void
   preview(tool: 'edit' | 'write', input: unknown): Promise<WritePreview>
   /** Gọi khi một yêu cầu đã hỏi được giải quyết (duyệt, từ chối, hết giờ, denyAll). */
@@ -96,17 +101,28 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
       return deny('Không tạo được bản xem trước thay đổi')
     }
     if (myEpoch !== epoch) return deny(revokedReason)
-    const decision = await wait({ id: randomUUID(), tool: toolName, path: preview.path, before: preview.before, after: preview.after })
+    const decision = deps.getPolicy?.() === 'auto' ? { allow: true as const }
+      : await wait({ id: randomUUID(), tool: toolName, path: preview.path, before: preview.before, after: preview.after })
     if (!decision.allow) return decision
     if (myEpoch !== epoch) return deny(revokedReason)
     const assertCurrent = () => {
       if (myEpoch !== epoch) throw new Error(revokedReason)
+      if (deps.getMode() !== 'edit') throw new Error('Chế độ hiện tại chỉ cho phép đọc')
     }
     return { ...decision, approved: { ...preview, assertCurrent } }
   }
 
   return {
     check,
+    async checkCommand(command) {
+      if (deps.getMode() !== 'edit' || !deps.canRunCommands?.()) return deny('Chưa cho phép chạy mã của dự án trong tác vụ này')
+      const myEpoch = epoch
+      const decision = deps.getPolicy?.() === 'auto' ? { allow: true as const }
+        : await wait({ id: randomUUID(), tool: 'command', ...command })
+      if (myEpoch !== epoch) return deny(revokedReason)
+      if (deps.getMode() !== 'edit' || !deps.canRunCommands?.()) return deny('Quyền chạy lệnh đã thay đổi')
+      return decision
+    },
     resolve: (id, allow) => settle(id, allow ? { allow: true } : deny('Người dùng từ chối thao tác này')),
     denyAll(reason) {
       revokedReason = reason

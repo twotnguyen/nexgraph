@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest } from '@shared/agent-types'
+import { sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { Icon } from '../common/icons'
 import { ApprovalCard } from './ApprovalCard'
 import { CitationText } from '../chat/CitationText'
 import { ConsentDialog } from '../chat/ConsentDialog'
+import { ConnectionDialog } from './ConnectionDialog'
+import { useAgentWorkbench, type AgentInspection } from './useAgentWorkbench'
+import { WorkbenchControls } from './WorkbenchControls'
 import './agent-panel.css'
 
 interface Props {
@@ -14,6 +17,10 @@ interface Props {
   projectName?: string
   hidden?: boolean
   activeFile?: FileContext
+  getEditorContext?: () => AgentContextItem | null
+  graphContext?: AgentContextItem
+  beforePrompt?: () => Promise<void>
+  onInspect?: (inspection: AgentInspection) => void
   onClose?: () => void
   onConnectOpenCode?: () => void
   onOpenCode: (file: string, line: number, lineEnd?: number) => void
@@ -22,8 +29,8 @@ interface Props {
 }
 
 type FileContext = { file: string; line: number; lineEnd?: number }
-type Msg = { id: number; role: 'user'; content: string; context?: FileContext } | { id: number; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
-type PendingConsent = { question: string; target: AiConsentTarget; model: string; context?: FileContext }
+type Msg = { id: number | string; role: 'user'; content: string; context?: FileContext } | { id: number | string; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
+type PendingConsent = { question: string; target: AiConsentTarget; model: string; context?: FileContext; attachments?: AgentContextItem[] }
 
 function fileReference(context: FileContext): string {
   const { file, line, lineEnd } = context
@@ -32,7 +39,7 @@ function fileReference(context: FileContext): string {
 }
 
 function targetOf(settings: AiSettings): AiConsentTarget | null {
-  return settings.provider && settings.baseUrl && settings.model ? { provider: settings.provider, baseUrl: settings.baseUrl } : null
+  return settings.provider && settings.baseUrl && settings.model ? { provider: settings.provider, baseUrl: settings.baseUrl, ...(settings.accountId ? { accountId: settings.accountId } : {}) } : null
 }
 
 function errorCode(e: unknown): string {
@@ -43,37 +50,52 @@ function errorMessage(e: unknown): string {
   return vi.chat.errors[errorCode(e)] || (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
 }
 
-function isFileApproval(value: unknown): value is ApprovalRequest {
+function isFileApproval(value: unknown): value is FileApprovalRequest {
   if (!value || typeof value !== 'object') return false
-  const request = value as Partial<ApprovalRequest>
+  const request = value as Partial<FileApprovalRequest>
   return (request.tool === 'edit' || request.tool === 'write')
     && typeof request.id === 'string' && request.id.trim() !== ''
     && typeof request.path === 'string' && request.path.trim() !== ''
     && typeof request.before === 'string' && typeof request.after === 'string'
 }
 
+function isApproval(value: unknown): value is ApprovalRequest {
+  if (isFileApproval(value)) return true
+  const request = value as Partial<Extract<ApprovalRequest, { tool: 'command' }>> | null
+  return !!request && request.tool === 'command' && typeof request.id === 'string' && !!request.id
+    && typeof request.executable === 'string' && Array.isArray(request.args) && request.args.every((arg) => typeof arg === 'string')
+    && typeof request.cwd === 'string' && Number.isFinite(request.timeoutMs)
+}
+
+const contextLabel = (item: AgentContextItem): string => item.kind === 'file'
+  ? `${item.file}${item.start ? `:${item.start}${item.end && item.end !== item.start ? `-${item.end}` : ''}` : ''}${item.dirty ? ' · bản nháp' : ''}`
+  : item.label ?? (item.kind === 'node' ? item.nodeId : item.kind === 'flow' ? `Luồng ${item.flowId}` : item.blockId)
+
 export function AgentPanel(props: Props) {
   return <ProjectAgentPanel key={props.projectId} {...props} />
 }
 
-function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, activeFile, onClose, onConnectOpenCode, onOpenCode, onHighlight, onOpenSettings }: Props) {
+function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, activeFile, getEditorContext, graphContext, beforePrompt, onInspect, onClose, onConnectOpenCode, onOpenCode, onHighlight, onOpenSettings }: Props) {
   const [cfg, setCfg] = useState<AiSettings | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
   const [fileContext, setFileContext] = useState<FileContext>()
+  const [attachments, setAttachments] = useState<AgentContextItem[]>([])
+  const [connect, setConnect] = useState(false)
+  const [models, setModels] = useState<ModelInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [tool, setTool] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [consent, setConsent] = useState<PendingConsent | null>(null)
   const [checking, setChecking] = useState(false)
-  const [openTools, setOpenTools] = useState<number | null>(null)
+  const [openTools, setOpenTools] = useState<number | string | null>(null)
   const [draft, setDraft] = useState('') // chữ đang chảy về của lượt hiện tại
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [mode, setMode] = useState<AgentMode | null>(null)
   const [changingMode, setChangingMode] = useState(true)
   const modeRef = useRef<AgentMode | null>(null)
   const modePending = useRef(true)
-  const turn = useRef<{ id: number; q: string; context?: FileContext; tools: string[]; mode: AgentMode } | null>(null)
+  const turn = useRef<{ id: number; q: string; context?: FileContext; attachments?: AgentContextItem[]; tools: string[]; mode: AgentMode; cancelled?: boolean } | null>(null)
   const turnSeq = useRef(0)
   const failedTurns = useRef(new Set<number>())
   const editWarned = useRef(false) // lần đầu sang Sửa giải thích việc duyệt từng tệp
@@ -86,6 +108,17 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const messages = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const followMessages = useRef(true)
+  const work = useAgentWorkbench(projectId, (snapshot) => {
+    if (turn.current || operation.current !== null) return
+    setMsgs(snapshot.messages.map((message) => message.role === 'user'
+      ? { id: message.id, role: 'user', content: message.text }
+      : { id: message.id, role: 'assistant', content: message.text, citations: message.citations, tools: message.tools.map((tool) => tool.name) }))
+    setApprovals([])
+    setOpenTools(null)
+    modeRef.current = snapshot.mode
+    setMode(snapshot.mode)
+    if (snapshot.mode === 'edit') editWarned.current = true
+  })
 
   useEffect(() => {
     if (hidden || !followMessages.current || !messages.current) return
@@ -95,10 +128,12 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const applySettings = (settings: AiSettings) => {
     const target = targetOf(settings)
     if (scope.current && !sameConsentTarget(scope.current, target)) {
+      work.invalidate()
       setMsgs([])
       setApprovals([])
       setOpenTools(null)
       failedTurns.current.clear()
+      void work.restore().catch((e) => { if (mounted.current) setError(errorMessage(e)) })
     }
     scope.current = target
     setCfg(settings)
@@ -120,6 +155,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setMsgs((cur) => [...cur, { id, role: 'assistant', content: message, citations: [], tools: [] }])
     setText(q)
     setFileContext(turn.current?.context)
+    setAttachments(turn.current?.attachments ?? [])
     setError(message)
     end()
   }
@@ -142,6 +178,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       })
     }
     refresh()
+    void window.nexgraph.auth.models().then((items) => { if (alive) setModels(items) }).catch(() => {})
     window.addEventListener('focus', refresh)
     window.nexgraph.agent.getMode(projectId).then((m) => {
       if (!alive) return
@@ -160,7 +197,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       if (!mounted.current || pid !== projectId) return
       if (e.type === 'approval') {
         const { request } = e
-        if (t?.mode !== 'edit' || modeRef.current !== 'edit' || modePending.current || !isFileApproval(request)) return
+        if (t?.mode !== 'edit' || modeRef.current !== 'edit' || modePending.current || !isApproval(request)) return
         setApprovals((cur) => (cur.some((a) => a.id === request.id) ? cur : [...cur, request]))
         return
       }
@@ -201,11 +238,13 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   }, [hidden])
 
   const configured = !!cfg && !!targetOf(cfg)
+  const toolsUnavailable = models.find((model) => model.provider === cfg?.provider && model.id === cfg?.model)?.supportsTools === false
 
   const isCurrent = (id: number) => mounted.current && visible.current && operation.current === id
   const begin = () => {
-    if (!visible.current || operation.current !== null || turn.current || modePending.current || !modeRef.current) return null
+    if (!visible.current || operation.current !== null || turn.current || modePending.current || !modeRef.current || work.pending || work.loading || (modeRef.current === 'edit' && toolsUnavailable)) return null
     const id = ++operationSeq.current
+    work.invalidate()
     operation.current = id
     setChecking(true)
     setError(null)
@@ -219,7 +258,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   }
 
   const pickMode = async (m: AgentMode) => {
-    if (m === modeRef.current || modePending.current || operation.current !== null || consent || !visible.current) return
+    if (m === modeRef.current || modePending.current || operation.current !== null || consent || !visible.current || work.pending || work.loading) return
     if (m === 'edit' && turn.current) return
     if (m === 'edit' && !editWarned.current) {
       if (!window.confirm(vi.agent.editWarn)) return
@@ -233,7 +272,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       if (!mounted.current) return
       modeRef.current = m
       setMode(m)
-      if (m === 'ask') setApprovals([])
+      if (m !== 'edit') setApprovals([])
     } catch {
       if (!mounted.current) return
       modeRef.current = null
@@ -246,28 +285,33 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     }
   }
 
-  const run = async (question: string, target: AiConsentTarget, context?: FileContext) => {
+  const run = async (question: string, target: AiConsentTarget, context?: FileContext, attached: AgentContextItem[] = attachments) => {
     const mode = modeRef.current
     if (!mode) return
     const id = ++turnSeq.current
-    turn.current = { id, q: question, context, tools: [], mode }
+    turn.current = { id, q: question, context, attachments: attached, tools: [], mode }
     followMessages.current = true
     setMsgs((cur) => [...cur, { id, role: 'user', content: question, context }])
     setText('')
     setFileContext(undefined)
+    setAttachments([])
     setError(null)
     setBusy(true)
     setTool(null)
     setDraft('')
     try {
+      await beforePrompt?.()
+      if (!mounted.current || turn.current?.id !== id || turn.current.cancelled) return
       const prompt = context ? `${question}\n\n${vi.chat.filePrompt(fileReference(context))}` : question
-      await window.nexgraph.agent.prompt(projectId, prompt, target)
+      if (attached.length) await window.nexgraph.agent.prompt(projectId, prompt, target, { context: attached })
+      else await window.nexgraph.agent.prompt(projectId, prompt, target)
     } catch (e) {
       if (!mounted.current || turn.current?.id !== id) return
       if (errorCode(e) === 'ai_provider_changed') {
         setMsgs((cur) => cur.filter((m) => m.id !== id))
         setText(question)
         setFileContext(context)
+        setAttachments(attached)
         setError(errorMessage(e))
         end()
       } else fail(question, errorMessage(e))
@@ -279,7 +323,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (!q || busy || consent || operation.current !== null || !visible.current) return
     if (q === '/login') {
       setText('')
-      onOpenSettings()
+      setConnect(true)
       return
     }
     const id = begin()
@@ -292,7 +336,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const allowed = await window.nexgraph.ai.hasConsent(projectId, target)
       if (!isCurrent(id)) return
       if (allowed) void run(q, target, fileContext)
-      else setConsent({ question: q, target, model: settings.model, context: fileContext })
+      else setConsent({ question: q, target, model: settings.model, context: fileContext, attachments })
     } catch (e) {
       if (isCurrent(id)) setError(errorMessage(e))
     } finally {
@@ -311,7 +355,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       if (!sameConsentTarget(current, pending.target) || settings.model !== pending.model)
         throw new Error(vi.chat.errors.ai_provider_changed)
       await window.nexgraph.ai.grantConsent(projectId, pending.target)
-      if (isCurrent(id)) void run(pending.question, pending.target, pending.context)
+      if (isCurrent(id)) void run(pending.question, pending.target, pending.context, pending.attachments)
     } catch (e) {
       if (isCurrent(id)) setError(errorMessage(e))
     } finally {
@@ -347,31 +391,69 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
 
   const decide = (id: string, allow: boolean) => {
     if (!visible.current || modePending.current || modeRef.current !== 'edit' || turn.current?.mode !== 'edit') return
-    void window.nexgraph.agent.approve(projectId, id, allow).catch((e) => {
+    const current = turn.current
+    void (async () => {
+      if (allow) await beforePrompt?.()
+      if (!mounted.current || !visible.current || modePending.current || modeRef.current !== 'edit' || turn.current !== current || current?.cancelled) return
+      await window.nexgraph.agent.approve(projectId, id, allow)
+    })().catch((e) => {
       if (mounted.current) setError(errorMessage(e))
     })
   }
-  const modeLocked = changingMode || checking || !!consent
-  const composerLocked = !configured || !mode || busy || modeLocked
+  const modeLocked = changingMode || checking || !!consent || work.pending || work.loading
+  const composerLocked = !configured || !mode || busy || modeLocked || (mode === 'edit' && toolsUnavailable)
+  const changeModel = async (key: string) => {
+    if (busy || checking) return
+    setChecking(true)
+    try {
+      const selected = models.find((model) => `${model.provider}\n${model.id}` === key)
+      if (!selected) return
+      await window.nexgraph.auth.selectModel(selected.provider, selected.id)
+      applySettings(await window.nexgraph.ai.getSettings())
+      await work.restore()
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setChecking(false) }
+  }
+  const attachedFile = attachments.find((item) => item.kind === 'file')
+  const attachEditor = () => {
+    const item = getEditorContext?.()
+    if (item) { setAttachments((current) => [...current.filter((attachment) => attachment.kind !== 'file'), { ...item }]); setFileContext(undefined) }
+    else setFileContext(activeFile)
+    input.current?.focus()
+  }
+  const stop = () => {
+    const current = turn.current
+    if (current) current.cancelled = true
+    void window.nexgraph.agent.abort(projectId).catch((e) => { if (mounted.current) setError(errorMessage(e)) }).finally(() => {
+      if (mounted.current && turn.current === current) end()
+    })
+  }
 
   return (
     <aside id={id} className="chat agent-panel" aria-label={vi.chat.title} hidden={hidden}>
       <header>
         <h2><Icon name="spark" size={17} />{vi.chat.title}</h2>
         <div className="agent-actions">
+          <button type="button" className="agent-connect" disabled={busy || checking} onClick={() => setConnect(true)} title="Kết nối và đổi tài khoản AI">Kết nối</button>
           {onConnectOpenCode && <button type="button" className="agent-connect" onClick={onConnectOpenCode} title={vi.chat.connectOpenCode} aria-label={vi.chat.connectOpenCode}><Icon name="plug" size={14} />OpenCode</button>}
           <button type="button" className="agent-icon-button" onClick={onOpenSettings} title={vi.chat.settings} aria-label={vi.chat.settings}><Icon name="sliders" size={16} /></button>
           {onClose && <button type="button" className="agent-icon-button" onClick={onClose} aria-label={vi.chat.close} title={vi.chat.close}><Icon name="close" size={16} /></button>}
         </div>
       </header>
       <div className="agent-toolbar">
-        <span className="agent-model" title={configured ? `${cfg?.provider} · ${cfg?.model}` : undefined}>Pi{configured && ` · ${cfg?.model}`}</span>
+        {models.length > 0 && configured ? <select className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
+          {!models.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model}</option>}
+          {models.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.label} · {model.provider}</option>)}
+        </select> : <span className="agent-model" title={configured ? `${cfg?.provider} · ${cfg?.model}` : undefined}>Pi{configured && ` · ${cfg?.model}`}</span>}
         <span className="mode" role="group" aria-label={vi.agent.modeTitle}>
           <button type="button" disabled={modeLocked} aria-pressed={mode === 'ask'} onClick={() => void pickMode('ask')}>{vi.agent.ask}</button>
-          <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'edit'} onClick={() => void pickMode('edit')}>{vi.agent.edit}</button>
+          <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan'} onClick={() => void pickMode('plan')}>Kế hoạch</button>
+          <button type="button" disabled={modeLocked || busy || toolsUnavailable} aria-pressed={mode === 'edit'} onClick={() => void pickMode('edit')}>{vi.agent.edit}</button>
         </span>
       </div>
-      {mode && <p className="mode-description muted small">{mode === 'edit' ? vi.agent.editHint : vi.agent.askHint}</p>}
+      {mode && <p className="mode-description muted small">{mode === 'edit' ? work.execution.policy === 'auto' ? 'Tự động sửa mã trong phạm vi đã cấp quyền.' : vi.agent.editHint : mode === 'plan' ? 'Phân tích đồ thị và lập kế hoạch triển khai, chỉ đọc.' : vi.agent.askHint}</p>}
+      {toolsUnavailable && <p className="agent-notice">Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.</p>}
+      <div className="agent-workbench-controls"><WorkbenchControls projectId={projectId} work={work} busy={busy || checking} mode={mode} onInspect={onInspect} onSuggest={(suggestion) => { setText(suggestion); input.current?.focus() }} /></div>
       {error && <p role="alert" className="error">{error}</p>}
       <div className="msgs" ref={messages} onScroll={(event) => {
         const el = event.currentTarget
@@ -391,7 +473,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
             ) : (
               <>
                 <p className="muted">{vi.chat.setupDescription}</p>
-                <button type="button" className="primary" onClick={onOpenSettings}>{vi.chat.openSettings}</button>
+                <button type="button" className="primary" onClick={() => setConnect(true)}>Kết nối AI</button>
               </>
             )}
           </div>
@@ -421,32 +503,39 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
             )}
           </div>
         ))}
-        {busy && draft && <div className="ai">{draft}</div>}
+        {busy && draft && <div className="ai"><CitationText text={draft} citations={[]} onOpen={onOpenCode} /></div>}
         {busy && <div className="ai muted" role="status">{tool ? vi.chat.usingTool(tool) : vi.chat.thinking}</div>}
       </div>
       {approvals.length > 0 && (
         <div className="approvals">
-          {approvals.map((a) => <ApprovalCard key={a.id} request={a} disabled={changingMode} onDecide={(allow) => decide(a.id, allow)} />)}
+          {approvals.map((a) => <ApprovalCard key={a.id} request={a} disabled={changingMode} onDecide={(allow) => decide(a.id, allow)} onInspect={(request) => onInspect?.({ id: request.id, title: `Đề xuất · ${request.path}`, file: request.path, before: request.before, after: request.after })} />)}
         </div>
       )}
       <div className="compose">
         <div className="agent-compose-input">
+          {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={busy || checking} aria-label={`Gỡ ${contextLabel(item)}`} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}>×</button></div>)}
           {fileContext && <div className="agent-attachment">
             <span className="mono" title={fileReference(fileContext)}>{fileReference(fileContext)}</span>
             <button type="button" className="agent-icon-button" disabled={composerLocked} aria-label={vi.chat.removeFile} onClick={() => setFileContext(undefined)}><Icon name="close" size={14} /></button>
           </div>}
-          <textarea ref={input} value={text} aria-label={vi.chat.message} placeholder={vi.chat.placeholder} rows={3} disabled={composerLocked} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
+          <textarea ref={input} value={text} aria-label={vi.chat.message} placeholder={vi.chat.placeholder} rows={3} disabled={busy || modeLocked} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
         </div>
         <div className="row">
-          <button type="button" className="agent-attach" disabled={composerLocked || !activeFile || fileReference(activeFile) === (fileContext && fileReference(fileContext))}
-            title={activeFile ? fileReference(activeFile) : vi.chat.noActiveFile} onClick={() => { setFileContext(activeFile); input.current?.focus() }}>
+          <button type="button" className="agent-attach" disabled={composerLocked || !activeFile || (!getEditorContext && fileReference(activeFile) === (fileContext && fileReference(fileContext)))}
+            title={activeFile ? fileReference(activeFile) : vi.chat.noActiveFile} onClick={attachEditor}>
             <span aria-hidden="true">+</span>{vi.chat.attachFile}
           </button>
+          {graphContext && <button type="button" className="agent-attach" disabled={composerLocked || attachments.some((item) => item.kind === graphContext.kind && contextLabel(item) === contextLabel(graphContext))} title={contextLabel(graphContext)} onClick={() => setAttachments((current) => [...current, { ...graphContext }])}>+ Đồ thị</button>}
           {busy
-            ? <button type="button" onClick={() => void window.nexgraph.agent.abort(projectId)}>{vi.chat.stop}</button>
-            : <button type="button" className="primary" disabled={composerLocked || !text.trim()} onClick={() => void submit()}>{vi.chat.send}</button>}
+            ? <button type="button" onClick={stop}>{vi.chat.stop}</button>
+            : <button type="button" className="primary" disabled={(text.trim() !== '/login' && composerLocked) || !text.trim()} onClick={() => void submit()}>{vi.chat.send}</button>}
         </div>
       </div>
+      {attachedFile?.kind === 'file' && attachedFile.dirty && <span className="sr-only">Ngữ cảnh gồm bản nháp chưa lưu.</span>}
+      {connect && !hidden && <ConnectionDialog projectId={projectId} onClose={() => setConnect(false)} onConnected={() => {
+        setConnect(false)
+        void Promise.all([window.nexgraph.ai.getSettings(), window.nexgraph.auth.models()]).then(async ([settings, available]) => { if (!mounted.current) return; applySettings(settings); setModels(available); await work.restore() }).catch((e) => setError(errorMessage(e)))
+      }} />}
       {consent && !hidden && (
         <ConsentDialog project={projectName} target={consent.target} model={consent.model}
           onCancel={() => setConsent(null)}
