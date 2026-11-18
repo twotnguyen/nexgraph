@@ -4,7 +4,7 @@
 
 > Kết nối mã nguồn. Khám phá tri thức.
 
-**Trạng thái nghiệm thu (2026-11-17):** `main` tại commit `61cc7af` (repo GitHub `twotnguyen/nexgraph`, **private**), đã đẩy kèm các sửa sau review. **488 test engine + 424 test desktop đạt**, typecheck sạch; đã bấm thử trên cửa sổ Electron thật với engine thật và LLM giả. **CI xanh cả sáu job** (engine/desktop/package × macOS/Windows, run `44014209525`), gồm smoke test bản đóng gói trên cả hai hệ điều hành. Đây là bằng chứng build/chạy tự động trên Windows, **chưa phải nghiệm thu Windows trên máy thật của nhóm**. Chưa thử nhà cung cấp AI thật và chưa chạy đủ ba lượt demo.
+**Trạng thái nghiệm thu (2026-11-17):** `main` tại commit `61cc7af` (repo GitHub `twotnguyen/nexgraph`, **private**), đã đẩy kèm các sửa sau review. **488 test engine + 429 test desktop đạt**, typecheck sạch; đã bấm thử trên cửa sổ Electron thật với engine thật và LLM giả. **CI xanh cả sáu job** (engine/desktop/package × macOS/Windows, run `44014209525`), gồm smoke test bản đóng gói trên cả hai hệ điều hành. Đây là bằng chứng build/chạy tự động trên Windows, **chưa phải nghiệm thu Windows trên máy thật của nhóm**. Chưa thử nhà cung cấp AI thật và chưa chạy đủ ba lượt demo.
 
 ## Cấu trúc
 

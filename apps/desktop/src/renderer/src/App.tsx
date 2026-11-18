@@ -22,8 +22,10 @@ type Screen =
 /** Kiểm tra kích thước trước khi lập chỉ mục. Lỗi khi quét không chặn: coi như dự án không lớn. */
 function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan: ScanInfo | null) => void }) {
   useEffect(() => {
+    const api = window.nexgraph
+    if (!api) return // preload chưa kịp inject (dev reload): không crash, chờ lần render sau
     let alive = true
-    window.nexgraph.index
+    api.index
       .scan(project.project_id)
       .then((s) => alive && onDone(s))
       .catch(() => alive && onDone(null))
@@ -43,9 +45,11 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>({ name: 'projects' })
 
   useEffect(() => {
+    const api = window.nexgraph
+    if (!api) return // preload chưa kịp inject (dev reload): đợi, không crash renderer
     let alive = true
-    void window.nexgraph.engine.status().then((s) => alive && setStatus(s))
-    const off = window.nexgraph.engine.onStatus(setStatus)
+    void api.engine.status().then((s) => alive && setStatus(s))
+    const off = api.engine.onStatus(setStatus)
     return () => {
       alive = false
       off()
@@ -53,19 +57,20 @@ export default function App() {
   }, [])
 
   // Chạy trong extension: thư mục do nền mở sẵn, bỏ qua bước chọn dự án.
-  const hostFolder = window.nexgraph.host?.folder
+  const hostFolder = window.nexgraph?.host?.folder
   useEffect(() => {
-    if (!hostFolder || status.state !== 'ready' || screen.name !== 'projects') return
+    const api = window.nexgraph
+    if (!api || !hostFolder || status.state !== 'ready' || screen.name !== 'projects') return
     let alive = true
-    window.nexgraph.project.open(hostFolder)
-      .then((project) => alive && setScreen(project.last_indexed_at ? { name: 'workspace', project, tab: window.nexgraph.host?.initialView as WorkspaceTab | undefined } : { name: 'scan', project }))
+    api.project.open(hostFolder)
+      .then((project) => alive && setScreen(project.last_indexed_at ? { name: 'workspace', project, tab: api.host?.initialView as WorkspaceTab | undefined } : { name: 'scan', project }))
       .catch(() => {}) // lỗi mở: ở lại màn Dự án để người dùng thấy và thử lại
     return () => { alive = false }
   }, [hostFolder, status.state]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lệnh chọn thẻ từ nền khi đang ở màn Tổng quan: vào không gian làm việc đúng thẻ đó.
   // Lệnh từ nền khi không ở không gian làm việc (màn đó tự xử lý lệnh của nó): chọn thẻ, mở Cài đặt, về Tổng quan.
-  useEffect(() => window.nexgraph.host?.onCommand((c) => {
+  useEffect(() => window.nexgraph?.host?.onCommand((c) => {
     if (screen.name === 'workspace') return
     const at = screen.name === 'settings' ? screen.back : screen // màn nằm dưới Cài đặt
     if (c === 'settings' && screen.name !== 'settings') setScreen({ name: 'settings', back: screen })

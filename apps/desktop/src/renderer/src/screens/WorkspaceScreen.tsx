@@ -74,7 +74,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setTab('flows')
   }
   // Trong extension bảng công cụ đóng sẵn: thanh bên của nền đã có điều hướng, nhường chỗ cho đồ thị.
-  const [panel, setPanel] = useState<string | null>(window.nexgraph.host ? null : 'search')
+  const [panel, setPanel] = useState<string | null>(window.nexgraph?.host ? null : 'search')
   const live = useChanges(project.project_id)
   const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
   const changes = nodeImpact ? impactAsChanges(nodeImpact) : live.changes
