@@ -317,4 +317,3 @@ describe('Gemini local session mapping', () => {
     expect(() => store.open(scope, 'auto', '../../escape')).toThrow()
   })
 })
-

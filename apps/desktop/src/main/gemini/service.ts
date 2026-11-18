@@ -434,4 +434,3 @@ export class GeminiAgentService {
     finally { controller.abort(); await Promise.allSettled([client?.close(), broker.close()]); this.probing = false; if (this.probe === probe) this.probe = undefined; rmSync(root, { recursive: true, force: true }) }
   }
 }
-

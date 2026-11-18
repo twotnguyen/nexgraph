@@ -131,4 +131,3 @@ export class GeminiSessions {
     writeJson(join(this.directory(scope), 'index.json'), index as unknown as Record<string, unknown>)
   }
 }
-
