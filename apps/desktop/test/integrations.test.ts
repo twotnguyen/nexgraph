@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -13,6 +13,7 @@ let root: string
 beforeEach(() => {
   root = join(mkdtempSync(join(tmpdir(), 'ng-int-')), 'Đồ án', 'demo app')
   mkdirSync(join(root, '.cursor'), { recursive: true })
+  root = realpathSync.native(root)
 })
 const args = (r: string): string[] => ['mcp', '--project', r, '--data-dir', dataDir]
 
