@@ -10,7 +10,8 @@ import {
   extractAntigravityTarGz,
   getAntigravityRelease,
   GeminiInstallation,
-  verifyWindowsSignature
+  verifyWindowsSignature,
+  windowsSignatureEnvironment
 } from '../src/main/gemini/installation'
 import { buildGeminiEnvironment, prepareGeminiProfile } from '../src/main/gemini/profile'
 const roots: string[] = []
@@ -38,6 +39,16 @@ function tar(name = 'antigravity', type = '0', payload = 'binary'): Buffer {
   return gzipSync(Buffer.concat([header, body, Buffer.alloc(1024)]))
 }
 describe('native Google Antigravity installation and private configuration', () => {
+  it('removes every case variant of inherited PowerShell module paths', () => {
+    const env = windowsSignatureEnvironment({
+      PSMODULEPATH: 'old-uppercase',
+      PSModulePath: 'old-mixed',
+      psModulePath: 'old-other',
+      SystemRoot: 'C:\\Windows'
+    })
+    expect(Object.keys(env).filter((key) => key.toUpperCase() === 'PSMODULEPATH')).toEqual([])
+    expect(env.SystemRoot).toBe('C:\\Windows')
+  })
   it('pins the four official Windows/macOS artifacts and rejects unsupported platforms', () => {
     expect(ANTIGRAVITY_RELEASES).toHaveLength(4)
     for (const release of ANTIGRAVITY_RELEASES) {
@@ -100,7 +111,14 @@ describe('native Google Antigravity installation and private configuration', () 
     async () => {
       const prior = process.env.PSModulePath
       try {
-        process.env.PSModulePath = 'C:\\nexgraph-nonexistent-module-path'
+        for (const key of Object.keys(process.env))
+          if (key.toUpperCase() === 'PSMODULEPATH') delete process.env[key]
+        process.env.PSMODULEPATH = prior ?? 'C:\\nexgraph-nonexistent-uppercase-module-path'
+        await expect(
+          verifyWindowsSignature(process.env.NEXGRAPH_ANTIGRAVITY_TEST_BINARY!)
+        ).resolves.toBeUndefined()
+        delete process.env.PSMODULEPATH
+        process.env.PSModulePath = prior ?? 'C:\\nexgraph-nonexistent-mixedcase-module-path'
         await expect(
           verifyWindowsSignature(process.env.NEXGRAPH_ANTIGRAVITY_TEST_BINARY!)
         ).resolves.toBeUndefined()

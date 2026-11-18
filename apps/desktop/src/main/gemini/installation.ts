@@ -104,9 +104,13 @@ export function extractAntigravityTarGz(payload: Buffer): Buffer {
   if (!result?.length) throw bad('Gói Antigravity thiếu chương trình thực thi')
   return result
 }
+/** Windows environment keys are case-insensitive; Node keeps the first sorted duplicate. */
+export function windowsSignatureEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(source).filter(([key]) => key.toUpperCase() !== 'PSMODULEPATH'))
+}
 export async function verifyWindowsSignature(path: string): Promise<void> {
   const literal = `'${path.replaceAll("'", "''")}'`
-  const script = `$signature = Get-AuthenticodeSignature -LiteralPath ${literal}; if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch '(?:^|, )O=Google LLC(?:,|$)') { exit 1 }; Write-Output 'Google LLC'`
+  const script = `$ErrorActionPreference = 'Stop'; $signature = Get-AuthenticodeSignature -LiteralPath ${literal}; @{ status = [string]$signature.Status; publisher = [string]$signature.SignerCertificate.Subject } | ConvertTo-Json -Compress`
   const ps = join(
     process.env.SystemRoot ?? process.env.SYSTEMROOT ?? 'C:\\Windows',
     'System32',
@@ -122,12 +126,40 @@ export async function verifyWindowsSignature(path: string): Promise<void> {
         windowsHide: true,
         timeout: 30000,
         maxBuffer: 4096,
-        env: { ...process.env, PSModulePath: undefined }
+        env: windowsSignatureEnvironment()
       },
-      (error, output) =>
-        error || String(output).trim() !== 'Google LLC'
-          ? reject(bad('Không xác minh được chữ ký Google của Antigravity CLI'))
-          : done()
+      (error, output, stderr) => {
+        let signature: { status?: unknown; publisher?: unknown } = {}
+        try {
+          signature = JSON.parse(
+            String(output)
+              .trim()
+              .replace(/^\uFEFF/, '')
+          )
+        } catch {
+          /* A failed verifier has no signature metadata. */
+        }
+        if (
+          !error &&
+          signature.status === 'Valid' &&
+          typeof signature.publisher === 'string' &&
+          /(?:^|, )O=Google LLC(?:,|$)/.test(signature.publisher)
+        )
+          return done()
+        const clean = (value: unknown) =>
+          String(value ?? 'không có')
+            .replace(/https?:\/\/\S+/gi, '[liên kết đã ẩn]')
+            .replace(/[\r\n\t]+/g, ' ')
+            .slice(0, 500)
+        const detail = signature.status
+          ? `trạng thái: ${clean(signature.status)}; tổ chức: ${clean(signature.publisher)}`
+          : clean(stderr || output)
+        reject(
+          bad(
+            `Không xác minh được chữ ký Google của Antigravity CLI (${detail}; mã: ${clean(error?.code ?? 0)})`
+          )
+        )
+      }
     )
   )
 }
