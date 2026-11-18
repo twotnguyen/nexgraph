@@ -25,8 +25,10 @@ type Screen =
 /** Kiểm tra kích thước trước khi lập chỉ mục. Lỗi khi quét không chặn: coi như dự án không lớn. */
 function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan: ScanInfo | null) => void }) {
   useEffect(() => {
+    const api = window.nexgraph
+    if (!api) return
     let alive = true
-    window.nexgraph.index
+    api.index
       .scan(project.project_id)
       .then((s) => alive && onDone(s))
       .catch(() => alive && onDone(null))
@@ -51,20 +53,22 @@ function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan:
 export default function App() {
   const [status, setStatus] = useState<EngineStatus>({ state: 'starting' })
   const [screen, setScreen] = useState<Screen>({ name: 'projects' })
-  const initialHostCommand = useRef(window.nexgraph.host?.initialCommand)
+  const initialHostCommand = useRef(window.nexgraph?.host?.initialCommand)
   const [hostError, setHostError] = useState<string | null>(null)
 
   useEffect(() => {
+    const api = window.nexgraph
+    if (!api) return
     let alive = true
     let eventReceived = false
-    const off = window.nexgraph.engine.onStatus((status) => {
+    const off = api.engine.onStatus((status) => {
       eventReceived = true
       setStatus(status)
     })
     const failed = (e: unknown) => {
       if (alive && !eventReceived) setStatus({ state: 'error', message: e instanceof Error ? e.message : String(e) })
     }
-    void window.nexgraph.engine.status().then((s) => alive && !eventReceived && setStatus(s), failed)
+    void api.engine.status().then((s) => alive && !eventReceived && setStatus(s), failed)
     return () => {
       alive = false
       off()
@@ -72,7 +76,7 @@ export default function App() {
   }, [])
 
   // Chạy trong extension: thư mục do nền mở sẵn, bỏ qua bước chọn dự án.
-  const hostFolder = window.nexgraph.host?.folder
+  const hostFolder = window.nexgraph?.host?.folder
   useEffect(() => {
     if (hostFolder || initialHostCommand.current?.name !== 'settings') return
     initialHostCommand.current = undefined
@@ -80,14 +84,15 @@ export default function App() {
   }, [hostFolder])
 
   useEffect(() => {
-    if (!hostFolder || status.state !== 'ready' || screen.name !== 'projects') return
+    const api = window.nexgraph
+    if (!api || !hostFolder || status.state !== 'ready' || screen.name !== 'projects') return
     let alive = true
-    window.nexgraph.project.open(hostFolder)
+    api.project.open(hostFolder)
       .then((project) => {
         if (!alive) return
         setHostError(null)
         const command = initialHostCommand.current
-        const tab = window.nexgraph.host?.initialView as WorkspaceTab | undefined
+        const tab = api.host?.initialView as WorkspaceTab | undefined
         const hasGraph = project.last_indexed_at != null
         const base: Screen = hasGraph
           ? { name: 'workspace', project, tab, initialCommand: command?.name === 'settings' ? undefined : command }
@@ -107,7 +112,7 @@ export default function App() {
 
   // Lệnh chọn thẻ từ nền khi đang ở màn Tổng quan: vào không gian làm việc đúng thẻ đó.
   // Lệnh từ nền khi không ở không gian làm việc (màn đó tự xử lý lệnh của nó): chọn thẻ, mở Cài đặt, về Tổng quan.
-  useEffect(() => window.nexgraph.host?.onCommand((c, arg) => {
+  useEffect(() => window.nexgraph?.host?.onCommand((c, arg) => {
     if (screen.name === 'workspace' || (screen.name === 'indexing' && screen.exploring)) return
     const at = screen.name === 'settings' ? screen.back : screen // màn nằm dưới Cài đặt
     if (c === 'settings' && screen.name !== 'settings') setScreen({ name: 'settings', back: screen })
@@ -139,7 +144,7 @@ export default function App() {
 
   return (
     <div className="app">
-      {!window.nexgraph.host && <WorkbenchBar />}
+      {!window.nexgraph?.host && <WorkbenchBar />}
       {hostError && screen.name === 'projects' && <p role="alert" className="inline-message error">{hostError}</p>}
       {screen.name === 'projects' && (
         <ProjectsScreen engineReady={status.state === 'ready'}

@@ -97,7 +97,7 @@ interface Props {
 }
 
 export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, backLabel = vi.workspace.back, indexNotice, initialCommand }: Props) {
-  const hosted = !!window.nexgraph.host
+  const hosted = !!window.nexgraph?.host
   const id = useId()
   const tabList = useRef<HTMLDivElement>(null)
   const focusTabAfterClose = useRef(false)

@@ -20,6 +20,13 @@ async function openProject(scan: () => Promise<ScanInfo>) {
 }
 
 describe('App flow after opening a project', () => {
+  it('không crash renderer khi preload API chưa inject (dev reload)', () => {
+    delete (window as unknown as { nexgraph?: unknown }).nexgraph
+    expect(() => render(<App />)).not.toThrow()
+    expect(screen.getByRole('button', { name: 'Mở thư mục…' })).toBeInTheDocument()
+    installNexgraph() // khôi phục cho các test sau
+  })
+
   it('goes straight to indexing for a small project', async () => {
     const h = await openProject(async () => small)
     expect(await screen.findByText('Đang lập chỉ mục: demo')).toBeInTheDocument()
