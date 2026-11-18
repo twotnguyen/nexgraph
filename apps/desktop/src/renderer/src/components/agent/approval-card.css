@@ -1,0 +1,14 @@
+.approval-command pre {
+  margin: 0 0 12px;
+  padding: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-bg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.approval-command dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; margin: 0 0 12px; font-size: 11px; }
+.approval-command dt { color: var(--color-muted); }
+.approval-command dd { margin: 0; overflow-wrap: anywhere; }
+.approval-command code { font-family: var(--font-mono); }

@@ -1,11 +1,13 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { lookup } from 'node:dns/promises'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CredentialSynchronizationError, ModelRuntime } from '@earendil-works/pi-coding-agent'
-import { normalizeConsentTarget, sameConsentTarget, type AiConsentTarget, type AuthEventView, type AuthPromptView, type CustomProvider, type ModelInfo, type ProviderInfo } from '../../shared/agent-types'
+import { Type } from 'typebox'
+import { normalizeConsentTarget, sameConsentTarget, type AiConsentTarget, type AuthEventView, type AuthPromptView, type CustomProvider, type LocalModelInfo, type ModelInfo, type ProviderInfo } from '../../shared/agent-types'
 import { readJson, writeJson, type SecretStore } from '../ai/settings'
 import { AgentError, loadPi, rememberSecret, scrub } from './session'
+import { createOpenAiOAuth, revokeOpenAiSession, type OpenAiRegistration } from './openai-auth'
 
 // pi-coding-agent không tái xuất các kiểu auth; suy ra từ chữ ký login() công khai.
 type AuthInteraction = Parameters<ModelRuntime['login']>[2]
@@ -148,10 +150,42 @@ export type AccountDeps = {
   ask(prompt: AuthPromptView): Promise<string | null>
 }
 
-export const CUSTOM_MODEL_SPEC = (id: string) => ({
+export const CUSTOM_MODEL_SPEC = (id: string, metadata?: CustomProvider) => ({
   id, name: id, reasoning: false, input: ['text'] as ('text' | 'image')[],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128_000, maxTokens: 8192
+  // Pi yêu cầu số cho chi phí và giới hạn. View giữ null/undefined khi người dùng chưa xác nhận metadata.
+  cost: { input: metadata?.cost?.input ?? 0, output: metadata?.cost?.output ?? 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: metadata?.contextWindow ?? 4096, maxTokens: metadata?.maxTokens ?? 1024
 })
+
+const OLLAMA_ID = 'ollama-local'
+const OLLAMA_DEFAULT = 'http://127.0.0.1:11434/v1'
+const BLOCKED_OAUTH = new Set(['anthropic'])
+const finitePositive = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0
+
+/** Local provider chỉ dùng địa chỉ loopback tường minh, không đọc URL do mô hình cung cấp. */
+export function localBaseUrl(raw = OLLAMA_DEFAULT): string {
+  let url: URL
+  try { url = new URL(raw.trim()) } catch { throw badUrl('Địa chỉ Ollama không hợp lệ') }
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (!['127.0.0.1', 'localhost', '::1'].includes(host) || !['http:', 'https:'].includes(url.protocol) ||
+      url.username || url.password || url.search || url.hash || !['/', '/v1', '/v1/'].includes(url.pathname)) {
+    throw badUrl('Ollama local cần địa chỉ localhost, 127.0.0.1 hoặc ::1 và đường dẫn /v1')
+  }
+  return `${url.origin}/v1`
+}
+
+async function ollamaRequest(baseUrl: string, path: string, body?: object): Promise<Record<string, unknown>> {
+  const response = await fetch(`${new URL(baseUrl).origin}/api/${path}`, {
+    method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(12_000),
+    ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {})
+  })
+  if (!response.ok) throw new AgentError('ai_unreachable', `Ollama trả về HTTP ${response.status}`)
+  const text = await response.text()
+  if (text.length > 2_000_000) throw new AgentError('too_large', 'Danh sách Ollama vượt giới hạn')
+  const value: unknown = JSON.parse(text)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw badUrl('Ollama trả về dữ liệu không hợp lệ')
+  return value as Record<string, unknown>
+}
 
 const isCustom = (v: unknown): v is CustomProvider =>
   !!v && typeof v === 'object' && typeof (v as CustomProvider).id === 'string' &&
@@ -226,7 +260,8 @@ export class AccountService {
   private constructor(
     readonly modelRuntime: ModelRuntime,
     private readonly deps: AccountDeps,
-    private readonly credentials: SecureCredentialStore
+    private readonly credentials: SecureCredentialStore,
+    private readonly registrations: SecretStore
   ) {}
 
   static async create(deps: AccountDeps): Promise<AccountService> {
@@ -242,11 +277,25 @@ export class AccountService {
     } catch (e) {
       throw new AgentError('ai_error', `Không nạp được bộ mô hình AI (${scrub(e instanceof Error ? e.message : String(e))})`)
     }
-    const svc = new AccountService(rt, deps, credentials)
+    const registrations = deps.secrets.withFile(join(deps.dataDir, 'agent', 'oauth-registrations.json'))
+    const svc = new AccountService(rt, deps, credentials, registrations)
+    const openai = rt.getProvider('openai')
+    if (openai?.auth.oauth) rt.registerNativeProvider({
+      ...openai,
+      auth: { ...openai.auth, oauth: createOpenAiOAuth(openai.auth.oauth, {
+        readStored: () => svc.openAiRegistration(),
+        saveRegistration: (registration) => registrations.set('openai', JSON.stringify({ clientId: registration.clientId, sub: registration.sub }))
+      }) }
+    })
     svc.migrate()
+    svc.installationId()
     // Cấu hình cũ từng lưu http công khai/IP riêng: bỏ qua, không đăng ký và không gắn key.
     for (const c of svc.customs()) {
-      try { await validateBaseUrl(c.baseUrl); svc.registerCustom(c) } catch { /* provider không an toàn */ }
+      try {
+        if (c.kind === 'ollama') localBaseUrl(c.baseUrl)
+        else await validateBaseUrl(c.baseUrl)
+        svc.registerCustom(c)
+      } catch { /* provider không an toàn */ }
     }
     // Key chỉ vào runtime (bộ nhớ); không bao giờ ghi vào auth.json/models.json.
     for (const id of deps.secrets.ids()) {
@@ -272,24 +321,104 @@ export class AccountService {
     writeJson(this.deps.prefsFile, { ...readJson(this.deps.prefsFile), aiCustomProviders: list })
   }
 
+  private installationId(): string {
+    const prefs = readJson(this.deps.prefsFile)
+    if (typeof prefs.aiInstallationId === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(prefs.aiInstallationId))
+      return prefs.aiInstallationId
+    const id = randomUUID()
+    writeJson(this.deps.prefsFile, { ...prefs, aiInstallationId: id })
+    return id
+  }
+
+  private async openAiRegistration(): Promise<OpenAiRegistration | undefined> {
+    const active = await this.credentials.read('openai')
+    if (active?.type === 'oauth' && typeof active.clientId === 'string') return {
+      clientId: active.clientId, ...(typeof active.sub === 'string' ? { sub: active.sub } : {}),
+      ...(typeof active.idToken === 'string' ? { idToken: active.idToken } : {})
+    }
+    const raw = this.registrations.readStrict('openai')
+    if (!raw) return undefined
+    try {
+      const value = JSON.parse(raw) as OpenAiRegistration
+      if (typeof value.clientId !== 'string' || typeof value.sub !== 'string') throw new Error('invalid registration')
+      return { clientId: value.clientId, sub: value.sub }
+    } catch { throw storageError(new Error('invalid registration')) }
+  }
+
+  async forgetOpenAiRegistration(): Promise<void> {
+    if (this.loginAbort) throw new AgentError('bad_param', 'Hãy hủy đăng nhập đang chờ trước')
+    const active = await this.credentials.read('openai')
+    if (active?.type === 'oauth') throw new AgentError('bad_param', 'Hãy đăng xuất ChatGPT trước khi chọn tài khoản hoặc workspace khác')
+    this.registrations.remove('openai')
+    this.accountGeneration('openai', true)
+  }
+
+  private accountGeneration(provider: string, rotate = false): string {
+    const prefs = readJson(this.deps.prefsFile)
+    const ids = prefs.aiAccountIds && typeof prefs.aiAccountIds === 'object' && !Array.isArray(prefs.aiAccountIds)
+      ? prefs.aiAccountIds as Record<string, unknown> : {}
+    if (!rotate && typeof ids[provider] === 'string') return ids[provider] as string
+    const id = randomUUID()
+    writeJson(this.deps.prefsFile, { ...prefs, aiAccountIds: { ...ids, [provider]: id } })
+    return id
+  }
+
+  /** Đổi tài khoản/key làm consent cũ hết hiệu lực. Token refresh giữ nguyên generation. */
+  private accountId(provider: string, key?: string): string {
+    return createHash('sha256').update(this.accountGeneration(provider)).update('\0').update(key ?? '').digest('hex')
+  }
+
+  sessionIdentity(): string {
+    const selected = this.getSelectedModel()
+    return selected ? JSON.stringify([selected.provider,
+      this.accountId(selected.provider, this.deps.secrets.get(selected.provider) ?? undefined),
+      this.modelRuntime.isUsingOAuth(selected.provider)]) : ''
+  }
+
+  selectedModelPricing(): NonNullable<ModelInfo['pricing']> {
+    const selected = this.getSelectedModel()
+    if (!selected) return 'unknown'
+    const custom = this.customs().find((p) => p.id === selected.provider)
+    if (custom?.kind === 'ollama') return 'local'
+    if (this.modelRuntime.isUsingSubscription(selected.provider)) return 'subscription'
+    const model = this.modelRuntime.getModel(selected.provider, selected.id)
+    const cost = custom ? custom.cost : model?.cost
+    return !cost ? 'unknown' : cost.input === 0 && cost.output === 0 ? 'free' : 'known'
+  }
+
   /** shortcut: SDK OpenAI trong pi không gửi được request thiếu Authorization; khi chưa có key,
    *  endpoint nhận giá trị sentinel 'unused' của chính pi (server không cần key sẽ bỏ qua). */
   private registerCustom(p: CustomProvider): void {
     this.modelRuntime.registerProvider(p.id, {
       name: p.label, baseUrl: p.baseUrl, api: 'openai-completions', apiKey: 'unused',
-      models: [CUSTOM_MODEL_SPEC(p.model)]
+      models: [CUSTOM_MODEL_SPEC(p.model, p)]
     })
   }
 
   async saveCustomProvider(p: CustomProvider, apiKey?: string): Promise<void> {
     if (!PROVIDER_ID.test(p.id)) throw badUrl('ID nhà cung cấp không hợp lệ')
     if (!p.label.trim() || !p.model.trim()) throw badUrl('Thiếu tên hoặc model')
-    const origin = await validateBaseUrl(p.baseUrl) // HTTPS (hoặc localhost+cờ dev) + DNS + chặn IP riêng TRƯỚC registerProvider/gắn key
+    if (p.kind !== undefined && p.kind !== 'compatible' && p.kind !== 'ollama') throw badUrl('Loại nhà cung cấp không hợp lệ')
+    if (p.kind === 'ollama' && p.id !== OLLAMA_ID) throw badUrl('Dùng kết nối Ollama để đăng ký model local')
+    for (const field of ['contextWindow', 'maxTokens'] as const) {
+      if (p[field] !== undefined && (!finitePositive(p[field]) || !Number.isInteger(p[field]) || p[field]! > 10_000_000))
+        throw badUrl('Giới hạn token không hợp lệ')
+    }
+    if (p.cost && (![p.cost.input, p.cost.output].every((v) => Number.isFinite(v) && v >= 0))) throw badUrl('Đơn giá không hợp lệ')
+    const baseUrl = p.kind === 'ollama' ? localBaseUrl(p.baseUrl) : p.baseUrl.trim()
+    const origin = p.kind === 'ollama' ? new URL(baseUrl).origin : await validateBaseUrl(baseUrl)
     const previous = this.customs().find((c) => c.id === p.id)
     if (!previous && this.modelRuntime.getProvider(p.id)) throw new AgentError('bad_param', 'ID đã thuộc nhà cung cấp có sẵn')
     // Key của máy chủ cũ không được tự chuyển sang origin khác.
     if (previous && new URL(previous.baseUrl).origin !== origin) await this.removeApiKey(p.id)
-    const custom: CustomProvider = { id: p.id, label: p.label.trim(), baseUrl: p.baseUrl.trim(), model: p.model.trim() }
+    const custom: CustomProvider = {
+      id: p.id, label: p.label.trim(), baseUrl, model: p.model.trim(),
+      ...(p.kind ? { kind: p.kind } : {}),
+      ...(p.contextWindow ? { contextWindow: p.contextWindow } : {}),
+      ...(p.maxTokens ? { maxTokens: p.maxTokens } : {}),
+      ...(typeof p.supportsTools === 'boolean' ? { supportsTools: p.supportsTools } : {}),
+      ...(p.cost ? { cost: p.cost } : {})
+    }
     this.saveCustoms([...this.customs().filter((c) => c.id !== p.id), custom])
     this.registerCustom(custom)
     if (apiKey !== undefined) {
@@ -298,6 +427,7 @@ export class AccountService {
         rememberSecret(key)
         this.deps.secrets.set(p.id, key)
         await this.modelRuntime.setRuntimeApiKey(p.id, key)
+        this.accountGeneration(p.id, true)
       } else await this.removeApiKey(p.id)
     }
   }
@@ -309,6 +439,7 @@ export class AccountService {
       this.modelRuntime.unregisterProvider(id)
     } catch { /* đã unregister hoặc không còn */ }
     this.deps.secrets.remove(id)
+    this.accountGeneration(id, true)
     const sel = this.getSelectedModel()
     if (sel?.provider === id) writeJson(this.deps.prefsFile, { ...readJson(this.deps.prefsFile), aiSelectedModel: null })
   }
@@ -326,37 +457,101 @@ export class AccountService {
     rememberSecret(key.trim())
     this.deps.secrets.set(providerId, key.trim())
     await this.modelRuntime.setRuntimeApiKey(providerId, key.trim())
+    this.accountGeneration(providerId, true)
   }
 
   async removeApiKey(providerId: string): Promise<void> {
     this.deps.secrets.remove(providerId)
     if (this.modelRuntime.getProvider(providerId)) await this.modelRuntime.removeRuntimeApiKey(providerId)
+    this.accountGeneration(providerId, true)
+  }
+
+  async discoverLocal(baseUrl = OLLAMA_DEFAULT): Promise<LocalModelInfo[]> {
+    const url = localBaseUrl(baseUrl)
+    try {
+      const body = await ollamaRequest(url, 'tags')
+      if (!Array.isArray(body.models)) throw badUrl('Ollama chưa trả về danh sách model')
+      return body.models.slice(0, 200).flatMap((raw) => {
+        if (!raw || typeof raw !== 'object') return []
+        const model = raw as Record<string, unknown>
+        const id = typeof model.name === 'string' ? model.name : model.model
+        if (typeof id !== 'string' || !id) return []
+        return [{ id, label: id, ...(finitePositive(model.size) ? { sizeBytes: model.size } : {}) }]
+      })
+    } catch (error) {
+      if (error instanceof AgentError) throw error
+      throw new AgentError('ai_unreachable', 'Không kết nối được Ollama. Hãy mở Ollama và tải một model.')
+    }
+  }
+
+  async connectLocal(baseUrl: string, modelId: string): Promise<void> {
+    const url = localBaseUrl(baseUrl)
+    const models = await this.discoverLocal(url)
+    if (!models.some((m) => m.id === modelId)) throw badUrl('Model chưa có trong Ollama local')
+    const details = await ollamaRequest(url, 'show', { model: modelId })
+    const info = details.model_info && typeof details.model_info === 'object' ? details.model_info as Record<string, unknown> : {}
+    const maximumContext = Object.entries(info).find(([key, value]) => key.endsWith('.context_length') && finitePositive(value))?.[1]
+    const parameters = typeof details.parameters === 'string' ? details.parameters : ''
+    const configuredContext = Number(/(?:^|\n)\s*num_ctx\s+(\d+)/.exec(parameters)?.[1]) || 4096
+    const contextWindow = Math.min(configuredContext, finitePositive(maximumContext) ? maximumContext : configuredContext)
+    const supportsTools = Array.isArray(details.capabilities) ? details.capabilities.includes('tools') : undefined
+    await this.saveCustomProvider({
+      id: OLLAMA_ID, label: 'Ollama local', kind: 'ollama', baseUrl: url, model: modelId,
+      ...(finitePositive(contextWindow) ? { contextWindow, maxTokens: Math.min(8192, Math.floor(contextWindow / 4)) } : {}),
+      ...(typeof supportsTools === 'boolean' ? { supportsTools } : {})
+    })
+    this.selectModel(OLLAMA_ID, modelId)
   }
 
   // ----- danh sách provider / model / chọn model -----
 
   async listProviders(): Promise<ProviderInfo[]> {
-    const customs = new Set(this.customs().map((c) => c.id))
+    const customProviders = this.customs()
+    const customs = new Set(customProviders.map((c) => c.id))
     const oauthStorageIssue = this.credentials.issue()
     return this.modelRuntime.getProviders()
       .filter((p) => p.auth.apiKey || p.auth.oauth || customs.has(p.id))
       .map((p) => ({
         id: p.id, label: p.name,
-        hasKey: this.hasKey(p.id),
-        oauth: !!p.auth.oauth,
-        loggedIn: !!p.auth.oauth && !oauthStorageIssue && this.modelRuntime.isUsingOAuth(p.id),
-        ...(p.auth.oauth && oauthStorageIssue ? { oauthStorageIssue } : {}),
-        custom: customs.has(p.id)
+        hasKey: this.deps.secrets.get(p.id) != null,
+        oauth: !!p.auth.oauth && !BLOCKED_OAUTH.has(p.id),
+        loggedIn: !!p.auth.oauth && !BLOCKED_OAUTH.has(p.id) && !oauthStorageIssue && this.modelRuntime.isUsingOAuth(p.id),
+        ...(p.auth.oauth && !BLOCKED_OAUTH.has(p.id) && oauthStorageIssue ? { oauthStorageIssue } : {}),
+        custom: customs.has(p.id),
+        authMethods: customProviders.find((c) => c.id === p.id)?.kind === 'ollama'
+          ? ['none' as const] : [...(p.auth.apiKey || customs.has(p.id) ? ['api_key' as const] : []),
+            ...(p.auth.oauth && !BLOCKED_OAUTH.has(p.id) ? ['oauth' as const] : [])],
+        kind: customProviders.find((c) => c.id === p.id)?.kind === 'ollama' ? 'local' as const
+          : this.modelRuntime.isUsingSubscription(p.id) ? 'subscription' as const : 'api' as const,
+        ...(p.id === 'anthropic' ? { description: 'Claude qua Anthropic API key' }
+          : p.id === 'openai' ? { description: 'API key hoặc tài khoản ChatGPT đủ điều kiện' }
+            : p.id === 'google' ? { description: 'Gemini API key từ Google AI Studio; quota theo dự án' }
+              : p.id === 'openrouter' ? { description: 'Model miễn phí và trả phí theo tài khoản OpenRouter' } : {})
       }))
   }
 
   async listModels(): Promise<ModelInfo[]> {
-    const customs = new Set(this.customs().map((c) => c.id))
+    const customs = new Map(this.customs().map((c) => [c.id, c]))
     const out: ModelInfo[] = []
     for (const p of this.modelRuntime.getProviders()) {
       // Chỉ model của provider dùng được: tuỳ chỉnh, đã có key/đăng nhập, hoặc env đã cấu hình.
-      if (!customs.has(p.id) && !this.modelRuntime.hasConfiguredAuth(p.id)) continue
-      for (const m of this.modelRuntime.getModels(p.id)) out.push({ provider: p.id, id: m.id, label: m.name })
+      if ((!customs.has(p.id) && !this.modelRuntime.hasConfiguredAuth(p.id)) ||
+          BLOCKED_OAUTH.has(p.id) && this.modelRuntime.isUsingOAuth(p.id)) continue
+      const custom = customs.get(p.id)
+      for (const m of this.modelRuntime.getModels(p.id)) {
+        const local = custom?.kind === 'ollama'
+        const subscription = this.modelRuntime.isUsingSubscription(p.id)
+        const cost = custom ? custom.cost : m.cost
+        out.push({
+          provider: p.id, id: m.id, label: m.name,
+          ...(!custom || custom.contextWindow ? { contextWindow: m.contextWindow } : {}),
+          ...(!custom || custom.maxTokens ? { maxTokens: m.maxTokens } : {}),
+          ...(!custom || typeof custom.supportsTools === 'boolean' ? { supportsTools: custom?.supportsTools ?? true } : {}),
+          cost: { input: cost?.input ?? null, output: cost?.output ?? null },
+          pricing: local ? 'local' : subscription ? 'subscription'
+            : !cost ? 'unknown' : cost.input === 0 && cost.output === 0 ? 'free' : 'known'
+        })
+      }
     }
     return out
   }
@@ -378,7 +573,7 @@ export class AccountService {
   async loginOAuth(providerId: string): Promise<void> {
     if (this.loginAbort) throw new AgentError('bad_param', 'Đang có đăng nhập khác đang chạy')
     const p = this.modelRuntime.getProvider(providerId)
-    if (!p?.auth.oauth) throw new AgentError('bad_param', 'Nhà cung cấp này không hỗ trợ đăng nhập bằng gói đăng ký')
+    if (!p?.auth.oauth || BLOCKED_OAUTH.has(providerId)) throw new AgentError('bad_param', 'Nhà cung cấp này dùng API key trong NexGraph')
     this.credentials.requireReady()
     const ac = new AbortController()
     this.loginAbort = ac
@@ -415,7 +610,8 @@ export class AccountService {
     }
     const before = await this.credentials.read(providerId)
     try {
-      await this.modelRuntime.login(providerId, 'oauth', interaction, { agentName: 'NexGraph' })
+      await this.modelRuntime.login(providerId, 'oauth', interaction, { agentName: 'NexGraph', getDeviceId: () => this.installationId() })
+      this.accountGeneration(providerId, true)
     } catch (e) {
       // Pi chỉ ghi khi lấy được token. Nếu đã ghi nhưng đồng bộ runtime thất bại,
       // hoàn tác đúng phiên bản vừa ghi, tránh đè token được làm mới sau đó.
@@ -443,25 +639,54 @@ export class AccountService {
     if (!p?.auth.oauth) throw new AgentError('bad_param', 'Nhà cung cấp này không đăng nhập bằng gói đăng ký')
     if (this.loginProvider === providerId) throw new AgentError('bad_param', 'Hãy hủy đăng nhập đang chạy trước khi đăng xuất')
     this.credentials.requireReady()
+    this.accountGeneration(providerId, true)
+    let revoked = true
+    if (providerId === 'openai') {
+      await this.modelRuntime.settleCredentialWrites()
+      const active = await this.credentials.read(providerId)
+      if (active?.type === 'oauth' && typeof active.clientId === 'string') {
+        if (typeof active.sub === 'string') this.registrations.set('openai', JSON.stringify({ clientId: active.clientId, sub: active.sub }))
+        revoked = await revokeOpenAiSession(active.refresh, active.clientId)
+      }
+    }
     try {
       await this.modelRuntime.logout(providerId)
     } catch (e) {
       if (!(e instanceof Error) || e.name !== 'CredentialSynchronizationError') throw e
       const result = await this.modelRuntime.refresh({ allowNetwork: false, providers: [providerId] }).catch(() => null)
       if (!result || result.errors.has(providerId)) throw new AgentError('ai_error', 'Đã xóa thông tin đăng nhập. Mở lại ứng dụng để đồng bộ danh sách tài khoản.')
+    } finally {
+      this.accountGeneration(providerId, true)
     }
+    if (!revoked) this.deps.notify({ type: 'info', message: 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.' })
   }
 
   // ----- kiểm tra kết nối: gọi provider thật với model đang chọn -----
 
-  async test(): Promise<{ ok: boolean; message: string }> {
+  async test(): Promise<{ ok: boolean; message: string; capabilities?: { streaming: boolean; tools: boolean } }> {
     const sel = this.getSelectedModel()
     const model = sel && this.modelRuntime.getModel(sel.provider, sel.id)
     if (!model) return { ok: false, message: 'Chưa chọn model hoặc model không còn' }
+    const selection = this.consentSelection()
     try {
-      await this.modelRuntime.completeSimple(model, { messages: [{ role: 'user', content: 'ping', timestamp: Date.now() }] },
-        { signal: AbortSignal.timeout(15_000), maxTokens: 1 })
-      return { ok: true, message: 'Kết nối được' }
+      if (BLOCKED_OAUTH.has(model.provider) && this.modelRuntime.isUsingOAuth(model.provider))
+        throw new AgentError('ai_not_configured', 'Hãy kết nối Claude bằng Anthropic API key')
+      const marker = randomUUID()
+      const stream = this.modelRuntime.streamSimple(model, {
+        messages: [{ role: 'user', content: `Call nexgraph_connection_check with value "${marker}".`, timestamp: Date.now() }],
+        tools: [{ name: 'nexgraph_connection_check', description: 'A connection probe with no side effects.',
+          parameters: Type.Object({ value: Type.String() }) }]
+      }, { signal: AbortSignal.timeout(20_000) })
+      let streaming = false
+      for await (const event of stream) {
+        if (event.type === 'text_delta' || event.type === 'toolcall_delta') streaming = true
+      }
+      const result = await stream.result()
+      this.ensureSelection(selection)
+      if (result.stopReason === 'error' || result.stopReason === 'aborted') throw new Error(result.errorMessage ?? 'Kiểm tra bị gián đoạn')
+      const tools = result.content.some((part) => part.type === 'toolCall' && part.name === 'nexgraph_connection_check' && part.arguments.value === marker)
+      return { ok: true, message: tools ? 'Kết nối được và gọi công cụ thành công' : 'Kết nối được; model chưa xác nhận gọi công cụ',
+        capabilities: { streaming, tools } }
     } catch (e) {
       return { ok: false, message: scrub(e instanceof Error ? e.message : String(e)) }
     }
@@ -475,22 +700,28 @@ export class AccountService {
 
   private consentSelection(): string {
     const model = this.consentModel()
-    return model ? JSON.stringify([model.provider, model.id, model.baseUrl, this.modelRuntime.isUsingOAuth(model.provider)]) : ''
+    return model ? JSON.stringify([model.provider, model.id, model.baseUrl, this.sessionIdentity()]) : ''
   }
 
   async getConsentTarget(): Promise<AiConsentTarget | null> {
     const model = this.consentModel()
     if (!model) return null
+    if (BLOCKED_OAUTH.has(model.provider) && this.modelRuntime.isUsingOAuth(model.provider))
+      throw new AgentError('ai_not_configured', 'Hãy kết nối Claude bằng Anthropic API key')
     const selection = this.consentSelection()
     let baseUrl = model.baseUrl
+    let accountKey: string | undefined
     if (this.modelRuntime.isUsingOAuth(model.provider)) {
       this.credentials.requireReady()
       const resolved = await this.modelRuntime.getAuth(model, { signal: AbortSignal.timeout(10_000) })
       if (!resolved) throw new AgentError('ai_not_configured', 'Không xác minh được điểm đến OAuth. Hãy kiểm tra tài khoản trong Cài đặt.')
       baseUrl = resolved.auth.baseUrl ?? baseUrl
+    } else {
+      const resolved = await this.modelRuntime.getAuth(model, { signal: AbortSignal.timeout(10_000) })
+      accountKey = resolved?.auth.apiKey
     }
     this.ensureSelection(selection)
-    return normalizeConsentTarget(model.provider, baseUrl)
+    return normalizeConsentTarget(model.provider, baseUrl, this.accountId(model.provider, accountKey))
   }
 
   private ensureSelection(selection: string): void {
@@ -502,7 +733,7 @@ export class AccountService {
     this.ensureSelection(selected)
     if (!sameConsentTarget(requested, active))
       throw new AgentError('ai_provider_changed', 'Nhà cung cấp AI đã thay đổi. Hãy kiểm tra lại trước khi gửi.')
-    return JSON.stringify([projectId, requested.provider, requested.baseUrl])
+    return JSON.stringify([projectId, requested.provider, requested.baseUrl, requested.accountId])
   }
 
   async hasConsent(projectId: string, target: AiConsentTarget): Promise<boolean> {

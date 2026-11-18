@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileContent } from '@shared/api'
+import type { AgentContextItem } from '@shared/agent-types'
 import { vi } from '../../strings'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
 import { Icon } from '../common/icons'
 import './editor-tab.css'
+
+export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
 
 interface Props {
   projectId: string
@@ -12,6 +15,7 @@ interface Props {
   lineEnd?: number
   onClose: () => void
   onDirtyChange: (file: string, dirty: boolean) => void
+  onContextReady?: (file: string, getter: EditorContextGetter | null) => void
   /** Thẻ đang hiện; thẻ ẩn vẫn gắn kết để giữ nội dung, con trỏ và undo, và không nhận Ctrl+S. */
   active?: boolean
 }
@@ -33,11 +37,13 @@ function explain(e: { code?: string; message?: string }): string {
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChange, active = true }: Props) {
+export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChange, onContextReady, active = true }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
   const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void } | null>(null)
   const dirty = useRef(false)
+  const contextCallback = useRef(onContextReady)
+  contextCallback.current = onContextReady
   const [readOnly, setReadOnly] = useState<FileContent['reason'] | boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<Conflict | null>(null)
@@ -72,6 +78,7 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
     }
 
     setReady(false)
+    contextCallback.current?.(file, null)
     setFormat(null)
     setSaveState('idle')
     setError(null)
@@ -223,12 +230,21 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
       setReadOnly(c.readOnly ? (c.reason ?? true) : false)
       updateFormat(c)
       setReady(true)
+      contextCallback.current?.(file, () => {
+        if (!alive || !open || open.base.readOnly) return null
+        const selection = open.editor.getSelection?.()
+        const text = selection?.text ?? open.editor.getValue()
+        return { kind: 'file', file, text, start: selection?.start ?? 1,
+          end: selection?.end ?? text.split('\n').length,
+          version: open.base.version, dirty: dirty.current }
+      })
       void flush()
     }).catch((e) => alive && setError(explain(e)))
     return () => {
       alive = false
       off()
       actions.current = null
+      contextCallback.current?.(file, null)
       editor.current?.dispose()
       editor.current = null
       setDirty(false)

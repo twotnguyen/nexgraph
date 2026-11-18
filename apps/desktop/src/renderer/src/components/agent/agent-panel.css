@@ -172,3 +172,33 @@
 
 .agent-attachment .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-attachment .agent-icon-button { min-height: 20px; width: 20px; }
+
+.agent-model-select { min-width: 0; max-width: 52%; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text); font-size: 11px; padding: 4px; border-radius: 4px; }
+.agent-workbench-controls { flex: none; max-height: 38%; overflow: auto; border-bottom: 1px solid var(--color-border); }
+.agent-session-actions { display: flex; flex-wrap: wrap; gap: 5px; padding: 0 10px 8px; }
+.agent-session-actions button { padding: 4px 6px; font-size: 10px; background: transparent; }
+.agent-subpanel { padding: 10px; display: grid; gap: 10px; background: var(--color-surface); border-block: 1px solid var(--color-border); }
+.agent-subpanel label { display: flex; align-items: center; justify-content: space-between; gap: 7px; font-size: 11px; }
+.agent-subpanel select { max-width: 65%; background: var(--panel); color: var(--color-text); border: 1px solid var(--color-border); padding: 4px; }
+.agent-subpanel input[type=checkbox] { width: auto; margin: 0; }
+.agent-subpanel form { display: grid; gap: 7px; }
+.agent-limits { display: grid; gap: 6px; }
+.agent-limits input { width: 100px; min-width: 0; padding: 3px 5px; }
+.agent-history-row { display: flex; align-items: center; gap: 4px; }
+.agent-history-row button { padding: 4px 6px; }
+.agent-history-title { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.agent-history-title small { display: block; color: var(--color-muted); font-size: 10px; margin-top: 3px; }
+.agent-history-title[aria-current=true] { border-color: var(--blue); }
+.agent-task-status { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 6px 10px; font-size: 11px; }
+.agent-task-status span { flex: 1; }
+.agent-task-status button { padding: 3px 5px; font-size: 10px; }
+.agent-usage, .agent-notice { margin: 0; padding: 4px 10px 7px; font-size: 10px; color: var(--color-muted); overflow-wrap: anywhere; }
+.agent-timeline { padding: 6px 10px; font-size: 11px; }
+.agent-timeline details { margin: 5px 0; padding-inline-start: 7px; border-inline-start: 1px solid var(--color-border); }
+.agent-timeline summary { cursor: pointer; padding: 3px 0; }
+.agent-timeline small { color: var(--color-muted); margin-inline-start: 5px; }
+.agent-timeline pre { max-height: 180px; overflow: auto; white-space: pre-wrap; background: var(--color-bg); padding: 6px; font-size: 10px; }
+.agent-command-suggestions { display: flex; flex-wrap: wrap; gap: 4px; }
+.agent-command-suggestions button { font-size: 11px; padding: 4px 6px; }
+.agent-panel .compose > .row { flex-wrap: wrap; }
+.agent-panel .compose > .row > .primary { margin-inline-start: auto; }

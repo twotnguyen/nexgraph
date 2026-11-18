@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync }
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createRequire } from 'node:module'
 import { createFakeLlm } from './fake-llm.mjs'
 import { smokeInstaller } from './installer-smoke.mjs'
 
@@ -22,7 +23,7 @@ function findBinary() {
   return null
 }
 
-async function smoke(bin, temp, disableWebgl) {
+async function smoke(bin, temp, disableWebgl, launchArgs = []) {
   const sourceParent = join(temp, 'Nguồn dự án NexGraph với thư mục dài và có dấu')
   mkdirSync(sourceParent)
   let droppedRequests = 0
@@ -40,7 +41,7 @@ async function smoke(bin, temp, disableWebgl) {
       server.listen(0, '127.0.0.1', resolve)
     })
     const result = await new Promise((resolve, reject) => {
-      const child = spawn(bin, disableWebgl ? ['--disable-webgl'] : [], {
+      const child = spawn(bin, [...launchArgs, ...(disableWebgl ? ['--disable-webgl'] : [])], {
         cwd: temp,
         env: { ...process.env, NEXGRAPH_SMOKE: '1', NEXGRAPH_DATA_DIR: join(temp, 'Đồ án', 'data'),
           NEXGRAPH_USER_DATA_DIR: join(temp, 'user-data'),
@@ -57,7 +58,8 @@ async function smoke(bin, temp, disableWebgl) {
       child.on('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }) })
     })
     const line = result.stdout.split('\n').find((s) => s.includes('SMOKE OK') &&
-      s.includes('fs=OK agent=OK index=OK edit_policy=OK acceptance=OK workspace_controls=OK') &&
+      s.includes('fs=OK agent=OK index=OK edit_policy=OK acceptance=OK') && s.includes('workspace_controls=OK') &&
+      s.includes('sessions=OK plan=OK process=OK rollback=OK draft_context=OK') &&
       (!disableWebgl || s.includes('webgl_fallback=OK')))
     const stopped = /^SMOKE ENGINE STOPPED pid=([1-9]\d*)\r?$/m.exec(result.stdout)
     if (result.code !== 0 || !line || !stopped || droppedRequests === 0) {
@@ -83,15 +85,23 @@ async function smoke(bin, temp, disableWebgl) {
 }
 
 const commandLine = process.argv.slice(2)
-const args = commandLine.filter((arg) => arg !== '--disable-webgl')
-const disableWebgl = args.length !== commandLine.length
-if (commandLine.length - args.length > 1 || (args.length !== 0 && (args.length !== 2 || args[0] !== '--installer' || !args[1]))) {
-  throw new Error('Cách dùng: node apps/desktop/scripts/smoke-packaged.mjs [--installer <đường dẫn>] [--disable-webgl]')
+const args = commandLine.filter((arg) => arg !== '--disable-webgl' && arg !== '--development')
+const disableWebgl = commandLine.includes('--disable-webgl')
+const development = commandLine.includes('--development')
+if (commandLine.filter((arg) => arg === '--disable-webgl').length > 1 ||
+    commandLine.filter((arg) => arg === '--development').length > 1 ||
+    (development && args.length) || (args.length !== 0 && (args.length !== 2 || args[0] !== '--installer' || !args[1]))) {
+  throw new Error('Cách dùng: node apps/desktop/scripts/smoke-packaged.mjs [--installer <đường dẫn> | --development] [--disable-webgl]')
 }
 
 const temp = realpathSync(mkdtempSync(join(tmpdir(), 'ng-smoke-')))
 try {
-  if (args.length) {
+  if (development) {
+    const desktop = join(dirname(fileURLToPath(import.meta.url)), '..')
+    if (!existsSync(join(desktop, 'out', 'main', 'index.js'))) throw new Error('Build desktop trước khi chạy smoke --development')
+    const electron = createRequire(import.meta.url)('electron')
+    await smoke(electron, temp, disableWebgl, [desktop])
+  } else if (args.length) {
     const installer = resolve(args[1])
     console.log(`Kiểm bộ cài: ${installer}`)
     await smokeInstaller(installer, temp, (bin) => smoke(bin, temp, disableWebgl))

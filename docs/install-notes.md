@@ -54,11 +54,11 @@ Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<
 
 ## Cài đặt tài khoản AI
 
-Trong **Cài đặt → Tài khoản AI**, chọn nhà cung cấp có sẵn và nhập API key, hoặc thêm **Nhà cung cấp tuỳ chỉnh** với tên, Base URL và model. Chọn model có tool calling và bấm **Kiểm tra kết nối**. Với nhà cung cấp có OAuth, màn hình có thể mở trình duyệt, hiện device code hoặc hỏi mã. Các test OAuth dùng provider giả qua SDK pi.
+Trong khung trợ lý, chọn **Kết nối** để mở các mục **Tài khoản**, **API key** và **Ollama local**. **Cài đặt → Tài khoản AI** vẫn quản lý nhà cung cấp tùy chỉnh. Chọn model có tool calling rồi dùng **Kiểm tra kết nối và công cụ**. Đăng nhập ChatGPT đi qua trình duyệt của nhà cung cấp; việc mở trình duyệt thành công chưa xác nhận token và lời gọi model thành công. Claude trong ứng dụng dùng Anthropic API key. Xem [hướng dẫn trợ lý AI](ai-workbench.md) cho các lựa chọn, quyền và cách khôi phục.
 
-- Base URL custom mặc định dùng HTTPS và phải qua kiểm tra địa chỉ mạng. Để thử máy chủ HTTP loopback cục bộ, khởi động app với `NEXGRAPH_ALLOW_HTTP_PROVIDER=1` theo [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Custom endpoint không có API key vẫn nhận `Authorization: Bearer unused` do SDK pi.
-- API key và token OAuth dùng kho mã hóa của NexGraph. Token OAuth nằm trong `agent/oauth-secrets.json` dưới thư mục dữ liệu engine. NexGraph thử di trú `agent/auth.json` của bản cũ khi kho khóa an toàn khả dụng. Các phiên hội thoại của Agent giữ trong bộ nhớ và tách theo dự án, nhà cung cấp, URL đích.
-- Lần gửi đầu cho mỗi dự án và đích gửi yêu cầu đồng ý. **Hỏi** mặc định chỉ đọc. **Sửa** cho xem diff và đòi xác nhận từng lần tạo, sửa hoặc ghi đè tệp. Cả hai chế độ từ chối yêu cầu chạy lệnh shell.
+- Base URL custom mặc định dùng HTTPS và phải qua kiểm tra địa chỉ mạng. Để thử máy chủ HTTP loopback tùy chỉnh, khởi động app với `NEXGRAPH_ALLOW_HTTP_PROVIDER=1` theo [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Kết nối **Ollama local** có luồng riêng cho loopback, không cần cờ dev này. Custom endpoint không có API key vẫn nhận `Authorization: Bearer unused` do SDK pi.
+- API key và token OAuth dùng kho mã hóa của NexGraph. Token OAuth nằm trong `agent/oauth-secrets.json` dưới thư mục dữ liệu engine. NexGraph thử di trú `agent/auth.json` của bản cũ khi kho khóa an toàn khả dụng. Hội thoại Pi JSONL, chỉ mục phiên và manifest tác vụ lưu tại `agent/sessions/`, tách theo dự án, gốc thư mục, nhà cung cấp, đích gửi và danh tính kết nối.
+- Lần gửi đầu cho mỗi dự án, tài khoản và đích gửi yêu cầu đồng ý. **Hỏi** và **Kế hoạch** chỉ đọc. Trong **Sửa → Quyền & giới hạn**, chọn duyệt từng thay đổi hoặc tự động và bật quyền chạy lệnh riêng. Quyền này trở về duyệt từng thay đổi, không chạy lệnh khi đóng dự án. Checkpoint chỉ khôi phục mã nguồn văn bản đã thu thập trong phạm vi cho phép.
 - Trên Electron, Monaco giữ CRLF/BOM khi lưu. Thẻ có thay đổi chưa lưu được giữ lại nếu tệp trên đĩa đổi. Editor đánh dấu chỉ đọc khi tệp vượt 5 MiB hoặc không phải UTF-8.
 
 ## Git hook cập nhật sau commit

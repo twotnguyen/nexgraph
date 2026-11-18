@@ -10,7 +10,7 @@ import { promisify } from 'node:util'
 import type { FileContent, FileRevision, ProjectDirectory, WriteOpts } from '../../shared/api'
 import { shouldIgnore } from '../watch/ignore'
 
-export type FsErrorCode = 'outside_project' | 'file_not_found' | 'too_large' | 'not_text' | 'conflict' | 'unknown_project' | 'protected_path'
+export type FsErrorCode = 'outside_project' | 'file_not_found' | 'too_large' | 'not_text' | 'conflict' | 'unknown_project' | 'protected_path' | 'bad_param'
 
 export class FsError extends Error {
   constructor(public code: FsErrorCode, message: string) {
@@ -331,6 +331,29 @@ export async function writeProjectFile(
 }
 
 type ProjectLookup = () => Promise<{ project_id: string; path: string }[]>
+
+/** Xoá đúng phiên bản tệp do AI vừa tạo khi hoàn tác checkpoint, cùng hàng đợi với thao tác lưu. */
+export async function deleteProjectFile(root: string, relPath: string, expectedVersion: string, assertCurrent?: () => void): Promise<void> {
+  const abs = resolveInside(root, relPath)
+  const key = pathKey(abs)
+  const previous = pendingWrites.get(key)
+  let release!: () => void
+  const current = new Promise<void>((resolve) => { release = resolve })
+  pendingWrites.set(key, current)
+  try {
+    await previous
+    const before = readProjectSnapshot(root, relPath)
+    if (before.revision.version !== expectedVersion) throw conflict(relPath)
+    if (resolveInside(root, relPath) !== abs) throw conflict(relPath)
+    const latest = snapshotFile(abs, relPath)
+    if (latest?.revision.version !== expectedVersion) throw conflict(relPath)
+    assertCurrent?.()
+    unlinkSync(abs)
+  } finally {
+    release()
+    if (pendingWrites.get(key) === current) pendingWrites.delete(key)
+  }
+}
 
 /** Thân handler `fs:read`/`fs:write`: tra gốc dự án từ `projectId` rồi gọi hàm đọc/ghi an toàn. */
 /** Gốc dự án theo projectId; id lạ → FsError('unknown_project'). */

@@ -76,6 +76,7 @@ const slice = { file: 'service.py', start: 2, end: 10, text: 'def login_user(): 
 describe('FlowsView', () => {
   it('liệt kê luồng, chọn một luồng thì vẽ đúng bước và tô bước hiện tại', async () => {
     const onOpenCode = vi.fn()
+    const onSelectedFlowChange = vi.fn()
     const { api } = installNexgraph({
       graph: {
         flows: vi.fn(async () => list),
@@ -83,7 +84,7 @@ describe('FlowsView', () => {
         code: vi.fn(async () => slice)
       }
     })
-    render(<FlowsView projectId="p1" onOpenCode={onOpenCode} onOpenNode={() => {}} />)
+    render(<FlowsView projectId="p1" onOpenCode={onOpenCode} onOpenNode={() => {}} onSelectedFlowChange={onSelectedFlowChange} />)
     expect(await screen.findByText('Chọn một luồng ở danh sách bên trái.')).toBeInTheDocument()
 
     await userEvent.click(await screen.findByRole('button', { name: /login/ }))
@@ -92,6 +93,7 @@ describe('FlowsView', () => {
     const canvas = await screen.findByTestId('canvas')
     expect(canvas.dataset.nodes).toBe('3')
     expect(canvas.dataset.current).toBe('app.py::login#function')
+    await waitFor(() => expect(onSelectedFlowChange).toHaveBeenLastCalledWith(7))
 
     await userEvent.click(screen.getByRole('button', { name: 'Sau' }))
     expect(screen.getByTestId('canvas').dataset.current).toBe('service.py::login_user#function')

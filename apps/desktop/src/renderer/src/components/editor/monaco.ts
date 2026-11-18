@@ -54,6 +54,7 @@ import.meta.hot?.dispose(stopObservingTheme)
 
 export interface EditorHandle {
   getValue(): string
+  getSelection?(): { text: string; start: number; end: number } | null
   setValue(v: string): void
   onChange(cb: () => void): void
   revealLines(start: number, end?: number): void
@@ -80,6 +81,17 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
   const hit = editor.createDecorationsCollection()
   return {
     getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
+    getSelection: () => {
+      const selection = editor.getSelection()
+      const model = editor.getModel()
+      if (!selection || selection.isEmpty() || !model) return null
+      return {
+        text: model.getValueInRange(selection).replace(/\r\n?/g, '\n'),
+        start: selection.startLineNumber,
+        end: selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
+          ? selection.endLineNumber - 1 : selection.endLineNumber
+      }
+    },
     setValue: (v) => editor.setValue(v),
     onChange: (cb) => void editor.onDidChangeModelContent(() => cb()),
     revealLines: (start, end = start) => {

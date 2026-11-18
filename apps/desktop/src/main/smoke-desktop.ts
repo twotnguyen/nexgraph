@@ -116,7 +116,7 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
     if (settings.provider !== id || settings.baseUrl !== endpoint) {
       throw new Error(`agent IPC did not expose the selected smoke provider ${id}`)
     }
-    const target = { provider: settings.provider, baseUrl: settings.baseUrl }
+    const target = { provider: settings.provider, baseUrl: settings.baseUrl, accountId: settings.accountId }
     await api.ai.grantConsent(pid, target)
     return target
   }
@@ -126,9 +126,10 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
   const original = await api.fs.read(pid, filename)
 
   async function prompt(question: string, options: {
-    decision?: 'deny' | 'stop' | 'approve'; destination?: AiConsentTarget; expected?: string
+    decision?: 'deny' | 'stop' | 'approve'; commandDecision?: 'deny' | 'approve'; destination?: AiConsentTarget; expected?: string
+    context?: Parameters<NexGraphApi['agent']['prompt']>[3]
   } = {}): Promise<void> {
-    const { decision, destination = target, expected = decision === 'stop' ? 'error:ai_cancelled'
+    const { decision, commandDecision, context, destination = target, expected = decision === 'stop' ? 'error:ai_cancelled'
       : question === 'NEXGRAPH_SMOKE' ? 'done:NEXGRAPH_SMOKE_OK' : 'done:NEXGRAPH_SMOKE_POLICY_OK' } = options
     let approvals = 0
     let unexpectedDiff = false
@@ -144,6 +145,11 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
       if (event.type !== 'approval') return
       approvals++
       const diff = event.request
+      if (diff.tool === 'command' && commandDecision && question === 'NEXGRAPH_SMOKE_PROCESS' &&
+          diff.executable === 'node' && diff.cwd === '.' && diff.args.join(' ').includes('NEXGRAPH_PROCESS_OK')) {
+        actions.push(api.agent.approve(pid, diff.id, commandDecision === 'approve'))
+        return
+      }
       if (!decision || diff.tool !== 'edit' || diff.path !== filename || diff.before !== source || diff.after !== expectedEdit) {
         unexpectedDiff = true
         actions.push(api.agent.approve(pid, diff.id, false))
@@ -159,9 +165,9 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
       const deadline = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(() => reject(new Error(`agent IPC timed out for ${question}`)), 15_000)
       })
-      const [result] = await Promise.all([Promise.race([terminal, deadline]), api.agent.prompt(pid, question, destination)])
+      const [result] = await Promise.all([Promise.race([terminal, deadline]), api.agent.prompt(pid, question, destination, context)])
       await Promise.all(actions)
-      if (unexpectedDiff || approvals !== (decision ? 1 : 0) || result !== expected) {
+      if (unexpectedDiff || approvals !== (decision || commandDecision ? 1 : 0) || result !== expected) {
         throw new Error(`agent IPC policy failed for ${question}: approvals=${approvals}, streamed=${streamed}, result=${result}`)
       }
     } finally {
@@ -215,6 +221,58 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
       throw new Error('graph IPC did not propagate impact to the caller in the other file')
     }
 
+    const savedSession = await api.agent.snapshot(pid)
+    if (!savedSession.session || !savedSession.messages.some((message) => message.role === 'assistant') ||
+        savedSession.task?.status !== 'completed') throw new Error('persistent session snapshot is incomplete')
+    await api.agent.close(pid)
+    const resumed = await api.agent.snapshot(pid)
+    if (resumed.session?.id !== savedSession.session.id || resumed.messages.length !== savedSession.messages.length) {
+      throw new Error('session transcript did not survive closing and reopening')
+    }
+    const second = await api.agent.newSession(pid)
+    if (!second.session || second.session.id === savedSession.session.id || second.messages.length) throw new Error('new session was not isolated')
+    await api.agent.switchSession(pid, savedSession.session.id)
+    await api.agent.renameSession(pid, savedSession.session.id, 'Smoke persistent conversation')
+    if (!(await api.agent.listSessions(pid)).some((session) => session.id === savedSession.session!.id && session.title === 'Smoke persistent conversation')) {
+      throw new Error('session name was not persisted')
+    }
+    await api.agent.deleteSession(pid, second.session.id)
+
+    await api.agent.setMode(pid, 'plan')
+    await prompt('NEXGRAPH_SMOKE_PLAN_WRITE')
+    const [forbiddenPlan] = await Promise.allSettled([api.fs.read(pid, 'smoke-plan-should-not-write.ts')])
+    if (forbiddenPlan.status !== 'rejected' || forbiddenPlan.reason?.code !== 'file_not_found') throw new Error('plan mode wrote a file')
+    const currentFile = await api.fs.read(pid, filename)
+    await prompt('NEXGRAPH_SMOKE_CONTEXT', { expected: 'done:NEXGRAPH_SMOKE_CONTEXT_OK',
+      context: { context: [{ kind: 'file', file: filename, start: 2, end: 2,
+        text: 'SMOKE_UNSAVED_SELECTION', dirty: true, version: currentFile.version }] } })
+    if ((await api.fs.read(pid, filename)).version !== currentFile.version) throw new Error('attaching a draft changed the source file')
+
+    await api.agent.setMode(pid, 'edit')
+    await api.agent.setExecution(pid, { policy: 'review', allowCommands: false })
+    await prompt('NEXGRAPH_SMOKE_PROCESS')
+    const [forbiddenCommand] = await Promise.allSettled([api.fs.read(pid, 'command-created.ts')])
+    if (forbiddenCommand.status !== 'rejected' || forbiddenCommand.reason?.code !== 'file_not_found') throw new Error('command ran without a task grant')
+    await api.agent.setExecution(pid, { policy: 'review', allowCommands: true })
+    await prompt('NEXGRAPH_SMOKE_PROCESS', { commandDecision: 'deny' })
+    const [deniedCommand] = await Promise.allSettled([api.fs.read(pid, 'command-created.ts')])
+    if (deniedCommand.status !== 'rejected' || deniedCommand.reason?.code !== 'file_not_found') throw new Error('rejected command ran')
+    await prompt('NEXGRAPH_SMOKE_PROCESS', { commandDecision: 'approve' })
+    if (!(await api.fs.read(pid, 'command-created.ts')).text.includes('processCheckpoint')) throw new Error('approved command did not run')
+    const processTask = (await api.agent.snapshot(pid)).task
+    if (!processTask || !(await api.agent.checkpoints(pid, processTask.id)).some((checkpoint) => checkpoint.path === 'command-created.ts')) {
+      throw new Error('command checkpoint was not recorded')
+    }
+    const commandRollback = await api.agent.rollback(pid, processTask.id)
+    if (commandRollback.conflicts.length || !commandRollback.restored.includes('command-created.ts')) throw new Error('command-created file did not roll back')
+    await api.agent.setExecution(pid, { policy: 'auto', allowCommands: false })
+    await prompt('NEXGRAPH_SMOKE_AUTO_WRITE')
+    const autoTask = (await api.agent.snapshot(pid)).task
+    if (!autoTask || !(await api.fs.read(pid, 'auto-created.ts')).text.includes('autoCheckpoint')) throw new Error('automatic file editing did not execute')
+    const autoRollback = await api.agent.rollback(pid, autoTask.id)
+    if (autoRollback.conflicts.length || !autoRollback.restored.includes('auto-created.ts')) throw new Error('automatic file edit did not roll back')
+    await api.agent.setExecution(pid, { policy: 'review', allowCommands: false })
+
     await api.agent.setMode(pid, 'ask')
     const offline = await selectProvider('smoke-offline', new URL('/offline/v1', baseUrl).href)
     await prompt('NEXGRAPH_SMOKE_PROVIDER_OUTAGE', { destination: offline, expected: 'error:ai_unreachable' })
@@ -226,7 +284,7 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
   } finally {
     await api.agent.close(pid)
   }
-  return 'fs=OK agent=OK index=OK edit_policy=OK acceptance=OK'
+  return 'fs=OK agent=OK index=OK edit_policy=OK acceptance=OK sessions=OK plan=OK process=OK rollback=OK draft_context=OK'
 }
 
 /** Chạy trong UI đã nạp lại sau khi fixture được công bố bằng IPC thật. */

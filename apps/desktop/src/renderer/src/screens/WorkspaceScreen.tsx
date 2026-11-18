@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Changes, ExportFormat, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
 import type { HostCommand } from '@shared/api'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
-import { EditorTab } from '../components/editor/EditorTab'
+import { EditorTab, type EditorContextGetter } from '../components/editor/EditorTab'
+import type { AgentContextItem, AgentEditorState } from '@shared/agent-types'
+import type { AgentInspection } from '../components/agent/useAgentWorkbench'
+import { TaskInspector } from '../components/agent/TaskInspector'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanvas'
 import { ActivityBar } from '../components/layout/ActivityBar'
@@ -23,7 +26,7 @@ import { Icon, Logo, VIEW_TONE } from '../components/common/icons'
 import { vi } from '../strings'
 import './workspace.css'
 
-type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}`
+type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}` | `task:${string}`
 const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
 const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
   graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }
@@ -109,6 +112,28 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [feedback, setFeedback] = useState<string | null>(null)
   const [chatOpen, setChatOpen] = useState(() => !hosted && (window.matchMedia?.('(min-width: 980px)').matches ?? true))
   const [connectOpenCode, setConnectOpenCode] = useState(false)
+  const editorContexts = useRef(new Map<string, EditorContextGetter>())
+  const [inspections, setInspections] = useState<AgentInspection[]>([])
+  const [chatWidth, setChatWidth] = useState(() => { try { return Math.max(300, Math.min(640, Number(localStorage.getItem('nexgraph.chat.width')) || 360)) } catch { return 360 } })
+  const resize = useRef<{ x: number; width: number } | null>(null)
+  const saveChatWidth = (width: number) => {
+    const next = Math.max(300, Math.min(640, Math.max(300, window.innerWidth - 560), width))
+    setChatWidth(next)
+    try { localStorage.setItem('nexgraph.chat.width', String(next)) } catch { /* preference only */ }
+  }
+  const flushEditorState = useCallback(async () => {
+    const states: AgentEditorState[] = []
+    for (const [file, get] of editorContexts.current) {
+      const snapshot = get()
+      if (snapshot) states.push({ file, dirty: snapshot.dirty === true, version: snapshot.version })
+    }
+    await window.nexgraph.agent.editorState(project.project_id, states)
+  }, [project.project_id])
+  const contextReady = useCallback((file: string, get: EditorContextGetter | null) => {
+    if (get) editorContexts.current.set(file, get)
+    else editorContexts.current.delete(file)
+    void flushEditorState().catch(() => {})
+  }, [flushEditorState])
   useEffect(() => {
     if (hosted) return
     const onKey = (e: KeyboardEvent): void => {
@@ -121,8 +146,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     return () => document.removeEventListener('keydown', onKey)
   }, [hosted])
   const [archParent, setArchParent] = useState<string | undefined>(undefined)
+  const [archContext, setArchContext] = useState<string | undefined>(undefined)
   const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
+  const [flowContext, setFlowContext] = useState<number | undefined>(undefined)
   const openFlow = (id: number) => {
+    setFlowContext(undefined)
     setFlowId(id)
     setTab('flows')
   }
@@ -161,7 +189,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const activeFile = tab.startsWith('file:') ? tab.slice('file:'.length) : undefined
   const [lastMain, setLastMain] = useState<Tab>(initialTab ?? 'arch')
   useEffect(() => {
-    if (!tab.startsWith('file:')) setLastMain(tab)
+    if (!tab.startsWith('file:') && !tab.startsWith('task:')) setLastMain(tab)
   }, [tab])
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
@@ -173,6 +201,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null)
   const [overlay, setOverlay] = useState<Overlay | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const inspect = (inspection: AgentInspection) => {
+    setInspections((current) => current.some((item) => item.id === inspection.id) ? current.map((item) => item.id === inspection.id ? inspection : item) : [...current, inspection])
+    setTab(`task:${inspection.id}`)
+  }
+  const graphContext: AgentContextItem | undefined = tab === 'graph' && selected ? { kind: 'node', nodeId: selected.id, label: selected.label }
+    : tab === 'flows' && flowContext !== undefined ? { kind: 'flow', flowId: flowContext, label: `Luồng ${flowContext}` }
+    : tab === 'arch' ? { kind: 'architecture', blockId: archContext ?? 'root', label: archContext ?? 'Kiến trúc dự án' } : undefined
 
   useEffect(() => window.nexgraph.index.onEvent((event) => {
     if (event.type !== 'graph_updated' || event.project_id !== project.project_id) return
@@ -253,6 +288,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
   const openArch = (blockId: string) => {
     setArchParent(blockId)
+    setArchContext(blockId)
     setTab('arch')
   }
   const openExport = (scope: ExportScope, format: ExportFormat = 'html') => {
@@ -292,7 +328,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       else next.delete(file)
       return next
     })
-  }, [])
+    void flushEditorState().catch((e) => setFeedback(messageOf(e)))
+  }, [flushEditorState])
   // Đóng cửa sổ khi còn tệp chưa lưu: chặn unload, main hỏi bằng hộp thoại hệ thống (will-prevent-unload).
   useEffect(() => {
     if (dirtyFiles.size === 0) return
@@ -394,7 +431,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
 
   return (
-    <div className="workspace workspace-shell" data-hosted={hosted || undefined}>
+    <div className="workspace workspace-shell" data-hosted={hosted || undefined} style={{ '--ws-chat': `${chatWidth}px` } as CSSProperties}>
       {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
       {!hosted && (
         <ActivityBar
@@ -483,11 +520,15 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}>×</button>
             </span>
           ))}
+          {inspections.map((inspection) => <span key={inspection.id} className={`tab file-tab${tab === `task:${inspection.id}` ? ' active' : ''}`}>
+            <button id={tabId(`task:${inspection.id}`)} type="button" role="tab" aria-selected={tab === `task:${inspection.id}`} aria-controls={viewId} tabIndex={tab === `task:${inspection.id}` ? 0 : -1} className="tab-name" onClick={() => setTab(`task:${inspection.id}`)}><Icon name="spark" size={14} /><span>{inspection.title}</span></button>
+            <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}>×</button>
+          </span>)}
         </div>
         <div className="canvas-wrap" id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
-          {tab === 'arch' && <ArchitectureCanvas key={archParent ?? 'root'} projectId={project.project_id} revision={revision} initialParent={archParent} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'arch' && <ArchitectureCanvas key={archParent ?? 'root'} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
-          {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} onOpenCode={openCode} onOpenNode={openNodeId} />}
+          {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (
             <>
               <GraphCanvas projectId={project.project_id} revision={revision} startNodeId=".#repository" focusNodeId={focus} highlights={highlights}
@@ -530,8 +571,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
           {files.map((f) => (
             <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} active={tab === `file:${f.file}`}
-              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} />
+              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} />
           ))}
+          {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
           {feedback && (
             <div className="ws-feedback">
               <span role="alert">{feedback}</span>
@@ -540,8 +582,14 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
         </div>
       </section>
+      {!hosted && chatOpen && <div className="agent-resize-handle" role="separator" aria-label="Độ rộng trợ lý AI" aria-orientation="vertical" tabIndex={0} aria-valuemin={300} aria-valuemax={640} aria-valuenow={chatWidth}
+        onPointerDown={(event) => { resize.current = { x: event.clientX, width: chatWidth }; event.currentTarget.setPointerCapture(event.pointerId) }}
+        onPointerMove={(event) => { if (resize.current) saveChatWidth(resize.current.width + resize.current.x - event.clientX) }}
+        onPointerUp={() => { resize.current = null }} onPointerCancel={() => { resize.current = null }}
+        onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); saveChatWidth(chatWidth + (event.key === 'ArrowLeft' ? 20 : -20)) } }} />}
       {!hosted && <AgentPanel id={chatId} hidden={!chatOpen} projectId={project.project_id} projectName={project.name}
         activeFile={chatFile} onClose={() => setChatOpen(false)} onConnectOpenCode={() => setConnectOpenCode(true)}
+        getEditorContext={() => activeFile ? editorContexts.current.get(activeFile)?.() ?? null : null} graphContext={graphContext} beforePrompt={flushEditorState} onInspect={inspect}
         onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
     </div>

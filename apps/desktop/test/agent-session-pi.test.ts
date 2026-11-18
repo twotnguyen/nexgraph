@@ -44,6 +44,7 @@ const SCRIPT: Record<string, [string, object]> = {
   'sửa h.txt': ['edit', { path: 'h.txt', edits: [{ oldText: 'bản gốc', newText: 'bản đã duyệt' }] }],
   'đọc marker.txt': ['read', { path: 'marker.txt' }],
   'viết g.txt': ['write', { path: 'g.txt', content: 'không được ghi' }],
+  'checkpoint lưu bền': ['write', { path: 'checkpoint.py', content: 'saved = True\n' }],
   'đọc ngoài': ['read', { path: OUTSIDE_READ }],
   'đọc nháy': ['read', { path: "a'b.txt" }],
   'thử ghi khi đang hỏi': ['write', { path: 'ask-would-write.txt', content: 'không được ghi' }]
@@ -368,9 +369,12 @@ describe('AgentService + pi SDK thật', () => {
   it('SDK đổi endpoint sau khi kiểm đồng ý → chặn payload ở endpoint mới', async () => {
     const redirectedSeen = { auth: [] as string[], tools: [] as string[][], bodies: [] as string[] }
     const redirected = await fakeLlm(redirectedSeen)
-    const auth = vi.spyOn(accounts.modelRuntime, 'getAuth').mockResolvedValueOnce({
-      auth: { apiKey: KEY, baseUrl: redirected.url },
-    } as Awaited<ReturnType<typeof accounts.modelRuntime.getAuth>>)
+    // recipient và hasConsent xác minh cùng đích trước lượt. Sau đó mô phỏng
+    // SDK nhận endpoint OAuth khác ngay trước khi tạo request thật.
+    const auth = vi.spyOn(accounts.modelRuntime, 'getAuth')
+      .mockResolvedValueOnce({ auth: { apiKey: KEY, baseUrl: llm.url } } as Awaited<ReturnType<typeof accounts.modelRuntime.getAuth>>)
+      .mockResolvedValueOnce({ auth: { apiKey: KEY, baseUrl: llm.url } } as Awaited<ReturnType<typeof accounts.modelRuntime.getAuth>>)
+      .mockResolvedValueOnce({ auth: { apiKey: KEY, baseUrl: redirected.url } } as Awaited<ReturnType<typeof accounts.modelRuntime.getAuth>>)
     const requestCount = seen.bodies.length
     try {
       await svc.prompt('p1', 'chỉ gửi tới endpoint đã đồng ý', target)
@@ -382,6 +386,26 @@ describe('AgentService + pi SDK thật', () => {
       auth.mockRestore()
       await redirected.close()
     }
+  }, 30_000)
+
+  it('SDK thật lưu hội thoại, checkpoint và hoàn tác sau khi đóng/mở lại dự án', async () => {
+    svc.setMode('p1', 'edit')
+    svc.setExecution('p1', { policy: 'auto', allowCommands: false })
+    await turn('checkpoint lưu bền')
+    const before = await svc.snapshot('p1')
+    const sessionId = before.session!.id
+    const taskId = before.task!.id
+    expect(readFileSync(join(root, 'checkpoint.py'), 'utf8')).toBe('saved = True\n')
+    expect(await svc.checkpoints('p1', taskId)).toMatchObject([{ path: 'checkpoint.py', before: '', after: 'saved = True\n' }])
+    svc.close('p1')
+    const restored = await svc.snapshot('p1')
+    expect(restored.session?.id).toBe(sessionId)
+    expect(restored.messages.at(-1)).toMatchObject({ text: 'Xong [[a.py:1-1]]', tools: [{ name: 'write', status: 'completed' }] })
+    expect(svc.getExecution('p1')).toEqual({ policy: 'review', allowCommands: false })
+    expect(await svc.rollback('p1', taskId)).toEqual({ restored: ['checkpoint.py'], conflicts: [] })
+    expect(existsSync(join(root, 'checkpoint.py'))).toBe(false)
+    expect(await svc.checkpoints('p1', taskId)).toMatchObject([{ restored: true }])
+    expect((await svc.snapshot('p1')).task?.checkpointIds).toEqual([])
   }, 30_000)
 
   it('nhà cung cấp OpenAI-compatible trả 307 → không chuyển payload hoặc API key sang máy chủ khác', async () => {

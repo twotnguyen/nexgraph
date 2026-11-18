@@ -22,12 +22,22 @@ const smokeCalls = {
   NEXGRAPH_SMOKE_EDIT_SHELL: { editing: true, call: shellCall },
   NEXGRAPH_SMOKE_EDIT_FILE: { editing: true, call: toolCall('edit', {
     path: 'smoke.ts', edits: [{ oldText: '  return true', newText: '  return false' }]
+  }) },
+  NEXGRAPH_SMOKE_PLAN_WRITE: { editing: false, call: toolCall('write', {
+    path: 'smoke-plan-should-not-write.ts', content: 'export const forbiddenPlanWrite = true'
+  }) },
+  NEXGRAPH_SMOKE_PROCESS: { editing: true, call: toolCall('run_process', {
+    executable: 'node', args: ['-e', 'console.log("NEXGRAPH_PROCESS_OK");require("fs").writeFileSync("command-created.ts","export const processCheckpoint = true\\n")'],
+    cwd: '.', timeoutMs: 10000
+  }) },
+  NEXGRAPH_SMOKE_AUTO_WRITE: { editing: true, call: toolCall('write', {
+    path: 'auto-created.ts', content: 'export const autoCheckpoint = true\n'
   }) }
 }
 
 function smokePolicy(scenario, advertised, results, turn) {
   if (results.length) return { role: 'assistant', content: 'NEXGRAPH_SMOKE_POLICY_OK' }
-  const expected = scenario.editing ? [...readOnlyTools, 'edit', 'write'] : readOnlyTools
+  const expected = scenario.editing ? [...readOnlyTools, 'edit', 'write', 'run_process'] : readOnlyTools
   const names = (advertised ?? []).map((item) => item.function?.name)
   if (names.length !== expected.length || expected.some((name) => !names.includes(name))) {
     throw new Error('Bộ công cụ quảng bá của agent không đúng chế độ')
@@ -62,8 +72,15 @@ function readToolResult(message, name) {
 
 function complete(messages, maxTokens, advertised) {
   const lastUser = messages.findLastIndex((m) => m.role === 'user')
-  const question = text(messages[lastUser] ?? {})
+  const rawQuestion = text(messages[lastUser] ?? {})
+  const question = rawQuestion.split('\n\n', 1)[0]
   if (question === 'NEXGRAPH_SMOKE') return { role: 'assistant', content: 'NEXGRAPH_SMOKE_OK' }
+  if (question === 'NEXGRAPH_SMOKE_CONTEXT') {
+    if (!rawQuestion.includes('SMOKE_UNSAVED_SELECTION') || !rawQuestion.includes('unsaved_editor_snapshot')) {
+      throw new Error('Thiếu ngữ cảnh bản nháp được người dùng chọn')
+    }
+    return { role: 'assistant', content: 'NEXGRAPH_SMOKE_CONTEXT_OK' }
+  }
   if (maxTokens === 1) return { role: 'assistant', content: 'pong' }
   const tools = messages.slice(lastUser).filter((m) => m.role === 'tool')
   if (Object.hasOwn(smokeCalls, question)) return smokePolicy(smokeCalls[question], advertised, tools, lastUser)
