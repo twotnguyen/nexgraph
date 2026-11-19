@@ -16,7 +16,8 @@ function fixture() {
   const controller = new AbortController()
   let mode: AgentMode = 'edit'
   let permission = true
-  const ask = vi.fn<(request: ApprovalRequest) => void>()
+  // Lệnh luôn chờ duyệt (ADR 0016): fixture duyệt thay người dùng.
+  const ask = vi.fn<(request: ApprovalRequest) => void>((request) => { queueMicrotask(() => gate.resolve(request.id, true)) })
   const gate = createApprovalGate({
     root, getMode: () => mode, getPolicy: () => 'auto', canRunCommands: () => permission,
     preview: (tool, input) => previewWrite(root, tool, input), ask
@@ -85,6 +86,21 @@ describe('TaskExecution', () => {
     gate.resolve(requested.id, true)
     gate.denyAll('stopped')
     await expect(result).rejects.toThrow('stopped')
+    expect(existsSync(join(f.root, 'unexpected'))).toBe(false)
+  })
+
+  it('auto policy still waits for a command decision and a denial runs nothing', async () => {
+    const f = fixture()
+    let requested!: ApprovalRequest
+    const gate = createApprovalGate({ root: f.root, getMode: () => 'edit', getPolicy: () => 'auto',
+      canRunCommands: () => true, preview: async () => { throw new Error('unused') },
+      ask: (request) => { requested = request } })
+    const task = new TaskExecution({ root: f.root, taskId: 'auto', storageDir: f.storage, policy: 'auto', allowCommands: true,
+      signal: f.controller.signal, assertCurrent: () => f.controller.signal.throwIfAborted(), gate })
+    const result = task.run({ executable: 'node', args: ['-e', 'require("fs").writeFileSync("unexpected","x")'] })
+    await vi.waitFor(() => expect(requested?.tool).toBe('command'))
+    gate.resolve(requested.id, false)
+    await expect(result).rejects.toThrow()
     expect(existsSync(join(f.root, 'unexpected'))).toBe(false)
   })
 

@@ -56,7 +56,7 @@ Adapter ChatGPT dùng callback HTTP loopback trên `127.0.0.1` với cổng tr�
 | **Kế hoạch** | Cùng quyền chỉ đọc; yêu cầu kế hoạch có tệp liên quan và kiểm thử dự kiến. |
 | **Sửa** | Cho phép công cụ sửa/tạo tệp. Quyền chạy lệnh và cách duyệt được chọn riêng trong **Quyền & giới hạn**. |
 
-Mặc định **Duyệt từng thay đổi**: mỗi thao tác ghi hiển thị đường dẫn cùng diff trước/sau. Lệnh được duyệt bằng executable, args, cwd và timeout. **Tự động trong phiên này** bỏ bước duyệt từng thao tác trong phạm vi đã cấp; vẫn cần bật **Cho phép chạy lệnh build/test** riêng. Hỏi và Kế hoạch luôn chỉ đọc, kể cả khi trước đó đã bật quyền tự động.
+Mặc định **Duyệt từng thay đổi**: mỗi thao tác ghi hiển thị đường dẫn cùng diff trước/sau. Lệnh được duyệt bằng executable, args, cwd và timeout. **Tự động trong phiên này** bỏ bước duyệt từng thao tác trong phạm vi đã cấp; **lệnh thì luôn phải duyệt từng lệnh** và vẫn cần bật **Cho phép chạy lệnh build/test** riêng (ADR 0016). Hỏi và Kế hoạch luôn chỉ đọc, kể cả khi trước đó đã bật quyền tự động.
 
 Quyền tự động và chạy lệnh không được bật lại khi đóng rồi mở dự án. Công cụ chạy tiến trình bằng executable và mảng args, không diễn giải chuỗi shell chung. Tiến trình dùng quyền tài khoản Windows/macOS hiện tại; đây không phải máy ảo hay sandbox của hệ điều hành. Script của dự án có thể có tác động ngoài mã nguồn mà checkpoint không hoàn tác được.
 

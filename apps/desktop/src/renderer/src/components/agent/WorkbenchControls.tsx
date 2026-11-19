@@ -53,7 +53,7 @@ export function WorkbenchControls({ projectId, work, busy, mode, runtime, onInsp
     {pane === 'settings' && <section className="agent-subpanel" aria-label="Quyền và giới hạn AI">
       <label>Thực thi<select disabled={locked || mode !== 'edit'} value={work.execution.policy} onChange={(event) => {
         const policy = event.target.value === 'auto' ? 'auto' : 'review'
-        if (policy === 'auto' && !window.confirm('Tự động ghi các tệp được phép trong dự án cho phiên này? Lệnh chỉ chạy khi bạn bật quyền chạy lệnh.')) return
+        if (policy === 'auto' && !window.confirm('Tự động ghi các tệp được phép trong dự án cho phiên này? Lệnh build/test luôn cần bạn duyệt riêng và chỉ chạy khi bạn bật quyền chạy lệnh.')) return
         void work.saveExecution({ ...work.execution, policy })
       }}><option value="review">Duyệt từng thay đổi</option><option value="auto">Tự động trong phiên này</option></select></label>
       <label><input type="checkbox" checked={work.execution.allowCommands} disabled={locked || mode !== 'edit'} onChange={(event) => {
