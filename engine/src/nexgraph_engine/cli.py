@@ -65,7 +65,8 @@ def _refresh(project: Path, data_dir: Path | None) -> int:
             if conn.execute("SELECT 1 FROM lan_lap_chi_muc WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai') LIMIT 1").fetchone():
                 print(json.dumps(skipped))
                 return 0
-            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, store.project_id()))
+            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, store.project_id()),
+                                keep_sources=data_dir is None)
     except (GraphWriteBusy, sqlite3.OperationalError):
         print(json.dumps(skipped))
         return 0

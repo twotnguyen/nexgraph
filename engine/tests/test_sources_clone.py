@@ -77,3 +77,30 @@ def test_failed_clone_leaves_nothing(api, tmp_path, monkeypatch):
     assert job["state"] == "error" and job["message"]
     clones = api.app.state.services.data_dir / "clones"
     assert not clones.exists() or not any(clones.iterdir())
+
+
+def test_depth_capped(api):
+    r = api.post("/v1/projects/clone", json={"url": "https://github.com/owner/repo", "depth": 51})
+    assert r.status_code == 400
+
+
+def test_clone_size_cap_kills_and_cleans(local_repo, tmp_path, monkeypatch):
+    import threading
+    monkeypatch.setattr(clone_module, "git_remote", lambda url: local_repo.as_uri())
+    dest = tmp_path / "clones" / "demo-1"
+    with pytest.raises(RuntimeError, match="vượt"):
+        clone_module.clone_repo("https://github.com/owner/demo", dest, depth=1, cancel=threading.Event(), max_bytes=10)
+    assert not dest.exists()
+
+
+def test_failed_open_removes_clone(api, local_repo, monkeypatch):
+    monkeypatch.setattr(clone_module, "git_remote", lambda url: local_repo.as_uri())
+
+    def boom(path):
+        raise RuntimeError("không mở được")
+
+    monkeypatch.setattr(api.app.state.services.registry, "open_project", boom)
+    job = wait_job(api, api.post("/v1/projects/clone", json={"url": "https://github.com/owner/demo"}).json()["job_id"])
+    assert job["state"] == "error"
+    clones = api.app.state.services.data_dir / "clones"
+    assert not clones.exists() or not any(clones.iterdir())

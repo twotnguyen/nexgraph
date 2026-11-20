@@ -146,3 +146,30 @@ def test_discover_sources_root(copy_fixture, tmp_path):
     (root / "sources" / "note.md").write_text("# Mine\n", encoding="utf-8")
     mine = {f.rel_path: f for f in discover(root, include_docs=True, sources_dir=src)}["sources/note.md"]
     assert mine.path is None and mine.location(root) == root / "sources" / "note.md"
+
+
+def test_context_reads_sources(api, project, web):
+    _, pid = project
+    job = wait_job(api, api.post(f"/v1/projects/{pid}/sources", json={"url": f"{web}/page.html"}).json()["job_id"])
+    rel = job["result"]["file"]
+    r = api.post(f"/v1/projects/{pid}/context", json={"question": "Ghi chu kien truc"})
+    assert r.status_code == 200, r.text
+    ctx = r.json()
+    assert any(i["code"]["file"] == rel and "BookService" in i["code"]["text"] for i in ctx["items"]), ctx
+
+
+def test_cli_refresh_without_data_dir_keeps_sources(api, project, web, capsys):
+    from nexgraph_engine.cli import _refresh
+    root, pid = project
+    job = wait_job(api, api.post(f"/v1/projects/{pid}/sources", json={"url": f"{web}/page.html"}).json()["job_id"])
+    rel = job["result"]["file"]
+    assert _refresh(root, None) in (0, 3)
+    assert api.get(f"/v1/projects/{pid}/nodes/{node_url(rel)}").status_code == 200
+
+
+@pytest.mark.parametrize("name", ["C:evil.md", "c:..", "a:b.md"])
+def test_drive_and_colon_names_rejected(tmp_path, name):
+    from nexgraph_engine.index.discovery import source_path
+    from nexgraph_engine.sources import remove_source
+    assert source_path(tmp_path / "proj", f"sources/{name}", tmp_path / "src") is None
+    assert remove_source(tmp_path, name) is False

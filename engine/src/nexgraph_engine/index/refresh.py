@@ -7,6 +7,7 @@ Kết quả phải bằng một lần lập chỉ mục đầy đủ trên cây 
 """
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +17,7 @@ from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import flows_before, rebuild_flows, update_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
-from nexgraph_engine.index.discovery import is_batch_language
+from nexgraph_engine.index.discovery import SOURCES_PREFIX, is_batch_language
 from nexgraph_engine.index.indexer import ExtractedFile, _git_head, add_batch_calls, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
@@ -53,7 +54,8 @@ def _ancestors(rel_path: str) -> list[str]:
 
 
 def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | None = None,
-                    sources_dir: Path | None = None) -> RefreshResult:
+                    sources_dir: Path | None = None, keep_sources: bool = False) -> RefreshResult:
+    """`keep_sources`: không biết gốc phụ (CLI thiếu --data-dir) nên giữ nguyên các tệp `sources/` không có trong dự án."""
     t0 = time.time()
     root = Path(root)
     scope = store.last_scope()
@@ -65,7 +67,8 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
     now = time.time()
 
     added = sorted(p for p in disk if p not in known)
-    removed = sorted(p for p in known if p not in disk)
+    removed = sorted(p for p in known if p not in disk
+                     and not (keep_sources and p.startswith(SOURCES_PREFIX) and not os.path.lexists(root / p)))
     modified: list[str] = []
     touched: list[DiscoveredFile] = []
     for p, f in disk.items():

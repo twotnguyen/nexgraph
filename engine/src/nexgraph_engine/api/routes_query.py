@@ -71,7 +71,8 @@ def ask(project_id: str, request: Request, body: AskBody) -> dict:
 def context(project_id: str, request: Request, body: ContextBody) -> dict:
     with open_store(request, project_id) as (store, info):
         try:
-            return build_context(store, info.path, body.question, body.budget)
+            return build_context(store, info.path, body.question, body.budget,
+                                 sources_dir=sources_root(request.app.state.services.data_dir, project_id))
         except ValueError as exc:
             raise ApiError(400, "bad_param", str(exc)) from exc
 
