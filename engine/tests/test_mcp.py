@@ -15,7 +15,7 @@ from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
 
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
          "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context",
-         "get_section"}
+         "get_section", "get_callers", "tests_for", "find"}
 
 
 @pytest.fixture
@@ -283,3 +283,37 @@ def test_get_section_tool(api, tmp_path):
     out = payload(call(server, "get_section", {"node_id": hits[0]["node"]["id"]}))
     assert out["text"].startswith("## Setup") and "sk-abcdefghijklmnopqrstuvwx1234" not in out["text"]
     assert call(server, "get_section", {"node_id": "README.md#file"}).isError is True
+
+
+LOGIN = "lib/services/auth_service.dart::AuthService.login#method"
+
+
+def test_get_callers_matches_neighbors_in_calls(indexed):
+    server = build_server(*indexed)
+    got = payload(call(server, "get_callers", {"node_id": LOGIN}))
+    want = payload(call(server, "get_neighbors", {"node_id": LOGIN, "types": ["CALLS"], "direction": "in"}))
+    assert got == want and got["edges"]
+
+
+def test_tests_for_tool_lists_test_nodes(indexed):
+    from nexgraph_engine.impact.analyze import tests_for
+    from nexgraph_engine.mcp.server import resolve_graph_db
+    from nexgraph_engine.schema.db import open_graph_db
+    server = build_server(*indexed)
+    got = payload(call(server, "tests_for", {"node_id": LOGIN}))
+    conn = open_graph_db(resolve_graph_db(*indexed), read_only=True)
+    try:
+        want = {n.id for n in tests_for(conn, LOGIN)}
+    finally:
+        conn.close()
+    assert got and all(n["is_test"] for n in got)
+    assert {n["id"] for n in got} == want
+
+
+def test_tests_for_unknown_node_is_tool_error(indexed):
+    assert call(build_server(*indexed), "tests_for", {"node_id": "nope#file"}).isError is True
+
+
+def test_find_with_kind_filters(indexed):
+    hits = payload(call(build_server(*indexed), "find", {"query": "AuthService", "kind": "class"}))
+    assert hits and all(h["node"]["kind"] == "class" for h in hits)

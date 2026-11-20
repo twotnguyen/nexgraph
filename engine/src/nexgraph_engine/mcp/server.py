@@ -31,6 +31,7 @@ from mcp.types import ToolAnnotations
 from nexgraph_engine import __version__
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
+from nexgraph_engine.impact.analyze import tests_for as tests_for_node
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.common import nodes_by_pk
 from nexgraph_engine.query.contracts import (
@@ -52,6 +53,7 @@ from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.report.build import report_json
 from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import NEXGRAPH_DIR, ProjectRegistry
 
@@ -61,7 +63,8 @@ SERVER_INSTRUCTIONS = (
     "Đồ thị tri thức của dự án đang mở trong NexGraph (Tree-sitter AST + cạnh gọi hàm / import / kế thừa / "
     "kiểm thử, mỗi cạnh có bằng chứng tệp:dòng). Dùng khi câu hỏi là về QUAN HỆ giữa các phần của mã:\n"
     "- tìm ký hiệu, tệp theo tên -> search\n"
-    "- ai gọi / import / kế thừa X -> get_neighbors direction=in\n"
+    "- ai gọi X -> get_callers; ai import / kế thừa X -> get_neighbors direction=in\n"
+    "- test nào kiểm X -> tests_for\n"
     "- X gọi / dùng gì -> get_neighbors direction=out\n"
     "- các khối kiến trúc và mũi tên giữa chúng -> get_architecture, rồi get_evidence để lấy tệp:dòng\n"
     "- sửa X thì ảnh hưởng đâu, test nào liên quan -> get_impact\n"
@@ -246,6 +249,26 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
         tối đa 8.000 ký tự. stale=true nghĩa là tệp đã đổi sau lần lập chỉ mục."""
         return await run("get_section", lambda s: section_json(s, root, node_id,
                                                                source=SourcePolicy(root, s.last_exclude())))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_callers(node_id: str, depth: int = 1, limit: int = 200) -> dict:
+        """Ai gọi nút này (cạnh CALLS chiều vào), depth 1–3."""
+        return await run("get_callers", lambda s: neighbors_json(
+            s, node_id, {EdgeType.CALLS}, "in", max(1, min(depth, 3)), max(1, min(limit, 2000))))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def tests_for(node_id: str) -> list[dict]:
+        """Test kiểm nút này: test gọi thẳng nút hoặc gọi một hàm gọi nó (tối đa 2 bước)."""
+        def body(s: GraphStore) -> list[dict]:
+            if s.get_node(node_id) is None:
+                raise ToolError(f"Không có nút {node_id}")
+            return [node_json(n) for n in tests_for_node(s.conn, node_id)]
+        return await run("tests_for", body)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def find(query: str, kind: str | None = None, limit: int = 20) -> list[dict]:
+        """Như search, lọc theo một loại nút (class, function, method, document...)."""
+        return await run("find", lambda s: search_json(s, query, [kind] if kind else None, max(1, min(limit, 100))))
 
     return mcp
 
