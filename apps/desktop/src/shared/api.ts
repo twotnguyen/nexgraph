@@ -15,6 +15,7 @@ import type {
 } from './graph-types'
 import type { IndexSources } from './graph-types'
 import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from './graph-types'
+import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -229,5 +230,15 @@ export interface NexGraphApi {
     /** Engine đổi trích dẫn tệp:dòng sang node. */
     rate(projectId: string, rating: AnswerRating): Promise<{ id: number; node_ids: string[] }>
     lessons(projectId: string): Promise<Lessons>
+  }
+  /** Graph chung nhiều repo (W8). Thêm/gỡ chạy lại job nối cạnh liên repo; theo dõi bằng `index.status`. */
+  globalGraph: {
+    list(): Promise<GlobalMember[]>
+    add(projectId: string): Promise<{ jobId: string }>
+    remove(projectId: string): Promise<void>
+    search(q: string, limit?: number): Promise<GlobalSearchHit[]>
+    graph(projectIds: string[], limit?: number): Promise<GlobalGraph>
+    /** Hộp thoại chọn thư mục ở main rồi ghi graph.json gộp; `null` khi huỷ. */
+    export(projectIds: string[]): Promise<GlobalExportResult | null>
   }
 }

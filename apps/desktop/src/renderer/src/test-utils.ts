@@ -99,7 +99,10 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     memory: { recall: vi.fn(async (): Promise<MemoryRecall> => ({ memories: [] })), add: vi.fn(async () => ({ id: 1, created: true })),
       rate: vi.fn(async () => ({ id: 1, node_ids: [] })),
       lessons: vi.fn(async () => ({ total: 0, min_corroboration: 2, counts: { useful: 0, dead_end: 0, corrected: 0, unmarked: 0 },
-        preferred: [], tentative: [], contested: [], dead_ends: [], corrections: [], labels: {} })), ...over.memory }
+        preferred: [], tentative: [], contested: [], dead_ends: [], corrections: [], labels: {} })), ...over.memory },
+    globalGraph: { list: vi.fn(async () => []), add: vi.fn(async () => ({ jobId: 'g1' })), remove: vi.fn(async () => {}),
+      search: vi.fn(async () => []), graph: vi.fn(async () => ({ projects: [], nodes: [], edges: [], truncated: false, skipped: [] })),
+      export: vi.fn(async () => null), ...over.globalGraph }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }

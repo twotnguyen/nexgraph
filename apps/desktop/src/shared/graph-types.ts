@@ -420,3 +420,36 @@ export interface Lessons {
   labels: Record<string, string>
 }
 export interface AnswerRating { question: string; answer: string; outcome: RatingOutcome; correction?: string; citations: { file: string; line: number }[] }
+
+/** Graph chung nhiều repo (W8). */
+export interface GlobalMember {
+  project_id: string
+  /** `null` khi dự án đã bị gỡ khỏi ứng dụng. */
+  name: string | null
+  path: string | null
+  added_at: number
+  /** `false` khi dự án đã gỡ, mất thư mục hoặc chưa có đồ thị: bị bỏ qua khi tìm và xem chung. */
+  available: boolean
+}
+
+export interface GlobalSearchHit extends SearchHit {
+  project_id: string
+  project_name: string
+}
+
+export interface GlobalGraph {
+  projects: { project_id: string; name: string }[]
+  /** Id nút dạng `<project_id>::<id nút>`. */
+  nodes: (GraphNode & { project_id: string })[]
+  edges: (GraphEdge & { cross_repo?: boolean })[]
+  truncated: boolean
+  skipped: string[]
+}
+
+export interface GlobalExportResult {
+  files: string[]
+  nodes: number
+  edges: number
+  truncated: boolean
+  skipped: string[]
+}

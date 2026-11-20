@@ -98,4 +98,39 @@ describe('ProjectsScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tải về và mở' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Chỉ nhận URL https://github.com')
   })
+
+  it('adds a recent project to the shared graph and removes a member', async () => {
+    const a = project({ project_id: 'pa', name: 'thư viện', path: '/a' })
+    const b = project({ project_id: 'pb', name: 'ứng dụng', path: '/b' })
+    const members = vi.fn(async () => [{ project_id: 'pa', name: 'thư viện', path: '/a', added_at: 1, available: true }])
+    const { api } = installNexgraph({ project: { list: vi.fn(async () => [a, b]) }, globalGraph: { list: members } })
+    render(<ProjectsScreen engineReady onOpened={() => {}} onOpenGlobal={() => {}} />)
+    const group = await screen.findByRole('region', { name: 'Graph chung' })
+    expect(await within(group).findByRole('checkbox', { name: 'thư viện' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Thêm thư viện vào graph chung' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Thêm ứng dụng vào graph chung' }))
+    expect(api.globalGraph.add).toHaveBeenCalledWith('pb')
+    await userEvent.click(within(group).getByRole('button', { name: 'Gỡ thư viện khỏi graph chung' }))
+    expect(api.globalGraph.remove).toHaveBeenCalledWith('pa')
+  })
+
+  it('opens the combined view with the selected members', async () => {
+    const members = [
+      { project_id: 'pa', name: 'thư viện', path: '/a', added_at: 1, available: true },
+      { project_id: 'pb', name: 'ứng dụng', path: '/b', added_at: 2, available: true },
+      { project_id: 'pc', name: null, path: null, added_at: 3, available: false }
+    ]
+    installNexgraph({ globalGraph: { list: vi.fn(async () => members) } })
+    const onOpenGlobal = vi.fn()
+    render(<ProjectsScreen engineReady onOpened={() => {}} onOpenGlobal={onOpenGlobal} />)
+    const group = await screen.findByRole('region', { name: 'Graph chung' })
+    const view = within(group).getByRole('button', { name: 'Xem chung' })
+    await within(group).findByRole('checkbox', { name: 'thư viện' })
+    expect(view).toBeDisabled()
+    await userEvent.click(within(group).getByRole('checkbox', { name: 'thư viện' }))
+    await userEvent.click(within(group).getByRole('checkbox', { name: 'ứng dụng' }))
+    expect(within(group).getByRole('checkbox', { name: /Không còn dùng được/ })).toBeDisabled()
+    await userEvent.click(view)
+    expect(onOpenGlobal).toHaveBeenCalledWith(['pa', 'pb'])
+  })
 })

@@ -541,4 +541,21 @@ export function registerIpc(
   on('memory:add', (pid: string, kind: MemoryKind, text: string, nodeIds: string[]) => api().addMemory(pid, kind, text, nodeIds))
   on('memory:rate', (pid: string, rating: AnswerRating) => api().rateAnswer(pid, rating))
   on('memory:lessons', (pid: string) => api().lessons(pid))
+  // Graph chung nhiều repo (W8): thư mục xuất chọn ở main, renderer không gửi path.
+  on('global:list', () => api().globalList())
+  on('global:add', async (pid: string) => ({ jobId: (await api().globalAdd(pid)).job_id }))
+  on('global:remove', (pid: string) => api().globalRemove(pid))
+  on('global:search', (q: string, limit?: number) => api().globalSearch(q, limit))
+  on('global:graph', (pids: string[], limit?: number) => api().globalGraph(pids, limit))
+  on('global:export', async (pids: string[]) => {
+    const win = getWindow()
+    const opts = {
+      properties: ['openDirectory' as const, 'createDirectory' as const],
+      title: 'Chọn thư mục lưu graph.json gộp',
+      defaultPath: app.getPath('downloads')
+    }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || !r.filePaths[0]) return null
+    return api().globalExport(pids, r.filePaths[0])
+  })
 }

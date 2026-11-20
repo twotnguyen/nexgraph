@@ -15,3 +15,15 @@ class Services:
         self.locks = ProjectLocks()
         self.jobs = JobManager(self.registry, self.bus, locks=self.locks)
         self.refresh = RefreshService(self.registry, self.bus, self.jobs, self.locks)
+        self.jobs.on_index_done.append(self._relink_if_member)
+
+    # --- graph chung (W8) ---------------------------------------------------------------------------
+    def relink_global(self) -> str:
+        """Job tính lại cạnh liên repo; không khoá dự án nào vì chỉ đọc CSDL của chúng."""
+        from nexgraph_engine.global_graph.link import relink
+        return self.jobs.start_task(None, "global_link", lambda ctx: relink(self.data_dir, self.registry))
+
+    def _relink_if_member(self, project_id: str) -> None:
+        from nexgraph_engine.global_graph.store import GlobalStore
+        if any(pid == project_id for pid, _ in GlobalStore(self.data_dir).members(read_only=True)):
+            self.relink_global()

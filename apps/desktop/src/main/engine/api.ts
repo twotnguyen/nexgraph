@@ -7,6 +7,7 @@ import type {
   SourceItem
 } from '../../shared/graph-types'
 import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from '../../shared/graph-types'
+import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
 
 export class EngineApiError extends Error {
@@ -242,5 +243,28 @@ export class EngineApi {
   }
   lessons(pid: string): Promise<Lessons> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/lessons`)
+  }
+  // Graph chung nhiều repo (W8)
+  globalList(): Promise<GlobalMember[]> {
+    return this.request('GET', '/v1/global/projects')
+  }
+  globalAdd(pid: string): Promise<{ project_id: string; job_id: string }> {
+    return this.request('POST', '/v1/global/projects', { project_id: pid })
+  }
+  async globalRemove(pid: string): Promise<void> {
+    await this.request('DELETE', `/v1/global/projects/${encodeURIComponent(pid)}`)
+  }
+  globalSearch(q: string, limit?: number): Promise<GlobalSearchHit[]> {
+    const params = new URLSearchParams({ q })
+    if (limit != null) params.set('limit', String(limit))
+    return this.request('GET', `/v1/global/search?${params}`)
+  }
+  globalGraph(pids: string[], limit?: number): Promise<GlobalGraph> {
+    const params = new URLSearchParams({ projects: pids.join(',') })
+    if (limit != null) params.set('limit', String(limit))
+    return this.request('GET', `/v1/global/graph?${params}`, undefined, AbortSignal.timeout(60_000))
+  }
+  globalExport(pids: string[], outDir: string): Promise<GlobalExportResult> {
+    return this.request('POST', '/v1/global/export', { out_dir: outDir, projects: pids }, AbortSignal.timeout(120_000))
   }
 }

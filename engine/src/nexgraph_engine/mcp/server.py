@@ -107,7 +107,7 @@ async def _offload(tool_name: str, work: Callable[[], Any]) -> Any:
         raise ToolError(f"{tool_name} quá {timeout:g}s") from exc
 
 
-def build_server(project: Path, data_dir: Path | None) -> FastMCP:
+def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = False) -> FastMCP:
     root = project.resolve()
     graph_db = resolve_graph_db(root, data_dir)
     mcp = FastMCP("nexgraph", instructions=SERVER_INSTRUCTIONS)
@@ -311,7 +311,80 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     resource_json("nexgraph://questions", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()), src(s))["questions"], "Câu hỏi gợi ý để khám phá graph.")
     resource_json("nexgraph://audit", audit_json, "Tỉ lệ cạnh EXTRACTED/INFERRED/AMBIGUOUS và lỗi phân tích.")
 
+    if global_graph:
+        _add_global_tools(mcp, root, graph_db, data_dir)
     return mcp
+
+
+def _add_global_tools(mcp: FastMCP, root: Path, graph_db: Path, data_dir: Path | None) -> None:
+    """`--global` (W8): thêm `list_repositories`, thay `query_graph` bằng bản nhận `repository`. Đều chỉ đọc."""
+    from nexgraph_engine.global_graph.store import GlobalStore
+
+    if data_dir is None:
+        raise ProjectNotIndexed("--global cần --data-dir (graph chung nằm ở <data_dir>/global.db)")
+    registry = ProjectRegistry(data_dir, read_only=True)
+    store_global = GlobalStore(data_dir)
+
+    def repositories() -> list[dict]:
+        edges = store_global.edges(read_only=True)
+        out = []
+        for pid, _ in store_global.members(read_only=True):
+            info = registry.get(pid)
+            out.append({"project_id": pid, "name": info.name if info else None,
+                        "available": bool(info and info.path.is_dir() and info.graph_db.is_file()),
+                        "current": bool(info and info.graph_db.resolve() == graph_db.resolve()),
+                        "cross_edges": sum(pid in (e["du_an_nguon"], e["du_an_dich"]) for e in edges)})
+        return out
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def list_repositories() -> list[dict]:
+        """Các dự án trong graph chung (id, tên, còn mở được không, có phải dự án hiện tại, số cạnh liên repo)."""
+        return await _offload("list_repositories", repositories)
+
+    mcp.remove_tool("query_graph")
+
+    @mcp.tool(annotations=READ_ONLY, name="query_graph")
+    async def query_graph_global(question: str, depth: int = 2, budget: int = 2000,
+                                 mode: Literal["bfs", "dfs"] = "bfs", repository: str | None = None) -> dict:
+        """Hỏi đồ thị bằng câu tự do. repository = id hoặc tên dự án trong graph chung (xem list_repositories);
+        bỏ trống là dự án hiện tại. Kết quả kèm cross_repo: cạnh liên repo chạm các nút tìm được."""
+        def work() -> dict:
+            if repository is None:
+                pid, db, base = None, graph_db, root
+            else:
+                found = [r for r in repositories() if repository in (r["project_id"], r["name"])]
+                if len(found) != 1 or not found[0]["available"]:
+                    raise ToolError(f"Không có dự án {repository} trong graph chung (gọi list_repositories)")
+                info = registry.get(found[0]["project_id"])
+                pid, db, base = info.project_id, info.graph_db, info.path
+            try:
+                conn = open_graph_db(db, read_only=True)
+            except (sqlite3.Error, OSError) as exc:
+                raise ToolError(f"Không mở được dữ liệu đồ thị: {exc}") from exc
+            try:
+                s = GraphStore(conn)
+                if not s.has_published_graph():
+                    raise ToolError("Dự án chưa được lập chỉ mục xong")
+                pid = pid or s.project_id()
+                try:
+                    out = ask_graph(s, question, max(1, min(depth, 6)), max(1, min(budget, 100_000)), mode)
+                except ValueError as exc:
+                    raise ToolError(str(exc)) from exc
+                touch_query_stamp(data_dir, project_id_of(s.conn))
+                ids = {n["id"] for n in out.get("nodes", [])}
+                cross = []
+                for e in store_global.edges(read_only=True):
+                    for side, other, direction in (("nguon", "dich", "out"), ("dich", "nguon", "in")):
+                        if e[f"du_an_{side}"] == pid and e[f"id_nut_{side}"] in ids:
+                            cross.append({"node_id": e[f"id_nut_{side}"], "direction": direction,
+                                          "other_project_id": e[f"du_an_{other}"], "other_node_id": e[f"id_nut_{other}"],
+                                          "type": e["loai_canh"], "subtype": e["loai_con"]})
+                return ModelGraph(s, base).filter({**out, "repository": pid, "cross_repo": cross})
+            except ApiError as exc:
+                raise ToolError(exc.message) from exc
+            finally:
+                conn.close()
+        return await _offload("query_graph", work)
 
 
 def community_json(store: GraphStore, community_id: str, limit: int) -> dict:
@@ -348,13 +421,13 @@ class ApiKeyMiddleware:
         await self.app(scope, receive, send)
 
 
-def run_http(project: Path, data_dir: Path | None, port: int, key: str) -> int:
+def run_http(project: Path, data_dir: Path | None, port: int, key: str, global_graph: bool = False) -> int:
     import json
     import socket
 
     import uvicorn
 
-    mcp = build_server(project, data_dir)
+    mcp = build_server(project, data_dir, global_graph=global_graph)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.bind(("127.0.0.1", port))
     sock.listen(128)
@@ -365,6 +438,6 @@ def run_http(project: Path, data_dir: Path | None, port: int, key: str) -> int:
     return 0
 
 
-def run_stdio(project: Path, data_dir: Path | None) -> int:
-    build_server(project, data_dir).run("stdio")
+def run_stdio(project: Path, data_dir: Path | None, global_graph: bool = False) -> int:
+    build_server(project, data_dir, global_graph=global_graph).run("stdio")
     return 0

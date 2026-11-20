@@ -37,6 +37,8 @@ def _build_parser() -> argparse.ArgumentParser:
     mcp.add_argument("--http", action="store_true",
                      help="Streamable HTTP tại 127.0.0.1 thay vì stdio; cần NEXGRAPH_MCP_KEY (>=32 ký tự)")
     mcp.add_argument("--port", type=int, default=0)
+    mcp.add_argument("--global", dest="global_graph", action="store_true",
+                     help="Graph chung nhiều repo: thêm list_repositories, query_graph nhận repository (cần --data-dir)")
     refresh = sub.add_parser("refresh", help="Cập nhật tăng dần đồ thị của một dự án đã lập chỉ mục (dùng cho git hook)")
     refresh.add_argument("--project", required=True, type=Path)
     refresh.add_argument("--data-dir", type=Path, default=None)
@@ -273,8 +275,8 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
         try:
             if args.http:
-                return run_http(args.project, args.data_dir, args.port, key)
-            return run_stdio(args.project, args.data_dir)
+                return run_http(args.project, args.data_dir, args.port, key, args.global_graph)
+            return run_stdio(args.project, args.data_dir, args.global_graph)
         except ProjectNotIndexed as exc:
             print(str(exc), file=sys.stderr)  # stdout dành riêng cho giao thức MCP
             return 3

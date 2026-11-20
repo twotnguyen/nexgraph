@@ -174,6 +174,14 @@ const api: NexGraphApi = {
     add: (pid, kind, text, nodeIds) => call('memory:add', pid, kind, text, nodeIds),
     rate: (pid, rating) => call('memory:rate', pid, rating),
     lessons: (pid) => call('memory:lessons', pid)
+  },
+  globalGraph: {
+    list: () => call('global:list'),
+    add: (pid) => call('global:add', pid),
+    remove: (pid) => call('global:remove', pid),
+    search: (q, limit) => call('global:search', q, limit),
+    graph: (pids, limit) => call('global:graph', pids, limit),
+    export: (pids) => call('global:export', pids)
   }
 }
 

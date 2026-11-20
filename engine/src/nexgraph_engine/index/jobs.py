@@ -56,6 +56,8 @@ class JobManager:
         self._publishing: set[str] = set()
         self._threads: list[threading.Thread] = []
         self._lock = threading.Lock()
+        # Gọi với project_id sau khi job index công bố đồ thị mới (W8: tính lại cạnh liên repo).
+        self.on_index_done: list[Callable[[str], None]] = []
 
     def start_index(self, project_id: str, *, subdir: str | None = None, exclude: list[str] | None = None,
                     include_docs: bool | None = None, include_media: bool | None = None,
@@ -194,6 +196,11 @@ class JobManager:
         self._bus.publish({"type": "job_progress", **snapshot})
         if e.state == "done":  # đồ thị mới đã được xuất bản
             self._bus.publish({"type": "graph_updated", "project_id": snapshot["project_id"]})
+            for hook in list(self.on_index_done):
+                try:
+                    hook(snapshot["project_id"])
+                except Exception:  # móc phụ không được làm hỏng job index đã xong
+                    pass
 
     def _run(self, job_id: str, info: ProjectInfo, cancel: threading.Event, subdir: str | None,
              exclude: list[str] | None = None, include_docs: bool | None = None,

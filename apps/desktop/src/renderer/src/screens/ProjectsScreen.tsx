@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ProjectSummary } from '@shared/graph-types'
+import type { GlobalMember, ProjectSummary } from '@shared/graph-types'
 import { Icon } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
 import { waitJob } from '../state/waitJob'
@@ -10,6 +10,8 @@ interface Props {
   engineReady: boolean
   onOpened: (p: ProjectSummary) => void
   onOpenSettings?: () => void
+  /** "Xem chung" của nhóm Graph chung (W8). */
+  onOpenGlobal?: (projectIds: string[]) => void
 }
 
 function message(err: unknown) {
@@ -47,7 +49,7 @@ function RemoveProjectDialog({ project, busy, onCancel, onRemove }: {
   )
 }
 
-export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props) {
+export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGlobal }: Props) {
   const [recent, setRecent] = useState<ProjectSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [refresh, setRefresh] = useState(0)
@@ -59,6 +61,9 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props)
   const [cloneUrl, setCloneUrl] = useState<string | null>(null)
   const [cloneStatus, setCloneStatus] = useState<string | null>(null)
   const cloneJob = useRef<string | null>(null)
+  const [members, setMembers] = useState<GlobalMember[]>([])
+  const [picked, setPicked] = useState<string[]>([])
+  const [membersVersion, setMembersVersion] = useState(0)
   const operation = useRef(false)
   const mounted = useRef(false)
   const openButton = useRef<HTMLButtonElement>(null)
@@ -78,6 +83,21 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props)
     ).finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [engineReady, refresh])
+
+  useEffect(() => {
+    if (!engineReady) return
+    let alive = true
+    void window.nexgraph.globalGraph.list().then((list) => { if (alive) setMembers(list) }, () => {})
+    return () => { alive = false }
+  }, [engineReady, refresh, membersVersion])
+
+  function changeMembership(action: () => Promise<unknown>) {
+    setError(null)
+    void action().then(() => { if (mounted.current) setMembersVersion((v) => v + 1) },
+      (err) => { if (mounted.current) setError(message(err)) })
+  }
+
+  const memberIds = new Set(members.map((m) => m.project_id))
 
   async function run(kind: 'open' | 'remove' | 'clone', action: () => Promise<void>) {
     if (operation.current || !engineReady) return
@@ -209,9 +229,49 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props)
                     </span>
                     <Icon name="chevron" size={16} />
                   </button>
+                  {!memberIds.has(project.project_id) && (
+                    <button type="button" className="icon-button recent-remove recent-join" title={vi.globalGraph.addTo(project.name)}
+                      aria-label={vi.globalGraph.addTo(project.name)} disabled={!engineReady || pending !== null}
+                      onClick={() => changeMembership(() => window.nexgraph.globalGraph.add(project.project_id))}><Icon name="graph" size={16} /></button>
+                  )}
                   <button type="button" className="icon-button recent-remove" title="Gỡ khỏi danh sách"
                     aria-label={`Gỡ ${project.name} khỏi danh sách`} disabled={!engineReady || loading || pending !== null}
                     onClick={() => setRemoving(project)}><Icon name="close" size={16} /></button>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </section>
+      <section className="workbench-panel projects-panel" aria-labelledby="global-heading">
+        <header className="projects-recent-heading">
+          <h2 id="global-heading">{vi.globalGraph.title}</h2>
+          <button type="button" className="primary" disabled={!engineReady || picked.length < 2 || !onOpenGlobal}
+            title={vi.globalGraph.viewHint} onClick={() => onOpenGlobal?.(picked)}>
+            <Icon name="graph" size={16} /> {vi.globalGraph.view}
+          </button>
+        </header>
+        <p className="panel-instruction muted">{members.length ? vi.globalGraph.hint : vi.globalGraph.empty}</p>
+        {members.length > 0 && (
+          <ul className="recent">
+            {members.map((m) => {
+              const name = m.name ?? m.project_id
+              return (
+                <li key={m.project_id}>
+                  <label className="recent-open global-member">
+                    <input type="checkbox" aria-label={m.available ? name : `${name}: ${vi.globalGraph.unavailable}`} disabled={!m.available} checked={picked.includes(m.project_id)}
+                      onChange={(e) => setPicked((ids) => e.target.checked ? [...ids, m.project_id] : ids.filter((id) => id !== m.project_id))} />
+                    <span className="recent-identity"><b>{name}</b>
+                      {!m.available ? <span className="muted">{vi.globalGraph.unavailable}</span>
+                        : m.path && <span className="muted mono" title={m.path}>{m.path}</span>}
+                    </span>
+                  </label>
+                  <button type="button" className="icon-button recent-remove" title={vi.globalGraph.removeFrom(name)}
+                    aria-label={vi.globalGraph.removeFrom(name)} disabled={!engineReady}
+                    onClick={() => {
+                      setPicked((ids) => ids.filter((id) => id !== m.project_id))
+                      changeMembership(() => window.nexgraph.globalGraph.remove(m.project_id))
+                    }}><Icon name="close" size={16} /></button>
                 </li>
               )
             })}
