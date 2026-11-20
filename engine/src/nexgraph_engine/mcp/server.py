@@ -62,7 +62,7 @@ from nexgraph_engine.sources import sources_root
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.projects import ProjectNotIndexed, resolve_graph_db  # noqa: F401 (cli, test dùng qua module này)
+from nexgraph_engine.store.projects import ProjectNotIndexed, ProjectRegistry, resolve_graph_db  # noqa: F401 (cli, test dùng qua module này)
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 # Ngoại lệ duy nhất (ADR 0019): `remember` ghi bảng ký ức trong CSDL của NexGraph, không ghi tệp dự án.
@@ -405,7 +405,7 @@ def _add_global_tools(mcp: FastMCP, root: Path, graph_db: Path, data_dir: Path |
                     out = ask_graph(s, question, max(1, min(depth, 6)), max(1, min(budget, 100_000)), mode)
                 except ValueError as exc:
                     raise ToolError(str(exc)) from exc
-                touch_query_stamp(data_dir, project_id_of(s.conn))
+                touch_query_stamp(data_dir, s.project_id())
                 ids = {n["id"] for n in out.get("nodes", [])}
                 cross = []
                 for e in store_global.edges(read_only=True):
