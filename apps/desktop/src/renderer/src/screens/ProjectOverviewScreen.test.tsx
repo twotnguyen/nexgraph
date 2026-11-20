@@ -61,7 +61,8 @@ describe('ProjectOverviewScreen', () => {
     await userEvent.type(screen.getByLabelText('Mẫu bỏ qua'), 'gen/{Enter}vendor/{Enter}{Enter}')
     expect(screen.getByLabelText(/Số tiến trình/)).not.toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
-    expect(props.onReindex).toHaveBeenCalledWith({ exclude: ['gen/', 'vendor/'], includeDocs: false, includeMedia: false, includeConfig: false, force: false })
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: ['gen/', 'vendor/'], includeDocs: false, includeMedia: false, includeConfig: false, force: false,
+      sources: { postgres: false, cargo: false, manifests: false, scipFiles: [], mcpFiles: [] } })
   })
 
   it('tuỳ chọn index gồm tài liệu, audio/video chỉ bật được sau khi bật tài liệu', async () => {
@@ -72,7 +73,8 @@ describe('ProjectOverviewScreen', () => {
     await userEvent.click(screen.getByLabelText(/Gồm tài liệu/))
     expect(media).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
-    expect(props.onReindex).toHaveBeenCalledWith({ exclude: [], includeDocs: true, includeMedia: false, includeConfig: false, force: false })
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: [], includeDocs: true, includeMedia: false, includeConfig: false, force: false,
+      sources: { postgres: false, cargo: false, manifests: false, scipFiles: [], mcpFiles: [] } })
   })
 
   it('thiếu faster-whisper thì khoá ô audio/video và nói cần cài', async () => {
