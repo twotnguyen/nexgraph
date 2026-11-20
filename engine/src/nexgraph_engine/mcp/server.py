@@ -50,6 +50,9 @@ from nexgraph_engine.query.contracts import (
     stats_json,
 )
 from nexgraph_engine.query.context import build_context
+from nexgraph_engine.prs.gh import GhError
+from nexgraph_engine.prs.listing import list_prs_json, triage_json
+from nexgraph_engine.prs.review import pr_detail_json, review_status_json
 from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.query.paths import find_paths
 from nexgraph_engine.query.section import section_json
@@ -84,6 +87,8 @@ SERVER_INSTRUCTIONS = (
     "- từ một hàm bất kỳ gọi tiếp tới đâu -> trace_flow entry=<id nút>\n"
     "- trước khi sửa một nút, xem bài học/quyết định/sự cố/người phụ trách đã ghi -> recall node_id=<id nút>\n"
     "- ghi lại bài học, quyết định, sự cố, người phụ trách gắn với nút -> remember\n"
+    "- PR nào đang mở, nên review PR nào trước -> list_prs, triage_prs; một PR ảnh hưởng đâu, test nào cần chạy "
+    "-> get_pr_impact, review_status\n"
     "Trước khi tin kết quả, gọi graph_stats một lần: stale=true nghĩa là mã nguồn đã đổi sau lần lập chỉ mục, "
     "hãy đọc lại tệp bằng read_code để xác nhận.\n"
     "Khi trả lời, trích dẫn dạng tệp:dòng lấy từ kết quả tool; không bịa đường đi không có trong đồ thị. "
@@ -294,6 +299,36 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
         return await run("recall", body)
+
+    # Pull request (W7): gọi `gh` chỉ đọc trong thư mục dự án; lỗi `gh` và số PR lạ thành lỗi tool đọc được.
+    def pr_call(work: Callable[[], Any]) -> Any:
+        try:
+            return work()
+        except (GhError, ValueError) as exc:
+            raise ToolError(str(exc)) from exc
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def list_prs(limit: int = 50) -> dict:
+        """PR đang mở trên GitHub: nhãn (WRONG-BASE, CI-FAIL, CHANGES-REQ, DRAFT, STALE, PENDING, APPROVED, READY),
+        tệp đổi, số nút bị ảnh hưởng, và các cặp PR xung đột (cùng tệp hoặc cùng vùng ảnh hưởng). Cần `gh` đã đăng nhập."""
+        return await run("list_prs", lambda s: pr_call(lambda: list_prs_json(s, root, max(1, min(limit, 100)))))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_pr_impact(pr_number: int) -> dict:
+        """Ảnh hưởng và review cục bộ của một PR (không checkout): nút đổi, vùng ảnh hưởng có điểm, test liên quan,
+        symbol đổi thiếu test, tài liệu có thể cũ, code có thể không còn ai gọi, test nên chạy và lệnh gợi ý."""
+        return await run("get_pr_impact", lambda s: pr_call(lambda: pr_detail_json(s, root, pr_number)))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def triage_prs() -> dict:
+        """Hàng đợi review xếp theo luật (bỏ PR sai nhánh gốc và PR cũ), kèm việc nên làm cho từng PR."""
+        return await run("triage_prs", lambda s: pr_call(lambda: triage_json(list_prs_json(s, root))))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def review_status(pr_number: int) -> dict:
+        """Tóm tắt review cục bộ của một PR: gate pass|advisory, số phát hiện, các phát hiện đầu và test nên chạy.
+        Không đăng gì lên GitHub."""
+        return await run("review_status", lambda s: pr_call(lambda: review_status_json(pr_detail_json(s, root, pr_number))))
 
     def resource_json(uri: str, body: Callable[[GraphStore], Any], doc: str) -> None:
         async def read() -> str:

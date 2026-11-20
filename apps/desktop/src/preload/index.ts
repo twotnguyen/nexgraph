@@ -182,6 +182,11 @@ const api: NexGraphApi = {
     search: (q, limit) => call('global:search', q, limit),
     graph: (pids, limit) => call('global:graph', pids, limit),
     export: (pids) => call('global:export', pids)
+  },
+  prs: {
+    status: (pid) => call('prs:status', pid),
+    list: (pid) => call('prs:list', pid),
+    detail: (pid, n) => call('prs:detail', pid, n)
   }
 }
 

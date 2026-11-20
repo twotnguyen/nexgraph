@@ -104,6 +104,23 @@ describe('WorkspaceScreen', () => {
     expect(await screen.findByText(/Chưa đủ dữ liệu/)).toBeInTheDocument()
   })
 
+  it('tab Pull request chỉ hiện khi gh dùng được', async () => {
+    const status = vi.fn(async () => ({ available: true, reason: null, repo: 'acme/demo', default_branch: 'main' }))
+    const list = vi.fn(async () => ({ repo: 'acme/demo', default_branch: 'main', base: 'main', prs: [], conflicts: [], truncated: false }))
+    installNexgraph({ prs: { status, list } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('tab', { name: 'Pull request' }))
+    expect(await screen.findByText('Không có pull request nào đang mở.')).toBeInTheDocument()
+    expect(status).toHaveBeenCalledWith('p1')
+  })
+
+  it('ẩn tab Pull request khi thiếu gh', async () => {
+    const { api } = installNexgraph()
+    render(<WorkspaceScreen project={project()} />)
+    await waitFor(() => expect(api.prs.status).toHaveBeenCalled())
+    expect(screen.queryByRole('tab', { name: 'Pull request' })).not.toBeInTheDocument()
+  })
+
   it('mở Kiến trúc ở giữa, cây tệp bên trái và trợ lý bên phải', () => {
     setup()
     expect(screen.getByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()

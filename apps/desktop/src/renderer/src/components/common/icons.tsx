@@ -27,7 +27,8 @@ const PATHS = {
   close: <path d="m6 6 12 12M18 6 6 18" />,
   chevron: <path d="m9 6 6 6-6 6" />,
   check: <path d="m5 12 4 4L19 6" />,
-  commit: <><circle cx="12" cy="12" r="3.5" /><path d="M3 12h5.5M15.5 12H21" /></>
+  commit: <><circle cx="12" cy="12" r="3.5" /><path d="M3 12h5.5M15.5 12H21" /></>,
+  pr: <><circle cx="6" cy="5" r="2" /><circle cx="6" cy="19" r="2" /><circle cx="18" cy="19" r="2" /><path d="M6 7v10M18 17V9a3 3 0 0 0-3-3h-4M13 4l-2 2 2 2" /></>
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof PATHS

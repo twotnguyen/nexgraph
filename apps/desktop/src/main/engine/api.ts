@@ -8,6 +8,7 @@ import type {
 } from '../../shared/graph-types'
 import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from '../../shared/graph-types'
 import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from '../../shared/graph-types'
+import type { PrAvailability, PrDetail, PrList } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
 
 export class EngineApiError extends Error {
@@ -266,5 +267,16 @@ export class EngineApi {
   }
   globalExport(pids: string[], outDir: string): Promise<GlobalExportResult> {
     return this.request('POST', '/v1/global/export', { out_dir: outDir, projects: pids }, AbortSignal.timeout(120_000))
+  }
+  // Mỗi lời gọi `gh` trong engine có timeout 30 s; danh sách gồm `repo view` + `pr list`, chi tiết thêm `pr view` + `pr diff`.
+  prStatus(pid: string): Promise<PrAvailability> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/prs/status`, undefined, AbortSignal.timeout(40_000))
+  }
+  listPrs(pid: string): Promise<PrList> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/prs`, undefined, AbortSignal.timeout(75_000))
+  }
+  async prDetail(pid: string, n: number): Promise<PrDetail> {
+    if (!Number.isSafeInteger(n) || n < 1) throw new EngineApiError(400, 'bad_param', 'Số pull request không hợp lệ')
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/prs/${n}`, undefined, AbortSignal.timeout(100_000))
   }
 }

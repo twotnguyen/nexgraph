@@ -102,7 +102,9 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
         preferred: [], tentative: [], contested: [], dead_ends: [], corrections: [], labels: {} })), ...over.memory },
     globalGraph: { list: vi.fn(async () => []), add: vi.fn(async () => ({ jobId: 'g1' })), remove: vi.fn(async () => {}),
       search: vi.fn(async () => []), graph: vi.fn(async () => ({ projects: [], nodes: [], edges: [], truncated: false, skipped: [] })),
-      export: vi.fn(async () => null), ...over.globalGraph }
+      export: vi.fn(async () => null), ...over.globalGraph },
+    prs: { status: vi.fn(async () => ({ available: false, reason: 'gh_missing' as const, repo: null, default_branch: null })),
+      list: vi.fn(), detail: vi.fn(), ...over.prs }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }

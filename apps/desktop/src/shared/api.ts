@@ -16,6 +16,7 @@ import type {
 import type { IndexSources } from './graph-types'
 import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from './graph-types'
 import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from './graph-types'
+import type { PrAvailability, PrDetail, PrList } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -240,5 +241,12 @@ export interface NexGraphApi {
     graph(projectIds: string[], limit?: number): Promise<GlobalGraph>
     /** Hộp thoại chọn thư mục ở main rồi ghi graph.json gộp; `null` khi huỷ. */
     export(projectIds: string[]): Promise<GlobalExportResult | null>
+  }
+  /** Pull request của GitHub qua `gh` (W7), chỉ đọc. Lỗi có `code`: `gh_missing` | `gh_auth` | `not_github` | `gh_timeout` | `gh_failed` | `pr_not_found`. */
+  prs: {
+    /** Tab Pull request chỉ hiện khi `available`. */
+    status(projectId: string): Promise<PrAvailability>
+    list(projectId: string): Promise<PrList>
+    detail(projectId: string, prNumber: number): Promise<PrDetail>
   }
 }
