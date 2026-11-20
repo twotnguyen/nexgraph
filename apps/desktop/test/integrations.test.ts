@@ -187,7 +187,7 @@ describe('integrations', () => {
     const crlf = 'Hướng dẫn.\r\n<!-- nexgraph:start -->\r\ncũ\r\n<!-- nexgraph:end -->\r\nCuối tệp.\r\n'
     writeFileSync(file, crlf)
     applySkill('agents-md', root)
-    const afterCrlf = `Hướng dẫn.\r\n${agentsMdBlock()}Cuối tệp.\r\n`
+    const afterCrlf = `Hướng dẫn.\r\n${agentsMdBlock().replace(/\n/g, '\r\n')}Cuối tệp.\r\n`
     expect(readFileSync(file, 'utf8')).toBe(afterCrlf)
     expect(applySkill('agents-md', root).status).toBe('up_to_date')
     expect(readFileSync(file, 'utf8')).toBe(afterCrlf)

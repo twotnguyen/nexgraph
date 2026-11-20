@@ -87,7 +87,9 @@ Hộp thoại có 21 trợ lý. Mỗi trợ lý ghi tối đa bốn phần, mỗ
 Nút **Gỡ…** xem trước rồi thực hiện:
 
 - chỉ bỏ mục, khối hoặc hook của NexGraph, phần còn lại của tệp giữ nguyên;
-- tệp chỉ còn phần của NexGraph thì bị xoá;
+- tệp Markdown, skill, plugin chỉ còn phần của NexGraph thì bị xoá, kèm các thư mục cha trở nên rỗng (dừng ở gốc dự án);
+- tệp JSON (`.mcp.json`, `settings.json`, `kilo.json`…) còn rỗng thì giữ lại dạng `{}`, vì không phân biệt được với tệp `{}` có sẵn của người dùng;
+- trong `hooks`, chỉ bỏ từng lệnh `hook-guard` của NexGraph; lệnh khác cùng nhóm matcher được giữ;
 - skill không có frontmatter `name: nexgraph` thì không bị xoá.
 
 `AGENTS.md` và `.agents/skills/nexgraph/` dùng chung cho nhiều trợ lý.
@@ -97,15 +99,17 @@ Hook gọi `nexgraph-engine hook-guard read|search|gemini --project <dự án> -
 - **Khi nào nhắc:** lệnh trả `additionalContext` khi graph còn mới mà trong 30 phút qua chưa có lần gọi MCP `query_graph` hoặc `get_context`. "Còn mới" nghĩa là HEAD trùng commit đã index và tệp đích không đổi sau lần index.
 - **Tem thời gian:** ghi ở `<thư mục app>/projects/<id>/last_query_stamp`.
 - **Chế độ nghiêm (strict):** chỉ có ở Claude Code và CodeBuddy. Chặn lần `Read` đầu tiên mỗi phiên khi chưa hỏi graph. Grep, Glob và Bash chỉ được nhắc, không bị chặn.
+- **Bỏ qua:** tệp trong `.nexgraph/`, và `file_path`/`path` (của Read, Grep, Glob) nằm ngoài dự án.
 - **Không bao giờ chặn nhầm:** mọi lỗi, kể cả stdin hỏng hay tham số sai, đều cho lệnh thoát 0 và không in gì.
 
-### Skill nexgraph cho agent ngoài
+### Skill và khối quy tắc
 
-Tổng quan dự án → "Tích hợp trợ lý AI" có thêm hai mục skill, nội dung sinh từ cùng nguồn với phần "Quy tắc dùng đồ thị NexGraph" trong app (gồm danh sách tool chỉ đọc của MCP):
+Nội dung skill và khối quy tắc sinh từ cùng nguồn với phần "Quy tắc dùng đồ thị NexGraph" trong app (gồm danh sách tool chỉ đọc của MCP). Hai mục lẻ "Skill nexgraph (Claude Code)" và "Khối nexgraph trong AGENTS.md" trước đây nay là phần skill của **Claude Code** và phần quy tắc của **Agent Skills (AGENTS.md)**.
 
-- **Skill nexgraph (Claude Code):** ghi `.claude/skills/nexgraph/SKILL.md` (frontmatter `name`/`description` + quy tắc). File đã có cùng nội dung → báo "Đã cài"; khác → **không ghi đè**, hiện nội dung để người dùng ghép tay.
-- **Khối nexgraph trong AGENTS.md:** chèn hoặc thay khối giữa hai dòng `<!-- nexgraph:start -->` và `<!-- nexgraph:end -->`. Phần ngoài khối giữ nguyên từng byte; chưa có `AGENTS.md` thì tạo tệp chỉ gồm khối. Khối dùng được cho mọi agent đọc AGENTS.md (Codex, Cursor…).
-- Cả hai đường dẫn đều được kiểm symlink: symlink (kể cả symlink treo) trỏ ra ngoài dự án bị chặn và không ghi gì.
+- **SKILL.md:** frontmatter `name`/`description` + quy tắc. Tệp đã có cùng nội dung → "Đã cài"; khác → **không ghi đè**, hiện nội dung để ghép tay.
+- **Khối marker:** chèn hoặc thay khối giữa `<!-- nexgraph:start -->` và `<!-- nexgraph:end -->`. Phần ngoài khối giữ nguyên từng byte, khối dùng kiểu xuống dòng của tệp (CRLF hoặc LF); chưa có tệp thì tạo tệp chỉ gồm khối.
+- Tệp JSON có BOM vẫn đọc được (BOM bị bỏ khi ghi lại).
+- Mọi đường dẫn đều được kiểm symlink: symlink (kể cả symlink treo) trỏ ra ngoài dự án bị chặn và không ghi gì.
 
 ### Đối chiếu nguồn chính thức (2026-11-13; hàng Codex tra ngày 2026-11-15)
 

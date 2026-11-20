@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import sqlite3
+import subprocess
 import time
 from contextlib import closing
 from pathlib import Path
@@ -47,26 +47,32 @@ def touch_query_stamp(data_dir: Path | None, project_id: str | None) -> None:
         pass
 
 
-def project_id_of(conn: sqlite3.Connection) -> str | None:
-    row = conn.execute("SELECT ma_du_an FROM du_an").fetchone()
-    return row[0] if row else None
+def _git_head(root: Path) -> str | None:
+    if not (root / ".git").exists():
+        return None
+    from nexgraph_engine.subprocesses import run_captured
+    try:
+        out = run_captured(["git", "rev-parse", "HEAD"], cwd=root, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = out.stdout.decode("ascii", "replace").strip()
+    return sha if out.returncode == 0 and 40 <= len(sha) <= 64 else None
 
 
 def _fresh_project(root: Path, data_dir: Path, target: Path | None) -> str | None:
     """Id dự án khi graph còn mới với tệp đích; None khi chưa index, graph cũ hoặc vừa hỏi graph."""
-    from nexgraph_engine.index.indexer import _git_head
-    from nexgraph_engine.mcp.server import resolve_graph_db
     from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.store.projects import resolve_graph_db
 
     with closing(open_graph_db(resolve_graph_db(root, data_dir), read_only=True)) as conn:
         store = GraphStore(conn)
         run = store.last_completed_run() if store.has_published_graph() else None
-        pid = project_id_of(conn)
+        pid = store.project_id()
     if run is None or not pid or not _SAFE_ID.fullmatch(pid):
         return None
     # Kiểm rẻ thay cho freshness() (duyệt và băm cả cây): hook chạy ở mỗi lần gọi tool.
-    head = _git_head(root)
+    head = _git_head(root)  # cùng phép như index.indexer._git_head, tránh nạp indexer (0,23 s mỗi lần gọi tool)
     if head and run[1] and head != run[1]:
         return None
     if target is not None and target.is_file() and target.stat().st_mtime > run[0]:
@@ -117,6 +123,13 @@ def guard_output(kind: str, project: Path, data_dir: Path | None, strict: bool, 
         tool = d.get("tool_name")
         root = Path(project).resolve()
         target: Path | None = None
+        # Tệp/thư mục ngoài dự án hoặc trong .nexgraph/: đồ thị không có gì để nói.
+        for value in (t.get("file_path"), t.get("path")):
+            if value:
+                p = Path(str(value))
+                p = (p if p.is_absolute() else root / p).resolve()
+                if not p.is_relative_to(root) or p.is_relative_to(root / ".nexgraph"):
+                    return ""
         if kind == "search":
             command = str(t.get("command") or "")
             if command:
@@ -129,8 +142,6 @@ def guard_output(kind: str, project: Path, data_dir: Path | None, strict: bool, 
             fp = str(t.get("file_path") or "")
             if fp:
                 target = Path(fp) if Path(fp).is_absolute() else root / fp
-                if not target.resolve().is_relative_to(root):
-                    return ""
         else:
             return ""
         pid = _fresh_project(root, data_dir, target)
