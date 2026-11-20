@@ -23,7 +23,7 @@ Mỗi tệp cài phải dưới 500 MB; bước kiểm tệp cài trong CI báo 
 
 Bộ cài không có chứng chỉ nhà phát triển nên hệ điều hành cảnh báo ở lần mở đầu.
 
-- **macOS:** mở NexGraph, gặp thông báo không xác minh được nhà phát triển thì chọn **Done**. Vào **System Settings → Privacy & Security**, kéo xuống mục Security, chọn **Open Anyway** cạnh dòng nhắc NexGraph rồi xác nhận. Từ bản sau 0.1.0, app được ký ad-hoc nên đi được đường này. Bản 0.1.0 có chữ ký chưa trọn, macOS có thể báo app "bị hỏng"; khi đó chạy `xattr -dr com.apple.quarantine /Applications/NexGraph.app` trong Terminal rồi mở lại.
+- **macOS:** mở NexGraph, gặp thông báo không xác minh được nhà phát triển thì chọn **Done**. Vào **System Settings → Privacy & Security**, kéo xuống mục Security, chọn **Open Anyway** cạnh dòng nhắc NexGraph rồi xác nhận. Từ bản 0.1.1, app được ký ad-hoc nên đi được đường này. Bản 0.1.0 có chữ ký chưa trọn, macOS có thể báo app "bị hỏng"; khi đó chạy `xattr -dr com.apple.quarantine /Applications/NexGraph.app` trong Terminal rồi mở lại.
 - **Windows:** SmartScreen hiện "Windows protected your PC" thì chọn **More info → Run anyway**.
 
 Nếu hệ điều hành vẫn chặn trình cài hoặc engine đã cài, ghi rõ thành phần và thông báo trong checklist. Với máy được quản lý, báo người phụ trách máy. [Workflow và artifact](../../.github/workflows/ci.yml) · [Kiểm tên bộ cài](../../apps/desktop/scripts/check-installer.mjs).

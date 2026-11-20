@@ -1,2 +1,2 @@
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 VENDOR_COMMIT = "86c57be8204673c2a1b9849a3292a7dd3ab373d8"
