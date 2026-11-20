@@ -1,0 +1,12 @@
+{"documents": [
+  {"relative_path": "src/shape.py", "language": "python", "symbols": [
+    {"symbol": "py . shape/Shape#", "kind": "Class", "display_name": "Shape",
+     "occurrences": [{"range": [3, 0, 5]}]},
+    {"symbol": "py . shape/Circle#", "kind": "Class", "display_name": "Circle",
+     "occurrences": [{"range": [10, 0, 6]}],
+     "relationships": [{"symbol": "py . shape/Shape#", "is_implementation": true}]},
+    {"symbol": "py . shape/Circle#area().", "kind": "Method", "display_name": "area",
+     "occurrences": [{"range": [12, 4, 8]}],
+     "relationships": [{"symbol": "py . math/pi.", "is_reference": true}]}
+  ]}
+]}

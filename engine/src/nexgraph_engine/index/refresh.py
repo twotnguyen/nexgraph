@@ -17,11 +17,12 @@ from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import flows_before, rebuild_flows, update_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
 from nexgraph_engine.index.discovery import is_batch_language
+from nexgraph_engine.index.extra_sources import is_source_path
 from nexgraph_engine.index.indexer import ExtractedFile, _git_head, add_batch_calls, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Edge, Node
+from nexgraph_engine.store.models import Edge, FileRec, Node
 
 RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm lại (hai lần sửa trong cùng một giây)
 _RESOLVABLE_KINDS = [k.value for k in (*TYPE_KINDS, NodeKind.FUNCTION)]
@@ -35,6 +36,11 @@ class RefreshResult:
     unchanged: int
     seconds: float
     warnings: tuple[str, ...] = ()  # phần phụ (luồng/cụm) phải fallback: API/SSE không được báo "ok" im lặng
+
+
+def real_file_records(store: GraphStore) -> dict[str, FileRec]:
+    """Tệp trên đĩa đã index; tệp ảo của nguồn bổ sung (W11) chỉ đổi khi index đầy đủ."""
+    return {p: r for p, r in store.file_records().items() if not is_source_path(p)}
 
 
 def _hash(path: Path) -> str | None:
@@ -60,7 +66,7 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
     disk = {f.rel_path: f for f in discover(root, subdir=scope, exclude=store.last_exclude(),
                                             include_docs=docs, include_media=media,
                                             include_config=store.last_config_flag())}
-    known = store.file_records()
+    known = real_file_records(store)
     now = time.time()
 
     added = sorted(p for p in disk if p not in known)
@@ -125,7 +131,7 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         # cùng nút cũ (W2).
         changed_langs = [disk[p].language for p in (*added, *modified)] + [known[p].language for p in removed]
         if any(is_batch_language(lang) for lang in changed_langs):
-            resolved_edges += add_batch_calls(store, root, [(rel, rec.language) for rel, rec in store.file_records().items()
+            resolved_edges += add_batch_calls(store, root, [(rel, rec.language) for rel, rec in real_file_records(store).items()
                                                             if is_batch_language(rec.language)])
         resolve_references(store, package_name=_package_name(
             pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None), created_out=resolved_edges)
