@@ -317,7 +317,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     async def get_pr_impact(pr_number: int) -> dict:
         """Ảnh hưởng và review cục bộ của một PR (không checkout): nút đổi, vùng ảnh hưởng có điểm, test liên quan,
         symbol đổi thiếu test, tài liệu có thể cũ, code có thể không còn ai gọi, test nên chạy và lệnh gợi ý."""
-        return await run("get_pr_impact", lambda s: pr_call(lambda: pr_detail_json(s, root, pr_number)))
+        return await run("get_pr_impact", lambda s: pr_call(lambda: pr_detail_json(s, root, pr_number, data_dir=data_dir)))
 
     @mcp.tool(annotations=READ_ONLY)
     async def triage_prs() -> dict:
@@ -328,7 +328,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     async def review_status(pr_number: int) -> dict:
         """Tóm tắt review cục bộ của một PR: gate pass|advisory, số phát hiện, các phát hiện đầu và test nên chạy.
         Không đăng gì lên GitHub."""
-        return await run("review_status", lambda s: pr_call(lambda: review_status_json(pr_detail_json(s, root, pr_number))))
+        return await run("review_status", lambda s: pr_call(lambda: review_status_json(pr_detail_json(s, root, pr_number, data_dir=data_dir))))
 
     def resource_json(uri: str, body: Callable[[GraphStore], Any], doc: str) -> None:
         async def read() -> str:

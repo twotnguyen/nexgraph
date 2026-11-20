@@ -37,6 +37,7 @@ def pr_detail(project_id: str, number: str, request: Request) -> dict:
         raise ApiError(400, "bad_param", str(exc)) from exc
     with open_store(request, project_id) as (store, info):
         try:
-            return model_payload(request, store, info, pr_detail_json(store, info.path, n))
+            return model_payload(request, store, info, pr_detail_json(store, info.path, n,
+                                                                        data_dir=request.app.state.services.data_dir))
         except gh.GhError as exc:
             raise exc.api_error() from exc

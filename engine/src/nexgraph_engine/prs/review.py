@@ -25,9 +25,12 @@ _BUILD_FILES = frozenset({
 })
 
 
-def cross_repo_impact(store: GraphStore, changed: list[Node]) -> dict | None:
-    """Điểm móc cho graph chung (W8): tác động sang repo khác. Chưa nối nên trả None."""
-    return None
+def cross_repo_impact(store: GraphStore, changed: list[Node], data_dir: Path | None = None) -> list[dict] | None:
+    """Tác động sang repo khác qua graph chung (W8); None khi chưa có graph chung."""
+    if data_dir is None or not (data_dir / "global.db").is_file():
+        return None
+    from nexgraph_engine.global_graph import link
+    return link.cross_repo_impact(data_dir, store.project_id(), [n.id for n in changed])
 
 
 def _marks(items: list) -> str:
@@ -163,6 +166,9 @@ def comment_markdown(d: dict) -> str:
     if d["unreferenced"]:
         out += ["", "### Code có thể không còn ai gọi (heuristic)"] + [
             f"- `{u['node']['label']}` ({_loc(u['node'])})" for u in d["unreferenced"][:20]]
+    if d.get("cross_repo"):
+        out += ["", "### Ảnh hưởng sang repo khác (graph chung, suy luận)"] + [
+            f"- `{c['node_id']}` ở dự án {c['project_id']} phụ thuộc `{c['via']}`" for c in d["cross_repo"][:20]]
     sel = d["test_selection"]
     out += ["", "### Test nên chạy"]
     if sel["run_all"]:
@@ -172,7 +178,7 @@ def comment_markdown(d: dict) -> str:
     return "\n".join(out)
 
 
-def pr_detail_json(store: GraphStore, root: Path, number: object) -> dict:
+def pr_detail_json(store: GraphStore, root: Path, number: object, *, data_dir: Path | None = None) -> dict:
     n = gh.pr_number(number)
     base = repo_info(root)["default_branch"]
     view = _json(root, ["pr", "view", str(n), "--json", FIELDS])
@@ -192,7 +198,7 @@ def pr_detail_json(store: GraphStore, root: Path, number: object) -> dict:
         "stale_docs": stale_docs(store, report.changed_nodes, diff_paths),
         "unreferenced": unreferenced(store, files),
         "test_selection": select_tests(root, report, files, truncated),
-        "cross_repo": cross_repo_impact(store, report.changed_nodes),
+        "cross_repo": cross_repo_impact(store, report.changed_nodes, data_dir),
         "truncated": truncated,
     }
     detail["comment"] = comment_markdown(detail)

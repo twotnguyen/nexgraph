@@ -111,3 +111,24 @@ def test_bad_number_never_calls_gh(store, monkeypatch):
     with pytest.raises(ValueError):
         pr_detail_json(*store, "9 --repo evil/x")
     assert calls == []
+
+
+def test_cross_repo_impact_uses_shared_graph_when_present(store, monkeypatch, tmp_path):
+    from nexgraph_engine.global_graph import link
+    seen = {}
+
+    def fake(data_dir, project_id, node_ids):
+        seen.update(data_dir=data_dir, project_id=project_id, node_ids=node_ids)
+        return [{"project_id": "other", "node_id": "app.ts::main#function", "via": node_ids[0],
+                 "type": "CALLS", "subtype": None, "file": "app.ts", "line": 3}]
+
+    monkeypatch.setattr(link, "cross_repo_impact", fake)
+    gh_fake.install(monkeypatch, {("pr", "view", "9"): VIEW, ("pr", "diff", "9"): HELPER_DIFF})
+    data_dir = tmp_path / "appdata"
+    data_dir.mkdir()
+    assert pr_detail_json(*store, 9, data_dir=data_dir)["cross_repo"] is None  # chưa có graph chung
+    (data_dir / "global.db").touch()
+    d = pr_detail_json(*store, 9, data_dir=data_dir)
+    assert seen["project_id"] == store[0].project_id() and seen["node_ids"] == [n["id"] for n in d["changed_nodes"]]
+    assert d["cross_repo"][0]["project_id"] == "other"
+    assert "repo khác" in d["comment"]
