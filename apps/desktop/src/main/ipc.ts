@@ -26,6 +26,7 @@ import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
 import { IndexSourceStore } from './index-sources'
 import type { GeminiConsentTarget } from '../shared/agent-types'
+import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -534,4 +535,10 @@ export function registerIpc(
   on('sources:list', (pid: string) => api().listSources(pid))
   on('sources:add', async (pid: string, url: string) => ({ jobId: (await api().addSource(pid, url)).job_id }))
   on('sources:remove', (pid: string, name: string) => api().removeSource(pid, name))
+
+  // Bộ nhớ làm việc (W10): mọi ghi đi qua engine, engine giữ khoá ghi của dự án.
+  on('memory:recall', (pid: string, q: { node?: string; q?: string }) => api().recallMemory(pid, q))
+  on('memory:add', (pid: string, kind: MemoryKind, text: string, nodeIds: string[]) => api().addMemory(pid, kind, text, nodeIds))
+  on('memory:rate', (pid: string, rating: AnswerRating) => api().rateAnswer(pid, rating))
+  on('memory:lessons', (pid: string) => api().lessons(pid))
 }

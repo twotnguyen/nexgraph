@@ -9,6 +9,7 @@ import { ConsentDialog } from '../chat/ConsentDialog'
 import { ConnectionDialog } from './ConnectionDialog'
 import { useAgentWorkbench, type AgentInspection } from './useAgentWorkbench'
 import { WorkbenchControls } from './WorkbenchControls'
+import { AnswerRating } from './AnswerRating'
 import './agent-panel.css'
 
 interface Props {
@@ -31,6 +32,12 @@ interface Props {
 type FileContext = { file: string; line: number; lineEnd?: number }
 type Msg = { id: number | string; role: 'user'; content: string; context?: FileContext } | { id: number | string; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
 type PendingConsent = { question: string; target: AiConsentTarget; model: string; context?: FileContext; attachments?: AgentContextItem[] }
+
+/** Câu hỏi của lượt mà câu trả lời thứ `i` thuộc về. */
+function questionBefore(msgs: Msg[], i: number): string {
+  for (let j = i - 1; j >= 0; j--) if (msgs[j].role === 'user') return msgs[j].content
+  return ''
+}
 
 function fileReference(context: FileContext): string {
   const { file, line, lineEnd } = context
@@ -488,7 +495,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
             )}
           </div>
         )}
-        {msgs.map((m) => m.role === 'user' ? (
+        {msgs.map((m, i) => m.role === 'user' ? (
           <div key={`user-${m.id}`} className="me">
             {m.content}
             {m.context && <span className="agent-sent-file mono" title={fileReference(m.context)}>{fileReference(m.context)}</span>}
@@ -505,6 +512,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
               {m.tools.length > 0 && (
                 <button type="button" className="link" onClick={() => setOpenTools(openTools === m.id ? null : m.id)}>{vi.chat.tools(m.tools.length)}</button>
               )}
+              {questionBefore(msgs, i) && <AnswerRating projectId={projectId} question={questionBefore(msgs, i)} answer={m.content} citations={m.citations} />}
             </div>
             {openTools === m.id && (
               <ul className="tool-list mono">

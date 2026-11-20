@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
 import type { Changes, EngineEvent, Job, JobState, ProjectSummary } from '@shared/graph-types'
+import type { MemoryRecall } from '@shared/graph-types'
 import type { AgentEvent, AgentSessionSnapshot } from '@shared/agent-types'
 import type { GeminiCliEvent, GeminiCliStatus } from '@shared/gemini-types'
 
@@ -94,7 +95,11 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}), ...over.watch },
     sources: { clone: vi.fn(async () => ({ jobId: 'c1' })), list: vi.fn(async () => []), add: vi.fn(async () => ({ jobId: 's1' })),
       remove: vi.fn(async () => {}), ...over.sources },
-    indexSources: { hasDsn: vi.fn(async () => false), saveDsn: vi.fn(async () => {}), pickFile: vi.fn(async () => null), remembered: vi.fn(async () => null), ...over.indexSources }
+    indexSources: { hasDsn: vi.fn(async () => false), saveDsn: vi.fn(async () => {}), pickFile: vi.fn(async () => null), remembered: vi.fn(async () => null), ...over.indexSources },
+    memory: { recall: vi.fn(async (): Promise<MemoryRecall> => ({ memories: [] })), add: vi.fn(async () => ({ id: 1, created: true })),
+      rate: vi.fn(async () => ({ id: 1, node_ids: [] })),
+      lessons: vi.fn(async () => ({ total: 0, min_corroboration: 2, counts: { useful: 0, dead_end: 0, corrected: 0, unmarked: 0 },
+        preferred: [], tentative: [], contested: [], dead_ends: [], corrections: [], labels: {} })), ...over.memory }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }

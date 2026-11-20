@@ -14,6 +14,7 @@ import type {
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit, SourceItem
 } from './graph-types'
 import type { IndexSources } from './graph-types'
+import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -220,5 +221,13 @@ export interface NexGraphApi {
     pickFile(kind: 'scip' | 'mcp'): Promise<string | null>
     /** Lựa chọn nguồn đã nhớ (không gồm DSN) để hộp thoại hiện lại. */
     remembered(projectId: string): Promise<IndexSources | null>
+  }
+  /** Bộ nhớ làm việc (W10): đánh giá câu trả lời, Bài học, Memory neo vào node. Ghi bị từ chối (`index_running`) khi đang index. */
+  memory: {
+    recall(projectId: string, q: { node?: string; q?: string }): Promise<MemoryRecall>
+    add(projectId: string, kind: MemoryKind, text: string, nodeIds: string[]): Promise<{ id: number; created: boolean }>
+    /** Engine đổi trích dẫn tệp:dòng sang node. */
+    rate(projectId: string, rating: AnswerRating): Promise<{ id: number; node_ids: string[] }>
+    lessons(projectId: string): Promise<Lessons>
   }
 }

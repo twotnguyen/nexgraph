@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { DocSection, GraphNode, NodeExplain } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { kindStyle } from './kindStyle'
+import { NodeMemory } from './NodeMemory'
 
 /** Bậc, cụm và cạnh vào/ra theo loại như `explain`: engine đã nhóm sẵn, phần quá 20 node gom theo tệp. */
 function Explain({ projectId, node, onOpenNode }: { projectId: string; node: GraphNode; onOpenNode?: (n: GraphNode) => void }) {
@@ -90,6 +91,7 @@ export function NodeInspector({ node, onOpenCode, projectId, onOpenNode }: {
       )}
       {projectId && node.kind === 'document' && <ReadSection projectId={projectId} node={node} />}
       {projectId && <Explain projectId={projectId} node={node} onOpenNode={onOpenNode} />}
+      {projectId && <NodeMemory projectId={projectId} nodeId={node.id} />}
     </aside>
   )
 }

@@ -3,6 +3,7 @@ import type { GraphReport } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { kindStyle } from '../graph/kindStyle'
 import { CanvasState } from '../common/CanvasState'
+import { LessonsSection } from './LessonsSection'
 
 interface Props {
   projectId: string
@@ -105,6 +106,8 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
           </ul>
         </section>
       )}
+
+      <LessonsSection projectId={projectId} revision={revision} onOpenNode={onOpenNode} />
 
       <section>
         <h3>{vi.report.cycles(report.cycles.total)}</h3>

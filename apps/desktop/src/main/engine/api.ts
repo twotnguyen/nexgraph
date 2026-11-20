@@ -6,6 +6,7 @@ import type {
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit,
   SourceItem
 } from '../../shared/graph-types'
+import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
 
 export class EngineApiError extends Error {
@@ -226,5 +227,20 @@ export class EngineApi {
   }
   async removeSource(pid: string, name: string): Promise<void> {
     await this.request('DELETE', `/v1/projects/${encodeURIComponent(pid)}/sources?${new URLSearchParams({ name })}`)
+  }
+  recallMemory(pid: string, q: { node?: string; q?: string }): Promise<MemoryRecall> {
+    const params = new URLSearchParams()
+    if (q.node) params.set('node', q.node)
+    if (q.q) params.set('q', q.q)
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/memory?${params}`)
+  }
+  addMemory(pid: string, kind: MemoryKind, text: string, nodeIds: string[]): Promise<{ id: number; created: boolean }> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/memory`, { kind, text, node_ids: nodeIds })
+  }
+  rateAnswer(pid: string, r: AnswerRating): Promise<{ id: number; node_ids: string[] }> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/memory/ratings`, r)
+  }
+  lessons(pid: string): Promise<Lessons> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/lessons`)
   }
 }

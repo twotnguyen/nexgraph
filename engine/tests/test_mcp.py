@@ -15,7 +15,7 @@ from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
 
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
          "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context",
-         "get_section", "get_callers", "tests_for", "find"}
+         "get_section", "get_callers", "tests_for", "find", "remember", "recall"}
 
 
 @pytest.fixture
@@ -49,7 +49,8 @@ def test_lists_only_read_only_tools(indexed):
             return (await client.list_tools()).tools
     tools = anyio.run(run)
     assert {t.name for t in tools} == TOOLS
-    assert all(t.annotations and t.annotations.readOnlyHint for t in tools)
+    # remember là ngoại lệ ghi duy nhất (ADR 0019), và chỉ ghi bộ nhớ của NexGraph.
+    assert {t.name for t in tools if not (t.annotations and t.annotations.readOnlyHint)} == {"remember"}
 
 
 def test_search_and_node(indexed):
