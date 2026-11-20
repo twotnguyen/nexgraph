@@ -85,6 +85,7 @@ export function NodeInspector({ node, onOpenCode, projectId, onOpenNode }: {
       {where && <p className="mono">{where}</p>}
       {node.signature && <p className="mono">{node.signature}</p>}
       {node.is_test && <p>{vi.graph.isTest}</p>}
+      {node.origin === 'llm' && <p className="ai-inferred" role="note">{vi.graph.aiInferred}</p>}
       {node.file && onOpenCode && (
         <button type="button" onClick={() => onOpenCode(node.file as string, node.line_start ?? 1, node.line_end ?? undefined)}>{vi.code.open}</button>
       )}

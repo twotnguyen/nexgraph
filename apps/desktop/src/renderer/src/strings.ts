@@ -501,7 +501,8 @@ export const vi = {
     nothingSelected: 'Chọn một nút để xem chi tiết',
     truncated: 'Đã cắt bớt, thu hẹp bằng cách chọn nút khác',
     truncatedOf: (shown: number, total: number) => `Đang hiện ${shown}/${total} nút láng giềng. Dùng Tìm kiếm hoặc Cây để tới nút cần xem.`,
-    isTest: 'Mã kiểm thử'
+    isTest: 'Mã kiểm thử',
+    aiInferred: 'Suy luận bởi AI: chưa có bằng chứng trong mã nguồn'
   },
   sources: {
     cloneOpen: 'Mở từ URL…',
@@ -520,5 +521,47 @@ export const vi = {
     empty: 'Chưa có nguồn nào.',
     remove: (name: string) => `Xoá ${name}`,
     failed: (message: string) => `Không tải được: ${message}`
+  },
+  semantic: {
+    title: 'Phân tích ngữ nghĩa bằng AI',
+    labelsTitle: 'Đặt tên cụm bằng AI',
+    labelsCard: 'Đặt tên cụm bằng AI',
+    labelsDesc: 'Gửi tên node của mỗi cụm (không gửi mã) để AI đặt tên dễ hiểu.',
+    cardDesc: 'Rút khái niệm từ tài liệu, PDF, bản chép lời và ảnh. Mã nguồn không được gửi.',
+    off: 'Đang tắt',
+    on: (model: string) => `Đang bật · ${model}`,
+    enableIntro: 'AI đang tắt cho dự án này. Khi bật, NexGraph gửi nội dung tài liệu (không gửi mã nguồn) tới model AI bạn chọn.',
+    transportApp: 'Dùng tài khoản AI của ứng dụng (model đang chọn trong Cài đặt)',
+    transportDirect: 'Engine gọi trực tiếp API tương thích OpenAI (Ollama, nhà cung cấp tuỳ chỉnh có API key)',
+    consent: 'Tôi đồng ý gửi tài liệu của dự án này tới nhà cung cấp AI đã chọn',
+    enable: 'Bật AI cho dự án',
+    disable: 'Tắt AI cho dự án',
+    targetLabel: 'Phân tích',
+    targets: {
+      docs: 'Tài liệu (Markdown, Word, PDF, bản chép lời)',
+      deep: 'Phân tích sâu tài liệu (thêm quan hệ suy luận)',
+      images: 'Ảnh (cần model đọc được ảnh)',
+      dedup: 'Gộp khái niệm trùng (chạy trên máy, không gọi AI)',
+      labels: 'Tên cụm',
+      pr_triage: 'Xếp hạng pull request'
+    } as Record<string, string>,
+    provider: (model: string) => `Model: ${model}`,
+    estimating: 'Đang ước tính…',
+    estimate: (files: number, chunks: number, cached: number) => `${files} tệp · ${chunks} khối (${cached} khối đã có sẵn kết quả)`,
+    tokens: (input: string, output: string) => `Ước tính ${input} token đầu vào, ${output} token đầu ra`,
+    noFiles: 'Không có gì để gửi. Bật "Gồm tài liệu" (hoặc audio/ảnh) trong Tuỳ chọn index rồi index lại.',
+    filesLabel: 'Tệp sẽ gửi',
+    more: (n: number) => `… và ${n} tệp khác`,
+    run: 'Đồng ý và chạy',
+    running: (done: number, total: number) => `Đang phân tích ${done}/${total} khối…`,
+    waiting: 'Đang chờ model trả lời…',
+    cancel: 'Huỷ',
+    close: 'Đóng',
+    done: (nodes: number, edges: number) => `Xong: thêm ${nodes} node, ${edges} quan hệ suy luận bởi AI.`,
+    labelsDone: (n: number) => `Xong: đặt tên ${n} cụm.`,
+    merged: (n: number) => `Xong: gộp ${n} khái niệm trùng.`,
+    failedChunks: (n: number) => `${n} khối lỗi (model trả kết quả hỏng hoặc không gọi được).`,
+    cost: (input: string, output: string) => `Đã dùng ${input} token đầu vào, ${output} token đầu ra.`,
+    failed: (message: string) => `Không chạy được: ${message}`
   }
 }

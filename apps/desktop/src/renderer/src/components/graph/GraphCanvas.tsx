@@ -29,7 +29,12 @@ interface Props {
 }
 
 const toFlowEdges = (edges: GraphEdge[], strong: boolean, routes: Record<string, { x: number; y: number }[]> = {}): Edge[] =>
-  edges.map((e) => dotEdge({ id: String(e.id), source: e.source, target: e.target, label: e.type, strong, points: routes[String(e.id)] }))
+  edges.map((e) => {
+    // Cạnh do AI suy luận (W9): nét đứt màu khác và nhãn "AI" để không lẫn với cạnh có bằng chứng.
+    const ai = e.origin === 'llm'
+    const edge = dotEdge({ id: String(e.id), source: e.source, target: e.target, label: ai ? `${e.type} · AI` : e.type, strong, points: routes[String(e.id)] })
+    return ai ? { ...edge, className: 'ai-inferred' } : edge
+  })
 
 /** Cỡ từng nút theo số cạnh của nó trong vùng đang vẽ. */
 function sizes(nodes: GraphNode[], edges: GraphEdge[]): Record<string, number> {

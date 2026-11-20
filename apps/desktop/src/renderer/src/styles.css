@@ -2471,3 +2471,7 @@ dialog.modal::backdrop { background: var(--overlay); }
     scroll-behavior: auto !important;
   }
 }
+
+/* W9: kết quả suy luận bởi AI */
+.react-flow__edge.ai-inferred path { stroke: var(--violet); stroke-dasharray: 5 4; }
+.ai-inferred[role='note'] { color: var(--violet); }

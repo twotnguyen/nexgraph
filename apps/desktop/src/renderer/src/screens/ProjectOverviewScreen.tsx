@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { GraphStats, IndexOptions, ProjectSummary } from '@shared/graph-types'
+import type { GraphStats, IndexOptions, ProjectAiSettings, ProjectSummary } from '@shared/graph-types'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { IndexOptionsDialog } from '../components/overview/IndexOptionsDialog'
 import { Icon, VIEW_TONE, type IconName, type Tone } from '../components/common/icons'
@@ -7,6 +7,7 @@ import { HookCard } from '../components/overview/HookCard'
 import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { McpCard } from '../components/overview/McpCard'
 import { SourcesPanel } from '../components/overview/SourcesPanel'
+import { SemanticDialog } from '../components/overview/SemanticDialog'
 import { vi } from '../strings'
 
 export type WorkspaceTab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report'
@@ -44,6 +45,11 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
   const [options, setOptions] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [integrating, setIntegrating] = useState(false)
+  const [semantic, setSemantic] = useState<'run' | 'labels' | null>(null)
+  const [ai, setAi] = useState<ProjectAiSettings | null>(null)
+  useEffect(() => {
+    void window.nexgraph.semantic.getSettings(pid).then(setAi, () => setAi(null))
+  }, [pid])
 
   useEffect(() => {
     let alive = true
@@ -121,6 +127,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
         <Card title={vi.overview.options} icon="sliders" desc={vi.overview.optionsDesc} onClick={() => setOptions(true)} />
         <Card title={vi.overview.recluster} icon="cluster" desc={vi.overview.reclusterDesc}
           status={reclustering ? vi.overview.reclustering : clusters} disabled={reclustering || noGraph} onClick={() => void recluster()} />
+        <Card title={vi.semantic.labelsCard} icon="spark" tone="violet" desc={vi.semantic.labelsDesc} disabled={noGraph} onClick={() => setSemantic('labels')} />
       </div>
       {clusterError && <p role="alert" className="inline-message error">{clusterError}</p>}
       <SourcesPanel projectId={pid} />
@@ -150,12 +157,14 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       <h2>{vi.overview.ai}</h2>
       <div className="cards">
         <Card title={vi.overview.aiSettings} icon="spark" tone="violet" desc={vi.overview.aiSettingsDesc} onClick={onOpenSettings} />
-        <Card title={vi.overview.semantic} icon="spark" tone="violet" desc={vi.overview.semanticDesc} status={vi.overview.wave2} disabled />
+        <Card title={vi.overview.semantic} icon="spark" tone="violet" desc={vi.semantic.cardDesc} disabled={noGraph}
+          status={ai?.enabled ? vi.semantic.on(ai.model ?? '') : vi.semantic.off} onClick={() => setSemantic('run')} />
       </div>
 
       {options && (
         <IndexOptionsDialog projectId={pid} onClose={() => setOptions(false)} onSubmit={(o) => { setOptions(false); onReindex(o) }} />
       )}
+      {semantic && <SemanticDialog projectId={pid} target={semantic === 'labels' ? 'labels' : undefined} onSettings={setAi} onClose={() => setSemantic(null)} />}
       {integrating && <IntegrationsDialog project={project} onClose={() => setIntegrating(false)} />}
       {exporting && <ExportDialog projectId={pid} projectName={project.name} scope={{ kind: 'all' }} onClose={() => setExporting(false)} />}
     </main>

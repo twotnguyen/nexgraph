@@ -94,7 +94,10 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}), ...over.watch },
     sources: { clone: vi.fn(async () => ({ jobId: 'c1' })), list: vi.fn(async () => []), add: vi.fn(async () => ({ jobId: 's1' })),
       remove: vi.fn(async () => {}), ...over.sources },
-    indexSources: { hasDsn: vi.fn(async () => false), saveDsn: vi.fn(async () => {}), pickFile: vi.fn(async () => null), remembered: vi.fn(async () => null), ...over.indexSources }
+    indexSources: { hasDsn: vi.fn(async () => false), saveDsn: vi.fn(async () => {}), pickFile: vi.fn(async () => null), remembered: vi.fn(async () => null), ...over.indexSources },
+    semantic: { getSettings: vi.fn(async () => ({ enabled: false, transport: null, model: null })), setSettings: vi.fn(async (_pid: string, s: { enabled: boolean; transport: 'app' | 'direct' | null }) => ({ ...s, model: s.enabled ? 'openai / gpt-test' : null })),
+      estimate: vi.fn(async () => ({ files: ['README.md'], chunks: 1, cached_chunks: 0, input_tokens: 1200, output_tokens: 300 })),
+      start: vi.fn(async () => ({ jobId: 'sem1' })), cancel: vi.fn(async () => {}), ...over.semantic }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }
