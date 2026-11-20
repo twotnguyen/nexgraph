@@ -26,6 +26,7 @@ describe('IndexSourceStore', () => {
     s.resolve('p1', { sources: { cargo: true, scipFiles: ['/a/index.scip.json'] } })
     expect(s.resolve('p1')).toEqual({ opts: { sources: { cargo: true, scipFiles: ['/a/index.scip.json'] } } })
     expect(s.resolve('p2')).toEqual({ opts: undefined })
+    expect(s.remembered('p1')).toEqual({ cargo: true, scipFiles: ['/a/index.scip.json'] })
   })
 
   it('chỉ gắn DSN khi bật PostgreSQL; DSN không ở dạng rõ trên đĩa', () => {

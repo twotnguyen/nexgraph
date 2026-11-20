@@ -40,7 +40,8 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
     ...(options?.includeDocs !== undefined ? { includeDocs: options.includeDocs } : {}),
     ...(options?.includeMedia !== undefined ? { includeMedia: options.includeMedia } : {}),
     ...(options?.includeConfig !== undefined ? { includeConfig: options.includeConfig } : {}),
-    ...(options?.workers ? { workers: options.workers } : {}), ...(options?.force ? { force: true } : {})
+    ...(options?.workers ? { workers: options.workers } : {}), ...(options?.force ? { force: true } : {}),
+    ...(options?.sources ? { sources: options.sources } : {})
   }
   const key = JSON.stringify([projectId, opts])
 

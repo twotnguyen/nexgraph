@@ -13,6 +13,7 @@ import type {
   DocSection, GraphNode, GraphReport, GraphStats, IndexOptions, Job, NeighborQuery, Neighborhood, NodeExplain, NodeImpact, PathResult,
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from './graph-types'
+import type { IndexSources } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -204,5 +205,7 @@ export interface NexGraphApi {
     hasDsn(projectId: string): Promise<boolean>
     saveDsn(projectId: string, dsn: string | null): Promise<void>
     pickFile(kind: 'scip' | 'mcp'): Promise<string | null>
+    /** Lựa chọn nguồn đã nhớ (không gồm DSN) để hộp thoại hiện lại. */
+    remembered(projectId: string): Promise<IndexSources | null>
   }
 }

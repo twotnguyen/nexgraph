@@ -158,7 +158,8 @@ const api: NexGraphApi = {
   indexSources: {
     hasDsn: (pid) => call('index-sources:has-dsn', pid),
     saveDsn: (pid, dsn) => call('index-sources:save-dsn', pid, dsn),
-    pickFile: (kind) => call('index-sources:pick-file', kind)
+    pickFile: (kind) => call('index-sources:pick-file', kind),
+    remembered: (pid) => call('index-sources:remembered', pid)
   }
 }
 

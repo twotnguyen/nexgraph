@@ -17,10 +17,14 @@ export class IndexSourceStore {
     else this.secrets.remove(`pg:${pid}`)
   }
 
+  remembered(pid: string): IndexSources | null {
+    return (readJson(this.file)[pid] as IndexSources | undefined) ?? null
+  }
+
   /** Hộp thoại gửi `sources` thì nhớ lại; nút "Index lại" không gửi thì dùng bản đã nhớ để nguồn không bị rơi. */
   resolve(pid: string, opts?: IndexOptions): { opts: IndexOptions | undefined; postgresDsn?: string } {
     if (opts?.sources) writeJson(this.file, { ...readJson(this.file), [pid]: opts.sources })
-    const sources = opts?.sources ?? (readJson(this.file)[pid] as IndexSources | undefined)
+    const sources = opts?.sources ?? this.remembered(pid)
     if (!sources) return { opts }
     const dsn = sources.postgres ? this.secrets.get(`pg:${pid}`) : null
     return { opts: { ...opts, sources }, ...(dsn ? { postgresDsn: dsn } : {}) }

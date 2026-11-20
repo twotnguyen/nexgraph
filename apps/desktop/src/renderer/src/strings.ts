@@ -164,7 +164,22 @@ export const vi = {
     needWhisper: 'Cần faster-whisper: chạy engine từ mã nguồn với extra media (bản cài chưa gồm)',
     includeMedia: 'Gồm audio/video (chép lời trên máy, cần faster-whisper; lần đầu tải model)',
     cancel: 'Huỷ',
-    reindexWithOptions: 'Index lại với tuỳ chọn này'
+    reindexWithOptions: 'Index lại với tuỳ chọn này',
+    sourcesTitle: 'Nguồn bổ sung (nâng cao)',
+    sourcesHint: 'Mỗi nguồn thành một tệp ảo trong đồ thị. Nút Index lại dùng lại lựa chọn này.',
+    sourcePostgres: 'Lược đồ PostgreSQL (bảng, view, hàm, khoá ngoại)',
+    dsnLabel: 'Chuỗi kết nối PostgreSQL',
+    dsnSaved: 'Đã lưu chuỗi kết nối trong kho khoá của máy. Nhập chuỗi mới để thay.',
+    dsnForget: 'Xoá chuỗi kết nối',
+    needDsn: 'Nhập chuỗi kết nối để đọc PostgreSQL',
+    needPsycopg: 'Cần cài psycopg vào môi trường engine (bản cài chưa gồm)',
+    sourceCargo: 'Cargo workspace (crate và phụ thuộc giữa các crate)',
+    sourceManifests: 'Phụ thuộc giữa các manifest gói trong dự án (pyproject.toml, Cargo.toml, go.mod, pom.xml)',
+    scipLabel: 'Tệp SCIP (JSON)',
+    scipAdd: 'Thêm tệp SCIP…',
+    mcpLabel: 'Tệp cấu hình MCP',
+    mcpAdd: 'Thêm tệp MCP…',
+    filesHint: 'Mỗi dòng một đường dẫn, tuyệt đối hoặc tính từ gốc dự án.'
   },
   map: {
     root: 'Gốc',

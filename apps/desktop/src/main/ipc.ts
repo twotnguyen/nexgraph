@@ -223,6 +223,7 @@ export function registerIpc(
   on('watch:stop', async (pid: string) => stopWatch(pid))
   // Nguồn bổ sung (W11): DSN chỉ đi một chiều renderer → main; renderer chỉ biết đã có DSN hay chưa.
   on('index-sources:has-dsn', async (pid: string) => indexSources.hasDsn(pid))
+  on('index-sources:remembered', async (pid: string) => indexSources.remembered(pid))
   on('index-sources:save-dsn', async (pid: string, dsn: string | null) => indexSources.saveDsn(pid, dsn))
   on('index-sources:pick-file', async (kind: 'scip' | 'mcp') => {
     const win = getWindow()

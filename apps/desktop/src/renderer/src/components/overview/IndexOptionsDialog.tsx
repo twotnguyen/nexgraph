@@ -3,12 +3,29 @@ import type { IndexOptions } from '@shared/graph-types'
 import { vi } from '../../strings'
 
 interface Props {
+  projectId: string
   onSubmit: (opts: Required<Pick<IndexOptions, 'exclude' | 'includeDocs' | 'includeMedia' | 'includeConfig' | 'force'>>
-    & Pick<IndexOptions, 'workers'>) => void
+    & Pick<IndexOptions, 'workers' | 'sources'>) => void
   onClose: () => void
 }
 
-export function IndexOptionsDialog({ onSubmit, onClose }: Props) {
+const lines = (text: string): string[] => text.split('\n').map((l) => l.trim()).filter(Boolean)
+
+/** Danh sách đường dẫn sửa tay được, nút thêm mở hộp chọn tệp của main. */
+function FileList({ label, add, kind, value, onChange }: { label: string; add: string; kind: 'scip' | 'mcp'; value: string; onChange: (v: string) => void }) {
+  const pick = (): void => {
+    window.nexgraph.indexSources.pickFile(kind).then((p) => { if (p) onChange(value.trim() ? `${value.trim()}\n${p}` : p) }).catch(() => {})
+  }
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <textarea aria-label={label} rows={2} className="mono" value={value} onChange={(e) => onChange(e.target.value)} />
+      <button type="button" onClick={pick}>{add}</button>
+    </label>
+  )
+}
+
+export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
   const [text, setText] = useState('')
   const [includeDocs, setDocs] = useState(false)
   const [includeMedia, setMedia] = useState(false)
@@ -16,12 +33,30 @@ export function IndexOptionsDialog({ onSubmit, onClose }: Props) {
   const [force, setForce] = useState(false)
   const [workersText, setWorkers] = useState('')
   const [whisperMissing, setWhisperMissing] = useState(false)
+  const [pgMissing, setPgMissing] = useState(false)
+  const [postgres, setPostgres] = useState(false)
+  const [dsn, setDsn] = useState('')
+  const [hasDsn, setHasDsn] = useState(false)
+  const [cargo, setCargo] = useState(false)
+  const [manifests, setManifests] = useState(false)
+  const [scipText, setScip] = useState('')
+  const [mcpText, setMcp] = useState('')
   useEffect(() => {
     let live = true
     // Lỗi khi dò công cụ không chặn: engine vẫn báo thiếu công cụ theo từng tệp khi index.
-    window.nexgraph.engine.tools().then((t) => live && setWhisperMissing(t.faster_whisper === false)).catch(() => {})
+    window.nexgraph.engine.tools().then((t) => {
+      if (!live) return
+      setWhisperMissing(t.faster_whisper === false)
+      setPgMissing(t.psycopg === false)
+    }).catch(() => {})
+    window.nexgraph.indexSources.hasDsn(projectId).then((v) => live && setHasDsn(v)).catch(() => {})
+    window.nexgraph.indexSources.remembered(projectId).then((s) => {
+      if (!live || !s) return
+      setPostgres(!!s.postgres); setCargo(!!s.cargo); setManifests(!!s.manifests)
+      setScip((s.scipFiles ?? []).join('\n')); setMcp((s.mcpFiles ?? []).join('\n'))
+    }).catch(() => {})
     return () => { live = false }
-  }, [])
+  }, [projectId])
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -32,8 +67,21 @@ export function IndexOptionsDialog({ onSubmit, onClose }: Props) {
 
   const exclude = text.split('\n').map((l) => l.trim()).filter(Boolean)
   const workers = Number.parseInt(workersText, 10)
-  const submit = (): void => onSubmit({ exclude, includeDocs, includeMedia, includeConfig, force,
-    ...(workers >= 1 && workers <= 64 ? { workers } : {}) })
+  const scipFiles = lines(scipText)
+  const mcpFiles = lines(mcpText)
+  const usePostgres = postgres && !pgMissing
+  // Luôn gửi tường minh: bỏ chọn hết là tắt nguồn đã nhớ (nút Index lại không gửi thì main dùng bản đã nhớ).
+  const sources = { sources: { postgres: usePostgres, cargo, manifests, scipFiles, mcpFiles } }
+  const needDsn = usePostgres && !hasDsn && !dsn.trim()
+  const submit = async (): Promise<void> => {
+    // DSN đi thẳng xuống kho khoá của main; tuỳ chọn index chỉ mang cờ `postgres`.
+    if (usePostgres && dsn.trim()) await window.nexgraph.indexSources.saveDsn(projectId, dsn.trim())
+    onSubmit({ exclude, includeDocs, includeMedia, includeConfig, force,
+      ...(workers >= 1 && workers <= 64 ? { workers } : {}), ...sources })
+  }
+  const forgetDsn = (): void => {
+    window.nexgraph.indexSources.saveDsn(projectId, null).then(() => setHasDsn(false)).catch(() => {})
+  }
   return (
     <div className="modal-backdrop">
       <div role="dialog" aria-modal="true" aria-label={vi.overview.optionsTitle} className="modal">
@@ -60,9 +108,31 @@ export function IndexOptionsDialog({ onSubmit, onClose }: Props) {
           disabled={!includeDocs || whisperMissing} onChange={(e) => setMedia(e.target.checked)} /> {vi.overview.includeMedia}</label>
         {whisperMissing && <small className="muted">{vi.overview.needWhisper}</small>}
         <small className="muted">{vi.overview.languageMapHint}</small>
+        <details>
+          <summary>{vi.overview.sourcesTitle}</summary>
+          <small className="muted">{vi.overview.sourcesHint}</small>
+          <label className={pgMissing ? 'muted' : undefined}><input type="checkbox" checked={usePostgres} disabled={pgMissing}
+            onChange={(e) => setPostgres(e.target.checked)} /> {vi.overview.sourcePostgres}</label>
+          {pgMissing && <small className="muted">{vi.overview.needPsycopg}</small>}
+          {usePostgres && (
+            <label className="field">
+              <span>{vi.overview.dsnLabel}</span>
+              <input type="password" autoComplete="off" className="mono" aria-label={vi.overview.dsnLabel}
+                placeholder="postgresql://user@host:5432/db" value={dsn} onChange={(e) => setDsn(e.target.value)} />
+              {hasDsn
+                ? <small className="muted">{vi.overview.dsnSaved} <button type="button" onClick={forgetDsn}>{vi.overview.dsnForget}</button></small>
+                : needDsn && <small className="muted">{vi.overview.needDsn}</small>}
+            </label>
+          )}
+          <label><input type="checkbox" checked={cargo} onChange={(e) => setCargo(e.target.checked)} /> {vi.overview.sourceCargo}</label>
+          <label><input type="checkbox" checked={manifests} onChange={(e) => setManifests(e.target.checked)} /> {vi.overview.sourceManifests}</label>
+          <FileList label={vi.overview.scipLabel} add={vi.overview.scipAdd} kind="scip" value={scipText} onChange={setScip} />
+          <FileList label={vi.overview.mcpLabel} add={vi.overview.mcpAdd} kind="mcp" value={mcpText} onChange={setMcp} />
+          <small className="muted">{vi.overview.filesHint}</small>
+        </details>
         <footer>
           <button type="button" onClick={onClose}>{vi.overview.cancel}</button>
-          <button type="button" className="primary" onClick={submit}>{vi.overview.reindexWithOptions}</button>
+          <button type="button" className="primary" disabled={needDsn} onClick={() => void submit()}>{vi.overview.reindexWithOptions}</button>
         </footer>
       </div>
     </div>
