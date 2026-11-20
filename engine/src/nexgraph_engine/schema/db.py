@@ -6,6 +6,7 @@ from typing import Literal
 
 GRAPH_SCHEMA_VERSION = 7
 APP_SCHEMA_VERSION = 3
+GLOBAL_SCHEMA_VERSION = 1  # <data_dir>/global.db (W8)
 MIN_SQLITE = (3, 43, 0)  # FTS5 contentless_delete
 
 
@@ -21,18 +22,18 @@ class UnsupportedSqliteError(RuntimeError):
     """SQLite của Python đang chạy quá cũ."""
 
 
-def load_sql(name: Literal["graph", "app"]) -> str:
+def load_sql(name: Literal["graph", "app", "global"]) -> str:
     return resources.files("nexgraph_engine.schema").joinpath(f"{name}.sql").read_text(encoding="utf-8")
 
 
-def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app"], target: int) -> None:
+def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app", "global"], target: int) -> None:
     """Nâng cấp từng bậc trong một giao dịch."""
     conn.isolation_level = None
     conn.execute("BEGIN IMMEDIATE")
     try:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         for v in range(version, target):
-            prefix = "migrate_app" if sql_name == "app" else "migrate"
+            prefix = {"app": "migrate_app", "global": "migrate_global"}.get(sql_name, "migrate")
             if sql_name == "graph" and v == 5:
                 _widen_node_kinds(conn)
                 _add_config_column(conn)
@@ -82,7 +83,7 @@ def _add_config_column(conn: sqlite3.Connection) -> None:
                      " CHECK (gom_cau_hinh IN (0, 1))")
 
 
-def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app"]) -> None:
+def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app", "global"]) -> None:
     """Tạo schema trong một giao dịch: trọn vẹn hoặc không, chỉ fsync một lần (tự commit từng lệnh chậm ~1 s trên Windows).
 
     BEGIN IMMEDIATE rồi đọc lại user_version để hai tiến trình cùng mở CSDL mới không cùng tạo schema.
@@ -120,7 +121,7 @@ def _split_statements(sql: str) -> list[str]:
 
 
 def _open(
-    path: Path, sql_name: Literal["graph", "app"], *, read_only: bool, wal: bool, current: int
+    path: Path, sql_name: Literal["graph", "app", "global"], *, read_only: bool, wal: bool, current: int
 ) -> sqlite3.Connection:
     if sqlite3.sqlite_version_info < MIN_SQLITE:
         raise UnsupportedSqliteError(
@@ -159,3 +160,7 @@ def open_graph_db(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
 
 def open_app_db(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
     return _open(path, "app", read_only=read_only, wal=True, current=APP_SCHEMA_VERSION)
+
+
+def open_global_db(path: Path, *, read_only: bool = False) -> sqlite3.Connection:
+    return _open(path, "global", read_only=read_only, wal=True, current=GLOBAL_SCHEMA_VERSION)

@@ -396,3 +396,24 @@ def test_app_v3_ai_per_project_and_upgrades_v2(tmp_path):
     assert c3.execute("PRAGMA user_version").fetchone()[0] == 3
     assert c3.execute("SELECT count(*) FROM du_an_da_mo").fetchone()[0] == 1
     assert c3.execute("SELECT count(*) FROM ai_theo_du_an").fetchone()[0] == 0
+
+
+def test_global_db_created_at_v1_and_matches_script(tmp_path):
+    from nexgraph_engine.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
+    conn = open_global_db(tmp_path / "global.db")
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GLOBAL_SCHEMA_VERSION == 1
+    assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
+    ref = sqlite3.connect(tmp_path / "ref.db")
+    ref.executescript(load_sql("global"))
+    assert _schema_rows(conn) == _schema_rows(ref)
+    conn.close()
+    open_global_db(tmp_path / "global.db").close()  # mở lại không tạo lại schema
+
+
+def test_global_db_newer_version_rejected(tmp_path):
+    from nexgraph_engine.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
+    conn = open_global_db(tmp_path / "global.db")
+    conn.execute(f"PRAGMA user_version = {GLOBAL_SCHEMA_VERSION + 1}")
+    conn.close()
+    with pytest.raises(SchemaVersionError):
+        open_global_db(tmp_path / "global.db")
