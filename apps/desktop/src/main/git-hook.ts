@@ -8,7 +8,7 @@ export const END = '# <<< nexgraph <<<'
 export const HOOKS = ['post-commit', 'post-checkout', 'post-merge', 'post-rewrite'] as const
 export type HookName = (typeof HOOKS)[number]
 const BLOCK_RE = new RegExp(`${BEGIN}\\n[\\s\\S]*?${END}\\n?`)
-export type HookStatus = 'no_git' | 'off' | 'on' | 'outdated'
+export type HookStatus = 'no_git' | 'off' | 'on' | 'outdated' | 'outside_repo'
 
 const fail = (code: string, message: string): Error => Object.assign(new Error(message), { code })
 const quote = (s: string): string => `'${s.replace(/\\/g, '/').replace(/'/g, `'\\''`)}'`
@@ -30,11 +30,13 @@ const isWithin = (child: string, parent: string): boolean => {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
+type HooksDir = { dir: string; husky: boolean }
+
 /**
  * Thư mục hook git thật sự chạy: theo core.hooksPath (Husky), worktree và thư mục con; `null` khi không phải kho git.
- * Như graphify hooks.py: Husky 9 (`.husky/_`) ghi vào `.husky/`; core.hooksPath ra ngoài kho thì từ chối.
+ * Như graphify hooks.py: Husky 9 (`<x>/_`, mặc định `.husky/_`) ghi vào `<x>/`; core.hooksPath ra ngoài kho thì từ chối.
  */
-function hooksDir(projectPath: string): string | null {
+function hooksDir(projectPath: string): HooksDir | null {
   let out: string
   let root: string
   try {
@@ -48,41 +50,73 @@ function hooksDir(projectPath: string): string | null {
   const [top, common, hooks] = out.trim().split(/\r?\n/)
   if (!top || !common || !hooks) return null
   let dir = resolve(root, hooks)
-  if (basename(dir) === '_' && basename(dirname(dir)) === '.husky') dir = dirname(dir)
+  const husky = basename(dir) === '_'
+  if (husky) dir = dirname(dir)
   if (!isWithin(dir, resolve(top)) && dir !== resolve(root, common, 'hooks')) {
     throw fail('unsupported_hook_path', `core.hooksPath trỏ ra ngoài kho (${dir}), NexGraph không ghi vào đó`)
   }
-  return dir
+  return { dir, husky }
 }
 
-/** Chạy nền để lệnh git không chậm đi và không bao giờ thất bại vì NexGraph; luật bỏ qua nằm trong `refresh --hook`. */
+const needDir = (projectPath: string): HooksDir => {
+  const found = hooksDir(projectPath)
+  if (!found) throw fail('no_git', 'Dự án không phải kho Git')
+  return found
+}
+
+/**
+ * Chạy nền để lệnh git không chậm đi và không bao giờ thất bại vì NexGraph; luật bỏ qua nằm trong `refresh --hook`.
+ * Trạng thái git (rebase/merge/cherry-pick, sequencer) phải chụp đồng bộ ở đây: khi engine khởi động xong thì git đã đi tiếp.
+ * Mọi lệnh có thể lỗi đều nằm trong `if`/`|| :` vì Husky chạy tệp bằng `sh -e`.
+ */
 export function hookBlock(cmd: EngineCommand, projectPath: string, dataDir: string, hook: HookName): string {
   const argv = [cmd.command, ...cmd.args, 'refresh', '--project', projectPath, '--data-dir', dataDir, '--hook', hook].map(quote).join(' ')
-  return `${BEGIN}\n( ${argv} "$@" </dev/null >/dev/null 2>&1 & )\n${END}\n`
+  return `${BEGIN}
+(
+_ng_d=\${GIT_DIR:-$(git rev-parse --git-dir 2>/dev/null || :)}
+NEXGRAPH_GIT_STATE= NEXGRAPH_SEQ_TODO= NEXGRAPH_HEAD_SUBJECT=
+for _ng_f in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD; do
+  if [ -n "$_ng_d" ] && [ -e "$_ng_d/$_ng_f" ]; then NEXGRAPH_GIT_STATE="$NEXGRAPH_GIT_STATE $_ng_f"; fi
+done
+if [ -n "$_ng_d" ] && [ -f "$_ng_d/sequencer/todo" ]; then
+  NEXGRAPH_SEQ_TODO=$(grep . "$_ng_d/sequencer/todo" 2>/dev/null | head -n 2 || :)
+  NEXGRAPH_HEAD_SUBJECT=$(git log -1 --format=%s 2>/dev/null || :)
+fi
+export NEXGRAPH_GIT_STATE NEXGRAPH_SEQ_TODO NEXGRAPH_HEAD_SUBJECT
+${argv} "$@" </dev/null >/dev/null 2>&1 &
+)
+${END}
+`
 }
 
 export function hookPreview(projectPath: string, cmd: EngineCommand, dataDir: string): string {
-  const dir = hooksDir(projectPath)
-  if (!dir) throw fail('no_git', 'Dự án không phải kho Git')
+  const { dir } = needDir(projectPath)
   return HOOKS.map((h) => `${join(dir, h)}\n${hookBlock(cmd, projectPath, dataDir, h)}`).join('\n')
 }
 
 const readHook = (file: string): string | null => (existsSync(file) ? readFileSync(file, 'utf8') : null)
 
 export function hookStatus(projectPath: string, cmd: EngineCommand, dataDir: string): HookStatus {
-  const dir = hooksDir(projectPath)
-  if (!dir) return 'no_git'
+  let found0: HooksDir | null
+  try {
+    found0 = hooksDir(projectPath)
+  } catch (e) {
+    if ((e as { code?: string }).code === 'unsupported_hook_path') return 'outside_repo'
+    throw e
+  }
+  if (!found0) return 'no_git'
+  const { dir } = found0
   const found = HOOKS.map((h) => readHook(join(dir, h))?.match(BLOCK_RE)?.[0])
   if (found.every((b) => b === undefined)) return 'off'
   return found.every((b, i) => b === hookBlock(cmd, projectPath, dataDir, HOOKS[i])) ? 'on' : 'outdated'
 }
 
 export function installHook(projectPath: string, cmd: EngineCommand, dataDir: string): void {
-  const dir = hooksDir(projectPath)
-  if (!dir) throw fail('no_git', 'Dự án không phải kho Git')
+  const { dir, husky } = needDir(projectPath)
   const texts = HOOKS.map((h) => {
     const text = readHook(join(dir, h))
-    if (text !== null && !isShellHook(text)) throw fail('unsupported_hook', `Hook ${h} hiện có không dùng shell tương thích`)
+    // Husky chạy tệp người dùng bằng `sh -e`, nên tệp không có shebang vẫn là shell.
+    if (text !== null && !isShellHook(text) && !(husky && !text.startsWith('#!'))) throw fail('unsupported_hook', `Hook ${h} hiện có không dùng shell tương thích`)
     return text ?? '#!/bin/sh\n'
   })
   mkdirSync(dir, { recursive: true })
@@ -98,12 +132,14 @@ export function installHook(projectPath: string, cmd: EngineCommand, dataDir: st
 }
 
 export function uninstallHook(projectPath: string): void {
-  const dir = hooksDir(projectPath)
-  if (!dir) return
+  const found = hooksDir(projectPath)
+  if (!found) return
+  const mine = `'--project' ${quote(projectPath)} `
   for (const h of HOOKS) {
-    const file = join(dir, h)
+    const file = join(found.dir, h)
     const text = readHook(file)
-    if (text === null || !BLOCK_RE.test(text)) continue
+    // Thư mục hook dùng chung giữa các worktree: chỉ gỡ khối của chính dự án này.
+    if (text === null || !text.match(BLOCK_RE)?.[0].includes(mine)) continue
     const rest = text.replace(BLOCK_RE, '')
     if (rest.trim() === '' || rest.trim() === '#!/bin/sh') unlinkSync(file)
     else writeFileSync(file, rest)
