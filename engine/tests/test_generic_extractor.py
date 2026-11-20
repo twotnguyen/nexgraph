@@ -99,3 +99,10 @@ def test_python_parse_trees_are_not_memoized():
 
     assert not hasattr(resolution, "_parse_python_tree_cached")
     assert not hasattr(resolution._parse_python_tree, "cache_info")
+
+
+def test_extractor_never_writes_stdout(tmp_path, capfd):
+    # stdout của engine là kênh giao thức (dòng `ready` của serve, JSON của refresh, JSON-RPC của MCP).
+    (tmp_path / "a.py").write_text("def f():\n    return 1\n")
+    extract_generic(tmp_path, "a.py", "python", is_test=False)
+    assert capfd.readouterr().out == ""

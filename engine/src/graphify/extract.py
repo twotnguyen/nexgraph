@@ -1,3 +1,4 @@
+# Modified by NexGraph contributors, 2026
 """Deterministic structural extraction from source code using tree-sitter. Outputs nodes+edges dicts."""
 from __future__ import annotations
 
@@ -11925,7 +11926,7 @@ def extract(
             f"  AST cache: {cache_hits}/{total} files served from cache "
             f"({cache_hits * 100 // total}%); {len(uncached_work)} to extract"
             + (f"; {no_extractor} without an extractor" if no_extractor else ""),
-            flush=True,
+            file=sys.stderr, flush=True,  # NexGraph: stdout của engine là kênh giao thức
         )
 
     # Phase 2: extract uncached files (parallel or sequential)
