@@ -59,3 +59,22 @@ def test_report_uses_published_graph_during_reindex(api, copy_fixture, monkeypat
     conn.close()
     r = api.get(url)
     assert r.status_code == 409 and r.json()["error"]["code"] == "not_indexed"
+
+
+def test_audit_ratios_sum_to_one(copy_fixture, index_project):
+    from nexgraph_engine.report.build import audit_json
+    store, _, _ = index_project(copy_fixture("bookstore_app"))
+    audit = audit_json(store)
+    want = dict(store.conn.execute("SELECT muc_tin_cay, count(*) FROM canh GROUP BY muc_tin_cay").fetchall())
+    assert {k: v["count"] for k, v in audit["by_confidence"].items() if v["count"]} == want
+    assert audit["edges"] == sum(want.values())
+    assert abs(sum(v["ratio"] for v in audit["by_confidence"].values()) - 1) < 1e-3
+
+
+def test_audit_lists_parse_errors(copy_fixture, index_project):
+    from nexgraph_engine.report.build import audit_json
+    store, _, _ = index_project(copy_fixture("bookstore_app"))  # lib/broken.dart cú pháp hỏng
+    errors = audit_json(store)["parse_errors"]
+    assert errors["total"] >= 1
+    assert any(f["file"] == "lib/broken.dart" for f in errors["files"])
+    assert sum(errors["by_kind"].values()) == errors["total"]

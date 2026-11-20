@@ -317,3 +317,30 @@ def test_tests_for_unknown_node_is_tool_error(indexed):
 def test_find_with_kind_filters(indexed):
     hits = payload(call(build_server(*indexed), "find", {"query": "AuthService", "kind": "class"}))
     assert hits and all(h["node"]["kind"] == "class" for h in hits)
+
+
+RESOURCES = {"nexgraph://report", "nexgraph://stats", "nexgraph://god-nodes", "nexgraph://surprises",
+             "nexgraph://questions", "nexgraph://audit"}
+
+
+def test_lists_six_resources(indexed):
+    server = build_server(*indexed)
+
+    async def run():
+        async with create_connected_server_and_client_session(server._mcp_server) as client:
+            return (await client.list_resources()).resources
+    assert {str(r.uri) for r in anyio.run(run)} == RESOURCES
+
+
+def test_read_resources(indexed):
+    server = build_server(*indexed)
+
+    async def run(uri):
+        async with create_connected_server_and_client_session(server._mcp_server) as client:
+            return (await client.read_resource(uri)).contents[0]
+    audit = json.loads(anyio.run(run, "nexgraph://audit").text)
+    assert "by_confidence" in audit and "parse_errors" in audit
+    assert json.loads(anyio.run(run, "nexgraph://stats").text)["files"] > 0
+    assert isinstance(json.loads(anyio.run(run, "nexgraph://god-nodes").text), list)
+    report = anyio.run(run, "nexgraph://report")
+    assert report.mimeType == "text/markdown" and report.text.startswith("#")

@@ -57,6 +57,24 @@ def report_json(store: GraphStore) -> dict:
             "questions": questions, "benchmark": _benchmark(bg), "truncated": bg.truncated}
 
 
+AUDIT_FILES = 50
+
+
+def audit_json(store: GraphStore) -> dict:
+    """Tỉ lệ cạnh EXTRACTED/INFERRED/AMBIGUOUS và lỗi phân tích theo loại (resource `audit`)."""
+    q = store.conn.execute
+    counts = dict(q("SELECT muc_tin_cay, count(*) FROM canh GROUP BY muc_tin_cay").fetchall())
+    total = sum(counts.values())
+    by_conf = {c: {"count": counts.get(c, 0), "ratio": round(counts.get(c, 0) / total, 4) if total else 0.0}
+               for c in ("EXTRACTED", "INFERRED", "AMBIGUOUS")}
+    by_kind = dict(q("SELECT loai, count(*) FROM loi_phan_tich GROUP BY loai").fetchall())
+    files = [{"file": r[0], "kind": r[1], "detail": r[2]} for r in q(
+        "SELECT t.duong_dan_tuong_doi, l.loai, l.chi_tiet FROM loi_phan_tich l JOIN tep t ON t.ma_tep = l.ma_tep"
+        " ORDER BY t.duong_dan_tuong_doi, l.loai LIMIT ?", (AUDIT_FILES,))]
+    return {"edges": total, "by_confidence": by_conf,
+            "parse_errors": {"total": sum(by_kind.values()), "by_kind": by_kind, "files": files}}
+
+
 def report_markdown(store: GraphStore, project_name: str) -> str:
     return render_report_markdown(build_nx(store), project_name, store.stats()["files"])
 
