@@ -21,12 +21,13 @@ import { TourPanel } from '../components/tour/TourPanel'
 import { AgentPanel } from '../components/agent/AgentPanel'
 import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { MapView } from '../components/map/MapView'
+import { PrsView } from '../components/prs/PrsView'
 import { useChanges } from '../state/useChanges'
 import { Icon, Logo, VIEW_TONE } from '../components/common/icons'
 import { vi } from '../strings'
 import './workspace.css'
 
-type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | `file:${string}` | `task:${string}`
+type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | `file:${string}` | `task:${string}`
 const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
 const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
   graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }
@@ -186,6 +187,14 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     return h
   }, [changes])
   const [tab, setTab] = useState<Tab>(initialTab ?? 'arch')
+  // Tab Pull request chỉ hiện khi có remote GitHub và `gh` đã đăng nhập.
+  const [prsAvailable, setPrsAvailable] = useState(false)
+  useEffect(() => {
+    let alive = true
+    setPrsAvailable(false)
+    window.nexgraph.prs.status(project.project_id).then((s) => alive && setPrsAvailable(s.available)).catch(() => {})
+    return () => { alive = false }
+  }, [project.project_id])
   const activeFile = tab.startsWith('file:') ? tab.slice('file:'.length) : undefined
   const [lastMain, setLastMain] = useState<Tab>(initialTab ?? 'arch')
   useEffect(() => {
@@ -509,6 +518,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               <Icon name={t} size={16} /><span>{TAB_LABELS[t]}</span>
             </button>
           ))}
+          {prsAvailable && (
+            <button id={tabId('prs')} type="button" role="tab" aria-selected={tab === 'prs'} aria-controls={viewId} tabIndex={tab === 'prs' ? 0 : -1}
+              data-tone="teal" className={`tab${tab === 'prs' ? ' active' : ''}`} onClick={() => setTab('prs')}>
+              <Icon name="pr" size={16} /><span>{vi.prs.tab}</span>
+            </button>
+          )}
           {files.map((f) => (
             <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`}>
               <button id={tabId(`file:${f.file}`)} type="button" role="tab" aria-selected={tab === `file:${f.file}`} aria-controls={viewId}
@@ -565,6 +580,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               )}
             </div>
           )}
+          {tab === 'prs' && <PrsView projectId={project.project_id} onOpenNode={openNodeId} />}
           {tab === 'report' && (
             <ReportView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onAsk={(q) => void askOnGraph(q)}
               onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />

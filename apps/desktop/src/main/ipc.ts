@@ -533,4 +533,9 @@ export function registerIpc(
   on('sources:list', (pid: string) => api().listSources(pid))
   on('sources:add', async (pid: string, url: string) => ({ jobId: (await api().addSource(pid, url)).job_id }))
   on('sources:remove', (pid: string, name: string) => api().removeSource(pid, name))
+
+  // Pull request (W7): engine gọi `gh` chỉ đọc; số PR được engine kiểm lại.
+  on('prs:status', (pid: string) => api().prStatus(pid))
+  on('prs:list', (pid: string) => api().listPrs(pid))
+  on('prs:detail', (pid: string, n: number) => api().prDetail(pid, n))
 }

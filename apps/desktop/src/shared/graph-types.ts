@@ -396,3 +396,30 @@ export interface AiSettings {
 export interface Citation { raw: string; file: string; start: number; end: number; valid: boolean; reason: null | 'file_not_found' | 'out_of_range' }
 export interface ContextItem { node: GraphNode; score: number; reasons: string[]; code: { file: string; start: number; end: number; text: string } | null }
 export interface ContextPack { items: ContextItem[]; flows: FlowSummary[]; tokens: number; truncated: boolean }
+
+/** Pull request của GitHub (W7). Nhãn theo thứ tự ưu tiên của bộ phân loại. */
+export type PrStatusLabel = 'WRONG-BASE' | 'CI-FAIL' | 'CHANGES-REQ' | 'DRAFT' | 'STALE' | 'PENDING' | 'APPROVED' | 'READY'
+export interface PrAvailability { available: boolean; reason: 'gh_missing' | 'gh_auth' | 'not_github' | 'gh_timeout' | 'gh_failed' | null; repo: string | null; default_branch: string | null }
+export interface PrInfo {
+  number: number; title: string; branch: string; base: string; author: string; draft: boolean
+  review: string | null; ci: 'SUCCESS' | 'FAILURE' | 'PENDING' | 'NONE'; updated_at: string; days_old: number
+  status: PrStatusLabel; url: string | null
+}
+export interface PrListItem extends PrInfo { files: string[]; nodes_affected: number }
+export interface PrConflict { a: number; b: number; files: string[]; nodes: number }
+export interface PrList { repo: string | null; default_branch: string; base: string; prs: PrListItem[]; conflicts: PrConflict[]; truncated: boolean }
+export interface PrDetail {
+  pr: PrInfo
+  changed_files: { path: string; status: 'M' | 'A' | 'D' | 'R'; old_path: string | null }[]
+  changed_nodes: GraphNode[]
+  impacted: ImpactedNode[]
+  tests: GraphNode[]
+  test_gaps: GraphNode[]
+  stale_docs: { node: GraphNode; symbols: string[] }[]
+  unreferenced: { node: GraphNode; heuristic: true }[]
+  test_selection: { files: string[]; commands: string[]; run_all: boolean; reasons: string[] }
+  /** Tác động sang repo khác khi dự án nằm trong graph chung; `null` khi chưa có. */
+  cross_repo: unknown | null
+  comment: string
+  truncated: boolean
+}

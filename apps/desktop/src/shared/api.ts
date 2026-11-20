@@ -14,6 +14,7 @@ import type {
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit, SourceItem
 } from './graph-types'
 import type { IndexSources } from './graph-types'
+import type { PrAvailability, PrDetail, PrList } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -220,5 +221,12 @@ export interface NexGraphApi {
     pickFile(kind: 'scip' | 'mcp'): Promise<string | null>
     /** Lựa chọn nguồn đã nhớ (không gồm DSN) để hộp thoại hiện lại. */
     remembered(projectId: string): Promise<IndexSources | null>
+  }
+  /** Pull request của GitHub qua `gh` (W7), chỉ đọc. Lỗi có `code`: `gh_missing` | `gh_auth` | `not_github` | `gh_timeout` | `gh_failed` | `pr_not_found`. */
+  prs: {
+    /** Tab Pull request chỉ hiện khi `available`. */
+    status(projectId: string): Promise<PrAvailability>
+    list(projectId: string): Promise<PrList>
+    detail(projectId: string, prNumber: number): Promise<PrDetail>
   }
 }
