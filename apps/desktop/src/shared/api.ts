@@ -14,6 +14,7 @@ import type {
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit, SourceItem
 } from './graph-types'
 import type { IndexSources } from './graph-types'
+import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -220,5 +221,15 @@ export interface NexGraphApi {
     pickFile(kind: 'scip' | 'mcp'): Promise<string | null>
     /** Lựa chọn nguồn đã nhớ (không gồm DSN) để hộp thoại hiện lại. */
     remembered(projectId: string): Promise<IndexSources | null>
+  }
+  /** Graph chung nhiều repo (W8). Thêm/gỡ chạy lại job nối cạnh liên repo; theo dõi bằng `index.status`. */
+  globalGraph: {
+    list(): Promise<GlobalMember[]>
+    add(projectId: string): Promise<{ jobId: string }>
+    remove(projectId: string): Promise<void>
+    search(q: string, limit?: number): Promise<GlobalSearchHit[]>
+    graph(projectIds: string[], limit?: number): Promise<GlobalGraph>
+    /** Hộp thoại chọn thư mục ở main rồi ghi graph.json gộp; `null` khi huỷ. */
+    export(projectIds: string[]): Promise<GlobalExportResult | null>
   }
 }

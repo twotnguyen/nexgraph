@@ -168,6 +168,14 @@ const api: NexGraphApi = {
     saveDsn: (pid, dsn) => call('index-sources:save-dsn', pid, dsn),
     pickFile: (kind) => call('index-sources:pick-file', kind),
     remembered: (pid) => call('index-sources:remembered', pid)
+  },
+  globalGraph: {
+    list: () => call('global:list'),
+    add: (pid) => call('global:add', pid),
+    remove: (pid) => call('global:remove', pid),
+    search: (q, limit) => call('global:search', q, limit),
+    graph: (pids, limit) => call('global:graph', pids, limit),
+    export: (pids) => call('global:export', pids)
   }
 }
 
