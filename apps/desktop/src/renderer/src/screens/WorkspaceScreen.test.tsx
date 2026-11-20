@@ -56,7 +56,7 @@ function setup() {
   const neighbors = vi.fn(async (_p: string, q: { node: string }) => hood(q.node))
   const search = vi.fn(async () => [{ node: gnode('lib/a.dart::AuthService.login#method', 'login'), score: 2 }])
   installNexgraph({ graph: { neighbors, search, report: vi.fn(async () => ({
-    god_nodes: [], communities: [], surprising: [], questions: [], benchmark: null, truncated: false
+    god_nodes: [], communities: [], surprising: [], questions: [], cycles: { cycles: [], total: 0 }, freshness: { indexed_at: null, index_commit: null, head_commit: null, changed_files: 0, stale: false }, gaps: { isolated: { total: 0, nodes: [] }, ambiguous_edges: { total: 0, edges: [] } }, benchmark: null, truncated: false
   })) } })
   render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
   return { neighbors, search }
@@ -487,7 +487,7 @@ describe('WorkspaceScreen: editor tabs', () => {
   it('tab Báo cáo: câu hỏi gợi ý chạy Hỏi graph và chuyển sang Graph; Xuất Markdown chọn sẵn markdown', async () => {
     const a = gnode('lib/a.dart::A.run#method', 'run')
     const ask = vi.fn(async () => ({ seeds: [a], nodes: [a], edges: [], truncated: false }))
-    const report = vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], benchmark: null, truncated: false,
+    const report = vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], cycles: { cycles: [], total: 0 }, freshness: { indexed_at: null, index_commit: null, head_commit: null, changed_files: 0, stale: false }, gaps: { isolated: { total: 0, nodes: [] }, ambiguous_edges: { total: 0, edges: [] } }, benchmark: null, truncated: false,
       questions: [{ question: 'run làm gì?', why: '' }] }))
     installNexgraph({ graph: { ask, report } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
@@ -505,7 +505,7 @@ describe('WorkspaceScreen: editor tabs', () => {
   it('câu hỏi gợi ý lỗi hoặc không khớp vẫn báo trên tab Graph', async () => {
     const ask = vi.fn().mockRejectedValueOnce({ code: 'bad_param', message: 'Câu hỏi không có từ nào tìm được' })
       .mockResolvedValueOnce({ seeds: [], nodes: [], edges: [], truncated: false })
-    const report = vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], benchmark: null, truncated: false,
+    const report = vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], cycles: { cycles: [], total: 0 }, freshness: { indexed_at: null, index_commit: null, head_commit: null, changed_files: 0, stale: false }, gaps: { isolated: { total: 0, nodes: [] }, ambiguous_edges: { total: 0, edges: [] } }, benchmark: null, truncated: false,
       questions: [{ question: 'q1?', why: '' }] }))
     installNexgraph({ graph: { ask, report, neighbors: vi.fn(async () => ({ nodes: [], edges: [], truncated: false })) } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)

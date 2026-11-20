@@ -69,7 +69,7 @@ describe('App flow after opening a project', () => {
 
   it('mở dự án đã index vào workspace và vẫn có thể lập chỉ mục lại từ Tổng quan', async () => {
     const h = installNexgraph({ project: { open: vi.fn(async () => project({ last_indexed_at: 1_700_000_000 })) },
-      graph: { report: vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], questions: [], benchmark: null, truncated: false })) } })
+      graph: { report: vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], questions: [], cycles: { cycles: [], total: 0 }, freshness: { indexed_at: null, index_commit: null, head_commit: null, changed_files: 0, stale: false }, gaps: { isolated: { total: 0, nodes: [] }, ambiguous_edges: { total: 0, edges: [] } }, benchmark: null, truncated: false })) } })
     render(<App />)
     await userEvent.click(await screen.findByRole('button', { name: 'Mở thư mục…' }))
     expect(await screen.findByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()
