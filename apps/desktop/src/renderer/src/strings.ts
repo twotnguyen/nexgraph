@@ -50,10 +50,19 @@ export const vi = {
   integration: {
     skillExisting: 'Tệp SKILL.md đã có nội dung khác nên NexGraph không ghi đè. Hãy sao chép nội dung mới và cập nhật tệp bằng tay.',
     codex: 'Codex',
-    skillClaude: 'Skill nexgraph (Claude Code)',
-    skillAgentsMd: 'Khối nexgraph trong AGENTS.md',
     codexTrusted: 'Codex chỉ đọc .codex/config.toml của dự án khi dự án đã được đánh dấu tin cậy trong Codex.',
-    codexExisting: 'Tệp .codex/config.toml đã có nên NexGraph không sửa (TOML). Hãy sao chép cấu hình và dán vào tệp của dự án hoặc ~/.codex/config.toml.'
+    codexExisting: 'Tệp .codex/config.toml đã có nên NexGraph không sửa (TOML). Hãy sao chép cấu hình và dán vào tệp của dự án hoặc ~/.codex/config.toml.',
+    parts: { mcp: 'Cấu hình MCP', rules: 'Quy tắc hỏi graph trước', skill: 'Skill nexgraph', hook: 'Hook nhắc dùng graph' } as Record<string, string>,
+    willRemove: 'NexGraph sẽ gỡ',
+    removeStatus: { remove: 'Bỏ mục nexgraph, giữ phần còn lại', delete: 'Xoá tệp', up_to_date: 'Không có gì để gỡ' } as Record<string, string>,
+    removeInvalid: 'NexGraph không tự sửa tệp này (không đọc được, hoặc có nội dung không do NexGraph tạo). Hãy xoá mục nexgraph bằng tay.',
+    remove: 'Gỡ…',
+    confirmRemove: 'Xác nhận gỡ',
+    back: 'Quay lại',
+    removed: 'Đã gỡ NexGraph khỏi các tệp trên',
+    sharedNote: 'AGENTS.md và .agents/skills dùng chung cho nhiều trợ lý: gỡ ở một trợ lý sẽ gỡ cho cả các trợ lý khác.',
+    strict: 'Chặn lần đọc tệp đầu tiên mỗi phiên khi trợ lý chưa hỏi graph (chế độ nghiêm)',
+    copyPart: 'Sao chép'
   },
   projects: {
     title: 'Dự án',
@@ -201,16 +210,22 @@ export const vi = {
     noWebgl: 'Máy này không bật được WebGL nên không vẽ được bản đồ. Dùng thẻ Kiến trúc thay thế.'
   },
   integrate: {
-    card: 'Tích hợp trợ lý AI', cardDesc: 'Nối Claude Code, Cursor, VS Code hoặc OpenCode vào đồ thị của dự án qua MCP.',
+    card: 'Tích hợp trợ lý AI', cardDesc: 'Nối Claude Code, Codex, Cursor, Gemini và 17 trợ lý khác vào đồ thị của dự án: MCP, quy tắc hỏi graph trước, skill và hook nhắc.',
     title: 'Tích hợp trợ lý AI',
-    agents: { claude: 'Claude Code', cursor: 'Cursor', vscode: 'VS Code (Copilot)', opencode: 'OpenCode' } as Record<string, string>,
+    agents: {
+      claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', opencode: 'OpenCode', kilo: 'Kilo Code', aider: 'Aider',
+      amp: 'Amp', vscode: 'VS Code (Copilot)', claw: 'OpenClaw', droid: 'Factory Droid', trae: 'Trae', 'trae-cn': 'Trae CN',
+      antigravity: 'Antigravity', hermes: 'Hermes', kiro: 'Kiro', pi: 'Pi', devin: 'Devin / Windsurf', codebuddy: 'CodeBuddy', kimi: 'Kimi',
+      agents: 'Agent Skills (AGENTS.md)'
+    } as Record<string, string>,
     agentLabel: 'Trợ lý', close: 'Đóng',
     willWrite: 'Tệp sẽ ghi', existing: 'Tệp đã có, chỉ thêm mục nexgraph', fresh: 'Tệp mới',
     write: 'Ghi tệp này', update: 'Cập nhật', copy: 'Sao chép cấu hình', copied: 'Đã sao chép',
     written: (path: string) => `Đã ghi ${path}`,
     upToDate: 'Đã cài, không cần ghi lại',
     invalid: 'Tệp cấu hình hiện có không phải JSON hợp lệ nên NexGraph không sửa. Hãy sao chép cấu hình và dán thủ công.',
-    note: 'NexGraph chỉ thêm mục "nexgraph" và giữ nguyên phần còn lại của tệp. Mọi công cụ MCP đều chỉ đọc.'
+    note: 'NexGraph chỉ thêm mục "nexgraph" và giữ nguyên phần còn lại của tệp. Mọi công cụ MCP đều chỉ đọc.',
+    writeAll: 'Ghi các tệp này'
   },
   hook: {
     card: 'Tự cập nhật theo Git', cardDesc: 'Thêm git hook để đồ thị tự cập nhật sau commit, đổi nhánh, merge và rebase.',

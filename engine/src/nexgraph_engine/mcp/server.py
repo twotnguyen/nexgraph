@@ -32,6 +32,7 @@ from mcp.types import ToolAnnotations
 from nexgraph_engine import __version__
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
+from nexgraph_engine.hook_guard import project_id_of, touch_query_stamp
 from nexgraph_engine.impact.analyze import tests_for as tests_for_node
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.common import nodes_by_pk
@@ -193,9 +194,11 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
         """Hỏi đồ thị bằng câu tự do: tìm nút khớp rồi mở rộng BFS/DFS trong giới hạn token (budget)."""
         def body(s: GraphStore) -> dict:
             try:
-                return ask_graph(s, question, max(1, min(depth, 6)), max(1, min(budget, 100_000)), mode)
+                out = ask_graph(s, question, max(1, min(depth, 6)), max(1, min(budget, 100_000)), mode)
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
+            touch_query_stamp(data_dir, project_id_of(s.conn))  # hook-guard thôi nhắc trong 30 phút
+            return out
         return await run("query_graph", body)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -229,9 +232,11 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
         """Gói các nút và đoạn mã liên quan nhất tới câu hỏi, xếp hạng hợp nhất và gọn trong ngân sách token (500–20000)."""
         def body(s: GraphStore) -> dict:
             try:
-                return build_context(s, root, question, max(500, min(budget, 20_000)))
+                out = build_context(s, root, question, max(500, min(budget, 20_000)))
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
+            touch_query_stamp(data_dir, project_id_of(s.conn))
+            return out
         return await run("get_context", body)
 
     @mcp.tool(annotations=READ_ONLY)

@@ -145,8 +145,10 @@ const api: NexGraphApi = {
   },
   mcp: {
     config: (pid) => call('mcp:config', pid),
-    plan: (agent, pid) => call('mcp:plan', agent, pid),
-    apply: (agent, pid) => call('mcp:apply', agent, pid),
+    plan: (agent, pid, opts) => call('mcp:plan', agent, pid, opts),
+    apply: (agent, pid, opts) => call('mcp:apply', agent, pid, opts),
+    planRemove: (agent, pid) => call('mcp:plan-remove', agent, pid),
+    remove: (agent, pid) => call('mcp:remove', agent, pid),
     startHttp: (pid) => call('mcp:start-http', pid),
     stopHttp: (pid) => call('mcp:stop-http', pid),
     httpStatus: (pid) => call('mcp:http-status', pid)
