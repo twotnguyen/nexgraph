@@ -117,8 +117,8 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
     async checkCommand(command) {
       if (deps.getMode() !== 'edit' || !deps.canRunCommands?.()) return deny('Chưa cho phép chạy mã của dự án trong tác vụ này')
       const myEpoch = epoch
-      const decision = deps.getPolicy?.() === 'auto' ? { allow: true as const }
-        : await wait({ id: randomUUID(), tool: 'command', ...command })
+      // Lệnh luôn phải duyệt, kể cả khi policy là 'auto' (ADR 0016): mã chạy được ngoài phạm vi checkpoint và có mạng.
+      const decision = await wait({ id: randomUUID(), tool: 'command', ...command })
       if (myEpoch !== epoch) return deny(revokedReason)
       if (deps.getMode() !== 'edit' || !deps.canRunCommands?.()) return deny('Quyền chạy lệnh đã thay đổi')
       return decision
