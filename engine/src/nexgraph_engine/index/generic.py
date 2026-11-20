@@ -15,6 +15,7 @@ from pathlib import Path
 from graphify.extract import _get_extractor, _safe_extract_with_xaml_root, extract
 
 from nexgraph_engine.dart.extractor import FileExtraction
+from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, LANGUAGE_BY_EXT
 from nexgraph_engine.ids import file_node_id, node_id
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.models import Edge, Node, UnresolvedRef
@@ -51,19 +52,28 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     fid = file_node_id(rel_path)
     base = path.name
     file_gid = next((n["id"] for n in result["nodes"] if n.get("label") == base), "")
-    raw = {n["id"]: n for n in result["nodes"] if n.get("label") != base and n.get("_callable")}
+    # Ngôn ngữ có từ trước W2 giữ đúng cách lọc cũ (chỉ node `_callable`) để số node/cạnh không đổi.
+    full = language not in _LEGACY_LANGUAGES
+    raw = {n["id"]: n for n in result["nodes"] if _keep(n, base, full)}
     raw_edges = result["edges"]
 
     parent_class: dict[str, str] = {e["target"]: e["source"] for e in raw_edges if e["relation"] == "method"}
+    type_sources = {e["source"] for e in raw_edges if e["relation"] in _TYPE_RELATIONS}
     qnames: dict[str, tuple[str, NodeKind]] = {}
     for gid, n in raw.items():
         name = _plain_name(raw, gid)
+        if full:
+            name = name.replace("::", ".")
+        callable_ = bool(n.get("_callable")) or (full and _looks_callable(n))
         if n.get("_callable_class"):
             qnames[gid] = (name, NodeKind.CLASS)
-        elif gid in parent_class and parent_class[gid] in raw:
-            qnames[gid] = (f"{_plain_name(raw, parent_class[gid])}.{name}", NodeKind.METHOD)
-        else:
+        elif callable_ and gid in parent_class and parent_class[gid] in raw:
+            parent = _plain_name(raw, parent_class[gid]).replace("::", ".") if full else _plain_name(raw, parent_class[gid])
+            qnames[gid] = (f"{parent}.{name}", NodeKind.METHOD)
+        elif callable_:
             qnames[gid] = (name, NodeKind.FUNCTION)
+        else:
+            qnames[gid] = (name, _data_kind(n, name, language, gid in type_sources))
     ids: dict[str, str] = {}
     used: set[str] = set()
     first: dict[str, str] = {}  # id NexGraph -> gid đầu tiên mang id đó
@@ -118,10 +128,24 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         rel, src, dst, line = e["relation"], owner.get(e["source"], e["source"]), e["target"], _line(e.get("source_location"))
         conf = Confidence.INFERRED if e.get("confidence") == "INFERRED" else Confidence.EXTRACTED
         score = 1.0 if conf == Confidence.EXTRACTED else 0.8
-        if rel in ("contains", "method"):
-            parent = ids.get(src) if rel == "method" else fid
+        if rel in ("contains", "method") or (full and rel in ("defines", "case_of")):
+            parent = ids.get(src) if rel == "method" or (full and src in ids) else fid
             if parent and dst in ids:
                 edges.append(Edge(source=parent, target=ids[dst], type=EdgeType.DEFINES))
+        elif full and rel in ("indirect_call", "dispatches_to") and src in ids and dst in ids:
+            edges.append(Edge(source=ids[src], target=ids[dst], type=EdgeType.CALLS, confidence=Confidence.INFERRED,
+                              confidence_score=0.8, line=line, subtype=rel))
+        elif full and rel in _HERITAGE and src in ids and line:
+            etype, sub = _HERITAGE[rel]
+            if dst in ids:
+                edges.append(Edge(source=ids[src], target=ids[dst], type=etype, confidence=conf,
+                                  confidence_score=score, line=line, subtype=sub))
+            else:
+                base_name = (labels.get(dst) or dst).replace("::", ".").split(".")[-1]
+                refs.append(UnresolvedRef(source=ids[src], name=base_name, type=etype, line=line, col=0))
+        elif full and rel in _REFERENCE_RELATIONS and src in ids and dst in ids and ids[src] != ids[dst]:
+            edges.append(Edge(source=ids[src], target=ids[dst], type=_REFERENCE_RELATIONS[rel], confidence=conf,
+                              confidence_score=score, line=line, subtype=None if rel == "references" else rel))
         elif rel in ("imports", "imports_from") and line:
             if rel == "imports" and line in from_lines:
                 continue
@@ -329,6 +353,45 @@ def _foreign_receiver(lines: list[str], line: int, callee: str) -> str | None:
         return None
     chain = hit.group(1).split(".")
     return None if chain[-1] in _OWN_RECEIVERS else chain[-1]
+
+
+_LEGACY_LANGUAGES = frozenset(LANGUAGE_BY_EXT.values())
+_TYPE_RELATIONS = frozenset({"method", "inherits", "implements", "mixes_in", "embeds", "case_of"})
+_SKIP_META_KINDS = frozenset({"file", "bash_entrypoint"})  # nút đại diện cho chính tệp
+# Quan hệ kế thừa của graphify → (EdgeType, loai_con).
+_HERITAGE = {"inherits": (EdgeType.INHERITS, None), "implements": (EdgeType.IMPLEMENTS, None),
+             "mixes_in": (EdgeType.INHERITS, "mixes_in")}
+_REFERENCE_RELATIONS = {"references": EdgeType.REFERENCES, "uses": EdgeType.REFERENCES,
+                        "instantiates": EdgeType.REFERENCES, "reads_from": EdgeType.REFERENCES,
+                        "writes_to": EdgeType.REFERENCES, "embeds": EdgeType.COMPOSES}
+_CONSTANT = re.compile(r"[A-Z][A-Z0-9_]*")
+
+
+def _keep(n: dict, base: str, full: bool) -> bool:
+    if n.get("label") == base:
+        return False
+    if not full:
+        return bool(n.get("_callable"))
+    return bool(n.get("source_file")) and (n.get("metadata") or {}).get("kind") not in _SKIP_META_KINDS
+
+
+def _looks_callable(n: dict) -> bool:
+    return n.get("label", "").endswith("()") or "function" in str((n.get("metadata") or {}).get("kind", ""))
+
+
+def _data_kind(n: dict, name: str, language: str, is_type: bool) -> NodeKind:
+    """Loại nút không gọi được của ngôn ngữ mức chung (W2): node graphify không có trường kind chung."""
+    if is_type:
+        return NodeKind.CLASS
+    if language == "sql":
+        return NodeKind.TABLE
+    if language == "terraform":
+        return NodeKind.RESOURCE
+    if language in CONFIG_LANGUAGES:
+        return NodeKind.CONFIG_KEY
+    if n.get("label", "").startswith(".") or _CONSTANT.fullmatch(name.split(".")[-1]):
+        return NodeKind.VARIABLE
+    return NodeKind.TYPE
 
 
 def _plain_name(raw: dict, gid: str) -> str:

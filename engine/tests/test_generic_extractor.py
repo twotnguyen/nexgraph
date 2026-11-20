@@ -125,3 +125,67 @@ def test_java_overloads_share_one_line_independent_node(tmp_path):
     after = {n.id for n in extract_generic(tmp_path, "A.java", "java", is_test=False).nodes}
     assert before == after
     assert sum(1 for i in after if "A.run" in i) == 1
+
+
+def _kinds(r):
+    return {n.id.split("::", 1)[1]: n.kind.value for n in r.nodes}
+
+
+def _edges(r, type_name):
+    return {(e.source.split("::", 1)[-1], e.target.split("::", 1)[-1], e.subtype) for e in r.edges if e.type.name == type_name}
+
+
+RUST = """pub const RETRY_LIMIT: u32 = 3;
+pub struct Graph { n: u32 }
+pub trait Shape { fn area(&self) -> f64; }
+impl Graph {
+    pub fn add(&mut self) { self.grow(); }
+    fn grow(&mut self) {}
+}
+impl Shape for Graph { fn area(&self) -> f64 { 0.0 } }
+"""
+
+
+def test_rust_types_methods_constants_and_calls(tmp_path):
+    (tmp_path / "a.rs").write_text(RUST)
+    r = extract_generic(tmp_path, "a.rs", "rust", is_test=False)
+    k = _kinds(r)
+    assert k["Graph#class"] == "class" and k["Shape#class"] == "class"
+    assert k["Graph.add#method"] == "method" and k["Graph.area#method"] == "method" and k["Shape.area#method"] == "method"
+    assert k["RETRY_LIMIT#variable"] == "variable"
+    assert ("Graph.add#method", "Graph.grow#method", None) in _edges(r, "CALLS")
+    assert ("Graph#class", "Shape#class", None) in _edges(r, "IMPLEMENTS")
+
+
+def test_bash_functions_and_calls(tmp_path):
+    (tmp_path / "a.sh").write_text("build() {\n  echo hi\n}\ndeploy() {\n  build\n}\n")
+    r = extract_generic(tmp_path, "a.sh", "bash", is_test=False)
+    assert _kinds(r) == {"build#function": "function", "deploy#function": "function"}  # nút "script" là chính tệp
+    assert ("deploy#function", "build#function", None) in _edges(r, "CALLS")
+
+
+def test_ruby_nested_class_and_external_base(tmp_path):
+    (tmp_path / "a.rb").write_text("module Shop\n  class Cart < Base\n    def total\n      sum()\n    end\n    def sum; 0; end\n  end\nend\n")
+    r = extract_generic(tmp_path, "a.rb", "ruby", is_test=False)
+    k = _kinds(r)
+    assert k["Shop.Cart#class"] == "class" and k["Shop.Cart.total#method"] == "method"
+    assert any(ref.name == "Base" and ref.type.name == "INHERITS" for ref in r.refs)
+
+
+def test_sql_tables_and_references(tmp_path):
+    (tmp_path / "a.sql").write_text("CREATE TABLE users (id INT PRIMARY KEY);\n"
+                                    "CREATE TABLE orders (id INT, user_id INT REFERENCES users(id));\n"
+                                    "CREATE VIEW v AS SELECT * FROM users;\n")
+    r = extract_generic(tmp_path, "a.sql", "sql", is_test=False)
+    k = _kinds(r)
+    assert k["users#table"] == "table" and k["orders#table"] == "table" and k["v#table"] == "table"
+    refs = _edges(r, "REFERENCES")
+    assert ("orders#table", "users#table", None) in refs and ("v#table", "users#table", "reads_from") in refs
+
+
+def test_same_file_name_in_two_directories_gets_distinct_ids(tmp_path):
+    for d in ("a", "b"):
+        (tmp_path / d).mkdir()
+        (tmp_path / d / "mod.rs").write_text("pub fn run() {}\n")
+    ids = {n.id for d in ("a", "b") for n in extract_generic(tmp_path, f"{d}/mod.rs", "rust", is_test=False).nodes}
+    assert ids == {"a/mod.rs::run#function", "b/mod.rs::run#function"}
