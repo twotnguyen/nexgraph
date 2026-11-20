@@ -1,4 +1,5 @@
 // Test bảo mật IPC: mọi handler nhận path phải suy gốc từ projectId đã đăng ký trong main.
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,7 +72,8 @@ beforeAll(() => {
   root2 = join(base, 'proj2')
   exportDir = join(base, 'export')
   h.userData = join(base, 'user-data')
-  for (const dir of [root, root2, exportDir, h.userData, join(root, '.git', 'hooks')]) mkdirSync(dir, { recursive: true })
+  for (const dir of [root, root2, exportDir, h.userData]) mkdirSync(dir, { recursive: true })
+  execFileSync('git', ['init', '-q', root])
   writeFileSync(join(root, 'a.ts'), 'x')
   h.projects = [{ project_id: 'p1', path: root }, { project_id: 'p2', path: root2 }]
   registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => null, () => ({ command: 'engine', args: [], cwd: base }), base)

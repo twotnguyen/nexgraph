@@ -14,7 +14,7 @@ import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentEx
 import { detectProjectCommands } from './agent/process-tools'
 import type { AiSettings } from '../shared/graph-types'
 import { SecretStore, writeJson } from './ai/settings'
-import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
+import { hookPreview, hookStatus, installHook, uninstallHook } from './git-hook'
 import { applyIntegration, planIntegration } from './integrations'
 import type { AgentId } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
@@ -498,7 +498,7 @@ export function registerIpc(
   // Mọi path đi vào engine/git hook/MCP đều suy từ projectId đã đăng ký, không tin path renderer gửi.
   on('mcp:config', async (pid: string) => ({ stdio: mcpStdioConfig(getCommand(), await rootOf(pid), dataDir) }))
   on('hook:status', async (pid: string) => hookStatus(await rootOf(pid), getCommand(), dataDir))
-  on('hook:preview', async (pid: string) => hookBlock(getCommand(), await rootOf(pid), dataDir))
+  on('hook:preview', async (pid: string) => hookPreview(await rootOf(pid), getCommand(), dataDir))
   on('hook:install', async (pid: string) => installHook(await rootOf(pid), getCommand(), dataDir))
   on('hook:uninstall', async (pid: string) => uninstallHook(await rootOf(pid)))
   on('mcp:plan', async (agent: AgentId, pid: string) => planIntegration(agent, await rootOf(pid), getCommand(), dataDir))

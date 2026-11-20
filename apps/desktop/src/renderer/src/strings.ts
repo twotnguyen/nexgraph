@@ -198,10 +198,11 @@ export const vi = {
     note: 'NexGraph chỉ thêm mục "nexgraph" và giữ nguyên phần còn lại của tệp. Mọi công cụ MCP đều chỉ đọc.'
   },
   hook: {
-    card: 'Cập nhật sau mỗi commit', cardDesc: 'Thêm git hook để đồ thị tự cập nhật sau mỗi lần commit.',
+    card: 'Tự cập nhật theo Git', cardDesc: 'Thêm git hook để đồ thị tự cập nhật sau commit, đổi nhánh, merge và rebase.',
     on: 'Đang bật', off: 'Chưa bật', noGit: 'Dự án không phải kho Git',
-    title: 'Cập nhật sau mỗi commit', preview: 'Sẽ thêm vào .git/hooks/post-commit',
-    install: 'Bật', uninstall: 'Tắt', outdated: 'Đường dẫn engine đã đổi, cần cài lại', close: 'Đóng'
+    title: 'Tự cập nhật theo Git',
+    preview: 'Sẽ thêm khối dưới đây vào 4 hook post-commit, post-checkout, post-merge, post-rewrite (giữ nguyên nội dung sẵn có). Cập nhật chạy nền và tự bỏ qua khi đang rebase, merge hoặc cherry-pick.',
+    install: 'Bật', uninstall: 'Tắt', outdated: 'Hook cũ, thiếu hoặc đường dẫn engine đã đổi, cần cài lại', close: 'Đóng'
   },
   tour: {
     title: (name: string, n: number) => `Tham quan ${name} · ${n} bước`,
