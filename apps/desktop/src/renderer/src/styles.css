@@ -2471,3 +2471,9 @@ dialog.modal::backdrop { background: var(--overlay); }
     scroll-behavior: auto !important;
   }
 }
+
+/* W10: ghi nhớ trong Inspector và mục Bài học. */
+.node-memory h4 { margin: 8px 0 2px; font-size: 13px; }
+.node-memory ul { margin: 2px 0 4px; padding-left: 16px; font-size: 12px; }
+.node-memory form { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.node-memory textarea { font: inherit; font-size: 12px; }

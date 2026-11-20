@@ -83,6 +83,18 @@ describe('AgentPanel', () => {
     expect(screen.getByRole('button', { name: /ma\.py:1–2/ })).toBeDisabled()
   })
 
+  it('câu trả lời có ba nút đánh giá, gửi kèm câu hỏi của lượt đó (W10)', async () => {
+    let emit: (pid: string, e: AgentEvent) => void = () => {}
+    const installed = installNexgraph({ ...consented(), agent: { prompt: replying(() => emit, done) } })
+    emit = installed.emitAgent
+    render(<AgentPanel {...props()} />)
+    await ask('Luồng chạy thế nào?')
+    const group = await screen.findByRole('group', { name: 'Đánh giá câu trả lời' })
+    await userEvent.click(within(group).getByRole('button', { name: 'Ngõ cụt' }))
+    expect(installed.api.memory.rate).toHaveBeenCalledWith('p1', { question: 'Luồng chạy thế nào?', answer: done.type === 'done' ? done.text : '',
+      outcome: 'ngo_cut', citations: [{ file: 'app.py', line: 8 }] })
+  })
+
   it('Hỏi chỉ đọc; lần đầu sang Sửa giải thích việc duyệt từng bản diff', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
     const { api } = installNexgraph({ ...consented(), agent: { getMode: vi.fn(async () => 'ask' as const) } })

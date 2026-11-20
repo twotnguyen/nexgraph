@@ -168,6 +168,12 @@ const api: NexGraphApi = {
     saveDsn: (pid, dsn) => call('index-sources:save-dsn', pid, dsn),
     pickFile: (kind) => call('index-sources:pick-file', kind),
     remembered: (pid) => call('index-sources:remembered', pid)
+  },
+  memory: {
+    recall: (pid, q) => call('memory:recall', pid, q),
+    add: (pid, kind, text, nodeIds) => call('memory:add', pid, kind, text, nodeIds),
+    rate: (pid, rating) => call('memory:rate', pid, rating),
+    lessons: (pid) => call('memory:lessons', pid)
   }
 }
 

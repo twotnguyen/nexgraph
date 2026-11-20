@@ -396,3 +396,27 @@ export interface AiSettings {
 export interface Citation { raw: string; file: string; start: number; end: number; valid: boolean; reason: null | 'file_not_found' | 'out_of_range' }
 export interface ContextItem { node: GraphNode; score: number; reasons: string[]; code: { file: string; start: number; end: number; text: string } | null }
 export interface ContextPack { items: ContextItem[]; flows: FlowSummary[]; tokens: number; truncated: boolean }
+
+/** Bộ nhớ làm việc (W10). `kind` và `outcome` giữ đúng giá trị trong CSDL. */
+export type MemoryKind = 'lesson' | 'decision' | 'incident' | 'owner'
+export type RatingOutcome = 'huu_ich' | 'ngo_cut' | 'da_sua'
+export interface MemoryItem {
+  id: number; kind: MemoryKind | 'danh_gia'; text: string; node_ids: string[]; missing_node_ids: string[]
+  outcome: RatingOutcome | null; created_at: number; source: 'nguoi_dung' | 'tro_ly' | 'mcp'
+  question?: string; answer?: string; correction?: string
+}
+export interface LessonEntry { node: string; score: number; n?: number; pos?: number; neg?: number; verdict?: 'useful' | 'dead end' | 'even'; last?: string }
+export interface MemoryRecall {
+  memories: MemoryItem[]
+  node_id?: string; node_exists?: boolean
+  lesson?: (LessonEntry & { status: 'preferred' | 'tentative' | 'contested' }) | null
+}
+export interface Lessons {
+  total: number; min_corroboration: number
+  counts: { useful: number; dead_end: number; corrected: number; unmarked: number }
+  preferred: LessonEntry[]; tentative: LessonEntry[]; contested: LessonEntry[]
+  dead_ends: { question: string; nodes: string[]; date: string }[]
+  corrections: { question: string; correction: string; date: string }[]
+  labels: Record<string, string>
+}
+export interface AnswerRating { question: string; answer: string; outcome: RatingOutcome; correction?: string; citations: { file: string; line: number }[] }

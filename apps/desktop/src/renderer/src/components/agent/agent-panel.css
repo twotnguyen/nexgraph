@@ -202,3 +202,6 @@
 .agent-command-suggestions button { font-size: 11px; padding: 4px 6px; }
 .agent-panel .compose > .row { flex-wrap: wrap; }
 .agent-panel .compose > .row > .primary { margin-inline-start: auto; }
+.answer-rating { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-inline-start: auto; }
+.answer-correction { display: flex; gap: 6px; align-items: flex-start; flex-basis: 100%; }
+.answer-correction textarea { flex: 1; font: inherit; font-size: 12px; }
