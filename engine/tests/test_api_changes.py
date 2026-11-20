@@ -86,8 +86,8 @@ def test_refresh_response_shows_fallback_warning(api, opened, monkeypatch):
 
     real = refresh_service.refresh_project
 
-    def with_warning(store, root, *, transcript_dir=None):
-        r = real(store, root, transcript_dir=transcript_dir)
+    def with_warning(store, root, *, transcript_dir=None, sources_dir=None):
+        r = real(store, root, transcript_dir=transcript_dir, sources_dir=sources_dir)
         return RefreshResult(r.added, r.changed, r.removed, r.unchanged, r.seconds,
                              ("update_flows lỗi; đã dựng lại toàn bộ luồng",))
 

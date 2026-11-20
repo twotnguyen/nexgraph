@@ -52,14 +52,15 @@ def _ancestors(rel_path: str) -> list[str]:
     return out  # từ sâu nhất lên gốc
 
 
-def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | None = None) -> RefreshResult:
+def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | None = None,
+                    sources_dir: Path | None = None) -> RefreshResult:
     t0 = time.time()
     root = Path(root)
     scope = store.last_scope()
     docs, media = store.last_doc_flags()
     disk = {f.rel_path: f for f in discover(root, subdir=scope, exclude=store.last_exclude(),
                                             include_docs=docs, include_media=media,
-                                            include_config=store.last_config_flag())}
+                                            include_config=store.last_config_flag(), sources_dir=sources_dir)}
     known = store.file_records()
     now = time.time()
 
@@ -73,7 +74,7 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
             continue
         if f.size == k.size and f.mtime == k.mtime and abs(now - f.mtime) >= RACY_SECONDS:
             continue
-        if _hash(root / p) != k.sha256:
+        if _hash(f.location(root)) != k.sha256:
             modified.append(p)
         elif (f.size, f.mtime) != (k.size, k.mtime):
             touched.append(f)

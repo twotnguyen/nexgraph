@@ -53,6 +53,7 @@ from nexgraph_engine.query.paths import find_paths
 from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.report.build import audit_json, report_json, report_markdown
+from nexgraph_engine.sources import sources_root
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
@@ -123,6 +124,9 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     mcp = FastMCP("nexgraph", instructions=SERVER_INSTRUCTIONS)
     mcp._mcp_server.version = __version__
 
+    def src(s: GraphStore) -> Path | None:  # gốc phụ `sources/` (nguồn tải từ URL, W6)
+        return sources_root(data_dir, s.project_id())
+
     async def run(tool_name: str, body: Callable[[GraphStore], Any]) -> Any:
         def work() -> Any:
             try:
@@ -181,7 +185,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     async def read_code(file: str, start: int | None = None, end: int | None = None) -> dict:
         """Đọc mã của tệp đã lập chỉ mục (đường dẫn tương đối trong dự án), tối đa 2.000 dòng."""
         return await run("read_code", lambda s: read_code_json(
-            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude())))
+            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s)))
 
     @mcp.tool(annotations=READ_ONLY)
     async def query_graph(question: str, depth: int = 2, budget: int = 2000,
@@ -213,7 +217,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     async def graph_stats() -> dict:
         """Số tệp, số nút theo loại, số cạnh theo loại, ngôn ngữ, số tham chiếu chưa phân giải, và độ mới của graph
         (indexed_at, index_commit, head_commit, changed_files, stale)."""
-        return await run("graph_stats", lambda s: stats_json(s, root))
+        return await run("graph_stats", lambda s: stats_json(s, root, src(s)))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_community(community_id: str, limit: int = 200) -> dict:
@@ -249,7 +253,8 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
         """Đọc thân một mục tài liệu (nút document, mỗi heading một nút) từ tệp hiện tại, đã che secret,
         tối đa 8.000 ký tự. stale=true nghĩa là tệp đã đổi sau lần lập chỉ mục."""
         return await run("get_section", lambda s: section_json(s, root, node_id,
-                                                               source=SourcePolicy(root, s.last_exclude())))
+                                                               source=SourcePolicy(root, s.last_exclude()),
+                                                               sources_dir=src(s)))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_callers(node_id: str, depth: int = 1, limit: int = 200) -> dict:
@@ -281,7 +286,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     async def report_resource() -> str:
         return await run("nexgraph://report", lambda s: report_markdown(s, root.name, SourcePolicy(root, s.last_exclude())))
 
-    resource_json("nexgraph://stats", lambda s: stats_json(s, root), "Số liệu tổng và độ mới của graph.")
+    resource_json("nexgraph://stats", lambda s: stats_json(s, root, src(s)), "Số liệu tổng và độ mới của graph.")
     resource_json("nexgraph://god-nodes", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()))["god_nodes"], "Các nút có nhiều liên kết nhất.")
     resource_json("nexgraph://surprises", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()))["surprising"], "Kết nối bất ngờ giữa các cộng đồng.")
     resource_json("nexgraph://questions", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()))["questions"], "Câu hỏi gợi ý để khám phá graph.")

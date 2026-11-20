@@ -14,7 +14,8 @@ from nexgraph_engine.store.graph_store import GraphStore
 
 
 def section_json(store: GraphStore, root: Path, node_id: str, *, source: SourcePolicy | None = None,
-                 transcript_dir: Path | None = None, max_chars: int = DEFAULT_MAX_CHARS) -> dict:
+                 transcript_dir: Path | None = None, max_chars: int = DEFAULT_MAX_CHARS,
+                 sources_dir: Path | None = None) -> dict:
     node = store.get_node(node_id)
     if node is None:
         raise ApiError(404, "unknown_node", f"Không có nút {node_id}")
@@ -22,7 +23,8 @@ def section_json(store: GraphStore, root: Path, node_id: str, *, source: SourceP
         raise ApiError(400, "not_section", f"{node.label} không phải một mục tài liệu")
     start = node.line_start
     end = min(node.line_end or start, start + MAX_CODE_LINES - 1)
-    code = read_code(store, root, node.file, start, end, transcript_dir=transcript_dir, source=source)
+    code = read_code(store, root, node.file, start, end, transcript_dir=transcript_dir, source=source,
+                     sources_dir=sources_dir)
     # Bỏ ký tự điều khiển (trừ tab) để tài liệu không chèn mã thoát terminal vào ngữ cảnh model, rồi che secret.
     text = redact_secrets(_BODY_CONTROL_RE.sub("", code["text"]).rstrip())
     truncated = len(text) > max_chars

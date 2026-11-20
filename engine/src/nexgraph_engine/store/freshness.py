@@ -10,14 +10,15 @@ from nexgraph_engine.index.refresh import RACY_SECONDS
 from nexgraph_engine.store.graph_store import GraphStore
 
 
-def _disk_changes(store: GraphStore, root: Path) -> int:
+def _disk_changes(store: GraphStore, root: Path, sources_dir: Path | None = None) -> int:
     """Đếm khác biệt giữa toàn bộ phạm vi đã lập chỉ mục và đồ thị hiện tại."""
     known = store.file_records()
     docs, media = store.last_doc_flags()
     disk = {
         f.rel_path: f
         for f in discover(root, subdir=store.last_scope(), exclude=store.last_exclude(),
-                          include_docs=docs, include_media=media, include_config=store.last_config_flag())
+                          include_docs=docs, include_media=media, include_config=store.last_config_flag(),
+                          sources_dir=sources_dir)
     }
     changed = len(disk.keys() ^ known.keys())
     now = time.time()
@@ -29,19 +30,19 @@ def _disk_changes(store: GraphStore, root: Path) -> int:
         # và băm cả 17.000 tệp mỗi lần mở Tổng quan mất 3,7 s.
         if f.size == record.size and f.mtime == record.mtime and abs(now - f.mtime) >= RACY_SECONDS:
             continue
-        if sha256_file(root / rel_path) != record.sha256:
+        if sha256_file(f.location(root)) != record.sha256:
             changed += 1
     return changed
 
 
-def freshness(store: GraphStore, root: Path) -> dict:
+def freshness(store: GraphStore, root: Path, sources_dir: Path | None = None) -> dict:
     run = store.last_completed_run()
     out: dict = {"indexed_at": run[0] if run else None, "index_commit": run[1] if run else None,
                  "head_commit": _git_head(root), "changed_files": None, "stale": False}
     # Theo dõi HEAD bằng một lệnh. Phạm vi mã nguồn đối chiếu trực tiếp với bản công bố.
     moved = bool(out["head_commit"] and out["index_commit"] and out["head_commit"] != out["index_commit"])
     try:
-        out["changed_files"] = _disk_changes(store, root)
+        out["changed_files"] = _disk_changes(store, root, sources_dir)
     except OSError:
         out["stale"] = moved
         return out

@@ -54,6 +54,10 @@ class DiscoveredFile:
     mtime: int
     is_test: bool
     oversized: bool
+    path: str | None = None  # đường dẫn thật khi tệp thuộc gốc phụ `sources/` (nằm ngoài dự án)
+
+    def location(self, root: Path) -> Path:
+        return Path(self.path) if self.path else Path(root) / self.rel_path
 
 
 def language_of(rel_path: str, root: Path | None = None, language_map: dict[str, str] | None = None) -> str | None:
@@ -149,7 +153,8 @@ def _language(root: Path, rel: str, include_docs: bool, include_media: bool,
 def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None = None,
              exclude: list[str] | None = None, include_docs: bool = False,
              include_media: bool = False, language_map: dict[str, str] | None = None,
-             include_config: bool = False) -> Iterator[DiscoveredFile]:
+             include_config: bool = False, sources_dir: Path | None = None) -> Iterator[DiscoveredFile]:
+    """`sources_dir`: nguồn tải từ URL (`<data_dir>/sources/<pid>/`), vào graph dưới dạng `sources/<tên>`."""
     root = Path(root)
     found: list[DiscoveredFile] = []
     # `.graphifyrc` của dự án (language.inc = php): graphify áp cùng ánh xạ này khi extract() nên hai bên khớp nhau.
@@ -195,7 +200,44 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                                             not doc and is_test_path(rel), st.st_size > cap))
 
     walk(root, "", base_rules)
+    if sources_dir is not None:
+        found += _discover_sources(Path(sources_dir), root, base_rules, max_file_bytes)
     yield from sorted(found, key=lambda f: f.rel_path)
+
+
+SOURCES_PREFIX = "sources/"
+
+
+def source_path(root: Path, rel: str, sources_dir: Path | None) -> Path | None:
+    """Đường dẫn thật của `sources/<tên>` thuộc gốc phụ; None nếu tệp thuộc dự án hoặc không có gốc phụ."""
+    name = rel.removeprefix(SOURCES_PREFIX)
+    if (sources_dir is None or name == rel or not name or name.startswith(".") or "/" in name or "\\" in name
+            or os.path.lexists(Path(root) / rel)):
+        return None
+    return Path(sources_dir) / name
+
+
+def _discover_sources(directory: Path, root: Path, rules: list[Rule], max_file_bytes: int) -> list[DiscoveredFile]:
+    """Gốc phụ phẳng: người dùng đã chủ động thêm nên luôn nhận tài liệu/ảnh/media, bỏ qua phạm vi thư mục con.
+    Đường dẫn trùng một mục có thật trong dự án thì dự án được ưu tiên (cùng quy tắc với `source_path`)."""
+    try:
+        entries = sorted(os.scandir(directory), key=lambda e: e.name)
+    except OSError:
+        return []
+    out = []
+    for entry in entries:
+        rel = SOURCES_PREFIX + entry.name
+        if (entry.name.startswith(".") or "\\" in entry.name or os.path.lexists(root / rel)
+                or not entry.is_file(follow_symlinks=False) or _ignored(rel, rules)):
+            continue
+        language = _language(directory, entry.name, True, True, None)
+        if language not in DOC_LANGUAGES:
+            continue
+        st = entry.stat(follow_symlinks=False)
+        cap = MAX_MEDIA_BYTES if language == "media" else max_file_bytes
+        out.append(DiscoveredFile(rel, language, st.st_size, int(st.st_mtime), False, st.st_size > cap,
+                                  path=entry.path))
+    return out
 
 
 def is_batch_language(language: str) -> bool:

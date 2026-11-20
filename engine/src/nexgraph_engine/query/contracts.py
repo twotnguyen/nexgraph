@@ -15,8 +15,8 @@ from nexgraph_engine.changes.model import read_changes
 from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.impact.analyze import analyze
-from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file
-from nexgraph_engine.query.source_policy import SourcePolicy, safe_project_path
+from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file, source_path
+from nexgraph_engine.query.source_policy import SourcePolicy, protected_source, safe_project_path
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
@@ -42,10 +42,10 @@ def edge_json(se: StoredEdge) -> dict:
             "evidence": evidence}
 
 
-def stats_json(store: GraphStore, root: Path) -> dict:
+def stats_json(store: GraphStore, root: Path, sources_dir: Path | None = None) -> dict:
     stats = store.stats()
     generic = sorted(lang for lang in stats["languages"] if lang not in FULL_SUPPORT and lang not in DOC_LANGUAGES)
-    return {**stats, "generic_languages": generic, **freshness(store, root)}
+    return {**stats, "generic_languages": generic, **freshness(store, root, sources_dir)}
 
 
 def get_node_json(store: GraphStore, node_id: str) -> dict:
@@ -73,8 +73,15 @@ def neighbors_json(store: GraphStore, node: str, types: set[EdgeType] | None, di
 
 
 def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None, *,
-              transcript_dir: Path | None = None, source: SourcePolicy | None = None) -> dict:
-    path = source.resolve(file) if source else safe_project_path(root, file)
+              transcript_dir: Path | None = None, source: SourcePolicy | None = None,
+              sources_dir: Path | None = None) -> dict:
+    external = source_path(root, file, sources_dir)
+    if external is not None:  # nguồn tải từ URL: ngoài dự án nên không qua .gitignore, nhưng vẫn theo mẫu loại trừ AI
+        if source is not None and not source.allows(file):
+            raise protected_source()
+        path, source = external, None
+    else:
+        path = source.resolve(file) if source else safe_project_path(root, file)
     record = store.file_record(file)
     if record is None:  # chỉ phục vụ tệp đã được lập chỉ mục (không đọc .git, .nexgraph, khóa bí mật...)
         raise ApiError(404, "file_not_found", f"Tệp chưa được lập chỉ mục: {file}")

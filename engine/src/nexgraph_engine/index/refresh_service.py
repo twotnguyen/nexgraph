@@ -8,6 +8,7 @@ from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.jobs import JobManager, UnknownProject
 from nexgraph_engine.index.refresh import refresh_project
 from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectRegistry
 from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
@@ -86,7 +87,8 @@ class RefreshService:
                 if not store.has_published_graph():
                     return self._skipped("not_indexed")
                 result = refresh_project(store, info.path,
-                                         transcript_dir=self._registry.app_data_dir / "transcripts" / project_id)
+                                         transcript_dir=self._registry.app_data_dir / "transcripts" / project_id,
+                                         sources_dir=sources_root(self._registry.app_data_dir, project_id))
         except GraphWriteBusy:
             return self._skipped("refresh_running")
         if result.added or result.changed or result.removed:

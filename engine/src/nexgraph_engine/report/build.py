@@ -65,7 +65,8 @@ def _benchmark(bg: BridgeGraph) -> dict | None:
     return {"corpus_tokens": r["corpus_tokens"], "graph_tokens": r["avg_query_tokens"], "reduction": r["reduction_ratio"]}
 
 
-def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = None) -> dict:
+def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = None,
+                sources_dir: Path | None = None) -> dict:
     from graphify.analyze import suggest_questions, surprising_connections
     bg = build_nx(store, keep_file=source.allows if source else None)
     communities = [{"id": f"com:{cid}", "label": bg.labels[cid], "size": len(members), "cohesion": bg.cohesion[cid]}
@@ -77,7 +78,7 @@ def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = Non
                  for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)]
     return {"god_nodes": _god_nodes(store, bg), "communities": communities, "surprising": surprising,
             "questions": questions, "benchmark": _benchmark(bg), "truncated": bg.truncated,
-            "cycles": import_cycles(store.conn), "freshness": freshness(store, root), "gaps": _gaps(store)}
+            "cycles": import_cycles(store.conn), "freshness": freshness(store, root, sources_dir), "gaps": _gaps(store)}
 
 
 AUDIT_FILES = 50

@@ -10,6 +10,7 @@ from contextlib import closing
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.indexer import Indexer, ProgressEvent
 from nexgraph_engine.index.scan import resolve_subdir
+from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectRegistry
 from nexgraph_engine.store.publication import backup_graph, stage_graph
@@ -226,6 +227,7 @@ class JobManager:
                     include_config=store.last_config_flag() if include_config is None else include_config,
                     workers=workers, force=force,
                     transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id,
+                    sources_dir=sources_root(self._registry.app_data_dir, info.project_id),
                 ).run()
 
                 if terminal_event is None:

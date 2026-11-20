@@ -11,6 +11,7 @@ from nexgraph_engine.query.explain import explain_json
 from nexgraph_engine.query.paths import find_paths, impact_of
 from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy
+from nexgraph_engine.sources import sources_root
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
 
@@ -86,7 +87,8 @@ def section(project_id: str, request: Request, node: str = Query(...)) -> dict:
     with open_store(request, project_id) as (store, info):
         source = SourcePolicy(info.path, store.last_exclude()) if for_model(request) else None
         return section_json(store, info.path, node, source=source,
-                            transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id)
+                            transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id,
+                            sources_dir=sources_root(request.app.state.services.data_dir, project_id))
 
 
 @router.get("/explain")

@@ -18,6 +18,7 @@ from nexgraph_engine.query.contracts import (
 from nexgraph_engine.query.model_view import MODEL_AUDIENCE_HEADER, ModelGraph
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source
 from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo
 
@@ -56,7 +57,7 @@ def open_store(request: Request, project_id: str) -> Iterator[tuple[GraphStore, 
 @router.get("/stats")
 def stats(project_id: str, request: Request) -> dict:
     with open_store(request, project_id) as (store, info):
-        return stats_json(store, info.path)
+        return stats_json(store, info.path, sources_root(request.app.state.services.data_dir, project_id))
 
 
 @router.get("/nodes/{node_id:path}")
@@ -86,7 +87,7 @@ def code(project_id: str, request: Request, file: str = Query(...), start: int |
         source = SourcePolicy(info.path, store.last_exclude()) if for_model(request) else None
         return read_code(store, info.path, file, start, end,
                          transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id,
-                         source=source)
+                         source=source, sources_dir=sources_root(request.app.state.services.data_dir, project_id))
 
 
 @router.get("/search")

@@ -46,6 +46,7 @@ def _refresh(project: Path, data_dir: Path | None) -> int:
     from nexgraph_engine.index.refresh import refresh_project
     from nexgraph_engine.mcp.server import ProjectNotIndexed, resolve_graph_db
     from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.sources import sources_root
     from nexgraph_engine.store.graph_store import GraphStore
     from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
 
@@ -64,7 +65,7 @@ def _refresh(project: Path, data_dir: Path | None) -> int:
             if conn.execute("SELECT 1 FROM lan_lap_chi_muc WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai') LIMIT 1").fetchone():
                 print(json.dumps(skipped))
                 return 0
-            r = refresh_project(store, project.resolve())
+            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, store.project_id()))
     except (GraphWriteBusy, sqlite3.OperationalError):
         print(json.dumps(skipped))
         return 0
