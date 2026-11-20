@@ -66,9 +66,15 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
             qnames[gid] = (name, NodeKind.FUNCTION)
     ids: dict[str, str] = {}
     used: set[str] = set()
+    first: dict[str, str] = {}  # id NexGraph -> gid đầu tiên mang id đó
+    merged: set[str] = set()
     for gid in sorted(qnames, key=lambda g: _line(raw[g].get("source_location")) or 1):
         q, k = qnames[gid]
         nid = node_id(rel_path, q, k)
+        if nid in used and k == NodeKind.METHOD:  # overload: gộp một nút như 0.9.92, id không phụ thuộc số dòng
+            ids[gid] = nid
+            merged.add(gid)
+            continue
         if nid in used:  # hàm lồng cùng tên, hoặc khai báo lặp: cùng quy ước `@dòng` với Dart
             at = f"{q}@{_line(raw[gid].get('source_location')) or 1}"
             nid, n = node_id(rel_path, at, k), 1
@@ -77,6 +83,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
                 nid = node_id(rel_path, f"{at}.{n}", k)
         used.add(nid)
         ids[gid] = nid
+        first[nid] = gid
 
     cross, type_table, scoped_types = _cross_file_calls(path, Path(root), raw, raw_edges, file_gid)
     # line_end ước lượng: dòng lớn nhất trong bằng chứng các cạnh đi ra; lớp bao luôn các phương thức của nó.
@@ -87,6 +94,8 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     for caller, _, line in cross:
         if caller is not None and caller in end:
             end[caller] = max(end[caller], line)
+    for gid in merged:
+        end[first[ids[gid]]] = max(end[first[ids[gid]]], end[gid])
     for child, cls in parent_class.items():
         if cls in end and child in end:
             end[cls] = max(end[cls], end[child])
@@ -95,7 +104,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         Node(id=ids[gid], kind=qnames[gid][1], label=qnames[gid][0].split(".")[-1], qualified_name=qnames[gid][0],
              file=rel_path, line_start=_line(raw[gid].get("source_location")) or 1, line_end=end[gid],
              is_test=is_test, origin=Origin.AST)
-        for gid in raw
+        for gid in raw if gid not in merged
     ]
     edges: list[Edge] = []
     refs: list[UnresolvedRef] = []
@@ -103,8 +112,10 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     from_lines = {_line(e.get("source_location")) for e in raw_edges if e.get("relation") == "imports_from"}
     from_lines.discard(None)
+    # 0.9.112 tách constructor/indexer/operator C# thành nút không `_callable`: lời gọi của chúng thuộc về lớp như 0.9.92.
+    owner = {c: p for c, p in parent_class.items() if c not in raw and p in raw}
     for e in raw_edges:
-        rel, src, dst, line = e["relation"], e["source"], e["target"], _line(e.get("source_location"))
+        rel, src, dst, line = e["relation"], owner.get(e["source"], e["source"]), e["target"], _line(e.get("source_location"))
         conf = Confidence.INFERRED if e.get("confidence") == "INFERRED" else Confidence.EXTRACTED
         score = 1.0 if conf == Confidence.EXTRACTED else 0.8
         if rel in ("contains", "method"):
