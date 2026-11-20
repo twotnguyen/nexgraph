@@ -20,10 +20,11 @@ from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.docs import media
 from nexgraph_engine.docs.extract import extract_document
 from nexgraph_engine.docs.text import doc_text
-from nexgraph_engine.index.discovery import DOC_LANGUAGES, DiscoveredFile, discover, sha256_file
+from nexgraph_engine.index.discovery import DOC_LANGUAGES, DiscoveredFile, discover, is_batch_language, sha256_file
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import rebuild_flows
 from nexgraph_engine.index.generic import extract_generic
+from nexgraph_engine.index.batch_calls import batch_cross_file_calls
 from nexgraph_engine.index.resolver import _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
@@ -166,6 +167,7 @@ class Indexer:
             self.on_progress(ProgressEvent("resolve", total, total))
             if self.cancel.is_set():
                 return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", total, total))
+            add_batch_calls(store, self.root, [(f.rel_path, f.language) for f in files if is_batch_language(f.language)])
             pubspec = self.root / "pubspec.yaml"
             name = _package_name(pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None)
             resolve_references(store, package_name=name)
@@ -287,3 +289,25 @@ class Indexer:
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)
         store.commit()
         return True
+
+
+_BATCH_FAMILY = {"c": "cpp", "objc": "cpp"}  # header .h nhận diện là c nhưng thuộc cùng chương trình C++
+
+
+def add_batch_calls(store: GraphStore, root: Path, files: list[tuple[str, str]]) -> None:
+    """Thêm cạnh CALLS liên tệp của ngôn ngữ mức chung; lỗi ở bước này không làm hỏng lần index.
+
+    Mỗi ngôn ngữ một lô: gộp chung thì cùng tên (Util.helper của Java và Kotlin) thành mơ hồ và graphify bỏ qua.
+    """
+    groups: dict[str, list[str]] = {}
+    for rel, language in files:
+        groups.setdefault(_BATCH_FAMILY.get(language, language), []).append(rel)
+    groups = {lang: rels for lang, rels in groups.items() if len(rels) >= 2}
+    if not groups:
+        return
+    nodes = list(store.all_nodes())
+    for rels in groups.values():
+        try:
+            store.add_edges(batch_cross_file_calls(root, rels, nodes))
+        except Exception:  # noqa: BLE001 — graphify có thể ném lỗi trên cú pháp lạ; cạnh từng tệp vẫn còn
+            continue

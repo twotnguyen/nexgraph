@@ -15,7 +15,7 @@ from pathlib import Path
 from graphify.extract import _get_extractor, _safe_extract_with_xaml_root, extract
 
 from nexgraph_engine.dart.extractor import FileExtraction
-from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, LANGUAGE_BY_EXT
+from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, LANGUAGE_BY_EXT, is_batch_language
 from nexgraph_engine.ids import file_node_id, node_id
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.models import Edge, Node, UnresolvedRef
@@ -165,7 +165,10 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
             # lớp cha ở tệp khác là nút giữ chỗ id viết thường; tên thật nằm ở nhãn, dạng `mod.Base` lấy phần cuối
             base = (labels.get(dst) or dst).split(".")[-1]
             refs.append(UnresolvedRef(source=ids[src], name=base, type=EdgeType.INHERITS, line=line, col=0))
-    refs += [UnresolvedRef(source=fid if c is None else ids[c], name=name, type=EdgeType.CALLS, line=line, col=0) for c, name, line in cross]
+    # Ngôn ngữ mức chung: lời gọi không rõ hàm gọi sẽ được batch_calls nối đúng hàm; không gán cho cả tệp.
+    batch = is_batch_language(language)
+    refs += [UnresolvedRef(source=fid if c is None else ids[c], name=name, type=EdgeType.CALLS, line=line, col=0)
+             for c, name, line in cross if not (batch and c is None)]
     if path.suffix in _TS_SUFFIXES:
         have = {(r.source, r.name, r.type) for r in refs}
         for gid, (_, kind) in qnames.items():

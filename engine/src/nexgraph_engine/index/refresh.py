@@ -16,7 +16,8 @@ from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import flows_before, rebuild_flows, update_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
-from nexgraph_engine.index.indexer import ExtractedFile, _git_head, extract_file
+from nexgraph_engine.index.discovery import is_batch_language
+from nexgraph_engine.index.indexer import ExtractedFile, _git_head, add_batch_calls, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
@@ -117,6 +118,9 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         store.set_run_state(run_id, "phan_giai")
         new_labels = {n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels
         store.requeue_failed_refs(tails=new_labels, imports=bool(added))
+        # Lô gồm cả tệp không đổi: cạnh từ tệp không đổi tới tệp vừa sửa đã mất cùng nút cũ (W2).
+        add_batch_calls(store, root, [(rel, rec.language) for rel, rec in store.file_records().items()
+                                      if is_batch_language(rec.language)])
         pubspec = root / "pubspec.yaml"
         resolved_edges: list[Edge] = []
         resolve_references(store, package_name=_package_name(

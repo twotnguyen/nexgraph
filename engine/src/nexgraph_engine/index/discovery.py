@@ -192,3 +192,8 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
 
     walk(root, "", base_rules)
     yield from sorted(found, key=lambda f: f.rel_path)
+
+
+def is_batch_language(language: str) -> bool:
+    """Ngôn ngữ mức chung có lời gọi liên tệp lấy từ extract() cả lô (W2): không phải 5 ngôn ngữ đầy đủ, tài liệu, cấu hình."""
+    return language not in FULL_SUPPORT and language not in DOC_LANGUAGES and language not in CONFIG_LANGUAGES
