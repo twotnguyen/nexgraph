@@ -166,3 +166,20 @@ class ProjectRegistry:
         graph_db = root / NEXGRAPH_DIR / "graph.db" if in_project else self._app_dir_db(r["ma_du_an"])
         return ProjectInfo(r["ma_du_an"], root, r["ten"], (root / ".git").exists(),
                            "in_project" if in_project else "app_dir", graph_db, r["mo_lan_cuoi"])
+
+
+class ProjectNotIndexed(RuntimeError):
+    pass
+
+
+def resolve_graph_db(project: Path, data_dir: Path | None) -> Path:
+    """Tìm CSDL đồ thị mà app đã tạo; không tạo mới (MCP không được ghi)."""
+    root = project.resolve()
+    in_project = root / NEXGRAPH_DIR / "graph.db"
+    if in_project.is_file():
+        return in_project
+    if data_dir is not None and (data_dir / "app.db").is_file():
+        for info in ProjectRegistry(data_dir, read_only=True).list_projects():
+            if info.path.resolve() == root and info.graph_db.is_file():
+                return info.graph_db
+    raise ProjectNotIndexed(f"Dự án chưa được lập chỉ mục trong NexGraph: {root}")

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import json
 import multiprocessing
@@ -6,10 +8,12 @@ import socket
 import sys
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import uvicorn
+if TYPE_CHECKING:
+    import uvicorn
 
-from nexgraph_engine.api.app import create_app
+# uvicorn và api.app nạp trong _serve: hook-guard chạy ở mỗi lần gọi tool của agent, không được trả 0,3 s nạp FastAPI.
 
 MIN_TOKEN_LEN = 32
 
@@ -49,7 +53,7 @@ def _refresh(project: Path, data_dir: Path | None) -> int:
     from contextlib import closing
 
     from nexgraph_engine.index.refresh import refresh_project
-    from nexgraph_engine.mcp.server import ProjectNotIndexed, resolve_graph_db
+    from nexgraph_engine.store.projects import ProjectNotIndexed, resolve_graph_db
     from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.store.graph_store import GraphStore
     from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
@@ -87,6 +91,10 @@ def _exit_when_stdin_closes(server: uvicorn.Server) -> None:
 
 
 def _serve(data_dir: Path, port: int, exit_on_stdin_close: bool) -> int:
+    import uvicorn
+
+    from nexgraph_engine.api.app import create_app
+
     token = os.environ.get("NEXGRAPH_TOKEN", "")
     if len(token) < MIN_TOKEN_LEN:
         print("NEXGRAPH_TOKEN is required (>=32 chars)", file=sys.stderr)

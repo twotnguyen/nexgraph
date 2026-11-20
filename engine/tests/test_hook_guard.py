@@ -129,3 +129,39 @@ def test_touch_without_data_dir_is_noop(tmp_path):
 def test_bad_arguments_still_exit_zero():
     r = subprocess.run([sys.executable, "-m", "nexgraph_engine.cli", "hook-guard", "nope"], capture_output=True)
     assert r.returncode == 0 and r.stdout == b""
+
+
+def test_hook_guard_skips_heavy_imports(proj):
+    root, data, _ = proj
+    code = ("import sys, io; from nexgraph_engine.cli import main; sys.stdin = io.TextIOWrapper(io.BytesIO(b'{}'));"
+            f"main(['hook-guard', 'read', '--project', {str(root)!r}, '--data-dir', {str(data)!r}]);"
+            "print(sorted(m for m in ('uvicorn', 'fastapi', 'mcp.server.fastmcp', 'nexgraph_engine.api.app') if m in sys.modules), file=sys.stderr)")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert r.returncode == 0 and r.stderr.strip().endswith("[]"), r.stderr
+
+
+def test_nexgraph_dir_and_outside_paths_are_silent(proj, tmp_path):
+    root, data, _ = proj
+    (root / ".nexgraph").mkdir(exist_ok=True)
+    (root / ".nexgraph" / "notes.md").write_text("x\n")
+    assert guard_output("read", root, data, True, _in("Read", file_path=str(root / ".nexgraph" / "notes.md"))) == ""
+    assert guard_output("search", root, data, False, _in("Grep", pattern="x", path=str(tmp_path))) == ""
+    assert guard_output("read", root, data, False, _in("Glob", pattern="*.py", path=str(tmp_path))) == ""
+    assert guard_output("search", root, data, False, _in("Grep", pattern="x", path="."))  # trong dự án vẫn nhắc
+
+
+
+def test_silent_after_head_moves(api, copy_fixture, tmp_path):
+    import shutil
+    if shutil.which("git") is None:
+        pytest.skip("cần git")
+    root = copy_fixture("py_mini")
+    git = ["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false"]
+    subprocess.run([*git, "init", "-q"], cwd=root, check=True)
+    subprocess.run([*git, "add", "."], cwd=root, check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "a"], cwd=root, check=True)
+    assert api.index(api.open(root)["project_id"])["state"] == "done"
+    data, raw = tmp_path / "appdata", _in("Grep", pattern="x")
+    assert _ctx(guard_output("search", root, data, False, raw))
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "b"], cwd=root, check=True)
+    assert guard_output("search", root, data, False, raw) == ""

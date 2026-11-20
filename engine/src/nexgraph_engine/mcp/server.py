@@ -32,7 +32,7 @@ from mcp.types import ToolAnnotations
 from nexgraph_engine import __version__
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
-from nexgraph_engine.hook_guard import project_id_of, touch_query_stamp
+from nexgraph_engine.hook_guard import touch_query_stamp
 from nexgraph_engine.impact.analyze import tests_for as tests_for_node
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.common import nodes_by_pk
@@ -57,7 +57,7 @@ from nexgraph_engine.report.build import audit_json, report_json, report_markdow
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.projects import NEXGRAPH_DIR, ProjectRegistry
+from nexgraph_engine.store.projects import ProjectNotIndexed, resolve_graph_db  # noqa: F401 (cli, test dùng qua module này)
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 
@@ -83,23 +83,6 @@ SERVER_INSTRUCTIONS = (
     "Khi trả lời, trích dẫn dạng tệp:dòng lấy từ kết quả tool; không bịa đường đi không có trong đồ thị. "
     "Mọi tool chỉ đọc."
 )
-
-
-class ProjectNotIndexed(RuntimeError):
-    pass
-
-
-def resolve_graph_db(project: Path, data_dir: Path | None) -> Path:
-    """Tìm CSDL đồ thị mà app đã tạo; không tạo mới (MCP không được ghi)."""
-    root = project.resolve()
-    in_project = root / NEXGRAPH_DIR / "graph.db"
-    if in_project.is_file():
-        return in_project
-    if data_dir is not None and (data_dir / "app.db").is_file():
-        for info in ProjectRegistry(data_dir, read_only=True).list_projects():
-            if info.path.resolve() == root and info.graph_db.is_file():
-                return info.graph_db
-    raise ProjectNotIndexed(f"Dự án chưa được lập chỉ mục trong NexGraph: {root}")
 
 
 async def _run_off_loop(work: Callable[[], Any]) -> Any:
@@ -193,7 +176,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
                 out = ask_graph(s, question, max(1, min(depth, 6)), max(1, min(budget, 100_000)), mode)
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
-            touch_query_stamp(data_dir, project_id_of(s.conn))  # hook-guard thôi nhắc trong 30 phút
+            touch_query_stamp(data_dir, s.project_id())  # hook-guard thôi nhắc trong 30 phút
             return out
         return await run("query_graph", body)
 
@@ -231,7 +214,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
                 out = build_context(s, root, question, max(500, min(budget, 20_000)))
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
-            touch_query_stamp(data_dir, project_id_of(s.conn))
+            touch_query_stamp(data_dir, s.project_id())
             return out
         return await run("get_context", body)
 
