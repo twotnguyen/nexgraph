@@ -14,7 +14,8 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
 
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
-         "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context"}
+         "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context",
+         "get_section"}
 
 
 @pytest.fixture
@@ -264,3 +265,21 @@ def test_get_context_tool(indexed_flow):
 def test_graph_stats_reports_freshness(indexed):
     stats = payload(call(build_server(*indexed), "graph_stats", {}))
     assert {"indexed_at", "index_commit", "head_commit", "changed_files", "stale"} <= set(stats)
+
+
+def test_get_section_tool(api, tmp_path):
+    root = tmp_path / "docs proj"
+    root.mkdir()
+    (root / "README.md").write_text("# Top\n\nx\n\n## Setup\n\ntoken = \"sk-abcdefghijklmnopqrstuvwx1234\"\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    import time
+    for _ in range(1500):
+        if api.get(f"/v1/jobs/{r.json()['job_id']}").json()["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    server = build_server(root, tmp_path / "appdata")
+    hits = payload(call(server, "search", {"query": "Setup", "kinds": ["document"]}))
+    out = payload(call(server, "get_section", {"node_id": hits[0]["node"]["id"]}))
+    assert out["text"].startswith("## Setup") and "sk-abcdefghijklmnopqrstuvwx1234" not in out["text"]
+    assert call(server, "get_section", {"node_id": "README.md#file"}).isError is True

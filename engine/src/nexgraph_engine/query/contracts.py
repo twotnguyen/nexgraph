@@ -24,7 +24,7 @@ from nexgraph_engine.store.models import Node, StoredEdge
 from nexgraph_engine.store.search import build_match_query, search
 
 MAX_CODE_LINES = 2000
-CONVERTED_LANGUAGES = ("docx", "xlsx", "pdf")
+CONVERTED_LANGUAGES = ("docx", "xlsx", "pdf", "html")  # HTML index qua bản Markdown: đọc lại cùng bản để khớp dòng
 
 
 def node_json(n: Node) -> dict:

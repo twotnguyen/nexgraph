@@ -48,6 +48,7 @@ from nexgraph_engine.query.contracts import (
 from nexgraph_engine.query.context import build_context
 from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.query.paths import find_paths
+from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.report.build import report_json
 from nexgraph_engine.schema.db import open_graph_db
@@ -65,6 +66,7 @@ SERVER_INSTRUCTIONS = (
     "- các khối kiến trúc và mũi tên giữa chúng -> get_architecture, rồi get_evidence để lấy tệp:dòng\n"
     "- sửa X thì ảnh hưởng đâu, test nào liên quan -> get_impact\n"
     "- đọc đoạn mã để trích dẫn -> read_code\n"
+    "- đọc một mục tài liệu (heading Markdown/docx/PDF) -> get_section\n"
     "- câu hỏi tự do, lấy đồ thị con liên quan -> query_graph\n"
     "- cần các đoạn mã liên quan nhất tới một câu hỏi, gọn trong ngân sách token -> get_context\n"
     "- đường đi giữa hai nút -> shortest_path\n"
@@ -237,6 +239,13 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
         if flow_id is not None:
             return await run("trace_flow", lambda s: flow_json(s, flow_id))
         return await run("trace_flow", lambda s: trace_from_json(s, entry))  # type: ignore[arg-type]
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_section(node_id: str) -> dict:
+        """Đọc thân một mục tài liệu (nút document, mỗi heading một nút) từ tệp hiện tại, đã che secret,
+        tối đa 8.000 ký tự. stale=true nghĩa là tệp đã đổi sau lần lập chỉ mục."""
+        return await run("get_section", lambda s: section_json(s, root, node_id,
+                                                               source=SourcePolicy(root, s.last_exclude())))
 
     return mcp
 

@@ -4,10 +4,12 @@ from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_graph import model_payload, open_store
+from nexgraph_engine.api.routes_graph import for_model, model_payload, open_store
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.context import build_context, locate_json
 from nexgraph_engine.query.paths import find_paths, impact_of
+from nexgraph_engine.query.section import section_json
+from nexgraph_engine.query.source_policy import SourcePolicy
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
 
@@ -76,3 +78,11 @@ def context(project_id: str, request: Request, body: ContextBody) -> dict:
 def locate(project_id: str, request: Request, file: str = Query(...), line: int = Query(..., ge=1)) -> dict:
     with open_store(request, project_id) as (store, _):
         return locate_json(store, file, line)
+
+
+@router.get("/section")
+def section(project_id: str, request: Request, node: str = Query(...)) -> dict:
+    with open_store(request, project_id) as (store, info):
+        source = SourcePolicy(info.path, store.last_exclude()) if for_model(request) else None
+        return section_json(store, info.path, node, source=source,
+                            transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id)
