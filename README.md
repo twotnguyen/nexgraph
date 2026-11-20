@@ -15,7 +15,7 @@ pnpm run setup:dev
 pnpm dev
 ```
 
-Nếu đã clone repo, sau khi nhóm hợp nhất thay đổi, chạy `git pull --ff-only` từ nhánh `main`, rồi chạy lại `pnpm run setup:dev` và `pnpm dev`. Kho riêng tư cần tài khoản GitHub có quyền đọc.
+Nếu đã clone repo, sau khi nhóm hợp nhất thay đổi, chạy `git pull --ff-only` từ nhánh `main`, rồi chạy lại `pnpm run setup:dev` và `pnpm dev`. Bộ cài theo phiên bản tải ở [Releases](https://github.com/twotnguyen/nexgraph/releases).
 
 Mở thư mục mã nguồn trong cửa sổ NexGraph. Dự án nhỏ được quét và lập chỉ mục tự động. Khi hoàn tất, bấm **Bắt đầu khám phá**. Cây tệp nằm bên trái, các thẻ mã nguồn và sơ đồ ở giữa, trợ lý AI ở bên phải. Mở dự án gần đây đã có chỉ mục sẽ vào thẳng không gian làm việc. Nút **← Tổng quan** mở thống kê, tùy chọn lập chỉ mục, Git hook và tích hợp MCP.
 

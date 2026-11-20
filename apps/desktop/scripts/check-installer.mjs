@@ -13,6 +13,8 @@ if (!target || !['x64', 'arm64'].includes(arch)) {
   throw new Error(`Nền tảng đóng gói chưa được hỗ trợ: ${process.platform}/${arch}`)
 }
 
+const MAX_INSTALLER_BYTES = 500 * 1000 * 1000 // spec §6.1: mỗi tệp cài < 500 MB
+
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const name = `NexGraph-${version}-${target.os}-${arch}`
 const filename = `${name}.${target.ext}`
@@ -31,6 +33,10 @@ const installer = new URL(`../dist/${filename}`, import.meta.url)
 const hash = createHash('sha256')
 for await (const chunk of createReadStream(installer)) hash.update(chunk)
 const sha256 = hash.digest('hex')
+const bytes = statSync(installer).size
+if (bytes >= MAX_INSTALLER_BYTES) {
+  throw new Error(`${filename} nặng ${(bytes / 1e6).toFixed(1)} MB, vượt giới hạn ${MAX_INSTALLER_BYTES / 1e6} MB`)
+}
 const commit = execFileSync('git', ['rev-parse', 'HEAD'], {
   cwd: fileURLToPath(new URL('../../../', import.meta.url)),
   encoding: 'utf8'
@@ -44,7 +50,7 @@ writeFileSync(new URL(`../dist/${name}.build.json`, import.meta.url), JSON.strin
   platform: target.os,
   arch,
   filename,
-  bytes: statSync(installer).size,
+  bytes,
   sha256,
   commit,
   run
@@ -54,4 +60,4 @@ if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\npath=${path}\nmanifest=${manifest}\n`, 'utf8')
 }
 console.log(`Tệp cài đặt: ${path}`)
-console.log(`Build ${commit} · SHA-256 ${sha256}`)
+console.log(`Build ${commit} · SHA-256 ${sha256} · ${(bytes / 1e6).toFixed(1)} MB / ${MAX_INSTALLER_BYTES / 1e6} MB`)
