@@ -168,6 +168,13 @@ const api: NexGraphApi = {
     saveDsn: (pid, dsn) => call('index-sources:save-dsn', pid, dsn),
     pickFile: (kind) => call('index-sources:pick-file', kind),
     remembered: (pid) => call('index-sources:remembered', pid)
+  },
+  semantic: {
+    getSettings: (pid) => call('semantic:get-settings', pid),
+    setSettings: (pid, settings) => call('semantic:set-settings', pid, settings),
+    estimate: (pid, target) => call('semantic:estimate', pid, target),
+    start: (pid, target, budget) => call('semantic:start', pid, target, budget),
+    cancel: (jobId) => call('semantic:cancel', jobId)
   }
 }
 

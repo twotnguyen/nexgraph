@@ -4,8 +4,9 @@ import type {
   ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   DocSection, GraphNode, GraphReport, GraphStats, Job, NodeExplain,
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit,
-  SourceItem
+  SourceItem, ProjectAiSettings, SemanticEstimate, SemanticTarget
 } from '../../shared/graph-types'
+import type { LlmChunk } from '../ai/semantic-runner'
 import type { EngineHandle } from './launcher'
 
 export class EngineApiError extends Error {
@@ -226,5 +227,30 @@ export class EngineApi {
   }
   async removeSource(pid: string, name: string): Promise<void> {
     await this.request('DELETE', `/v1/projects/${encodeURIComponent(pid)}/sources?${new URLSearchParams({ name })}`)
+  }
+  // ----- Phân tích ngữ nghĩa (W9) -----
+  aiSettings(pid: string): Promise<ProjectAiSettings> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/ai`, undefined, AbortSignal.timeout(15_000))
+  }
+  setAiSettings(pid: string, s: ProjectAiSettings): Promise<ProjectAiSettings> {
+    return this.request('PUT', `/v1/projects/${encodeURIComponent(pid)}/ai`, s, AbortSignal.timeout(15_000))
+  }
+  semanticEstimate(pid: string, target: SemanticTarget): Promise<SemanticEstimate> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/semantic/estimate`, { targets: target }, AbortSignal.timeout(60_000))
+  }
+  /** `transport.api_key` (đường B) chỉ do main đọc từ kho khoá; renderer không bao giờ thấy nó. */
+  startSemantic(pid: string, body: { targets: SemanticTarget; transport: { kind: 'app'; model_label: string } | { kind: 'direct'; base_url: string; api_key: string; model: string }; max_tokens_budget?: number; prs?: unknown[] }): Promise<{ job_id: string }> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/semantic`, body, AbortSignal.timeout(15_000))
+  }
+  async llmNext(jobId: string): Promise<LlmChunk | null> {
+    const res = await fetch(`${this.h.baseUrl}/v1/jobs/${encodeURIComponent(jobId)}/llm/next`, {
+      headers: { Authorization: `Bearer ${this.h.token}` }, signal: AbortSignal.timeout(15_000)
+    })
+    if (res.status === 204) return null
+    if (!res.ok) throw new EngineApiError(res.status, 'http_error', `Engine trả về ${res.status} khi lấy khối AI`)
+    return (await res.json()) as LlmChunk
+  }
+  async llmAnswer(jobId: string, chunkId: string, body: { text: string } | { error: string }): Promise<void> {
+    await this.request('POST', `/v1/jobs/${encodeURIComponent(jobId)}/llm/${encodeURIComponent(chunkId)}`, body, AbortSignal.timeout(30_000))
   }
 }

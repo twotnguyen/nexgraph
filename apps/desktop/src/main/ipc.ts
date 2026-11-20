@@ -25,6 +25,9 @@ import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
 import { IndexSourceStore } from './index-sources'
+import { runSemanticJob } from './ai/semantic-runner'
+import { directTransport, piComplete, selectedModelLabel } from './ai/semantic-models'
+import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
 
 const watchers = new Map<string, ProjectWatcher>()
@@ -533,4 +536,39 @@ export function registerIpc(
   on('sources:list', (pid: string) => api().listSources(pid))
   on('sources:add', async (pid: string, url: string) => ({ jobId: (await api().addSource(pid, url)).job_id }))
   on('sources:remove', (pid: string, name: string) => api().removeSource(pid, name))
+
+  // Phân tích ngữ nghĩa bằng AI (W9). Mặc định tắt theo dự án; key chỉ đọc ở đây và chỉ đi xuống engine ở đường B.
+  const semanticRuns = new Map<string, AbortController>()
+  on('semantic:get-settings', (pid: string) => api().aiSettings(pid))
+  on('semantic:set-settings', async (pid: string, settings: ProjectAiSettings) => {
+    await rootOf(pid)
+    const transport = settings?.transport === 'direct' || settings?.transport === 'app' ? settings.transport : null
+    const model = transport ? selectedModelLabel(await acc()) : null
+    return api().setAiSettings(pid, { enabled: settings?.enabled === true, transport, model })
+  })
+  on('semantic:estimate', (pid: string, target: SemanticTarget) => api().semanticEstimate(pid, target))
+  on('semantic:start', async (pid: string, target: SemanticTarget, budget?: number) => {
+    const settings = await api().aiSettings(pid)
+    if (!settings.enabled) throw new AgentError('ai_disabled', 'Chưa bật phân tích bằng AI cho dự án này.')
+    const a = await acc()
+    const max = Number.isFinite(budget) && budget! > 0 ? Math.floor(budget!) : 1_000_000
+    const transport = settings.transport === 'direct' ? await directTransport(a) : { kind: 'app' as const, model_label: selectedModelLabel(a) }
+    const jobId = (await api().startSemantic(pid, { targets: target, transport, max_tokens_budget: max })).job_id
+    if (transport.kind === 'app') {
+      const ac = new AbortController()
+      semanticRuns.set(jobId, ac)
+      void runSemanticJob(jobId, {
+        jobState: async (id) => (await api().getJob(id)).state,
+        next: (id) => api().llmNext(id),
+        answer: (id, chunkId, body) => api().llmAnswer(id, chunkId, body)
+      }, piComplete(a), { signal: ac.signal, budget: max })
+        .catch((e) => console.warn(`[semantic] ${jobId}: ${e instanceof Error ? e.message : String(e)}`))
+        .finally(() => semanticRuns.delete(jobId))
+    }
+    return { jobId }
+  })
+  on('semantic:cancel', async (jobId: string) => {
+    semanticRuns.get(jobId)?.abort()
+    await api().cancelJob(jobId)
+  })
 }
