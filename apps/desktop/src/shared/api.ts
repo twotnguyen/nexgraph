@@ -199,4 +199,10 @@ export interface NexGraphApi {
     start(projectId: string): Promise<void>
     stop(projectId: string): Promise<void>
   }
+  /** Nguồn bổ sung của Tuỳ chọn index (W11). DSN chỉ gửi xuống main, không bao giờ đọc lại được. */
+  indexSources: {
+    hasDsn(projectId: string): Promise<boolean>
+    saveDsn(projectId: string, dsn: string | null): Promise<void>
+    pickFile(kind: 'scip' | 'mcp'): Promise<string | null>
+  }
 }

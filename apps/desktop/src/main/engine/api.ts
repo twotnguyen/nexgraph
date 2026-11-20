@@ -69,14 +69,18 @@ export class EngineApi {
   async removeProject(pid: string): Promise<void> {
     await this.request('DELETE', `/v1/projects/${encodeURIComponent(pid)}`, undefined, AbortSignal.timeout(15_000))
   }
-  startIndex(pid: string, o?: IndexOptions): Promise<{ job_id: string }> {
+  /** `postgresDsn` chỉ do main đọc từ kho khoá (W11); renderer không bao giờ thấy nó. */
+  startIndex(pid: string, o?: IndexOptions, postgresDsn?: string): Promise<{ job_id: string }> {
+    const s = o?.sources
     const body = {
       ...(o?.subdir ? { subdir: o.subdir } : {}), ...(o?.exclude?.length ? { exclude: o.exclude } : {}),
       // Không gửi cờ = engine giữ tuỳ chọn lần trước; false là tắt tường minh.
       ...(o?.includeDocs !== undefined ? { include_docs: o.includeDocs } : {}),
       ...(o?.includeMedia !== undefined ? { include_media: o.includeMedia } : {}),
       ...(o?.includeConfig !== undefined ? { include_config: o.includeConfig } : {}),
-      ...(o?.workers ? { workers: o.workers } : {}), ...(o?.force ? { force: true } : {})
+      ...(o?.workers ? { workers: o.workers } : {}), ...(o?.force ? { force: true } : {}),
+      ...(s ? { sources: { cargo: !!s.cargo, manifests: !!s.manifests, scip_files: s.scipFiles ?? [], mcp_files: s.mcpFiles ?? [],
+        ...(s.postgres && postgresDsn ? { postgres_dsn: postgresDsn } : {}) } } : {})
     }
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, Object.keys(body).length ? body : undefined,
       AbortSignal.timeout(15_000))

@@ -24,6 +24,7 @@ import { AgentRouter } from './agent-router'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
+import { IndexSourceStore } from './index-sources'
 import type { GeminiConsentTarget } from '../shared/agent-types'
 
 const watchers = new Map<string, ProjectWatcher>()
@@ -181,9 +182,12 @@ export function registerIpc(
     return fsh.write(pid, relPath, text, opts)
   })
   on('index:scan', (pid: string) => api().scan(pid))
+  const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),
+    new SecretStore(join(app.getPath('userData'), 'index-source-secrets.json'), secretBox))
   on('index:start', async (pid: string, opts?: IndexOptions) => {
     try {
-      return { jobId: (await api().startIndex(pid, opts)).job_id }
+      const resolved = indexSources.resolve(pid, opts)
+      return { jobId: (await api().startIndex(pid, resolved.opts, resolved.postgresDsn)).job_id }
     } catch (error) {
       if (error instanceof EngineApiError && error.code === 'index_running' && error.jobId) return { jobId: error.jobId }
       throw error
@@ -217,6 +221,15 @@ export function registerIpc(
     }
   })
   on('watch:stop', async (pid: string) => stopWatch(pid))
+  // Nguồn bổ sung (W11): DSN chỉ đi một chiều renderer → main; renderer chỉ biết đã có DSN hay chưa.
+  on('index-sources:has-dsn', async (pid: string) => indexSources.hasDsn(pid))
+  on('index-sources:save-dsn', async (pid: string, dsn: string | null) => indexSources.saveDsn(pid, dsn))
+  on('index-sources:pick-file', async (kind: 'scip' | 'mcp') => {
+    const win = getWindow()
+    const opts = { properties: ['openFile' as const], filters: [{ name: kind === 'scip' ? 'SCIP JSON' : 'MCP', extensions: ['json'] }] }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
+  })
   on('graph:stats', (pid: string) => api().stats(pid))
   on('graph:neighbors', (pid: string, q: NeighborQuery) => api().neighbors(pid, q))
   on('graph:node', (pid: string, id: string) => api().getNode(pid, id))
