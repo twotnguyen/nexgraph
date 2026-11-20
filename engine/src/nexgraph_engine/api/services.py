@@ -16,6 +16,7 @@ class Services:
         self.jobs = JobManager(self.registry, self.bus, locks=self.locks)
         self.refresh = RefreshService(self.registry, self.bus, self.jobs, self.locks)
         self.jobs.on_index_done.append(self._relink_if_member)
+        self.llm_queues: dict = {}  # job_id → LlmQueue của job semantic đường A (W9)
 
     # --- graph chung (W8) ---------------------------------------------------------------------------
     def relink_global(self) -> str:

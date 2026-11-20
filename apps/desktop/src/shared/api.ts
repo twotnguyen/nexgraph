@@ -17,6 +17,7 @@ import type { IndexSources } from './graph-types'
 import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from './graph-types'
 import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from './graph-types'
 import type { PrAvailability, PrDetail, PrList } from './graph-types'
+import type { ProjectAiSettings, SemanticEstimate, SemanticTarget } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -248,5 +249,14 @@ export interface NexGraphApi {
     status(projectId: string): Promise<PrAvailability>
     list(projectId: string): Promise<PrList>
     detail(projectId: string, prNumber: number): Promise<PrDetail>
+  }
+  /** Phân tích ngữ nghĩa bằng AI (W9). Tiến độ job theo dõi bằng `index.status`. */
+  semantic: {
+    getSettings(projectId: string): Promise<ProjectAiSettings>
+    setSettings(projectId: string, settings: ProjectAiSettings): Promise<ProjectAiSettings>
+    estimate(projectId: string, target: SemanticTarget): Promise<SemanticEstimate>
+    /** Main chọn đường theo cấu hình dự án. Đường A: main tự kéo khối và gọi model đang chọn. Đường B: main gửi key xuống engine. */
+    start(projectId: string, target: SemanticTarget, budget?: number): Promise<{ jobId: string }>
+    cancel(jobId: string): Promise<void>
   }
 }

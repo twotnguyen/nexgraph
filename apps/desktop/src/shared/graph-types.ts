@@ -53,7 +53,7 @@ export interface NeighborQuery {
 }
 
 /** `running`: job tổng quát (clone, ingest…) của `JobManager.start_task`. */
-export type JobState = 'queued' | 'structure' | 'resolve' | 'running' | 'done' | 'error' | 'cancelled'
+export type JobState = 'queued' | 'structure' | 'resolve' | 'running' | 'waiting_llm' | 'done' | 'error' | 'cancelled'
 
 export interface Job {
   job_id: string
@@ -479,4 +479,21 @@ export interface PrDetail {
   cross_repo: unknown | null
   comment: string
   truncated: boolean
+}
+
+// ----- Phân tích ngữ nghĩa bằng AI (W9) -----
+export type SemanticTarget = 'docs' | 'images' | 'deep' | 'labels' | 'dedup' | 'pr_triage'
+/** Cấu hình AI theo dự án (engine `ai_theo_du_an`): mặc định tắt. `app` = đường A, `direct` = đường B. */
+export interface ProjectAiSettings { enabled: boolean; transport: 'direct' | 'app' | null; model: string | null }
+export interface SemanticEstimate { files: string[]; chunks: number; cached_chunks: number; input_tokens: number; output_tokens: number }
+export interface SemanticResult {
+  target: SemanticTarget
+  nodes_added: number
+  edges_added: number
+  labels: Record<string, string>
+  merged: number
+  triage: { number: number; priority: number; action: string }[] | null
+  errors: { chunk_id: string; files: string[]; message: string }[]
+  usage: { input_tokens: number; output_tokens: number }
+  chunks: { total: number; cached: number; sent: number; done: number; failed: number; skipped_budget: number }
 }

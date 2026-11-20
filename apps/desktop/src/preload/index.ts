@@ -187,6 +187,13 @@ const api: NexGraphApi = {
     status: (pid) => call('prs:status', pid),
     list: (pid) => call('prs:list', pid),
     detail: (pid, n) => call('prs:detail', pid, n)
+  },
+  semantic: {
+    getSettings: (pid) => call('semantic:get-settings', pid),
+    setSettings: (pid, settings) => call('semantic:set-settings', pid, settings),
+    estimate: (pid, target) => call('semantic:estimate', pid, target),
+    start: (pid, target, budget) => call('semantic:start', pid, target, budget),
+    cancel: (jobId) => call('semantic:cancel', jobId)
   }
 }
 

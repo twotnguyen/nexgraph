@@ -1,0 +1,125 @@
+import { useEffect, useState } from 'react'
+import type { Job, ProjectAiSettings, SemanticEstimate, SemanticResult, SemanticTarget } from '@shared/graph-types'
+import { waitJob } from '../../state/waitJob'
+import { vi } from '../../strings'
+
+const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
+const num = (n: number) => n.toLocaleString('vi-VN')
+const SHOWN_FILES = 50
+
+interface Props {
+  projectId: string
+  /** Cố định target (nút "Đặt tên cụm bằng AI"); bỏ trống thì cho chọn docs/deep/images/dedup. */
+  target?: SemanticTarget
+  onClose: () => void
+  onSettings?: (s: ProjectAiSettings) => void
+}
+
+/** Bật AI theo dự án (mặc định tắt), xem ước tính (tệp, khối, token) rồi mới chạy: đây là hộp thoại đồng ý của W9. */
+export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }: Props) {
+  const [settings, setSettings] = useState<ProjectAiSettings | null>(null)
+  const [transport, setTransport] = useState<'app' | 'direct'>('app')
+  const [consent, setConsent] = useState(false)
+  const [target, setTarget] = useState<SemanticTarget>(fixed ?? 'docs')
+  const [estimate, setEstimate] = useState<SemanticEstimate | null>(null)
+  const [job, setJob] = useState<Job | null>(null)
+  const [result, setResult] = useState<SemanticResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const apply = (s: ProjectAiSettings) => { setSettings(s); onSettings?.(s) }
+  useEffect(() => {
+    window.nexgraph.semantic.getSettings(projectId).then(apply, (e) => setError(errMessage(e)))
+  }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!settings?.enabled) return
+    let live = true
+    setEstimate(null)
+    window.nexgraph.semantic.estimate(projectId, target).then((e) => live && setEstimate(e), (e) => live && setError(errMessage(e)))
+    return () => { live = false }
+  }, [projectId, target, settings?.enabled])
+
+  const act = async (fn: () => Promise<void>) => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try { await fn() } catch (e) { setError(vi.semantic.failed(errMessage(e))) } finally { setBusy(false) }
+  }
+  const enable = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId, { enabled: true, transport, model: null })))
+  const disable = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId, { enabled: false, transport: null, model: null })))
+  const run = () => act(async () => {
+    setResult(null)
+    const { jobId } = await window.nexgraph.semantic.start(projectId, target)
+    try {
+      const done = await waitJob(jobId, setJob, 500)
+      setResult(done.result as unknown as SemanticResult)
+    } finally {
+      setJob(null)
+    }
+  })
+  const cancel = () => { if (job) void window.nexgraph.semantic.cancel(job.job_id).catch(() => {}) }
+
+  const local = target === 'dedup'
+  const empty = estimate !== null && estimate.chunks === 0 && !local
+  return (
+    <div className="modal-backdrop">
+      <div role="dialog" aria-modal="true" aria-label={fixed === 'labels' ? vi.semantic.labelsTitle : vi.semantic.title} className="modal">
+        <h2>{fixed === 'labels' ? vi.semantic.labelsTitle : vi.semantic.title}</h2>
+        {settings && !settings.enabled && (
+          <>
+            <p>{vi.semantic.enableIntro}</p>
+            <label><input type="radio" name="transport" checked={transport === 'app'} onChange={() => setTransport('app')} /> {vi.semantic.transportApp}</label>
+            <label><input type="radio" name="transport" checked={transport === 'direct'} onChange={() => setTransport('direct')} /> {vi.semantic.transportDirect}</label>
+            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {vi.semantic.consent}</label>
+          </>
+        )}
+        {settings?.enabled && (
+          <>
+            {settings.model && <p className="muted">{vi.semantic.provider(settings.model)}</p>}
+            {!fixed && (
+              <fieldset>
+                <legend>{vi.semantic.targetLabel}</legend>
+                {(['docs', 'deep', 'images', 'dedup'] as const).map((t) => (
+                  <label key={t}><input type="radio" name="target" checked={target === t} disabled={busy} onChange={() => setTarget(t)} /> {vi.semantic.targets[t]}</label>
+                ))}
+              </fieldset>
+            )}
+            {!estimate && !error && <p className="muted">{vi.semantic.estimating}</p>}
+            {estimate && !local && (
+              <div role="status">
+                <p>{vi.semantic.estimate(estimate.files.length, estimate.chunks, estimate.cached_chunks)}</p>
+                <p>{vi.semantic.tokens(num(estimate.input_tokens), num(estimate.output_tokens))}</p>
+                {estimate.files.length > 0 && (
+                  <details>
+                    <summary>{vi.semantic.filesLabel}</summary>
+                    <ul className="mono">{estimate.files.slice(0, SHOWN_FILES).map((f) => <li key={f}>{f}</li>)}</ul>
+                    {estimate.files.length > SHOWN_FILES && <p className="muted">{vi.semantic.more(estimate.files.length - SHOWN_FILES)}</p>}
+                  </details>
+                )}
+              </div>
+            )}
+            {empty && <p className="inline-message">{vi.semantic.noFiles}</p>}
+          </>
+        )}
+        {job && <p role="status">{job.state === 'waiting_llm' ? vi.semantic.waiting : vi.semantic.running(job.files_done, job.files_total)}</p>}
+        {result && (
+          <div role="status" className="inline-message">
+            <p>{result.target === 'labels' ? vi.semantic.labelsDone(Object.keys(result.labels).length)
+              : result.target === 'dedup' ? vi.semantic.merged(result.merged) : vi.semantic.done(result.nodes_added, result.edges_added)}</p>
+            {result.chunks.failed > 0 && <p>{vi.semantic.failedChunks(result.chunks.failed)}</p>}
+            {(result.usage.input_tokens > 0 || result.usage.output_tokens > 0) &&
+              <p className="muted">{vi.semantic.cost(num(result.usage.input_tokens), num(result.usage.output_tokens))}</p>}
+          </div>
+        )}
+        {error && <p role="alert" className="inline-message error">{error}</p>}
+        <footer>
+          {settings?.enabled && !job && <button type="button" className="link" disabled={busy} onClick={() => void disable()}>{vi.semantic.disable}</button>}
+          {job ? <button type="button" onClick={cancel}>{vi.semantic.cancel}</button>
+            : <button type="button" onClick={onClose}>{vi.semantic.close}</button>}
+          {settings && !settings.enabled && <button type="button" className="primary" disabled={!consent || busy} onClick={() => void enable()}>{vi.semantic.enable}</button>}
+          {settings?.enabled && !job && <button type="button" className="primary" disabled={busy || !estimate || empty} onClick={() => void run()}>{vi.semantic.run}</button>}
+        </footer>
+      </div>
+    </div>
+  )
+}

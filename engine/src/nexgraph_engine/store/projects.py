@@ -96,6 +96,29 @@ class ProjectRegistry:
         finally:
             conn.close()
 
+    # --- AI theo dự án (W9): mặc định tắt -------------------------------------------
+    def ai_settings(self, project_id: str) -> dict:
+        conn = open_app_db(self._app_db, read_only=True)
+        try:
+            row = conn.execute("SELECT bat, kieu_ket_noi, ten_model FROM ai_theo_du_an WHERE ma_du_an = ?",
+                               (project_id,)).fetchone()
+        finally:
+            conn.close()
+        if row is None:
+            return {"enabled": False, "transport": None, "model": None}
+        return {"enabled": bool(row["bat"]), "transport": row["kieu_ket_noi"], "model": row["ten_model"]}
+
+    def set_ai_settings(self, project_id: str, *, enabled: bool, transport: str | None, model: str | None) -> dict:
+        conn = self._conn()
+        try:
+            conn.execute("INSERT INTO ai_theo_du_an (ma_du_an, bat, kieu_ket_noi, ten_model) VALUES (?, ?, ?, ?)"
+                         " ON CONFLICT (ma_du_an) DO UPDATE SET bat = excluded.bat, kieu_ket_noi = excluded.kieu_ket_noi,"
+                         " ten_model = excluded.ten_model", (project_id, int(enabled), transport, model))
+            conn.commit()
+        finally:
+            conn.close()
+        return self.ai_settings(project_id)
+
     # --- nội bộ -------------------------------------------------------------------
     def _conn(self) -> sqlite3.Connection:
         return open_app_db(self._app_db, read_only=self._read_only)

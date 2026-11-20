@@ -48,3 +48,11 @@ describe('NodeInspector', () => {
     expect(screen.queryByRole('button', { name: 'Đọc mục' })).not.toBeInTheDocument()
   })
 })
+
+describe('NodeInspector — kết quả AI (W9)', () => {
+  it('nút do AI tạo có nhãn suy luận bởi AI', async () => {
+    installNexgraph({ graph: { explain: vi.fn(async () => explain()) } })
+    render(<NodeInspector node={gnode('README.md::Ý tưởng#concept', 'Ý tưởng', { kind: 'concept', origin: 'llm' })} projectId="p1" onOpenNode={vi.fn()} />)
+    expect(await screen.findByText(/Suy luận bởi AI/)).toBeInTheDocument()
+  })
+})

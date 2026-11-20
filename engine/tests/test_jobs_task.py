@@ -148,3 +148,38 @@ def test_base_exception_is_error_not_cancelled(env):
 
     job = wait_done(manager, manager.start_task(info.project_id, "demo", work))
     assert job["state"] == "error" and job["message"]
+
+
+def test_task_waiting_llm_state_blocks_writers_and_cancels(env):
+    _, info, _, manager, _ = env
+    waiting = threading.Event()
+
+    def work(ctx):
+        ctx.set_state("waiting_llm")
+        waiting.set()
+        ctx.cancel.wait(10)
+        raise TaskCancelled
+
+    job_id = manager.start_task(info.project_id, "semantic", work)
+    assert waiting.wait(5)
+    assert manager.get(job_id)["state"] == "waiting_llm"
+    with pytest.raises(IndexAlreadyRunning):
+        manager.start_index(info.project_id)
+    assert manager.cancel(job_id) is True
+    assert wait_done(manager, job_id)["state"] == "cancelled"
+
+
+def test_task_set_state_rejects_terminal_states(env):
+    _, info, _, manager, _ = env
+    seen = {}
+
+    def work(ctx):
+        with pytest.raises(ValueError):
+            ctx.set_state("done")
+        ctx.set_state("waiting_llm")
+        ctx.set_state("running")
+        seen["ok"] = True
+        return {}
+
+    assert wait_done(manager, manager.start_task(info.project_id, "semantic", work))["state"] == "done"
+    assert seen["ok"]

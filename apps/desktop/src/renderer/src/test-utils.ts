@@ -104,7 +104,10 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       search: vi.fn(async () => []), graph: vi.fn(async () => ({ projects: [], nodes: [], edges: [], truncated: false, skipped: [] })),
       export: vi.fn(async () => null), ...over.globalGraph },
     prs: { status: vi.fn(async () => ({ available: false, reason: 'gh_missing' as const, repo: null, default_branch: null })),
-      list: vi.fn(), detail: vi.fn(), ...over.prs }
+      list: vi.fn(), detail: vi.fn(), ...over.prs },
+    semantic: { getSettings: vi.fn(async () => ({ enabled: false, transport: null, model: null })), setSettings: vi.fn(async (_pid: string, s: { enabled: boolean; transport: 'app' | 'direct' | null }) => ({ ...s, model: s.enabled ? 'openai / gpt-test' : null })),
+      estimate: vi.fn(async () => ({ files: ['README.md'], chunks: 1, cached_chunks: 0, input_tokens: 1200, output_tokens: 300 })),
+      start: vi.fn(async () => ({ jobId: 'sem1' })), cancel: vi.fn(async () => {}), ...over.semantic }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }

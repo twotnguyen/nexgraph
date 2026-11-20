@@ -113,8 +113,18 @@ describe('ProjectOverviewScreen', () => {
     expect(api.mcp.stopHttp).toHaveBeenCalledWith('p1')
   })
 
-  it('thẻ AI đợt 2 bị tắt', () => {
+  it('thẻ Phân tích ngữ nghĩa mở hộp thoại bật AI (mặc định tắt)', async () => {
     renderOverview()
-    expect(screen.getByRole('button', { name: /Phân tích ngữ nghĩa bằng AI/ })).toBeDisabled()
+    const card = await screen.findByRole('button', { name: /Phân tích ngữ nghĩa bằng AI/ })
+    await waitFor(() => expect(card).toHaveTextContent('Đang tắt'))
+    await userEvent.click(card)
+    expect(await screen.findByRole('dialog', { name: 'Phân tích ngữ nghĩa bằng AI' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bật AI cho dự án' })).toBeDisabled()
+  })
+
+  it('nút Đặt tên cụm bằng AI nằm trong nhóm Dựng graph', async () => {
+    renderOverview()
+    await userEvent.click(await screen.findByRole('button', { name: /Đặt tên cụm bằng AI/ }))
+    expect(await screen.findByRole('dialog', { name: 'Đặt tên cụm bằng AI' })).toBeInTheDocument()
   })
 })

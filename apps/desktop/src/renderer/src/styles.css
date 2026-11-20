@@ -2477,3 +2477,7 @@ dialog.modal::backdrop { background: var(--overlay); }
 .node-memory ul { margin: 2px 0 4px; padding-left: 16px; font-size: 12px; }
 .node-memory form { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
 .node-memory textarea { font: inherit; font-size: 12px; }
+
+/* W9: kết quả suy luận bởi AI */
+.react-flow__edge.ai-inferred path { stroke: var(--violet); stroke-dasharray: 5 4; }
+.ai-inferred[role='note'] { color: var(--violet); }
