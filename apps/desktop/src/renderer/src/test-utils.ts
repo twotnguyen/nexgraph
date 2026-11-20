@@ -44,7 +44,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       ...over.index
     },
     graph: { stats: vi.fn(async () => ({ files: 0, nodes_by_kind: {}, edges_by_type: {}, languages: {}, unresolved: 0 })),
-      neighbors: vi.fn(async () => ({ nodes: [], edges: [], truncated: false })), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
+      neighbors: vi.fn(async () => ({ nodes: [], edges: [], truncated: false })),
+      explain: vi.fn(async () => ({ node: null, degree: 0, community: null, groups: [] })), section: vi.fn(), node: vi.fn(async (_p: string, id: string) => ({ id, kind: 'file' as const, label: id, qualified_name: id,
       language: null, file: null, line_start: null, line_end: null, is_test: false, origin: 'ast', signature: null, community: null })), code: vi.fn(), search: vi.fn(async () => []),
       architecture: vi.fn(async () => ({ parent: null, blocks: [], links: [] })), archEvidence: vi.fn(async () => []),
       changes: vi.fn(async () => emptyChanges()), report: vi.fn(), paths: vi.fn(), impactOf: vi.fn(), ask: vi.fn(),
