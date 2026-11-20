@@ -17,6 +17,15 @@ export class IndexSourceStore {
     else this.secrets.remove(`pg:${pid}`)
   }
 
+  /** Gỡ dự án: không để lại DSN hay lựa chọn của dự án không còn trong danh sách. */
+  forget(pid: string): void {
+    this.secrets.remove(`pg:${pid}`)
+    const all = readJson(this.file)
+    if (!(pid in all)) return
+    delete all[pid]
+    writeJson(this.file, all)
+  }
+
   remembered(pid: string): IndexSources | null {
     return (readJson(this.file)[pid] as IndexSources | undefined) ?? null
   }
