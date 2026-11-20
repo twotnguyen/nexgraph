@@ -11,10 +11,8 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from graphify.cargo_introspect import introspect_cargo
 from graphify.manifest_ingest import extract_package_manifest
@@ -28,7 +26,7 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, FileRec, Node
 
 PREFIX = "nguon://"
-MAX_FILE_BYTES = 64 * 1024 * 1024
+MAX_FILE_BYTES = 16 * 1024 * 1024  # SCIP JSON 28 MB đã đẩy RSS lên 824 MB (json.loads + ingest giữ cả cây)
 
 
 def introspect_postgres(dsn: str) -> dict:
@@ -153,7 +151,7 @@ def _read_files(root: Path, paths: tuple[str, ...], read: Callable[[Path], dict]
                 errors.append(f"Không thấy tệp {p}")
                 continue
             if path.stat().st_size > MAX_FILE_BYTES:
-                errors.append(f"{p} lớn hơn 64 MB")
+                errors.append(f"{p} lớn hơn {MAX_FILE_BYTES // (1024 * 1024)} MB")
                 continue
             result = read(path)
         except Exception as exc:  # noqa: BLE001 — tệp người dùng chọn có thể hỏng bất kỳ kiểu nào
@@ -168,26 +166,33 @@ def _read_files(root: Path, paths: tuple[str, ...], read: Callable[[Path], dict]
 
 def _read_scip(path: Path) -> dict:
     try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
+        doc = json.loads(path.read_text(encoding="utf-8-sig"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         # shortcut: chỉ nhận dạng JSON như graphify; nâng lên khi cần đọc tệp protobuf `index.scip` của scip-*.
         return {"error": "chỉ nhận SCIP dạng JSON"}
+    if not isinstance(doc, dict) or not isinstance(doc.get("documents"), list):
+        return {"error": "SCIP JSON sai cấu trúc (cần đối tượng có mảng documents)"}  # vendor sẽ lặng lẽ trả rỗng
     return ingest_scip_json(doc, source_file=path.name)
+
+
+def _with_timeout(dsn: str) -> str:
+    """CSDL không trả lời thì job index không được treo theo timeout mặc định (vô hạn) của libpq."""
+    if "connect_timeout" in dsn:
+        return dsn
+    if "://" in dsn:
+        return dsn + ("&" if "?" in dsn else "?") + "connect_timeout=10"
+    return dsn + " connect_timeout=10"
 
 
 def _postgres(dsn: str) -> tuple[list[dict], list[str]]:
     try:
-        return [introspect_postgres(dsn)], []
+        return [introspect_postgres(_with_timeout(dsn))], []
     except ImportError:
         return [], ["Cần cài psycopg vào môi trường engine để đọc PostgreSQL"]
-    except Exception as exc:  # noqa: BLE001 — thông báo của driver có thể chứa DSN: xoá trước khi ghi CSDL
-        msg = str(exc).split("\n")[0]
-        secrets = {dsn, *re.findall(r"password\s*=\s*'?([^'\s]+)", dsn)}
-        with suppress(ValueError):
-            secrets.add(urlsplit(dsn).password or dsn)
-        for secret in sorted(secrets, key=len, reverse=True):
-            msg = msg.replace(secret, "***")
-        return [], [f"Không đọc được PostgreSQL ({type(exc).__name__}): {msg}"]
+    except ConnectionError as exc:  # vendor đã cắt thông báo của psycopg về dòng đầu, không mang DSN
+        return [], [f"Không kết nối được PostgreSQL: {str(exc).replace(dsn, '***')}"]
+    except Exception as exc:  # noqa: BLE001 — lỗi khác (DSN sai cú pháp…) có thể trích lại DSN: chỉ ghi tên kiểu lỗi
+        return [], [f"Không đọc được PostgreSQL ({type(exc).__name__}). Kiểm tra lại chuỗi kết nối."]
 
 
 def _cargo(root: Path) -> tuple[list[dict], list[str]]:

@@ -87,7 +87,7 @@ def test_postgres_with_mocked_introspect(run, tmp_path, monkeypatch):
                         lambda dsn: seen.append(dsn) or extract_sql(PurePosixPath("postgresql://db.local/shop"), content=ddl))
     (tmp_path / "p").mkdir()
     store = run(tmp_path / "p", ExtraSources(postgres_dsn=DSN))
-    assert seen == [DSN]
+    assert seen == [DSN + "?connect_timeout=10"]
     assert {("public.users", "table"), ("public.orders", "table")} <= _nodes(store, "nguon://postgres")
     assert ("public.orders", "REFERENCES", "public.users") in _edges(store, "nguon://postgres")
     assert SECRET not in repr(ExtraSources(postgres_dsn=DSN))
@@ -173,3 +173,69 @@ def test_dsn_never_reaches_disk_or_job(api, copy_fixture, tmp_path, monkeypatch)
 
 def test_tools_report_psycopg(api):
     assert "psycopg" in api.get("/v1/tools").json()
+
+
+# --- sửa sau kiểm thử độc lập ---------------------------------------------------------------------
+LEAKY_DSNS = ["host=h password=se SECRETtail", "host=h password='a b SECRETq'", "postgresql://u:p%40SECRET@h/db"]
+
+
+class _ProgrammingError(Exception):
+    """Giống psycopg.ProgrammingError: không đi qua vendor nên thông báo chưa được làm sạch."""
+
+
+@pytest.mark.parametrize("dsn", LEAKY_DSNS)
+def test_postgres_errors_never_leak_password(run, tmp_path, monkeypatch, dsn):
+    def boom(d):
+        raise _ProgrammingError(f'invalid dsn: missing "=" after "{d.split()[-1]}" in {d} / p@SECRET')
+    monkeypatch.setattr(extra_sources, "introspect_postgres", boom)
+    (tmp_path / "p").mkdir()
+    store = run(tmp_path / "p", ExtraSources(postgres_dsn=dsn))
+    store.conn.commit()
+    assert "_ProgrammingError" in _error(store, "nguon://postgres")
+    for f in tmp_path.rglob("*"):
+        if f.is_file():
+            assert b"SECRET" not in f.read_bytes(), f
+
+
+def test_postgres_keeps_vendor_sanitised_messages(run, tmp_path, monkeypatch):
+    seen = []
+
+    def fail(d):
+        seen.append(d)
+        raise ConnectionError("could not connect to PostgreSQL: connection refused")
+    monkeypatch.setattr(extra_sources, "introspect_postgres", fail)
+    (tmp_path / "p").mkdir()
+    store = run(tmp_path / "p", ExtraSources(postgres_dsn="host=h dbname=d"))
+    assert "connection refused" in _error(store, "nguon://postgres")
+    assert seen == ["host=h dbname=d connect_timeout=10"]
+
+
+def test_connect_timeout_added_once():
+    t = extra_sources._with_timeout
+    assert t("postgresql://u@h/db") == "postgresql://u@h/db?connect_timeout=10"
+    assert t("postgresql://u@h/db?sslmode=require") == "postgresql://u@h/db?sslmode=require&connect_timeout=10"
+    assert t("host=h connect_timeout=3") == "host=h connect_timeout=3"
+
+
+def test_scip_bom_and_bad_shapes(run, tmp_path, copy_fixture):
+    root = copy_fixture("extra_sources")
+    (root / "bom.json").write_bytes(b"\xef\xbb\xbf" + (root / "index.scip.json").read_bytes())
+    (root / "list.json").write_text("[1, 2, 3]")
+    (root / "docs.json").write_text('{"documents": {}}')
+    store = run(root, ExtraSources(scip_files=("bom.json", "list.json", "docs.json")))
+    assert ("Circle", "class") in _nodes(store, "nguon://scip")
+    err = _error(store, "nguon://scip")
+    assert "list.json" in err and "docs.json" in err and "bom.json" not in err
+
+
+def test_scip_size_cap_is_16mb():
+    assert extra_sources.MAX_FILE_BYTES == 16 * 1024 * 1024
+
+
+def test_code_route_explains_virtual_nodes(api, copy_fixture):
+    pid = api.open(copy_fixture("extra_sources"))["project_id"]
+    r = api.post(f"/v1/projects/{pid}/index", json={"sources": {"cargo": True}})
+    assert _wait(api, r.json()["job_id"])["state"] == "done"
+    r = api.get(f"/v1/projects/{pid}/code", params={"file": "nguon://cargo", "start": 1, "end": 1})
+    assert r.status_code == 404
+    assert "nguồn bổ sung" in r.json()["error"]["message"]
