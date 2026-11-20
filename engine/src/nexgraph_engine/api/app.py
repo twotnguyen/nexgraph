@@ -10,6 +10,7 @@ from nexgraph_engine.api import (
     routes_arch, routes_changes, routes_events, routes_export, routes_flows,
     routes_graph, routes_map, routes_projects, routes_query, routes_report, routes_tools,
 )
+from nexgraph_engine.api import routes_sources
 from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.api.services import Services
 from nexgraph_engine.selftest import run_selftest
@@ -81,5 +82,6 @@ def create_app(token: str, allowed_hosts: set[str], *, data_dir: Path | None = N
     app.include_router(routes_tools.router)
     app.include_router(routes_flows.router)
     app.include_router(routes_map.router)
+    app.include_router(routes_sources.router)
     app.add_middleware(Guard, token=token, allowed_hosts=allowed_hosts)
     return app
