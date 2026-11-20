@@ -285,8 +285,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
                     return memory.remember(conn, kind, text, node_ids or [], "mcp")
             except (memory.MemoryBusy, ValueError) as exc:
                 raise ToolError(str(exc)) from exc
-            except (sqlite3.Error, OSError) as exc:
-                raise ToolError(f"Không ghi được bộ nhớ: {exc}") from exc
+            except (sqlite3.Error, OSError) as exc:  # không đưa câu lỗi SQLite cho agent
+                raise ToolError("Không ghi được bộ nhớ của dự án") from exc
         return await _offload("remember", work)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -295,7 +295,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         Theo nút thì kèm `lesson` (preferred/tentative/contested) và `node_exists`; nút đã mất có trong `missing_node_ids`."""
         def body(s: GraphStore) -> dict:
             try:
-                return memory.recall(s.conn, query=query, node_id=node_id, limit=max(1, min(limit, 200)))
+                return memory.recall(s.conn, query=query, node_id=node_id, limit=max(1, min(limit, 200)),
+                                     allows=memory.source_filter(SourcePolicy(root, s.last_exclude())))
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
         return await run("recall", body)

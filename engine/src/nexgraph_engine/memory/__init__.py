@@ -10,14 +10,16 @@ import json
 import re
 import sqlite3
 import unicodedata
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 from graphify.reflect import aggregate_lessons
 
+from nexgraph_engine.query.source_policy import SourcePolicy, protected_source
 from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
 
 KINDS = ("lesson", "decision", "incident", "owner")
@@ -34,9 +36,14 @@ class MemoryBusy(RuntimeError):
 
 @contextmanager
 def writer(graph_db: Path) -> Iterator[sqlite3.Connection]:
-    """Kết nối ghi riêng dưới khoá ghi của dự án; commit khi thân chạy xong, khoá bận thì ném MemoryBusy."""
+    """Kết nối ghi riêng dưới khoá ghi của dự án; commit khi thân chạy xong, khoá bận thì ném MemoryBusy.
+    Không bao giờ tạo CSDL mới: chưa có graph đã công bố thì ném ValueError."""
+    if not graph_db.is_file():
+        raise ValueError("Dự án chưa được lập chỉ mục xong")
     try:
         with graph_writer(graph_db) as path, closing(open_graph_db(path)) as conn:
+            if not GraphStore(conn).has_published_graph():
+                raise ValueError("Dự án chưa được lập chỉ mục xong")
             yield conn
             conn.commit()
     except GraphWriteBusy as exc:
@@ -44,8 +51,27 @@ def writer(graph_db: Path) -> Iterator[sqlite3.Connection]:
 
 
 def normalize(text: str) -> str:
-    """Khoá gộp trùng: NFKC, casefold, chỉ giữ chữ/số, gộp khoảng trắng."""
-    return " ".join(re.findall(r"\w+", unicodedata.normalize("NFKC", text).casefold()))
+    """Khoá gộp trùng: NFKC, casefold, gộp khoảng trắng, bỏ dấu câu cuối câu. Giữ ký hiệu ở giữa (`> 0`, `-1`, `C++`)."""
+    return " ".join(unicodedata.normalize("NFKC", text).casefold().split()).rstrip(".!?…;,: ")
+
+
+def _words(text: str) -> list[str]:
+    """Từ để tìm theo `query` (khác khoá gộp trùng: ở đây bỏ hết dấu câu)."""
+    return re.findall(r"\w+", unicodedata.normalize("NFKC", text).casefold())
+
+
+def _clean(text: str) -> str:
+    """Bỏ ký tự điều khiển (loại Cc) trừ xuống dòng và tab."""
+    return "".join(ch for ch in text if ch in "\n\t" or unicodedata.category(ch) != "Cc")
+
+
+def source_filter(source: SourcePolicy) -> Callable[[str], bool]:
+    """Node có được đưa cho AI không, xét từ chính id (cả khi node đã mất khỏi graph)."""
+    def allows(node_id: str) -> bool:
+        if node_id.endswith("#directory"):
+            return source.allows(node_id.removesuffix("#directory"), directory=True)
+        return source.allows(node_id.split("::", 1)[0].rsplit("#", 1)[0])
+    return allows
 
 
 def _now(now: datetime | None) -> int:
@@ -69,7 +95,7 @@ def _nodes(conn: sqlite3.Connection, node_ids: list[str]) -> list[str]:
 
 
 def _text(text: str, limit: int = MAX_TEXT) -> str:
-    text = text.strip()
+    text = _clean(text).strip()
     if not text:
         raise ValueError("Nội dung trống")
     if len(text) > limit:
@@ -101,7 +127,7 @@ def rate(conn: sqlite3.Connection, question: str, answer: str, outcome: str, nod
         raise ValueError(f"outcome phải là một trong {', '.join(OUTCOMES)}")
     if source not in SOURCES:
         raise ValueError(f"Nguồn không hợp lệ: {source}")
-    body = {"question": _text(question), "answer": answer.strip()[:MAX_ANSWER]}
+    body = {"question": _text(_clean(question).strip()[:MAX_TEXT]), "answer": _clean(answer).strip()[:MAX_ANSWER]}
     if outcome == "da_sua":
         body["correction"] = _text(correction or "")
     nodes = _nodes(conn, node_ids)
@@ -119,11 +145,14 @@ def _rating_body(noi_dung: str) -> dict:
     return body if isinstance(body, dict) else {"question": noi_dung}
 
 
-def lessons(conn: sqlite3.Connection, now: datetime | None = None) -> dict:
-    """Bài học từ mọi đánh giá, tất định với `now` cho trước. Node không còn trong graph bị bỏ (như vendor)."""
+def lessons(conn: sqlite3.Connection, now: datetime | None = None, allows: Callable[[str], bool] | None = None) -> dict:
+    """Bài học từ mọi đánh giá, tất định với `now` cho trước. Node không còn trong graph bị bỏ (như vendor).
+    `allows` (cho AI): bỏ cả đánh giá nào có node bị loại khỏi ngữ cảnh AI, để câu hỏi/cách sửa không lộ."""
     docs = []
     for ket_qua, noi_dung, nodes, ts in conn.execute(
             "SELECT ket_qua, noi_dung, node_ids_json, tao_luc FROM ky_uc WHERE loai = 'danh_gia' ORDER BY tao_luc, id"):
+        if allows and not all(allows(n) for n in json.loads(nodes)):
+            continue
         body = _rating_body(noi_dung)
         docs.append({"date": datetime.fromtimestamp(ts, timezone.utc).isoformat(), "outcome": OUTCOMES[ket_qua],
                      "question": str(body.get("question", "")), "correction": str(body.get("correction") or ""),
@@ -144,17 +173,20 @@ def _lesson_of(agg: dict, node_id: str) -> dict | None:
 
 
 def recall(conn: sqlite3.Connection, *, query: str | None = None, node_id: str | None = None, limit: int = 20,
-           now: datetime | None = None) -> dict:
-    """Ký ức theo node và/hoặc theo từ khoá, mới trước. Node đã mất khỏi graph vẫn giữ, báo ở `missing_node_ids`."""
+           now: datetime | None = None, allows: Callable[[str], bool] | None = None) -> dict:
+    """Ký ức theo node và/hoặc theo từ khoá, mới trước. Node đã mất khỏi graph vẫn giữ, báo ở `missing_node_ids`.
+    `allows` (cho AI): node bị loại thì báo protected_source; bỏ mọi ký ức có node bị loại."""
     if not (query and query.strip()) and not node_id:
         raise ValueError("Cần query hoặc node_id")
-    terms = normalize(query or "").split()
+    if allows and node_id and not allows(node_id):
+        raise protected_source()
+    terms = _words(query or "")
     hits: list[tuple[int, dict]] = []
     # shortcut: quét cả bảng trong Python; đổi sang FTS khi một dự án có hàng chục nghìn ký ức.
     for row in conn.execute("SELECT id, loai, noi_dung, node_ids_json, ket_qua, tao_luc, nguon FROM ky_uc"
                             " ORDER BY tao_luc DESC, id DESC"):
         nodes = json.loads(row["node_ids_json"])
-        if node_id and node_id not in nodes:
+        if (node_id and node_id not in nodes) or (allows and not all(allows(n) for n in nodes)):
             continue
         item = {"id": row["id"], "kind": row["loai"], "text": row["noi_dung"], "node_ids": nodes,
                 "outcome": row["ket_qua"], "created_at": row["tao_luc"], "source": row["nguon"]}
@@ -162,7 +194,7 @@ def recall(conn: sqlite3.Connection, *, query: str | None = None, node_id: str |
             body = _rating_body(row["noi_dung"])
             item.update(text=str(body.get("question", "")), question=body.get("question"),
                         answer=body.get("answer"), correction=body.get("correction"))
-        haystack = normalize(" ".join(str(v) for v in (item["text"], item.get("answer"), item.get("correction"), *nodes) if v))
+        haystack = " ".join(_words(" ".join(str(v) for v in (item["text"], item.get("answer"), item.get("correction"), *nodes) if v)))
         score = sum(t in haystack for t in terms)
         if terms and not score:
             continue
@@ -174,5 +206,5 @@ def recall(conn: sqlite3.Connection, *, query: str | None = None, node_id: str |
         m["missing_node_ids"] = [n for n in m["node_ids"] if n not in alive]
     out: dict = {"memories": memories}
     if node_id:
-        out.update(node_id=node_id, node_exists=node_id in alive, lesson=_lesson_of(lessons(conn, now), node_id))
+        out.update(node_id=node_id, node_exists=node_id in alive, lesson=_lesson_of(lessons(conn, now, allows), node_id))
     return out

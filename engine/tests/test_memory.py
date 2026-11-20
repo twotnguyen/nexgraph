@@ -1,5 +1,6 @@
 """W10: bộ nhớ làm việc (đánh giá → bài học) và Memory neo vào node (remember/recall)."""
 import json
+import unicodedata
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 
@@ -191,3 +192,73 @@ def test_mcp_remember_and_recall(project, tmp_path):
     with graph_writer(db):
         busy = _call(server, "remember", {"kind": "lesson", "text": "y", "node_ids": []})
     assert busy.isError and "lập chỉ mục" in busy.content[0].text
+
+
+# --- Sửa sau kiểm thử độc lập ---------------------------------------------------------------------------------------
+
+MODEL = {"X-NexGraph-Audience": "model"}
+
+
+def test_recall_hides_memories_of_sources_excluded_from_ai(api, project, tmp_path):
+    pid, db, root = project
+    with writer(db) as conn:
+        remember(conn, "lesson", "Khoá api nằm trong auth service", [AUTH], "nguoi_dung")
+        remember(conn, "owner", "Nhóm UI phụ trách nút", [BUTTON], "nguoi_dung")
+        rate(conn, "auth service lưu token ở đâu?", "bí mật", "da_sua", [AUTH], correction="khoá api", now=at(1))
+    (root / ".gitignore").write_text("lib/services/\n", encoding="utf-8")
+
+    def check():
+        server = build_server(root, tmp_path / "appdata")
+        blocked = _call(server, "recall", {"node_id": AUTH})
+        assert blocked.isError and "loại khỏi ngữ cảnh AI" in blocked.content[0].text
+        for q in ("auth service", "khoá api", "services"):
+            assert _body(_call(server, "recall", {"query": q}))["memories"] == []
+        assert [m["kind"] for m in _body(_call(server, "recall", {"query": "nút"}))["memories"]] == ["owner"]
+        assert api.get(f"/v1/projects/{pid}/memory", params={"node": AUTH}, headers=MODEL).status_code == 403
+        assert api.get(f"/v1/projects/{pid}/memory", params={"q": "khoá api"}, headers=MODEL).json()["memories"] == []
+        model_lessons = api.get(f"/v1/projects/{pid}/lessons", headers=MODEL).json()
+        assert model_lessons["corrections"] == [] and AUTH not in model_lessons["labels"]
+        # Giao diện của người dùng (không phải model) vẫn thấy đủ.
+        assert len(api.get(f"/v1/projects/{pid}/memory", params={"node": AUTH}).json()["memories"]) == 2
+
+    check()
+    assert api.index(pid)["state"] == "done"  # node bị loại khỏi graph: vẫn phải ẩn
+    with closing(open_graph_db(db, read_only=True)) as conn:
+        assert conn.execute("SELECT count(*) FROM nut WHERE id_nut = ?", (AUTH,)).fetchone()[0] == 0
+    server = build_server(root, tmp_path / "appdata")
+    assert _call(server, "recall", {"node_id": AUTH}).isError
+    assert _body(_call(server, "recall", {"query": "khoá api"}))["memories"] == []
+
+
+def test_dedupe_keeps_opposite_meanings(project):
+    _, db, _ = project
+    with writer(db) as conn:
+        pairs = [("giá trị phải > 0", "giá trị phải < 0"), ("x = -1", "x = 1"), ("Dùng C++", "Dùng C#")]
+        for a, b in pairs:
+            assert remember(conn, "lesson", a, [], "mcp")["created"]
+            assert remember(conn, "lesson", b, [], "mcp")["created"]
+        assert remember(conn, "lesson", unicodedata.normalize("NFC", "Đừng sửa cache"), [AUTH, LOGIN], "mcp")["created"]
+        assert not remember(conn, "lesson", unicodedata.normalize("NFD", "  ĐỪNG  sửa cache. "), [LOGIN, AUTH], "mcp")["created"]
+
+
+def test_control_chars_and_long_question(api, project):
+    pid, db, _ = project
+    r = api.post(f"/v1/projects/{pid}/memory", json={"kind": "lesson", "text": "\x00", "node_ids": []})
+    assert r.status_code == 400
+    r = api.post(f"/v1/projects/{pid}/memory/ratings", json={"question": "q" * 5000, "answer": "a\x00b",
+                                                               "outcome": "huu_ich", "citations": []})
+    assert r.status_code == 200, r.text
+    with closing(open_graph_db(db, read_only=True)) as conn:
+        body = json.loads(conn.execute("SELECT noi_dung FROM ky_uc").fetchone()[0])
+    assert len(body["question"]) == 4000 and body["answer"] == "ab"
+
+
+def test_mcp_remember_does_not_recreate_missing_db(project, tmp_path):
+    _, db, root = project
+    server = build_server(root, tmp_path / "appdata")
+    db.unlink()
+    for suffix in ("-wal", "-shm"):
+        db.with_name(db.name + suffix).unlink(missing_ok=True)
+    r = _call(server, "remember", {"kind": "lesson", "text": "x", "node_ids": []})
+    assert r.isError and "sqlite" not in r.content[0].text.lower()
+    assert not db.exists()
