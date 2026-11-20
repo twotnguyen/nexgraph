@@ -70,6 +70,35 @@ Trong **Tổng quan dự án → Cập nhật sau mỗi commit**, NexGraph thêm
 
 Ghi `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code), `opencode.json` (OpenCode), `.codex/config.toml` (Codex) sau khi bạn xem trước và xác nhận. Chỉ thêm mục `nexgraph`; tệp không phân tích được (JSON hỏng hoặc có chú thích `//`, TOML đã có sẵn) thì không ghi, dùng nút "Sao chép cấu hình".
 
+### 21 nền tảng, gỡ và hook nhắc dùng graph (W5, 2026-11-21)
+
+Hộp thoại có 21 trợ lý. Mỗi trợ lý ghi tối đa bốn phần, mỗi phần có xem trước:
+
+- **cấu hình MCP**: ngoài 5 tệp ở trên còn có `.gemini/settings.json` (`mcpServers`) và `.kiro/settings/mcp.json` (`mcpServers`);
+- **quy tắc hỏi graph trước**:
+  - khối marker trong `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `CODEBUDDY.md` hoặc `.github/copilot-instructions.md`;
+  - hoặc tệp riêng `.cursor/rules/nexgraph.mdc`, `.kiro/steering/nexgraph.md`, `.windsurf/rules/nexgraph.md`, `.agents/rules/nexgraph.md`;
+- **skill**: `<thư mục của trợ lý>/skills/nexgraph/SKILL.md`;
+- **hook**:
+  - Claude Code và CodeBuddy: `PreToolUse` trong `.claude/settings.json` và `.codebuddy/settings.json`;
+  - Gemini CLI: `BeforeTool` trong `.gemini/settings.json`;
+  - OpenCode và Kilo: plugin `.opencode/plugins/nexgraph.js` và `.kilo/plugins/nexgraph.js`, Kilo đăng ký thêm trong `.kilo/kilo.json`.
+
+Nút **Gỡ…** xem trước rồi thực hiện:
+
+- chỉ bỏ mục, khối hoặc hook của NexGraph, phần còn lại của tệp giữ nguyên;
+- tệp chỉ còn phần của NexGraph thì bị xoá;
+- skill không có frontmatter `name: nexgraph` thì không bị xoá.
+
+`AGENTS.md` và `.agents/skills/nexgraph/` dùng chung cho nhiều trợ lý.
+
+Hook gọi `nexgraph-engine hook-guard read|search|gemini --project <dự án> --data-dir <thư mục app> [--strict]`:
+
+- **Khi nào nhắc:** lệnh trả `additionalContext` khi graph còn mới mà trong 30 phút qua chưa có lần gọi MCP `query_graph` hoặc `get_context`. "Còn mới" nghĩa là HEAD trùng commit đã index và tệp đích không đổi sau lần index.
+- **Tem thời gian:** ghi ở `<thư mục app>/projects/<id>/last_query_stamp`.
+- **Chế độ nghiêm (strict):** chỉ có ở Claude Code và CodeBuddy. Chặn lần `Read` đầu tiên mỗi phiên khi chưa hỏi graph. Grep, Glob và Bash chỉ được nhắc, không bị chặn.
+- **Không bao giờ chặn nhầm:** mọi lỗi, kể cả stdin hỏng hay tham số sai, đều cho lệnh thoát 0 và không in gì.
+
 ### Skill nexgraph cho agent ngoài
 
 Tổng quan dự án → "Tích hợp trợ lý AI" có thêm hai mục skill, nội dung sinh từ cùng nguồn với phần "Quy tắc dùng đồ thị NexGraph" trong app (gồm danh sách tool chỉ đọc của MCP):
