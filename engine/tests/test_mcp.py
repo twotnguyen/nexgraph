@@ -15,7 +15,8 @@ from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
 
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
          "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context",
-         "get_section", "get_callers", "tests_for", "find"}
+         "get_section", "get_callers", "tests_for", "find",
+         "list_prs", "get_pr_impact", "triage_prs", "review_status"}
 
 
 @pytest.fixture
@@ -365,3 +366,27 @@ def test_resources_hide_sources_blocked_from_ai(api, tmp_path):
         assert "load_secret_vault_token" not in text and "credentials" not in text, uri
     gods = payload(call(server, "god_nodes", {}))
     assert all("credentials" not in g["node"]["id"] for g in gods)
+
+
+def test_pr_tools_use_fake_gh(indexed, monkeypatch):
+    import gh_fake
+    diff = ("diff --git a/lib/services/auth_service.dart b/lib/services/auth_service.dart\n"
+            "--- a/lib/services/auth_service.dart\n+++ b/lib/services/auth_service.dart\n@@ -1 +1 @@\n-a\n+b\n")
+    view = ('{"number": 8, "title": "t", "state": "OPEN", "headRefName": "f", "baseRefName": "main", "author": null,'
+            ' "isDraft": false, "reviewDecision": "", "statusCheckRollup": [], "updatedAt": "2026-11-20T00:00:00Z"}')
+    gh_fake.install(monkeypatch, {("pr", "view", "8"): view, ("pr", "diff", "8"): diff})
+    server = build_server(*indexed)
+    assert len(payload(call(server, "list_prs", {}))["prs"]) == 8
+    assert [p["number"] for p in payload(call(server, "triage_prs", {}))["ranked"]][0] == 2
+    assert payload(call(server, "get_pr_impact", {"pr_number": 8}))["pr"]["number"] == 8
+    assert payload(call(server, "review_status", {"pr_number": 8}))["gate"] in ("pass", "advisory")
+    bad = call(server, "get_pr_impact", {"pr_number": -1})
+    assert bad.isError and "không hợp lệ" in bad.content[0].text
+
+
+def test_pr_tools_report_missing_gh(indexed, monkeypatch):
+    import gh_fake
+    from nexgraph_engine.prs.gh import GhError
+    gh_fake.install(monkeypatch, {("repo", "view"): GhError("gh_missing")})
+    r = call(build_server(*indexed), "list_prs", {})
+    assert r.isError and "gh" in r.content[0].text
