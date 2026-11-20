@@ -457,7 +457,13 @@ export const vi = {
     loading: 'Đang tải…',
     none: 'Không có liên kết',
     out: (type: string, n: number) => `${type} → (${n})`,
-    in: (type: string, n: number) => `← ${type} (${n})`
+    in: (type: string, n: number) => `← ${type} (${n})`,
+    summary: (degree: number, community: string | null) => (community ? `${degree} liên kết · cụm ${community}` : `${degree} liên kết`),
+    more: (files: { file: string | null; count: number }[]) =>
+      `+${files.reduce((n, f) => n + f.count, 0)} trong ${files.length} tệp: ${files.map((f) => `${f.file ?? '(ngoài tệp)'} (${f.count})`).join(', ')}`,
+    readSection: 'Đọc mục',
+    sectionStale: 'Tệp đã đổi sau lần index: nội dung có thể lệch dòng.',
+    sectionTruncated: (file: string, start: number, end: number) => `Đã cắt ở 8.000 ký tự. Mở ${file} dòng ${start}–${end} để đọc hết.`
   },
   graph: {
     backToRoot: 'Về gốc',

@@ -10,7 +10,7 @@ import type {
   AiSettings,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
   ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
-  GraphNode, GraphReport, GraphStats, IndexOptions, Job, NeighborQuery, Neighborhood, NodeImpact, PathResult,
+  DocSection, GraphNode, GraphReport, GraphStats, IndexOptions, Job, NeighborQuery, Neighborhood, NodeExplain, NodeImpact, PathResult,
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from './graph-types'
 
@@ -89,6 +89,8 @@ export interface NexGraphApi {
     /** `refresh: false` chỉ đọc, không cập nhật đồ thị trước. */
     changes(projectId: string, opts?: { refresh?: boolean }): Promise<Changes>
     report(projectId: string): Promise<GraphReport>
+    explain(projectId: string, nodeId: string): Promise<NodeExplain>
+    section(projectId: string, nodeId: string): Promise<DocSection>
     paths(projectId: string, nodeIds: string[], opts?: { maxHops?: number; directed?: boolean }): Promise<PathResult>
     impactOf(projectId: string, nodeId: string): Promise<NodeImpact>
     ask(projectId: string, question: string, opts?: { depth?: number; budget?: number; mode?: 'bfs' | 'dfs' }): Promise<AskResult>

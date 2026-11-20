@@ -226,6 +226,8 @@ export function registerIpc(
   on('graph:arch-evidence', (pid: string, from: string, to: string, limit?: number) => api().archEvidence(pid, from, to, limit))
   on('engine:tools', () => api().tools())
   on('graph:report', (pid: string) => api().report(pid))
+  on('graph:explain', (pid: string, nodeId: string) => api().explain(pid, nodeId))
+  on('graph:section', (pid: string, nodeId: string) => api().section(pid, nodeId))
   on('graph:paths', (pid: string, ids: string[], o?: { maxHops?: number; directed?: boolean }) => api().paths(pid, ids, o))
   on('graph:impact-of', (pid: string, nodeId: string) => api().impactOf(pid, nodeId))
   on('graph:ask', (pid: string, q: string, o?: { depth?: number; budget?: number; mode?: 'bfs' | 'dfs' }) => api().ask(pid, q, o))

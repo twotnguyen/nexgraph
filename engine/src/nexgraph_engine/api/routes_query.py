@@ -7,6 +7,7 @@ from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.routes_graph import for_model, model_payload, open_store
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.context import build_context, locate_json
+from nexgraph_engine.query.explain import explain_json
 from nexgraph_engine.query.paths import find_paths, impact_of
 from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy
@@ -86,3 +87,9 @@ def section(project_id: str, request: Request, node: str = Query(...)) -> dict:
         source = SourcePolicy(info.path, store.last_exclude()) if for_model(request) else None
         return section_json(store, info.path, node, source=source,
                             transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id)
+
+
+@router.get("/explain")
+def explain(project_id: str, request: Request, node: str = Query(...), limit: int = Query(20, ge=1, le=200)) -> dict:
+    with open_store(request, project_id) as (store, info):
+        return model_payload(request, store, info, explain_json(store, node, limit))

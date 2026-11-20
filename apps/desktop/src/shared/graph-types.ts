@@ -190,6 +190,33 @@ export interface ReportCommunity {
 }
 
 /** `GET /report`: surprising/questions mang nhãn (Graphify chỉ trả nhãn, không trả id nút). */
+/** Thẻ "Giải thích": cạnh vào/ra theo loại, tối đa `limit` node mỗi nhóm, phần còn lại đếm theo tệp. */
+export interface ExplainGroup {
+  direction: 'in' | 'out'
+  type: string
+  total: number
+  nodes: GraphNode[]
+  more_by_file: { file: string | null; count: number }[]
+}
+
+export interface NodeExplain {
+  node: GraphNode
+  degree: number
+  community: { id: string; label: string } | null
+  groups: ExplainGroup[]
+}
+
+/** Thân một mục tài liệu (đã che secret). */
+export interface DocSection {
+  node: GraphNode
+  file: string
+  start: number
+  end: number
+  text: string
+  truncated: boolean
+  stale: boolean
+}
+
 export interface GraphFreshness {
   indexed_at: number | null
   index_commit: string | null
@@ -205,7 +232,7 @@ export interface GraphReport {
   questions: { question: string; why: string }[]
   benchmark: { corpus_tokens: number; graph_tokens: number; reduction: number } | null
   truncated: boolean
-  cycles: { cycles: { files: string[]; size: number }[]; total: number }
+  cycles: ImportCycles
   freshness: GraphFreshness
   /** Lỗ hổng tri thức: node cô lập (không có cạnh ngoài cấu trúc chứa) và cạnh AMBIGUOUS. */
   gaps: { isolated: { total: number; nodes: GraphNode[] }; ambiguous_edges: { total: number; edges: GraphEdge[] } }

@@ -2,7 +2,7 @@ import type {
   IndexOptions,
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope,
   ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
-  GraphNode, GraphReport, GraphStats, Job,
+  DocSection, GraphNode, GraphReport, GraphStats, Job, NodeExplain,
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
 } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
@@ -141,6 +141,12 @@ export class EngineApi {
     if (start !== undefined) p.set('start', String(start))
     if (end !== undefined) p.set('end', String(end))
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/code?${p}`)
+  }
+  explain(pid: string, nodeId: string): Promise<NodeExplain> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/explain?${new URLSearchParams({ node: nodeId })}`)
+  }
+  section(pid: string, nodeId: string): Promise<DocSection> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/section?${new URLSearchParams({ node: nodeId })}`)
   }
   /** Công cụ ngoài có trên máy (ffmpeg, faster-whisper, git, gh, yt-dlp). */
   tools(): Promise<Record<string, boolean>> {

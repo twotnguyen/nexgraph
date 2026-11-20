@@ -1,38 +1,18 @@
 import { useEffect, useState } from 'react'
-import type { GraphNode, Neighborhood } from '@shared/graph-types'
+import type { DocSection, GraphNode, NodeExplain } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { kindStyle } from './kindStyle'
 
-interface Group { key: string; title: string; nodes: GraphNode[] }
-
-/** Láng giềng một bước, nhóm theo loại cạnh và hướng ("CALLS →", "← IMPORTS"). */
-function groupNeighbors(id: string, hood: Neighborhood): Group[] {
-  const byId = new Map(hood.nodes.map((n) => [n.id, n]))
-  const groups = new Map<string, { out: boolean; type: string; nodes: GraphNode[] }>()
-  for (const e of hood.edges) {
-    const out = e.source === id
-    if (!out && e.target !== id) continue
-    const other = byId.get(out ? e.target : e.source)
-    if (!other) continue
-    const key = `${out ? 'out' : 'in'}:${e.type}`
-    const g = groups.get(key) ?? { out, type: e.type, nodes: [] }
-    if (!g.nodes.some((n) => n.id === other.id)) g.nodes.push(other)
-    groups.set(key, g)
-  }
-  return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, g]) => ({ key, title: g.out ? vi.explain.out(g.type, g.nodes.length) : vi.explain.in(g.type, g.nodes.length), nodes: g.nodes }))
-}
-
+/** Bậc, cụm và cạnh vào/ra theo loại như `explain`: engine đã nhóm sẵn, phần quá 20 node gom theo tệp. */
 function Explain({ projectId, node, onOpenNode }: { projectId: string; node: GraphNode; onOpenNode?: (n: GraphNode) => void }) {
-  const [groups, setGroups] = useState<Group[] | null>(null)
+  const [info, setInfo] = useState<NodeExplain | null | 'error'>(null)
   useEffect(() => {
     let alive = true
-    setGroups(null)
+    setInfo(null)
     window.nexgraph.graph
-      .neighbors(projectId, { node: node.id, depth: 1, limit: 200 })
-      .then((h) => alive && setGroups(groupNeighbors(node.id, h)))
-      .catch(() => alive && setGroups([]))
+      .explain(projectId, node.id)
+      .then((r) => alive && setInfo(r))
+      .catch(() => alive && setInfo('error'))
     return () => {
       alive = false
     }
@@ -40,20 +20,51 @@ function Explain({ projectId, node, onOpenNode }: { projectId: string; node: Gra
   return (
     <section className="explain">
       <h4>{vi.explain.title}</h4>
-      {groups === null && <p className="muted">{vi.explain.loading}</p>}
-      {groups?.length === 0 && <p className="muted">{vi.explain.none}</p>}
-      {groups?.map((g) => (
-        <details key={g.key}>
-          <summary className="mono">{g.title}</summary>
+      {info === null && <p className="muted">{vi.explain.loading}</p>}
+      {info !== null && info !== 'error' && <p className="muted small">{vi.explain.summary(info.degree, info.community?.label ?? null)}</p>}
+      {(info === 'error' || info?.groups.length === 0) && <p className="muted">{vi.explain.none}</p>}
+      {info !== null && info !== 'error' && info.groups.map((g) => (
+        <details key={`${g.direction}:${g.type}`}>
+          <summary className="mono">{g.direction === 'out' ? vi.explain.out(g.type, g.total) : vi.explain.in(g.type, g.total)}</summary>
           <ul>
-            {g.nodes.slice(0, 50).map((n) => (
+            {g.nodes.map((n) => (
               <li key={n.id}>
                 {onOpenNode ? <button type="button" className="link" onClick={() => onOpenNode(n)}>{n.label}</button> : n.label}
               </li>
             ))}
           </ul>
+          {g.more_by_file.length > 0 && <p className="muted small">{vi.explain.more(g.more_by_file)}</p>}
         </details>
       ))}
+    </section>
+  )
+}
+
+function ReadSection({ projectId, node }: { projectId: string; node: GraphNode }) {
+  const [section, setSection] = useState<DocSection | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    setSection(null)
+    setError(null)
+  }, [projectId, node.id])
+  const read = () => {
+    setError(null)
+    window.nexgraph.graph
+      .section(projectId, node.id)
+      .then(setSection)
+      .catch((e: { message?: string }) => setError(e?.message ?? String(e)))
+  }
+  return (
+    <section className="read-section">
+      {!section && <button type="button" onClick={read}>{vi.explain.readSection}</button>}
+      {error && <p role="alert" className="error">{error}</p>}
+      {section && (
+        <>
+          {section.stale && <p className="warn small">{vi.explain.sectionStale}</p>}
+          <pre className="mono">{section.text}</pre>
+          {section.truncated && <p className="muted small">{vi.explain.sectionTruncated(section.file, section.start, section.end)}</p>}
+        </>
+      )}
     </section>
   )
 }
@@ -77,6 +88,7 @@ export function NodeInspector({ node, onOpenCode, projectId, onOpenNode }: {
       {node.file && onOpenCode && (
         <button type="button" onClick={() => onOpenCode(node.file as string, node.line_start ?? 1, node.line_end ?? undefined)}>{vi.code.open}</button>
       )}
+      {projectId && node.kind === 'document' && <ReadSection projectId={projectId} node={node} />}
       {projectId && <Explain projectId={projectId} node={node} onOpenNode={onOpenNode} />}
     </aside>
   )
