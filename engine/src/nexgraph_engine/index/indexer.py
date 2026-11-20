@@ -119,6 +119,8 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
         return ExtractedFile(rec, [file_node], [], [], {}, [("oversized", f"{f.size} byte vượt giới hạn")])
     if read_error or (source is None and f.language != "media"):
         return ExtractedFile(rec, [file_node], [], [], {}, [("read", read_error or "Không đọc được tệp")])
+    if f.language == "image":  # chỉ là nút tệp; nội dung ảnh có khi chạy phân tích AI (W9)
+        return ExtractedFile(rec, [file_node], [], [], {}, [])
     try:
         if f.language in DOC_LANGUAGES:
             if f.language == "media":

@@ -92,7 +92,7 @@ def test_languages_and_unknown_extensions(tmp_path):
         write(tmp_path, rel)
     got = {f.rel_path: f.language for f in discover(tmp_path)}
     assert got == {"a.dart": "dart", "a.py": "python", "a.ts": "typescript", "a.tsx": "typescript",
-                   "a.js": "javascript", "a.cs": "csharp", "a.cshtml": "csharp"}
+                   "a.js": "javascript", "a.cs": "csharp", "a.cshtml": "csharp", "a.sql": "sql"}
     assert language_of("x/y.md") is None
 
 
@@ -126,3 +126,46 @@ def test_parent_gitignore_applies_to_subdir(tmp_path):
     write(tmp_path, "lib/x.skip.dart")
     write(tmp_path, "lib/keep.dart")
     assert rels(tmp_path, subdir="lib") == ["lib/keep.dart"]
+
+
+def test_every_graphify_language_is_discovered(tmp_path):
+    # W2: ngôn ngữ lấy từ extractor của graphify; 7 ngôn ngữ cũ giữ tên cũ.
+    expected = {"a.rs": "rust", "a.go": "go", "a.java": "java", "a.kt": "kotlin", "a.rb": "ruby", "a.php": "php",
+                "a.swift": "swift", "a.cpp": "cpp", "a.h": "c", "a.sql": "sql", "a.tf": "terraform", "a.sh": "bash",
+                "a.vue": "vue", "a.ex": "elixir", "a.r": "r", "a.erl": "erlang", "a.sol": "solidity",
+                "a.vb": "vbnet", "a.pas": "pascal", "a.jl": "julia", "a.ps1": "powershell", "a.yaml": "yaml",
+                "package.json": "json", "pyproject.toml": "package_manifest", "a.py": "python", "a.cs": "csharp"}
+    for rel in expected:
+        write(tmp_path, rel)
+    got = {f.rel_path: f.language for f in discover(tmp_path, include_config=True)}
+    assert got == expected
+    config = {"a.yaml", "package.json", "pyproject.toml"}
+    assert {f.rel_path for f in discover(tmp_path)} == set(expected) - config  # mặc định không có tệp cấu hình
+
+
+def test_data_json_and_lockfiles_are_not_indexed(tmp_path):
+    for rel in ("data.json", "fixtures/users.json", "package-lock.json", "package.json", "tsconfig.base.json"):
+        write(tmp_path, rel)
+    assert sorted(f.rel_path for f in discover(tmp_path, include_config=True)) == ["package.json", "tsconfig.base.json"]
+
+
+def test_language_map_overrides_extension(tmp_path):
+    write(tmp_path, "lib/a.inc")
+    assert [f.language for f in discover(tmp_path)] == ["pascal"]
+    assert [f.language for f in discover(tmp_path, language_map={".inc": "php"})] == ["php"]
+    assert language_of("lib/a.inc", language_map={".inc": "php"}) == "php"
+
+
+def test_new_doc_and_image_types(tmp_path):
+    for rel in ("a.html", "a.qmd", "a.j2", "a.skill", "a.png", "a.svg"):
+        write(tmp_path, rel)
+    assert {f.rel_path: f.language for f in discover(tmp_path)} == {}
+    got = {f.rel_path: f.language for f in discover(tmp_path, include_docs=True, include_media=True)}
+    assert got == {"a.html": "html", "a.qmd": "markdown", "a.j2": "text", "a.skill": "markdown",
+                   "a.png": "image", "a.svg": "image"}
+
+
+@pytest.mark.parametrize("rel", ["pkg/a_test.go", "src/FooTest.java", "Foo.Tests/BarTests.cs", "spec/a_spec.rb",
+                                 "src/FooTest.kt", "tests/a_test.rs", "test_a.sh"])
+def test_is_test_path_other_languages(rel):
+    assert is_test_path(rel) is True

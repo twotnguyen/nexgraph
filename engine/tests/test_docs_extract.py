@@ -115,3 +115,21 @@ def test_bridge_marks_documents(docs_root, tmp_path):
     G = build_nx(store).G
     assert G.nodes["README.md::Cài đặt#document"]["file_type"] == "document"
     assert G.nodes["lib/auth.py::AuthService#class"]["file_type"] == "code"
+
+
+def test_html_headings_become_document_nodes(docs_root, tmp_path):
+    (docs_root / "guide.html").write_text("<html><body><h1>Hướng dẫn</h1><p>Mở <b>app</b>.</p>"
+                                          "<script>var x=1</script><h2>Cài đặt</h2><p>Chạy.</p></body></html>")
+    store = run_index(docs_root, tmp_path / "g.db", include_docs=True)
+    docs = nodes_of(store, NodeKind.DOCUMENT)
+    assert "guide.html::Hướng dẫn#document" in docs and "guide.html::Cài đặt#document" in docs
+
+
+def test_image_is_a_file_node_without_error(docs_root, tmp_path):
+    (docs_root / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    store = run_index(docs_root, tmp_path / "g.db", include_docs=True, include_media=True,
+                      transcript_dir=tmp_path / "tr")
+    assert store.file_record("logo.png") is not None
+    errs = store.conn.execute("SELECT count(*) FROM loi_phan_tich e JOIN tep t ON t.ma_tep = e.ma_tep"
+                              " WHERE t.duong_dan_tuong_doi = 'logo.png'").fetchone()[0]
+    assert errs == 0

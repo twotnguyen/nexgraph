@@ -9,13 +9,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pathspec
+from graphify.detect import DOC_EXTENSIONS as _GRAPHIFY_DOC_EXTS
+from graphify.extract import _get_extractor
+from graphify.extractors.json_config import _CONFIG_JSON_NAMES
 
 # Thư mục luôn bỏ (spec §5.5); `.nexgraph/` là dữ liệu của chính NexGraph.
 SKIP_DIRS = frozenset({".git", ".nexgraph", "build", ".dart_tool", "node_modules"})
 GENERATED_SUFFIXES = (".g.dart", ".freezed.dart", ".gr.dart", ".config.dart", ".mocks.dart",
                       "_generated.dart", ".pb.dart")
 
-# Chỉ các ngôn ngữ trong lộ trình (ADR 0006); .json, .sql, .xml... không phải mã cần lập đồ thị.
+# Tên cố định cho các ngôn ngữ có từ trước W2 (giữ dữ liệu cũ). Ngôn ngữ khác lấy từ extractor của graphify.
 LANGUAGE_BY_EXT = {
     ".dart": "dart", ".py": "python",
     ".ts": "typescript", ".tsx": "typescript", ".mts": "typescript", ".cts": "typescript",
@@ -25,14 +28,21 @@ LANGUAGE_BY_EXT = {
 }
 FULL_SUPPORT = frozenset({"dart", "python", "typescript", "javascript", "csharp"})
 # Tài liệu và media chỉ vào graph khi người dùng bật trong Tuỳ chọn index (F10 mục 6a).
-DOC_LANGUAGE_BY_EXT = {".md": "markdown", ".mdx": "markdown", ".txt": "text", ".rst": "text",
-                       ".docx": "docx", ".xlsx": "xlsx", ".pdf": "pdf"}
+DOC_LANGUAGE_BY_EXT = {".md": "markdown", ".mdx": "markdown", ".qmd": "markdown", ".skill": "markdown",
+                       ".txt": "text", ".rst": "text", ".j2": "text", ".jinja": "text", ".jinja2": "text",
+                       ".html": "html", ".htm": "html", ".docx": "docx", ".xlsx": "xlsx", ".pdf": "pdf"}
 MEDIA_EXTS = frozenset({".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mov", ".webm", ".mkv"})
-DOC_LANGUAGES = frozenset({*DOC_LANGUAGE_BY_EXT.values(), "media"})
+IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"})  # nút tệp; nội dung chỉ có khi chạy AI (W9)
+DOC_LANGUAGES = frozenset({*DOC_LANGUAGE_BY_EXT.values(), "media", "image"})
+# JSON chỉ là code khi là cấu hình/manifest: JSON dữ liệu (fixture, dataset) làm phình đồ thị (graphify #1224).
+_CONFIG_JSON_PREFIXES = ("tsconfig", "jsconfig")
+# Tệp cấu hình chỉ vào graph khi bật "Tệp cấu hình" trong Tuỳ chọn index (W2), để index mặc định giữ nguyên kết quả.
+CONFIG_LANGUAGES = frozenset({"json", "yaml", "package_manifest", "mcp_config"})
 MAX_MEDIA_BYTES = 500_000_000
 _TEST_DIRS = frozenset({"test", "tests", "__tests__", "integration_test"})
 _TEST_SUFFIXES = ("_test.dart", "_test.py", ".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx",
-                  ".test.js", ".spec.js")
+                  ".test.js", ".spec.js", "_test.go", "Test.java", "Tests.java", "Test.cs", "Tests.cs",
+                  "_spec.rb", "_test.rb", "Test.kt", "Tests.kt", "_test.rs", "Test.php", "Tests.swift")
 
 
 @dataclass(frozen=True)
@@ -45,15 +55,38 @@ class DiscoveredFile:
     oversized: bool
 
 
-def language_of(rel_path: str) -> str | None:
-    return LANGUAGE_BY_EXT.get(os.path.splitext(rel_path)[1].lower())
+def language_of(rel_path: str, root: Path | None = None, language_map: dict[str, str] | None = None) -> str | None:
+    """Ngôn ngữ code của tệp, None nếu không phải code. `root` cho phép graphify đọc đầu tệp để phân biệt (.h, .m)."""
+    ext = os.path.splitext(rel_path)[1].lower()
+    if language_map and ext in language_map:
+        return language_map[ext]
+    if ext in LANGUAGE_BY_EXT:
+        return LANGUAGE_BY_EXT[ext]
+    name = rel_path.rsplit("/", 1)[-1]
+    if ext in _GRAPHIFY_DOC_EXTS or ext in IMAGE_EXTS or ext in MEDIA_EXTS:
+        return None
+    if ext == ".json" and not _is_config_json_name(name):
+        return None
+    path = Path(root) / rel_path if root is not None else Path(rel_path)
+    try:
+        extractor = _get_extractor(path, sniff_headers=root is not None)
+    except OSError:
+        return None
+    return extractor.__name__.removeprefix("extract_") if extractor is not None else None
+
+
+def _is_config_json_name(name: str) -> bool:
+    low = name.lower()
+    if "lock" in low:
+        return False
+    return low in _CONFIG_JSON_NAMES or low.startswith(_CONFIG_JSON_PREFIXES) or low.endswith("mcp.json")
 
 
 def is_test_path(rel_path: str) -> bool:
     parts = rel_path.split("/")
     name = parts[-1]
     return (bool(_TEST_DIRS & set(parts[:-1])) or name.endswith(_TEST_SUFFIXES)
-            or (name.startswith("test_") and name.endswith(".py")))
+            or (name.startswith("test_") and name.endswith((".py", ".sh"))))
 
 
 def sha256_file(path: Path) -> str:
@@ -97,20 +130,25 @@ def _ignored(rel: str, rules: list[Rule]) -> bool:
     return False
 
 
-def _language(name: str, include_docs: bool, include_media: bool) -> str | None:
-    ext = os.path.splitext(name)[1].lower()
-    if ext in LANGUAGE_BY_EXT:
-        return LANGUAGE_BY_EXT[ext]
-    if include_docs and ext in DOC_LANGUAGE_BY_EXT:
+def _language(root: Path, rel: str, include_docs: bool, include_media: bool,
+              language_map: dict[str, str] | None, include_config: bool = False) -> str | None:
+    ext = os.path.splitext(rel)[1].lower()
+    if include_docs and ext in DOC_LANGUAGE_BY_EXT and not (language_map and ext in language_map):
         return DOC_LANGUAGE_BY_EXT[ext]
     if include_media and ext in MEDIA_EXTS:
         return "media"
-    return None
+    if include_media and ext in IMAGE_EXTS:
+        return "image"
+    language = language_of(rel, root, language_map)
+    if language in CONFIG_LANGUAGES and not include_config:
+        return None
+    return language
 
 
 def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None = None,
              exclude: list[str] | None = None, include_docs: bool = False,
-             include_media: bool = False) -> Iterator[DiscoveredFile]:
+             include_media: bool = False, language_map: dict[str, str] | None = None,
+             include_config: bool = False) -> Iterator[DiscoveredFile]:
     root = Path(root)
     found: list[DiscoveredFile] = []
     # Mẫu người dùng chọn (kiểu .gitignore, tính từ gốc project) áp như một .gitignore ở gốc.
@@ -143,7 +181,7 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                 if inside(rel) or on_path_to_subdir(rel):  # chỉ đi xuống nhánh dẫn tới thư mục con
                     walk(Path(entry.path), rel, rules)
             elif entry.is_file(follow_symlinks=False):
-                language = _language(entry.name, include_docs, include_media)
+                language = _language(root, rel, include_docs, include_media, language_map, include_config)
                 if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES) or _ignored(rel, rules):
                     continue
                 st = entry.stat(follow_symlinks=False)
