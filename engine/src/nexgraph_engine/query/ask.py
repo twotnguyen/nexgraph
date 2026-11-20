@@ -57,6 +57,7 @@ def ask_graph(store: GraphStore, question: str, depth: int = 2, budget: int = 20
               mode: Literal["bfs", "dfs"] = "bfs") -> dict:
     if build_match_query(question) is None:
         raise ValueError("Câu hỏi không có từ nào tìm được")
+    # shortcut: dựng lại đồ thị cầu nối mỗi câu hỏi (~9 ms/1.000 cạnh); repo trên ~100.000 cạnh thì cache G theo lần index.
     G = build_nx(store, Scope(limit=10**9)).G
     seed_ids, rivals = _seed_ids(G, question)
     if rivals:
