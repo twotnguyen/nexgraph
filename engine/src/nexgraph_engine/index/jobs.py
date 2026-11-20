@@ -118,9 +118,11 @@ class JobManager:
         lock = self._locks.get(project_id) if self._locks and project_id else None
         if lock is not None:
             lock.acquire()  # đợi lần refresh hiện tại của project xong
-        final: dict = {"state": "cancelled"}
+        final: dict = {"state": "error", "message": "Công việc dừng bất thường"}  # BaseException (SystemExit…)
         try:
-            if not cancel.is_set():
+            if cancel.is_set():
+                final = {"state": "cancelled"}
+            else:
                 self._set(job_id, state="running")
                 ctx = TaskContext(cancel, lambda done, total, message: self._set(
                     job_id, files_done=max(0, done), files_total=max(0, total), message=message))

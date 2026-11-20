@@ -522,6 +522,8 @@ export const vi = {
     adding: 'Đang tải…',
     empty: 'Chưa có nguồn nào.',
     remove: (name: string) => `Xoá ${name}`,
-    failed: (message: string) => `Không tải được: ${message}`
+    failed: (message: string) => `Không tải được: ${message}`,
+    jobCancelled: 'Đã huỷ',
+    jobFailed: 'Công việc thất bại'
   }
 }

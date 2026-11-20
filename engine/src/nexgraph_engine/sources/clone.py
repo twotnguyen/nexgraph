@@ -6,9 +6,13 @@ import re
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 from tempfile import TemporaryFile
 
+MAX_CLONE_DEPTH = 50
+MAX_CLONE_BYTES = 2 * 1024 ** 3  # 2 GB: repo lớn hơn thì dừng, tránh lấp đầy đĩa
+_SIZE_CHECK_SECONDS = 1.0
 _REPO_URL = re.compile(r"https://(github\.com|gitlab\.com)/([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)+)/?")
 
 
@@ -34,8 +38,21 @@ def git_remote(url: str) -> str:
     return url
 
 
-def clone_repo(url: str, dest: Path, *, depth: int, cancel: threading.Event) -> None:
-    """`git clone --depth` có thể huỷ; lỗi hoặc huỷ thì xoá `dest`."""
+def _dir_bytes(path: Path) -> int:
+    total = 0
+    for base, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.lstat(os.path.join(base, name)).st_size
+            except OSError:
+                pass
+    return total
+
+
+def clone_repo(url: str, dest: Path, *, depth: int, cancel: threading.Event, max_bytes: int | None = None) -> None:
+    """`git clone --depth` có thể huỷ, dừng khi `dest` vượt `max_bytes` (mặc định MAX_CLONE_BYTES); lỗi thì xoá `dest`."""
+    limit = max_bytes or MAX_CLONE_BYTES
+    too_big = RuntimeError(f"Repo vượt giới hạn {limit // 1024 ** 2} MB")
     git = shutil.which("git")
     if git is None:
         raise RuntimeError("Cần cài git để mở dự án từ URL")
@@ -46,15 +63,24 @@ def clone_repo(url: str, dest: Path, *, depth: int, cancel: threading.Event) -> 
         proc = subprocess.Popen([git, "clone", "--depth", str(depth), "--", git_remote(url), str(dest)],
                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=err, env=env)
         try:
+            next_check = time.monotonic() + _SIZE_CHECK_SECONDS
             while proc.poll() is None:
                 if cancel.wait(0.2):
                     proc.kill()
                     proc.wait()
                     raise RuntimeError("Đã huỷ")
+                if time.monotonic() >= next_check:
+                    next_check = time.monotonic() + _SIZE_CHECK_SECONDS
+                    if _dir_bytes(dest) > limit:
+                        proc.kill()
+                        proc.wait()
+                        raise too_big
             if proc.returncode != 0:
                 err.seek(0)
                 detail = err.read().decode("utf-8", "replace").strip()[-1200:]
                 raise RuntimeError(f"git clone thất bại: {detail}")
+            if _dir_bytes(dest) > limit:  # clone xong trước lần đo đầu
+                raise too_big
         except BaseException:
             shutil.rmtree(dest, ignore_errors=True)
             raise

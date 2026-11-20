@@ -54,7 +54,8 @@ def list_sources(directory: Path | None) -> list[dict]:
 
 def remove_source(directory: Path | None, name: str) -> bool:
     """Xoá một nguồn theo tên (chỉ tên tệp phẳng trong `directory`); False nếu không có."""
-    if directory is None or not name or name.startswith(".") or "/" in name or "\\" in name:
+    from nexgraph_engine.index.discovery import flat_name
+    if directory is None or not flat_name(name):
         return False
     path = directory / name
     if path.is_symlink() or not path.is_file():

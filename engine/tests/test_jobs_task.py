@@ -138,3 +138,13 @@ def test_project_task_can_refresh_now(api, copy_fixture):
     job_id = services.jobs.start_task(pid, "demo", lambda ctx: services.refresh.refresh_now(pid))
     job = wait_done(services.jobs, job_id)
     assert job["state"] == "done" and job["result"]["status"] == "ok" and job["result"]["added"] == 1
+
+
+def test_base_exception_is_error_not_cancelled(env):
+    _, info, _, manager, _ = env
+
+    def work(ctx):
+        raise SystemExit(1)
+
+    job = wait_done(manager, manager.start_task(info.project_id, "demo", work))
+    assert job["state"] == "error" and job["message"]

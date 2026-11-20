@@ -204,7 +204,8 @@ def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
                 return 3, {"status": "not_indexed"}
             if conn.execute("SELECT 1 FROM lan_lap_chi_muc WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai') LIMIT 1").fetchone():
                 return 0, skipped
-            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, store.project_id()))
+            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, store.project_id()),
+                                keep_sources=data_dir is None)
     except (GraphWriteBusy, sqlite3.OperationalError):
         return 0, skipped
     out = {"status": "ok", "added": r.added, "changed": r.changed, "removed": r.removed,

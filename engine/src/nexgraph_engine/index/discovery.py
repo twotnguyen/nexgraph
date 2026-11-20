@@ -6,7 +6,7 @@ import os
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 import pathspec
 from graphify.detect import DOC_EXTENSIONS as _GRAPHIFY_DOC_EXTS
@@ -214,11 +214,16 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
 SOURCES_PREFIX = "sources/"
 
 
+def flat_name(name: str) -> bool:
+    """Tên tệp phẳng an toàn trong thư mục nguồn: không ẩn, không có dấu phân cách, ổ đĩa Windows hay `:` (ADS)."""
+    return bool(name) and not name.startswith(".") and not any(c in name for c in "/\\:") \
+        and not PureWindowsPath(name).drive
+
+
 def source_path(root: Path, rel: str, sources_dir: Path | None) -> Path | None:
     """Đường dẫn thật của `sources/<tên>` thuộc gốc phụ; None nếu tệp thuộc dự án hoặc không có gốc phụ."""
     name = rel.removeprefix(SOURCES_PREFIX)
-    if (sources_dir is None or name == rel or not name or name.startswith(".") or "/" in name or "\\" in name
-            or os.path.lexists(Path(root) / rel)):
+    if (sources_dir is None or name == rel or not flat_name(name) or os.path.lexists(Path(root) / rel)):
         return None
     return Path(sources_dir) / name
 
