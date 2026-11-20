@@ -56,3 +56,20 @@ tests/test_query_fallback_edges.py::test_fallback_output_budget_still_truncates 
 tests/test_semantic_origin_stamp.py::test_part_c_stamps_the_semantic_side[core.md]  # lệch môi trường, chưa phân loại
 tests/test_semantic_origin_stamp.py::test_part_c_stamps_the_semantic_side[aider.md]  # lệch môi trường, chưa phân loại
 tests/test_semantic_origin_stamp.py::test_part_c_stamps_the_semantic_side[devin.md]  # lệch môi trường, chưa phân loại
+
+# --- Nâng lên 0.9.112 (2026-11-20, W1 / ADR 0018) ---
+# Đọc tệp theo bố cục repo upstream (pyproject.toml, graphify/*.py, skills/, tools/ cạnh tests/), NexGraph đặt mã ở engine/src/graphify
+tests/test_update_manifest_preservation.py  # cần tools/skillgen của upstream (đã bỏ)
+tests/test_update_partial_manifest.py  # cần tools/skillgen của upstream (đã bỏ)
+tests/test_backend_extras.py::test_video_extra_caps_pyav_below_19  # đọc pyproject.toml của upstream
+tests/test_backend_extras.py::test_requires_python_is_capped_below_an_unsupported_interpreter  # đọc pyproject.toml của upstream
+tests/test_prompt_id_rule_matches_ids.py::test_prompt_does_not_claim_ascii_only_ids[llm.py]  # đọc graphify/llm.py cạnh tests/
+tests/test_prompt_id_rule_matches_ids.py::test_prompt_does_not_claim_ascii_only_ids[extraction-spec.md]  # đọc skill upstream cạnh tests/
+tests/test_prompt_id_rule_matches_ids.py::test_prompt_does_not_claim_ascii_only_ids[extraction-spec-compact.md]  # đọc skill upstream cạnh tests/
+tests/test_report.py::test_watch_rebuild_passes_cost_json_totals_to_the_report  # đọc graphify/watch.py theo đường dẫn tương đối
+tests/test_skill_when_to_build.py::test_the_skill_files_are_found  # cần skill sinh ra ở gốc upstream (đã bỏ)
+# Cần extra tuỳ chọn tree-sitter-pascal (không cài; chạy với --with tree-sitter-pascal thì 13/13 qua, 2026-11-20). W2 quyết định có đóng gói grammar này không
+tests/test_pascal_singleton_resolution.py  # cần extra tuỳ chọn tree-sitter-pascal
+# Sửa có chủ đích của NexGraph (extract.py, dòng đầu "Modified by NexGraph"): dòng "AST cache:" in ra stderr vì stdout của engine là kênh giao thức
+tests/test_extract.py::test_extract_reports_ast_cache_hit_rate_over_file_total  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py  # (đã có ở trên) cũng đọc dòng AST cache trên stdout
