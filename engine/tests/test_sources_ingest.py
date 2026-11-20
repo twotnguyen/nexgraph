@@ -108,7 +108,7 @@ def test_cli_refresh_keeps_sources(api, project, web, capsys):
     job = wait_job(api, api.post(f"/v1/projects/{pid}/sources", json={"url": f"{web}/page.html"}).json()["job_id"])
     rel = job["result"]["file"]
     (root / "extra.py").write_text("def extra():\n    return 1\n", encoding="utf-8")
-    assert _refresh(root, api.app.state.services.data_dir) == 0
+    assert _refresh(root, api.app.state.services.data_dir)[0] == 0
     assert '"removed": 0' in capsys.readouterr().out
     assert api.get(f"/v1/projects/{pid}/nodes/{node_url(rel)}").status_code == 200
 
