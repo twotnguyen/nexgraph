@@ -70,6 +70,20 @@ describe('IndexOptionsDialog', () => {
       expect(screen.getByRole('textbox', { name: /Tệp cấu hình MCP/ })).toHaveValue('/a/.mcp.json')
     })
 
+    it('lưu DSN lỗi thì báo lỗi và không index', async () => {
+      installNexgraph({ engine: { tools: vi.fn(async () => ({ psycopg: true })) },
+        indexSources: { saveDsn: vi.fn(async () => { throw new Error('no_keychain') }) } })
+      const onSubmit = vi.fn()
+      render(<IndexOptionsDialog projectId="p1" onSubmit={onSubmit} onClose={() => {}} />)
+      await userEvent.click(await screen.findByRole('checkbox', { name: /PostgreSQL/ }))
+      const dsn = screen.getByLabelText(/Chuỗi kết nối/)
+      expect(dsn).toHaveAttribute('placeholder', 'postgresql://user@host:5432/db')
+      await userEvent.type(dsn, 'host=h')
+      await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
+      expect(await screen.findByRole('alert')).toHaveTextContent('Không lưu được chuỗi kết nối')
+      expect(onSubmit).not.toHaveBeenCalled()
+    })
+
     it('thiếu psycopg thì khoá PostgreSQL', async () => {
       installNexgraph({ engine: { tools: vi.fn(async () => ({ psycopg: false })) } })
       render(<IndexOptionsDialog projectId="p1" onSubmit={() => {}} onClose={() => {}} />)

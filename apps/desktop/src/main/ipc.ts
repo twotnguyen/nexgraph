@@ -154,6 +154,8 @@ export function registerIpc(
   })
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
+  const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),
+    new SecretStore(join(app.getPath('userData'), 'index-source-secrets.json'), secretBox))
   const removalVersions = new Map<string, symbol>()
   const stopWatch = (pid: string): void => {
     watchStarts.delete(pid)
@@ -162,6 +164,7 @@ export function registerIpc(
   }
   on('project:remove', async (pid: string) => {
     await api().removeProject(pid)
+    indexSources.forget(pid)
     removalVersions.set(pid, Symbol())
     stopWatch(pid)
     agents?.close(pid)
@@ -182,8 +185,6 @@ export function registerIpc(
     return fsh.write(pid, relPath, text, opts)
   })
   on('index:scan', (pid: string) => api().scan(pid))
-  const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),
-    new SecretStore(join(app.getPath('userData'), 'index-source-secrets.json'), secretBox))
   on('index:start', async (pid: string, opts?: IndexOptions) => {
     try {
       const resolved = indexSources.resolve(pid, opts)

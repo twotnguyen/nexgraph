@@ -15,7 +15,7 @@ from nexgraph_engine.changes.model import read_changes
 from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.impact.analyze import analyze
-from nexgraph_engine.index.extra_sources import is_source_language
+from nexgraph_engine.index.extra_sources import is_source_language, is_source_path
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file, source_path
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source, safe_project_path
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
@@ -77,6 +77,8 @@ def neighbors_json(store: GraphStore, node: str, types: set[EdgeType] | None, di
 def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None, *,
               transcript_dir: Path | None = None, source: SourcePolicy | None = None,
               sources_dir: Path | None = None) -> dict:
+    if is_source_path(file):
+        raise ApiError(404, "file_not_found", "Nút đến từ nguồn bổ sung, không có mã nguồn")
     external = source_path(root, file, sources_dir)
     if external is not None:  # nguồn tải từ URL: ngoài dự án nên không qua .gitignore, nhưng vẫn theo mẫu loại trừ AI
         if source is not None and not source.allows(file):

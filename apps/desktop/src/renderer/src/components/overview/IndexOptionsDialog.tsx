@@ -41,6 +41,7 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
   const [manifests, setManifests] = useState(false)
   const [scipText, setScip] = useState('')
   const [mcpText, setMcp] = useState('')
+  const [dsnError, setDsnError] = useState<string | null>(null)
   useEffect(() => {
     let live = true
     // Lỗi khi dò công cụ không chặn: engine vẫn báo thiếu công cụ theo từng tệp khi index.
@@ -75,7 +76,14 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
   const needDsn = usePostgres && !hasDsn && !dsn.trim()
   const submit = async (): Promise<void> => {
     // DSN đi thẳng xuống kho khoá của main; tuỳ chọn index chỉ mang cờ `postgres`.
-    if (usePostgres && dsn.trim()) await window.nexgraph.indexSources.saveDsn(projectId, dsn.trim())
+    if (usePostgres && dsn.trim()) {
+      try {
+        await window.nexgraph.indexSources.saveDsn(projectId, dsn.trim())
+      } catch (e) {
+        setDsnError(vi.overview.dsnSaveFailed(e instanceof Error ? e.message : String(e)))
+        return
+      }
+    }
     onSubmit({ exclude, includeDocs, includeMedia, includeConfig, force,
       ...(workers >= 1 && workers <= 64 ? { workers } : {}), ...sources })
   }
@@ -118,10 +126,11 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
             <label className="field">
               <span>{vi.overview.dsnLabel}</span>
               <input type="password" autoComplete="off" className="mono" aria-label={vi.overview.dsnLabel}
-                placeholder="postgresql://user@host:5432/db" value={dsn} onChange={(e) => setDsn(e.target.value)} />
+                placeholder={vi.overview.dsnPlaceholder} value={dsn} onChange={(e) => setDsn(e.target.value)} />
               {hasDsn
                 ? <small className="muted">{vi.overview.dsnSaved} <button type="button" onClick={forgetDsn}>{vi.overview.dsnForget}</button></small>
                 : needDsn && <small className="muted">{vi.overview.needDsn}</small>}
+              {dsnError && <small role="alert" className="error">{dsnError}</small>}
             </label>
           )}
           <label><input type="checkbox" checked={cargo} onChange={(e) => setCargo(e.target.checked)} /> {vi.overview.sourceCargo}</label>

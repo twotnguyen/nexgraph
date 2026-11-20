@@ -178,6 +178,8 @@ export const vi = {
     sourcesHint: 'Mỗi nguồn thành một tệp ảo trong đồ thị. Nút Index lại dùng lại lựa chọn này.',
     sourcePostgres: 'Lược đồ PostgreSQL (bảng, view, hàm, khoá ngoại)',
     dsnLabel: 'Chuỗi kết nối PostgreSQL',
+    dsnPlaceholder: 'postgresql://user@host:5432/db',
+    dsnSaveFailed: (msg: string) => `Không lưu được chuỗi kết nối: ${msg}`,
     dsnSaved: 'Đã lưu chuỗi kết nối trong kho khoá của máy. Nhập chuỗi mới để thay.',
     dsnForget: 'Xoá chuỗi kết nối',
     needDsn: 'Nhập chuỗi kết nối để đọc PostgreSQL',

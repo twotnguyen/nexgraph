@@ -40,4 +40,15 @@ describe('IndexSourceStore', () => {
     s.saveDsn('p1', null)
     expect(s.hasDsn('p1')).toBe(false)
   })
+
+  it('gỡ dự án thì xoá cả DSN lẫn lựa chọn đã nhớ', () => {
+    const { s } = store()
+    s.saveDsn('p1', DSN)
+    s.resolve('p1', { sources: { postgres: true } })
+    s.resolve('p2', { sources: { cargo: true } })
+    s.forget('p1')
+    expect(s.hasDsn('p1')).toBe(false)
+    expect(s.remembered('p1')).toBeNull()
+    expect(s.remembered('p2')).toEqual({ cargo: true })
+  })
 })
