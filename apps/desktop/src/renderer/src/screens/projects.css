@@ -238,3 +238,9 @@
 .projects-clone p {
   margin: 0;
 }
+
+/* Graph chung (W8) */
+.projects-page .projects-panel + .projects-panel { margin-top: 18px; }
+.projects-page .global-member { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+.projects-page .global-member input { flex: none; }
+.workbench-panel .recent .recent-join:hover:not(:disabled) { background: var(--accent-soft); color: var(--blue); }

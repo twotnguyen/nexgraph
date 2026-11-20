@@ -520,5 +520,26 @@ export const vi = {
     empty: 'Chưa có nguồn nào.',
     remove: (name: string) => `Xoá ${name}`,
     failed: (message: string) => `Không tải được: ${message}`
+  },
+  globalGraph: {
+    title: 'Graph chung',
+    hint: 'Gộp nhiều dự án để thấy lời gọi giữa các repo (ví dụ app gọi vào thư viện của nhóm). Cạnh liên repo là suy luận, được tính lại mỗi khi một dự án trong nhóm lập chỉ mục xong.',
+    empty: 'Chưa có dự án nào. Bấm nút đồ thị cạnh một dự án gần đây để thêm.',
+    addTo: (name: string) => `Thêm ${name} vào graph chung`,
+    removeFrom: (name: string) => `Gỡ ${name} khỏi graph chung`,
+    unavailable: 'Không còn dùng được',
+    view: 'Xem chung',
+    viewHint: 'Chọn từ hai dự án để xem chung.',
+    readOnly: 'Chỉ đọc: gộp đồ thị đã lập chỉ mục của các dự án đã chọn.',
+    crossEdges: (n: number) => `${n} cạnh liên repo`,
+    search: 'Tìm trong graph chung',
+    searchPlaceholder: 'Tên hàm, lớp, tệp…',
+    noHits: 'Không tìm thấy trong các dự án đang xem.',
+    export: 'Xuất graph.json gộp',
+    exported: (file: string) => `Đã xuất ${file}`,
+    loading: 'Đang gộp đồ thị…',
+    truncated: 'Đã cắt bớt: mỗi dự án chỉ hiện các nút có nhiều liên kết nhất.',
+    skipped: (n: number) => `Bỏ qua ${n} dự án đã gỡ, mất thư mục hoặc chưa lập chỉ mục.`,
+    back: 'Dự án'
   }
 }

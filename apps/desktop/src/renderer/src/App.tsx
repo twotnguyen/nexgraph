@@ -12,6 +12,7 @@ import { ProjectOverviewScreen, type WorkspaceTab } from './screens/ProjectOverv
 import { SettingsScreen } from './screens/SettingsScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
 import { WorkspaceScreen } from './screens/WorkspaceScreen'
+import { GlobalViewScreen } from './screens/GlobalViewScreen'
 
 type Screen =
   | { name: 'projects' }
@@ -21,6 +22,7 @@ type Screen =
   | { name: 'overview'; project: ProjectSummary }
   | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab; initialCommand?: HostCommand }
   | { name: 'settings'; back: Screen }
+  | { name: 'global'; projectIds: string[] }
 
 /** Kiểm tra kích thước trước khi lập chỉ mục. Lỗi khi quét không chặn: coi như dự án không lớn. */
 function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan: ScanInfo | null) => void }) {
@@ -149,6 +151,7 @@ export default function App() {
       {screen.name === 'projects' && (
         <ProjectsScreen engineReady={status.state === 'ready'}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
+          onOpenGlobal={(projectIds) => setScreen({ name: 'global', projectIds })}
           onOpened={(project) => {
             setHostError(null)
             setScreen(project.last_indexed_at != null ? { name: 'workspace', project } : { name: 'scan', project })
@@ -198,6 +201,7 @@ export default function App() {
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
           onBack={() => setScreen({ name: 'overview', project: screen.project })} />
       )}
+      {screen.name === 'global' && <GlobalViewScreen projectIds={screen.projectIds} onBack={() => setScreen({ name: 'projects' })} />}
       {screen.name === 'settings' && <SettingsScreen onBack={() => setScreen(screen.back)} />}
       <EngineStatusBar status={status} onRestart={() => void window.nexgraph.engine.restart()} />
     </div>
