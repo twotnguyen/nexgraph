@@ -10,8 +10,9 @@ from pydantic import BaseModel, Field
 
 from nexgraph_engine import memory
 from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_graph import open_store
+from nexgraph_engine.api.routes_graph import for_model, open_store
 from nexgraph_engine.query.context import locate_json
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.store.graph_store import GraphStore
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
@@ -29,7 +30,7 @@ class CitationBody(BaseModel):
 
 
 class RatingBody(BaseModel):
-    question: str = Field(max_length=memory.MAX_TEXT)
+    question: str = Field(max_length=200_000)  # engine cắt còn MAX_TEXT
     answer: str = Field(max_length=200_000)
     outcome: Literal["huu_ich", "ngo_cut", "da_sua"]
     correction: str | None = Field(None, max_length=memory.MAX_TEXT)
@@ -50,6 +51,13 @@ def _write(request: Request, project_id: str, body: Callable[[sqlite3.Connection
         raise ApiError(409, "index_running", str(exc)) from exc
     except ValueError as exc:
         raise ApiError(400, "bad_param", str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise ApiError(400, "bad_param", "Dữ liệu ghi nhớ không hợp lệ") from exc
+
+
+def _ai_filter(request: Request, store: GraphStore, info):
+    """Chỉ khi trả cho model: ẩn ký ức có node thuộc nguồn bị loại khỏi ngữ cảnh AI."""
+    return memory.source_filter(SourcePolicy(info.path, store.last_exclude())) if for_model(request) else None
 
 
 def _cited_nodes(conn: sqlite3.Connection, citations: list[CitationBody]) -> list[str]:
@@ -67,9 +75,9 @@ def _cited_nodes(conn: sqlite3.Connection, citations: list[CitationBody]) -> lis
 @router.get("/memory")
 def recall(project_id: str, request: Request, node: str | None = Query(None, max_length=2048),
            q: str | None = Query(None, max_length=memory.MAX_TEXT), limit: int = Query(50, ge=1, le=200)) -> dict:
-    with open_store(request, project_id) as (store, _):
+    with open_store(request, project_id) as (store, info):
         try:
-            return memory.recall(store.conn, query=q, node_id=node, limit=limit)
+            return memory.recall(store.conn, query=q, node_id=node, limit=limit, allows=_ai_filter(request, store, info))
         except ValueError as exc:
             raise ApiError(400, "bad_param", str(exc)) from exc
 
@@ -87,5 +95,5 @@ def add_rating(project_id: str, body: RatingBody, request: Request) -> dict:
 
 @router.get("/lessons")
 def get_lessons(project_id: str, request: Request) -> dict:
-    with open_store(request, project_id) as (store, _):
-        return memory.lessons(store.conn)
+    with open_store(request, project_id) as (store, info):
+        return memory.lessons(store.conn, allows=_ai_filter(request, store, info))

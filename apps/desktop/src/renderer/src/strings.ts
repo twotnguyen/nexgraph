@@ -528,7 +528,6 @@ export const vi = {
     corrected: 'Đã sửa',
     correctionLabel: 'Câu trả lời đúng là gì?',
     save: 'Lưu',
-    cancel: 'Hủy',
     saved: 'Đã lưu đánh giá',
     failed: (message: string) => `Không lưu được: ${message}`,
     lessonsTitle: 'Bài học',
