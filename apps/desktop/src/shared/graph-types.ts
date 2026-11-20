@@ -372,6 +372,16 @@ export interface IndexOptions {
   includeConfig?: boolean
   workers?: number
   force?: boolean
+  /** Nguồn bổ sung (W11). DSN PostgreSQL không đi qua đây: main giữ trong kho khoá và tự gắn vào request. */
+  sources?: IndexSources
+}
+
+export interface IndexSources {
+  postgres?: boolean
+  cargo?: boolean
+  manifests?: boolean
+  scipFiles?: string[]
+  mcpFiles?: string[]
 }
 
 export interface AiSettings {

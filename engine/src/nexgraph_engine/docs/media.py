@@ -46,7 +46,8 @@ def google_text(path: Path, sha: str, out_dir: Path) -> str:
 def tools_available() -> dict[str, bool]:
     return {"ffmpeg": shutil.which("ffmpeg") is not None, "faster_whisper": has_whisper(),
             "git": shutil.which("git") is not None, "gh": shutil.which("gh") is not None,
-            "yt_dlp": find_spec("yt_dlp") is not None, "gws": has_gws()}
+            "yt_dlp": find_spec("yt_dlp") is not None, "gws": has_gws(),
+            "psycopg": find_spec("psycopg") is not None}  # nguồn PostgreSQL (W11)
 
 
 def transcript_for(path: Path, sha: str, out_dir: Path, *, cancel: threading.Event | None = None) -> str:

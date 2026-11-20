@@ -20,6 +20,7 @@ from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
 from nexgraph_engine.docs import media
 from nexgraph_engine.docs.extract import extract_document
 from nexgraph_engine.docs.text import doc_text
+from nexgraph_engine.index.extra_sources import ExtraSources, ingest_sources
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, DiscoveredFile, discover, is_batch_language, sha256_file
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import rebuild_flows
@@ -152,8 +153,9 @@ class Indexer:
                  cancel: threading.Event, subdir: str | None = None, exclude: list[str] | None = None,
                  include_docs: bool = False, include_media: bool = False, transcript_dir: Path | None = None,
                  include_config: bool = False, workers: int | None = None, force: bool = False,
-                 sources_dir: Path | None = None) -> None:
+                 sources_dir: Path | None = None, sources: ExtraSources | None = None) -> None:
         self.store, self.root, self.on_progress, self.cancel = store, Path(root), on_progress, cancel
+        self.sources = sources
         self.subdir, self.exclude = subdir, exclude or []
         self.include_docs, self.include_media, self.transcript_dir = include_docs, include_media, transcript_dir
         self.include_config, self.workers, self.force = include_config, workers, force
@@ -178,6 +180,10 @@ class Indexer:
             self.on_progress(ProgressEvent("structure", 0, total))
             if not self._structure(run_id, files):
                 return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", 0, total))
+            if self.sources is not None and self.sources.any():
+                self.on_progress(ProgressEvent("structure", total, total, "Đang đọc nguồn bổ sung"))
+                ingest_sources(store, run_id, self.root, self.sources, subdir=self.subdir, exclude=self.exclude,
+                               cancel=self.cancel)
             store.set_run_state(run_id, "phan_giai", files_done=total)
             self.on_progress(ProgressEvent("resolve", total, total))
             if self.cancel.is_set():

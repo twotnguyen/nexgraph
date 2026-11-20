@@ -13,6 +13,7 @@ import type {
   DocSection, GraphNode, GraphReport, GraphStats, IndexOptions, Job, NeighborQuery, Neighborhood, NodeExplain, NodeImpact, PathResult,
   ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit, SourceItem
 } from './graph-types'
+import type { IndexSources } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -207,5 +208,13 @@ export interface NexGraphApi {
     /** Tải URL vào nguồn của dự án rồi cập nhật đồ thị; lỗi `bad_url` khi URL bị chặn. */
     add(projectId: string, url: string): Promise<{ jobId: string }>
     remove(projectId: string, name: string): Promise<void>
+  },
+  /** Nguồn bổ sung của Tuỳ chọn index (W11). DSN chỉ gửi xuống main, không bao giờ đọc lại được. */
+  indexSources: {
+    hasDsn(projectId: string): Promise<boolean>
+    saveDsn(projectId: string, dsn: string | null): Promise<void>
+    pickFile(kind: 'scip' | 'mcp'): Promise<string | null>
+    /** Lựa chọn nguồn đã nhớ (không gồm DSN) để hộp thoại hiện lại. */
+    remembered(projectId: string): Promise<IndexSources | null>
   }
 }

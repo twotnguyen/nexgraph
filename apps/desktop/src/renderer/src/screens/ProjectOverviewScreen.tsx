@@ -154,7 +154,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       </div>
 
       {options && (
-        <IndexOptionsDialog onClose={() => setOptions(false)} onSubmit={(o) => { setOptions(false); onReindex(o) }} />
+        <IndexOptionsDialog projectId={pid} onClose={() => setOptions(false)} onSubmit={(o) => { setOptions(false); onReindex(o) }} />
       )}
       {integrating && <IntegrationsDialog project={project} onClose={() => setIntegrating(false)} />}
       {exporting && <ExportDialog projectId={pid} projectName={project.name} scope={{ kind: 'all' }} onClose={() => setExporting(false)} />}

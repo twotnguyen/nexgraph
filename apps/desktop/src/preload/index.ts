@@ -160,6 +160,12 @@ const api: NexGraphApi = {
     list: (pid) => call('sources:list', pid),
     add: (pid, url) => call('sources:add', pid, url),
     remove: (pid, name) => call('sources:remove', pid, name)
+  },
+  indexSources: {
+    hasDsn: (pid) => call('index-sources:has-dsn', pid),
+    saveDsn: (pid, dsn) => call('index-sources:save-dsn', pid, dsn),
+    pickFile: (kind) => call('index-sources:pick-file', kind),
+    remembered: (pid) => call('index-sources:remembered', pid)
   }
 }
 

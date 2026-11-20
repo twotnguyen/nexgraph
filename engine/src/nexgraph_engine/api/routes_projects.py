@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError, error_response
+from nexgraph_engine.index.extra_sources import ExtraSources
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.index import scan as scan_module
 from nexgraph_engine.schema.db import SchemaVersionError, open_graph_db
@@ -15,6 +16,15 @@ class OpenBody(BaseModel):
     path: str
 
 
+class SourcesBody(BaseModel):
+    """Nguồn bổ sung (W11). DSN do Electron main gửi kèm từng lần index; engine không ghi đĩa hay log."""
+    postgres_dsn: str | None = Field(default=None, max_length=4096, repr=False)
+    cargo: bool = False
+    manifests: bool = False
+    scip_files: list[str] = Field(default_factory=list, max_length=50)
+    mcp_files: list[str] = Field(default_factory=list, max_length=50)
+
+
 class IndexBody(BaseModel):
     subdir: str | None = None
     exclude: list[str] = Field(default_factory=list, max_length=200)
@@ -24,6 +34,7 @@ class IndexBody(BaseModel):
     include_config: bool | None = None
     workers: int | None = Field(default=None, ge=1, le=64)  # None = tự chọn theo số tệp
     force: bool = False  # bỏ cache AST, trích lại mọi tệp
+    sources: SourcesBody | None = None
 
 
 def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
@@ -78,6 +89,15 @@ def remove_project(project_id: str, request: Request) -> dict:
     return {"removed": True}
 
 
+def _sources(body: IndexBody | None) -> ExtraSources | None:
+    s = body.sources if body else None
+    if s is None:
+        return None
+    clean = lambda paths: tuple(p for p in paths if p.strip())  # noqa: E731
+    return ExtraSources(postgres_dsn=s.postgres_dsn or None, cargo=s.cargo, manifests=s.manifests,
+                        scip_files=clean(s.scip_files), mcp_files=clean(s.mcp_files))
+
+
 @router.post("/projects/{project_id}/index", status_code=202)
 def start_index(project_id: str, request: Request, body: IndexBody | None = None):
     try:
@@ -87,7 +107,8 @@ def start_index(project_id: str, request: Request, body: IndexBody | None = None
                                                                        include_media=body.include_media if body else None,
                                                                        include_config=body.include_config if body else None,
                                                                        workers=body.workers if body else None,
-                                                                       force=body.force if body else False)}
+                                                                       force=body.force if body else False,
+                                                                       sources=_sources(body))}
     except ProjectPathError as exc:
         raise ApiError(400, "bad_path", str(exc)) from exc
     except UnknownProject as exc:

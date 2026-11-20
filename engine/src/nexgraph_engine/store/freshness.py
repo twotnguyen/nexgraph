@@ -6,13 +6,13 @@ from pathlib import Path
 
 from nexgraph_engine.index.discovery import discover, sha256_file
 from nexgraph_engine.index.indexer import _git_head
-from nexgraph_engine.index.refresh import RACY_SECONDS
+from nexgraph_engine.index.refresh import RACY_SECONDS, real_file_records
 from nexgraph_engine.store.graph_store import GraphStore
 
 
 def _disk_changes(store: GraphStore, root: Path, sources_dir: Path | None = None) -> int:
     """Đếm khác biệt giữa toàn bộ phạm vi đã lập chỉ mục và đồ thị hiện tại."""
-    known = store.file_records()
+    known = real_file_records(store)
     docs, media = store.last_doc_flags()
     disk = {
         f.rel_path: f

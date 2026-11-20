@@ -15,6 +15,7 @@ from nexgraph_engine.changes.model import read_changes
 from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.impact.analyze import analyze
+from nexgraph_engine.index.extra_sources import is_source_language
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file, source_path
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source, safe_project_path
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
@@ -44,7 +45,8 @@ def edge_json(se: StoredEdge) -> dict:
 
 def stats_json(store: GraphStore, root: Path, sources_dir: Path | None = None) -> dict:
     stats = store.stats()
-    generic = sorted(lang for lang in stats["languages"] if lang not in FULL_SUPPORT and lang not in DOC_LANGUAGES)
+    generic = sorted(lang for lang in stats["languages"] if lang not in FULL_SUPPORT and lang not in DOC_LANGUAGES
+                     and not is_source_language(lang))
     return {**stats, "generic_languages": generic, **freshness(store, root, sources_dir)}
 
 

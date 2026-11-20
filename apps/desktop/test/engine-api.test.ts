@@ -189,6 +189,15 @@ describe('EngineApi: F10 wave 1 routes', () => {
     expect((await api.startIndex('p1', { exclude: ['a/'] }) as unknown as { received_body: object }).received_body).toEqual({ exclude: ['a/'] })
   })
 
+  it('startIndex sends extra sources; DSN only when PostgreSQL is on (W11)', async () => {
+    const body = async (o: Parameters<EngineApi['startIndex']>[1], dsn?: string) =>
+      ((await api.startIndex('p1', o, dsn)) as unknown as { received_body: Record<string, unknown> }).received_body
+    expect(await body({ sources: { cargo: true, scipFiles: ['a.json'] } }, 'postgresql://x'))
+      .toEqual({ sources: { cargo: true, manifests: false, scip_files: ['a.json'], mcp_files: [] } })
+    expect(await body({ sources: { postgres: true } }, 'postgresql://x'))
+      .toEqual({ sources: { cargo: false, manifests: false, scip_files: [], mcp_files: [], postgres_dsn: 'postgresql://x' } })
+  })
+
   it('startIndex sends exclude patterns', async () => {
     expect(await api.startIndex('p1', { exclude: ['vendor/', '*.g.dart'] })).toMatchObject({ received_body: { exclude: ['vendor/', '*.g.dart'] } })
     expect(await api.startIndex('p1', { subdir: 'lib', exclude: [] })).toMatchObject({ received_body: { subdir: 'lib' } })
