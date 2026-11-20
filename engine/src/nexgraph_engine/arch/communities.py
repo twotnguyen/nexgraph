@@ -47,6 +47,14 @@ def _name(files: list[str], g: nx.Graph, dir_counts: Counter[str]) -> str:
     return "Cụm quanh " + posixpath.basename(max(files, key=lambda f: (g.degree(f, weight="weight"), f)))
 
 
+def _ai_name(store: GraphStore, files: list[str]) -> str | None:
+    """Tên do AI/người dùng đặt (`nhan_cum`) khi cụm vẫn đúng các tệp như lúc đặt tên (W9)."""
+    from nexgraph_engine.semantic.chunks import membership_signature
+    row = store.conn.execute("SELECT ten FROM nhan_cum WHERE chu_ky_thanh_vien = ? ORDER BY nguon = 'nguoi_dung' DESC,"
+                             " tao_luc DESC LIMIT 1", (membership_signature(files),)).fetchone()
+    return row[0] if row else None
+
+
 def detect_communities(store: GraphStore) -> int:
     store.clear_communities()
     g = file_graph(store.conn)
@@ -58,7 +66,7 @@ def detect_communities(store: GraphStore) -> int:
         posixpath.dirname(r[0]) for r in store.conn.execute("SELECT duong_dan_tuong_doi FROM tep"))
     used: Counter[str] = Counter()
     for files in groups:
-        name = _name(files, g, dir_counts)
+        name = _ai_name(store, files) or _name(files, g, dir_counts)
         used[name] += 1
         if used[name] > 1:
             name = f"{name} {used[name]}"

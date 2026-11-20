@@ -15,3 +15,4 @@ class Services:
         self.locks = ProjectLocks()
         self.jobs = JobManager(self.registry, self.bus, locks=self.locks)
         self.refresh = RefreshService(self.registry, self.bus, self.jobs, self.locks)
+        self.llm_queues: dict = {}  # job_id → LlmQueue của job semantic đường A (W9)
