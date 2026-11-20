@@ -131,6 +131,10 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
                 if transcript_dir is None or not media.has_whisper():
                     return ExtractedFile(rec, [file_node], [], [], {}, [("extract", media.MISSING_WHISPER)])
                 text = media.transcript_for(path, sha, transcript_dir, cancel=cancel)
+            elif f.language == "google_workspace":
+                if transcript_dir is None:
+                    return ExtractedFile(rec, [file_node], [], [], {}, [("extract", "Thiếu thư mục lưu nội dung đã xuất")])
+                text = media.google_text(path, sha, transcript_dir)
             else:
                 text = doc_text(path, f.language)
             x: FileExtraction = extract_document(f.rel_path, text, file_id=file_node.id)

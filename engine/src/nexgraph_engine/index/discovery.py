@@ -14,6 +14,8 @@ from graphify.extract import _get_extractor
 from graphify.rcfile import activate_language_overrides
 from graphify.extractors.json_config import _CONFIG_JSON_NAMES
 
+from nexgraph_engine.docs import media as _media
+
 # Thư mục luôn bỏ (spec §5.5); `.nexgraph/` là dữ liệu của chính NexGraph.
 SKIP_DIRS = frozenset({".git", ".nexgraph", "build", ".dart_tool", "node_modules"})
 GENERATED_SUFFIXES = (".g.dart", ".freezed.dart", ".gr.dart", ".config.dart", ".mocks.dart",
@@ -34,7 +36,9 @@ DOC_LANGUAGE_BY_EXT = {".md": "markdown", ".mdx": "markdown", ".qmd": "markdown"
                        ".html": "html", ".htm": "html", ".docx": "docx", ".xlsx": "xlsx", ".pdf": "pdf"}
 MEDIA_EXTS = frozenset({".mp3", ".wav", ".m4a", ".ogg", ".mp4", ".mov", ".webm", ".mkv"})
 IMAGE_EXTS = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"})  # nút tệp; nội dung chỉ có khi chạy AI (W9)
-DOC_LANGUAGES = frozenset({*DOC_LANGUAGE_BY_EXT.values(), "media", "image"})
+# Lối tắt Google Workspace: vào graph khi bật "Tài liệu" và máy có `gws` (W6); chữ được xuất và cache như bản chép lời.
+GOOGLE_WORKSPACE_EXTS = frozenset({".gdoc", ".gsheet", ".gslides"})
+DOC_LANGUAGES = frozenset({*DOC_LANGUAGE_BY_EXT.values(), "media", "image", "google_workspace"})
 # JSON chỉ là code khi là cấu hình/manifest: JSON dữ liệu (fixture, dataset) làm phình đồ thị (graphify #1224).
 _CONFIG_JSON_PREFIXES = ("tsconfig", "jsconfig")
 # Tệp cấu hình chỉ vào graph khi bật "Tệp cấu hình" trong Tuỳ chọn index (W2), để index mặc định giữ nguyên kết quả.
@@ -140,6 +144,8 @@ def _language(root: Path, rel: str, include_docs: bool, include_media: bool,
     ext = os.path.splitext(rel)[1].lower()
     if include_docs and ext in DOC_LANGUAGE_BY_EXT and not (language_map and ext in language_map):
         return DOC_LANGUAGE_BY_EXT[ext]
+    if include_docs and ext in GOOGLE_WORKSPACE_EXTS:
+        return "google_workspace" if _media.has_gws() else None
     if include_media and ext in MEDIA_EXTS:
         return "media"
     if include_media and ext in IMAGE_EXTS:

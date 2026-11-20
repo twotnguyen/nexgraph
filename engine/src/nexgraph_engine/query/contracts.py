@@ -90,11 +90,12 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
     first = 1 if start is None else start
     if first < 1 or (end is not None and (end < first or end - first + 1 > MAX_CODE_LINES)):
         raise ApiError(400, "bad_param", f"start >= 1, end >= start, tối đa {MAX_CODE_LINES} dòng mỗi lần")
-    snapshot = source.read(file, path) if source and record.language != "media" else None
-    if record.language == "media":  # audio/video: phục vụ bản chép lời đã lưu, không đọc tệp nhị phân
+    cached_text = record.language in ("media", "google_workspace")
+    snapshot = source.read(file, path) if source and not cached_text else None
+    if cached_text:  # audio/video, lối tắt Google: phục vụ chữ đã lưu lúc index, không đọc lại tệp hay gọi gws
         cached = transcript_dir / f"{record.sha256}.txt" if transcript_dir else None
         if cached is None or not cached.is_file():
-            raise ApiError(404, "no_text", f"Chưa có bản chép lời cho {file}")
+            raise ApiError(404, "no_text", f"Chưa có nội dung chữ cho {file}")
         lines = cached.read_text(encoding="utf-8").splitlines()
     elif record.language in CONVERTED_LANGUAGES:  # docx/xlsx/PDF: chuyển lại sang chữ, cùng hàm lúc index
         if snapshot is None:

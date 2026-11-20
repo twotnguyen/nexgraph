@@ -19,10 +19,34 @@ def has_whisper() -> bool:
     return find_spec("faster_whisper") is not None
 
 
+def has_gws() -> bool:
+    """Google Workspace CLI: cần để xuất lối tắt .gdoc/.gsheet/.gslides (W6)."""
+    return shutil.which("gws") is not None
+
+
+def google_text(path: Path, sha: str, out_dir: Path) -> str:
+    """Chữ của lối tắt Google Workspace, xuất bằng `gws` qua graphify và lưu theo mã băm như bản chép lời."""
+    from tempfile import TemporaryDirectory
+
+    from graphify.detect import xlsx_to_markdown
+    from graphify.google_workspace import convert_google_workspace_file
+    cached = Path(out_dir) / f"{sha}.txt"
+    if cached.is_file():
+        return cached.read_text(encoding="utf-8")
+    with TemporaryDirectory(prefix="nexgraph-gws-") as tmp:
+        md = convert_google_workspace_file(Path(path), Path(tmp), xlsx_to_markdown=xlsx_to_markdown)
+        if md is None:
+            raise RuntimeError("gws không xuất được nội dung")
+        text = md.read_text(encoding="utf-8")
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_text(text, encoding="utf-8")
+    return text
+
+
 def tools_available() -> dict[str, bool]:
     return {"ffmpeg": shutil.which("ffmpeg") is not None, "faster_whisper": has_whisper(),
             "git": shutil.which("git") is not None, "gh": shutil.which("gh") is not None,
-            "yt_dlp": find_spec("yt_dlp") is not None}
+            "yt_dlp": find_spec("yt_dlp") is not None, "gws": has_gws()}
 
 
 def transcript_for(path: Path, sha: str, out_dir: Path, *, cancel: threading.Event | None = None) -> str:
