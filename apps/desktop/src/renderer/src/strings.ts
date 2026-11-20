@@ -202,7 +202,8 @@ export const vi = {
     on: 'Đang bật', off: 'Chưa bật', noGit: 'Dự án không phải kho Git',
     title: 'Tự cập nhật theo Git',
     preview: 'Sẽ thêm khối dưới đây vào 4 hook post-commit, post-checkout, post-merge, post-rewrite (giữ nguyên nội dung sẵn có). Cập nhật chạy nền và tự bỏ qua khi đang rebase, merge hoặc cherry-pick.',
-    install: 'Bật', uninstall: 'Tắt', outdated: 'Hook cũ, thiếu hoặc đường dẫn engine đã đổi, cần cài lại', close: 'Đóng'
+    install: 'Bật', uninstall: 'Tắt', outdated: 'Hook cũ, thiếu hoặc đường dẫn engine đã đổi, cần cài lại', close: 'Đóng',
+    outsideRepo: 'core.hooksPath trỏ ra ngoài kho nên NexGraph không ghi vào đó. Bỏ core.hooksPath hoặc tự thêm lệnh cập nhật vào hook.'
   },
   tour: {
     title: (name: string, n: number) => `Tham quan ${name} · ${n} bước`,

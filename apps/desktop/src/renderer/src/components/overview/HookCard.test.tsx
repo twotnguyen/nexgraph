@@ -6,7 +6,7 @@ import { installNexgraph, project } from '../../test-utils'
 import { HookCard } from './HookCard'
 
 const PREVIEW = ['post-commit', 'post-checkout', 'post-merge', 'post-rewrite'].map((n) => `/p/.git/hooks/${n}\n# >>> nexgraph >>>`).join('\n')
-const setup = (status: 'no_git' | 'off' | 'on' | 'outdated') => {
+const setup = (status: 'no_git' | 'off' | 'on' | 'outdated' | 'outside_repo') => {
   const h = installNexgraph({ hook: { status: vi.fn(async () => status), preview: vi.fn(async () => PREVIEW) } })
   render(<HookCard project={project()} />)
   return h
@@ -40,5 +40,12 @@ describe('HookCard', () => {
   it('outdated: hiện câu cần cài lại', async () => {
     setup('outdated')
     expect(await screen.findByText('Hook cũ, thiếu hoặc đường dẫn engine đã đổi, cần cài lại')).toBeInTheDocument()
+  })
+
+  it('outside_repo: câu dễ hiểu, thẻ vô hiệu, không hiện lỗi kỹ thuật', async () => {
+    setup('outside_repo')
+    expect(await screen.findByText(/core.hooksPath trỏ ra ngoài kho/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Tự cập nhật theo Git/ })).toBeDisabled()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })
