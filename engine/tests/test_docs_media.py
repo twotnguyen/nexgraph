@@ -63,7 +63,7 @@ def test_missing_whisper_reports_tool_error(docs_root, tmp_path, monkeypatch):
 
 def test_tools_route(api):
     body = api.get("/v1/tools").json()
-    assert set(body) == {"ffmpeg", "faster_whisper", "git", "gh", "yt_dlp"}
+    assert set(body) == {"ffmpeg", "faster_whisper", "git", "gh", "yt_dlp", "psycopg"}
     assert all(isinstance(v, bool) for v in body.values())
 
 
