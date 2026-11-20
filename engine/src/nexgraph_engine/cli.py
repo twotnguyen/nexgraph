@@ -5,6 +5,7 @@ import os
 import socket
 import sys
 import threading
+import time
 from pathlib import Path
 
 import uvicorn
@@ -66,18 +67,37 @@ def _git_dir(project: Path) -> Path | None:
     return (project / raw).resolve() if raw else None
 
 
-def _mid_pick_sequence(project: Path, git_dir: Path) -> bool:
-    """Cherry-pick/revert một dải: bỏ qua mọi bước trừ bước cuối. `sequencer/` cũ (sau reset --hard) không được tính."""
+_GIT_MARKERS = ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD")
+
+
+def _git_state(project: Path) -> tuple[set[str], list[str], str | None]:
+    """(dấu trạng thái có mặt, tối đa 2 dòng đầu `sequencer/todo`, tiêu đề HEAD).
+
+    Khối hook chụp sẵn các giá trị này đồng bộ trước khi chạy nền (biến NEXGRAPH_GIT_STATE…), vì lúc Python
+    khởi động xong thì git đã đi tiếp; chạy tay thì đọc đĩa."""
+    env = os.environ
+    if "NEXGRAPH_GIT_STATE" in env:
+        todo = [s for s in env.get("NEXGRAPH_SEQ_TODO", "").splitlines() if s.strip()][:2]
+        return set(env["NEXGRAPH_GIT_STATE"].split()), todo, env.get("NEXGRAPH_HEAD_SUBJECT")
+    git_dir = _git_dir(project)
+    if git_dir is None:
+        return set(), [], None
     try:
-        steps = [s for s in (git_dir / "sequencer" / "todo").read_text(encoding="utf-8").splitlines() if s.strip()]
+        todo = [s for s in (git_dir / "sequencer" / "todo").read_text(encoding="utf-8").splitlines() if s.strip()][:2]
     except OSError:
+        todo = []
+    subject = _git_out(project, "log", "-1", "--format=%s") if len(todo) > 1 else None
+    return {m for m in _GIT_MARKERS if (git_dir / m).exists()}, todo, subject
+
+
+def _mid_pick_sequence(todo: list[str], head_subject: str | None) -> bool:
+    """Cherry-pick/revert một dải: bỏ qua mọi bước trừ bước cuối. `sequencer/` cũ (sau reset --hard) không được tính."""
+    if len(todo) < 2:
         return False
-    if len(steps) < 2:
-        return False
-    verb, _, rest = steps[0].partition(" ")
+    verb, _, rest = todo[0].partition(" ")
     subject = rest.partition(" ")[2]
     expected = {"pick": subject, "revert": f'Revert "{subject}"'}.get(verb)
-    return expected is not None and _git_out(project, "log", "-1", "--format=%s") == expected
+    return expected is not None and head_subject == expected
 
 
 def _skip_reason(project: Path, hook: str | None, args: list[str]) -> str | None:
@@ -88,16 +108,14 @@ def _skip_reason(project: Path, hook: str | None, args: list[str]) -> str | None
         return "no_branch_switch"
     if hook == "post-rewrite" and args[:1] != ["rebase"]:
         return "amend"  # amend đã được post-commit cập nhật
-    git_dir = _git_dir(project)
-    if git_dir is None:
-        return None
-    if hook != "post-rewrite" and ((git_dir / "rebase-merge").is_dir() or (git_dir / "rebase-apply").is_dir()):
+    state, todo, head_subject = _git_state(project)
+    if hook != "post-rewrite" and state & {"rebase-merge", "rebase-apply"}:
         return "rebase"
-    if hook != "post-merge" and (git_dir / "MERGE_HEAD").is_file():
+    if hook != "post-merge" and "MERGE_HEAD" in state:
         return "merge"
     if hook == "post-commit":  # git còn giữ CHERRY_PICK_HEAD khi post-commit chạy
-        return "cherry_pick" if _mid_pick_sequence(project, git_dir) else None
-    if (git_dir / "CHERRY_PICK_HEAD").is_file():
+        return "cherry_pick" if _mid_pick_sequence(todo, head_subject) else None
+    if "CHERRY_PICK_HEAD" in state:
         return "cherry_pick"
     return None
 
@@ -127,7 +145,10 @@ def _refresh_cmd(project: Path, data_dir: Path | None, hook: str | None = None, 
         print(json.dumps(out))
         log(out)
         return 0
-    timeout = float(os.environ.get("NEXGRAPH_REFRESH_TIMEOUT", "600") or 0)
+    try:
+        timeout = float(os.environ.get("NEXGRAPH_REFRESH_TIMEOUT") or 600)
+    except ValueError:
+        timeout = 600.0
 
     def bail() -> None:
         log({"status": "timeout", "seconds": timeout})
@@ -137,20 +158,28 @@ def _refresh_cmd(project: Path, data_dir: Path | None, hook: str | None = None, 
     if timer:
         timer.daemon = True
         timer.start()
+    # Từ hook: khoá ghi bận thì chờ (tối đa nửa timeout) chứ không bỏ qua, nếu không thay đổi của lần checkout/merge này bị mất.
+    deadline = time.monotonic() + (timeout / 2 if hook and timeout > 0 else 300 if hook else 0)
     try:
-        code, out = _refresh(project, data_dir)
+        while True:
+            code, out = _refresh(project, data_dir)
+            if out.get("reason") != "index_running" or time.monotonic() >= deadline:
+                break
+            time.sleep(1)
     except Exception as exc:
         log({"status": "error", "error": repr(exc)})
         raise
     finally:
         if timer:
             timer.cancel()
+    if code == 0:
+        print(json.dumps(out))
     log(out)
     return code
 
 
 def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
-    """In một dòng JSON; thoát 0 kể cả khi bỏ qua (không bao giờ làm commit thất bại), 3 khi dự án chưa lập chỉ mục."""
+    """(0, kết quả) kể cả khi bỏ qua (không bao giờ làm lệnh git thất bại); (3, …) khi dự án chưa lập chỉ mục."""
     import sqlite3
     from contextlib import closing
 
@@ -174,15 +203,12 @@ def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
                 print(f"Dự án chưa được lập chỉ mục trong NexGraph: {project}", file=sys.stderr)
                 return 3, {"status": "not_indexed"}
             if conn.execute("SELECT 1 FROM lan_lap_chi_muc WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai') LIMIT 1").fetchone():
-                print(json.dumps(skipped))
                 return 0, skipped
             r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, store.project_id()))
     except (GraphWriteBusy, sqlite3.OperationalError):
-        print(json.dumps(skipped))
         return 0, skipped
     out = {"status": "ok", "added": r.added, "changed": r.changed, "removed": r.removed,
            "unchanged": r.unchanged, "seconds": round(r.seconds, 3)}
-    print(json.dumps(out))
     return 0, out
 
 

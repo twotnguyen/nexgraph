@@ -125,7 +125,7 @@ export interface NexGraphApi {
     reveal(projectId: string, path: string): Promise<void>
   }
   hook: {
-    status(projectId: string): Promise<'no_git' | 'off' | 'on' | 'outdated'>
+    status(projectId: string): Promise<'no_git' | 'off' | 'on' | 'outdated' | 'outside_repo'>
     preview(projectId: string): Promise<string>
     install(projectId: string): Promise<void>
     uninstall(projectId: string): Promise<void>

@@ -3,7 +3,7 @@ import type { ProjectSummary } from '@shared/graph-types'
 import { Icon } from '../common/icons'
 import { vi } from '../../strings'
 
-type Status = 'no_git' | 'off' | 'on' | 'outdated'
+type Status = 'no_git' | 'off' | 'on' | 'outdated' | 'outside_repo'
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 export function HookCard({ project }: { project: ProjectSummary }) {
@@ -32,10 +32,10 @@ export function HookCard({ project }: { project: ProjectSummary }) {
     }
   }
 
-  const label = status === 'no_git' ? vi.hook.noGit : status === 'on' ? vi.hook.on : status === 'outdated' ? vi.hook.outdated : status === 'off' ? vi.hook.off : ''
+  const label = status === 'no_git' ? vi.hook.noGit : status === 'outside_repo' ? vi.hook.outsideRepo : status === 'on' ? vi.hook.on : status === 'outdated' ? vi.hook.outdated : status === 'off' ? vi.hook.off : ''
   return (
     <>
-      <button type="button" className="card" data-tone="green" disabled={status === 'no_git' || status === null} onClick={() => void openDialog()}>
+      <button type="button" className="card" data-tone="green" disabled={status === 'no_git' || status === 'outside_repo' || status === null} onClick={() => void openDialog()}>
         <span className="card-icon"><Icon name="commit" /></span>
         <b>{vi.hook.card}</b>
         <span className="muted">{vi.hook.cardDesc}</span>

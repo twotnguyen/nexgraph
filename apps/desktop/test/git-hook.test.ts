@@ -111,11 +111,40 @@ describe('git hook', () => {
     expect(existsSync(join(root, '.husky', '_', 'post-commit'))).toBe(false)
   })
 
-  it('core.hooksPath ngoài kho: từ chối, không ghi', () => {
+  it('Husky: tệp người dùng không có shebang (Husky chạy bằng sh -e) được chấp nhận và giữ nguyên', () => {
+    mkdirSync(join(root, '.husky', '_'), { recursive: true })
+    git(root, 'config', 'core.hooksPath', '.husky/_')
+    writeFileSync(join(root, '.husky', 'post-merge'), 'echo husky-user-post-merge\n')
+    installHook(root, cmd, dataDir)
+    const text = readFileSync(join(root, '.husky', 'post-merge'), 'utf8')
+    expect(text.startsWith('echo husky-user-post-merge\n')).toBe(true)
+    expect(text).toContain(BEGIN)
+    uninstallHook(root)
+    expect(readFileSync(join(root, '.husky', 'post-merge'), 'utf8')).toBe('echo husky-user-post-merge\n')
+  })
+
+  it('Husky đặt ở thư mục khác (.config/husky/_): vẫn ghi vào thư mục cha', () => {
+    mkdirSync(join(root, '.config', 'husky', '_'), { recursive: true })
+    git(root, 'config', 'core.hooksPath', '.config/husky/_')
+    installHook(root, cmd, dataDir)
+    expect(readFileSync(join(root, '.config', 'husky', 'post-commit'), 'utf8')).toContain(BEGIN)
+  })
+
+  it('core.hooksPath ngoài kho: từ chối, không ghi; status outside_repo thay vì ném lỗi', () => {
     const outside = mkdtempSync(join(tmpdir(), 'ng-global-hooks-'))
     git(root, 'config', 'core.hooksPath', outside)
     expect(() => installHook(root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'unsupported_hook_path' }))
     expect(existsSync(join(outside, 'post-commit'))).toBe(false)
+    expect(hookStatus(root, cmd, dataDir)).toBe('outside_repo')
+  })
+
+  it('gỡ ở worktree chỉ gỡ khối của chính dự án đó, giữ khối của dự án chính', () => {
+    git(root, 'commit', '-q', '--allow-empty', '-m', 'x')
+    const wt = join(realpathSync(mkdtempSync(join(tmpdir(), 'ng-wt-'))), 'wt')
+    git(root, 'worktree', 'add', '-q', wt)
+    installHook(root, cmd, dataDir)
+    uninstallHook(wt)
+    expect(hookStatus(root, cmd, dataDir)).toBe('on')
   })
 
   it('worktree (.git là tệp) và thư mục con: ghi vào hook chung của kho', () => {
@@ -141,6 +170,31 @@ describe('git hook', () => {
     expect(lines[0]).toMatch(new RegExp(`^refresh --project ${root} --data-dir /d --hook post-checkout [0-9a-f]{40} [0-9a-f]{40} 1$`))
     expect(lines[1]).toBe(`refresh --project ${root} --data-dir /d --hook post-commit`)
   })
+
+  const enginePython = join(process.cwd(), '..', '..', 'engine', '.venv', 'bin', 'python')
+  it.skipIf(process.platform === 'win32' || !existsSync(enginePython))(
+    'khối hook thật chạy nền: cherry-pick dải 4 commit ghi cherry_pick cho 3 bước đầu (trạng thái chụp trước khi tách nền)',
+    async () => {
+      const data = realpathSync(mkdtempSync(join(tmpdir(), 'ng-hook-data-')))
+      git(root, 'commit', '-q', '--allow-empty', '-m', 'base')
+      git(root, 'checkout', '-q', '-b', 'src')
+      for (const n of ['a', 'b', 'c', 'd']) {
+        writeFileSync(join(root, `${n}.txt`), n)
+        git(root, 'add', `${n}.txt`)
+        git(root, 'commit', '-q', '-m', `add ${n}`)
+      }
+      git(root, 'checkout', '-q', '-')
+      installHook(root, { command: enginePython, args: ['-m', 'nexgraph_engine.cli'] }, data)
+      git(root, 'cherry-pick', 'HEAD..src')
+      const log = join(data, 'logs', 'refresh.log')
+      const commits = (): string[] => (readHook(log) ?? '').split('\n').filter((l) => l.split(' ')[1] === 'post-commit')
+      const deadline = Date.now() + 25000
+      while (Date.now() < deadline && commits().length < 4) await new Promise((r) => setTimeout(r, 100))
+      const reasons = commits().map((l) => (JSON.parse(l.split(' ').slice(2).join(' ')) as { reason?: string }).reason ?? 'refresh')
+      expect(reasons.sort()).toEqual(['cherry_pick', 'cherry_pick', 'cherry_pick', 'refresh'])
+    },
+    30000
+  )
 
   it('đường dẫn có nháy đơn và khoảng trắng được escape đúng', () => {
     expect(hookBlock(cmd, "/x/Đồ án/it's", '/d', 'post-commit')).toContain(`'/x/Đồ án/it'\\''s'`)
