@@ -16,8 +16,6 @@ tests/test_wheel_packaging.py  # kiểm tra wheel upstream, cần skills/*/refer
 tests/test_skillgen_input_path_injection.py  # cần trình sinh/bản skill upstream (đã bỏ)
 tests/test_skill_auto_refresh.py  # cần file skill upstream (đã bỏ)
 tests/test_skill_no_backtick_substitution.py  # cần file skill upstream (đã bỏ)
-tests/test_terraform.py  # cần extra tuỳ chọn tree-sitter-hcl, NexGraph không dùng Terraform
-tests/test_terraform_modules.py  # cần extra tuỳ chọn tree-sitter-hcl, NexGraph không dùng Terraform
 
 # --- Lỗi mức test, chưa phân loại chi tiết: lệch môi trường (gói "graphifyy" không cài nên metadata phiên bản là 0.0.1/unknown, thiếu extras tuỳ chọn). Cần xem lại nếu sửa phần liên quan. ---
 tests/test_backend_extras.py::test_anthropic_extra_exists  # lệch môi trường, chưa phân loại
@@ -68,8 +66,17 @@ tests/test_prompt_id_rule_matches_ids.py::test_prompt_does_not_claim_ascii_only_
 tests/test_prompt_id_rule_matches_ids.py::test_prompt_does_not_claim_ascii_only_ids[extraction-spec-compact.md]  # đọc skill upstream cạnh tests/
 tests/test_report.py::test_watch_rebuild_passes_cost_json_totals_to_the_report  # đọc graphify/watch.py theo đường dẫn tương đối
 tests/test_skill_when_to_build.py::test_the_skill_files_are_found  # cần skill sinh ra ở gốc upstream (đã bỏ)
-# Cần extra tuỳ chọn tree-sitter-pascal (không cài; chạy với --with tree-sitter-pascal thì 13/13 qua, 2026-11-20). W2 quyết định có đóng gói grammar này không
-tests/test_pascal_singleton_resolution.py  # cần extra tuỳ chọn tree-sitter-pascal
 # Sửa có chủ đích của NexGraph (extract.py, dòng đầu "Modified by NexGraph"): dòng "AST cache:" in ra stderr vì stdout của engine là kênh giao thức
 tests/test_extract.py::test_extract_reports_ast_cache_hit_rate_over_file_total  # NexGraph in dòng AST cache ra stderr
-tests/test_terraform_modules.py  # (đã có ở trên) cũng đọc dòng AST cache trên stdout
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[sequential--.tf]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[sequential--.hcl]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[sequential--.tfvars]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[sequential-deploy-.tf]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[sequential-deploy-.hcl]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[sequential-deploy-.tfvars]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel--.tf]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel--.hcl]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel--.tfvars]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel-deploy-.tf]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel-deploy-.hcl]  # NexGraph in dòng AST cache ra stderr
+tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel-deploy-.tfvars]  # NexGraph in dòng AST cache ra stderr

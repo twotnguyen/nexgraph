@@ -1,3 +1,4 @@
+import importlib
 import shutil
 import sqlite3
 import tempfile
@@ -7,6 +8,27 @@ from pathlib import Path
 from graphify.extract import extract
 
 from nexgraph_engine.schema.db import load_sql
+
+
+# Grammar graphify dùng (W2). tree_sitter_vb_dotnet không có wheel cho macOS Intel nên được phép thiếu ở đó.
+GRAMMAR_MODULES = tuple(f"tree_sitter_{n}" for n in (
+    "bash", "c", "c_sharp", "commonlisp", "cpp", "dart", "dm", "elixir", "embedded_template", "fortran", "go",
+    "groovy", "hcl", "java", "javascript", "json", "julia", "kotlin", "language_pack", "lua", "objc", "ocaml",
+    "pascal", "php", "powershell", "python", "ruby", "rust", "scala", "solidity", "sql", "swift", "typescript",
+    "vb_dotnet", "verilog", "yaml", "zig")) + ("robot",)
+
+
+def _grammars() -> tuple[list[str], list[str]]:
+    ok, missing = [], []
+    for mod in GRAMMAR_MODULES:
+        try:
+            m = importlib.import_module(mod)
+            if mod == "tree_sitter_language_pack":  # bản đóng gói chỉ giữ hai binding này (packaging spec)
+                m.get_language("erlang"), m.get_language("r")
+            ok.append(mod)
+        except Exception:  # ImportError hoặc lỗi nạp thư viện native trong bản đóng gói
+            missing.append(mod)
+    return ok, missing
 
 
 def run_selftest() -> dict:
@@ -25,4 +47,6 @@ def run_selftest() -> dict:
         sqlite3.connect(":memory:").executescript(load_sql("graph"))
     except sqlite3.Error:
         schema_ok = False
-    return {"ok": nodes >= 2 and schema_ok, "nodes": nodes, "sqlite": sqlite3.sqlite_version}
+    grammars, missing = _grammars()
+    return {"ok": nodes >= 2 and schema_ok, "nodes": nodes, "sqlite": sqlite3.sqlite_version,
+            "grammars": grammars, "missing_grammars": missing}

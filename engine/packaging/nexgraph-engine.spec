@@ -12,7 +12,7 @@ ENGINE_DIR = os.path.abspath(os.path.join(SPECPATH, ".."))
 datas, binaries, hiddenimports = [], [], []
 
 # Mã bên thứ ba được chép nguyên vào src/ (xem NOTICE); nexgraph_engine là code của nhóm.
-for pkg in ("graphify", "nexgraph_engine"):
+for pkg in ("graphify", "nexgraph_engine", "robot"):  # robot: trích xuất .robot/.resource (W2)
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
@@ -30,6 +30,23 @@ for dist in md.distributions():
         datas += d
         binaries += b
         hiddenimports += h
+
+# tree_sitter_language_pack có 170 grammar (~170 MB); graphify chỉ dùng erlang và r (extractors/erlang.py, r.py).
+_PACK_KEEP = ("erlang", "r")
+
+
+def _pack_ok(path: str) -> bool:
+    norm = path.replace("\\", "/")
+    if "tree_sitter_language_pack/bindings/" not in norm:
+        return True
+    name = norm.rsplit("/", 1)[1].split(".", 1)[0]
+    return name in _PACK_KEEP or name == "__init__"
+
+
+binaries = [x for x in binaries if _pack_ok(x[0])]
+datas = [x for x in datas if _pack_ok(x[0])]
+hiddenimports = [h for h in hiddenimports
+                 if not h.startswith("tree_sitter_language_pack.bindings.") or h.rsplit(".", 1)[1] in _PACK_KEEP]
 
 hiddenimports += collect_submodules("uvicorn")
 # Graphify import các gói export trong thân hàm (F10): khai báo rõ để bản đóng gói có đủ.
