@@ -1,9 +1,10 @@
-"""Công việc lập chỉ mục chạy nền (mỗi job một luồng, kết nối CSDL riêng), có hủy và sự kiện."""
+"""Công việc chạy nền (mỗi job một luồng, kết nối CSDL riêng), có hủy và sự kiện: lập chỉ mục và task tổng quát."""
 from __future__ import annotations
 
 import sqlite3
 import threading
 import uuid
+from collections.abc import Callable
 from contextlib import closing
 
 from nexgraph_engine.index.events import EventBus
@@ -13,7 +14,7 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectRegistry
 from nexgraph_engine.store.publication import backup_graph, stage_graph
 
-ACTIVE = ("queued", "structure", "resolve")
+ACTIVE = ("queued", "structure", "resolve", "running")
 
 
 class IndexAlreadyRunning(RuntimeError):
@@ -26,6 +27,21 @@ class IndexAlreadyRunning(RuntimeError):
 
 class UnknownProject(KeyError):
     pass
+
+
+class TaskCancelled(Exception):
+    """`work` ném lỗi này (hoặc bất kỳ lỗi nào sau khi `cancel` đã bật) để job kết thúc ở `cancelled`."""
+
+
+class TaskContext:
+    """Truyền vào `work` của `start_task`: cờ huỷ và hàm báo tiến độ."""
+
+    def __init__(self, cancel: threading.Event, report: Callable[[int, int, str], None]) -> None:
+        self.cancel = cancel
+        self._report = report
+
+    def progress(self, done: int, total: int, message: str) -> None:
+        self._report(done, total, message)
 
 
 class JobManager:
@@ -52,8 +68,8 @@ class JobManager:
             if running is not None:
                 raise IndexAlreadyRunning(project_id, running["job_id"])
             job_id = str(uuid.uuid4())
-            self._jobs[job_id] = {"job_id": job_id, "project_id": project_id, "state": "queued",
-                                  "files_done": 0, "files_total": 0, "message": None}
+            self._jobs[job_id] = {"job_id": job_id, "project_id": project_id, "kind": "index", "state": "queued",
+                                  "files_done": 0, "files_total": 0, "message": None, "result": None}
             cancel = self._cancels[job_id] = threading.Event()
             thread = threading.Thread(target=self._run, args=(job_id, info, cancel, subdir, exclude, include_docs, include_media,
                                                                  include_config, workers, force), daemon=True,
@@ -62,6 +78,57 @@ class JobManager:
         self._bus.publish({"type": "job_progress", **self._jobs[job_id]})
         thread.start()
         return job_id
+
+    def start_task(self, project_id: str | None, kind: str, work: Callable[[TaskContext], dict]) -> str:
+        """Chạy `work(ctx)` trong luồng riêng; giá trị trả về thành `result` của job.
+
+        Có `project_id`: job giữ khoá dự án suốt lúc chạy và chặn mọi job khác của dự án (IndexAlreadyRunning),
+        nên `work` được ghi CSDL của dự án (ví dụ qua `RefreshService.refresh_now`). `None`: không khoá gì.
+        """
+        with self._lock:
+            if project_id is not None:
+                if self._registry.get(project_id) is None:
+                    raise UnknownProject(project_id)
+                running = self._running_job(project_id)
+                if running is not None:
+                    raise IndexAlreadyRunning(project_id, running["job_id"])
+            job_id = str(uuid.uuid4())
+            self._jobs[job_id] = {"job_id": job_id, "project_id": project_id, "kind": kind, "state": "queued",
+                                  "files_done": 0, "files_total": 0, "message": None, "result": None}
+            cancel = self._cancels[job_id] = threading.Event()
+            thread = threading.Thread(target=self._run_task, args=(job_id, project_id, work, cancel), daemon=True,
+                                      name=f"{kind}-{job_id[:8]}")
+            self._threads.append(thread)
+        self._bus.publish({"type": "job_progress", **self._jobs[job_id]})
+        thread.start()
+        return job_id
+
+    def _set(self, job_id: str, **fields) -> None:
+        with self._lock:
+            job = self._jobs[job_id]
+            job.update(fields)
+            snapshot = dict(job)
+        self._bus.publish({"type": "job_progress", **snapshot})
+
+    def _run_task(self, job_id: str, project_id: str | None, work: Callable[[TaskContext], dict],
+                  cancel: threading.Event) -> None:
+        lock = self._locks.get(project_id) if self._locks and project_id else None
+        if lock is not None:
+            lock.acquire()  # đợi lần refresh hiện tại của project xong
+        final: dict = {"state": "cancelled"}
+        try:
+            if not cancel.is_set():
+                self._set(job_id, state="running")
+                ctx = TaskContext(cancel, lambda done, total, message: self._set(
+                    job_id, files_done=max(0, done), files_total=max(0, total), message=message))
+                final = {"state": "done", "result": work(ctx)}
+        except Exception as exc:
+            final = {"state": "cancelled" if cancel.is_set() or isinstance(exc, TaskCancelled) else "error",
+                     "message": None if isinstance(exc, TaskCancelled) else f"{type(exc).__name__}: {exc}"}
+        finally:
+            if lock is not None:
+                lock.release()
+            self._set(job_id, **final)
 
     def remove_project(self, project_id: str) -> None:
         if self._registry.get(project_id) is None:

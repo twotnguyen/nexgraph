@@ -71,9 +71,16 @@ class RefreshService:
         if not lock.acquire(blocking=False):
             return self._skipped("refresh_running")
         try:
-            info = self._registry.get(project_id)
-            if info is None:
-                raise UnknownProject(project_id)
+            return self.refresh_now(project_id)
+        finally:
+            lock.release()
+
+    def refresh_now(self, project_id: str) -> dict:
+        """Refresh khi người gọi đã giữ khoá dự án (task của `JobManager.start_task` gắn với dự án này)."""
+        info = self._registry.get(project_id)
+        if info is None:
+            raise UnknownProject(project_id)
+        try:
             with graph_writer(info.graph_db) as db, closing(open_graph_db(db)) as conn:
                 store = GraphStore(conn)
                 if not store.has_published_graph():
@@ -82,8 +89,6 @@ class RefreshService:
                                          transcript_dir=self._registry.app_data_dir / "transcripts" / project_id)
         except GraphWriteBusy:
             return self._skipped("refresh_running")
-        finally:
-            lock.release()
         if result.added or result.changed or result.removed:
             extra = {"warnings": list(result.warnings)} if result.warnings else {}
             self._bus.publish({"type": "graph_updated", "project_id": project_id, **extra})
