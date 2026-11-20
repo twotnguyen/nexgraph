@@ -5,6 +5,7 @@ Dùng để gọi lại hàm export/analyze/report của bản vendor `graphify/
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -78,7 +79,8 @@ def _top_by_degree(store: GraphStore, pks: list[int], limit: int) -> list[int]:
     return sorted(pks, key=lambda pk: (-degree[pk], pk))[:limit]
 
 
-def build_nx(store: GraphStore, scope: Scope = Scope()) -> BridgeGraph:
+def build_nx(store: GraphStore, scope: Scope = Scope(), keep_file: Callable[[str], bool] | None = None) -> BridgeGraph:
+    """`keep_file`: bỏ nút của tệp bị chặn với AI (resource MCP); cộng đồng có nút bị bỏ mất nhãn để tên không lộ."""
     conn = store.conn
     pks = _candidate_pks(store, scope)
     truncated = len(pks) > scope.limit
@@ -93,10 +95,14 @@ def build_nx(store: GraphStore, scope: Scope = Scope()) -> BridgeGraph:
     rows = conn.execute(
         "SELECT n.ma_nut, n.id_nut, n.loai_nut, n.nhan, n.dong_bat_dau, n.la_kiem_thu, n.ma_khoi,"
         " t.duong_dan_tuong_doi AS tep, t.ngon_ngu FROM nut n LEFT JOIN tep t ON t.ma_tep = n.ma_tep")
+    hidden_communities: set[int] = set()
     for r in rows:
         if r["ma_nut"] not in keep:
             continue
         cid = r["ma_khoi"] if r["ma_khoi"] in blocks else OTHER_COMMUNITY
+        if keep_file is not None and r["tep"] and not keep_file(r["tep"]):
+            hidden_communities.add(cid)
+            continue
         G.add_node(r["id_nut"], id=r["id_nut"], label=r["nhan"], source_file=r["tep"] or "",
                    source_location=f"L{r['dong_bat_dau']}" if r["dong_bat_dau"] else "",
                    file_type="document" if r["loai_nut"] in DOC_KINDS or r["ngon_ngu"] in DOC_LANGUAGES else "code",
@@ -122,7 +128,8 @@ def build_nx(store: GraphStore, scope: Scope = Scope()) -> BridgeGraph:
             if r["loai_canh"] not in data["types"]:
                 data["types"] = sorted([*data["types"], r["loai_canh"]])
 
-    labels = {cid: blocks[cid]["ten"] for cid in communities if cid in blocks}
+    labels = {cid: blocks[cid]["ten"] if cid not in hidden_communities else f"Cộng đồng {cid}"
+              for cid in communities if cid in blocks}
     cohesion = {cid: float(blocks[cid]["do_gan_ket"] or 0.0) for cid in communities if cid in blocks}
     if OTHER_COMMUNITY in communities:
         labels[OTHER_COMMUNITY] = "Khác"

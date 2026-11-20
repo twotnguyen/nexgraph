@@ -9,6 +9,7 @@ from nexgraph_engine.arch.cycles import import_cycles
 from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, build_nx, write_graph_json
 from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -16,19 +17,21 @@ os.environ.setdefault("GRAPHIFY_BACKEND", "none")  # không bao giờ để Grap
 
 GOD_NODES = 10
 GAP_ITEMS = 20
-# Nút cô lập: không phải tệp/thư mục/test và không có cạnh nào ngoài cấu trúc chứa (CONTAINS/DEFINES).
-_ISOLATED = ("FROM nut n WHERE n.loai_nut NOT IN ('file', 'directory', 'repository') AND n.la_kiem_thu = 0"
-             " AND NOT EXISTS (SELECT 1 FROM canh c WHERE c.ma_nut_nguon = n.ma_nut AND c.loai_canh NOT IN ('CONTAINS', 'DEFINES'))"
-             " AND NOT EXISTS (SELECT 1 FROM canh c WHERE c.ma_nut_dich = n.ma_nut AND c.loai_canh NOT IN ('CONTAINS', 'DEFINES'))")
+# Nút cô lập như Knowledge Gaps của Graphify (`report.py`, `_is_contains_only_ast_node`): không có láng giềng nào,
+# hoặc đúng một láng giềng mà không chỉ qua cạnh chứa. Khai báo chỉ có cạnh chứa từ tệp/lớp là bình thường.
+_ISOLATED = ("FROM nut n LEFT JOIN (SELECT ma_nut_nguon AS a, ma_nut_dich AS b, loai_canh AS t FROM canh"
+             " UNION ALL SELECT ma_nut_dich, ma_nut_nguon, loai_canh FROM canh) nb ON nb.a = n.ma_nut"
+             " WHERE n.loai_nut NOT IN ('file', 'directory', 'repository') AND n.la_kiem_thu = 0"
+             " GROUP BY n.ma_nut HAVING count(DISTINCT nb.b) = 0"
+             " OR (count(DISTINCT nb.b) = 1 AND sum(nb.t NOT IN ('CONTAINS', 'DEFINES')) > 0)")
 
 
 def _gaps(store: GraphStore) -> dict:
     q = store.conn.execute
-    isolated = [r[0] for r in q(f"SELECT n.ma_nut {_ISOLATED} ORDER BY n.ma_nut LIMIT ?", (GAP_ITEMS,))]
+    isolated = [r[0] for r in q(f"SELECT n.ma_nut {_ISOLATED} ORDER BY n.ma_nut")]
     ambiguous = [r[0] for r in q("SELECT ma_canh FROM canh WHERE muc_tin_cay = 'AMBIGUOUS' ORDER BY diem_tin_cay, ma_canh"
                                  " LIMIT ?", (GAP_ITEMS,))]
-    return {"isolated": {"total": q(f"SELECT count(*) {_ISOLATED}").fetchone()[0],
-                         "nodes": [node_json(n) for n in nodes_by_pk(store, isolated)]},
+    return {"isolated": {"total": len(isolated), "nodes": [node_json(n) for n in nodes_by_pk(store, isolated[:GAP_ITEMS])]},
             "ambiguous_edges": {"total": q("SELECT count(*) FROM canh WHERE muc_tin_cay = 'AMBIGUOUS'").fetchone()[0],
                                 "edges": [edge_json(e) for e in edges_by_id(store, ambiguous)]}}
 
@@ -62,9 +65,9 @@ def _benchmark(bg: BridgeGraph) -> dict | None:
     return {"corpus_tokens": r["corpus_tokens"], "graph_tokens": r["avg_query_tokens"], "reduction": r["reduction_ratio"]}
 
 
-def report_json(store: GraphStore, root: Path) -> dict:
+def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = None) -> dict:
     from graphify.analyze import suggest_questions, surprising_connections
-    bg = build_nx(store)
+    bg = build_nx(store, keep_file=source.allows if source else None)
     communities = [{"id": f"com:{cid}", "label": bg.labels[cid], "size": len(members), "cohesion": bg.cohesion[cid]}
                    for cid, members in sorted(bg.communities.items()) if cid != OTHER_COMMUNITY]
     surprising = [{"source": s["source"], "target": s["target"], "source_files": s.get("source_files", []),
@@ -95,8 +98,9 @@ def audit_json(store: GraphStore) -> dict:
             "parse_errors": {"total": sum(by_kind.values()), "by_kind": by_kind, "files": files}}
 
 
-def report_markdown(store: GraphStore, project_name: str) -> str:
-    return render_report_markdown(build_nx(store), project_name, store.stats()["files"])
+def report_markdown(store: GraphStore, project_name: str, source: SourcePolicy | None = None) -> str:
+    return render_report_markdown(build_nx(store, keep_file=source.allows if source else None), project_name,
+                                  store.stats()["files"])
 
 
 def render_report_markdown(bg: BridgeGraph, project_name: str, files: int) -> str:

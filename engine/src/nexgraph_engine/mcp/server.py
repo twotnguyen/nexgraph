@@ -207,7 +207,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     @mcp.tool(annotations=READ_ONLY)
     async def god_nodes(top: int = 10) -> list[dict]:
         """Các nút có nhiều liên kết nhất (không tính tệp và test)."""
-        return await run("god_nodes", lambda s: report_json(s, root)["god_nodes"][:max(1, min(top, 10))])
+        return await run("god_nodes", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()))["god_nodes"][:max(1, min(top, 10))])
 
     @mcp.tool(annotations=READ_ONLY)
     async def graph_stats() -> dict:
@@ -279,12 +279,12 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     @mcp.resource("nexgraph://report", name="report", mime_type="text/markdown",
                   description="Báo cáo đồ thị dạng Markdown: nút trung tâm, cộng đồng, kết nối bất ngờ, câu hỏi gợi ý.")
     async def report_resource() -> str:
-        return await run("nexgraph://report", lambda s: report_markdown(s, root.name))
+        return await run("nexgraph://report", lambda s: report_markdown(s, root.name, SourcePolicy(root, s.last_exclude())))
 
     resource_json("nexgraph://stats", lambda s: stats_json(s, root), "Số liệu tổng và độ mới của graph.")
-    resource_json("nexgraph://god-nodes", lambda s: report_json(s, root)["god_nodes"], "Các nút có nhiều liên kết nhất.")
-    resource_json("nexgraph://surprises", lambda s: report_json(s, root)["surprising"], "Kết nối bất ngờ giữa các cộng đồng.")
-    resource_json("nexgraph://questions", lambda s: report_json(s, root)["questions"], "Câu hỏi gợi ý để khám phá graph.")
+    resource_json("nexgraph://god-nodes", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()))["god_nodes"], "Các nút có nhiều liên kết nhất.")
+    resource_json("nexgraph://surprises", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()))["surprising"], "Kết nối bất ngờ giữa các cộng đồng.")
+    resource_json("nexgraph://questions", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()))["questions"], "Câu hỏi gợi ý để khám phá graph.")
     resource_json("nexgraph://audit", audit_json, "Tỉ lệ cạnh EXTRACTED/INFERRED/AMBIGUOUS và lỗi phân tích.")
 
     return mcp

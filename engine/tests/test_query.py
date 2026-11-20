@@ -263,3 +263,13 @@ def test_many_equal_paths_bounded(pg):
     r = find_paths(pg.store, [a, c])
     assert time.perf_counter() - t < 2
     assert len(r["edges"]) == 2
+
+
+def test_ask_same_file_duplicate_name_lists_candidates(tmp_path, index_project):
+    # Flutter: mỗi widget trong một tệp đều có `build`. Không được trả rỗng như "không tìm thấy".
+    root = _write(tmp_path / "p", {"m.py": "class A:\n    def run(self):\n        return 1\n\n"
+                                           "class B:\n    def run(self):\n        return 2\n"})
+    store, _, _ = index_project(root)
+    r = ask_graph(store, "run")
+    assert sorted(n["id"] for n in r["ambiguous"]) == ["m.py::A.run#method", "m.py::B.run#method"]
+    assert r["nodes"] == []

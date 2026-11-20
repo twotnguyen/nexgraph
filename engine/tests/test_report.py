@@ -106,11 +106,14 @@ def test_report_freshness_without_git(copy_fixture, index_project):
 
 
 def test_report_gaps_isolated_and_ambiguous(tmp_path, index_project):
+    # Như Graphify: nút chỉ có một cạnh chứa (khai báo không ai dùng) là bình thường, không phải lỗ hổng;
+    # cô lập = không có láng giềng nào, hoặc đúng một láng giềng qua cạnh không phải cấu trúc chứa.
     root = _write(tmp_path / "p", {"m.py": "def lonely():\n    return 1\n\ndef caller():\n    return used()\n\n"
-                                           "def used():\n    return 2\n"})
+                                           "def used():\n    return 2\n\ndef orphan():\n    return 3\n"})
     store, _, _ = index_project(root)
     store.conn.execute("UPDATE canh SET muc_tin_cay = 'AMBIGUOUS', diem_tin_cay = 0.2 WHERE loai_canh = 'CALLS'")
+    store.conn.execute("DELETE FROM canh WHERE ma_nut_dich = (SELECT ma_nut FROM nut WHERE nhan = 'orphan')")
     gaps = report_json(store, root)["gaps"]
-    assert [n["label"] for n in gaps["isolated"]["nodes"]] == ["lonely"] and gaps["isolated"]["total"] == 1
+    assert [n["label"] for n in gaps["isolated"]["nodes"]] == ["orphan"] and gaps["isolated"]["total"] == 1
     assert gaps["ambiguous_edges"]["total"] == 1
     assert gaps["ambiguous_edges"]["edges"][0]["confidence"] == "AMBIGUOUS"

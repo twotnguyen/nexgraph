@@ -10,6 +10,7 @@ from typing import Literal
 
 from graphify.serve import (
     _RELATIONAL_INTENT_TERMS,
+    _find_node_tiers,
     _pick_seeds,
     _query_name_refusal,
     _query_path_weight,
@@ -37,7 +38,9 @@ def _cost(label: str, qname: str, file: str | None) -> int:
 def _seed_ids(G, question: str) -> tuple[list[str], list[str]]:
     """(hạt giống, ứng viên trùng tên). Câu hỏi là đúng tên của nhiều nút ở nhiều tệp thì không chọn bừa."""
     if _query_name_refusal(G, question):
-        return [], find_node_ambiguity(G, question)
+        # Trùng ở nhiều tệp: mỗi tệp một ứng viên; trùng trong một tệp (nhiều `build` của widget): cả tầng thắng.
+        source_exact, exact, _, _ = _find_node_tiers(G, question)
+        return [], find_node_ambiguity(G, question) or source_exact or exact
     terms = _query_terms(question)
     qs = _score_query(G, terms, collect_per_term_seeds=True, path_weight=_query_path_weight(terms))
     best = qs.best_seed_by_term

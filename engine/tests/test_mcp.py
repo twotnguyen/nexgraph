@@ -344,3 +344,24 @@ def test_read_resources(indexed):
     assert isinstance(json.loads(anyio.run(run, "nexgraph://god-nodes").text), list)
     report = anyio.run(run, "nexgraph://report")
     assert report.mimeType == "text/markdown" and report.text.startswith("#")
+
+
+def test_resources_hide_sources_blocked_from_ai(api, tmp_path):
+    root = tmp_path / "leak"
+    root.mkdir()
+    (root / "credentials.py").write_text("def load_secret_vault_token():\n    return 1\n", encoding="utf-8")
+    for i in range(8):
+        (root / f"m{i}.py").write_text(f"from credentials import load_secret_vault_token\n\n"
+                                       f"def use{i}():\n    return load_secret_vault_token()\n", encoding="utf-8")
+    p = api.open(root)
+    assert api.index(p["project_id"])["state"] == "done"
+    server = build_server(root, tmp_path / "appdata")
+
+    async def run(uri):
+        async with create_connected_server_and_client_session(server._mcp_server) as client:
+            return (await client.read_resource(uri)).contents[0].text
+    for uri in RESOURCES:
+        text = anyio.run(run, uri)
+        assert "load_secret_vault_token" not in text and "credentials" not in text, uri
+    gods = payload(call(server, "god_nodes", {}))
+    assert all("credentials" not in g["node"]["id"] for g in gods)
