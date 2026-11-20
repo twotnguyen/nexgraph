@@ -35,6 +35,11 @@ def _build_parser() -> argparse.ArgumentParser:
     refresh = sub.add_parser("refresh", help="Cập nhật tăng dần đồ thị của một dự án đã lập chỉ mục (dùng cho git hook)")
     refresh.add_argument("--project", required=True, type=Path)
     refresh.add_argument("--data-dir", type=Path, default=None)
+    guard = sub.add_parser("hook-guard", help="Hook PreToolUse/BeforeTool: nhắc trợ lý AI hỏi graph trước khi đọc tệp (luôn thoát 0)")
+    guard.add_argument("kind", choices=["read", "search", "gemini"])
+    guard.add_argument("--project", required=True, type=Path)
+    guard.add_argument("--data-dir", type=Path, default=None)
+    guard.add_argument("--strict", action="store_true", help="Chặn lần Read đầu tiên mỗi phiên khi chưa hỏi graph")
     return parser
 
 
@@ -104,7 +109,14 @@ def _serve(data_dir: Path, port: int, exit_on_stdin_close: bool) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     multiprocessing.freeze_support()
-    args = _build_parser().parse_args(argv)
+    argv = sys.argv[1:] if argv is None else argv
+    try:
+        args = _build_parser().parse_args(argv)
+    except SystemExit:
+        # Hook thoát 2 thì Claude Code chặn lần gọi tool: tham số sai của hook-guard vẫn phải thoát 0.
+        if argv[:1] == ["hook-guard"]:
+            return 0
+        raise
     if args.command == "serve":
         return _serve(args.data_dir, args.port, args.exit_on_stdin_close)
     if args.command == "refresh":
@@ -123,6 +135,14 @@ def main(argv: list[str] | None = None) -> int:
         except ProjectNotIndexed as exc:
             print(str(exc), file=sys.stderr)  # stdout dành riêng cho giao thức MCP
             return 3
+    if args.command == "hook-guard":
+        from nexgraph_engine.hook_guard import guard_output
+        try:
+            raw = b"" if args.kind == "gemini" else sys.stdin.buffer.read()
+            sys.stdout.buffer.write(guard_output(args.kind, args.project, args.data_dir, args.strict, raw).encode("utf-8"))
+        except Exception:
+            pass  # fail-open: không bao giờ chặn lần gọi tool vì lỗi của hook
+        return 0
     return 2
 
 
