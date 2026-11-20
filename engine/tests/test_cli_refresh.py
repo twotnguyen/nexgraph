@@ -152,3 +152,54 @@ def test_real_git_hooks_merge_rebase_cherry_pick(api, copy_fixture, tmp_path):
     commits = [r for h, r in got if h == "post-commit"]
     assert [r.get("reason") for r in commits] == ["cherry_pick", None], got
     assert commits[-1]["status"] == "ok"
+
+
+# --- W4 review: trạng thái chụp trong hook, chờ khoá, timeout sai ---
+
+def test_refresh_uses_git_state_snapshot_from_hook(api, copy_fixture, tmp_path):
+    """Hook chụp trạng thái git đồng bộ (NEXGRAPH_GIT_STATE…) trước khi chạy nền; CLI tin bản chụp, không đọc đĩa muộn."""
+    root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
+    snap = {"NEXGRAPH_GIT_STATE": " CHERRY_PICK_HEAD", "NEXGRAPH_SEQ_TODO": "", "NEXGRAPH_HEAD_SUBJECT": ""}
+    assert _refresh_json(root, appdata, "--hook", "post-checkout", "a" * 40, "b" * 40, "1", env=snap)["reason"] == "cherry_pick"
+    (root / ".git" / "rebase-merge").mkdir()  # git đã đi tiếp; bản chụp lúc hook chạy là sạch
+    assert _refresh_json(root, appdata, "--hook", "post-commit", env={**snap, "NEXGRAPH_GIT_STATE": ""})["status"] == "ok"
+    (root / ".git" / "rebase-merge").rmdir()
+    seq = {**snap, "NEXGRAPH_GIT_STATE": " CHERRY_PICK_HEAD", "NEXGRAPH_SEQ_TODO": "pick abc add a\npick def add b",
+           "NEXGRAPH_HEAD_SUBJECT": "add a"}
+    assert _refresh_json(root, appdata, "--hook", "post-commit", env=seq)["reason"] == "cherry_pick"
+    assert _refresh_json(root, appdata, "--hook", "post-commit", env={**seq, "NEXGRAPH_HEAD_SUBJECT": "other"})["status"] == "ok"
+
+
+def test_hook_refresh_waits_for_busy_writer_instead_of_skipping(api, copy_fixture, tmp_path):
+    import threading
+    import time
+
+    from nexgraph_engine.mcp.server import resolve_graph_db
+    from nexgraph_engine.store.publication import graph_writer
+
+    root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
+    db = resolve_graph_db(root, appdata)
+    held, release = threading.Event(), threading.Event()
+
+    def hold():
+        with graph_writer(db):
+            held.set()
+            release.wait(10)
+
+    t = threading.Thread(target=hold)
+    t.start()
+    held.wait(5)
+    try:
+        assert _refresh_json(root, appdata)["reason"] == "index_running"  # chạy tay: vẫn bỏ qua ngay
+        threading.Timer(2.0, release.set).start()
+        started = time.monotonic()
+        out = _refresh_json(root, appdata, "--hook", "post-commit")
+        assert out["status"] == "ok" and time.monotonic() - started >= 1.5
+    finally:
+        release.set()
+        t.join()
+
+
+def test_invalid_refresh_timeout_falls_back_to_default(api, copy_fixture, tmp_path):
+    root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
+    assert _refresh_json(root, appdata, env={"NEXGRAPH_REFRESH_TIMEOUT": "10s"})["status"] == "ok"
