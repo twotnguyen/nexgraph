@@ -169,3 +169,12 @@ def test_new_doc_and_image_types(tmp_path):
                                  "src/FooTest.kt", "tests/a_test.rs", "test_a.sh"])
 def test_is_test_path_other_languages(rel):
     assert is_test_path(rel) is True
+
+
+def test_graphifyrc_language_overrides_are_honoured(tmp_path):
+    # Ánh xạ đuôi tệp theo `.graphifyrc` của dự án (graphify #2961); NexGraph chỉ đọc, không ghi tệp này.
+    (tmp_path / ".graphifyrc").write_text("language.inc = php\n")
+    (tmp_path / "a.inc").write_text("<?php\nfunction run() { return 1; }\n")
+    assert [f.language for f in discover(tmp_path)] == ["php"]
+    from nexgraph_engine.index.generic import extract_generic
+    assert [n.label for n in extract_generic(tmp_path, "a.inc", "php", is_test=False).nodes] == ["run"]

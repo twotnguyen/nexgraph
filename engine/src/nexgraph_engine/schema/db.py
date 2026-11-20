@@ -35,6 +35,7 @@ def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app"], target
             prefix = "migrate_app" if sql_name == "app" else "migrate"
             if sql_name == "graph" and v == 5:
                 _widen_node_kinds(conn)
+                _add_config_column(conn)
             script = resources.files("nexgraph_engine.schema").joinpath(f"{prefix}_{v}_to_{v + 1}.sql")
             for stmt in _split_statements(script.read_text(encoding="utf-8")):
                 conn.execute(stmt)
@@ -72,6 +73,13 @@ def _widen_node_kinds(conn: sqlite3.Connection) -> None:
         conn.execute(f"PRAGMA schema_version = {int(version) + 1}")
     finally:
         conn.execute("PRAGMA writable_schema = OFF")
+
+
+def _add_config_column(conn: sqlite3.Connection) -> None:
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(lan_lap_chi_muc)")}
+    if cols and "gom_cau_hinh" not in cols:
+        conn.execute("ALTER TABLE lan_lap_chi_muc ADD COLUMN gom_cau_hinh INTEGER NOT NULL DEFAULT 0"
+                     " CHECK (gom_cau_hinh IN (0, 1))")
 
 
 def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app"]) -> None:

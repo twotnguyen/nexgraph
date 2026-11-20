@@ -32,6 +32,14 @@ def _cache_root() -> Path:
     return Path(_cache_dir.name)
 
 
+def reset_cache_root() -> None:
+    """"Index lại từ đầu" (W2): bỏ cache AST của bộ trích xuất trong tiến trình này."""
+    global _cache_dir
+    if _cache_dir is not None:
+        _cache_dir.cleanup()
+        _cache_dir = None
+
+
 def _line(loc: str | None) -> int | None:
     m = re.match(r"L(\d+)", loc or "")
     return int(m.group(1)) if m else None

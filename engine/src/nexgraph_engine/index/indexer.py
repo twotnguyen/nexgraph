@@ -25,6 +25,7 @@ from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import rebuild_flows
 from nexgraph_engine.index.generic import extract_generic
 from nexgraph_engine.index.batch_calls import batch_cross_file_calls
+from nexgraph_engine.index.generic import reset_cache_root
 from nexgraph_engine.index.resolver import _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
@@ -143,20 +144,26 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
 class Indexer:
     def __init__(self, store: GraphStore, root: Path, *, on_progress: Callable[[ProgressEvent], None],
                  cancel: threading.Event, subdir: str | None = None, exclude: list[str] | None = None,
-                 include_docs: bool = False, include_media: bool = False, transcript_dir: Path | None = None) -> None:
+                 include_docs: bool = False, include_media: bool = False, transcript_dir: Path | None = None,
+                 include_config: bool = False, workers: int | None = None, force: bool = False) -> None:
         self.store, self.root, self.on_progress, self.cancel = store, Path(root), on_progress, cancel
         self.subdir, self.exclude = subdir, exclude or []
         self.include_docs, self.include_media, self.transcript_dir = include_docs, include_media, transcript_dir
+        self.include_config, self.workers, self.force = include_config, workers, force
 
     def run(self) -> RunResult:
         t0 = time.time()
         store = self.store
         run_id = store.begin_run(commit_sha=_git_head(self.root), subdir=self.subdir, exclude=self.exclude,
-                                 include_docs=self.include_docs, include_media=self.include_media)
+                                 include_docs=self.include_docs, include_media=self.include_media,
+                                 include_config=self.include_config)
         total = 0
         try:
             files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
-                                  include_docs=self.include_docs, include_media=self.include_media))
+                                  include_docs=self.include_docs, include_media=self.include_media,
+                                  include_config=self.include_config))
+            if self.force:
+                reset_cache_root()
             total = len(files)
             store.set_run_state(run_id, "cau_truc", files_done=0, files_total=total)
             store.clear_graph()
@@ -218,7 +225,7 @@ class Indexer:
         dirs: set[str] = set()
         contains: list[tuple[str, str]] = []
         batch_count = (total + EXTRACTION_BATCH_SIZE - 1) // EXTRACTION_BATCH_SIZE
-        workers = min(index_workers(total, self.include_media), batch_count)
+        workers = min(self.workers or index_workers(total, self.include_media), batch_count)
         if IS_WINDOWS:
             workers = min(workers, 61)  # giới hạn ProcessPoolExecutor trên Windows
 

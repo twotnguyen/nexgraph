@@ -309,3 +309,14 @@ def test_v6_node_kinds_and_upgrades_v5(tmp_path):
     assert c6.execute("PRAGMA foreign_key_check").fetchall() == []
     nut_sql = lambda c: c.execute("SELECT sql FROM sqlite_master WHERE name = 'nut'").fetchone()[0]
     assert nut_sql(c6) == nut_sql(fresh)
+
+
+def test_v5_run_table_gets_config_column(tmp_path):
+    path = tmp_path / "v5.db"
+    c5 = sqlite3.connect(path)
+    sql = load_sql("graph").replace(NEW_KINDS, "").replace("PRAGMA user_version = 6;", "PRAGMA user_version = 5;")
+    line = next(l for l in sql.splitlines() if l.strip().startswith("gom_cau_hinh"))
+    c5.executescript(sql.replace(line + "\n", ""))
+    c5.close()
+    cols = [r[1] for r in open_graph_db(path).execute("PRAGMA table_info(lan_lap_chi_muc)")]
+    assert cols[-1] == "gom_cau_hinh"

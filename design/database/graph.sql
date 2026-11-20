@@ -35,6 +35,7 @@ CREATE TABLE lan_lap_chi_muc (
     mau_bo_qua    TEXT    CHECK (mau_bo_qua IS NULL OR length(mau_bo_qua) BETWEEN 2 AND 20000),     -- mảng JSON mẫu .gitignore (F10)
     gom_tai_lieu  INTEGER NOT NULL DEFAULT 0 CHECK (gom_tai_lieu IN (0, 1)),             -- tuỳ chọn index gồm tài liệu (F10 6a)
     gom_media     INTEGER NOT NULL DEFAULT 0 CHECK (gom_media IN (0, 1)),                -- tuỳ chọn index gồm audio/video (F10 6a)
+    gom_cau_hinh  INTEGER NOT NULL DEFAULT 0 CHECK (gom_cau_hinh IN (0, 1)),             -- tuỳ chọn index gồm tệp cấu hình (W2)
     CHECK (so_tep_xu_ly <= so_tep_tong),                                                -- RB9
     CHECK (ket_thuc_luc IS NULL OR ket_thuc_luc >= bat_dau_luc),                        -- RB9
     CHECK ((trang_thai IN ('hoan_tat', 'loi', 'huy')) = (ket_thuc_luc IS NOT NULL)),    -- RB9

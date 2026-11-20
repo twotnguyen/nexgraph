@@ -11,6 +11,7 @@ from pathlib import Path
 import pathspec
 from graphify.detect import DOC_EXTENSIONS as _GRAPHIFY_DOC_EXTS
 from graphify.extract import _get_extractor
+from graphify.rcfile import activate_language_overrides
 from graphify.extractors.json_config import _CONFIG_JSON_NAMES
 
 # Thư mục luôn bỏ (spec §5.5); `.nexgraph/` là dữ liệu của chính NexGraph.
@@ -151,6 +152,9 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
              include_config: bool = False) -> Iterator[DiscoveredFile]:
     root = Path(root)
     found: list[DiscoveredFile] = []
+    # `.graphifyrc` của dự án (language.inc = php): graphify áp cùng ánh xạ này khi extract() nên hai bên khớp nhau.
+    rc_map = {ext: language_of("x" + target) for ext, target in activate_language_overrides(root).items()}
+    language_map = {**{k: v for k, v in rc_map.items() if v}, **(language_map or {})}
     # Mẫu người dùng chọn (kiểu .gitignore, tính từ gốc project) áp như một .gitignore ở gốc.
     base_rules: list[Rule] = []
     if exclude:
