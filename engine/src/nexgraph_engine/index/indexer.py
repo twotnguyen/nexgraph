@@ -56,10 +56,12 @@ class RunResult:
     seconds: float
 
 
-def index_workers(n_files: int, include_media: bool) -> int:
+def index_workers(n_files: int, include_media: bool, requested: int | None = None) -> int:
     # Media/ít tệp luôn chạy đơn luồng: override không được trả sớm bỏ qua điều kiện này.
     if n_files < 200 or include_media:
         return 1
+    if requested:  # số tiến trình người dùng chọn trong Tuỳ chọn index (W2)
+        return requested
     override = os.environ.get("NEXGRAPH_INDEX_WORKERS")
     if override:
         try:
@@ -174,7 +176,8 @@ class Indexer:
             self.on_progress(ProgressEvent("resolve", total, total))
             if self.cancel.is_set():
                 return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", total, total))
-            add_batch_calls(store, self.root, [(f.rel_path, f.language) for f in files if is_batch_language(f.language)])
+            add_batch_calls(store, self.root, [(f.rel_path, f.language) for f in files if is_batch_language(f.language)],
+                            cancel=self.cancel)
             pubspec = self.root / "pubspec.yaml"
             name = _package_name(pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None)
             resolve_references(store, package_name=name)
@@ -225,7 +228,7 @@ class Indexer:
         dirs: set[str] = set()
         contains: list[tuple[str, str]] = []
         batch_count = (total + EXTRACTION_BATCH_SIZE - 1) // EXTRACTION_BATCH_SIZE
-        workers = min(self.workers or index_workers(total, self.include_media), batch_count)
+        workers = min(index_workers(total, self.include_media, self.workers), batch_count)
         if IS_WINDOWS:
             workers = min(workers, 61)  # giới hạn ProcessPoolExecutor trên Windows
 
@@ -301,7 +304,8 @@ class Indexer:
 _BATCH_FAMILY = {"c": "cpp", "objc": "cpp"}  # header .h nhận diện là c nhưng thuộc cùng chương trình C++
 
 
-def add_batch_calls(store: GraphStore, root: Path, files: list[tuple[str, str]]) -> None:
+def add_batch_calls(store: GraphStore, root: Path, files: list[tuple[str, str]],
+                    cancel: threading.Event | None = None) -> list[Edge]:
     """Thêm cạnh CALLS liên tệp của ngôn ngữ mức chung; lỗi ở bước này không làm hỏng lần index.
 
     Mỗi ngôn ngữ một lô: gộp chung thì cùng tên (Util.helper của Java và Kotlin) thành mơ hồ và graphify bỏ qua.
@@ -310,11 +314,15 @@ def add_batch_calls(store: GraphStore, root: Path, files: list[tuple[str, str]])
     for rel, language in files:
         groups.setdefault(_BATCH_FAMILY.get(language, language), []).append(rel)
     groups = {lang: rels for lang, rels in groups.items() if len(rels) >= 2}
+    added: list[Edge] = []
     if not groups:
-        return
+        return added
     nodes = list(store.all_nodes())
     for rels in groups.values():
+        if cancel is not None and cancel.is_set():
+            break
         try:
-            store.add_edges(batch_cross_file_calls(root, rels, nodes))
+            added += store.insert_edges(batch_cross_file_calls(root, rels, nodes))
         except Exception:  # noqa: BLE001 — graphify có thể ném lỗi trên cú pháp lạ; cạnh từng tệp vẫn còn
             continue
+    return added

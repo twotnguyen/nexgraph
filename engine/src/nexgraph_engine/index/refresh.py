@@ -119,11 +119,14 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         store.set_run_state(run_id, "phan_giai")
         new_labels = {n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels
         store.requeue_failed_refs(tails=new_labels, imports=bool(added))
-        # Lô gồm cả tệp không đổi: cạnh từ tệp không đổi tới tệp vừa sửa đã mất cùng nút cũ (W2).
-        add_batch_calls(store, root, [(rel, rec.language) for rel, rec in store.file_records().items()
-                                      if is_batch_language(rec.language)])
         pubspec = root / "pubspec.yaml"
         resolved_edges: list[Edge] = []
+        # Chỉ chạy lô khi có tệp mức chung đổi; lô gồm cả tệp không đổi vì cạnh từ chúng tới tệp vừa sửa đã mất
+        # cùng nút cũ (W2).
+        changed_langs = [disk[p].language for p in (*added, *modified)] + [known[p].language for p in removed]
+        if any(is_batch_language(lang) for lang in changed_langs):
+            resolved_edges += add_batch_calls(store, root, [(rel, rec.language) for rel, rec in store.file_records().items()
+                                                            if is_batch_language(rec.language)])
         resolve_references(store, package_name=_package_name(
             pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None), created_out=resolved_edges)
         derive_tested_by(store)

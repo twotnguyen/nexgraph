@@ -18,7 +18,7 @@ from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, Node, UnresolvedRef
 
-TYPE_KINDS = {NodeKind.CLASS, NodeKind.WIDGET, NodeKind.MIXIN, NodeKind.ENUM}
+TYPE_KINDS = {NodeKind.CLASS, NodeKind.WIDGET, NodeKind.MIXIN, NodeKind.ENUM, NodeKind.TYPE}
 SAME_SCOPE, IMPORTED, GLOBAL = 0.9, 0.8, 0.5
 
 

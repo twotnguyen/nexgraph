@@ -11,7 +11,7 @@ from pathlib import Path
 
 from nexgraph_engine.changes.model import MAX_FILES as _MAX_FILES_DEFAULT  # noqa: F401  (đọc lại ở lúc gọi)
 from nexgraph_engine.changes.model import ChangeSet, FileChange
-from nexgraph_engine.index.discovery import GENERATED_SUFFIXES, SKIP_DIRS, language_of
+from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, GENERATED_SUFFIXES, SKIP_DIRS, language_of
 from nexgraph_engine.subprocesses import run_captured
 
 MAX_FILES = _MAX_FILES_DEFAULT
@@ -41,7 +41,9 @@ def _git(root: Path, *args: str) -> str:
 
 def _relevant(path: str) -> bool:
     parts = path.split("/")
-    return (language_of(path) is not None and not path.endswith(GENERATED_SUFFIXES)
+    language = language_of(path)
+    # Tệp cấu hình (W2) không phải mã: giữ hành vi trước W2, không chiếm chỗ trong giới hạn số tệp.
+    return (language is not None and language not in CONFIG_LANGUAGES and not path.endswith(GENERATED_SUFFIXES)
             and not (set(parts[:-1]) & SKIP_DIRS))
 
 

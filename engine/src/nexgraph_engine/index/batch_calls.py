@@ -51,5 +51,6 @@ def batch_cross_file_calls(root: Path, files: list[str], nodes: Iterable[Node]) 
         inferred = e.get("confidence") == "INFERRED"
         out.append(Edge(source=src, target=dst, type=EdgeType.CALLS, origin=Origin.RESOLVER,
                         confidence=Confidence.INFERRED if inferred else Confidence.EXTRACTED,
-                        confidence_score=0.8 if inferred else 1.0, line=_line(e.get("source_location"))))
+                        confidence_score=0.8 if inferred else 1.0, line=_line(e.get("source_location")),
+                        col=0))  # cùng cột với cạnh của resolver để chỉ mục uq_canh chặn bản trùng
     return out

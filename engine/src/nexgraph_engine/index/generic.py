@@ -67,6 +67,10 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
 
     parent_class: dict[str, str] = {e["target"]: e["source"] for e in raw_edges if e["relation"] == "method"}
     type_sources = {e["source"] for e in raw_edges if e["relation"] in _TYPE_RELATIONS}
+    # Thành viên dữ liệu (biến thể enum, hằng trong kiểu) mang tên cha để id không phải phân biệt bằng số dòng.
+    data_parent = {e["target"]: e["source"] for e in raw_edges
+                   if full and e["relation"] in ("defines", "case_of", "contains") and e["source"] in raw
+                   and e["source"] != e["target"]}
     qnames: dict[str, tuple[str, NodeKind]] = {}
     for gid, n in raw.items():
         name = _plain_name(raw, gid)
@@ -81,7 +85,10 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         elif callable_:
             qnames[gid] = (name, NodeKind.FUNCTION)
         else:
-            qnames[gid] = (name, _data_kind(n, name, language, gid in type_sources))
+            kind = _data_kind(n, name, language, gid in type_sources)
+            if gid in data_parent:
+                name = f"{_plain_name(raw, data_parent[gid]).replace('::', '.')}.{name}"
+            qnames[gid] = (name, kind)
     ids: dict[str, str] = {}
     used: set[str] = set()
     first: dict[str, str] = {}  # id NexGraph -> gid đầu tiên mang id đó
@@ -107,7 +114,8 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     # line_end ước lượng: dòng lớn nhất trong bằng chứng các cạnh đi ra; lớp bao luôn các phương thức của nó.
     end: dict[str, int] = {gid: _line(raw[gid].get("source_location")) or 1 for gid in raw}
     for e in raw_edges:
-        if e["source"] in end and e["relation"] in ("calls", "imports", "imports_from"):
+        # Ngôn ngữ mức chung: mọi quan hệ có thể thành cạnh (impl/extension tách khỏi thân kiểu) nới khoảng dòng (RB22).
+        if e["source"] in end and (full or e["relation"] in ("calls", "imports", "imports_from")):
             end[e["source"]] = max(end[e["source"]], _line(e.get("source_location")) or 0)
     for caller, _, line in cross:
         if caller is not None and caller in end:
