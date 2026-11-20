@@ -199,10 +199,18 @@ export interface GraphReport {
   truncated: boolean
 }
 
+/** Độ tin cậy của đường đi = hop yếu nhất; score null khi EXTRACTED. */
+export interface PathConfidence {
+  level: 'EXTRACTED' | 'INFERRED' | 'AMBIGUOUS'
+  score: number | null
+  hop: number
+}
+
 export interface PathResult {
   nodes: GraphNode[]
   edges: GraphEdge[]
   unconnected: string[]
+  confidence?: PathConfidence | null
 }
 
 export interface NodeImpact {

@@ -1,4 +1,5 @@
 // Chuỗi giao diện (mặc định tiếng Việt, spec §5.9). i18n đầy đủ Việt/Anh ở kế hoạch con 6.
+import type { PathConfidence } from '@shared/graph-types'
 export const vi = {
   accounts: {
     title: 'Tài khoản AI',
@@ -426,7 +427,13 @@ export const vi = {
     pickingLabel: 'Chế độ chọn đích',
     cancel: 'Huỷ',
     noLink: 'Không tìm thấy liên kết trực tiếp trong graph',
-    found: (hops: number) => `Đường đi ${hops} bước`,
+    found: (hops: number, c: PathConfidence | null = null) => {
+      if (!c) return `Đường đi ${hops} bước`
+      const level = { EXTRACTED: 'trích từ mã', INFERRED: 'suy luận', AMBIGUOUS: 'chưa chắc' }[c.level]
+      return c.score === null
+        ? `Đường đi ${hops} bước · tin cậy: ${level}`
+        : `Đường đi ${hops} bước · tin cậy: ${level} ${c.score.toLocaleString('vi-VN')} (bước ${c.hop})`
+    },
     clear: 'Bỏ tô'
   },
   impact: {

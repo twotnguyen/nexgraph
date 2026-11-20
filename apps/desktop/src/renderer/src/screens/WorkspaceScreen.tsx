@@ -255,7 +255,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       if (request !== graphRequest.current) return
       // Không nối được: chỉ tô hai nút, không vẽ mũi tên (spec gốc §5.8).
       setOverlay({ nodes: r.nodes, edges: r.unconnected.length ? [] : r.edges })
-      setNotice(r.unconnected.length ? vi.path.noLink : vi.path.found(r.edges.length))
+      setNotice(r.unconnected.length ? vi.path.noLink : vi.path.found(r.edges.length, r.confidence ?? null))
     } catch (e) {
       if (request === graphRequest.current) {
         setFeedback(messageOf(e))

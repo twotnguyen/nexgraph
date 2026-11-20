@@ -176,3 +176,90 @@ def test_ask_seeds_match_reference_graph(question, tmp_path, index_project):
                      _pick_seeds(qs.ranked, G=G, best_seed_by_term=qs.best_seed_by_term, term_order=qs.term_order)])
     store, _, _ = index_project(shutil.copytree(MIXED / "raw", tmp_path / "raw"))
     assert want and _symbols([n["label"] for n in ask_graph(store, question)["seeds"]]) == want
+
+
+class _Graph:
+    """Đồ thị dựng tay để kiểm chọn đường: mỗi nút hàm nằm trong tệp riêng."""
+
+    def __init__(self, tmp_path):
+        from nexgraph_engine.schema.db import open_graph_db
+        from nexgraph_engine.store.graph_store import GraphStore
+        self.conn = open_graph_db(tmp_path / "paths.db")
+        self.store = GraphStore(self.conn)
+        self.store.init_project("g", False)
+        self.run = self.store.begin_run()
+
+    def node(self, name: str) -> str:
+        from nexgraph_engine.schema.enums import NodeKind
+        from nexgraph_engine.store.models import FileRec, Node
+        path = f"lib/{name}.py"
+        self.store.add_file(self.run, FileRec(path, "python", 1, 1, name.encode().hex().ljust(64, "0")[:64], False))
+        nid = f"{path}::{name}#function"
+        self.store.add_nodes([Node(nid, NodeKind.FUNCTION, name, name, file=path, line_start=1, line_end=2)])
+        return nid
+
+    def edge(self, a: str, b: str, conf: str = "EXTRACTED", score: float = 1.0) -> None:
+        from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
+        self.store.add_edges([Edge(a, b, EdgeType.CALLS, confidence=Confidence(conf), confidence_score=score,
+                                   origin=Origin.AST if conf == "EXTRACTED" else Origin.RESOLVER, line=1)])
+
+
+from nexgraph_engine.store.models import Edge  # noqa: E402
+
+
+@pytest.fixture
+def pg(tmp_path):
+    g = _Graph(tmp_path)
+    yield g
+    g.conn.close()
+
+
+def _via(result) -> list[str]:
+    return [n["label"] for n in result["nodes"]]
+
+
+def test_path_confidence_is_weakest_hop(pg):
+    a, b, c = pg.node("a"), pg.node("b"), pg.node("c")
+    pg.edge(a, b)
+    pg.edge(b, c, "INFERRED", 0.6)
+    assert find_paths(pg.store, [a, c])["confidence"] == {"level": "INFERRED", "score": 0.6, "hop": 2}
+
+
+def test_path_confidence_none_without_edges(pg):
+    a, b = pg.node("a"), pg.node("b")
+    assert find_paths(pg.store, [a, b])["confidence"] is None
+
+
+def test_equal_paths_avoid_hub(pg):
+    a, c, hub, mid = pg.node("a"), pg.node("c"), pg.node("hub"), pg.node("mid")
+    pg.edge(a, hub)  # cạnh qua hub thêm trước: BFS cũ sẽ chọn nó
+    pg.edge(hub, c)
+    pg.edge(a, mid)
+    pg.edge(mid, c)
+    for i in range(60):  # hub: bậc >= max(50, p99), như ngưỡng hub của Hỏi graph
+        pg.edge(hub, pg.node(f"leaf{i}"))
+    assert _via(find_paths(pg.store, [a, c])) == ["a", "mid", "c"]
+
+
+def test_equal_paths_pick_weakest_after_hubs(pg):
+    a, c, m1, m2 = pg.node("a"), pg.node("c"), pg.node("m1"), pg.node("m2")
+    pg.edge(a, m1)
+    pg.edge(m1, c)
+    pg.edge(a, m2)
+    pg.edge(m2, c, "AMBIGUOUS", 0.2)
+    r = find_paths(pg.store, [a, c])
+    assert _via(r) == ["a", "m2", "c"]
+    assert r["confidence"]["level"] == "AMBIGUOUS"
+
+
+def test_many_equal_paths_bounded(pg):
+    import time
+    a, c = pg.node("a"), pg.node("c")
+    for i in range(300):
+        m = pg.node(f"m{i}")
+        pg.edge(a, m)
+        pg.edge(m, c)
+    t = time.perf_counter()
+    r = find_paths(pg.store, [a, c])
+    assert time.perf_counter() - t < 2
+    assert len(r["edges"]) == 2
