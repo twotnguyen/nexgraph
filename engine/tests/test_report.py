@@ -2,9 +2,11 @@ from nexgraph_engine.report.build import report_json, report_markdown
 
 
 def test_report_excludes_tests_and_files(copy_fixture, index_project):
-    store, _, _ = index_project(copy_fixture("py_mini"))
-    r = report_json(store)
-    assert set(r) == {"god_nodes", "communities", "surprising", "questions", "benchmark", "truncated"}
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+    r = report_json(store, root)
+    assert set(r) == {"god_nodes", "communities", "surprising", "questions", "benchmark", "truncated",
+                      "cycles", "freshness", "gaps"}
     assert r["god_nodes"] and all(not g["node"]["is_test"] and g["node"]["kind"] != "file" for g in r["god_nodes"])
     assert r["god_nodes"] == sorted(r["god_nodes"], key=lambda g: -g["degree"])
     assert all(c["id"].startswith("com:") for c in r["communities"])
@@ -78,3 +80,37 @@ def test_audit_lists_parse_errors(copy_fixture, index_project):
     assert errors["total"] >= 1
     assert any(f["file"] == "lib/broken.dart" for f in errors["files"])
     assert sum(errors["by_kind"].values()) == errors["total"]
+
+
+def _write(root, files):
+    root.mkdir(parents=True, exist_ok=True)
+    for rel, text in files.items():
+        (root / rel).write_text(text, encoding="utf-8")
+    return root
+
+
+def test_report_lists_import_cycles(tmp_path, index_project):
+    root = _write(tmp_path / "p", {"a.py": "import b\n\ndef fa():\n    return b.fb()\n",
+                                   "b.py": "import a\n\ndef fb():\n    return 1\n"})
+    store, _, _ = index_project(root)
+    cycles = report_json(store, root)["cycles"]
+    assert cycles["total"] == 1 and cycles["cycles"][0]["files"] == ["a.py", "b.py"]
+
+
+def test_report_freshness_without_git(copy_fixture, index_project):
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+    r = report_json(store, root)
+    assert r["freshness"]["head_commit"] is None and r["freshness"]["stale"] is False
+    assert r["cycles"]["total"] == 0
+
+
+def test_report_gaps_isolated_and_ambiguous(tmp_path, index_project):
+    root = _write(tmp_path / "p", {"m.py": "def lonely():\n    return 1\n\ndef caller():\n    return used()\n\n"
+                                           "def used():\n    return 2\n"})
+    store, _, _ = index_project(root)
+    store.conn.execute("UPDATE canh SET muc_tin_cay = 'AMBIGUOUS', diem_tin_cay = 0.2 WHERE loai_canh = 'CALLS'")
+    gaps = report_json(store, root)["gaps"]
+    assert [n["label"] for n in gaps["isolated"]["nodes"]] == ["lonely"] and gaps["isolated"]["total"] == 1
+    assert gaps["ambiguous_edges"]["total"] == 1
+    assert gaps["ambiguous_edges"]["edges"][0]["confidence"] == "AMBIGUOUS"

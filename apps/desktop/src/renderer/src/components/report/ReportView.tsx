@@ -106,6 +106,48 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
         </section>
       )}
 
+      <section>
+        <h3>{vi.report.cycles(report.cycles.total)}</h3>
+        {report.cycles.total === 0 && <p className="muted">{vi.report.noCycles}</p>}
+        <ul className="report-list">
+          {report.cycles.cycles.map((c) => (
+            <li key={c.files.join('|')}>
+              <span className="mono">{c.files.join(' → ')}</span>
+              {c.size > c.files.length && <span className="muted small">{vi.report.cycleMore(c.size - c.files.length)}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h3>{vi.report.freshness}</h3>
+        {report.freshness.stale
+          ? <p className="warn">{vi.report.stale(report.freshness.changed_files)}</p>
+          : <p className="muted">{vi.report.freshOk}</p>}
+        {report.freshness.index_commit && report.freshness.head_commit && (
+          <p className="mono muted small">{vi.report.commits(report.freshness.index_commit.slice(0, 7), report.freshness.head_commit.slice(0, 7))}</p>
+        )}
+      </section>
+
+      <section>
+        <h3>{vi.report.gaps}</h3>
+        {report.gaps.isolated.total === 0 && report.gaps.ambiguous_edges.total === 0 && <p className="muted">{vi.report.noGaps}</p>}
+        {report.gaps.isolated.total > 0 && (
+          <>
+            <p>{vi.report.isolated(report.gaps.isolated.total)}</p>
+            <ul className="report-list">
+              {report.gaps.isolated.nodes.map((n) => (
+                <li key={n.id}>
+                  <button type="button" className="link" onClick={() => onOpenNode(n.id)}>{n.label}</button>
+                  {n.file && <span className="mono muted small">{n.line_start ? `${n.file}:${n.line_start}` : n.file}</span>}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {report.gaps.ambiguous_edges.total > 0 && <p>{vi.report.ambiguousEdges(report.gaps.ambiguous_edges.total)}</p>}
+      </section>
+
       {report.benchmark && (
         <section>
           <h3>{vi.report.benchmark}</h3>

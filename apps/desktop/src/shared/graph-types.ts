@@ -190,6 +190,14 @@ export interface ReportCommunity {
 }
 
 /** `GET /report`: surprising/questions mang nhãn (Graphify chỉ trả nhãn, không trả id nút). */
+export interface GraphFreshness {
+  indexed_at: number | null
+  index_commit: string | null
+  head_commit: string | null
+  changed_files: number | null
+  stale: boolean
+}
+
 export interface GraphReport {
   god_nodes: { node: GraphNode; degree: number }[]
   communities: ReportCommunity[]
@@ -197,6 +205,10 @@ export interface GraphReport {
   questions: { question: string; why: string }[]
   benchmark: { corpus_tokens: number; graph_tokens: number; reduction: number } | null
   truncated: boolean
+  cycles: { cycles: { files: string[]; size: number }[]; total: number }
+  freshness: GraphFreshness
+  /** Lỗ hổng tri thức: node cô lập (không có cạnh ngoài cấu trúc chứa) và cạnh AMBIGUOUS. */
+  gaps: { isolated: { total: number; nodes: GraphNode[] }; ambiguous_edges: { total: number; edges: GraphEdge[] } }
 }
 
 /** Độ tin cậy của đường đi = hop yếu nhất; score null khi EXTRACTED. */

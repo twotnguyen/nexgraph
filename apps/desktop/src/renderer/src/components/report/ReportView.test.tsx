@@ -15,7 +15,11 @@ const report = (over: Partial<GraphReport> = {}): GraphReport => ({
   surprising: [{ source: 'login', target: 'cache', source_files: ['a.py', 'b.py'], relation: 'calls', why: 'khác cộng đồng' }],
   questions: [{ question: 'Vì sao helper được gọi nhiều?', why: 'node trung tâm' }],
   benchmark: { corpus_tokens: 100000, graph_tokens: 2000, reduction: 50 },
-  truncated: false, ...over
+  truncated: false,
+  cycles: { cycles: [], total: 0 },
+  freshness: { indexed_at: 1763632800, index_commit: null, head_commit: null, changed_files: 0, stale: false },
+  gaps: { isolated: { total: 0, nodes: [] }, ambiguous_edges: { total: 0, edges: [] } },
+  ...over
 })
 
 const props = () => ({ projectId: 'p1', onOpenNode: vi.fn(), onAsk: vi.fn(), onExportMarkdown: vi.fn() })
@@ -51,5 +55,28 @@ describe('ReportView', () => {
     unmount()
     render(<ReportView {...props()} />)
     expect(await screen.findByRole('alert')).toHaveTextContent('Chưa lập chỉ mục')
+  })
+
+  it('hiện vòng import, độ mới và lỗ hổng tri thức', async () => {
+    const lonely = gnode('util.py::lonely#function', 'lonely')
+    installNexgraph({ graph: { report: vi.fn(async () => report({
+      cycles: { cycles: [{ files: ['a.py', 'b.py'], size: 2 }], total: 1 },
+      freshness: { indexed_at: 1763632800, index_commit: 'aaaaaaa', head_commit: 'bbbbbbb', changed_files: 3, stale: true },
+      gaps: { isolated: { total: 1, nodes: [lonely] }, ambiguous_edges: { total: 4, edges: [] } }
+    })) } })
+    const p = props()
+    render(<ReportView {...p} />)
+    expect(await screen.findByText('a.py → b.py')).toBeInTheDocument()
+    expect(screen.getByText(/Graph cũ hơn mã nguồn: 3 tệp đã đổi/)).toBeInTheDocument()
+    expect(screen.getByText(/4 cạnh chưa chắc chắn/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'lonely' }))
+    expect(p.onOpenNode).toHaveBeenCalledWith('util.py::lonely#function')
+  })
+
+  it('không có vòng import thì báo rõ, graph mới thì không cảnh báo', async () => {
+    installNexgraph({ graph: { report: vi.fn(async () => report()) } })
+    render(<ReportView {...props()} />)
+    expect(await screen.findByText('Không có vòng import giữa các tệp.')).toBeInTheDocument()
+    expect(screen.queryByText(/Graph cũ hơn mã nguồn/)).not.toBeInTheDocument()
   })
 })

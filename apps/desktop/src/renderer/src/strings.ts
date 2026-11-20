@@ -292,6 +292,18 @@ export const vi = {
     surprising: 'Kết nối bất ngờ',
     questions: 'Câu hỏi gợi ý',
     questionsHint: 'Bấm để hỏi graph với câu này.',
+    cycles: (n: number) => `Vòng import (${n})`,
+    noCycles: 'Không có vòng import giữa các tệp.',
+    cycleMore: (n: number) => `+${n} tệp nữa trong vòng`,
+    freshness: 'Độ mới của graph',
+    freshOk: 'Graph khớp mã nguồn hiện tại.',
+    stale: (changed: number | null) =>
+      changed ? `Graph cũ hơn mã nguồn: ${changed} tệp đã đổi sau lần index. Hãy index lại.` : 'Graph cũ hơn mã nguồn: HEAD đã đổi sau lần index. Hãy index lại.',
+    commits: (index: string, head: string) => `Index ở commit ${index} · HEAD hiện tại ${head}`,
+    gaps: 'Lỗ hổng tri thức',
+    isolated: (n: number) => `${n} node không có liên kết nào (ngoài tệp chứa nó):`,
+    ambiguousEdges: (n: number) => `${n} cạnh chưa chắc chắn (AMBIGUOUS).`,
+    noGaps: 'Không có node cô lập hay cạnh chưa chắc chắn.',
     benchmark: 'Mức giảm token',
     benchmarkText: (corpus: string, graph: string, ratio: string) =>
       `Đọc toàn bộ mã: ~${corpus} token. Hỏi qua graph: ~${graph} token mỗi câu. Giảm ${ratio} lần.`

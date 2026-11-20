@@ -207,7 +207,7 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     @mcp.tool(annotations=READ_ONLY)
     async def god_nodes(top: int = 10) -> list[dict]:
         """Các nút có nhiều liên kết nhất (không tính tệp và test)."""
-        return await run("god_nodes", lambda s: report_json(s)["god_nodes"][:max(1, min(top, 10))])
+        return await run("god_nodes", lambda s: report_json(s, root)["god_nodes"][:max(1, min(top, 10))])
 
     @mcp.tool(annotations=READ_ONLY)
     async def graph_stats() -> dict:
@@ -282,9 +282,9 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
         return await run("nexgraph://report", lambda s: report_markdown(s, root.name))
 
     resource_json("nexgraph://stats", lambda s: stats_json(s, root), "Số liệu tổng và độ mới của graph.")
-    resource_json("nexgraph://god-nodes", lambda s: report_json(s)["god_nodes"], "Các nút có nhiều liên kết nhất.")
-    resource_json("nexgraph://surprises", lambda s: report_json(s)["surprising"], "Kết nối bất ngờ giữa các cộng đồng.")
-    resource_json("nexgraph://questions", lambda s: report_json(s)["questions"], "Câu hỏi gợi ý để khám phá graph.")
+    resource_json("nexgraph://god-nodes", lambda s: report_json(s, root)["god_nodes"], "Các nút có nhiều liên kết nhất.")
+    resource_json("nexgraph://surprises", lambda s: report_json(s, root)["surprising"], "Kết nối bất ngờ giữa các cộng đồng.")
+    resource_json("nexgraph://questions", lambda s: report_json(s, root)["questions"], "Câu hỏi gợi ý để khám phá graph.")
     resource_json("nexgraph://audit", audit_json, "Tỉ lệ cạnh EXTRACTED/INFERRED/AMBIGUOUS và lỗi phân tích.")
 
     return mcp

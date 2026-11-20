@@ -5,13 +5,32 @@ import os
 import tempfile
 from pathlib import Path
 
+from nexgraph_engine.arch.cycles import import_cycles
 from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, build_nx, write_graph_json
-from nexgraph_engine.query.contracts import node_json
+from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
+from nexgraph_engine.query.contracts import edge_json, node_json
+from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
 os.environ.setdefault("GRAPHIFY_BACKEND", "none")  # không bao giờ để Graphify tự dò claude-cli (spec F10 §5)
 
 GOD_NODES = 10
+GAP_ITEMS = 20
+# Nút cô lập: không phải tệp/thư mục/test và không có cạnh nào ngoài cấu trúc chứa (CONTAINS/DEFINES).
+_ISOLATED = ("FROM nut n WHERE n.loai_nut NOT IN ('file', 'directory', 'repository') AND n.la_kiem_thu = 0"
+             " AND NOT EXISTS (SELECT 1 FROM canh c WHERE c.ma_nut_nguon = n.ma_nut AND c.loai_canh NOT IN ('CONTAINS', 'DEFINES'))"
+             " AND NOT EXISTS (SELECT 1 FROM canh c WHERE c.ma_nut_dich = n.ma_nut AND c.loai_canh NOT IN ('CONTAINS', 'DEFINES'))")
+
+
+def _gaps(store: GraphStore) -> dict:
+    q = store.conn.execute
+    isolated = [r[0] for r in q(f"SELECT n.ma_nut {_ISOLATED} ORDER BY n.ma_nut LIMIT ?", (GAP_ITEMS,))]
+    ambiguous = [r[0] for r in q("SELECT ma_canh FROM canh WHERE muc_tin_cay = 'AMBIGUOUS' ORDER BY diem_tin_cay, ma_canh"
+                                 " LIMIT ?", (GAP_ITEMS,))]
+    return {"isolated": {"total": q(f"SELECT count(*) {_ISOLATED}").fetchone()[0],
+                         "nodes": [node_json(n) for n in nodes_by_pk(store, isolated)]},
+            "ambiguous_edges": {"total": q("SELECT count(*) FROM canh WHERE muc_tin_cay = 'AMBIGUOUS'").fetchone()[0],
+                                "edges": [edge_json(e) for e in edges_by_id(store, ambiguous)]}}
 
 
 def _god_nodes(store: GraphStore, bg: BridgeGraph) -> list[dict]:
@@ -43,7 +62,7 @@ def _benchmark(bg: BridgeGraph) -> dict | None:
     return {"corpus_tokens": r["corpus_tokens"], "graph_tokens": r["avg_query_tokens"], "reduction": r["reduction_ratio"]}
 
 
-def report_json(store: GraphStore) -> dict:
+def report_json(store: GraphStore, root: Path) -> dict:
     from graphify.analyze import suggest_questions, surprising_connections
     bg = build_nx(store)
     communities = [{"id": f"com:{cid}", "label": bg.labels[cid], "size": len(members), "cohesion": bg.cohesion[cid]}
@@ -54,7 +73,8 @@ def report_json(store: GraphStore) -> dict:
     questions = [{"question": q["question"], "why": q.get("why", "")}
                  for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)]
     return {"god_nodes": _god_nodes(store, bg), "communities": communities, "surprising": surprising,
-            "questions": questions, "benchmark": _benchmark(bg), "truncated": bg.truncated}
+            "questions": questions, "benchmark": _benchmark(bg), "truncated": bg.truncated,
+            "cycles": import_cycles(store.conn), "freshness": freshness(store, root), "gaps": _gaps(store)}
 
 
 AUDIT_FILES = 50
