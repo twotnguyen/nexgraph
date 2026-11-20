@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentId, IntegrationOptions, IntegrationPart, IntegrationPlan } from '../shared/integration-types'
@@ -34,14 +34,14 @@ const del = (snippet: string): Result => ({ status: 'delete', after: '', snippet
 const parseObject = (text: string | null): Json | null => {
   if (text === null || text.trim() === '') return {}
   try {
-    const v: unknown = JSON.parse(text)
+    const v: unknown = JSON.parse(text.replace(/^\uFEFF/, '')) // BOM do trình soạn thảo trên Windows thêm vào
     return isObject(v) ? v : null
   } catch {
     return null
   }
 }
-/** Xoá các khoá rỗng do NexGraph vừa làm rỗng; cả tệp rỗng thì xoá tệp. */
-const rewriteOrDelete = (root: Json, snippet: string): Result => (Object.keys(root).length === 0 ? del(snippet) : { status: 'remove', after: json(root), snippet })
+/** Ghi lại phần còn lại sau khi bỏ mục NexGraph. Tệp còn rỗng vẫn giữ là {}: không phân biệt được với tệp {} người dùng có từ trước. */
+const rewrite = (root: Json, snippet: string): Result => ({ status: 'remove', after: json(root), snippet })
 const mcpArgs = (c: Ctx): string[] => [...c.cmd.args, 'mcp', '--project', c.root, '--data-dir', c.dataDir]
 
 // ---- MCP ------------------------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ function mcpJsonPart(agent: Exclude<McpAgent, 'codex'>): Part {
       for (const h of holders) delete h.nexgraph
       if (isObject(settings.servers) && Object.keys(settings.servers).length === 0) delete settings.servers
       if (Object.keys(settings).length === 0) delete root[spec.key]
-      return rewriteOrDelete(root, snippet)
+      return rewrite(root, snippet)
     }
   }
 }
@@ -134,11 +134,12 @@ function blockPart(rel: string): Part {
     part: 'rules',
     rel: () => rel,
     install(text) {
-      const content = agentsMdBlock()
-      if (text === null) return { status: 'new', after: content, snippet: content }
-      // Chỉ thay khối giữa hai dòng đánh dấu; phần ngoài khối giữ nguyên từng byte.
+      if (text === null) return { status: 'new', after: agentsMdBlock(), snippet: agentsMdBlock() }
+      // Chỉ thay khối giữa hai dòng đánh dấu; phần ngoài khối giữ nguyên từng byte. Khối theo kiểu xuống dòng của tệp.
+      const eol = text.includes('\r\n') ? '\r\n' : '\n'
+      const content = agentsMdBlock().replace(/\n/g, eol)
       const has = BLOCK_RE.test(text)
-      const after = has ? text.replace(BLOCK_RE, () => content) : `${text.endsWith('\n') || text === '' ? text : `${text}\n`}${content}`
+      const after = has ? text.replace(BLOCK_RE, () => content) : `${text.endsWith('\n') || text === '' ? text : `${text}${eol}`}${content}`
       return { status: after === text ? 'up_to_date' : has ? 'update' : 'add', after, snippet: content }
     },
     remove(text) {
@@ -189,9 +190,16 @@ function skillPart(dir: string): Part {
 const sh = (s: string): string => (/[\s"'$`\\&|;<>()*?]/.test(s) ? `"${s}"` : s)
 const guardCommand = (c: Ctx, kind: string, strict: boolean): string =>
   [c.cmd.command, ...c.cmd.args, 'hook-guard', kind, '--project', c.root, '--data-dir', c.dataDir].map(sh).join(' ') + (strict ? ' --strict' : '')
-/** Entry của NexGraph: lệnh hook-guard có --project (lệnh của công cụ khác không có). */
-const isOurHook = (group: unknown): boolean => isObject(group) && Array.isArray(group.hooks) &&
-  group.hooks.some((h) => isObject(h) && typeof h.command === 'string' && h.command.includes(' hook-guard ') && h.command.includes(' --project '))
+/** Lệnh của NexGraph: hook-guard có --project (lệnh của công cụ khác không có). */
+const isOurCommand = (h: unknown): boolean =>
+  isObject(h) && typeof h.command === 'string' && h.command.includes(' hook-guard ') && h.command.includes(' --project ')
+const hasOurs = (list: unknown[]): boolean => list.some((g) => isObject(g) && Array.isArray(g.hooks) && g.hooks.some(isOurCommand))
+/** Bỏ từng lệnh NexGraph, giữ lệnh khác cùng nhóm; nhóm chỉ bị bỏ khi không còn lệnh nào (như vendor `_strip_graphify_hooks`). */
+const stripOurs = (list: unknown[]): unknown[] => list.flatMap((g) => {
+  if (!isObject(g) || !Array.isArray(g.hooks) || !g.hooks.some(isOurCommand)) return [g]
+  const kept = g.hooks.filter((h) => !isOurCommand(h))
+  return kept.length ? [{ ...g, hooks: kept }] : []
+})
 
 function hooksPart(rel: string, event: 'PreToolUse' | 'BeforeTool', groups: (c: Ctx) => Json[]): Part {
   const snippetOf = (c: Ctx): string => JSON.stringify({ hooks: { [event]: groups(c) } }, null, 2)
@@ -211,10 +219,10 @@ function hooksPart(rel: string, event: 'PreToolUse' | 'BeforeTool', groups: (c: 
       const loaded = load(text)
       if (!loaded) return invalid(snippet)
       const { root, list } = loaded
-      const next = [...list.filter((g) => !isOurHook(g)), ...groups(c)]
+      const next = [...stripOurs(list), ...groups(c)]
       if (text !== null && isDeepStrictEqual(next, list)) return same(text, snippet)
       root.hooks = { ...(root.hooks as Json | undefined), [event]: next }
-      return { status: text === null ? 'new' : list.some(isOurHook) ? 'update' : 'add', after: json(root), snippet }
+      return { status: text === null ? 'new' : hasOurs(list) ? 'update' : 'add', after: json(root), snippet }
     },
     remove(text, c) {
       const snippet = snippetOf(c)
@@ -222,13 +230,13 @@ function hooksPart(rel: string, event: 'PreToolUse' | 'BeforeTool', groups: (c: 
       const loaded = load(text)
       if (!loaded) return invalid(snippet)
       const { root, list } = loaded
-      if (!list.some(isOurHook)) return same(text, snippet)
+      if (!hasOurs(list)) return same(text, snippet)
       const hooks = root.hooks as Json
-      const kept = list.filter((g) => !isOurHook(g))
+      const kept = stripOurs(list)
       if (kept.length) hooks[event] = kept
       else delete hooks[event]
       if (Object.keys(hooks).length === 0) delete root.hooks
-      return rewriteOrDelete(root, snippet)
+      return rewrite(root, snippet)
     }
   }
 }
@@ -308,7 +316,7 @@ const kiloRegisterPart: Part = {
     const kept = list.filter((p) => p !== entry)
     if (kept.length) root.plugin = kept
     else delete root.plugin
-    return rewriteOrDelete(root, snippet)
+    return rewrite(root, snippet)
   }
 }
 
@@ -355,13 +363,21 @@ function plan(agent: AgentId, parts: Part[], ctx: Ctx, mode: 'install' | 'remove
   })
 }
 
+/** Dọn thư mục rỗng còn lại sau khi xoá tệp (vd. `.claude/skills/nexgraph`), dừng ở gốc dự án hoặc thư mục còn tệp. */
+function removeEmptyParents(path: string, root: string): void {
+  const top = realpathSync.native(root) // đường dẫn trong plan đã là realpath (resolveInside)
+  for (let dir = dirname(path); dir !== top && dir.startsWith(top + sep); dir = dirname(dir)) {
+    try { rmdirSync(dir) } catch { return } // thư mục còn tệp khác
+  }
+}
+
 /** Ghi theo thứ tự; phần invalid bị bỏ qua (dán tay), không chặn các phần khác. Tính lại từ đĩa ngay lúc ghi. */
-function write(plans: IntegrationPlan[]): IntegrationPlan[] {
+function write(plans: IntegrationPlan[], root: string): IntegrationPlan[] {
   for (const p of plans) {
     if (p.status === 'up_to_date' || p.status === 'invalid') continue
     if (p.status === 'delete') {
       rmSync(p.path, { force: true })
-      if (basename(dirname(p.path)) === 'nexgraph') try { rmdirSync(dirname(p.path)) } catch { /* thư mục còn tệp khác */ }
+      removeEmptyParents(p.path, root)
       continue
     }
     mkdirSync(dirname(p.path), { recursive: true })
@@ -379,11 +395,11 @@ const ctxOf = (root: string, cmd: EngineCommand, dataDir: string, opts?: Integra
 export const planPlatform = (agent: AgentId, root: string, cmd: EngineCommand, dataDir: string, opts?: IntegrationOptions): IntegrationPlan[] =>
   plan(agent, partsOf(agent), ctxOf(root, cmd, dataDir, opts), 'install')
 export const applyPlatform = (agent: AgentId, root: string, cmd: EngineCommand, dataDir: string, opts?: IntegrationOptions): IntegrationPlan[] =>
-  write(planPlatform(agent, root, cmd, dataDir, opts))
+  write(planPlatform(agent, root, cmd, dataDir, opts), root)
 export const planUninstall = (agent: AgentId, root: string, cmd: EngineCommand, dataDir: string): IntegrationPlan[] =>
   plan(agent, partsOf(agent), ctxOf(root, cmd, dataDir), 'remove')
 export const applyUninstall = (agent: AgentId, root: string, cmd: EngineCommand, dataDir: string): IntegrationPlan[] =>
-  write(planUninstall(agent, root, cmd, dataDir))
+  write(planUninstall(agent, root, cmd, dataDir), root)
 
 /** Chỉ phần cấu hình MCP của một nền tảng (giữ cho các test và lệnh sao chép cấu hình cũ). */
 export function planIntegration(agent: McpAgent, projectPath: string, cmd: EngineCommand, dataDir: string): IntegrationPlan {
@@ -393,5 +409,5 @@ export function planIntegration(agent: McpAgent, projectPath: string, cmd: Engin
 export function applyIntegration(agent: McpAgent, projectPath: string, cmd: EngineCommand, dataDir: string): IntegrationPlan {
   const p = planIntegration(agent, projectPath, cmd, dataDir)
   if (p.status === 'invalid') throw Object.assign(new Error('Tệp cấu hình hiện có không phải JSON hợp lệ'), { code: 'invalid_config' })
-  return write([p])[0]
+  return write([p], projectPath)[0]
 }
