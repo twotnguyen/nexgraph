@@ -151,6 +151,8 @@ Script: `engine/scripts/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --
 
 Mỗi tiến trình con lớn nhất đạt 1.008 MB trên `hermes-agent` (232 MB trên `open-design`). **Mục tiêu RAM < 2 GB của tầng L không đạt trên `hermes-agent` ở mọi cấu hình đã thử**; giảm số tiến trình con chỉ giảm RAM từ 4,8 xuống 3,5 GB và kéo thời gian lên gấp 2,3 lần. Số 939 MB H1 báo (và 965 MB ở bảng 4.2) chỉ là tiến trình cha; trong tài liệu H1 cần hiểu đúng như vậy. Nguyên nhân chưa phân tích sâu (không có hồ sơ bộ nhớ của tiến trình con). Thời gian 132 s ở đây là chạy `index_to.py` riêng, khác 141 s trong `bench_all` do chạy trong tiến trình có thêm phần đo.
 
+**Cập nhật 2026-11-20, đã sửa:** nguyên nhân là `lru_cache(maxsize=2048)` `_parse_python_tree_cached` của bộ trích xuất vendored giữ cây cú pháp Python của tới 2.048 tệp trong mỗi tiến trình con. NexGraph gọi bộ trích xuất theo từng tệp nên cache chỉ có ích trong một lần gọi; `generic.py` nay xoá cache đầu mỗi lần gọi. Đo lại `hermes-agent` (17.260 tệp, 8 tiến trình con, M3 Pro, `scripts/engine/ram_index.py` của workspace): RSS đỉnh cả cây **4.634 → 1.236 MB**, tiến trình con lớn nhất 816 → 173 MB, thời gian 138 → 114 s, số nút và cạnh không đổi (215.015 / 693.526). Tiến trình cha còn khoảng 950 MB. Từ 2026-11-20 `hermes-agent` thuộc tầng XL (> 15.000 tệp, chỉ đo).
+
 ### 4.4 Đạt / không đạt và nguyên nhân
 
 - **Tầng S đạt hết**: lập chỉ mục lần đầu ≤ 1.52 s (mục tiêu < 60 s), mở lại ≈ 1 ms (mục tiêu < 3 s).
