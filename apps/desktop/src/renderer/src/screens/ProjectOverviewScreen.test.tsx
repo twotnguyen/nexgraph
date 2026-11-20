@@ -59,9 +59,9 @@ describe('ProjectOverviewScreen', () => {
     const { props } = renderOverview()
     await userEvent.click(screen.getByRole('button', { name: /^Tuỳ chọn index/ }))
     await userEvent.type(screen.getByLabelText('Mẫu bỏ qua'), 'gen/{Enter}vendor/{Enter}{Enter}')
-    expect(screen.getByLabelText(/Số tiến trình/)).toBeDisabled()
+    expect(screen.getByLabelText(/Số tiến trình/)).not.toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
-    expect(props.onReindex).toHaveBeenCalledWith({ exclude: ['gen/', 'vendor/'], includeDocs: false, includeMedia: false })
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: ['gen/', 'vendor/'], includeDocs: false, includeMedia: false, includeConfig: false, force: false })
   })
 
   it('tuỳ chọn index gồm tài liệu, audio/video chỉ bật được sau khi bật tài liệu', async () => {
@@ -72,7 +72,7 @@ describe('ProjectOverviewScreen', () => {
     await userEvent.click(screen.getByLabelText(/Gồm tài liệu/))
     expect(media).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: 'Index lại với tuỳ chọn này' }))
-    expect(props.onReindex).toHaveBeenCalledWith({ exclude: [], includeDocs: true, includeMedia: false })
+    expect(props.onReindex).toHaveBeenCalledWith({ exclude: [], includeDocs: true, includeMedia: false, includeConfig: false, force: false })
   })
 
   it('thiếu faster-whisper thì khoá ô audio/video và nói cần cài', async () => {

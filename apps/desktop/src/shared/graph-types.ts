@@ -300,12 +300,15 @@ export interface PushResult {
   truncated: boolean
 }
 
-/** Tuỳ chọn lập chỉ mục đầy đủ (F10): mẫu bỏ qua, gồm tài liệu, gồm audio/video. */
+/** Tuỳ chọn lập chỉ mục đầy đủ (F10, W2): mẫu bỏ qua, tài liệu, audio/video, tệp cấu hình, số tiến trình, index lại từ đầu. */
 export interface IndexOptions {
   subdir?: string
   exclude?: string[]
   includeDocs?: boolean
   includeMedia?: boolean
+  includeConfig?: boolean
+  workers?: number
+  force?: boolean
 }
 
 export interface AiSettings {

@@ -38,7 +38,9 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
   const opts: IndexOptions = {
     ...(subdir ? { subdir } : {}), ...(options?.exclude?.length ? { exclude: options.exclude } : {}),
     ...(options?.includeDocs !== undefined ? { includeDocs: options.includeDocs } : {}),
-    ...(options?.includeMedia !== undefined ? { includeMedia: options.includeMedia } : {})
+    ...(options?.includeMedia !== undefined ? { includeMedia: options.includeMedia } : {}),
+    ...(options?.includeConfig !== undefined ? { includeConfig: options.includeConfig } : {}),
+    ...(options?.workers ? { workers: options.workers } : {}), ...(options?.force ? { force: true } : {})
   }
   const key = JSON.stringify([projectId, opts])
 

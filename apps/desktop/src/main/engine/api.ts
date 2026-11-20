@@ -74,7 +74,9 @@ export class EngineApi {
       ...(o?.subdir ? { subdir: o.subdir } : {}), ...(o?.exclude?.length ? { exclude: o.exclude } : {}),
       // Không gửi cờ = engine giữ tuỳ chọn lần trước; false là tắt tường minh.
       ...(o?.includeDocs !== undefined ? { include_docs: o.includeDocs } : {}),
-      ...(o?.includeMedia !== undefined ? { include_media: o.includeMedia } : {})
+      ...(o?.includeMedia !== undefined ? { include_media: o.includeMedia } : {}),
+      ...(o?.includeConfig !== undefined ? { include_config: o.includeConfig } : {}),
+      ...(o?.workers ? { workers: o.workers } : {}), ...(o?.force ? { force: true } : {})
     }
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/index`, Object.keys(body).length ? body : undefined,
       AbortSignal.timeout(15_000))
