@@ -15,8 +15,8 @@ import { detectProjectCommands } from './agent/process-tools'
 import type { AiSettings } from '../shared/graph-types'
 import { SecretStore, writeJson } from './ai/settings'
 import { hookBlock, hookStatus, installHook, uninstallHook } from './git-hook'
-import { applyIntegration, planIntegration } from './integrations'
-import type { AgentId } from '../shared/integration-types'
+import { applyPlatform, applyUninstall, planPlatform, planUninstall } from './integrations'
+import type { AgentId, IntegrationOptions } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
 import { EditorStateRegistry } from './agent/editor-state'
@@ -501,8 +501,10 @@ export function registerIpc(
   on('hook:preview', async (pid: string) => hookBlock(getCommand(), await rootOf(pid), dataDir))
   on('hook:install', async (pid: string) => installHook(await rootOf(pid), getCommand(), dataDir))
   on('hook:uninstall', async (pid: string) => uninstallHook(await rootOf(pid)))
-  on('mcp:plan', async (agent: AgentId, pid: string) => planIntegration(agent, await rootOf(pid), getCommand(), dataDir))
-  on('mcp:apply', async (agent: AgentId, pid: string) => applyIntegration(agent, await rootOf(pid), getCommand(), dataDir))
+  on('mcp:plan', async (agent: AgentId, pid: string, opts?: IntegrationOptions) => planPlatform(agent, await rootOf(pid), getCommand(), dataDir, opts))
+  on('mcp:apply', async (agent: AgentId, pid: string, opts?: IntegrationOptions) => applyPlatform(agent, await rootOf(pid), getCommand(), dataDir, opts))
+  on('mcp:plan-remove', async (agent: AgentId, pid: string) => planUninstall(agent, await rootOf(pid), getCommand(), dataDir))
+  on('mcp:remove', async (agent: AgentId, pid: string) => applyUninstall(agent, await rootOf(pid), getCommand(), dataDir))
   on('mcp:start-http', async (pid: string) => {
     const version = removalVersions.get(pid)
     const root = await rootOf(pid)

@@ -89,7 +89,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       checkpoints: vi.fn(async () => []), rollback: vi.fn(async () => ({ restored: [], conflicts: [] })),
       editorState: vi.fn(async () => {}),
       onEvent: vi.fn((cb: (pid: string, e: AgentEvent) => void) => { agentHandlers.add(cb); return () => agentHandlers.delete(cb) }), ...over.agent },
-    mcp: { config: vi.fn(async () => ({ stdio: '{}' })), plan: vi.fn(), apply: vi.fn(), startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:1/mcp', key: 'k' })),
+    mcp: { config: vi.fn(async () => ({ stdio: '{}' })), plan: vi.fn(), apply: vi.fn(), planRemove: vi.fn(), remove: vi.fn(), startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:1/mcp', key: 'k' })),
       stopHttp: vi.fn(async () => {}), httpStatus: vi.fn(async () => null), ...over.mcp },
     watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}), ...over.watch }
   }

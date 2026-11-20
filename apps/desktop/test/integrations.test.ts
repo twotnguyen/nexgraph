@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { agentsMdBlock, applyIntegration, applySkill, planIntegration, planSkill } from '../src/main/integrations'
+import { agentsMdBlock, applyIntegration, applyPlatform, planIntegration, planPlatform } from '../src/main/integrations'
 import { skillMarkdown } from '../src/main/agent/skill'
 
 const cmd = { command: '/Apps/NexGraph/engine', args: [] as string[] }
@@ -16,6 +16,15 @@ beforeEach(() => {
   root = realpathSync.native(root)
 })
 const args = (r: string): string[] => ['mcp', '--project', r, '--data-dir', dataDir]
+type Target = 'claude' | 'agents-md'
+const pick = (target: Target) => (target === 'claude' ? { agent: 'claude' as const, part: 'skill' } : { agent: 'agents' as const, part: 'rules' })
+const planSkill = (target: Target, r: string) => planPlatform(pick(target).agent, r, cmd, dataDir).find((p) => p.part === pick(target).part)!
+const applySkill = (target: Target, r: string) => {
+  const p = planSkill(target, r)
+  if (p.status === 'invalid') throw Object.assign(new Error('invalid'), { code: 'invalid_config' })
+  applyPlatform(pick(target).agent, r, cmd, dataDir)
+  return p
+}
 
 describe('integrations', () => {
   it('tệp chưa có: status new, nội dung đúng định dạng từng agent; plan không ghi', () => {
@@ -143,7 +152,7 @@ describe('integrations', () => {
   it('planSkill claude: chưa có → new với SKILL.md; trùng → up_to_date; khác → invalid không ghi đè', () => {
     const skill = skillMarkdown()
     const p = planSkill('claude', root)
-    expect(p).toMatchObject({ agent: 'skill-claude', exists: false, status: 'new', after: skill })
+    expect(p).toMatchObject({ agent: 'claude', exists: false, status: 'new', after: skill })
     expect(p.path.replace(/\\/g, '/').endsWith('/.claude/skills/nexgraph/SKILL.md')).toBe(true) // Windows dùng \
     expect(existsSync(p.path)).toBe(false)
     applySkill('claude', root)

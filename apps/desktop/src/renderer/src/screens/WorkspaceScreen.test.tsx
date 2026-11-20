@@ -113,13 +113,13 @@ describe('WorkspaceScreen', () => {
   })
 
   it('mở cấu hình MCP của OpenCode từ panel trợ lý', async () => {
-    const plan = vi.fn(async () => ({ agent: 'opencode' as const, path: 'opencode.json', exists: false,
-      status: 'new' as const, after: '{}', snippet: '{}' }))
+    const plan = vi.fn(async () => [{ agent: 'opencode' as const, part: 'mcp' as const, path: 'opencode.json', exists: false,
+      status: 'new' as const, after: '{}', snippet: '{}' }])
     installNexgraph({ mcp: { plan } })
     render(<WorkspaceScreen project={project()} />)
     await userEvent.click(screen.getByRole('button', { name: 'Kết nối OpenCode' }))
-    expect(plan).toHaveBeenCalledWith('opencode', 'p1')
-    expect(within(screen.getByRole('dialog')).getByRole('radio', { name: 'OpenCode' })).toBeChecked()
+    expect(plan).toHaveBeenCalledWith('opencode', 'p1', undefined)
+    expect(within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Trợ lý' })).toHaveValue('opencode')
   })
 
   it('dùng phím mũi tên, Home và End để chuyển và đưa focus vào thẻ tương ứng', async () => {

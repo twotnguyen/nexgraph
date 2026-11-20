@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react'
-import type { AgentId, IntegrationPlan } from '@shared/integration-types'
+import { AGENT_IDS, type AgentId, type IntegrationPlan } from '@shared/integration-types'
 import type { ProjectSummary } from '@shared/graph-types'
 import { vi } from '../../strings'
 
-// Bốn agent JSON dùng nhãn có sẵn; Codex và hai mục skill dùng nhãn mới (strings.ts: vi.integration).
-const AGENTS: { id: AgentId; label: string }[] = [
-  { id: 'claude', label: vi.integrate.agents.claude },
-  { id: 'cursor', label: vi.integrate.agents.cursor },
-  { id: 'vscode', label: vi.integrate.agents.vscode },
-  { id: 'opencode', label: vi.integrate.agents.opencode },
-  { id: 'codex', label: vi.integration.codex },
-  { id: 'skill-claude', label: vi.integration.skillClaude },
-  { id: 'agents-md', label: vi.integration.skillAgentsMd }
-]
+const STRICT_AGENTS: AgentId[] = ['claude', 'codebuddy'] // nền tảng có hook PreToolUse
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
+const WRITES = new Set<IntegrationPlan['status']>(['new', 'add', 'update', 'remove', 'delete'])
+
+function invalidMessage(p: IntegrationPlan, removing: boolean): string {
+  if (removing) return vi.integration.removeInvalid
+  if (p.part === 'skill') return vi.integration.skillExisting
+  return p.path.endsWith('.toml') ? vi.integration.codexExisting : vi.integrate.invalid
+}
+
+function statusLabel(p: IntegrationPlan, removing: boolean): string {
+  if (removing) return vi.integration.removeStatus[p.status] ?? ''
+  if (p.status === 'up_to_date') return vi.integrate.upToDate
+  return p.status === 'new' ? vi.integrate.fresh : p.status === 'invalid' ? '' : vi.integrate.existing
+}
 
 export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }: {
   project: ProjectSummary
@@ -21,70 +25,86 @@ export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }
   initialAgent?: AgentId
 }) {
   const [agent, setAgent] = useState<AgentId>(initialAgent)
-  const [plan, setPlan] = useState<IntegrationPlan | null>(null)
+  const [strict, setStrict] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  const [plans, setPlans] = useState<IntegrationPlan[] | null>(null)
   const [done, setDone] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const hasStrict = STRICT_AGENTS.includes(agent)
+  const opts = hasStrict ? { strict } : undefined
 
   useEffect(() => {
     let alive = true
-    setPlan(null)
-    setDone(null)
-    setCopied(false)
+    setPlans(null)
+    setCopied(null)
     setError(null)
-    window.nexgraph.mcp.plan(agent, project.project_id).then((p) => alive && setPlan(p)).catch((e) => alive && setError(errMessage(e)))
+    const pending = removing ? window.nexgraph.mcp.planRemove(agent, project.project_id)
+      : window.nexgraph.mcp.plan(agent, project.project_id, hasStrict ? { strict } : undefined)
+    pending.then((p) => alive && setPlans(p)).catch((e) => alive && setError(errMessage(e)))
     return () => { alive = false }
-  }, [agent, project.project_id])
+  }, [agent, project.project_id, removing, strict, hasStrict])
 
-  const write = async () => {
+  const pick = (next: AgentId) => { setAgent(next); setRemoving(false); setDone(null) }
+  const run = async () => {
     setError(null)
     try {
-      const p = await window.nexgraph.mcp.apply(agent, project.project_id)
-      setDone(vi.integrate.written(p.path))
-      setPlan(p.status === 'up_to_date' || p.status === 'invalid' ? p : { ...p, status: 'up_to_date' })
+      const p = removing ? await window.nexgraph.mcp.remove(agent, project.project_id) : await window.nexgraph.mcp.apply(agent, project.project_id, opts)
+      const written = p.filter((x) => WRITES.has(x.status))
+      setDone(removing ? vi.integration.removed : written.map((x) => vi.integrate.written(x.path)).join(' · '))
+      // Sau khi ghi/gỡ, mọi phần không invalid đều đã khớp đĩa.
+      setPlans(p.map((x) => (WRITES.has(x.status) ? { ...x, status: 'up_to_date' } : x)))
     } catch (e) {
       setError(errMessage(e))
     }
   }
-  const copy = async () => {
-    if (!plan) return
-    await navigator.clipboard.writeText(plan.snippet)
-    setCopied(true)
+  const copy = async (p: IntegrationPlan) => {
+    await navigator.clipboard.writeText(p.snippet)
+    setCopied(p.path + p.part)
   }
 
-  const invalidMessage = agent === 'codex' ? vi.integration.codexExisting : agent === 'skill-claude' ? vi.integration.skillExisting : vi.integrate.invalid
+  const pendingWrites = plans?.filter((p) => WRITES.has(p.status)) ?? []
+  const updating = !removing && pendingWrites.length > 0 && pendingWrites.every((p) => p.status === 'update')
   return (
     <div className="modal-backdrop">
       <div role="dialog" aria-label={vi.integrate.title} className="modal">
         <header><h2>{vi.integrate.title}</h2><button type="button" aria-label={vi.integrate.close} onClick={onClose}>×</button></header>
-        <div role="radiogroup" aria-label={vi.integrate.agentLabel} className="segmented">
-          {AGENTS.map((a) => (
-            <label key={a.id}>
-              <input type="radio" name="agent" checked={agent === a.id} onChange={() => setAgent(a.id)} />
-              <span>{a.label}</span>
-            </label>
-          ))}
-        </div>
-        {plan && (
-          <>
-            <p><b>{vi.integrate.willWrite}</b> <span className="mono">{plan.path}</span></p>
-            <p className="muted">{plan.status === 'new' ? vi.integrate.fresh : vi.integrate.existing}</p>
-            {plan.status === 'invalid' ? <p role="alert" className="error">{invalidMessage}</p> : <pre className="mono">{plan.after}</pre>}
-            {plan.status === 'up_to_date' && <p className="muted">{vi.integrate.upToDate}</p>}
-          </>
+        <label className="row">
+          <span>{vi.integrate.agentLabel}</span>
+          <select aria-label={vi.integrate.agentLabel} value={agent} onChange={(e) => pick(e.target.value as AgentId)}>
+            {AGENT_IDS.map((id) => <option key={id} value={id}>{vi.integrate.agents[id]}</option>)}
+          </select>
+        </label>
+        {hasStrict && !removing && (
+          <label className="row small">
+            <input type="checkbox" checked={strict} onChange={(e) => setStrict(e.target.checked)} />
+            <span>{vi.integration.strict}</span>
+          </label>
         )}
+        {removing && <p><b>{vi.integration.willRemove}</b></p>}
+        {plans?.map((p) => (
+          <section key={p.part + p.path} aria-label={vi.integration.parts[p.part]}>
+            <h3>{vi.integration.parts[p.part]}</h3>
+            <p>{!removing && <b>{vi.integrate.willWrite} </b>}<span className="mono">{p.path}</span></p>
+            {statusLabel(p, removing) && <p className="muted">{statusLabel(p, removing)}</p>}
+            {p.status === 'invalid' ? (
+              <>
+                <p role="alert" className="error">{invalidMessage(p, removing)}</p>
+                <button type="button" onClick={() => void copy(p)}>{copied === p.path + p.part ? vi.integrate.copied : vi.integration.copyPart}</button>
+              </>
+            ) : (p.status === 'remove' || (!removing && p.status !== 'up_to_date')) && <pre className="mono">{p.after}</pre>}
+          </section>
+        ))}
         {agent === 'codex' && <p className="muted small">{vi.integration.codexTrusted}</p>}
         {agent === 'opencode' && <p className="muted small">{vi.chat.openCodeHint}</p>}
         {done && <p role="status">{done}</p>}
         {error && <p role="alert" className="error">{error}</p>}
-        <p className="muted small">{vi.integrate.note}</p>
+        <p className="muted small">{removing ? vi.integration.sharedNote : vi.integrate.note}</p>
         <div className="row">
-          {plan && plan.status !== 'invalid' && (
-            <button type="button" className="primary" disabled={plan.status === 'up_to_date'} onClick={() => void write()}>
-              {plan.status === 'update' ? vi.integrate.update : vi.integrate.write}
-            </button>
-          )}
-          <button type="button" disabled={!plan} onClick={() => void copy()}>{copied ? vi.integrate.copied : vi.integrate.copy}</button>
+          <button type="button" className="primary" disabled={!plans || pendingWrites.length === 0} onClick={() => void run()}>
+            {removing ? vi.integration.confirmRemove : updating ? vi.integrate.update : vi.integrate.writeAll}
+          </button>
+          <button type="button" onClick={() => { setRemoving(!removing); setDone(null) }}>{removing ? vi.integration.back : vi.integration.remove}</button>
         </div>
       </div>
     </div>

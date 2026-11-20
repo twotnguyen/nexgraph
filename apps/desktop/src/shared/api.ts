@@ -1,5 +1,5 @@
 import type { EngineStatus } from './engine-status'
-import type { AgentId, IntegrationPlan } from './integration-types'
+import type { AgentId, IntegrationOptions, IntegrationPlan } from './integration-types'
 import type { GeminiCliApi } from './gemini-types'
 import type {
   AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo,
@@ -188,8 +188,12 @@ export interface NexGraphApi {
   mcp: {
     /** JSON `mcpServers` cho trợ lý AI chạy MCP qua stdio. */
     config(projectId: string): Promise<{ stdio: string }>
-    plan(agent: AgentId, projectId: string): Promise<IntegrationPlan>
-    apply(agent: AgentId, projectId: string): Promise<IntegrationPlan>
+    /** Xem trước các tệp sẽ ghi cho một nền tảng (MCP, khối quy tắc, skill, hook); không ghi gì. */
+    plan(agent: AgentId, projectId: string, opts?: IntegrationOptions): Promise<IntegrationPlan[]>
+    apply(agent: AgentId, projectId: string, opts?: IntegrationOptions): Promise<IntegrationPlan[]>
+    /** Xem trước phần NexGraph sẽ gỡ khỏi các tệp của nền tảng. */
+    planRemove(agent: AgentId, projectId: string): Promise<IntegrationPlan[]>
+    remove(agent: AgentId, projectId: string): Promise<IntegrationPlan[]>
     startHttp(projectId: string): Promise<{ url: string; key: string }>
     stopHttp(projectId: string): Promise<void>
     httpStatus(projectId: string): Promise<{ url: string } | null>
