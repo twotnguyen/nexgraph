@@ -97,3 +97,13 @@ def test_cross_repo_impact_lists_callers(two_repos):
     assert [(h["project_id"], h["node_id"], h["via"]) for h in hits] == [
         (app, "src/cart.ts::checkout#function", "src/calculator.ts::Calculator.add#method")]
     assert cross_repo_impact(services.data_dir, app, ["src/cart.ts::checkout#function"]) == []
+
+
+def test_concurrent_relinks_agree(two_repos):
+    from concurrent.futures import ThreadPoolExecutor
+    services, lib, app = two_repos
+    g = GlobalStore(services.data_dir)
+    g.add(lib), g.add(app)
+    with ThreadPoolExecutor(4) as pool:
+        counts = list(pool.map(lambda _: relink(services.data_dir, services.registry)["edges"], range(4)))
+    assert len(set(counts)) == 1 and len(g.edges()) == counts[0] > 0
