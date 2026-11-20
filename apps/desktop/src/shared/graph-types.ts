@@ -218,6 +218,8 @@ export interface AskResult {
   edges: GraphEdge[]
   flows?: FlowSummary[]
   truncated: boolean
+  /** Câu hỏi là đúng tên của nhiều node ở nhiều tệp: engine không chọn bừa, trả mỗi tệp một ứng viên. */
+  ambiguous?: GraphNode[]
 }
 
 export interface TourStep {

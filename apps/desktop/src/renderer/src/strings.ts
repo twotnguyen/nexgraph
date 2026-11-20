@@ -413,7 +413,8 @@ export const vi = {
     askNodes: (n: number, e: number) => `${n} node, ${e} cạnh liên quan`,
     showOnGraph: 'Xem trên graph',
     askTruncated: 'Đã cắt theo ngân sách 2.000 token',
-    askNone: 'Không tìm thấy node nào khớp câu hỏi'
+    askNone: 'Không tìm thấy node nào khớp câu hỏi',
+    askAmbiguous: (n: number) => `Câu hỏi trùng với ${n} node cùng tên ở các tệp khác nhau. Chọn một node:`
   },
   nodeMenu: {
     findPath: 'Tìm đường tới…',

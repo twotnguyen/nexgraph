@@ -1,3 +1,6 @@
+import shutil
+from pathlib import Path
+
 import pytest
 
 from nexgraph_engine.query.ask import ask_graph
@@ -102,3 +105,74 @@ def test_query_route_errors(api, copy_fixture):
     assert r.status_code == 400 and r.json()["error"]["code"] == "bad_param"
     r = api.post(f"/v1/projects/{pid}/ask", json={"question": "helper", "depth": 7})
     assert r.status_code == 400
+
+
+def _write(root, files: dict[str, str]):
+    for rel, text in files.items():
+        p = root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+    return root
+
+
+def test_ask_prefers_source_over_test(tmp_path, index_project):
+    root = _write(tmp_path / "p", {
+        "src/validator.py": "class UsernameValidator:\n    def check(self, s):\n        return bool(s)\n",
+        "tests/test_validator.py": "from src.validator import UsernameValidator\n\n"
+                                   "class UsernameValidatorTests:\n    def test_ok(self):\n"
+                                   "        assert UsernameValidator().check('a')\n"})
+    store, _, _ = index_project(root)
+    r = ask_graph(store, "username validator")
+    assert r["seeds"][0]["file"] == "src/validator.py"
+
+
+def test_ask_ambiguous_name(tmp_path, index_project):
+    root = _write(tmp_path / "p", {"a/store.py": "class Store:\n    pass\n", "b/store.py": "class Store:\n    pass\n"})
+    store, _, _ = index_project(root)
+    r = ask_graph(store, "Store")
+    assert sorted(n["file"] for n in r["ambiguous"]) == ["a/store.py", "b/store.py"]
+    assert r["nodes"] == [] and r["seeds"] == []
+
+
+def test_ask_not_ambiguous_for_plain_question(copy_fixture, index_project):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    assert ask_graph(store, "helper")["ambiguous"] == []
+
+
+def test_ask_does_not_expand_hubs(tmp_path, index_project):
+    leaves = "".join(f"def leaf{i}():\n    return {i}\n\n" for i in range(60))
+    calls = "".join(f"    leaf{i}()\n" for i in range(60))
+    root = _write(tmp_path / "p", {
+        "hub.py": leaves + "def hub():\n" + calls,
+        "start.py": "from hub import hub\n\ndef zebra_entry():\n    hub()\n"})
+    store, _, _ = index_project(root)
+    r = ask_graph(store, "zebra_entry", depth=2, budget=100_000)
+    ids = {n["id"] for n in r["nodes"]}
+    assert "hub.py::hub#function" in ids
+    assert not any(i.startswith("hub.py::leaf") for i in ids)
+
+
+MIXED = Path(__file__).parent / "fixtures" / "mixed_corpus"
+MIXED_QUESTIONS = ["how does cluster work", "build graph", "god nodes"]
+
+
+def _norm(label: str) -> str:
+    return label.lstrip(".").removesuffix("()").lower()
+
+
+def _symbols(labels: list[str]) -> list[str]:
+    # Bỏ nút tệp: graph tham chiếu đặt id tệp bằng tên gốc (`cluster`) nên nút tệp trúng tầng exact theo id,
+    # còn id NexGraph là `cluster.py#file`. Khác ở nội dung graph, không ở cách chấm điểm.
+    return [_norm(x) for x in labels if not x.endswith(".py")]
+
+
+@pytest.mark.parametrize("question", MIXED_QUESTIONS)
+def test_ask_seeds_match_reference_graph(question, tmp_path, index_project):
+    from graphify.serve import _load_graph, _pick_seeds, _query_path_weight, _query_terms, _score_query
+    G = _load_graph(str(MIXED / "graph.json"))
+    terms = _query_terms(question)
+    qs = _score_query(G, terms, collect_per_term_seeds=True, path_weight=_query_path_weight(terms))
+    want = _symbols([G.nodes[s]["label"] for s in
+                     _pick_seeds(qs.ranked, G=G, best_seed_by_term=qs.best_seed_by_term, term_order=qs.term_order)])
+    store, _, _ = index_project(shutil.copytree(MIXED / "raw", tmp_path / "raw"))
+    assert want and _symbols([n["label"] for n in ask_graph(store, question)["seeds"]]) == want

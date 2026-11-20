@@ -133,6 +133,16 @@ function AskGraph({ projectId, revision, onOpen, onShowSubgraph, onOpenFlow }: P
       {error && <p role="alert" className="error">{error}</p>}
       {result && (
         <div className="ask-result">
+          {result.ambiguous && result.ambiguous.length > 0 && (
+            <>
+              <p>{vi.search.askAmbiguous(result.ambiguous.length)}</p>
+              <ul className="search-results">
+                {result.ambiguous.map((n) => (
+                  <li key={n.id}><NodeButton node={n} onOpen={onOpen} /></li>
+                ))}
+              </ul>
+            </>
+          )}
           <p>{vi.search.askNodes(result.nodes.length, result.edges.length)}</p>
           {result.truncated && <p className="muted small">{vi.search.askTruncated}</p>}
           {onShowSubgraph && result.nodes.length > 0 && (
