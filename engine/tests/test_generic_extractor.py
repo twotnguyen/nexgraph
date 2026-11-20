@@ -92,14 +92,10 @@ def test_typescript_symbol_imports_are_not_refs(tmp_path):
     assert [(r.line, r.name.endswith("_u_ts") or r.name in ("u", "path", "ref_path")) for r in imports] == [(1, True), (2, True)]
 
 
-def test_python_tree_cache_does_not_grow_across_files():
-    # Cache cây cú pháp của bộ trích xuất giữ tới 2.048 tệp mỗi tiến trình (~400 MB/worker trên dự án lớn).
-    from graphify.extractors.resolution import _parse_python_tree_cached as cache
+def test_python_parse_trees_are_not_memoized():
+    # Bản 0.9.92 giữ cây cú pháp của tới 2.048 tệp mỗi tiến trình (~400 MB/worker, PR #19 phải xoá cache).
+    # Từ 0.9.112 upstream bỏ hẳn memo (7d302e7b); test này giữ hợp đồng đó khi nâng vendor lần sau.
+    from graphify.extractors import resolution
 
-    cache.cache_clear()
-    run("util.py")
-    one_file = cache.cache_info().currsize
-    cache.cache_clear()
-    run()
-    run("util.py")
-    assert cache.cache_info().currsize == one_file
+    assert not hasattr(resolution, "_parse_python_tree_cached")
+    assert not hasattr(resolution._parse_python_tree, "cache_info")

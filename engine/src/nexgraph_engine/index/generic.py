@@ -13,7 +13,6 @@ import tempfile
 from pathlib import Path
 
 from graphify.extract import _get_extractor, _safe_extract_with_xaml_root, extract
-from graphify.extractors.resolution import _parse_python_tree_cached
 
 from nexgraph_engine.dart.extractor import FileExtraction
 from nexgraph_engine.ids import file_node_id, node_id
@@ -38,8 +37,6 @@ def _line(loc: str | None) -> int | None:
 
 
 def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) -> FileExtraction:
-    # Cache cây cú pháp Python của bộ trích xuất chỉ có ích trong một lần gọi; để nguyên thì mỗi tiến trình giữ tới 2.048 cây.
-    _parse_python_tree_cached.cache_clear()
     root = Path(root).resolve()  # gốc là symlink thì kết quả lấy từ cache của bộ trích xuất mang id theo đường dẫn khác
     path = root / rel_path
     if not path.is_file():
