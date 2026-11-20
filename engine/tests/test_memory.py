@@ -151,7 +151,7 @@ def test_api_memory_flow(api, project):
     assert api.post(f"/v1/projects/{pid}/memory/ratings", json={
         "question": "q", "answer": "a", "outcome": "da_sua", "citations": []}).status_code == 400  # thiếu cách đúng
     got = api.get(f"/v1/projects/{pid}/memory", params={"node": AUTH}).json()
-    assert [m["kind"] for m in got["memories"]] == ["owner"]
+    assert [m["kind"] for m in got["memories"]] == ["owner", "danh_gia"]  # cùng giây: id mới trước
     assert api.get(f"/v1/projects/{pid}/lessons").json()["total"] == 1
 
 

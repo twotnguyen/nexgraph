@@ -30,6 +30,7 @@ from mcp.server.fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from nexgraph_engine import __version__
+from nexgraph_engine import memory
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.query import flow_json, list_flows_json, trace_from_json
 from nexgraph_engine.hook_guard import project_id_of, touch_query_stamp
@@ -61,6 +62,8 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import NEXGRAPH_DIR, ProjectRegistry
 
 READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+# Ngoại lệ duy nhất (ADR 0019): `remember` ghi bảng ký ức trong CSDL của NexGraph, không ghi tệp dự án.
+WRITES_MEMORY = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
 
 SERVER_INSTRUCTIONS = (
     "Đồ thị tri thức của dự án đang mở trong NexGraph (Tree-sitter AST + cạnh gọi hàm / import / kế thừa / "
@@ -79,10 +82,12 @@ SERVER_INSTRUCTIONS = (
     "- nút trung tâm, số liệu tổng, một cộng đồng -> god_nodes, graph_stats, get_community\n"
     "- một tính năng chạy qua những bước nào, luồng xử lý một route/lệnh -> list_flows rồi trace_flow\n"
     "- từ một hàm bất kỳ gọi tiếp tới đâu -> trace_flow entry=<id nút>\n"
+    "- trước khi sửa một nút, xem bài học/quyết định/sự cố/người phụ trách đã ghi -> recall node_id=<id nút>\n"
+    "- ghi lại bài học, quyết định, sự cố, người phụ trách gắn với nút -> remember\n"
     "Trước khi tin kết quả, gọi graph_stats một lần: stale=true nghĩa là mã nguồn đã đổi sau lần lập chỉ mục, "
     "hãy đọc lại tệp bằng read_code để xác nhận.\n"
     "Khi trả lời, trích dẫn dạng tệp:dòng lấy từ kết quả tool; không bịa đường đi không có trong đồ thị. "
-    "Mọi tool chỉ đọc."
+    "Mọi tool chỉ đọc, trừ remember (chỉ ghi bộ nhớ của NexGraph, không ghi tệp)."
 )
 
 
@@ -280,6 +285,32 @@ def build_server(project: Path, data_dir: Path | None) -> FastMCP:
     async def find(query: str, kind: str | None = None, limit: int = 20) -> list[dict]:
         """Như search, lọc theo một loại nút (class, function, method, document...)."""
         return await run("find", lambda s: search_json(s, query, [kind] if kind else None, max(1, min(limit, 100))))
+
+    @mcp.tool(annotations=WRITES_MEMORY)
+    async def remember(kind: Literal["lesson", "decision", "incident", "owner"], text: str,
+                       node_ids: list[str] | None = None) -> dict:
+        """Ghi một bài học / quyết định / sự cố / người phụ trách, neo vào các nút (id). Chỉ ghi bộ nhớ của NexGraph.
+        Trùng nội dung (không phân biệt hoa thường, dấu câu) và cùng tập nút thì trả bản đã có (created=false)."""
+        def work() -> dict:
+            try:
+                with memory.writer(graph_db) as conn:
+                    return memory.remember(conn, kind, text, node_ids or [], "mcp")
+            except (memory.MemoryBusy, ValueError) as exc:
+                raise ToolError(str(exc)) from exc
+            except (sqlite3.Error, OSError) as exc:
+                raise ToolError(f"Không ghi được bộ nhớ: {exc}") from exc
+        return await _offload("remember", work)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def recall(query: str | None = None, node_id: str | None = None, limit: int = 20) -> dict:
+        """Ký ức đã ghi (bài học, quyết định, sự cố, người phụ trách, đánh giá câu trả lời) theo nút và/hoặc từ khoá.
+        Theo nút thì kèm `lesson` (preferred/tentative/contested) và `node_exists`; nút đã mất có trong `missing_node_ids`."""
+        def body(s: GraphStore) -> dict:
+            try:
+                return memory.recall(s.conn, query=query, node_id=node_id, limit=max(1, min(limit, 200)))
+            except ValueError as exc:
+                raise ToolError(str(exc)) from exc
+        return await run("recall", body)
 
     def resource_json(uri: str, body: Callable[[GraphStore], Any], doc: str) -> None:
         async def read() -> str:
