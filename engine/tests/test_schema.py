@@ -228,3 +228,39 @@ def test_v5_has_flow_tables_and_upgrades_v4(tmp_path):
     c5_tables = {r["name"] for r in c5.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"luong", "buoc_luong"} <= c5_tables
     c5.close()
+
+
+def _schema_rows(conn):
+    return sorted(tuple(r) for r in conn.execute("select type, name, tbl_name, sql from sqlite_master"))
+
+
+@pytest.mark.parametrize("name, opener", [("graph", "open_graph_db"), ("app", "open_app_db")])
+def test_new_db_schema_matches_plain_script(tmp_path, name, opener):
+    import sqlite3
+    from nexgraph_engine.schema import db
+    ref = sqlite3.connect(tmp_path / "ref.db")
+    ref.executescript(db.load_sql(name))
+    conn = getattr(db, opener)(tmp_path / "new.db")
+    assert _schema_rows(conn) == _schema_rows(ref)
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == ref.execute("PRAGMA user_version").fetchone()[0]
+
+
+def test_failed_schema_rolls_back_and_releases_lock(tmp_path, monkeypatch):
+    import sqlite3
+    from nexgraph_engine.schema import db
+    good = db.load_sql
+    monkeypatch.setattr(db, "load_sql", lambda name: good(name) + "\nCREATE TABLE nut (x);\n")
+    with pytest.raises(sqlite3.OperationalError):
+        db.open_graph_db(tmp_path / "g.db")
+    monkeypatch.setattr(db, "load_sql", good)
+    conn = db.open_graph_db(tmp_path / "g.db")  # không bị "database is locked", schema không dở dang
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == db.GRAPH_SCHEMA_VERSION
+
+
+def test_concurrent_first_open_creates_schema_once(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+    from nexgraph_engine.schema.db import APP_SCHEMA_VERSION, open_app_db
+    path = tmp_path / "app.db"
+    with ThreadPoolExecutor(8) as pool:
+        versions = list(pool.map(lambda _: open_app_db(path).execute("PRAGMA user_version").fetchone()[0], range(8)))
+    assert versions == [APP_SCHEMA_VERSION] * 8

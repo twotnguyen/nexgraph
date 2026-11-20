@@ -44,6 +44,31 @@ def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app"], target
         conn.isolation_level = ""
 
 
+def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app"]) -> None:
+    """Tạo schema trong một giao dịch: trọn vẹn hoặc không, chỉ fsync một lần (tự commit từng lệnh chậm ~1 s trên Windows).
+
+    BEGIN IMMEDIATE rồi đọc lại user_version để hai tiến trình cùng mở CSDL mới không cùng tạo schema.
+    Lỗi thì rollback và đóng kết nối để không giữ khoá ghi.
+    """
+    conn.isolation_level = None
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        if conn.execute("PRAGMA user_version").fetchone()[0] == 0:
+            for stmt in _split_statements(load_sql(sql_name)):
+                conn.execute(stmt)
+        conn.execute("COMMIT")
+    except BaseException:
+        if conn.in_transaction:
+            conn.execute("ROLLBACK")
+        conn.close()
+        raise
+    finally:
+        try:
+            conn.isolation_level = ""
+        except sqlite3.ProgrammingError:  # đã đóng
+            pass
+
+
 def _split_statements(sql: str) -> list[str]:
     out, buf = [], ""
     for line in sql.splitlines(keepends=True):
@@ -84,8 +109,7 @@ def _open(
         if not read_only:
             _migrate(conn, sql_name, current)
     if version == 0 and not read_only:
-        # Một giao dịch: schema tạo trọn vẹn hoặc không, và chỉ fsync một lần (mỗi lệnh tự commit chậm ~1 s trên Windows).
-        conn.executescript(f"BEGIN;\n{load_sql(sql_name)}\nCOMMIT;")
+        _create_schema(conn, sql_name)
     if wal and not read_only:
         conn.execute("PRAGMA journal_mode = WAL")
     return conn
