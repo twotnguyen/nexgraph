@@ -90,3 +90,16 @@ def test_typescript_symbol_imports_are_not_refs(tmp_path):
     x = extract_generic(tmp_path, "a.ts", "typescript", is_test=False)
     imports = [r for r in x.refs if r.type == EdgeType.IMPORTS]
     assert [(r.line, r.name.endswith("_u_ts") or r.name in ("u", "path", "ref_path")) for r in imports] == [(1, True), (2, True)]
+
+
+def test_python_tree_cache_does_not_grow_across_files():
+    # Cache cây cú pháp của bộ trích xuất giữ tới 2.048 tệp mỗi tiến trình (~400 MB/worker trên dự án lớn).
+    from graphify.extractors.resolution import _parse_python_tree_cached as cache
+
+    cache.cache_clear()
+    run("util.py")
+    one_file = cache.cache_info().currsize
+    cache.cache_clear()
+    run()
+    run("util.py")
+    assert cache.cache_info().currsize == one_file
