@@ -1,3 +1,4 @@
+from nexgraph_engine.schema.db import APP_SCHEMA_VERSION, GRAPH_SCHEMA_VERSION
 import os
 import sqlite3
 import sys
@@ -80,6 +81,7 @@ def test_v1_registry_can_be_read_and_upgrades_without_losing_projects(tmp_path, 
     registered = registry.open_project(make_project(tmp_path))
     file = registry.app_data_dir / "app.db"
     with sqlite3.connect(file) as conn:
+        conn.execute("DROP TABLE ai_theo_du_an")
         conn.execute("ALTER TABLE du_an_da_mo DROP COLUMN da_go")
         conn.execute("PRAGMA user_version = 1")
     conn.close()
@@ -90,7 +92,7 @@ def test_v1_registry_can_be_read_and_upgrades_without_losing_projects(tmp_path, 
 
     upgraded = ProjectRegistry(registry.app_data_dir)
     with open_app_db(file, read_only=True) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 2
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == APP_SCHEMA_VERSION
     conn.close()
     assert upgraded.remove(registered.project_id)
     assert legacy.list_projects() == []
@@ -157,5 +159,5 @@ def test_open_project_with_outdated_schema(tmp_path, registry):
     info = registry.open_project(root)
     assert info.project_id == "11111111-2222-3333-4444-555555555555"
     conn = sqlite3.connect(db_file)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     conn.close()

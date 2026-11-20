@@ -55,7 +55,8 @@ def test_publication_timeout_leaves_live_snapshot_untouched(graph):
 
 def test_old_schema_migrates_only_in_staging(graph):
     with closing(sqlite3.connect(graph)) as live:
-        live.executescript("DROP TABLE buoc_luong; DROP TABLE luong; PRAGMA user_version = 4;")
+        live.executescript("DROP TABLE buoc_luong; DROP TABLE luong; DROP TABLE nhan_cum; DROP TABLE ky_uc;"
+                           " DROP TABLE bo_nho_dem_ngu_nghia; PRAGMA user_version = 4;")
         with stage_graph(graph) as (_live_path, stage):
             assert stage.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
             assert stage.execute("SELECT count(*) FROM luong").fetchone()[0] == 0

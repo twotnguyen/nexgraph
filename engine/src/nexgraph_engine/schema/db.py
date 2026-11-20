@@ -4,8 +4,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Literal
 
-GRAPH_SCHEMA_VERSION = 6
-APP_SCHEMA_VERSION = 2
+GRAPH_SCHEMA_VERSION = 7
+APP_SCHEMA_VERSION = 3
 MIN_SQLITE = (3, 43, 0)  # FTS5 contentless_delete
 
 

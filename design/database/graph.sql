@@ -2,7 +2,7 @@
 -- Lược đồ theo docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md. Số RBn là mã ràng buộc toàn vẹn ở tài liệu đó.
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;  (SQLite tắt mặc định, không lưu trong tệp)
 
-PRAGMA user_version = 6;
+PRAGMA user_version = 7;
 
 -- 1. DU_AN ---------------------------------------------------------------
 CREATE TABLE du_an (
@@ -273,3 +273,29 @@ SELECT c.ma_canh, c.loai_canh, c.ma_nut_nguon, c.ma_nut_dich,
 FROM canh c
 JOIN nut n ON n.ma_nut = c.ma_nut_nguon
 LEFT JOIN tep t ON t.ma_tep = n.ma_tep;
+
+-- v7 (W9, W10): nhãn cụm do AI đặt (chữ ký thành viên như .graphify_labels.json.sig), ký ức (đánh giá câu trả lời
+-- huu_ich/ngo_cut/da_sua và memory tay), cache kết quả LLM theo SHA256(nội dung + đường dẫn) + dấu vân tay prompt.
+CREATE TABLE nhan_cum (
+    cum_id            TEXT    NOT NULL PRIMARY KEY,
+    ten               TEXT    NOT NULL CHECK (length(trim(ten)) BETWEEN 1 AND 255),
+    chu_ky_thanh_vien TEXT    NOT NULL CHECK (length(chu_ky_thanh_vien) = 64),
+    nguon             TEXT    NOT NULL CHECK (nguon IN ('llm', 'nguoi_dung')),
+    tao_luc           INTEGER NOT NULL
+);
+CREATE TABLE ky_uc (
+    id            INTEGER PRIMARY KEY,
+    loai          TEXT    NOT NULL CHECK (loai IN ('danh_gia', 'lesson', 'decision', 'incident', 'owner')),
+    noi_dung      TEXT    NOT NULL CHECK (length(trim(noi_dung)) > 0),
+    node_ids_json TEXT    NOT NULL DEFAULT '[]' CHECK (json_valid(node_ids_json) AND json_type(node_ids_json) = 'array'),
+    ket_qua       TEXT    CHECK (ket_qua IS NULL OR ket_qua IN ('huu_ich', 'ngo_cut', 'da_sua')),
+    tao_luc       INTEGER NOT NULL,
+    nguon         TEXT    NOT NULL CHECK (nguon IN ('nguoi_dung', 'tro_ly', 'mcp')),
+    CHECK ((loai = 'danh_gia') = (ket_qua IS NOT NULL))
+);
+CREATE INDEX idx_ky_uc_loai ON ky_uc (loai, tao_luc);
+CREATE TABLE bo_nho_dem_ngu_nghia (
+    khoa         TEXT    NOT NULL PRIMARY KEY CHECK (length(khoa) = 64),
+    ket_qua_json TEXT    NOT NULL CHECK (json_valid(ket_qua_json)),
+    tao_luc      INTEGER NOT NULL
+);

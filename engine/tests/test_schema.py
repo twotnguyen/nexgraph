@@ -43,7 +43,7 @@ def test_open_is_idempotent(tmp_path):
     p = tmp_path / "graph.db"
     open_graph_db(p).close()
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     conn.close()
@@ -124,7 +124,7 @@ def test_v1_database_is_upgraded(tmp_path):
     p = tmp_path / "graph.db"
     _make_v1(p)
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     assert conn.execute("SELECT count(*) FROM kieu_bien").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM moc_tep").fetchone()[0] == 0
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(lan_lap_chi_muc)")}
@@ -132,7 +132,7 @@ def test_v1_database_is_upgraded(tmp_path):
     assert conn.execute("SELECT gom_tai_lieu, gom_media FROM lan_lap_chi_muc").fetchone()[:] == (0, 0)
     assert conn.execute("SELECT count(*) FROM nut").fetchone()[0] == 2
     assert conn.execute("SELECT count(*) FROM canh").fetchone()[0] == 1
-    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 6
+    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == GRAPH_SCHEMA_VERSION
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.close()
     open_graph_db(p).close()  # lần hai không làm gì
@@ -145,9 +145,9 @@ def test_read_only_v1_is_rejected(tmp_path):
         open_graph_db(p, read_only=True)
 
 
-def test_new_database_is_v6(tmp_path):
+def test_new_database_is_current(tmp_path):
     conn = open_graph_db(tmp_path / "graph.db")
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"kieu_bien", "moc_tep", "luong", "buoc_luong"} <= tables
 
@@ -206,14 +206,14 @@ def test_v5_has_flow_tables_and_upgrades_v4(tmp_path):
     conn = open_graph_db(tmp_path / "g.db")
     cols = {r[1] for r in conn.execute("PRAGMA table_info(buoc_luong)")}
     assert cols == {"ma_luong", "thu_tu", "ma_nut", "do_sau", "ma_nut_goi", "dong_bang_chung"}
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO luong (ma_nut_vao, ten, loai_vao, so_buoc, so_tep, do_sau, diem) VALUES (1,'x','khac',2,1,1,0.5)")
 
     # Kiểm tra nâng cấp từ v4 có sẵn dữ liệu nút
     v4_path = tmp_path / "v4.db"
     c4 = sqlite3.connect(v4_path)
-    c4.executescript(load_sql("graph"))
+    c4.executescript(_sql_v6())
     c4.execute("DROP TABLE buoc_luong")
     c4.execute("DROP TABLE luong")
     c4.execute("UPDATE du_an SET phien_ban_schema = 4")
@@ -223,7 +223,7 @@ def test_v5_has_flow_tables_and_upgrades_v4(tmp_path):
     c4.close()
 
     c5 = open_graph_db(v4_path)
-    assert c5.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert c5.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     assert c5.execute("SELECT nhan FROM nut WHERE id_nut = '.#repository'").fetchone()[0] == "r"
     c5_tables = {r["name"] for r in c5.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"luong", "buoc_luong"} <= c5_tables
@@ -266,6 +266,12 @@ def test_concurrent_first_open_creates_schema_once(tmp_path):
     assert versions == [APP_SCHEMA_VERSION] * 8
 
 
+def _sql_v6() -> str:
+    """graph.sql cắt trước mốc v7, để dựng CSDL đời cũ cho test nâng cấp."""
+    sql = load_sql("graph")
+    return sql[:sql.index("-- v7")].replace("PRAGMA user_version = 7;", "PRAGMA user_version = 6;")
+
+
 NEW_KINDS = ", 'type', 'variable', 'table', 'resource', 'config_key'"
 
 
@@ -284,13 +290,13 @@ def _add_node(c, nid: str, kind: str) -> None:
 def test_v6_node_kinds_and_upgrades_v5(tmp_path):
     # W2: loại nút cho ngôn ngữ mới; nâng v5 → v6 nới CHECK mà giữ dữ liệu và khoá ngoại.
     fresh = open_graph_db(tmp_path / "g.db")
-    assert fresh.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert fresh.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     _seed_file(fresh)
     _add_node(fresh, "a.rs::A#variable", "variable")
 
     v5_path = tmp_path / "v5.db"
     c5 = sqlite3.connect(v5_path)
-    sql = load_sql("graph")
+    sql = _sql_v6()
     assert NEW_KINDS in sql
     c5.executescript(sql.replace(NEW_KINDS, "").replace("PRAGMA user_version = 6;", "PRAGMA user_version = 5;"))
     _seed_file(c5)
@@ -301,8 +307,8 @@ def test_v6_node_kinds_and_upgrades_v5(tmp_path):
     c5.close()
 
     c6 = open_graph_db(v5_path)
-    assert c6.execute("PRAGMA user_version").fetchone()[0] == 6
-    assert c6.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 6
+    assert c6.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
+    assert c6.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == GRAPH_SCHEMA_VERSION
     _add_node(c6, "a.rs::t#table", "table")
     assert c6.execute("SELECT count(*) FROM nut").fetchone()[0] == 2
     assert c6.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
@@ -314,9 +320,79 @@ def test_v6_node_kinds_and_upgrades_v5(tmp_path):
 def test_v5_run_table_gets_config_column(tmp_path):
     path = tmp_path / "v5.db"
     c5 = sqlite3.connect(path)
-    sql = load_sql("graph").replace(NEW_KINDS, "").replace("PRAGMA user_version = 6;", "PRAGMA user_version = 5;")
+    sql = _sql_v6().replace(NEW_KINDS, "").replace("PRAGMA user_version = 6;", "PRAGMA user_version = 5;")
     line = next(l for l in sql.splitlines() if l.strip().startswith("gom_cau_hinh"))
     c5.executescript(sql.replace(line + "\n", ""))
     c5.close()
     cols = [r[1] for r in open_graph_db(path).execute("PRAGMA table_info(lan_lap_chi_muc)")]
     assert cols[-1] == "gom_cau_hinh"
+
+
+V7_TABLES = {"nhan_cum", "ky_uc", "bo_nho_dem_ngu_nghia"}
+
+
+def test_v7_semantic_and_memory_tables(tmp_path):
+    # W9/W10: nhãn cụm do AI đặt, ký ức (đánh giá câu trả lời + memory tay), cache ngữ nghĩa.
+    c = open_graph_db(tmp_path / "g.db")
+    assert c.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 7
+    tables = {r["name"] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert V7_TABLES <= tables
+    c.execute("INSERT INTO nhan_cum VALUES ('3', 'Thanh toán', ?, 'llm', 0)", ("a" * 64,))
+    c.execute("INSERT INTO ky_uc (loai, noi_dung, node_ids_json, ket_qua, tao_luc, nguon)"
+              " VALUES ('danh_gia', 'q/a', '[\"a.py::f#function\"]', 'huu_ich', 0, 'nguoi_dung')")
+    c.execute("INSERT INTO ky_uc (loai, noi_dung, tao_luc, nguon) VALUES ('lesson', 'Đừng sửa cache', 0, 'mcp')")
+    c.execute("INSERT INTO bo_nho_dem_ngu_nghia VALUES (?, '{}', 0)", ("b" * 64,))
+    for bad in (
+        "INSERT INTO nhan_cum VALUES ('4', '  ', '" + "a" * 64 + "', 'llm', 0)",
+        "INSERT INTO ky_uc (loai, noi_dung, tao_luc, nguon) VALUES ('danh_gia', 'x', 0, 'nguoi_dung')",  # thiếu ket_qua
+        "INSERT INTO ky_uc (loai, noi_dung, ket_qua, tao_luc, nguon) VALUES ('lesson', 'x', 'huu_ich', 0, 'mcp')",
+        "INSERT INTO ky_uc (loai, noi_dung, node_ids_json, tao_luc, nguon) VALUES ('lesson', 'x', '{', 0, 'mcp')",
+        "INSERT INTO bo_nho_dem_ngu_nghia VALUES ('ngan', '{}', 0)",
+    ):
+        with pytest.raises(sqlite3.IntegrityError):
+            c.execute(bad)
+
+
+def test_v6_upgrades_to_v7_keeping_data(tmp_path):
+    path = tmp_path / "v6.db"
+    c6 = sqlite3.connect(path)
+    sql = load_sql("graph")
+    cut = sql.index("-- v7")
+    c6.executescript(sql[:cut].replace("PRAGMA user_version = 7;", "PRAGMA user_version = 6;"))
+    _seed_file(c6)
+    _add_node(c6, "a.rs::f#function", "function")
+    c6.commit()
+    c6.close()
+    c7 = open_graph_db(path)
+    assert c7.execute("PRAGMA user_version").fetchone()[0] == 7
+    assert c7.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 7
+    assert c7.execute("SELECT count(*) FROM nut").fetchone()[0] == 1
+    ref = open_graph_db(tmp_path / "fresh.db")
+    sql_of = lambda c: sorted(r[0] for r in c.execute("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL"))
+    assert sql_of(c7) == sql_of(ref)
+
+
+def test_app_v3_ai_per_project_and_upgrades_v2(tmp_path):
+    from nexgraph_engine.schema.db import APP_SCHEMA_VERSION
+    c = open_app_db(tmp_path / "app.db")
+    assert c.execute("PRAGMA user_version").fetchone()[0] == APP_SCHEMA_VERSION == 3
+    pid = "1" * 36
+    c.execute("INSERT INTO du_an_da_mo VALUES (?, '/p', 'p', 'thu_muc_app', 0, 0)", (pid,))
+    c.execute("INSERT INTO ai_theo_du_an (ma_du_an, bat, kieu_ket_noi, ten_model) VALUES (?, 1, 'direct', 'gpt')", (pid,))
+    with pytest.raises(sqlite3.IntegrityError):
+        c.execute("UPDATE ai_theo_du_an SET kieu_ket_noi = 'khac'")
+    assert c.execute("SELECT bat FROM ai_theo_du_an").fetchone()[0] == 1
+    c.execute("DELETE FROM du_an_da_mo")
+    assert c.execute("SELECT count(*) FROM ai_theo_du_an").fetchone()[0] == 0  # xoá dự án thì xoá cấu hình AI
+
+    path = tmp_path / "v2.db"
+    c2 = sqlite3.connect(path)
+    sql = load_sql("app")
+    c2.executescript(sql[:sql.index("-- v3")].replace("PRAGMA user_version = 3;", "PRAGMA user_version = 2;"))
+    c2.execute("INSERT INTO du_an_da_mo VALUES (?, '/q', 'q', 'thu_muc_app', 0, 0)", (pid,))
+    c2.commit()
+    c2.close()
+    c3 = open_app_db(path)
+    assert c3.execute("PRAGMA user_version").fetchone()[0] == 3
+    assert c3.execute("SELECT count(*) FROM du_an_da_mo").fetchone()[0] == 1
+    assert c3.execute("SELECT count(*) FROM ai_theo_du_an").fetchone()[0] == 0
