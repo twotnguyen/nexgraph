@@ -115,7 +115,7 @@ export const vi = {
     stats: (files: string, nodes: string, edges: string) => `${files} tệp · ${nodes} node · ${edges} cạnh`,
     lastIndexed: (when: string) => `Index lần cuối: ${when}`,
     stale: 'Graph cũ hơn mã nguồn',
-    genericLanguages: (langs: string) => `Ngôn ngữ ở mức chung (cấu trúc và lời gọi trong cùng tệp, chưa nối xuyên tệp): ${langs}`,
+    genericLanguages: (langs: string) => `Ngôn ngữ ở mức chung (cấu trúc và lời gọi; lời gọi xuyên tệp chỉ khi bộ trích xuất nối được, chưa suy kiểu biến): ${langs}`,
     staleHint: 'Trợ lý AI nối qua MCP cũng được báo graph cũ.',
     build: 'Dựng graph',
     reindex: 'Index lại',

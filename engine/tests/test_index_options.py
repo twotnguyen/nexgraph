@@ -55,3 +55,11 @@ def test_force_starts_a_fresh_ast_cache(tmp_path, index_project, monkeypatch):
     monkeypatch.setattr(ix.Indexer, "__init__", lambda self, *a, **k: real(self, *a, force=True, **k))
     index_project(tmp_path)
     assert generic._cache_root() != before
+
+
+def test_polyglot_stats_list_generic_languages(api, copy_fixture):
+    pid = api.open(copy_fixture("polyglot"))["project_id"]
+    r = api.post(f"/v1/projects/{pid}/index", json={})
+    assert _wait(api, r.json()["job_id"])["state"] == "done"
+    stats = api.get(f"/v1/projects/{pid}/stats").json()
+    assert {"go", "rust", "java", "kotlin", "ruby", "php", "swift", "cpp", "c"} <= set(stats["generic_languages"])
