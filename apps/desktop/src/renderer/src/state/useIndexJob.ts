@@ -6,7 +6,7 @@ const REQUEST_TIMEOUT_MS = 5_000
 const START_TIMEOUT_MS = 15_000
 const MAX_STATUS_FAILURES = 3
 
-const order: Record<JobState, number> = { queued: 0, structure: 1, resolve: 2, done: 3, error: 3, cancelled: 3 }
+const order: Record<JobState, number> = { queued: 0, structure: 1, resolve: 2, running: 1, done: 3, error: 3, cancelled: 3 }
 const terminal = (job?: Job): boolean => !!job && order[job.state] === 3
 
 function canApply(previous: Job | undefined, next: Job): boolean {

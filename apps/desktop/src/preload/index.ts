@@ -154,6 +154,12 @@ const api: NexGraphApi = {
   watch: {
     start: (pid) => call('watch:start', pid),
     stop: (pid) => call('watch:stop', pid)
+  },
+  sources: {
+    clone: (url) => call('sources:clone', url),
+    list: (pid) => call('sources:list', pid),
+    add: (pid, url) => call('sources:add', pid, url),
+    remove: (pid, name) => call('sources:remove', pid, name)
   }
 }
 

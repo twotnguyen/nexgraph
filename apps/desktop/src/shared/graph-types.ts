@@ -52,15 +52,29 @@ export interface NeighborQuery {
   limit?: number
 }
 
-export type JobState = 'queued' | 'structure' | 'resolve' | 'done' | 'error' | 'cancelled'
+/** `running`: job tổng quát (clone, ingest…) của `JobManager.start_task`. */
+export type JobState = 'queued' | 'structure' | 'resolve' | 'running' | 'done' | 'error' | 'cancelled'
 
 export interface Job {
   job_id: string
-  project_id: string
+  /** `null` với job không gắn dự án (clone). */
+  project_id: string | null
   state: JobState
   files_done: number
   files_total: number
   message: string | null
+  /** `index` | `clone` | `ingest` | … */
+  kind?: string
+  result?: Record<string, unknown> | null
+}
+
+/** Nguồn tải từ URL của một dự án (`<data_dir>/sources/<pid>/`), trong graph là `file`. */
+export interface SourceItem {
+  name: string
+  file: string
+  size: number
+  added_at: number
+  url: string | null
 }
 
 export interface ProjectSummary {

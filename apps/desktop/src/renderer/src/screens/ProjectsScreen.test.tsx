@@ -74,4 +74,28 @@ describe('ProjectsScreen', () => {
     expect(await screen.findByText('Đã gỡ ứng dụng khỏi danh sách gần đây.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^ứng dụng/ })).not.toBeInTheDocument()
   })
+
+  it('opens a project from a GitHub URL after the clone job finishes', async () => {
+    const cloned = project({ project_id: 'p9', name: 'repo-1a2b3c4d', path: '/data/clones/repo-1a2b3c4d' })
+    const { api } = installNexgraph({
+      index: { status: vi.fn(async () => ({ job_id: 'c1', project_id: null, kind: 'clone', state: 'done' as const,
+        files_done: 2, files_total: 2, message: null, result: { project: cloned } })) }
+    })
+    const onOpened = vi.fn()
+    render(<ProjectsScreen engineReady onOpened={onOpened} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Mở từ URL…' }))
+    await userEvent.type(screen.getByLabelText('URL kho mã GitHub hoặc GitLab'), 'https://github.com/owner/repo')
+    await userEvent.click(screen.getByRole('button', { name: 'Tải về và mở' }))
+    await waitFor(() => expect(onOpened).toHaveBeenCalledWith(cloned))
+    expect(api.sources.clone).toHaveBeenCalledWith('https://github.com/owner/repo')
+  })
+
+  it('shows the engine error when the URL is rejected', async () => {
+    installNexgraph({ sources: { clone: vi.fn(async () => { throw { code: 'bad_url', message: 'Chỉ nhận URL https://github.com' } }) } })
+    render(<ProjectsScreen engineReady onOpened={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Mở từ URL…' }))
+    await userEvent.type(screen.getByLabelText('URL kho mã GitHub hoặc GitLab'), 'https://example.com/a/b')
+    await userEvent.click(screen.getByRole('button', { name: 'Tải về và mở' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chỉ nhận URL https://github.com')
+  })
 })

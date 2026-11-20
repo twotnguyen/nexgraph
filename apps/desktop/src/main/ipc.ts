@@ -511,4 +511,10 @@ export function registerIpc(
   })
   on('mcp:stop-http', (pid: string) => mcp.stop(pid))
   on('mcp:http-status', async (pid: string) => mcp.status(pid))
+
+  // Nguồn ngoài thư mục (W6): engine kiểm URL (chỉ GitHub/GitLab khi clone; guard SSRF khi tải).
+  on('sources:clone', async (url: string) => ({ jobId: (await api().cloneProject(url)).job_id }))
+  on('sources:list', (pid: string) => api().listSources(pid))
+  on('sources:add', async (pid: string, url: string) => ({ jobId: (await api().addSource(pid, url)).job_id }))
+  on('sources:remove', (pid: string, name: string) => api().removeSource(pid, name))
 }

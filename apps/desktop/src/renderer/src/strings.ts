@@ -471,5 +471,23 @@ export const vi = {
     truncated: 'Đã cắt bớt, thu hẹp bằng cách chọn nút khác',
     truncatedOf: (shown: number, total: number) => `Đang hiện ${shown}/${total} nút láng giềng. Dùng Tìm kiếm hoặc Cây để tới nút cần xem.`,
     isTest: 'Mã kiểm thử'
+  },
+  sources: {
+    cloneOpen: 'Mở từ URL…',
+    cloneLabel: 'URL kho mã GitHub hoặc GitLab',
+    clonePlaceholder: 'https://github.com/chủ/kho-mã',
+    cloneSubmit: 'Tải về và mở',
+    cloneRunning: 'Đang tải mã nguồn…',
+    cloneHint: 'Chỉ nhận https://github.com/… và https://gitlab.com/…. Mã nguồn được lưu trong thư mục dữ liệu của ứng dụng.',
+    cancel: 'Hủy',
+    close: 'Đóng',
+    title: 'Nguồn từ URL',
+    hint: 'Trang web, bài báo arXiv, PDF, ảnh hoặc video YouTube. Nội dung được lưu trong thư mục dữ liệu của ứng dụng và hiện trong đồ thị dưới thư mục sources/.',
+    urlLabel: 'URL nguồn',
+    add: 'Thêm',
+    adding: 'Đang tải…',
+    empty: 'Chưa có nguồn nào.',
+    remove: (name: string) => `Xoá ${name}`,
+    failed: (message: string) => `Không tải được: ${message}`
   }
 }

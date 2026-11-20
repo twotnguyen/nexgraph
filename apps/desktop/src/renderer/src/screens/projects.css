@@ -222,3 +222,19 @@
   .projects-recent-date { grid-area: 2 / 2; }
   .projects-page .recent-open > svg:last-child { grid-area: 1 / 3 / span 2; }
 }
+
+.projects-clone {
+  display: grid;
+  gap: 8px;
+  max-width: 520px;
+  margin-top: 16px;
+}
+
+.projects-clone label {
+  display: grid;
+  gap: 6px;
+}
+
+.projects-clone p {
+  margin: 0;
+}

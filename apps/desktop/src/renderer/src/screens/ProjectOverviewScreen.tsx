@@ -6,6 +6,7 @@ import { Icon, VIEW_TONE, type IconName, type Tone } from '../components/common/
 import { HookCard } from '../components/overview/HookCard'
 import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { McpCard } from '../components/overview/McpCard'
+import { SourcesPanel } from '../components/overview/SourcesPanel'
 import { vi } from '../strings'
 
 export type WorkspaceTab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report'
@@ -122,6 +123,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
           status={reclustering ? vi.overview.reclustering : clusters} disabled={reclustering || noGraph} onClick={() => void recluster()} />
       </div>
       {clusterError && <p role="alert" className="inline-message error">{clusterError}</p>}
+      <SourcesPanel projectId={pid} />
 
       <h2>{vi.overview.view}</h2>
       <div className="cards">

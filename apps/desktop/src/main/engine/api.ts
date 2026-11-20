@@ -3,7 +3,8 @@ import type {
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, ExportFormat, ExportResult, ExportScope,
   ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   DocSection, GraphNode, GraphReport, GraphStats, Job, NodeExplain,
-  NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
+  NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit,
+  SourceItem
 } from '../../shared/graph-types'
 import type { EngineHandle } from './launcher'
 
@@ -208,5 +209,18 @@ export class EngineApi {
   }
   pushGraph(pid: string, req: PushRequest): Promise<PushResult> {
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export/push`, req)
+  }
+  cloneProject(url: string): Promise<{ job_id: string }> {
+    return this.request('POST', '/v1/projects/clone', { url }, AbortSignal.timeout(15_000))
+  }
+  listSources(pid: string): Promise<SourceItem[]> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/sources`, undefined, AbortSignal.timeout(15_000))
+  }
+  addSource(pid: string, url: string): Promise<{ job_id: string }> {
+    // Route kiểm URL (có phân giải DNS) trước khi tạo job.
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/sources`, { url }, AbortSignal.timeout(20_000))
+  }
+  async removeSource(pid: string, name: string): Promise<void> {
+    await this.request('DELETE', `/v1/projects/${encodeURIComponent(pid)}/sources?${new URLSearchParams({ name })}`)
   }
 }

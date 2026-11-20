@@ -11,7 +11,7 @@ import type {
   ArchEvidence, ArchView, AskResult, Changes, CodeSlice, EngineEvent, ExportFormat, ExportResult, ExportScope,
   ContextPack, TourStep, FlowDetail, FlowList, FlowQuery, ImportCycles, ProjectMap,
   DocSection, GraphNode, GraphReport, GraphStats, IndexOptions, Job, NeighborQuery, Neighborhood, NodeExplain, NodeImpact, PathResult,
-  ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit
+  ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit, SourceItem
 } from './graph-types'
 
 export type FileRevision = { mtimeMs: number; version: string }
@@ -198,5 +198,14 @@ export interface NexGraphApi {
   watch: {
     start(projectId: string): Promise<void>
     stop(projectId: string): Promise<void>
+  }
+  /** Nguồn ngoài thư mục. Tiến độ job theo dõi bằng `index.status`/`index.cancel`. */
+  sources: {
+    /** Clone repo `https://github.com/…` hoặc `https://gitlab.com/…` vào thư mục dữ liệu app; `result.project` khi xong. */
+    clone(url: string): Promise<{ jobId: string }>
+    list(projectId: string): Promise<SourceItem[]>
+    /** Tải URL vào nguồn của dự án rồi cập nhật đồ thị; lỗi `bad_url` khi URL bị chặn. */
+    add(projectId: string, url: string): Promise<{ jobId: string }>
+    remove(projectId: string, name: string): Promise<void>
   }
 }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ProjectSummary } from '@shared/graph-types'
 import { Icon } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
+import { waitJob } from '../state/waitJob'
 import { vi } from '../strings'
 import './projects.css'
 
@@ -53,8 +54,11 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props)
   const [listError, setListError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [pending, setPending] = useState<'open' | 'remove' | null>(null)
+  const [pending, setPending] = useState<'open' | 'remove' | 'clone' | null>(null)
   const [removing, setRemoving] = useState<ProjectSummary | null>(null)
+  const [cloneUrl, setCloneUrl] = useState<string | null>(null)
+  const [cloneStatus, setCloneStatus] = useState<string | null>(null)
+  const cloneJob = useRef<string | null>(null)
   const operation = useRef(false)
   const mounted = useRef(false)
   const openButton = useRef<HTMLButtonElement>(null)
@@ -75,7 +79,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props)
     return () => { alive = false }
   }, [engineReady, refresh])
 
-  async function run(kind: 'open' | 'remove', action: () => Promise<void>) {
+  async function run(kind: 'open' | 'remove' | 'clone', action: () => Promise<void>) {
     if (operation.current || !engineReady) return
     operation.current = true
     setPending(kind)
@@ -97,6 +101,23 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props)
       if (!path || !mounted.current) return
       const project = await window.nexgraph.project.open(path)
       if (mounted.current) onOpened(project)
+    })
+  }
+
+  function cloneFromUrl(url: string) {
+    void run('clone', async () => {
+      setCloneStatus(vi.sources.cloneRunning)
+      try {
+        const { jobId } = await window.nexgraph.sources.clone(url.trim())
+        cloneJob.current = jobId
+        const job = await waitJob(jobId, (j) => { if (mounted.current && j.message) setCloneStatus(j.message) })
+        if (!mounted.current) return
+        setCloneUrl(null)
+        onOpened(job.result?.project as ProjectSummary)
+      } finally {
+        cloneJob.current = null
+        if (mounted.current) setCloneStatus(null)
+      }
     })
   }
 
@@ -125,8 +146,26 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings }: Props)
             <button ref={openButton} type="button" className="primary" disabled={!engineReady || pending !== null} onClick={() => open()}>
               <Icon name="folder" size={17} /> {pending === 'open' ? 'Đang mở…' : vi.projects.open}
             </button>
+            <button type="button" disabled={!engineReady || pending !== null} onClick={() => setCloneUrl((v) => v ?? '')}>
+              <Icon name="plug" size={16} /> {vi.sources.cloneOpen}
+            </button>
             {onOpenSettings && <button type="button" onClick={onOpenSettings}><Icon name="sliders" size={16} /> {vi.projects.settings}</button>}
           </div>
+          {cloneUrl !== null && (
+            <form className="projects-clone" onSubmit={(e) => { e.preventDefault(); cloneFromUrl(cloneUrl) }}>
+              <label>{vi.sources.cloneLabel}
+                <input type="url" value={cloneUrl} placeholder={vi.sources.clonePlaceholder} disabled={pending === 'clone'}
+                  onChange={(e) => setCloneUrl(e.target.value)} autoFocus />
+              </label>
+              <p className="muted">{cloneStatus ?? vi.sources.cloneHint}</p>
+              <div className="row">
+                <button type="submit" className="primary" disabled={!engineReady || pending !== null || !cloneUrl.trim()}>{vi.sources.cloneSubmit}</button>
+                {pending === 'clone'
+                  ? <button type="button" onClick={() => { if (cloneJob.current) void window.nexgraph.index.cancel(cloneJob.current) }}>{vi.sources.cancel}</button>
+                  : <button type="button" onClick={() => setCloneUrl(null)}>{vi.sources.close}</button>}
+              </div>
+            </form>
+          )}
         </div>
         <div className="projects-hero-diagram" aria-hidden="true">
           <span className="projects-diagram-branch">
