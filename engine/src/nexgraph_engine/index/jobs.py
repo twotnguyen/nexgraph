@@ -16,7 +16,7 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectRegistry
 from nexgraph_engine.store.publication import backup_graph, stage_graph
 
-ACTIVE = ("queued", "structure", "resolve", "running")
+ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting_llm: job semantic đường A chờ main (W9)
 
 
 class IndexAlreadyRunning(RuntimeError):
@@ -38,12 +38,21 @@ class TaskCancelled(Exception):
 class TaskContext:
     """Truyền vào `work` của `start_task`: cờ huỷ và hàm báo tiến độ."""
 
-    def __init__(self, cancel: threading.Event, report: Callable[[int, int, str], None]) -> None:
+    def __init__(self, cancel: threading.Event, report: Callable[[int, int, str], None],
+                 set_state: Callable[[str], None] | None = None) -> None:
         self.cancel = cancel
         self._report = report
+        self._set_state = set_state
 
     def progress(self, done: int, total: int, message: str) -> None:
         self._report(done, total, message)
+
+    def set_state(self, state: str) -> None:
+        """Chỉ đổi giữa `running` và `waiting_llm`; trạng thái kết thúc do JobManager đặt."""
+        if state not in ("running", "waiting_llm"):
+            raise ValueError(state)
+        if self._set_state is not None:
+            self._set_state(state)
 
 
 class JobManager:
@@ -123,7 +132,8 @@ class JobManager:
             if not cancel.is_set():
                 self._set(job_id, state="running")
                 ctx = TaskContext(cancel, lambda done, total, message: self._set(
-                    job_id, files_done=max(0, done), files_total=max(0, total), message=message))
+                    job_id, files_done=max(0, done), files_total=max(0, total), message=message),
+                    lambda state: self._set(job_id, state=state))
                 final = {"state": "done", "result": work(ctx)}
         except Exception as exc:
             final = {"state": "cancelled" if cancel.is_set() or isinstance(exc, TaskCancelled) else "error",
