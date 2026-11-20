@@ -350,11 +350,26 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
   const nextTheme = initialTheme === 'light' ? 'dark' : 'light'
   const initialBackground = getComputedStyle(document.body).backgroundColor
   hit(themeButton, 'Chuyển giao diện').click()
-  await waitFor(() => document.documentElement.dataset.theme === nextTheme &&
-    localStorage.getItem('nexgraph.theme') === nextTheme &&
-    themeButton.getAttribute('aria-label') === themeLabel(nextTheme) &&
-    getComputedStyle(document.body).backgroundColor !== initialBackground && themePainted() ? themeButton : null,
-  'giao diện mới được lưu và vẽ đúng màu nền')
+  // Tìm lại nút mỗi lần: thanh công cụ có thể mount lại sau khi đổi giao diện, phần tử cũ giữ nhãn cũ.
+  const themeState = () => {
+    const button = document.querySelector<HTMLButtonElement>('.theme-toggle')
+    return {
+      button,
+      theme: document.documentElement.dataset.theme,
+      saved: localStorage.getItem('nexgraph.theme'),
+      label: button?.getAttribute('aria-label'),
+      background: getComputedStyle(document.body).backgroundColor,
+      painted: themePainted()
+    }
+  }
+  await waitFor(() => {
+    const s = themeState()
+    return s.theme === nextTheme && s.saved === nextTheme && s.label === themeLabel(nextTheme) &&
+      s.background !== initialBackground && s.painted ? s.button : null
+  }, 'giao diện mới được lưu và vẽ đúng màu nền').catch((error: Error) => {
+    const { button: _button, ...s } = themeState()
+    throw new Error(`${error.message} (cần ${nextTheme}, từ nền ${initialBackground}; hiện ${JSON.stringify(s)}; nút cũ còn gắn: ${themeButton.isConnected})`)
+  })
 
   const recent = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('ul.recent button')).find((item) =>
     !item.disabled && item.querySelector('b')?.textContent?.normalize('NFC') === projectName.normalize('NFC')), projectName)
