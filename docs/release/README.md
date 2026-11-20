@@ -4,6 +4,8 @@ Bản bàn giao chính 0.1.0 là **NexGraph độc lập trên Electron, với t
 
 ## Tải đúng bộ cài
 
+Bản đã gắn tag `v<version>` có sẵn bộ cài và tệp `.build.json` ở [Releases](https://github.com/twotnguyen/nexgraph/releases). Phát hành bản mới: tăng `version` trong `apps/desktop/package.json`, merge vào `main`, rồi `git tag v<version> && git push origin v<version>`; CI kiểm, đóng gói hai hệ điều hành rồi tạo Release. Tag không khớp `version` thì CI dừng. Commit chưa gắn tag thì lấy bộ cài từ Actions như dưới đây.
+
 1. Mở lượt [GitHub Actions](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) của commit dự kiến bàn giao. Chọn cả hai bộ cài từ cùng commit đó. Ở **Artifacts**, tải gói `NexGraph-${version}-<hệ-điều-hành>-${arch}` rồi giải nén để lấy bộ cài. Kho riêng tư nên tài khoản tải cần có quyền đọc.
 2. Kiểm hệ điều hành và kiến trúc của máy, rồi đối chiếu tên tệp trong artifact. Trên Windows xem **Settings → System → About → System type**. Trên macOS xem **About This Mac** để phân biệt Apple silicon và Intel. Chỉ dùng kiến trúc có trong lượt build và khớp với máy đích.
 3. Trong artifact, mở tệp cùng tên gốc với bộ cài và có đuôi `.build.json`, ví dụ `NexGraph-0.1.0-windows-x64.build.json`. Dùng `version`, `platform`, `arch`, `filename`, `bytes`, `sha256`, `commit` và `run` để đối chiếu tệp thực tế trước khi cài. Ghi hash và nguồn vào [biên bản nghiệm thu](acceptance/2026-11-18.md).

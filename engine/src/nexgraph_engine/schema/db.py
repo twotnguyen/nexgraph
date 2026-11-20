@@ -84,7 +84,8 @@ def _open(
         if not read_only:
             _migrate(conn, sql_name, current)
     if version == 0 and not read_only:
-        conn.executescript(load_sql(sql_name))
+        # Một giao dịch: schema tạo trọn vẹn hoặc không, và chỉ fsync một lần (mỗi lệnh tự commit chậm ~1 s trên Windows).
+        conn.executescript(f"BEGIN;\n{load_sql(sql_name)}\nCOMMIT;")
     if wal and not read_only:
         conn.execute("PRAGMA journal_mode = WAL")
     return conn

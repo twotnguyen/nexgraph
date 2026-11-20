@@ -45,7 +45,7 @@ Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<
 | Bằng chứng | Phạm vi |
 | --- | --- |
 | [Kiểm trên macOS ngày 15/11/2026](benchmarks/2026-11-15-editor-agent.md) | Bản Electron arm64 chưa ký, DMG khoảng 239,2 MB. Đã bấm thử editor và Agent trên fixture Python với engine thật và LLM giả. |
-| [CI Electron](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) | Job desktop kiểm setup và chạy dev. Job package kiểm bộ cài của checkout ghi trong tệp `.build.json` trước khi tải artifact lên. Kho riêng tư, cần quyền xem log và artifact. |
+| [CI Electron](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) | Job desktop kiểm setup và chạy dev. Job package kiểm bộ cài của checkout ghi trong tệp `.build.json` trước khi tải artifact lên. Xem log và tải artifact cần đăng nhập GitHub. |
 | [Nghiệm thu trên máy đích](release/acceptance/2026-11-18.md) | Ghi cài đặt và thao tác trên bộ cài Windows và macOS theo [checklist](windows-checklist.md), kèm thời gian từng lượt demo NestJS. Ghi loại provider và client MCP nếu đã thử. |
 
 ## Chạy Code-OSS
