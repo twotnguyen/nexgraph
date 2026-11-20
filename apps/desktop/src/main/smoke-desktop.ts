@@ -305,11 +305,15 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
         const found = find()
         if (!found) return
         clearTimeout(timer)
+        clearInterval(poll)
         observer.disconnect()
         resolve(found)
       }
       const observer = new MutationObserver(check)
+      // Kiểm định kỳ: màu nền, localStorage… có thể đổi sau mutation DOM cuối cùng.
+      const poll = setInterval(check, 100)
       const timer = setTimeout(() => {
+        clearInterval(poll)
         observer.disconnect()
         reject(new Error(`workspace smoke did not find ${label}`))
       }, 7_000)
