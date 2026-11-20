@@ -2,6 +2,7 @@
 export type NodeKind =
   | 'repository' | 'package' | 'directory' | 'file' | 'module' | 'class' | 'mixin' | 'enum' | 'extension'
   | 'function' | 'method' | 'test' | 'widget' | 'screen' | 'route' | 'document' | 'concept'
+  | 'type' | 'variable' | 'table' | 'resource' | 'config_key'
 
 export interface GraphNode {
   id: string

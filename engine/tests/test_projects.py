@@ -157,5 +157,5 @@ def test_open_project_with_outdated_schema(tmp_path, registry):
     info = registry.open_project(root)
     assert info.project_id == "11111111-2222-3333-4444-555555555555"
     conn = sqlite3.connect(db_file)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     conn.close()

@@ -2,7 +2,7 @@
 -- Lược đồ theo docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md. Số RBn là mã ràng buộc toàn vẹn ở tài liệu đó.
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;  (SQLite tắt mặc định, không lưu trong tệp)
 
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
 
 -- 1. DU_AN ---------------------------------------------------------------
 CREATE TABLE du_an (
@@ -107,7 +107,7 @@ CREATE TABLE nut (
     loai_nut      TEXT    NOT NULL CHECK (loai_nut IN
                       ('repository', 'package', 'directory', 'file', 'module', 'class', 'mixin',
                        'enum', 'extension', 'function', 'method', 'test', 'widget', 'screen',
-                       'route', 'document', 'concept')),                                -- RB6
+                       'route', 'document', 'concept', 'type', 'variable', 'table', 'resource', 'config_key')),                                -- RB6
     nhan          TEXT    NOT NULL CHECK (length(nhan) BETWEEN 1 AND 255),
     ten_day_du    TEXT    NOT NULL CHECK (length(ten_day_du) BETWEEN 1 AND 1024),
     dong_bat_dau  INTEGER,

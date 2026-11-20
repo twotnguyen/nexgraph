@@ -20,6 +20,11 @@ class NodeKind(StrEnum):
     ROUTE = "route"
     DOCUMENT = "document"
     CONCEPT = "concept"
+    TYPE = "type"  # W2: struct/trait/interface... của ngôn ngữ mức chung
+    VARIABLE = "variable"
+    TABLE = "table"
+    RESOURCE = "resource"
+    CONFIG_KEY = "config_key"
 
 
 class EdgeType(StrEnum):

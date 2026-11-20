@@ -4,7 +4,8 @@ import type { NodeKind } from '@shared/graph-types'
 const COLORS: Partial<Record<NodeKind, string>> = {
   class: 'var(--blue)', mixin: 'var(--blue)', enum: 'var(--blue)', extension: 'var(--blue)', screen: 'var(--blue)',
   widget: 'var(--violet)', function: 'var(--teal)', method: 'var(--teal)', test: 'var(--green)', route: 'var(--magenta)',
-  document: 'var(--amber)', concept: 'var(--amber)', repository: 'var(--color-text)', directory: 'var(--blue)'
+  document: 'var(--amber)', concept: 'var(--amber)', repository: 'var(--color-text)', directory: 'var(--blue)',
+  type: 'var(--blue)', table: 'var(--violet)', resource: 'var(--magenta)'
 }
 
 export function kindStyle(kind: NodeKind): { color: string } {

@@ -4,7 +4,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Literal
 
-GRAPH_SCHEMA_VERSION = 5
+GRAPH_SCHEMA_VERSION = 6
 APP_SCHEMA_VERSION = 2
 MIN_SQLITE = (3, 43, 0)  # FTS5 contentless_delete
 
@@ -33,6 +33,8 @@ def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app"], target
         version = conn.execute("PRAGMA user_version").fetchone()[0]
         for v in range(version, target):
             prefix = "migrate_app" if sql_name == "app" else "migrate"
+            if sql_name == "graph" and v == 5:
+                _widen_node_kinds(conn)
             script = resources.files("nexgraph_engine.schema").joinpath(f"{prefix}_{v}_to_{v + 1}.sql")
             for stmt in _split_statements(script.read_text(encoding="utf-8")):
                 conn.execute(stmt)
@@ -42,6 +44,34 @@ def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app"], target
         raise
     finally:
         conn.isolation_level = ""
+
+
+_V5_KINDS = "'route', 'document', 'concept'))"
+_V6_KINDS = "'route', 'document', 'concept', 'type', 'variable', 'table', 'resource', 'config_key'))"
+
+
+def _widen_node_kinds(conn: sqlite3.Connection) -> None:
+    """v5 → v6: thêm giá trị vào CHECK (loai_nut IN ...) của bảng nut tại chỗ.
+
+    Cách SQLite cho phép với thay đổi không đụng dữ liệu trên đĩa (nới CHECK): sửa câu SQL trong sqlite_schema
+    rồi tăng schema_version (https://www.sqlite.org/lang_altertable.html, mục "otherwise").
+    """
+    row = conn.execute("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'nut'").fetchone()
+    if row is None:  # CSDL rút gọn không có bảng nut: không có gì để nới
+        return
+    sql = row[0]
+    if _V6_KINDS in sql:
+        return
+    if sql.count(_V5_KINDS) != 1:
+        raise sqlite3.DatabaseError("Không nhận ra ràng buộc loai_nut của schema v5")
+    version = conn.execute("PRAGMA schema_version").fetchone()[0]
+    conn.execute("PRAGMA writable_schema = ON")
+    try:
+        conn.execute("UPDATE sqlite_schema SET sql = ? WHERE type = 'table' AND name = 'nut'",
+                     (sql.replace(_V5_KINDS, _V6_KINDS),))
+        conn.execute(f"PRAGMA schema_version = {int(version) + 1}")
+    finally:
+        conn.execute("PRAGMA writable_schema = OFF")
 
 
 def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app"]) -> None:

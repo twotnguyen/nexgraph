@@ -43,7 +43,7 @@ def test_open_is_idempotent(tmp_path):
     p = tmp_path / "graph.db"
     open_graph_db(p).close()
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 5
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 6
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
     conn.close()
@@ -124,7 +124,7 @@ def test_v1_database_is_upgraded(tmp_path):
     p = tmp_path / "graph.db"
     _make_v1(p)
     conn = open_graph_db(p)
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     assert conn.execute("SELECT count(*) FROM kieu_bien").fetchone()[0] == 0
     assert conn.execute("SELECT count(*) FROM moc_tep").fetchone()[0] == 0
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(lan_lap_chi_muc)")}
@@ -132,7 +132,7 @@ def test_v1_database_is_upgraded(tmp_path):
     assert conn.execute("SELECT gom_tai_lieu, gom_media FROM lan_lap_chi_muc").fetchone()[:] == (0, 0)
     assert conn.execute("SELECT count(*) FROM nut").fetchone()[0] == 2
     assert conn.execute("SELECT count(*) FROM canh").fetchone()[0] == 1
-    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 5
+    assert conn.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 6
     assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
     conn.close()
     open_graph_db(p).close()  # lần hai không làm gì
@@ -145,9 +145,9 @@ def test_read_only_v1_is_rejected(tmp_path):
         open_graph_db(p, read_only=True)
 
 
-def test_new_database_is_v5(tmp_path):
+def test_new_database_is_v6(tmp_path):
     conn = open_graph_db(tmp_path / "graph.db")
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     tables = {r["name"] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"kieu_bien", "moc_tep", "luong", "buoc_luong"} <= tables
 
@@ -206,7 +206,7 @@ def test_v5_has_flow_tables_and_upgrades_v4(tmp_path):
     conn = open_graph_db(tmp_path / "g.db")
     cols = {r[1] for r in conn.execute("PRAGMA table_info(buoc_luong)")}
     assert cols == {"ma_luong", "thu_tu", "ma_nut", "do_sau", "ma_nut_goi", "dong_bang_chung"}
-    assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert conn.execute("PRAGMA user_version").fetchone()[0] == 6
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("INSERT INTO luong (ma_nut_vao, ten, loai_vao, so_buoc, so_tep, do_sau, diem) VALUES (1,'x','khac',2,1,1,0.5)")
 
@@ -223,7 +223,7 @@ def test_v5_has_flow_tables_and_upgrades_v4(tmp_path):
     c4.close()
 
     c5 = open_graph_db(v4_path)
-    assert c5.execute("PRAGMA user_version").fetchone()[0] == 5
+    assert c5.execute("PRAGMA user_version").fetchone()[0] == 6
     assert c5.execute("SELECT nhan FROM nut WHERE id_nut = '.#repository'").fetchone()[0] == "r"
     c5_tables = {r["name"] for r in c5.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert {"luong", "buoc_luong"} <= c5_tables
@@ -264,3 +264,48 @@ def test_concurrent_first_open_creates_schema_once(tmp_path):
     with ThreadPoolExecutor(8) as pool:
         versions = list(pool.map(lambda _: open_app_db(path).execute("PRAGMA user_version").fetchone()[0], range(8)))
     assert versions == [APP_SCHEMA_VERSION] * 8
+
+
+NEW_KINDS = ", 'type', 'variable', 'table', 'resource', 'config_key'"
+
+
+def _seed_file(c) -> None:
+    c.execute("INSERT INTO du_an (ma_du_an, ten, co_git, phien_ban_schema, tao_luc) VALUES (?, 'p', 0, 5, 0)", ("0" * 36,))
+    c.execute("INSERT INTO lan_lap_chi_muc (ma_du_an, loai, trang_thai, bat_dau_luc) VALUES (?, 'day_du', 'cho', 0)", ("0" * 36,))
+    c.execute("INSERT INTO tep (ma_lan, duong_dan_tuong_doi, ngon_ngu, ma_bam, kich_thuoc, mtime)"
+              " VALUES (1, 'a.rs', 'rust', ?, 3, 0)", ("a" * 64,))
+
+
+def _add_node(c, nid: str, kind: str) -> None:
+    c.execute("INSERT INTO nut (id_nut, loai_nut, nhan, ten_day_du, ma_tep, dong_bat_dau, dong_ket_thuc, nguon_goc)"
+              " VALUES (?, ?, 'x', 'x', 1, 1, 2, 'ast')", (nid, kind))
+
+
+def test_v6_node_kinds_and_upgrades_v5(tmp_path):
+    # W2: loại nút cho ngôn ngữ mới; nâng v5 → v6 nới CHECK mà giữ dữ liệu và khoá ngoại.
+    fresh = open_graph_db(tmp_path / "g.db")
+    assert fresh.execute("PRAGMA user_version").fetchone()[0] == 6
+    _seed_file(fresh)
+    _add_node(fresh, "a.rs::A#variable", "variable")
+
+    v5_path = tmp_path / "v5.db"
+    c5 = sqlite3.connect(v5_path)
+    sql = load_sql("graph")
+    assert NEW_KINDS in sql
+    c5.executescript(sql.replace(NEW_KINDS, "").replace("PRAGMA user_version = 6;", "PRAGMA user_version = 5;"))
+    _seed_file(c5)
+    _add_node(c5, "a.rs::f#function", "function")
+    with pytest.raises(sqlite3.IntegrityError):
+        _add_node(c5, "a.rs::t#table", "table")
+    c5.commit()
+    c5.close()
+
+    c6 = open_graph_db(v5_path)
+    assert c6.execute("PRAGMA user_version").fetchone()[0] == 6
+    assert c6.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 6
+    _add_node(c6, "a.rs::t#table", "table")
+    assert c6.execute("SELECT count(*) FROM nut").fetchone()[0] == 2
+    assert c6.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert c6.execute("PRAGMA foreign_key_check").fetchall() == []
+    nut_sql = lambda c: c.execute("SELECT sql FROM sqlite_master WHERE name = 'nut'").fetchone()[0]
+    assert nut_sql(c6) == nut_sql(fresh)
