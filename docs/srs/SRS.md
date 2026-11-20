@@ -12,7 +12,7 @@
 
 | Hạng mục | Phạm vi |
 |---|---|
-| Nền tảng | Bản bàn giao chính 0.1.0 là Electron độc lập với Monaco tích hợp, cho Windows và macOS. Người dùng chọn đúng kiến trúc theo [bộ cài](../release/README.md). [Code-OSS](../../apps/shell/README.md) được giữ ở mức bản xem trước tích hợp, dùng editor của workbench và có phép nghiệm thu riêng. |
+| Nền tảng | Bản bàn giao chính 0.1.0 là Electron độc lập với Monaco tích hợp, cho **macOS Apple silicon (arm64) và Windows x64**; Mac Intel và Windows ARM ngoài phạm vi. Repo và bộ cài công khai ở [GitHub Releases](https://github.com/twotnguyen/nexgraph/releases). Người dùng chọn đúng kiến trúc theo [bộ cài](../release/README.md). [Code-OSS](../../apps/shell/README.md) được giữ ở mức bản xem trước tích hợp, dùng editor của workbench và có phép nghiệm thu riêng. |
 | Ngôn ngữ MVP | TypeScript, JavaScript và Python. Đánh giá trên ca sử dụng thực tế và báo giới hạn phân tích tĩnh. |
 | Ngôn ngữ bổ sung | C# và Dart có bộ trích xuất trong engine. Go và Java ở mức đồ thị chung. Cây widget, route và phân tích Flutter chuyên sâu thuộc hướng phát triển. Bảng [phần mở rộng thực tế](../../engine/src/nexgraph_engine/index/discovery.py) là tham chiếu khi cập nhật mức hỗ trợ. |
 | Phạm vi đồ thị | Một thư mục dự án mỗi lần phân tích, có thể giới hạn ở thư mục con và loại trừ đường dẫn. Dùng Git khi có commit phù hợp, nếu thiếu thì dùng mốc lập chỉ mục. |
@@ -78,6 +78,7 @@ flowchart LR
 
 ### Bảo mật và riêng tư
 
+- File mã nguồn của dự án chỉ thay đổi khi người dùng lưu trong trình soạn thảo hoặc duyệt thao tác ghi của trợ lý AI ở chế độ Sửa. Dữ liệu của NexGraph nằm trong `.nexgraph/` của dự án và thư mục dữ liệu của ứng dụng.
 - API engine nghe tại `127.0.0.1` và yêu cầu Bearer token. MCP HTTP dùng khóa riêng. Cấu hình xuất/chia sẻ cần giải thích phạm vi dữ liệu có thể đọc.
 - Luồng gửi mã cho AI yêu cầu đồng ý theo dự án và điểm đến. Mục tiêu nghiệm thu gồm kiểm tệp nhạy cảm, đổi provider, đổi workspace và loại khóa/token khỏi log.
 - API key dùng cơ chế bảo vệ bí mật của host. Lưu trữ OAuth và lịch sử phiên được mô tả theo mã nguồn trong [mô hình dữ liệu](data-model.md).
@@ -88,9 +89,10 @@ flowchart LR
 | Tình huống | Tiêu chí |
 |---|---|
 | Dự án nhỏ đến 1.000 tệp | Mục tiêu đã đặt là lập chỉ mục dưới 60 giây, mở lại dưới 3 giây. Đo đầu cuối trên bản cài từ lúc mở đến khi có thể dùng đồ thị. |
-| Dự án lớn | Mục tiêu đo là lập chỉ mục lần đầu trong 10 phút, mở lại dưới 5 giây, cập nhật sau khi lưu dưới 2 giây và bộ nhớ dưới 2 GB. Báo cáo số thực đo và cấu hình máy. Đây là mục tiêu đánh giá, không phải cam kết đã đạt. |
+| Dự án lớn (5.000–15.000 tệp) | Mục tiêu đo là lập chỉ mục lần đầu trong 10 phút, mở lại dưới 5 giây, cập nhật sau khi lưu dưới 2 giây với lần sửa không đổi quan hệ giữa các tệp (sửa làm đổi quan hệ thì đo và báo cáo), bộ nhớ dưới 2 GB tính cả cây tiến trình (engine và tiến trình con lập chỉ mục). Báo cáo số thực đo và cấu hình máy. Đây là mục tiêu đánh giá, không phải cam kết đã đạt. |
+| Dự án rất lớn (trên 15.000 tệp) | Không đặt mục tiêu. Đo và báo cáo thời gian lập chỉ mục, cập nhật và bộ nhớ cả cây tiến trình. |
 | Giao diện và đường dẫn | Tiếng Việt là giao diện hiện hành. Thử bàn phím, kích thước cửa sổ, đường dẫn có dấu/khoảng trắng và phương án thay thế khi WebGL không khả dụng. |
-| Đóng gói | Bộ cài Electron theo phiên bản và kiến trúc cần mở được, khởi động engine đi kèm trên máy Windows/macOS. Ghi tên artifact, commit, kiến trúc, dung lượng và kết quả. Smoke CI và kiểm cài trên máy đích có biên bản riêng. |
+| Đóng gói | Bộ cài Electron theo phiên bản và kiến trúc cần mở được, khởi động engine đi kèm trên máy Windows/macOS. Mỗi tệp cài (`.dmg`, `.exe`) dưới 500 MB, CI báo lỗi khi vượt. Ghi tên artifact, commit, kiến trúc, dung lượng bộ cài và dung lượng sau khi cài, cùng kết quả. Bộ cài chưa ký số, [hướng dẫn phát hành](../release/README.md) chỉ cách mở qua cảnh báo hệ điều hành. Smoke CI và kiểm cài trên máy đích có biên bản riêng. |
 
 Kết quả đo ở [báo cáo thực nghiệm](../benchmarks/2026-12-danh-gia.md) và [đợt tối ưu sau review](../benchmarks/2026-11-13-sua-sau-review.md) dùng các phiên bản và điều kiện khác nhau. Ghi phiên bản, host, phiên bản hệ điều hành và dữ liệu thử cho từng phép đo nghiệm thu mới.
 

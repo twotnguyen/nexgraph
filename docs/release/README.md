@@ -17,7 +17,16 @@ Bản đã gắn tag `v<version>` có sẵn bộ cài và tệp `.build.json` �
 
 Tính SHA-256 của tệp bộ cài đã giải nén bằng `Get-FileHash -Algorithm SHA256 -LiteralPath '<tệp>'` trong PowerShell hoặc `shasum -a 256 '<tệp>'` trên macOS. So hash không phân biệt chữ hoa và thường. Trường `commit` ghi đúng checkout mà runner đã dùng. Khi kiểm pull request, GitHub có thể dựng từ commit hợp nhất của lượt chạy.
 
-Bản dựng CI hiện dùng cấu hình chưa ký số. Nếu hệ điều hành cảnh báo hoặc chặn trình cài hoặc engine đã cài, ghi rõ thành phần và thông báo trong checklist. Với máy được quản lý, báo người phụ trách máy. [Workflow và artifact](../../.github/workflows/ci.yml) · [Kiểm tên bộ cài](../../apps/desktop/scripts/check-installer.mjs).
+Mỗi tệp cài phải dưới 500 MB; bước kiểm tệp cài trong CI báo lỗi khi vượt. Bản 0.1.0 trên macOS chiếm khoảng 650 MB sau khi kéo vào Applications.
+
+### Mở bộ cài chưa ký số
+
+Bộ cài không có chứng chỉ nhà phát triển nên hệ điều hành cảnh báo ở lần mở đầu.
+
+- **macOS:** mở NexGraph, gặp thông báo không xác minh được nhà phát triển thì chọn **Done**. Vào **System Settings → Privacy & Security**, kéo xuống mục Security, chọn **Open Anyway** cạnh dòng nhắc NexGraph rồi xác nhận. Từ bản sau 0.1.0, app được ký ad-hoc nên đi được đường này. Bản 0.1.0 có chữ ký chưa trọn, macOS có thể báo app "bị hỏng"; khi đó chạy `xattr -dr com.apple.quarantine /Applications/NexGraph.app` trong Terminal rồi mở lại.
+- **Windows:** SmartScreen hiện "Windows protected your PC" thì chọn **More info → Run anyway**.
+
+Nếu hệ điều hành vẫn chặn trình cài hoặc engine đã cài, ghi rõ thành phần và thông báo trong checklist. Với máy được quản lý, báo người phụ trách máy. [Workflow và artifact](../../.github/workflows/ci.yml) · [Kiểm tên bộ cài](../../apps/desktop/scripts/check-installer.mjs).
 
 ## Chạy lần đầu
 

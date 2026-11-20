@@ -17,7 +17,10 @@ extraResources:
     to: engine
 mac:
   target: dmg
-  identity: null # không ký số (xem README: cảnh báo Gatekeeper)
+  # Ký ad-hoc cả gói: không có chứng chỉ nhà phát triển nhưng chữ ký hợp lệ, nên macOS cho mở qua
+  # Privacy & Security → Open Anyway thay vì báo "bị hỏng". Tắt hardened runtime vì engine PyInstaller nạp thư viện riêng.
+  identity: '-'
+  hardenedRuntime: false
   category: public.app-category.developer-tools
 dmg:
   artifactName: 'NexGraph-${version}-macos-${arch}.${ext}'
