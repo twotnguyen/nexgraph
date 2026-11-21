@@ -34,6 +34,7 @@ vi.mock('../components/editor/monaco', () => ({
 }))
 
 import { WorkspaceScreen } from './WorkspaceScreen'
+import { installKeymap } from '../state/commands'
 
 beforeAll(() => {
   class RO { observe() {} unobserve() {} disconnect() {} }
@@ -42,6 +43,8 @@ beforeAll(() => {
 })
 // Các test cũ mô tả kiểu 2 (khung chat bên phải, mở sẵn); test kiểu Wu tự xoá khoá này.
 beforeEach(() => localStorage.setItem('nexgraph.chat.dock', 'right'))
+// App cài bộ phân phối phím; ở đây màn được render riêng nên tự cài.
+beforeAll(() => installKeymap())
 
 const gnode = (id: string, label = id): GraphNode => ({
   id, kind: 'method', label, qualified_name: id, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,

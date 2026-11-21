@@ -81,6 +81,7 @@ const api: NexGraphApi = {
   fs: {
     list: (pid, directory) => call('fs:list', pid, directory),
     read: (pid, relPath) => call('fs:read', pid, relPath),
+    files: (pid) => call('fs:files', pid),
     write: (pid, relPath, text, opts) => call('fs:write', pid, relPath, text, opts)
   },
   exporter: {

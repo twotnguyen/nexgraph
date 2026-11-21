@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeAll, expect, it } from 'vitest'
 import { WorkbenchBar } from '../components/layout/WorkbenchBar'
 import { currentTheme, initializeTheme } from './useTheme'
+import { installKeymap } from './commands'
+
+beforeAll(() => installKeymap())
 
 afterEach(() => {
   cleanup()
@@ -33,7 +36,7 @@ it('previews while moving through the list and Escape restores the saved theme',
   initializeTheme()
   render(<WorkbenchBar />)
   await userEvent.click(screen.getByRole('button', { name: 'Giao diện: Wu Dark' }))
-  const search = screen.getByRole('combobox', { name: 'Tìm theme' })
+  const search = screen.getByRole('combobox', { name: 'Chọn theme' })
   await userEvent.type(search, 'one')
   expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['One DarkTối', 'One LightSáng'])
   expect(document.documentElement.dataset.theme).toBe('one-dark')

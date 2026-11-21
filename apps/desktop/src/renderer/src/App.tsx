@@ -6,6 +6,8 @@ import type { IndexOptions, ProjectSummary, ScanInfo } from '@shared/graph-types
 import { EngineStatusBar } from './components/EngineStatusBar'
 import { WorkbenchBar } from './components/layout/WorkbenchBar'
 import { Icon } from './components/common/icons'
+import { CommandPaletteHost } from './components/layout/CommandPalette'
+import { installKeymap, useCommand } from './state/commands'
 import { LargeProjectScreen } from './screens/LargeProjectScreen'
 import { IndexingScreen } from './screens/IndexingScreen'
 import { ProjectOverviewScreen, type WorkspaceTab } from './screens/ProjectOverviewScreen'
@@ -21,7 +23,7 @@ type Screen =
   | { name: 'indexing'; project: ProjectSummary; subdir: string | null; options?: IndexOptions; rebuild?: boolean; exploring?: boolean; attempt?: number }
   | { name: 'overview'; project: ProjectSummary }
   | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab; initialCommand?: HostCommand }
-  | { name: 'settings'; back: Screen }
+  | { name: 'settings'; back: Screen; page?: string }
   | { name: 'global'; projectIds: string[] }
 
 /** Kiểm tra kích thước trước khi lập chỉ mục. Lỗi khi quét không chặn: coi như dự án không lớn. */
@@ -144,6 +146,14 @@ export default function App() {
     }).catch(() => {}) // Tổng quan đọc thêm mốc lập chỉ mục từ số liệu đồ thị.
   }
 
+  useEffect(() => (window.nexgraph?.host ? undefined : installKeymap()), [])
+  // Màn làm việc tự gắn các lệnh này (có hỏi trước khi bỏ tệp chưa lưu); các màn khác dùng của App.
+  const appCommands = !(screen.name === 'workspace' || (screen.name === 'indexing' && screen.exploring))
+  const openSettings = (page?: string) => setScreen((s) => s.name === 'settings' ? { ...s, page } : { name: 'settings', back: s, page })
+  useCommand('settings.open', () => openSettings(), appCommands)
+  useCommand('keymap.open', () => openSettings('keymap'), appCommands)
+  useCommand('projects.open', () => setScreen({ name: 'projects' }), appCommands && screen.name !== 'projects')
+
   return (
     <div className="app">
       {!window.nexgraph?.host && <WorkbenchBar project={'project' in screen ? screen.project : null} />}
@@ -183,7 +193,7 @@ export default function App() {
           onShowExisting={() => setScreen({ ...indexing, exploring: true })}
           renderExisting={indexing.exploring ? (notice) => (
             <WorkspaceScreen project={indexing.project} indexNotice={notice} backLabel={vi.indexing.backToProgress}
-              onOpenSettings={() => setScreen({ name: 'settings', back: indexing })}
+              onOpenSettings={(page) => setScreen({ name: 'settings', back: indexing, page })}
               onBack={() => setScreen({ ...indexing, exploring: false })} />
           ) : undefined} />
       )}
@@ -198,12 +208,13 @@ export default function App() {
       )}
       {screen.name === 'workspace' && (
         <WorkspaceScreen key={screen.tab ?? 'arch'} project={screen.project} initialTab={screen.tab} initialCommand={screen.initialCommand}
-          onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
+          onOpenSettings={(page) => setScreen({ name: 'settings', back: screen, page })}
           onBack={() => setScreen({ name: 'overview', project: screen.project })} />
       )}
       {screen.name === 'global' && <GlobalViewScreen projectIds={screen.projectIds} onBack={() => setScreen({ name: 'projects' })} />}
-      {screen.name === 'settings' && <SettingsScreen onBack={() => setScreen(screen.back)} />}
+      {screen.name === 'settings' && <SettingsScreen key={screen.page ?? ''} initialPage={screen.page} onBack={() => setScreen(screen.back)} />}
       <EngineStatusBar status={status} onRestart={() => void window.nexgraph.engine.restart()} />
+      {!window.nexgraph?.host && <CommandPaletteHost />}
     </div>
   )
 }

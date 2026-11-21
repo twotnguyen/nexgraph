@@ -25,6 +25,8 @@ import { PrsView } from '../components/prs/PrsView'
 import { useChanges } from '../state/useChanges'
 import { Icon, VIEW_TONE } from '../components/common/icons'
 import { openThemePicker } from '../components/layout/ThemePicker'
+import { FileFinder } from '../components/layout/FileFinder'
+import { useCommand } from '../state/commands'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi } from '../strings'
 import './workspace.css'
@@ -99,7 +101,7 @@ interface Props {
   initialTab?: Tab
   initialFlowId?: number
   onBack?: () => void
-  onOpenSettings?: () => void
+  onOpenSettings?: (page?: string) => void
   backLabel?: string
   indexNotice?: string
   initialCommand?: HostCommand
@@ -148,17 +150,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     else editorContexts.current.delete(file)
     void flushEditorState().catch(() => {})
   }, [flushEditorState])
-  useEffect(() => {
-    if (hosted) return
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
-        e.preventDefault()
-        setChatOpen((v) => !v)
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [hosted])
+  const [finder, setFinder] = useState(false)
   const [archParent, setArchParent] = useState<string | undefined>(undefined)
   const [archContext, setArchContext] = useState<string | undefined>(undefined)
   const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
@@ -478,6 +470,32 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     getEditorContext={() => activeFile ? editorContexts.current.get(activeFile)?.() ?? null : null} graphContext={graphContext} beforePrompt={flushEditorState} onInspect={inspect}
     onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} dock={chatDock} onToggleDock={toggleDock} />
 
+  // Lệnh cho bảng lệnh và phím tắt (state/commands.ts); rời màn hình thì hỏi trước nếu còn tệp chưa lưu.
+  useCommand('agent.toggle', () => setChatOpen((v) => !v), !hosted)
+  useCommand('file_finder.toggle', () => setFinder((v) => !v))
+  useCommand('explorer.toggle', () => togglePanel('explorer'))
+  useCommand('graph_search.toggle', () => togglePanel('search'))
+  useCommand('changes.toggle', () => togglePanel('changes'))
+  useCommand('tour.toggle', () => togglePanel('tour'))
+  useCommand('view.arch', () => selectView('arch'))
+  useCommand('view.map', () => selectView('map'))
+  useCommand('view.flows', () => selectView('flows'))
+  useCommand('view.graph', () => selectView('graph'))
+  useCommand('view.tree', () => selectView('tree'))
+  useCommand('view.report', () => selectView('report'))
+  useCommand('graph.export', () => exportCurrent())
+  useCommand('project.overview', () => guardLeave(onBack)?.(), !!onBack)
+  useCommand('settings.open', () => guardLeave(onOpenSettings && (() => onOpenSettings()))?.(), !!onOpenSettings)
+  useCommand('keymap.open', () => guardLeave(onOpenSettings && (() => onOpenSettings('keymap')))?.(), !!onOpenSettings)
+  useCommand('tab.close', () => {
+    if (activeFile) closeFile(activeFile)
+    else if (tab.startsWith('task:')) {
+      setInspections((current) => current.filter((item) => `task:${item.id}` !== tab))
+      setTab(lastMain)
+    }
+  })
+  const recentFiles = useMemo(() => files.map((f) => f.file).reverse(), [files])
+
   return (
     <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px` } as CSSProperties}>
       {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
@@ -643,6 +661,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       </section>
       {chatDock === 'right' && <>{resizeHandle}{agentPanel}</>}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
+      {finder && <FileFinder projectId={project.project_id} recent={recentFiles} onOpen={(path) => openCode(path)} onClose={() => setFinder(false)} />}
     </div>
   )
 }

@@ -116,7 +116,7 @@
 .settings-row .row { margin: 0 !important; }
 
 .settings-row > :last-child { flex: none; }
-.settings-row select { width: 220px; }
+.settings-wu .settings-row select { width: 220px; }
 .settings-row .row { flex-wrap: nowrap; gap: 8px; }
 .settings-wu .settings-section .settings-oauth-row { margin: 0; padding: 8px 0; flex-wrap: nowrap; }
 .settings-wu .settings-section .settings-oauth-row + .settings-oauth-row { border-top: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent); }

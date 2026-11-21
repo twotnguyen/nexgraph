@@ -114,6 +114,8 @@ export interface NexGraphApi {
     list?(projectId: string, directory: string): Promise<ProjectDirectory>
     /** Đọc tệp trong gốc dự án; lỗi có `code` là `outside_project` | `file_not_found`. */
     read(projectId: string, relPath: string): Promise<FileContent>
+    /** Mọi tệp của dự án (đường dẫn tương đối, theo .gitignore) cho ô tìm tệp; `truncated` khi vượt giới hạn duyệt. */
+    files?(projectId: string): Promise<{ files: string[]; truncated: boolean }>
     /** Ghi nguyên tử trong gốc dự án. Nếu tệp lệch phiên bản yêu cầu thì báo `conflict`. */
     write(projectId: string, relPath: string, text: string, opts: WriteOpts & { expectedVersion: string | null }): Promise<FileRevision>
   }

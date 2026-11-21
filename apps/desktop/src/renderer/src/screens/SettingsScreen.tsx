@@ -8,6 +8,7 @@ import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
 import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
+import { KeymapEditor } from '../components/settings/KeymapEditor'
 import './settings.css'
 
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
@@ -19,6 +20,7 @@ const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
 const SECTION_WORDS = {
   theme: 'Giao diện theme màu sáng tối dark light',
   chat: 'Giao diện khung chat AI trợ lý vị trí trái phải dock',
+  keymap: 'Phím tắt keymap keybinding shortcut lệnh bàn phím',
   quick: 'Kết nối nhanh ollama local tài khoản AI',
   gemini: 'Gemini Google Antigravity tài khoản AI',
   apikey: 'API key nhà cung cấp OpenAI Anthropic Claude khoá',
@@ -29,13 +31,14 @@ const SECTION_WORDS = {
 }
 const PAGES: { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] = [
   { id: 'appearance', label: 'Giao diện', icon: 'palette', sections: ['theme', 'chat'] },
+  { id: 'keymap', label: 'Phím tắt', icon: 'keyboard', sections: ['keymap'] },
   { id: 'ai', label: 'Tài khoản AI', icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
   { id: 'model', label: 'Mô hình', icon: 'spark', sections: ['model'] },
   { id: 'privacy', label: 'Quyền riêng tư', icon: 'shield', sections: ['privacy'] }
 ]
 
 /** Màn Tài khoản AI: key theo nhà cung cấp → nhà cung cấp tuỳ chỉnh → OAuth gói đăng ký → chọn model → kiểm tra kết nối. */
-export function SettingsScreen({ onBack }: { onBack: () => void }) {
+export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; initialPage?: string }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [models, setModels] = useState<ModelInfo[]>([])
   const [settings, setSettings] = useState<AiSettings | null>(null)
@@ -188,6 +191,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
     jumped.current = Date.now()
     document.getElementById(`settings-${id}`)?.scrollIntoView?.({ block: 'start' })
   }
+  useEffect(() => { if (initialPage) goTo(initialPage) }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // Đánh dấu trang đang đọc theo vị trí cuộn, như thanh trái của Wu.
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
     if (Date.now() - jumped.current < 400) return
@@ -216,7 +220,7 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
       {shows('theme') && <section className="settings-section" aria-labelledby="settings-theme-title">
         <h2 id="settings-theme-title">Theme</h2>
         <div className="settings-row">
-          <div><label htmlFor="settings-theme">Theme</label><p>Màu của toàn bộ app và editor. Cũng mở được bằng ⌘K rồi ⌘T.</p></div>
+          <div><label htmlFor="settings-theme">Theme</label><p>Màu của toàn bộ app và editor. Cũng mở được bằng ⌘K rồi ⌘T hoặc từ bảng lệnh (⌘⇧P).</p></div>
           <select id="settings-theme" value={themeId} onChange={(e) => setTheme(e.target.value)}>
             {THEMES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -235,6 +239,12 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             <option value="right">Bên phải</option>
           </select>
         </div>
+      </section>}
+
+      {pages.some((p) => p.id === 'keymap') && <h1 id="settings-keymap" data-settings-page="keymap" className="settings-page-title">Phím tắt</h1>}
+      {shows('keymap') && <section className="settings-section" aria-label="Phím tắt">
+        <p className="muted">Bấm Đổi hoặc bấm đúp một dòng rồi nhấn tổ hợp mới; hợp âm hai bước như ⌘K ⌘T cũng được. Một phím chỉ thuộc một lệnh.</p>
+        <KeymapEditor />
       </section>}
 
       {pages.some((p) => p.id === 'ai') && <h1 id="settings-ai" data-settings-page="ai" className="settings-page-title">{vi.accounts.title}</h1>}

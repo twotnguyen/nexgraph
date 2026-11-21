@@ -7,7 +7,8 @@ import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery,
 import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
-import { FsError, fsHandlers, isWithin, projectRoot } from './fs/project-fs'
+import { FsError, fsHandlers, isProtectedRel, isWithin, projectRoot } from './fs/project-fs'
+import { AgentFileScope } from './agent/file-scope'
 import { AgentError, AgentService } from './agent/session'
 import { AccountService } from './agent/accounts'
 import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentExecutionSettings, AgentRunLimits, AgentPromptOptions, AgentEditorState } from '../shared/agent-types'
@@ -182,6 +183,16 @@ export function registerIpc(
   const rootOf = projectRoot(listProjects)
   on('fs:list', fsh.list)
   on('fs:read', fsh.read)
+  // Tìm tệp (⌘P): mọi tệp theo .gitignore, bỏ thư mục sinh ra và tệp được bảo vệ; tối đa 20.000 mục duyệt.
+  on('fs:files', async (pid: string) => {
+    const scope = new AgentFileScope(await rootOf(pid), ['.git/', '.nexgraph/', '.venv/', 'dist/', '.next/', '.cache/', '.turbo/', '__pycache__/'])
+    const state = { limited: false }
+    const files: string[] = []
+    for await (const entry of scope.entries(scope.entry('.'), true, state)) {
+      if (!entry.directory && !isProtectedRel(entry.relative)) files.push(entry.relative)
+    }
+    return { files, truncated: state.limited }
+  })
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {
