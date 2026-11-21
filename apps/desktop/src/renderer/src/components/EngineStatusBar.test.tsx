@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { EngineStatusBar } from './EngineStatusBar'
+import { EngineStatusBar, StatusBarItems } from './EngineStatusBar'
 
 describe('EngineStatusBar', () => {
   it('shows starting', () => {
@@ -26,5 +26,11 @@ describe('EngineStatusBar', () => {
     expect(screen.getByText('Engine: lỗi — exit 5')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Khởi động lại' }))
     expect(onRestart).toHaveBeenCalled()
+  })
+
+  it('puts items of the open tab on the right side of the bar', () => {
+    // Thẻ (editor) nằm trước thanh trạng thái trong cây, như trong App.
+    render(<><StatusBarItems><span>12:4</span></StatusBarItems><EngineStatusBar status={{ state: 'starting' }} onRestart={() => {}} /></>)
+    expect(screen.getByLabelText('Thanh trạng thái').querySelector('.status-right')).toHaveTextContent('12:4')
   })
 })

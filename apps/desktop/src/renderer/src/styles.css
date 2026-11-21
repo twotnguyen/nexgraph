@@ -2754,9 +2754,15 @@ dialog.modal::backdrop { background: var(--overlay); }
 .toast .icon-button { margin-inline-start: auto; }
 .chat .me { color: var(--color-text); background: var(--accent-soft); border-radius: 7px; }
 .chat > header { border-top: 0; }
-.status-bar { min-height: 24px; padding-block: 3px; color: var(--color-muted); background: var(--color-surface); border-top: 1px solid var(--color-border); font-size: 11px; }
-.status-bar button { color: var(--color-text); border-color: var(--color-border); }
+/* Thanh trạng thái kiểu Wu: đệm 4px, mục là nút ma chữ 12px cao 22px bo 6; trái là engine, phải là mục của thẻ đang mở. */
+.status-bar { gap: 4px; min-height: 0; padding: 4px 8px; color: var(--color-muted); background: var(--color-surface); border-top: 1px solid var(--color-border); font-size: 12px; }
+.status-bar::before { flex: none; width: 7px; height: 7px; margin-inline: 4px 0; }
 .status-bar[data-state='ready']::before { box-shadow: none; }
+.status-bar .status-item { display: inline-flex; align-items: center; height: 22px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; color: var(--color-muted); font: inherit; white-space: nowrap; }
+.status-bar :is(.status-right .status-item, button.status-item):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); color: var(--color-text); }
+.status-bar button.status-item { color: var(--color-text); cursor: pointer; }
+.status-bar .status-engine { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.status-right { display: flex; flex: none; align-items: center; gap: 4px; margin-inline-start: auto; }
 
 @keyframes screen-enter { from { opacity: .55; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 @keyframes modal-enter { from { opacity: .65; } to { opacity: 1; } }

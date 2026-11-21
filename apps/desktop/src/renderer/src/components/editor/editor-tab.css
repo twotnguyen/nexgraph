@@ -15,17 +15,3 @@
 .editor-path li svg { flex: none; }
 .editor-path li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-path li[aria-current='true'] { flex-shrink: 0.3; color: var(--color-text); }
-
-.editor-format {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex: none;
-  gap: 13px;
-  min-height: 23px;
-  padding: 2px 11px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-muted);
-  font-size: 10px;
-}

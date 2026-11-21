@@ -1,23 +1,32 @@
+import { useEffect, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { EngineStatus } from '@shared/engine-status'
+
+const RIGHT_SLOT = 'status-bar-right'
 
 interface Props {
   status: EngineStatus
   onRestart: () => void
 }
 
+/** Thanh trạng thái kiểu Wu: trái là trạng thái engine, phải là mục của thẻ đang mở (vị trí con trỏ, ngôn ngữ…). */
 export function EngineStatusBar({ status, onRestart }: Props) {
   return (
-    <footer className="status-bar" role="status" data-state={status.state}>
-      {status.state === 'starting' && <span>Engine: đang khởi động…</span>}
-      {status.state === 'ready' && <span>{`Engine: sẵn sàng (v${status.engineVersion})`}</span>}
-      {status.state === 'error' && (
-        <>
-          <span>{`Engine: lỗi — ${status.message}`}</span>
-          <button type="button" onClick={onRestart}>
-            Khởi động lại
-          </button>
-        </>
-      )}
+    <footer className="status-bar" aria-label="Thanh trạng thái" data-state={status.state}>
+      <span className="status-item status-engine" role="status">
+        {status.state === 'starting' && 'Engine: đang khởi động…'}
+        {status.state === 'ready' && `Engine: sẵn sàng (v${status.engineVersion})`}
+        {status.state === 'error' && `Engine: lỗi — ${status.message}`}
+      </span>
+      {status.state === 'error' && <button type="button" className="status-item" onClick={onRestart}>Khởi động lại</button>}
+      <div id={RIGHT_SLOT} className="status-right" />
     </footer>
   )
+}
+
+/** Đưa các mục vào phía phải thanh trạng thái; chỉ thẻ đang hiện nên gắn. */
+export function StatusBarItems({ children }: { children: ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null)
+  useEffect(() => setSlot(document.getElementById(RIGHT_SLOT)), [])
+  return slot ? createPortal(children, slot) : null
 }

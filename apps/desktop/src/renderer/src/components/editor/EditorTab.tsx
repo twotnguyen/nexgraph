@@ -5,6 +5,7 @@ import { vi } from '../../strings'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
+import { StatusBarItems } from '../EngineStatusBar'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -53,6 +54,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   const [reloading, setReloading] = useState(false)
   const [ready, setReady] = useState(false)
   const [format, setFormat] = useState<EditorFormat | null>(null)
+  const [cursor, setCursor] = useState({ line: 1, column: 1 })
   const [modified, setModified] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [loadAttempt, setLoadAttempt] = useState(0)
@@ -229,6 +231,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
       open = { editor: ed, base: c }
       editor.current = ed
       ed.onChange(updateDirty)
+      ed.onCursor?.((line, column) => setCursor({ line, column }))
       ed.revealLines(line, lineEnd)
       setReadOnly(c.readOnly ? (c.reason ?? true) : false)
       updateFormat(c)
@@ -315,12 +318,13 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
         </p>
       )}
       <div ref={host} className="editor-host" />
-      {format && (
-        <footer className="editor-format" aria-label="Định dạng tệp">
-          <span>{format.language}</span>
-          <span>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</span>
-          <span>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</span>
-        </footer>
+      {format && active && (
+        <StatusBarItems>
+          <span className="status-item" title={`Dòng ${cursor.line}, cột ${cursor.column}`}>{cursor.line}:{cursor.column}</span>
+          <span className="status-item" title="Ngôn ngữ">{format.language}</span>
+          <span className="status-item" title="Kiểu xuống dòng">{format.eol === '\r\n' ? 'CRLF' : 'LF'}</span>
+          <span className="status-item" title="Bảng mã">{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</span>
+        </StatusBarItems>
       )}
     </div>
   )

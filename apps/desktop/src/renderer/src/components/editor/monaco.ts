@@ -83,6 +83,7 @@ export interface EditorHandle {
   getSelection?(): { text: string; start: number; end: number } | null
   setValue(v: string): void
   onChange(cb: () => void): void
+  onCursor?(cb: (line: number, column: number) => void): void
   revealLines(start: number, end?: number): void
   setReadOnly(v: boolean): void
   dispose(): void
@@ -120,6 +121,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     },
     setValue: (v) => editor.setValue(v),
     onChange: (cb) => void editor.onDidChangeModelContent(() => cb()),
+    onCursor: (cb) => void editor.onDidChangeCursorPosition((e) => cb(e.position.lineNumber, e.position.column)),
     revealLines: (start, end = start) => {
       hit.set([{ range: new monaco.Range(start, 1, end, 1), options: { isWholeLine: true, className: 'editor-hit' } }])
       editor.revealLinesInCenter(start, end)
