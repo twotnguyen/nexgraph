@@ -8,7 +8,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from contextlib import closing
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from graphify.llm import _LLM_JSON_MAX_BYTES
 
@@ -86,8 +86,13 @@ def _complete(transport: DirectTransport, chunk: Chunk, cancel: threading.Event)
 
 
 def make_work(*, graph_db, src: Sources, req: Request, transport: DirectTransport | LlmQueue,
-              on_written: Callable[[], None]) -> Callable[[TaskContext], dict]:
+              on_written: Callable[[], None],
+              load_prs: Callable[[], list[dict]] | None = None) -> Callable[[TaskContext], dict]:
+    """`load_prs`: lấy hàng PR trong job (gọi `gh` có thể chậm), để request trả 202 ngay."""
     def work(ctx: TaskContext) -> dict:
+        nonlocal req
+        if load_prs is not None:
+            req = replace(req, prs=load_prs())
         result = {"target": req.target, "nodes_added": 0, "edges_added": 0, "labels": {}, "triage": None,
                   "merged": 0, "errors": [], "usage": {"input_tokens": 0, "output_tokens": 0},
                   "chunks": {"total": 0, "cached": 0, "sent": 0, "done": 0, "failed": 0, "skipped_budget": 0}}

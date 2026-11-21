@@ -543,6 +543,27 @@ def test_pr_triage_without_prs_lists_open_prs_from_gh(api, docs_pid, llm, monkey
     sent = llm.requests[0]["messages"][1]["content"]
     assert "Sẵn sàng" in sent and "Sai nhánh gốc" not in sent
     assert job["result"]["triage"] == [{"number": 8, "priority": 1, "action": "Review ngay."}]
-    gh_fake.install(monkeypatch, {("repo", "view"): gh.GhError("gh_missing", "x")})
-    r = api.post(f"/v1/projects/{docs_pid}/semantic", json={"targets": "pr_triage", "transport": direct(llm)})
-    assert r.status_code >= 400 and r.json()["error"]["code"] == "gh_missing"
+    gh_fake.install(monkeypatch, {("repo", "view"): gh.GhError("gh_missing", "Không tìm thấy gh")})
+    job = wait_job(api, run(api, docs_pid, "pr_triage", direct(llm)))
+    assert job["state"] == "error" and "gh" in job["message"]
+
+
+def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
+    """`gh` chậm không được giữ request: desktop bỏ chờ sau 15 s và job sẽ kẹt giữ khoá dự án (kiểm thử tích hợp I1)."""
+    import threading
+    import gh_fake
+    from nexgraph_engine.prs import gh
+    enable(api, docs_pid)
+    gh_fake.install(monkeypatch, {})
+    fake_run, release = gh.run_gh, threading.Event()
+
+    def slow(root, args, timeout=gh.TIMEOUT):
+        release.wait(10)
+        return fake_run(root, args, timeout)
+
+    monkeypatch.setattr(gh, "run_gh", slow)
+    llm.reply = lambda body: json.dumps({"triage": [{"number": 8, "priority": 1, "action": "Review ngay."}]})
+    job_id = run(api, docs_pid, "pr_triage", direct(llm))  # trả 202 khi gh còn đang chờ
+    assert api.get(f"/v1/jobs/{job_id}").json()["state"] not in ("done", "error")
+    release.set()
+    assert wait_job(api, job_id)["state"] == "done"
