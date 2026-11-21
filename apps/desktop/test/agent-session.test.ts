@@ -26,6 +26,7 @@ class FakeSession {
   output = ''
   disposed = false
   script: (s: FakeSession, text: string) => Promise<void> = async (s) => s.finish()
+  promptOptions?: Parameters<PiSession['prompt']>[1]
   decisions: ({ block: true; reason: string } | undefined)[] = []
   constructor(public spec: SessionSpec) {
     this.active = [...spec.tools]
@@ -56,7 +57,8 @@ class FakeSession {
       usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
     } as never)
   }
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, options?: Parameters<PiSession['prompt']>[1]): Promise<void> {
+    this.promptOptions = options
     this.output = ''
     this.aborted = false
     this.startTurn?.()
@@ -105,7 +107,6 @@ const deferred = <T,>() => {
   const promise = new Promise<T>((r) => { resolve = r })
   return { promise, resolve }
 }
-
 /** Kịch bản: gọi write trong dự án rồi kết thúc. */
 const writeScript = (input: Record<string, unknown> = { path: 'b.txt', content: 'mới' }) => async (s: FakeSession) => {
   await s.call('write', input)
@@ -326,6 +327,22 @@ describe('AgentService (phiên giả)', () => {
     await next
   })
 
+  it('allows a queued prompt after abort and the old prompt have both settled', async () => {
+    const { svc, sessions } = setup()
+    await svc.prompt('p1', 'first', TARGET)
+    const gate = deferred<void>()
+    sessions[0].script = async (session) => { await gate.promise; session.finish() }
+    const oldPrompt = svc.prompt('p1', 'old', TARGET)
+    await tick()
+    await svc.abort('p1')
+    await expect(svc.prompt('p1', 'too early', TARGET)).rejects.toMatchObject({ code: 'agent_busy' })
+    gate.resolve()
+    await oldPrompt
+    sessions[0].script = async (session) => { session.finish() }
+    await expect(svc.prompt('p1', 'queued', TARGET)).resolves.toBeUndefined()
+    expect((await svc.snapshot('p1')).messages.at(-1)?.text).toBe('queued')
+  })
+
   it('sau close() không phát sự kiện approval cho tool_call đến muộn', async () => {
     const { svc, sessions, of } = setup()
     svc.setMode('p1', 'edit')
@@ -375,6 +392,41 @@ describe('AgentService durable conversations and task limits', () => {
     expect(restored.task).toMatchObject({ status: 'completed', sessionId: id, turns: 1 })
     expect(restored.usage.costUsd).toBeNull()
     reopened.closeAll()
+  })
+
+  it('forks Pi history without its task or execution grants and keeps the source unchanged', async () => {
+    const { svc, sessions } = setup()
+    await svc.prompt('p1', 'question originale', TARGET)
+    const source = await svc.snapshot('p1')
+    await svc.renameSession('p1', source.session!.id, 'Conversation nommée')
+    svc.setExecution('p1', { policy: 'auto', allowCommands: true })
+    const fork = await svc.forkSession('p1', source.session!.id)
+    expect(fork.session?.id).not.toBe(source.session!.id)
+    expect(fork.session?.title).toBe('Conversation nommée')
+    expect(fork.messages.map((message) => message.text)).toEqual(source.messages.map((message) => message.text))
+    expect(fork.task).toBeNull()
+    expect(fork.execution).toEqual({ policy: 'review', allowCommands: false })
+    await svc.prompt('p1', 'dans la branche', TARGET)
+    expect(sessions.at(-1)!.spec.sessionManager!.buildSessionContext().messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'user', content: 'question originale' })
+    ]))
+    expect((await svc.switchSession('p1', source.session!.id)).messages.map((message) => message.text)).toEqual(source.messages.map((message) => message.text))
+  })
+
+  it('passes image attachments to capable Pi models and rejects unknown or unsupported capability', async () => {
+    const model = { ...TARGET, id: 'm1', input: ['text', 'image'] }
+    const { svc, sessions } = setup({ accounts: async () => ({
+      modelRuntime: { getModel: () => model } as never, getSelectedModel: () => model, hasConsent: async () => true
+    }) })
+    const image = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aX0AAAAASUVORK5CYII=' }
+    await svc.prompt('p1', '', TARGET, { images: [image] })
+    expect(sessions[0].promptOptions?.images).toEqual([{ type: 'image', ...image }])
+    model.input = ['text']
+    await expect(svc.prompt('p1', 'x', TARGET, { images: [image] })).rejects.toMatchObject({ code: 'image_not_supported' })
+    model.input = []
+    await expect(svc.prompt('p1', 'x', TARGET, { images: [image] })).rejects.toMatchObject({ code: 'image_not_supported' })
+    const unconfigured = setup({ selected: null })
+    await expect(unconfigured.svc.prompt('p1', 'x', TARGET, { images: [image] })).rejects.toMatchObject({ code: 'image_not_supported' })
   })
 
   it('new, rename, switch and delete operate on the canonical session without mixing projects or accounts', async () => {

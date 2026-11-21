@@ -13,8 +13,10 @@ export type GeminiStoredSession = {
   version: 1
   scope: string
   info: AgentSessionInfo
+  forkParentNativeId?: string
   nativeId: string | null
   messages: AgentTranscriptMessage[]
+  forkMessageCount?: number
   task: AgentTask | null
   usage: AgentUsage
 }
@@ -56,6 +58,7 @@ export class GeminiSessions {
     if (selected) {
       if (!UUID.test(selected) || !index.sessions.some((item) => item.id === selected)) throw Object.assign(new Error('Hội thoại không thuộc kết nối Gemini và dự án đang chọn'), { code: 'session_not_found' })
       const stored = this.read(scope, selected)
+      if (stored.forkMessageCount !== undefined) stored.nativeId = null
       if (stored.task && ['running', 'waiting_approval'].includes(stored.task.status)) {
         stored.task = { ...stored.task, status: 'cancelled', finishedAt: Date.now(), error: 'Tác vụ đã dừng khi kết nối trước đóng.' }
         this.save(scope, stored)
@@ -81,10 +84,25 @@ export class GeminiSessions {
       const stored = JSON.parse(raw) as GeminiStoredSession
       if (!stored || stored.version !== 1 || stored.scope !== this.key(scope) || stored.info?.id !== id || stored.info.provider !== 'google-antigravity' ||
         (stored.nativeId !== null && !validNativeSessionId(stored.nativeId)) || !Array.isArray(stored.messages) || stored.messages.length > 20_000 ||
+        (stored.forkParentNativeId !== undefined && !validNativeSessionId(stored.forkParentNativeId)) ||
+        (stored.forkMessageCount !== undefined && (!Number.isSafeInteger(stored.forkMessageCount) || stored.forkMessageCount < 0 || stored.forkMessageCount > stored.messages.length)) ||
         stored.messages.some((message) => !message || typeof message.id !== 'string' || !['user', 'assistant'].includes(message.role) || typeof message.text !== 'string' || !Array.isArray(message.citations) || !Array.isArray(message.tools)) ||
         !validTask(stored.task, id) || !stored.usage || [stored.usage.inputTokens, stored.usage.outputTokens, stored.usage.cacheReadTokens, stored.usage.cacheWriteTokens].some((value) => !Number.isFinite(value) || value < 0)) throw fail('Bản ghi hội thoại Gemini không hợp lệ')
       return stored
     } catch { throw fail('Không khôi phục được hội thoại Gemini. Dữ liệu cũ được giữ để xử lý.') }
+  }
+  fork(scope: GeminiSessionScope, id: string): GeminiStoredSession {
+    const source = this.read(scope, id)
+    const parentNativeId = source.nativeId ?? source.forkParentNativeId
+    const now = Date.now()
+    const fork: GeminiStoredSession = {
+      version: 1, scope: source.scope, nativeId: null,
+      info: { ...source.info, id: randomUUID(), createdAt: now, updatedAt: now },
+      ...(parentNativeId ? { forkParentNativeId: parentNativeId } : {}),
+      messages: source.messages, forkMessageCount: source.messages.length, task: null, usage: emptyUsage()
+    }
+    this.save(scope, fork)
+    return fork
   }
   save(scope: GeminiSessionScope, stored: GeminiStoredSession): void {
     if (stored.scope !== this.key(scope) || !UUID.test(stored.info.id) || JSON.stringify(stored).length > 16_000_000) throw fail('Không ghi được hội thoại Gemini không hợp lệ hoặc quá lớn')

@@ -1,0 +1,25 @@
+.agent-history-list .agent-history-group {
+  padding: 6px 8px 2px;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.agent-history-group h3 { margin: 0; font: inherit; }
+
+.agent-history-row:is(:hover, :focus-within) .agent-history-actions {
+  position: static;
+  flex: none;
+  margin-right: 4px;
+}
+
+.agent-history-row:is(:hover, :focus-within) .agent-history-title time {
+  display: none;
+}
+
+.agent-history-actions .agent-icon-button.agent-history-pin {
+  width: auto;
+  padding: 0 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}

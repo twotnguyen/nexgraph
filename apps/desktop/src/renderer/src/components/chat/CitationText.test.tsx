@@ -25,6 +25,19 @@ describe('CitationText', () => {
     expect(screen.getByRole('button', { name: 'x.py:7' })).toBeInTheDocument()
   })
 
+  it('vẽ lại không dựng lại chip (bấm vẫn ăn khi cha re-render giữa mousedown và mouseup) và dùng onOpen mới nhất', async () => {
+    const citations = [{ raw: '[[a.ts:3]]', file: 'a.ts', start: 3, end: 3, valid: true, reason: null }]
+    const first = vi.fn()
+    const latest = vi.fn()
+    const view = render(<CitationText text="Xem [[a.ts:3]]" citations={citations} onOpen={first} />)
+    const chip = screen.getByRole('button', { name: 'a.ts:3' })
+    view.rerender(<CitationText text="Xem [[a.ts:3]]" citations={citations} onOpen={latest} />)
+    expect(screen.getByRole('button', { name: 'a.ts:3' })).toBe(chip)
+    await userEvent.click(chip)
+    expect(latest).toHaveBeenCalledWith('a.ts', 3, 3)
+    expect(first).not.toHaveBeenCalled()
+  })
+
   it('Markdown hiển thị heading, danh sách, bảng và code fence cùng citation đã xác minh', () => {
     const text = '# Kết quả\n\n- **Đã đọc** mã\n\n| Tệp | Kết quả |\n| --- | --- |\n| app.ts | Tốt |\n\n~~~ts\nconst value = 1\n~~~\n\nXem [[app.ts:2]].'
     const { container } = render(<CitationText text={text} onOpen={vi.fn()} citations={[

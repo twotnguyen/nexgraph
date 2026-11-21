@@ -159,7 +159,8 @@ type Entry = {
 
 function selectedModel(accounts: AgentAccounts): Model | undefined {
   const selected = accounts.getSelectedModel()
-  return selected ? accounts.modelRuntime.getModel(selected.provider, selected.id) : undefined
+  if (!selected || typeof selected.provider !== 'string' || typeof selected.id !== 'string') return undefined
+  return accounts.modelRuntime.getModel(selected.provider, selected.id)
 }
 
 const targetFor = (model: Model | undefined): AiConsentTarget | null =>
@@ -226,6 +227,7 @@ export class AgentService {
   private readonly starting = new Map<string, number>()
   private readonly generations = new Map<string, number>()
   private readonly rollbacks = new Set<string>()
+  private readonly forking = new Set<string>()
   private readonly store: SessionStore
 
   constructor(private readonly deps: AgentDeps) {
@@ -284,7 +286,7 @@ export class AgentService {
   pending(projectId: string): number { return this.entries.get(projectId)?.gate.pending() ?? 0 }
 
   private assertIdle(projectId: string): void {
-    if (this.rollbacks.has(projectId) || this.starting.has(projectId) || this.entries.get(projectId)?.busy) {
+    if (this.rollbacks.has(projectId) || this.forking.has(projectId) || this.starting.has(projectId) || this.entries.get(projectId)?.busy) {
       throw new AgentError('agent_busy', 'Trợ lý đang chạy tác vụ. Bấm Dừng trước khi đổi hội thoại hoặc quyền thực thi.')
     }
   }
@@ -345,6 +347,39 @@ export class AgentService {
     const generation = this.generations.get(projectId) ?? 0
     await this.ensureEntry(projectId, recipient, () => this.active(projectId, generation), undefined, true)
     return this.snapshot(projectId)
+  }
+
+  async forkSession(projectId: string, id: string): Promise<AgentSessionSnapshot> {
+    this.assertIdle(projectId)
+    this.forking.add(projectId)
+    const initialGeneration = this.generations.get(projectId) ?? 0
+    try {
+      const recipient = await this.recipient()
+      if (!recipient) throw new AgentError('ai_not_configured', 'Chọn mô hình trước khi tách hội thoại')
+      const root = realpathSync.native(await this.deps.rootOf(projectId))
+      const scope = this.scope(projectId, root, recipient)
+      if (!recipient.isCurrent()) throw providerChanged()
+      if (!this.active(projectId, initialGeneration)) throw providerChanged()
+      if (!this.store.list(scope).some((item) => item.id === id)) throw new AgentError('session_not_found', 'Hội thoại không thuộc tài khoản và dự án đang chọn')
+      const beforeRelease = this.generations.get(projectId) ?? 0
+      await this.release(projectId)
+      const generation = beforeRelease + 1
+      if (!this.active(projectId, generation)) throw providerChanged()
+      if (!recipient.isCurrent() || realpathSync.native(await this.deps.rootOf(projectId)) !== root) throw providerChanged()
+      let fork: StoredSession
+      try { fork = await this.store.fork(scope, recipient.model.id, id) } catch (error) {
+        const known = error as { code?: string; message?: string }
+        if (known.code && ['bad_param', 'session_not_found', 'session_missing', 'session_corrupt'].includes(known.code)) throw new AgentError(known.code, known.message ?? 'Không thể tách hội thoại')
+        throw error
+      }
+      const currentRoot = realpathSync.native(await this.deps.rootOf(projectId))
+      if (!this.active(projectId, generation) || !recipient.isCurrent() || currentRoot !== root) throw providerChanged()
+      this.executionSettings.delete(projectId)
+      await this.ensureEntry(projectId, recipient, () => this.active(projectId, generation), fork.record.id)
+      return await this.snapshot(projectId)
+    } finally {
+      this.forking.delete(projectId)
+    }
   }
 
   async switchSession(projectId: string, id: string): Promise<AgentSessionSnapshot> {
@@ -443,19 +478,26 @@ export class AgentService {
 
   async prompt(projectId: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions): Promise<void> {
     this.assertIdle(projectId)
-    if (typeof text !== 'string' || !text.trim() || text.length > 200_000) throw new AgentError('bad_param', 'Câu hỏi trống hoặc vượt 200.000 ký tự')
+    const images = options?.images ?? []
+    if (typeof text !== 'string' || (!text.trim() && images.length === 0) || text.length > 200_000) throw new AgentError('bad_param', 'Câu hỏi trống hoặc vượt 200.000 ký tự')
+    if (!text.trim()) text = 'Hãy phân tích ảnh đính kèm.'
     const generation = this.generations.get(projectId) ?? 0
     const active = (): boolean => this.active(projectId, generation)
     this.starting.set(projectId, generation)
     try {
       const recipient = await this.recipient()
       if (!active()) return
-      if (!recipient) throw new AgentError('ai_not_configured', 'Chưa cấu hình trợ lý AI')
+      if (!recipient) throw images.length
+        ? new AgentError('image_not_supported', 'Không xác định được mô hình và khả năng nhận ảnh. Hãy chọn mô hình hỗ trợ ảnh.')
+        : new AgentError('ai_not_configured', 'Chưa cấu hình trợ lý AI')
       const accounts = await this.deps.accounts()
       const consent = await accounts.hasConsent(projectId, target)
       if (!active()) return
       if (!recipient.isCurrent() || !sameConsentTarget(recipient.target, target)) throw providerChanged()
       if (!consent) throw new AgentError('consent_required', 'Chưa đồng ý gửi dữ liệu tới nhà cung cấp AI')
+      if (images.length && (!Array.isArray(recipient.model.input) || !recipient.model.input.includes('image'))) {
+        throw new AgentError('image_not_supported', 'Mô hình đang chọn không hỗ trợ ảnh hoặc chưa xác định được khả năng nhận ảnh.')
+      }
       const entry = await this.ensureEntry(projectId, recipient, active)
       if (!entry || !active()) return
       if (entry.busy) throw new AgentError('agent_busy', 'Trợ lý đang trả lời')
@@ -492,7 +534,7 @@ export class AgentService {
         entry.stored.manager.appendCustomEntry('nexgraph_input', { text: cleanAgentText(text, 200_000), context: context.items })
         this.store.touch(entry.stored, recipient.model.id, cleanAgentText(text, 200_000))
         const planning = this.getMode(projectId) === 'plan' ? '\n\nHãy lập kế hoạch cụ thể, nêu tệp và kiểm thử dự kiến. Chỉ đọc và phân tích trong lượt này.' : ''
-        const result = await this.run(projectId, entry, recipient.model, text + planning + (context.prompt ? '\n\n' + context.prompt : ''), active)
+        const result = await this.run(projectId, entry, recipient.model, text + planning + (context.prompt ? '\n\n' + context.prompt : ''), active, images)
         if (active()) {
           const completed = result.type === 'done'
           const error = result.type === 'error' ? result.message : undefined
@@ -550,7 +592,7 @@ export class AgentService {
     void entry.session.then((session) => session.abort()).catch(() => {})
   }
 
-  private async run(projectId: string, entry: Entry, model: Model, text: string, active: () => boolean): Promise<AgentEvent> {
+  private async run(projectId: string, entry: Entry, model: Model, text: string, active: () => boolean, images: NonNullable<AgentPromptOptions['images']>): Promise<AgentEvent> {
     const closed = () => !active() || this.entries.get(projectId) !== entry
     try {
       const session = await entry.session
@@ -558,7 +600,7 @@ export class AgentService {
       if (!entry.isCurrent()) return PROVIDER_CHANGED
       if (session.model?.provider !== model.provider || session.model?.id !== model.id) await session.setModel(model)
       this.assertTaskCurrent(projectId, entry)
-      await session.prompt(text, { expandPromptTemplates: false })
+      await session.prompt(text, { expandPromptTemplates: false, ...(images.length ? { images: images.map(({ mimeType, data }) => ({ type: 'image' as const, mimeType, data })) } : {}) } as Parameters<PiSession['prompt']>[1])
       if (closed()) return CANCELLED
       if (entry.limitError) return { type: 'error', code: 'agent_limit', message: entry.limitError }
       if (entry.dispatchBlocked || !entry.isCurrent()) return PROVIDER_CHANGED
@@ -601,6 +643,7 @@ export class AgentService {
   }
   selectionChanged(): void {
     for (const [projectId, entry] of this.entries) this.discardIfStale(projectId, entry)
+    for (const projectId of this.forking) this.invalidate(projectId)
   }
 
   private discardIfStale(projectId: string, entry: Entry): boolean {
@@ -638,7 +681,7 @@ export class AgentService {
   }
 
   closeAll(): void {
-    for (const projectId of new Set([...this.entries.keys(), ...this.starting.keys()])) this.close(projectId)
+    for (const projectId of new Set([...this.entries.keys(), ...this.starting.keys(), ...this.forking])) this.close(projectId)
   }
 
   private ensureEntry(projectId: string, recipient: Recipient, active: () => boolean, id?: string, fresh = false): Promise<Entry | undefined> {

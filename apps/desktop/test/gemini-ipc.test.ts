@@ -11,7 +11,7 @@ const h = vi.hoisted(() => ({
   status: vi.fn<() => Promise<GeminiCliStatus>>(),
   googleModels: vi.fn(), piModels: vi.fn(), googleTest: vi.fn<() => Promise<GeminiConnectionTest>>(), piTest: vi.fn(),
   googleSelect: vi.fn(), googleDisconnect: vi.fn(), googleForget: vi.fn(), googleLogin: vi.fn(),
-  googlePrompt: vi.fn(), piPrompt: vi.fn(), googleChanged: vi.fn(), piChanged: vi.fn(),
+  googlePrompt: vi.fn(), piPrompt: vi.fn(), googleFork: vi.fn(), piFork: vi.fn(), googleChanged: vi.fn(), piChanged: vi.fn(),
   piSelect: vi.fn(), setApiKey: vi.fn(), cancelLogin: vi.fn()
 }))
 
@@ -38,6 +38,7 @@ vi.mock('../src/main/agent/session', () => ({
   AgentService: class {
     selectionChanged() { h.piChanged() }
     prompt(...args: unknown[]) { return h.piPrompt(...args) }
+    forkSession(...args: unknown[]) { return h.piFork(...args) }
     snapshot() { return { runtime: 'pi' } }
   }
 }))
@@ -56,6 +57,7 @@ vi.mock('../src/main/gemini/service', () => ({ GeminiAgentService: class {
   selectionChanged() { h.googleChanged() }
   testConnection() { return h.googleTest() }
   prompt(...args: unknown[]) { return h.googlePrompt(...args) }
+  forkSession(...args: unknown[]) { return h.googleFork(...args) }
   snapshot() { return { runtime: 'antigravity-cli' } }
 } }))
 
@@ -96,6 +98,39 @@ beforeEach(() => {
   h.googlePrompt.mockResolvedValue(undefined); h.piPrompt.mockResolvedValue(undefined)
   h.handlers.clear()
   registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => null, () => ({ command: 'engine', args: [] }), base)
+})
+
+describe('agent attachments and fork IPC', () => {
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aX0AAAAASUVORK5CYII='
+  const target = { provider: 'google', baseUrl: 'https://api.example.com/v1' }
+
+  it('rejects malformed, oversized and mismatched image payloads before dispatch', async () => {
+    for (const images of [
+      'not-an-array',
+      [{ mimeType: 'image/svg+xml', data: png }],
+      [{ mimeType: 'image/jpeg', data: png }],
+      [{ mimeType: 'image/png', data: 'data:image/png;base64,' + png }],
+      [{ mimeType: 'image/png', data: 'AAAA===' }],
+      [{ mimeType: 'image/png', data: Buffer.from('not a real image').toString('base64') }],
+      [{ mimeType: 'image/png', data: 'A'.repeat(32 * 1024 * 1024 + 4) }]
+    ]) {
+      const result = await invoke('agent:prompt', 'p1', 'hello', target, { images })
+      expect(result).toMatchObject({ ok: false, error: { code: 'bad_param' } })
+    }
+    expect(h.piPrompt).not.toHaveBeenCalled()
+  })
+
+  it('passes a validated base64 image through and routes forks to the selected runtime', async () => {
+    expect(await invoke('agent:prompt', 'p1', 'hello', target, { images: [{ mimeType: 'image/png', data: png }] })).toMatchObject({ ok: true })
+    expect(h.piPrompt).toHaveBeenCalledWith('p1', 'hello', target, { images: [{ mimeType: 'image/png', data: png }] })
+    h.piFork.mockResolvedValueOnce({ session: { id: 'fork' } })
+    expect(await invoke('agent:fork-session', 'p1', 'source')).toMatchObject({ ok: true, data: { session: { id: 'fork' } } })
+    expect(h.piFork).toHaveBeenCalledWith('p1', 'source')
+    await ready()
+    h.googleFork.mockResolvedValueOnce({ session: { id: 'google-fork' } })
+    expect(await invoke('agent:fork-session', 'p1', 'source')).toMatchObject({ ok: true, data: { session: { id: 'google-fork' } } })
+    expect(h.googleFork).toHaveBeenCalledWith('p1', 'source')
+  })
 })
 
 describe('Gemini IPC runtime selection', () => {

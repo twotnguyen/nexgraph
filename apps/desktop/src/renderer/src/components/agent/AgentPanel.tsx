@@ -4,6 +4,10 @@ import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-t
 import { vi } from '../../strings'
 import { Icon } from '../common/icons'
 import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
+import { FileTypeIcon } from '../common/FileTypeIcon'
+import { rankFiles } from '../layout/FileFinder'
+import { runCommand } from '../../state/commands'
+import { completionToken, filterSlashCommands, imageError, removeQueued, replaceQueued, takeQueued } from './composer'
 import { ApprovalCard } from './ApprovalCard'
 import { CitationText } from '../chat/CitationText'
 import { ConsentDialog } from '../chat/ConsentDialog'
@@ -36,7 +40,25 @@ interface Props {
 
 type FileContext = { file: string; line: number; lineEnd?: number }
 type Msg = { id: number | string; role: 'user'; content: string; context?: FileContext } | { id: number | string; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
-type PendingConsent = { question: string; target: AiConsentTarget; model: string; context?: FileContext; attachments?: AgentContextItem[] }
+type ImageAttachment = { id: number; name: string; mimeType: string; dataUrl: string }
+type ComposerDraft = { text: string; context?: FileContext; attachments: AgentContextItem[]; images: ImageAttachment[] }
+type QueuedPrompt = ComposerDraft & { id: number; target: AiConsentTarget; model: string; sessionId: string | null }
+type PendingConsent = { question: string; target: AiConsentTarget; model: string; context?: FileContext; attachments?: AgentContextItem[]; images?: ImageAttachment[]; queued?: QueuedPrompt }
+
+const NO_CITATIONS: Citation[] = []
+
+const slashCommands = [
+  { name: 'new', detail: 'Tạo phiên mới' },
+  { name: 'model', detail: 'Chọn model' },
+  { name: 'resume', detail: 'Mở lịch sử trò chuyện' },
+  { name: 'clear', detail: 'Bắt đầu phiên mới' },
+  { name: 'stop', detail: 'Dừng trợ lý' },
+  { name: 'login', detail: 'Kết nối AI' },
+  { name: 'settings', detail: 'Mở cài đặt' },
+  { name: 'files', detail: 'Mở cây tệp' },
+  { name: 'terminal', detail: 'Mở terminal' },
+  { name: 'diff', detail: 'Mở thay đổi' }
+]
 
 /** Câu hỏi của lượt mà câu trả lời thứ `i` thuộc về. */
 function questionBefore(msgs: Msg[], i: number): string {
@@ -101,6 +123,18 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const [text, setText] = useState('')
   const [fileContext, setFileContext] = useState<FileContext>()
   const [attachments, setAttachments] = useState<AgentContextItem[]>([])
+  const [images, setImages] = useState<ImageAttachment[]>([])
+  const [queue, setQueue] = useState<QueuedPrompt[]>([])
+  const [editingQueue, setEditingQueue] = useState<{ id: number; draft: ComposerDraft } | null>(null)
+  const [stopping, setStopping] = useState(false)
+  const [stagingImages, setStagingImages] = useState(false)
+  const [cursor, setCursor] = useState(0)
+  const [focused, setFocused] = useState(false)
+  const [dismissedCompletion, setDismissedCompletion] = useState('')
+  const [completionIndex, setCompletionIndex] = useState(0)
+  const [projectFiles, setProjectFiles] = useState<string[] | null>(null)
+  const [fileListError, setFileListError] = useState('')
+  const [queueWake, setQueueWake] = useState(0)
   const [connect, setConnect] = useState(false)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [busy, setBusy] = useState(false)
@@ -123,11 +157,19 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   }, [projectId])
   const modeRef = useRef<AgentMode | null>(null)
   const modePending = useRef(true)
-  const turn = useRef<{ id: number; q: string; context?: FileContext; attachments?: AgentContextItem[]; tools: string[]; mode: AgentMode; cancelled?: boolean } | null>(null)
+  const turn = useRef<{ id: number; q: string; context?: FileContext; attachments: AgentContextItem[]; images: ImageAttachment[]; target: AiConsentTarget; model: string; sessionId: string | null; tools: string[]; mode: AgentMode; cancelled?: boolean; completed?: boolean } | null>(null)
   const turnSeq = useRef(0)
+  const imageSeq = useRef(0)
+  const queueSeq = useRef(0)
+  const queueRef = useRef<QueuedPrompt[]>([])
+  const queueReady = useRef(false)
+  const activeRun = useRef<Promise<void> | null>(null)
+  const composerRef = useRef<ComposerDraft>({ text: '', attachments: [], images: [] })
+  composerRef.current = { text, context: fileContext, attachments, images }
   const failedTurns = useRef(new Set<number>())
   const editWarned = useRef(false) // lần đầu sang Sửa giải thích việc duyệt từng tệp
   const mounted = useRef(true)
+  const projectGeneration = useRef(0)
   const visible = useRef(!hidden)
   visible.current = !hidden
   const scope = useRef<AiConsentTarget | null>(null)
@@ -135,6 +177,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const operationSeq = useRef(0)
   const messages = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
+  const imageInput = useRef<HTMLInputElement>(null)
+  const modelSelect = useRef<HTMLSelectElement>(null)
   const followMessages = useRef(true)
   const work = useAgentWorkbench(projectId, (snapshot) => {
     if (turn.current || operation.current !== null) return
@@ -147,6 +191,25 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setMode(snapshot.mode)
     if (snapshot.mode === 'edit') editWarned.current = true
   })
+  const sessionIdRef = useRef(work.sessionId)
+  const activeTarget = targetOf(cfg ?? { baseUrl: '', model: '', hasKey: false })
+  const sessionQueue = queue.filter((item) => item.sessionId === work.sessionId && sameConsentTarget(item.target, activeTarget))
+  useEffect(() => { sessionIdRef.current = work.sessionId }, [work.sessionId])
+
+  const setComposer = (value: ComposerDraft) => {
+    composerRef.current = value
+    setText(value.text)
+    setFileContext(value.context)
+    setAttachments(value.attachments)
+    setImages(value.images)
+    setCursor(value.text.length)
+  }
+  const updateQueue = (update: (current: QueuedPrompt[]) => QueuedPrompt[]) => {
+    queueRef.current = update(queueRef.current)
+    setQueue(queueRef.current)
+  }
+  const queuePrompt = (value: ComposerDraft, target: AiConsentTarget, model: string, sessionId: string | null): QueuedPrompt =>
+    ({ ...value, id: ++queueSeq.current, target, model, sessionId })
 
   useEffect(() => {
     if (hidden || !followMessages.current || !messages.current) return
@@ -156,6 +219,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const applySettings = (settings: AiSettings) => {
     const target = targetOf(settings)
     if (scope.current && !sameConsentTarget(scope.current, target)) {
+      if (editingQueue) { setComposer(editingQueue.draft); setEditingQueue(null) }
+      queueReady.current = false
       work.invalidate()
       setMsgs([])
       setApprovals([])
@@ -176,19 +241,27 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setDraft('')
   }
   const fail = (q: string, message: string) => {
-    const id = turn.current?.id ?? ++turnSeq.current
+    const current = turn.current
+    const id = current?.id ?? ++turnSeq.current
     if (failedTurns.current.has(id)) return
     failedTurns.current.add(id)
-    // Giữ câu hỏi và gắn thông báo lỗi vào đúng id lượt; không xoá phần tử cuối (có thể là lượt khác).
+    const continueQueue = !!current && sameConsentTarget(scope.current, current.target) && !!queueRef.current.some((item) => item.sessionId === current.sessionId && sameConsentTarget(item.target, current.target))
+    if (current) current.completed = continueQueue
     setMsgs((cur) => [...cur, { id, role: 'assistant', content: message, citations: [], tools: [] }])
-    setText(q)
-    setFileContext(turn.current?.context)
-    setAttachments(turn.current?.attachments ?? [])
+    if (current) {
+      const failed = { text: q, context: current.context, attachments: current.attachments, images: current.images }
+      const composing = composerRef.current
+      if (continueQueue && !composing.text.trim() && !composing.context && !composing.attachments.length && !composing.images.length) setComposer(failed)
+      else if (continueQueue || composing.text.trim() || composing.context || composing.attachments.length || composing.images.length)
+        updateQueue((items) => [...items, queuePrompt(failed, current.target, current.model, current.sessionId)])
+      else setComposer(failed)
+    }
     setError(message)
     end()
   }
 
   useEffect(() => {
+    projectGeneration.current++
     let alive = true
     let read = 0
     mounted.current = true
@@ -233,7 +306,17 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         setApprovals((cur) => cur.filter((a) => a.id !== e.id)) // id lạ không có gì để gỡ
         return
       }
+      if (e.type === 'session' && t && t.sessionId === null) {
+        t.sessionId = e.sessionId
+        sessionIdRef.current = e.sessionId
+        updateQueue((items) => items.map((item) => item.sessionId === null && sameConsentTarget(item.target, t.target) ? { ...item, sessionId: e.sessionId } : item))
+        return
+      }
       if (!t) return
+      if (t.cancelled) {
+        if (e.type === 'done' || e.type === 'error') end()
+        return
+      }
       if (e.type === 'write_conflict') {
         if (t.mode === 'edit') setError(e.message)
         return
@@ -243,12 +326,14 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         setTool(e.name)
       } else if (e.type === 'text') setDraft((d) => d + e.delta)
       else if (e.type === 'done') {
+        t.completed = true
         setMsgs((cur) => [...cur, { id: t.id, role: 'assistant', content: e.text, citations: e.citations, tools: t.tools }])
         end()
       } else if (e.type === 'error') fail(t.q, vi.chat.errors[e.code] || e.message)
     })
     return () => {
       alive = false
+      projectGeneration.current++
       mounted.current = false
       operation.current = null
       if (turn.current) void window.nexgraph.agent.abort(projectId)
@@ -260,6 +345,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
 
   useEffect(() => {
     if (!hidden) return
+    if (consent?.queued) updateQueue((items) => [consent.queued!, ...items])
     operation.current = null
     setConsent(null)
     setChecking(false)
@@ -272,7 +358,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
 
   const isCurrent = (id: number) => mounted.current && visible.current && operation.current === id
   const begin = () => {
-    if (!visible.current || operation.current !== null || turn.current || modePending.current || !modeRef.current || work.pending || work.loading || (modeRef.current === 'edit' && toolsUnavailable)) return null
+    if (!visible.current || operation.current !== null || turn.current || activeRun.current || modePending.current || !modeRef.current || work.pending || work.loading || (modeRef.current === 'edit' && toolsUnavailable)) return null
     const id = ++operationSeq.current
     work.invalidate()
     operation.current = id
@@ -332,63 +418,111 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     await pickMode(m)
   }
 
-  const run = async (question: string, target: AiConsentTarget, context?: FileContext, attached: AgentContextItem[] = attachments) => {
+  const run = (value: ComposerDraft, target: AiConsentTarget, model: string, clearComposer: boolean) => {
     const mode = modeRef.current
     if (!mode) return
+    const question = value.text.trim() || (value.images.length ? 'Hãy xem hình ảnh đính kèm.' : 'Hãy xem ngữ cảnh đính kèm.')
     const id = ++turnSeq.current
-    turn.current = { id, q: question, context, attachments: attached, tools: [], mode }
+    const current = { id, q: question, context: value.context, attachments: value.attachments, images: value.images, target, model, sessionId: work.sessionId, tools: [] as string[], mode, cancelled: false, completed: false }
+    turn.current = current
     followMessages.current = true
-    setMsgs((cur) => [...cur, { id, role: 'user', content: question, context }])
-    setText('')
-    setFileContext(undefined)
-    setAttachments([])
+    setMsgs((cur) => [...cur, { id, role: 'user', content: question, context: value.context }])
+    if (clearComposer) setComposer({ text: '', attachments: [], images: [] })
     setError(null)
     setBusy(true)
     setTool(null)
     setDraft('')
+    const task = (async () => {
+      try {
+        await beforePrompt?.()
+        if (!mounted.current || turn.current !== current || current.cancelled) return
+        const prompt = value.context ? `${question}\n\n${vi.chat.filePrompt(fileReference(value.context))}` : question
+        const imagePayload = value.images.map((image) => ({ mimeType: image.mimeType, data: image.dataUrl.slice(image.dataUrl.indexOf(',') + 1) }))
+        if (value.attachments.length || imagePayload.length) await window.nexgraph.agent.prompt(projectId, prompt, target, {
+          ...(value.attachments.length ? { context: value.attachments } : {}),
+          ...(imagePayload.length ? { images: imagePayload } : {})
+        })
+        else await window.nexgraph.agent.prompt(projectId, prompt, target)
+      } catch (e) {
+        if (!mounted.current || turn.current !== current || current.cancelled) return
+        if (errorCode(e) === 'ai_provider_changed') setMsgs((cur) => cur.filter((m) => m.id !== id))
+        fail(question, errorMessage(e))
+      }
+    })()
+    activeRun.current = task
+    void task.finally(() => {
+      if (activeRun.current !== task) return
+      activeRun.current = null
+      if (!mounted.current) return
+      if (turn.current === current && current.cancelled) end()
+      if (current.completed && !current.cancelled) queueReady.current = true
+      setQueueWake((count) => count + 1)
+    })
+  }
+
+  const sendDraft = async (value: ComposerDraft, queued?: QueuedPrompt) => {
+    const id = begin()
+    if (id === null) {
+      if (queued) updateQueue((items) => [queued, ...items])
+      return
+    }
     try {
-      await beforePrompt?.()
-      if (!mounted.current || turn.current?.id !== id || turn.current.cancelled) return
-      const prompt = context ? `${question}\n\n${vi.chat.filePrompt(fileReference(context))}` : question
-      if (attached.length) await window.nexgraph.agent.prompt(projectId, prompt, target, { context: attached })
-      else await window.nexgraph.agent.prompt(projectId, prompt, target)
+      const settings = await window.nexgraph.ai.getSettings()
+      if (!isCurrent(id)) {
+        if (queued && mounted.current) updateQueue((items) => [queued, ...items])
+        return
+      }
+      const selected = targetOf(settings)
+      if (queued && (!sameConsentTarget(selected, queued.target) || settings.model !== queued.model || queued.sessionId !== sessionIdRef.current))
+        throw new Error('Phiên hoặc model đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.')
+      const target = applySettings(settings)
+      if (!target) throw new Error(vi.chat.notConfigured)
+      const allowed = await window.nexgraph.ai.hasConsent(projectId, target)
+      if (!isCurrent(id)) {
+        if (queued && mounted.current) updateQueue((items) => [queued, ...items])
+        return
+      }
+      if (queued && queued.sessionId !== sessionIdRef.current) throw new Error('Phiên đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.')
+      if (allowed) run(value, target, settings.model, !queued)
+      else setConsent({ question: value.text, target, model: settings.model, context: value.context, attachments: value.attachments, images: value.images, queued })
     } catch (e) {
-      if (!mounted.current || turn.current?.id !== id) return
-      if (errorCode(e) === 'ai_provider_changed') {
-        setMsgs((cur) => cur.filter((m) => m.id !== id))
-        setText(question)
-        setFileContext(context)
-        setAttachments(attached)
+      if (isCurrent(id)) {
+        if (queued) updateQueue((items) => [queued, ...items])
         setError(errorMessage(e))
-        end()
-      } else fail(question, errorMessage(e))
+      }
+    } finally {
+      finish(id)
     }
   }
 
   const submit = async () => {
-    const q = text.trim()
-    if (!q || busy || consent || operation.current !== null || !visible.current) return
-    if (q === '/login') {
-      setText('')
-      setConnect(true)
+    const value = composerRef.current
+    if (consent || operation.current !== null || !visible.current || stopping || stagingImages) return
+    if (!value.text.trim() && !value.context && !value.attachments.length && !value.images.length) return
+    if (editingQueue) {
+      if (queueRef.current.some((item) => item.id === editingQueue.id)) updateQueue((items) => replaceQueued(items, editingQueue.id, { ...items.find((item) => item.id === editingQueue.id)!, ...value, id: editingQueue.id }))
+      setComposer(editingQueue.draft)
+      setEditingQueue(null)
+      setQueueWake((count) => count + 1)
       return
     }
-    const id = begin()
-    if (id === null) return
-    try {
-      const settings = await window.nexgraph.ai.getSettings()
-      if (!isCurrent(id)) return
-      const target = applySettings(settings)
-      if (!target) throw new Error(vi.chat.notConfigured)
-      const allowed = await window.nexgraph.ai.hasConsent(projectId, target)
-      if (!isCurrent(id)) return
-      if (allowed) void run(q, target, fileContext)
-      else setConsent({ question: q, target, model: settings.model, context: fileContext, attachments })
-    } catch (e) {
-      if (isCurrent(id)) setError(errorMessage(e))
-    } finally {
-      finish(id)
+    const command = value.text.trim().match(/^\/([\w-]+)$/)?.[1]
+    if (!value.attachments.length && !value.images.length && !value.context && command && slashCommands.some((item) => item.name === command)) {
+      executeSlash(command)
+      return
     }
+    const selectedModel = models.find((model) => model.provider === cfg?.provider && model.id === cfg?.model)
+    if (value.images.length && selectedModel?.supportsImages === false) { setError('Model hiện tại không nhận ảnh. Hãy đổi sang model hỗ trợ hình ảnh.'); return }
+    if (value.images.some((image) => cfg?.runtime === 'antigravity-cli') && !window.confirm('Gemini có thể không nhận ảnh trong phiên bản CLI này. Nếu không hỗ trợ, lượt gửi sẽ báo lỗi rõ ràng. Tiếp tục?')) return
+    if (busy || activeRun.current || queueRef.current.some((item) => item.sessionId === work.sessionId && sameConsentTarget(item.target, scope.current))) {
+      const target = scope.current
+      if (!target || !cfg?.model) { setError(vi.chat.notConfigured); return }
+      updateQueue((items) => [...items, queuePrompt(value, target, cfg.model, turn.current?.sessionId ?? sessionIdRef.current)])
+      setComposer({ text: '', attachments: [], images: [] })
+      if (!busy && !activeRun.current) { queueReady.current = true; setQueueWake((count) => count + 1) }
+      return
+    }
+    await sendDraft(value)
   }
 
   const confirmConsent = async (pending: PendingConsent) => {
@@ -397,25 +531,41 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setConsent(null)
     try {
       const settings = await window.nexgraph.ai.getSettings()
-      if (!isCurrent(id)) return
+      if (!isCurrent(id)) { if (pending.queued && mounted.current) updateQueue((items) => [pending.queued!, ...items]); return }
       const current = applySettings(settings)
+      if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.')
       if (!sameConsentTarget(current, pending.target) || settings.model !== pending.model)
         throw new Error(vi.chat.errors.ai_provider_changed)
       await window.nexgraph.ai.grantConsent(projectId, pending.target)
-      if (isCurrent(id)) void run(pending.question, pending.target, pending.context, pending.attachments)
+      if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.')
+      if (isCurrent(id)) run({ text: pending.question, context: pending.context, attachments: pending.attachments ?? [], images: pending.images ?? [] }, pending.target, pending.model, !pending.queued)
+      else if (pending.queued && mounted.current) updateQueue((items) => [pending.queued!, ...items])
     } catch (e) {
-      if (isCurrent(id)) setError(errorMessage(e))
+      if (isCurrent(id)) {
+        if (pending.queued) updateQueue((items) => [pending.queued!, ...items])
+        setError(errorMessage(e))
+      }
     } finally {
       finish(id)
     }
   }
 
-  const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault()
-      void submit()
+  useEffect(() => {
+    if (!editingQueue) return
+    const item = queueRef.current.find((entry) => entry.id === editingQueue.id)
+    if (item && (item.sessionId !== work.sessionId || !sameConsentTarget(item.target, activeTarget))) {
+      setComposer(editingQueue.draft)
+      setEditingQueue(null)
     }
-  }
+  }, [editingQueue, work.sessionId, cfg])
+  useEffect(() => {
+    if (!queueReady.current || busy || activeRun.current || operation.current !== null || checking || stopping || consent || hidden || work.pending || work.loading) return
+    const next = takeQueued(queueRef.current.filter((item) => item.sessionId === work.sessionId && sameConsentTarget(item.target, scope.current)), editingQueue?.id)
+    if (!next) { queueReady.current = false; return }
+    queueReady.current = false
+    updateQueue((items) => removeQueued(items, next.item.id))
+    void sendDraft(next.item, next.item)
+  }, [queue, queueWake, busy, checking, stopping, consent, hidden, work.pending, work.loading, work.sessionId, editingQueue])
 
   const highlight = async (citations: Citation[]) => {
     const seen = new Set<string>()
@@ -448,7 +598,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     })
   }
   const modeLocked = changingMode || checking || !!consent || work.pending || work.loading
-  const composerLocked = !configured || !mode || busy || modeLocked || (mode === 'edit' && toolsUnavailable)
+  const composerLocked = !configured || !mode || modeLocked || stopping || (mode === 'edit' && toolsUnavailable)
   const changeModel = async (key: string) => {
     if (busy || checking) return
     setChecking(true)
@@ -464,16 +614,140 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const attachedFile = attachments.find((item) => item.kind === 'file')
   const attachEditor = () => {
     const item = getEditorContext?.()
-    if (item) { setAttachments((current) => [...current.filter((attachment) => attachment.kind !== 'file'), { ...item }]); setFileContext(undefined) }
+    if (item) { setAttachments((current) => [...current.filter((attachment) => attachment.kind !== 'file' || item.kind !== 'file' || attachment.file !== item.file), { ...item }]); setFileContext(undefined) }
     else setFileContext(activeFile)
     input.current?.focus()
   }
   const stop = () => {
+    queueReady.current = false
     const current = turn.current
+    const running = activeRun.current
     if (current) current.cancelled = true
+    setStopping(true)
     void window.nexgraph.agent.abort(projectId).catch((e) => { if (mounted.current) setError(errorMessage(e)) }).finally(() => {
-      if (mounted.current && turn.current === current) end()
+      if (!mounted.current) return
+      if (turn.current === current) end()
+      if (activeRun.current === running) activeRun.current = null
+      setStopping(false)
     })
+  }
+
+  const sendNow = async (item: QueuedPrompt) => {
+    updateQueue((items) => removeQueued(items, item.id))
+    queueReady.current = false
+    const current = turn.current
+    const running = activeRun.current
+    if (current) current.cancelled = true
+    const generation = projectGeneration.current
+    setStopping(true)
+    try {
+      if (current || running) await window.nexgraph.agent.abort(projectId)
+      if (running) await running
+      if (!mounted.current || generation !== projectGeneration.current) return
+      if (activeRun.current === running) activeRun.current = null
+      if (turn.current === current && current) end()
+      if (item.sessionId === null && current?.sessionId) item = { ...item, sessionId: current.sessionId }
+      if (!visible.current) { updateQueue((items) => [item, ...items]); return }
+      await sendDraft(item, item)
+    } catch (e) {
+      if (mounted.current && generation === projectGeneration.current) { updateQueue((items) => [item, ...items]); setError(errorMessage(e)) }
+    } finally {
+      if (mounted.current && generation === projectGeneration.current) setStopping(false)
+    }
+  }
+
+  const executeSlash = (name: string, erase = true) => {
+    if (['new', 'clear', 'model', 'resume', 'login'].includes(name) && (busy || !!activeRun.current || checking || work.pending || work.loading)) {
+      setError('Dừng trợ lý trước khi đổi phiên hoặc model.')
+      return false
+    }
+    if (erase) setComposer({ ...composerRef.current, text: '' })
+    setDismissedCompletion('')
+    if (name === 'new' || name === 'clear') { void work.create(); setView('chat') }
+    else if (name === 'resume') { setView('history'); void work.refresh().catch((e) => setError(errorMessage(e))) }
+    else if (name === 'model') {
+      if (!modelSelect.current) setError('Chưa có danh sách model. Hãy kết nối AI trước.')
+      else { modelSelect.current.focus(); modelSelect.current.showPicker?.() }
+    } else if (name === 'stop') stop()
+    else if (name === 'login') setConnect(true)
+    else if (name === 'settings') onOpenSettings()
+    else if (name === 'files') runCommand('explorer.toggle')
+    else if (name === 'terminal') runCommand('terminal.toggle')
+    else if (name === 'diff') runCommand('changes.toggle')
+    return true
+  }
+
+  const token = focused ? completionToken(text, cursor) : null
+  const tokenKey = token ? `${token.kind}:${token.start}:${token.query}` : ''
+  const completion = token && tokenKey !== dismissedCompletion ? token : null
+  useEffect(() => {
+    if (completion?.kind !== 'mention' || projectFiles !== null || fileListError) return
+    let live = true
+    const load = window.nexgraph.fs.files
+    if (!load) { setFileListError('Không liệt kê được tệp ở chế độ này.'); return }
+    void load(projectId).then(({ files }) => { if (live) setProjectFiles(files) }).catch((e) => { if (live) setFileListError(errorMessage(e)) })
+    return () => { live = false }
+  }, [completion?.kind, projectFiles, fileListError, projectId])
+  const commandRows = completion?.kind === 'command' ? filterSlashCommands(slashCommands, completion.query) : []
+  const fileRows = completion?.kind === 'mention' ? rankFiles(projectFiles ?? [], completion.query).slice(0, 50).map((row) => row.item) : []
+  const completionCount = completion?.kind === 'command' ? commandRows.length : fileRows.length
+  const selectedCompletion = completionCount ? completionIndex % completionCount : 0
+
+  const acceptCompletion = (index: number) => {
+    if (!completion) return
+    if (completion.kind === 'command') {
+      const command = commandRows[index]
+      if (!command || !executeSlash(command.name, false)) return
+    } else {
+      const file = fileRows[index]
+      if (!file) return
+      if (!attachments.some((item) => item.kind === 'file' && item.file === file)) {
+        if (attachments.length >= 12) { setError('Mỗi lượt hỗ trợ tối đa 12 mục ngữ cảnh.'); return }
+        setAttachments((current) => [...current, { kind: 'file', file }])
+      }
+    }
+    const next = text.slice(0, completion.start) + text.slice(completion.end)
+    setText(next)
+    setCursor(completion.start)
+    setDismissedCompletion('')
+    requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(completion.start, completion.start) })
+  }
+
+  const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing) return
+    if (completion) {
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && completionCount) {
+        event.preventDefault()
+        setCompletionIndex((selectedCompletion + (event.key === 'ArrowDown' ? 1 : completionCount - 1)) % completionCount)
+        return
+      }
+      if (event.key === 'Escape') { event.preventDefault(); setDismissedCompletion(tokenKey); return }
+      if ((event.key === 'Enter' || event.key === 'Tab') && completionCount && !event.shiftKey) {
+        event.preventDefault(); acceptCompletion(selectedCompletion); return
+      }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void submit() }
+  }
+
+  const addImages = async (files: File[]) => {
+    if (stagingImages || !files.length) return
+    const problems = files.map(imageError).filter((problem): problem is string => !!problem)
+    if (problems.length) setError(problems.join(' '))
+    const valid = files.filter((file) => !imageError(file))
+    if (!valid.length) return
+    setStagingImages(true)
+    try {
+      const added = await Promise.all(valid.map((file) => new Promise<ImageAttachment>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => typeof reader.result === 'string'
+          ? resolve({ id: ++imageSeq.current, name: file.name || 'Ảnh', mimeType: file.type, dataUrl: reader.result }) : reject(new Error('Không đọc được ảnh.'))
+        reader.onerror = () => reject(new Error(`Không đọc được ${file.name}.`))
+        reader.onabort = () => reject(new Error(`Đã hủy đọc ${file.name}.`))
+        reader.readAsDataURL(file)
+      })))
+      if (mounted.current) setImages((current) => [...current, ...added])
+    } catch (e) { if (mounted.current) setError(errorMessage(e)) }
+    finally { if (mounted.current) setStagingImages(false) }
   }
 
   const workLocked = busy || checking || work.pending || work.loading
@@ -556,7 +830,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
               )}
             </div>
           ))}
-          {busy && draft && <div className="ai"><CitationText text={draft} citations={[]} onOpen={onOpenCode} /></div>}
+          {busy && draft && <div className="ai"><CitationText text={draft} citations={NO_CITATIONS} onOpen={onOpenCode} /></div>}
           {busy && <div className="ai agent-thinking muted" role="status"><span className="agent-spinner" aria-hidden="true" />{tool ? vi.chat.usingTool(tool) : vi.chat.thinking}</div>}
         </div>
         <div className="agent-workbench-status"><WorkbenchStatus projectId={projectId} work={work} busy={busy || checking} onInspect={onInspect} /></div>
@@ -566,26 +840,60 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
           </div>
         )}
         <div className="compose">
-          <div className="agent-composer">
-            {(attachments.length > 0 || fileContext) && <div className="agent-attachments">
-              {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={busy || checking} aria-label={`Gỡ ${contextLabel(item)}`} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={11} /></button></div>)}
+          {sessionQueue.length > 0 && <div className="agent-queue" aria-label="Hàng đợi tin nhắn">
+            {sessionQueue.map((item) => <div className="agent-queue-row" key={item.id}>
+              {editingQueue?.id === item.id ? <>
+                <span>Đang sửa trong ô soạn tin</span>
+                <button type="button" disabled={stagingImages} onClick={() => void submit()}>Lưu</button>
+                <button type="button" disabled={stagingImages} onClick={() => { setComposer(editingQueue.draft); setEditingQueue(null); setQueueWake((count) => count + 1) }}>Hủy</button>
+              </> : <>
+                {item.images[0] && <img src={item.images[0].dataUrl} alt="" />}
+                <span title={item.text}>{item.text.trim() || (item.images.length ? 'Hình ảnh' : 'Ngữ cảnh đính kèm')}</span>
+                <button type="button" className="agent-icon-button" aria-label="Gỡ tin khỏi hàng đợi" title="Gỡ" disabled={stopping || stagingImages || !!editingQueue} onClick={() => updateQueue((items) => removeQueued(items, item.id))}><Icon name="trash" size={13} /></button>
+                <button type="button" className="agent-icon-button" aria-label="Sửa tin trong hàng đợi" title="Sửa" disabled={stopping || stagingImages} onClick={() => {
+                  const draft = editingQueue?.draft ?? composerRef.current
+                  setEditingQueue({ id: item.id, draft })
+                  setComposer(item)
+                  input.current?.focus()
+                }}><Icon name="pencil" size={13} /></button>
+                <button type="button" title="Dừng trợ lý và gửi ngay tin này" disabled={stopping || stagingImages || !!editingQueue || checking || work.pending || work.loading || !!consent} onClick={() => void sendNow(item)}>Gửi ngay</button>
+              </>}
+            </div>)}
+          </div>}
+          <div className="agent-composer" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
+            onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages(Array.from(event.dataTransfer.files)) } }}>
+            {completion && <div id="agent-completions" className="agent-completions" role="listbox" aria-label={completion.kind === 'command' ? 'Lệnh' : 'Tệp trong dự án'}>
+              {completion.kind === 'command' ? commandRows.map((command, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={command.name} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><b>/{command.name}</b><span>{command.detail}</span></button>)
+                : fileRows.map((file, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={file} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><FileTypeIcon name={file} /><b>{file.slice(file.lastIndexOf('/') + 1)}</b><span>{file.slice(0, file.lastIndexOf('/') + 1)}</span></button>)}
+              {!completionCount && <div className="agent-completion-empty">{completion.kind === 'command' ? 'Không có lệnh khớp' : fileListError || (projectFiles ? 'Không có tệp khớp' : 'Đang liệt kê tệp…')}</div>}
+            </div>}
+            {(attachments.length > 0 || fileContext || images.length > 0 || stagingImages) && <div className="agent-attachments">
+              {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{item.kind === 'file' ? '@' : ''}{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={checking || stopping} aria-label={`Gỡ ${contextLabel(item)}`} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={11} /></button></div>)}
               {fileContext && <div className="agent-attachment">
                 <span className="mono" title={fileReference(fileContext)}>{fileReference(fileContext)}</span>
                 <button type="button" className="agent-icon-button" disabled={composerLocked} aria-label={vi.chat.removeFile} onClick={() => setFileContext(undefined)}><Icon name="close" size={11} /></button>
               </div>}
+              {images.map((image) => <div className="agent-image" key={image.id}><img src={image.dataUrl} alt={image.name} /><button type="button" className="agent-icon-button" aria-label={`Gỡ ảnh ${image.name}`} title="Gỡ ảnh" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))}><Icon name="close" size={11} /></button></div>)}
+              {stagingImages && <span className="agent-image-loading">Đang chuẩn bị ảnh…</span>}
             </div>}
-            <textarea ref={input} value={text} aria-label={vi.chat.message} placeholder={vi.chat.placeholder} rows={3} disabled={busy || modeLocked} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
+            <textarea ref={input} value={text} aria-label={vi.chat.message} placeholder={vi.chat.placeholder} rows={3} disabled={modeLocked || stopping}
+              aria-autocomplete="list" aria-expanded={!!completion} aria-controls={completion ? 'agent-completions' : undefined} aria-activedescendant={completionCount ? `agent-completion-${selectedCompletion}` : undefined}
+              onFocus={(event) => { setFocused(true); setCursor(event.currentTarget.selectionStart) }} onBlur={() => setFocused(false)}
+              onSelect={(event) => setCursor(event.currentTarget.selectionStart)} onChange={(event) => { setText(event.target.value); setCursor(event.target.selectionStart); setCompletionIndex(0); setDismissedCompletion('') }} onKeyDown={onKey}
+              onPaste={(event) => { const files = Array.from(event.clipboardData.items).filter((item) => item.kind === 'file').map((item) => item.getAsFile()).filter((file): file is File => !!file); if (files.length) { event.preventDefault(); void addImages(files) } }} />
             <div className="agent-composer-actions">
+              <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(event) => { void addImages(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
+              <button type="button" className="agent-round" aria-label="Đính kèm ảnh" title="Đính kèm ảnh" disabled={composerLocked || stagingImages} onClick={() => imageInput.current?.click()}><Icon name="plus" size={17} /></button>
               <button type="button" className="agent-round" aria-label={vi.chat.attachFile} disabled={composerLocked || !activeFile || (!getEditorContext && fileReference(activeFile) === (fileContext && fileReference(fileContext)))}
-                title={activeFile ? `${vi.chat.attachFile}: ${fileReference(activeFile)}` : vi.chat.noActiveFile} onClick={attachEditor}><Icon name="plus" size={17} /></button>
+                title={activeFile ? `${vi.chat.attachFile}: ${fileReference(activeFile)}` : vi.chat.noActiveFile} onClick={attachEditor}><Icon name="folder" size={15} /></button>
               {graphContext && <button type="button" className="agent-chip" disabled={composerLocked || attachments.some((item) => item.kind === graphContext.kind && contextLabel(item) === contextLabel(graphContext))} title={`Đính kèm ${contextLabel(graphContext)}`} aria-label="Đính kèm đồ thị" onClick={() => setAttachments((current) => [...current, { ...graphContext }])}><Icon name="graph" size={14} />Đồ thị</button>}
-              {availableModels.length > 0 && configured ? <select className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
+              {availableModels.length > 0 && configured ? <select ref={modelSelect} className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
                 {!availableModels.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model === 'auto' ? 'Tự động' : cfg?.model}</option>}
                 {availableModels.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.id === 'auto' ? 'Tự động' : model.label}</option>)}
               </select> : <span className="agent-model" title={configured ? `${connectionLabel(cfg)} · ${cfg?.model}` : undefined}>{configured ? cfg?.model === 'auto' ? 'Tự động' : cfg?.model : 'Chưa chọn model'}</span>}
-              {busy
-                ? <button type="button" className="agent-send" aria-label={vi.chat.stop} title={vi.chat.stop} onClick={stop}><span className="agent-stop-square" /></button>
-                : <button type="button" className="agent-send" aria-label={vi.chat.send} title={vi.chat.send} disabled={(text.trim() !== '/login' && composerLocked) || !text.trim()} onClick={() => void submit()}><Icon name="send" size={15} /></button>}
+              {busy && !text.trim() && !attachments.length && !fileContext && !images.length && !editingQueue
+                ? <button type="button" className="agent-send" aria-label={vi.chat.stop} title={vi.chat.stop} disabled={stopping} onClick={stop}><span className="agent-stop-square" /></button>
+                : <button type="button" className="agent-send" aria-label={editingQueue ? 'Lưu vào hàng đợi' : busy ? 'Xếp hàng' : vi.chat.send} title={editingQueue ? 'Lưu vào hàng đợi' : busy ? 'Xếp hàng' : vi.chat.send} disabled={(text.trim() !== '/login' && composerLocked) || stagingImages || (!text.trim() && !attachments.length && !fileContext && !images.length)} onClick={() => void submit()}><Icon name="send" size={15} /></button>}
             </div>
           </div>
           <div className="agent-composer-foot">
@@ -612,7 +920,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       }} />}
       {consent && !hidden && (
         <ConsentDialog project={projectName} target={consent.target} model={consent.model}
-          onCancel={() => setConsent(null)}
+          onCancel={() => { if (consent.queued) updateQueue((items) => [consent.queued!, ...items]); setConsent(null) }}
           onOk={() => void confirmConsent(consent)} />
       )}
     </aside>

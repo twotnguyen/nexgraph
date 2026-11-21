@@ -547,6 +547,7 @@ export class AccountService {
           ...(!custom || custom.contextWindow ? { contextWindow: m.contextWindow } : {}),
           ...(!custom || custom.maxTokens ? { maxTokens: m.maxTokens } : {}),
           ...(!custom || typeof custom.supportsTools === 'boolean' ? { supportsTools: custom?.supportsTools ?? true } : {}),
+          supportsImages: Array.isArray(m.input) && m.input.includes('image'),
           cost: { input: cost?.input ?? null, output: cost?.output ?? null },
           pricing: local ? 'local' : subscription ? 'subscription'
             : !cost ? 'unknown' : cost.input === 0 && cost.output === 0 ? 'free' : 'known'

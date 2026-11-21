@@ -80,6 +80,7 @@ export type ModelInfo = {
   contextWindow?: number
   maxTokens?: number
   supportsTools?: boolean
+  supportsImages?: boolean
   cost?: { input: number | null; output: number | null }
   pricing?: 'known' | 'unknown' | 'free' | 'subscription' | 'local'
 }
@@ -91,7 +92,7 @@ export type AgentContextItem =
   | { kind: 'flow'; flowId: number; label?: string }
   | { kind: 'architecture'; blockId: string; label?: string }
 
-export type AgentPromptOptions = { context?: AgentContextItem[] }
+export type AgentPromptOptions = { context?: AgentContextItem[]; images?: { mimeType: string; data: string }[] }
 export type AgentEditorState = { file: string; dirty: boolean; version?: string }
 export type AgentRunLimits = { maxTurns: number; maxDurationMs: number; maxTokens: number }
 export type AgentUsage = {

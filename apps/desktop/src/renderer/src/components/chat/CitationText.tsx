@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import ReactMarkdown from 'react-markdown'
+import { useMemo, useRef } from 'react'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Citation } from '@shared/graph-types'
 import { vi } from '../../strings'
@@ -51,26 +51,30 @@ function citationPlugin(citations: Citation[]) {
 
 export function CitationText({ text, citations, onOpen }: Props) {
   const plugin = useMemo(() => citationPlugin(citations), [citations])
+  const open = useRef(onOpen)
+  open.current = onOpen
+  // Giữ nguyên danh tính component giữa các lần vẽ: hàm mới mỗi lần làm React dựng lại chip, nên bấm trượt khi cha vẽ lại giữa mousedown và mouseup.
+  const components = useMemo<Components>(() => ({
+    a: ({ children, href, node }) => {
+      const index = node?.properties.dataNexgraphCitation
+      const citation = typeof index === 'string' ? citations[Number(index)] : undefined
+      if (citation) return citation.valid ? (
+        <button type="button" className="cite" onClick={() => open.current(citation.file, citation.start, citation.end)}>{label(citation)}</button>
+      ) : (
+        <button type="button" className="cite bad" disabled title={citation.reason ? vi.chat.reason[citation.reason] : undefined}
+          aria-label={`${label(citation)} ${vi.chat.unverified}`}>{label(citation)}</button>
+      )
+      const safe = externalUrl(href)
+      return safe ? <a href={safe} target="_blank" rel="noopener noreferrer">{children}</a> : <span>{children}</span>
+    },
+    img: ({ alt }) => <span className="markdown-image">{alt ? `Hình ảnh · ${alt}` : 'Hình ảnh'}</span>,
+    table: ({ children }) => <div className="markdown-table"><table>{children}</table></div>
+  }), [citations])
   return (
     <div className="chat-text markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm, plugin]} skipHtml
         urlTransform={(url) => url === '#nexgraph-citation' ? url : externalUrl(url) ?? ''}
-        components={{
-          a: ({ children, href, node }) => {
-            const index = node?.properties.dataNexgraphCitation
-            const citation = typeof index === 'string' ? citations[Number(index)] : undefined
-            if (citation) return citation.valid ? (
-              <button type="button" className="cite" onClick={() => onOpen(citation.file, citation.start, citation.end)}>{label(citation)}</button>
-            ) : (
-              <button type="button" className="cite bad" disabled title={citation.reason ? vi.chat.reason[citation.reason] : undefined}
-                aria-label={`${label(citation)} ${vi.chat.unverified}`}>{label(citation)}</button>
-            )
-            const safe = externalUrl(href)
-            return safe ? <a href={safe} target="_blank" rel="noopener noreferrer">{children}</a> : <span>{children}</span>
-          },
-          img: ({ alt }) => <span className="markdown-image">{alt ? `Hình ảnh · ${alt}` : 'Hình ảnh'}</span>,
-          table: ({ children }) => <div className="markdown-table"><table>{children}</table></div>
-        }}>{text}</ReactMarkdown>
+        components={components}>{text}</ReactMarkdown>
     </div>
   )
 }

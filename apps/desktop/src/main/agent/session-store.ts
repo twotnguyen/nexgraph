@@ -124,6 +124,33 @@ export class SessionStore {
     return { scope, directory, record, manager }
   }
 
+  async fork(scope: SessionScope, model: string, sourceId: string): Promise<StoredSession> {
+    const source = await this.open(scope, model, sourceId)
+    const { SessionManager } = await this.sdk()
+    const sourcePath = source.manager.getSessionFile()!
+    const id = randomUUID()
+    const manager = existsSync(sourcePath)
+      ? SessionManager.forkFrom(sourcePath, scope.root, source.directory, { id })
+      : SessionManager.create(scope.root, source.directory, { id })
+    const sourceLeaf = source.manager.getLeafId()
+    if (sourceLeaf && manager.getLeafId() !== sourceLeaf) {
+      manager.branch(sourceLeaf)
+      manager.appendCustomEntry('nexgraph_fork')
+    }
+    const now = Date.now()
+    const record: SessionRecord = {
+      id, title: source.record.title, provider: scope.provider, baseUrl: scope.baseUrl,
+      model: source.record.model, createdAt: now, updatedAt: now,
+      messageCount: manager.getBranch().filter((item) => item.type === 'message').length,
+      file: basename(manager.getSessionFile() ?? `${new Date().toISOString().replace(/[:.]/g, '-')}_${id}.jsonl`)
+    }
+    const index = this.index(scope)
+    index.sessions.push(record)
+    index.activeId = id
+    this.save(scope, index)
+    return { scope, directory: source.directory, record, manager }
+  }
+
   touch(session: StoredSession, model: string, firstPrompt?: string): void {
     const index = this.index(session.scope)
     const record = index.sessions.find((item) => item.id === session.record.id)

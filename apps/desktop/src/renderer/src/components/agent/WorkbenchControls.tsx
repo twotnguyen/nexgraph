@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import type { AgentMode, ProjectCommands } from '@shared/agent-types'
 import { Icon } from '../common/icons'
 import type { AgentInspection, AgentWorkbench } from './useAgentWorkbench'
+import './agent-history.css'
 
 const messageOf = (e: unknown): string => e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
 
@@ -21,35 +22,48 @@ export function WorkbenchHistory({ work, busy, onPicked }: { work: AgentWorkbenc
   const locked = busy || work.pending || work.loading
   const needle = query.trim().toLocaleLowerCase('vi')
   const sessions = needle ? work.sessions.filter((session) => session.title.toLocaleLowerCase('vi').includes(needle)) : work.sessions
+  const pinned = sessions.filter((session) => work.pinnedIds.includes(session.id))
+  const unpinned = sessions.filter((session) => !work.pinnedIds.includes(session.id))
   return <section className="agent-history" aria-label="Lịch sử trò chuyện">
     <label className="agent-history-search"><Icon name="search" size={15} />
       <input type="search" aria-label="Tìm cuộc trò chuyện" placeholder="Tìm cuộc trò chuyện…" value={query} onChange={(event) => setQuery(event.target.value)} />
     </label>
+    {work.error && <p role="alert" className="error">{work.error}</p>}
     {work.sessions.length === 0 ? <div className="agent-history-empty">
       <Icon name="chat" size={28} />
       <strong>Chưa có cuộc trò chuyện</strong>
       <span>Bắt đầu một phiên với trợ lý.</span>
       <button type="button" disabled={locked} onClick={() => { void work.create(); onPicked?.() }}><Icon name="plus" size={14} />Phiên mới</button>
     </div> : sessions.length === 0 ? <p className="agent-history-empty">Không có cuộc trò chuyện khớp</p> : <ul className="agent-history-list">
-      {sessions.map((session) => <li className="agent-history-row" key={session.id} aria-current={session.id === work.sessionId ? 'true' : undefined}>
-        {renaming?.id === session.id ? <form className="agent-session-rename" onSubmit={(event) => {
-          event.preventDefault()
-          if (renaming.title.trim()) void work.rename(session.id, renaming.title.trim()).then(() => setRenaming(null))
-        }}>
-          <input aria-label="Tên cuộc trò chuyện" value={renaming.title} disabled={locked} autoFocus onChange={(event) => setRenaming({ id: session.id, title: event.target.value })} />
-          <button type="submit" disabled={locked || !renaming.title.trim()}>Lưu tên</button>
-          <button type="button" disabled={locked} onClick={() => setRenaming(null)}>Hủy</button>
-        </form> : <>
-          <button type="button" className="agent-history-title" disabled={locked} title={`${session.provider} · ${session.model}`}
-            onClick={() => { void work.switchTo(session.id); onPicked?.() }}>
-            <span>{session.title}</span><time dateTime={new Date(session.updatedAt).toISOString()}>{ago(session.updatedAt)}</time>
-          </button>
-          <span className="agent-history-actions">
-            <button type="button" className="agent-icon-button" disabled={locked} aria-label={`Đổi tên ${session.title}`} title="Đổi tên" onClick={() => setRenaming({ id: session.id, title: session.title })}><Icon name="pencil" size={13} /></button>
-            <button type="button" className="agent-icon-button" disabled={locked} aria-label={`Xóa ${session.title}`} title="Xóa" onClick={() => { if (window.confirm(`Xóa cuộc trò chuyện “${session.title}”?`)) void work.remove(session.id) }}><Icon name="trash" size={13} /></button>
-          </span>
-        </>}
-      </li>)}
+      {pinned.length > 0 && <li className="agent-history-group" role="presentation"><h3>Đã ghim</h3></li>}
+      {[...pinned, ...unpinned].map((session, index) => <Fragment key={session.id}>
+        {pinned.length > 0 && index === pinned.length && <li className="agent-history-group" role="presentation"><h3>Khác</h3></li>}
+        <li className="agent-history-row" aria-current={session.id === work.sessionId ? 'true' : undefined}>
+          {renaming?.id === session.id ? <form className="agent-session-rename" onSubmit={(event) => {
+            event.preventDefault()
+            if (renaming.title.trim()) void work.rename(session.id, renaming.title.trim()).then(() => setRenaming(null))
+          }}>
+            <input aria-label="Tên cuộc trò chuyện" value={renaming.title} disabled={locked} autoFocus onChange={(event) => setRenaming({ id: session.id, title: event.target.value })} />
+            <button type="submit" disabled={locked || !renaming.title.trim()}>Lưu tên</button>
+            <button type="button" disabled={locked} onClick={() => setRenaming(null)}>Hủy</button>
+          </form> : <>
+            <button type="button" className="agent-history-title" disabled={locked} title={`${session.provider} · ${session.model}`}
+              onClick={() => { void work.switchTo(session.id); onPicked?.() }}>
+              <span>{session.title}</span><time dateTime={new Date(session.updatedAt).toISOString()}>{ago(session.updatedAt)}</time>
+            </button>
+            <span className="agent-history-actions">
+              <button type="button" className="agent-icon-button agent-history-pin" disabled={locked} aria-pressed={work.pinnedIds.includes(session.id)}
+                aria-label={`${work.pinnedIds.includes(session.id) ? 'Bỏ ghim' : 'Ghim'} ${session.title}`}
+                title={`${work.pinnedIds.includes(session.id) ? 'Bỏ ghim' : 'Ghim'} ${session.title}`}
+                onClick={() => work.togglePin(session.id)}>{work.pinnedIds.includes(session.id) ? 'Bỏ ghim' : 'Ghim'}</button>
+              <button type="button" className="agent-icon-button" disabled={locked} aria-label={`Tạo nhánh từ ${session.title}`} title={`Tạo nhánh từ ${session.title}`}
+                onClick={() => { void work.fork(session.id, onPicked) }}><Icon name="branch" size={13} /></button>
+              <button type="button" className="agent-icon-button" disabled={locked} aria-label={`Đổi tên ${session.title}`} title={`Đổi tên ${session.title}`} onClick={() => setRenaming({ id: session.id, title: session.title })}><Icon name="pencil" size={13} /></button>
+              <button type="button" className="agent-icon-button" disabled={locked} aria-label={`Xóa ${session.title}`} title={`Xóa ${session.title}`} onClick={() => { if (window.confirm(`Xóa cuộc trò chuyện “${session.title}”?`)) void work.remove(session.id) }}><Icon name="trash" size={13} /></button>
+            </span>
+          </>}
+        </li>
+      </Fragment>)}
     </ul>}
   </section>
 }

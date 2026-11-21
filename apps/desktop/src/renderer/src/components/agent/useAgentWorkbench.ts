@@ -5,10 +5,23 @@ export type AgentInspection = { id: string; title: string; text?: string; before
 const defaults: AgentRunLimits = { maxTurns: 30, maxDurationMs: 600_000, maxTokens: 120_000 }
 const emptyUsage: AgentUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: null }
 const messageOf = (e: unknown): string => e instanceof Error ? e.message : e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
+const pinKeyPrefix = 'nexgraph.agent.pinned.'
+const readPins = (projectId: string): string[] => {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(pinKeyPrefix + projectId) ?? '[]')
+    return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.trim().length > 0))] : []
+  } catch { return [] }
+}
+const writePins = (projectId: string, ids: string[]): boolean => {
+  try { localStorage.setItem(pinKeyPrefix + projectId, JSON.stringify(ids)); return true } catch { return false }
+}
+const pinStorageError = 'Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'
 
 /** Telemetry and durable history are separate from the in-flight composer draft. */
 export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: AgentSessionSnapshot) => void) {
   const alive = useRef(true)
+  const activeProject = useRef(projectId)
+  activeProject.current = projectId
   const readSeq = useRef(0)
   const mutationSeq = useRef(0)
   const loadingSeq = useRef(0)
@@ -17,6 +30,8 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
   const receive = useRef(onSnapshot)
   receive.current = onSnapshot
   const [sessions, setSessions] = useState<AgentSessionInfo[]>([])
+  const [pins, setPins] = useState(() => ({ projectId, ids: readPins(projectId) }))
+  const pinnedIds = pins.projectId === projectId ? pins.ids : readPins(projectId)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [task, setTask] = useState<AgentTask | null>(null)
   const [tools, setTools] = useState<AgentToolRun[]>([])
@@ -63,6 +78,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     alive.current = true
     const generation = ++mutationSeq.current
     mutating.current = false
+    setPins({ projectId, ids: readPins(projectId) })
     setPending(false); setError('')
     void restore().catch((e) => { if (alive.current && generation === mutationSeq.current) setError(messageOf(e)) })
     const off = window.nexgraph.agent.onEvent((pid, event) => {
@@ -80,7 +96,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     })
     return () => { alive.current = false; readSeq.current++; mutationSeq.current++; loadingSeq.current++; off() }
   }, [projectId])
-  const mutate = async <T,>(fn: () => Promise<T>, update?: (value: T) => void) => {
+  const mutate = async <T,>(fn: () => Promise<T>, update?: (value: T) => void, onApplied?: () => void) => {
     if (mutating.current || loadingRef.current) return
     mutating.current = true
     const mutation = ++mutationSeq.current
@@ -91,6 +107,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       const value = await fn()
       if (!current()) return
       update?.(value)
+      onApplied?.()
       const list = await window.nexgraph.agent.listSessions(projectId)
       if (current()) setSessions(list)
     } catch (e) { if (current()) setError(messageOf(e)) }
@@ -101,14 +118,28 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       }
     }
   }
-  return { sessions, sessionId, task, tools, usage, execution, limits, notice, error, pending, loading,
+  return { sessions, pinnedIds, sessionId, task, tools, usage, execution, limits, notice, error, pending, loading,
     invalidate: () => { readSeq.current++ },
     restore,
     refresh,
     create: () => mutate(() => window.nexgraph.agent.newSession(projectId), apply),
     switchTo: (id: string) => mutate(() => window.nexgraph.agent.switchSession(projectId, id), apply),
+    fork: (id: string, onApplied?: () => void) => mutate(() => window.nexgraph.agent.forkSession(projectId, id), apply, onApplied),
+    togglePin: (id: string) => {
+      const next = pinnedIds.includes(id) ? pinnedIds.filter((pin) => pin !== id) : [...pinnedIds, id]
+      setPins({ projectId, ids: next })
+      setError(writePins(projectId, next) ? '' : pinStorageError)
+    },
     rename: (id: string, title: string) => mutate(() => window.nexgraph.agent.renameSession(projectId, id, title)),
-    remove: (id: string) => mutate(async () => { await window.nexgraph.agent.deleteSession(projectId, id); return window.nexgraph.agent.snapshot(projectId) }, apply),
+    remove: (id: string) => mutate(async () => {
+      const generation = mutationSeq.current
+      await window.nexgraph.agent.deleteSession(projectId, id)
+      const saved = readPins(projectId)
+      if (saved.includes(id) && !writePins(projectId, saved.filter((pin) => pin !== id)) && alive.current && activeProject.current === projectId) setError(pinStorageError)
+      if (alive.current && activeProject.current === projectId)
+        setPins((current) => ({ projectId, ids: (current.projectId === projectId ? current.ids : saved).filter((pin) => pin !== id) }))
+      return alive.current && generation === mutationSeq.current ? window.nexgraph.agent.snapshot(projectId) : null
+    }, (snapshot) => { if (snapshot) apply(snapshot) }),
     saveExecution: (value: AgentExecutionSettings) => mutate(() => window.nexgraph.agent.setExecution(projectId, value), () => setExecution(value)),
     saveLimits: (value: AgentRunLimits) => mutate(() => window.nexgraph.agent.setLimits(projectId, value), () => setLimits(value)),
     rollback: () => task ? mutate(async () => {

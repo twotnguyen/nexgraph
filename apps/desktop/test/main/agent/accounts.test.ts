@@ -484,9 +484,18 @@ describe('AccountService', () => {
     await svc.saveCustomProvider({ id: 'unknown', label: 'Unknown', baseUrl: 'https://example.com/v1', model: 'm' })
     svc.selectModel('unknown', 'm')
     expect((await svc.listModels()).find((m) => m.provider === 'unknown')).toEqual({
-      provider: 'unknown', id: 'm', label: 'm', pricing: 'unknown', cost: { input: null, output: null }
+      provider: 'unknown', id: 'm', label: 'm', pricing: 'unknown', supportsImages: false, cost: { input: null, output: null }
     })
     expect(svc.selectedModelPricing()).toBe('unknown')
+  })
+
+  it('reports image support from the Pi model input capabilities', async () => {
+    const { svc } = await make()
+    await svc.saveCustomProvider({ id: 'image-check', label: 'Image check', baseUrl: 'https://example.com/v1', model: 'm' })
+    const model = svc.modelRuntime.getModel('image-check', 'm') as { id: string; input: string[] }
+    expect((await svc.listModels()).find((item) => item.provider === 'image-check')?.supportsImages).toBe(false)
+    model.input.push('image')
+    expect((await svc.listModels()).find((item) => item.provider === 'image-check')?.supportsImages).toBe(true)
   })
 
   it('kiểm tra kết nối xác minh cả stream lẫn tool call có marker đúng', async () => {

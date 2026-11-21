@@ -19,7 +19,7 @@ const TARGET: GeminiConsentTarget = { runtime: 'antigravity-cli', provider: 'goo
 
 class FakeAcp implements GeminiAcpClient {
   sessionCwd: string
-  initializeResult = { agentCapabilities: { loadSession: true } }
+  initializeResult = { agentCapabilities: { loadSession: true, promptCapabilities: { image: false } } }
   handlers: Parameters<GeminiAcpClient['setHandlers']>[0] = {}
   stopped = false
   calls: { method: string; params: Record<string, unknown> }[] = []
@@ -114,6 +114,84 @@ describe('Gemini controlled runtime', () => {
     expect(f.createClient).toHaveBeenCalledTimes(2)
     expect(f.clients[1].calls[0].method).toBe('session/load')
   })
+  it('forks local history into a new native session with prior text and tool results in its first prompt', async () => {
+    const f = setup()
+    f.script(async (client) => {
+      await client.tool('read', { path: 'a.ts' })
+      client.delta('Original answer')
+      return { stopReason: 'end_turn' }
+    })
+    await f.service.prompt('p', 'Original question', TARGET)
+    const parent = await f.service.snapshot('p')
+    const originalNative = f.clients[0].sid
+    await f.service.renameSession('p', parent.session!.id, 'Named history')
+    f.service.setExecution('p', { policy: 'auto', allowCommands: true })
+    const fork = await f.service.forkSession('p', parent.session!.id)
+    expect(fork.session?.id).not.toBe(parent.session!.id)
+    expect(fork.session?.title).toBe('Named history')
+    expect(fork.messages).toEqual(parent.messages)
+    expect(fork.task).toBeNull()
+    expect(fork.execution).toEqual({ policy: 'review', allowCommands: false })
+    f.script(async (client) => { client.delta('Fork answer'); return { stopReason: 'end_turn' } })
+    await f.service.prompt('p', 'Fork question', TARGET)
+    const client = f.clients[1]
+    expect(client.sid).not.toBe(originalNative)
+    expect(client.calls[0].method).toBe('session/new')
+    const sent = JSON.stringify(client.calls.find((call) => call.method === 'session/prompt')?.params.prompt)
+    expect(sent).toContain('Original question')
+    expect(sent).toContain('Original answer')
+    expect(sent).toContain('read')
+    expect(sent).toContain('value = 1')
+    expect((await f.service.switchSession('p', parent.session!.id)).messages).toEqual(parent.messages)
+    await expect(f.service.forkSession('other', parent.session!.id)).rejects.toMatchObject({ code: 'session_not_found' })
+  })
+  it('rejects a CLI that returns the parent native session ID for a fork', async () => {
+    const f = setup()
+    await f.service.prompt('p', 'source', TARGET)
+    const parent = (await f.service.snapshot('p')).session!.id
+    const nativeId = f.clients[0].sid
+    await f.service.forkSession('p', parent)
+    f.createClient.mockImplementationOnce(async () => {
+      const client = new FakeAcp(f.root)
+      client.sid = nativeId
+      f.clients.push(client)
+      return client
+    })
+    await expect(f.service.prompt('p', 'fork', TARGET)).rejects.toMatchObject({ code: 'session_fork_unavailable' })
+    expect(f.clients[1].calls.some((call) => call.method === 'session/prompt')).toBe(false)
+  })
+
+  it('replays fork history again in a fresh native session after the first prompt is cancelled', async () => {
+    const f = setup()
+    await f.service.prompt('p', 'old question', TARGET)
+    const parent = (await f.service.snapshot('p')).session!.id
+    await f.service.forkSession('p', parent)
+    f.script(async () => ({ stopReason: 'cancelled' }))
+    await f.service.prompt('p', 'failed attempt', TARGET)
+    f.script(async (client) => { client.delta('finished'); return { stopReason: 'end_turn' } })
+    await f.service.prompt('p', 'retry', TARGET)
+    expect(f.clients[2].calls[0].method).toBe('session/new')
+    expect(JSON.stringify(f.clients[2].calls.find((call) => call.method === 'session/prompt')?.params.prompt)).toContain('old question')
+  })
+
+
+  it('sends image blocks only when the ACP image capability is advertised', async () => {
+    const f = setup()
+    const image = { mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aX0AAAAASUVORK5CYII=' }
+    await expect(f.service.prompt('p', 'inspect', TARGET, { images: [image] })).rejects.toMatchObject({ code: 'image_not_supported' })
+    expect(f.clients[0].calls.some((call) => call.method === 'session/prompt')).toBe(false)
+    f.createClient.mockImplementationOnce(async () => {
+      const client = new FakeAcp(f.root)
+      client.initializeResult.agentCapabilities.promptCapabilities.image = true
+      f.clients.push(client)
+      return client
+    })
+    await f.service.prompt('p', '', TARGET, { images: [image] })
+    const prompt = f.clients[1].calls.find((call) => call.method === 'session/prompt')!.params.prompt as unknown[]
+    expect(prompt).toContainEqual({ type: 'image', ...image })
+    expect((await f.service.snapshot('p')).messages.at(-2)?.text).toContain('ảnh')
+  })
+
   it('restores the native CLI session and ignores ACP session/load transcript replay', async () => {
     const f = setup(); await f.service.prompt('p', 'first', TARGET)
     const nativeId = f.clients[0].sid
@@ -220,6 +298,23 @@ describe('Gemini controlled runtime', () => {
     await f.service.abort('p')
     const client = new FakeAcp(f.root); resolve(client); await run
     expect(client.closed()).toBe(true); expect(client.calls).toHaveLength(0)
+  })
+
+  it('allows a queued prompt only after abort and the old prompt have settled', async () => {
+    const f = setup()
+    await f.service.prompt('p', 'first', TARGET)
+    let release!: (value: unknown) => void
+    const gate = new Promise<unknown>((resolve) => { release = resolve })
+    f.script(() => gate)
+    const oldPrompt = f.service.prompt('p', 'old', TARGET)
+    await vi.waitFor(() => expect(f.clients[1].calls.some((call) => call.method === 'session/prompt')).toBe(true))
+    await f.service.abort('p')
+    await expect(f.service.prompt('p', 'too early', TARGET)).rejects.toMatchObject({ code: 'agent_busy' })
+    release({ stopReason: 'end_turn' })
+    await oldPrompt
+    f.script(async () => ({ stopReason: 'end_turn' }))
+    await expect(f.service.prompt('p', 'queued', TARGET)).resolves.toBeUndefined()
+    expect((await f.service.snapshot('p')).messages.at(-2)?.text).toBe('queued')
   })
   it('does not fall back to an API connection after disconnect and scopes history per identity', async () => {
     const f = setup(); await f.service.prompt('p', 'first identity', TARGET)

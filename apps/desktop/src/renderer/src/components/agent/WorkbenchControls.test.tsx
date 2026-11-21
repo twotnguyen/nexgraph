@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSnapshot, ProjectCommands } from '@shared/agent-types'
@@ -13,18 +13,27 @@ const pending = <T,>() => {
   return { promise, resolve }
 }
 const info = { id: 's1', title: 'Hội thoại một', createdAt: 1, updatedAt: 2, provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'm', messageCount: 1 }
-function Controls({ projectId = 'p1', runtime }: { projectId?: string; runtime?: 'pi' | 'antigravity-cli' }) {
-  const work = useAgentWorkbench(projectId, () => {})
+function Controls({ projectId = 'p1', runtime, onPicked, onSnapshot }: { projectId?: string; runtime?: 'pi' | 'antigravity-cli'; onPicked?: () => void; onSnapshot?: (snapshot: AgentSessionSnapshot) => void }) {
+  const work = useAgentWorkbench(projectId, onSnapshot ?? (() => {}))
   return <>
     <WorkbenchStatus projectId={projectId} work={work} busy={false} />
     <WorkbenchSettings projectId={projectId} work={work} busy={false} mode="edit" runtime={runtime} />
-    <WorkbenchHistory work={work} busy={false} />
+    <WorkbenchHistory work={work} busy={false} onPicked={onPicked} />
   </>
 }
 const openSettings = async () => {
   await waitFor(() => expect(screen.getByLabelText('Phút / tác vụ')).toBeEnabled())
 }
-afterEach(() => vi.restoreAllMocks())
+const enabledButton = async (name: string) => {
+  const button = await screen.findByRole('button', { name })
+  await waitFor(() => expect(button).toBeEnabled())
+  return button
+}
+const clickAction = (button: HTMLElement) => {
+  fireEvent.mouseOver(button.closest('li')!)
+  fireEvent.click(button)
+}
+afterEach(() => { vi.restoreAllMocks(); localStorage.clear() })
 
 describe('WorkbenchControls', () => {
   it('không hiển thị số lượt hoặc số dư Pro giả khi CLI không cung cấp thống kê', async () => {
@@ -65,9 +74,7 @@ describe('WorkbenchControls', () => {
   it('đổi tên bằng ô nhập trong ứng dụng và gọi rename đúng phiên', async () => {
     const { api } = installNexgraph({ agent: { listSessions: vi.fn(async () => [info]) } })
     render(<Controls />)
-    const rename = await screen.findByRole('button', { name: 'Đổi tên Hội thoại một' })
-    await waitFor(() => expect(rename).toBeEnabled())
-    await userEvent.click(rename)
+    clickAction(await enabledButton('Đổi tên Hội thoại một'))
     const name = screen.getByRole('textbox', { name: 'Tên cuộc trò chuyện' })
     await userEvent.clear(name)
     await userEvent.type(name, 'Tên mới')
@@ -85,6 +92,228 @@ describe('WorkbenchControls', () => {
     expect(ago(0, 17 * 60_000)).toBe('17 phút')
     expect(ago(0, 3 * 86_400_000)).toBe('3 ngày')
     expect(ago(0, 15 * 86_400_000)).toBe('2 tuần')
+  })
+
+  it('giữ nhóm ghim theo dự án khi chuyển dự án, tải lại và bỏ ghim', async () => {
+    const second = { ...info, id: 's2', title: 'Sửa lỗi đăng nhập' }
+    const third = { ...info, id: 's3', title: 'Xem báo cáo' }
+    installNexgraph({ agent: { listSessions: vi.fn(async (pid) => pid === 'p1'
+      ? [info, second, third] : [{ ...third, title: 'Phiên dự án hai' }]) } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Ghim Xem báo cáo'))
+    clickAction(screen.getByRole('button', { name: 'Ghim Sửa lỗi đăng nhập' }))
+    expect(screen.getByText('Đã ghim')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Khác' })).toBeInTheDocument()
+    expect(Array.from(screen.getByRole('list').querySelectorAll('.agent-history-title span'), (node) => node.textContent))
+      .toEqual(['Sửa lỗi đăng nhập', 'Xem báo cáo', 'Hội thoại một'])
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' }), 'đăng')
+    expect(screen.getByText('Đã ghim')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Khác' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Xem báo cáo')).not.toBeInTheDocument()
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' }))
+    view.rerender(<Controls projectId="p2" />)
+    expect(await screen.findByRole('button', { name: 'Ghim Phiên dự án hai' })).toBeInTheDocument()
+    expect(screen.queryByText('Đã ghim')).not.toBeInTheDocument()
+    clickAction(await enabledButton('Ghim Phiên dự án hai'))
+    view.rerender(<Controls projectId="p1" />)
+    expect(await screen.findByRole('button', { name: 'Bỏ ghim Sửa lỗi đăng nhập' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ghim Hội thoại một' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Bỏ ghim Sửa lỗi đăng nhập' })).toHaveAttribute('aria-pressed', 'true')
+    view.rerender(<Controls projectId="p2" />)
+    expect(await screen.findByRole('button', { name: 'Bỏ ghim Phiên dự án hai' })).toBeInTheDocument()
+    view.rerender(<Controls projectId="p1" />)
+    await enabledButton('Bỏ ghim Sửa lỗi đăng nhập')
+    view.unmount()
+
+    const restored = render(<Controls />)
+    clickAction(await enabledButton('Bỏ ghim Sửa lỗi đăng nhập'))
+    expect(screen.getByRole('button', { name: 'Bỏ ghim Xem báo cáo' })).toBeInTheDocument()
+    restored.unmount()
+    render(<Controls />)
+    expect(await screen.findByRole('button', { name: 'Ghim Sửa lỗi đăng nhập' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bỏ ghim Xem báo cáo' })).toBeInTheDocument()
+  })
+
+  it('khôi phục dữ liệu ghim sai định dạng và bỏ ghim trùng lặp', async () => {
+    localStorage.setItem('nexgraph.agent.pinned.p1', '[null,42,"s1","s1",""]')
+    installNexgraph({ agent: { listSessions: vi.fn(async () => [info]) } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Bỏ ghim Hội thoại một'))
+    expect(screen.queryByText('Đã ghim')).not.toBeInTheDocument()
+    view.unmount()
+    localStorage.setItem('nexgraph.agent.pinned.p1', '{')
+    render(<Controls />)
+    expect(await screen.findByRole('button', { name: 'Ghim Hội thoại một' })).toBeInTheDocument()
+  })
+
+  it('vẫn mở lịch sử khi không đọc được bộ nhớ ghim và lưu lại khi có thể', async () => {
+    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage unavailable') })
+    installNexgraph({ agent: { listSessions: vi.fn(async () => [info]) } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Ghim Hội thoại một'))
+    expect(screen.getByRole('button', { name: 'Bỏ ghim Hội thoại một' })).toBeInTheDocument()
+    getItem.mockRestore()
+    view.unmount()
+    render(<Controls />)
+    expect(await screen.findByRole('button', { name: 'Bỏ ghim Hội thoại một' })).toBeInTheDocument()
+  })
+
+  it('bỏ ghim phiên đã xóa ngay cả khi tải snapshot sau đó thất bại', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const snapshot = vi.fn(async () => emptyAgentSnapshot()).mockResolvedValueOnce(emptyAgentSnapshot())
+      .mockRejectedValueOnce(new Error('Không tải được snapshot'))
+    const { api } = installNexgraph({ agent: { snapshot, listSessions: vi.fn(async () => [info]) } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Ghim Hội thoại một'))
+    clickAction(screen.getByRole('button', { name: 'Xóa Hội thoại một' }))
+    expect(await within(screen.getByRole('region', { name: 'Lịch sử trò chuyện' })).findByRole('alert')).toHaveTextContent('Không tải được snapshot')
+    expect(api.agent.deleteSession).toHaveBeenCalledWith('p1', 's1')
+    view.unmount()
+    render(<Controls />)
+    expect(await screen.findByRole('button', { name: 'Ghim Hội thoại một' })).toBeInTheDocument()
+  })
+
+  it('giữ ghim nếu không xóa được hội thoại', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    installNexgraph({ agent: {
+      deleteSession: vi.fn(async () => { throw new Error('Không thể xóa') }),
+      listSessions: vi.fn(async () => [info])
+    } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Ghim Hội thoại một'))
+    clickAction(screen.getByRole('button', { name: 'Xóa Hội thoại một' }))
+    expect(await within(screen.getByRole('region', { name: 'Lịch sử trò chuyện' })).findByRole('alert')).toHaveTextContent('Không thể xóa')
+    view.unmount()
+    render(<Controls />)
+    expect(await screen.findByRole('button', { name: 'Bỏ ghim Hội thoại một' })).toBeInTheDocument()
+  })
+
+  it('xóa ghim của dự án gốc dù chuyển dự án trong khi đang xóa', async () => {
+    const deletion = pending<void>()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    installNexgraph({ agent: {
+      deleteSession: vi.fn(() => deletion.promise),
+      listSessions: vi.fn(async (pid) => pid === 'p1' ? [info] : [{ ...info, title: 'Phiên dự án hai' }])
+    } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Ghim Hội thoại một'))
+    clickAction(screen.getByRole('button', { name: 'Xóa Hội thoại một' }))
+    view.rerender(<Controls projectId="p2" />)
+    await enabledButton('Ghim Phiên dự án hai')
+    await act(async () => deletion.resolve())
+    view.rerender(<Controls projectId="p1" />)
+    expect(await screen.findByRole('button', { name: 'Ghim Hội thoại một' })).toBeInTheDocument()
+  })
+
+  it('xóa ghim khi quay lại dự án trước khi thao tác xóa hoàn tất', async () => {
+    const deletion = pending<void>()
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    installNexgraph({ agent: {
+      deleteSession: vi.fn(() => deletion.promise),
+      listSessions: vi.fn(async (pid) => pid === 'p1' ? [info] : [{ ...info, title: 'Phiên dự án hai' }])
+    } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Ghim Hội thoại một'))
+    clickAction(screen.getByRole('button', { name: 'Xóa Hội thoại một' }))
+    view.rerender(<Controls projectId="p2" />)
+    await enabledButton('Ghim Phiên dự án hai')
+    view.rerender(<Controls projectId="p1" />)
+    await enabledButton('Bỏ ghim Hội thoại một')
+    await act(async () => deletion.resolve())
+    expect(screen.getByRole('button', { name: 'Ghim Hội thoại một' })).toBeInTheDocument()
+  })
+
+  it('không khôi phục ghim cũ từ phiên đang tải khi xóa hoàn tất', async () => {
+    const deletion = pending<void>()
+    const firstList = pending<(typeof info)[]>()
+    let p1Reads = 0
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    installNexgraph({ agent: {
+      deleteSession: vi.fn(() => deletion.promise),
+      listSessions: vi.fn((pid) => pid === 'p1'
+        ? ++p1Reads === 1 ? Promise.resolve([info]) : firstList.promise
+        : Promise.resolve([{ ...info, title: 'Phiên dự án hai' }]))
+    } })
+    const view = render(<Controls />)
+    clickAction(await enabledButton('Ghim Hội thoại một'))
+    clickAction(screen.getByRole('button', { name: 'Xóa Hội thoại một' }))
+    view.rerender(<Controls projectId="p2" />)
+    await enabledButton('Ghim Phiên dự án hai')
+    view.rerender(<Controls projectId="p1" />)
+    await waitFor(() => expect(p1Reads).toBe(2))
+    await act(async () => deletion.resolve())
+    await act(async () => firstList.resolve([info]))
+    expect(await enabledButton('Ghim Hội thoại một')).toBeInTheDocument()
+  })
+
+  it('báo lỗi lưu ghim nhưng vẫn cho phép dùng trong phiên hiện tại', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage unavailable') })
+    installNexgraph({ agent: { listSessions: vi.fn(async () => [info]) } })
+    render(<Controls />)
+    clickAction(await enabledButton('Ghim Hội thoại một'))
+    expect(screen.getByRole('button', { name: 'Bỏ ghim Hội thoại một' })).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Lịch sử trò chuyện' })).getByRole('alert')).toHaveTextContent('Không thể lưu')
+  })
+
+  it('tạo nhánh của phiên và mở snapshot mới mà không xóa phiên cũ', async () => {
+    const child = { ...info, id: 's2', title: 'Nhánh mới' }
+    const forked = { ...emptyAgentSnapshot(), session: child }
+    let sessions = [info]
+    const forkSession = vi.fn(async () => { sessions = [child, info]; return forked })
+    const onPicked = vi.fn()
+    const onSnapshot = vi.fn()
+    const { api } = installNexgraph({ agent: { forkSession, listSessions: vi.fn(async () => sessions) } })
+    render(<Controls onPicked={onPicked} onSnapshot={onSnapshot} />)
+    clickAction(await enabledButton('Tạo nhánh từ Hội thoại một'))
+    await waitFor(() => expect(onPicked).toHaveBeenCalledTimes(1))
+    expect(forkSession).toHaveBeenCalledWith('p1', 's1')
+    expect(onSnapshot).toHaveBeenCalledWith(forked)
+    expect((await screen.findByRole('button', { name: /^Nhánh mới/ })).closest('li')).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByRole('button', { name: /^Hội thoại một/ })).toBeInTheDocument()
+    expect(api.agent.deleteSession).not.toHaveBeenCalled()
+  })
+
+  it('mở nhánh ngay sau khi nhận snapshot dù danh sách chưa tải lại', async () => {
+    const list = pending<(typeof info)[]>()
+    const child = { ...info, id: 's2', title: 'Nhánh mới' }
+    const onPicked = vi.fn()
+    const onSnapshot = vi.fn()
+    installNexgraph({ agent: {
+      listSessions: vi.fn().mockResolvedValueOnce([info]).mockImplementation(() => list.promise),
+      forkSession: vi.fn(async () => ({ ...emptyAgentSnapshot(), session: child }))
+    } })
+    render(<Controls onPicked={onPicked} onSnapshot={onSnapshot} />)
+    clickAction(await enabledButton('Tạo nhánh từ Hội thoại một'))
+    await waitFor(() => expect(onPicked).toHaveBeenCalledTimes(1))
+    expect(onSnapshot).toHaveBeenCalledWith(expect.objectContaining({ session: child }))
+    await act(async () => list.resolve([child, info]))
+  })
+
+  it('giữ lịch sử và hiện lỗi nếu tạo nhánh thất bại', async () => {
+    const onPicked = vi.fn()
+    installNexgraph({ agent: { forkSession: vi.fn(async () => { throw new Error('Không thể tạo nhánh') }), listSessions: vi.fn(async () => [info]) } })
+    render(<Controls onPicked={onPicked} />)
+    clickAction(await enabledButton('Tạo nhánh từ Hội thoại một'))
+    expect(await within(screen.getByRole('region', { name: 'Lịch sử trò chuyện' })).findByRole('alert')).toHaveTextContent('Không thể tạo nhánh')
+    expect(onPicked).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^Hội thoại một/ })).toBeInTheDocument()
+  })
+
+  it('không mở nhánh của dự án cũ khi chuyển dự án trước khi hoàn tất', async () => {
+    const fork = pending<AgentSessionSnapshot>()
+    const onPicked = vi.fn()
+    const onSnapshot = vi.fn()
+    installNexgraph({ agent: { forkSession: vi.fn(() => fork.promise), listSessions: vi.fn(async (pid) =>
+      pid === 'p1' ? [info] : [{ ...info, title: 'Phiên dự án hai' }]) } })
+    const view = render(<Controls onPicked={onPicked} onSnapshot={onSnapshot} />)
+    clickAction(await enabledButton('Tạo nhánh từ Hội thoại một'))
+    view.rerender(<Controls projectId="p2" onPicked={onPicked} onSnapshot={onSnapshot} />)
+    await enabledButton('Ghim Phiên dự án hai')
+    const oldFork = { ...emptyAgentSnapshot(), session: { ...info, id: 'old-fork' } }
+    await act(async () => fork.resolve(oldFork))
+    expect(onPicked).not.toHaveBeenCalled()
+    expect(onSnapshot).not.toHaveBeenCalledWith(oldFork)
   })
 
   it('xác nhận bật tự động và từ chối bật chạy lệnh không thay đổi quyền lệnh', async () => {

@@ -206,13 +206,13 @@ describe('AgentPanel', () => {
     expect(screen.getByText('Ghi tệp lib/new.dart')).toBeInTheDocument()
   })
 
-  it('nút Dừng gọi agent.abort; đang chạy thì ô nhập khoá', async () => {
+  it('nút Dừng gọi agent.abort; đang chạy vẫn soạn được tin kế tiếp', async () => {
     const { api } = installNexgraph({ ...consented(), agent: { prompt: pending() } })
     render(<AgentPanel {...props()} />)
     const box = await screen.findByPlaceholderText(/Hỏi về dự án/)
     await waitFor(() => expect(box).toBeEnabled())
     await userEvent.type(box, 'hỏi{Enter}')
-    expect(await screen.findByPlaceholderText(/Hỏi về dự án/)).toBeDisabled()
+    expect(await screen.findByPlaceholderText(/Hỏi về dự án/)).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Dừng' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Dừng' }))
     expect(api.agent.abort).toHaveBeenCalledWith('p1')
@@ -241,12 +241,15 @@ describe('AgentPanel', () => {
   })
 
   it('xung đột khi ghi vẫn hiện sau câu trả lời và được xóa khi gửi câu hỏi mới', async () => {
-    const { emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
+    let settle!: () => void // prompt() thật settle ngay sau `done`, khi main dọn xong lượt
+    const prompt = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve })).mockResolvedValue(undefined)
+    const { emitAgent } = installNexgraph({ ...consented(), agent: { getMode: vi.fn(async () => 'edit' as const), prompt } })
     render(<AgentPanel {...props()} />)
     await ask('sửa hàm login')
     const message = 'Tệp đã thay đổi. Chưa ghi thay đổi. Hãy đọc lại tệp và duyệt bản xem trước mới.'
     act(() => emitAgent('p1', { type: 'write_conflict', message }))
     act(() => emitAgent('p1', done))
+    await act(async () => settle())
     expect(await screen.findByRole('alert')).toHaveTextContent(message)
     await ask('đọc lại tệp')
     expect(screen.queryByRole('alert')).toBeNull()

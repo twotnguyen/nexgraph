@@ -371,5 +371,24 @@
 .answer-correction { display: flex; gap: 6px; align-items: flex-start; flex-basis: 100%; }
 .answer-correction textarea { flex: 1; font: inherit; font-size: 12px; }
 
+.agent-queue { display: grid; gap: 2px; max-height: 180px; overflow-y: auto; padding: 4px; border-radius: 10px; background: var(--agent-composer); }
+.agent-queue-row { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 36px; padding: 2px 4px; border-radius: 8px; font-size: 12px; }
+.agent-queue-row:hover { background: var(--agent-hover); }
+.agent-queue-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-queue-row > img { width: 40px; height: 28px; border-radius: 5px; object-fit: cover; }
+.agent-queue-row > button:not(.agent-icon-button) { flex: none; padding: 4px 6px; border: 0; border-radius: 5px; background: transparent; color: var(--color-muted); font-size: 11px; }
+.agent-queue-row > button:not(.agent-icon-button):hover:not(:disabled) { background: var(--agent-hover); color: var(--color-text); }
+.agent-composer { position: relative; }
+.agent-completions { position: absolute; z-index: 10; bottom: calc(100% + 6px); left: 0; right: 0; display: grid; gap: 2px; max-height: 310px; overflow-y: auto; padding: 4px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: 0 6px 18px rgb(0 0 0 / 16%); }
+.agent-completions > button { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 8px; border: 0; border-radius: 7px; background: transparent; color: var(--color-text); text-align: left; font-size: 13px; }
+.agent-completions > button:is(:hover, [aria-selected='true']) { background: var(--agent-selected); }
+.agent-completions > button b { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.agent-completions > button span { flex: 1; min-width: 0; overflow: hidden; color: var(--color-muted); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.agent-completion-empty { padding: 8px; color: var(--color-muted); font-size: 12px; }
+.agent-image { position: relative; width: 64px; height: 54px; border: 1px solid var(--color-border); border-radius: 7px; }
+.agent-image img { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; }
+.agent-image .agent-icon-button { position: absolute; top: 1px; right: 1px; width: 20px; height: 20px; background: var(--color-surface); }
+.agent-image-loading { align-self: center; color: var(--color-muted); font-size: 11px; }
+
 @keyframes agent-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .agent-panel .ai, .agent-spinner { animation: none; } }

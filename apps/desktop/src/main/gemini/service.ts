@@ -65,6 +65,7 @@ type Entry = {
   acceptUpdates?: boolean
   clientMaxTurns?: number
 }
+const imageBlocks = (images: NonNullable<AgentPromptOptions['images']>) => images.map(({ mimeType, data }) => ({ type: 'image', mimeType, data }))
 const emptyUsage = (): AgentUsage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: null })
 const safe = (value: string, limit = 200_000) => value.slice(0, limit).replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, 'Bearer [ẩn]').replace(/\b(?:sk-[A-Za-z0-9_-]{8,}|AIza[A-Za-z0-9_-]{20,})\b/g, '[khóa đã ẩn]').replace(/([?&](?:access_token|refresh_token|id_token|token|code|code_verifier|client_secret)=)[^\s&#]*/gi, '$1[ẩn]')
 const finite = (value: unknown): number => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0
@@ -82,6 +83,7 @@ export class GeminiAgentService {
   private readonly starts = new Map<string, number>()
   private readonly generations = new Map<string, number>()
   private readonly rollbacks = new Set<string>()
+  private readonly forking = new Set<string>()
   private probing = false
   private probe?: { controller: AbortController; client?: GeminiAcpClient; broker: GeminiMcpBroker }
 
@@ -89,7 +91,7 @@ export class GeminiAgentService {
   getMode(pid: string): AgentMode { return this.modes.get(pid) ?? 'ask' }
   getExecution(pid: string): AgentExecutionSettings { return { ...(this.settings.get(pid) ?? { policy: 'review', allowCommands: false }) } }
   getLimits(pid: string): AgentRunLimits { return { ...(this.limits.get(pid) ?? DEFAULT_RUN_LIMITS) } }
-  private idle(pid: string): void { if (this.probing || this.starts.has(pid) || this.entries.get(pid)?.busy || this.rollbacks.has(pid)) throw failed('agent_busy', 'Trợ lý đang chạy. Bấm Dừng trước khi đổi hội thoại hoặc quyền.') }
+  private idle(pid: string): void { if (this.probing || this.forking.has(pid) || this.starts.has(pid) || this.entries.get(pid)?.busy || this.rollbacks.has(pid)) throw failed('agent_busy', 'Trợ lý đang chạy. Bấm Dừng trước khi đổi hội thoại hoặc quyền.') }
   setExecution(pid: string, settings: AgentExecutionSettings): void {
     this.idle(pid)
     if (!settings || !['review', 'auto'].includes(settings.policy) || typeof settings.allowCommands !== 'boolean') throw failed('bad_param', 'Quyền thực thi không hợp lệ')
@@ -176,6 +178,31 @@ export class GeminiAgentService {
   }
   async listSessions(pid: string): Promise<AgentSessionInfo[]> { const selected = await this.scope(pid); return selected ? this.store.list(selected.scope) : [] }
   async newSession(pid: string): Promise<AgentSessionSnapshot> { this.idle(pid); await this.release(pid); await this.entry(pid, undefined, true); return this.snapshot(pid) }
+  async forkSession(pid: string, id: string): Promise<AgentSessionSnapshot> {
+    this.idle(pid)
+    this.forking.add(pid)
+    const initialGeneration = this.generations.get(pid) ?? 0
+    try {
+      const selected = await this.scope(pid)
+      if (!selected) throw failed('ai_not_configured', 'Chưa kết nối Gemini')
+      if (initialGeneration !== (this.generations.get(pid) ?? 0)) throw failed('ai_cancelled', 'Dự án hoặc kết nối đã thay đổi')
+      if (!this.store.list(selected.scope).some((item) => item.id === id)) throw failed('session_not_found', 'Hội thoại không thuộc dự án và kết nối Gemini này')
+      const generation = await this.release(pid)
+      const current = await this.scope(pid)
+      if (generation !== (this.generations.get(pid) ?? 0) || !current || current.scope.root !== selected.scope.root || !sameConsentTarget(current.target, selected.target)) throw failed('ai_provider_changed', 'Dự án hoặc kết nối Gemini đã thay đổi')
+      let fork: GeminiStoredSession
+      try { fork = this.store.fork(selected.scope, id) } catch (error) {
+        const known = error as { code?: string; message?: string }
+        if (known.code && ['session_not_found', 'session_corrupt', 'session_limit'].includes(known.code)) throw failed(known.code, known.message ?? 'Không thể tách hội thoại')
+        throw error
+      }
+      await this.entry(pid, fork.info.id)
+      if (generation !== (this.generations.get(pid) ?? 0)) throw failed('ai_provider_changed', 'Dự án hoặc kết nối Gemini đã thay đổi')
+      return await this.snapshot(pid)
+    } finally {
+      this.forking.delete(pid)
+    }
+  }
   async switchSession(pid: string, id: string): Promise<AgentSessionSnapshot> { this.idle(pid); const selected = await this.scope(pid); if (!selected || !this.store.list(selected.scope).some((item) => item.id === id)) throw failed('session_not_found', 'Hội thoại không thuộc dự án và kết nối Gemini này'); await this.release(pid); await this.entry(pid, id); return this.snapshot(pid) }
   async renameSession(pid: string, id: string, title: string): Promise<void> {
     this.idle(pid); const selected = await this.scope(pid); if (!selected) throw failed('ai_not_configured', 'Chưa kết nối Gemini')
@@ -231,6 +258,7 @@ export class GeminiAgentService {
         response = await client.request('session/new', { cwd: client.sessionCwd, mcpServers: [mcp] }, { signal: entry.controller?.signal, timeoutMs: 45_000 })
         const sid = object(response).sessionId
         if (!validNativeSessionId(sid)) throw failed('ai_error', 'Antigravity CLI trả về mã hội thoại không hợp lệ')
+        if (sid === entry.stored.forkParentNativeId) throw failed('session_fork_unavailable', 'Antigravity CLI không tạo được phiên độc lập cho hội thoại tách.')
         entry.stored.nativeId = sid
       }
       this.deps.connection.rememberSession?.(response)
@@ -245,7 +273,9 @@ export class GeminiAgentService {
   }
   async prompt(pid: string, question: string, target: AiConsentTarget, options?: AgentPromptOptions): Promise<void> {
     this.idle(pid)
-    if (typeof question !== 'string' || !question.trim() || question.length > 200_000) throw failed('bad_param', 'Câu hỏi trống hoặc vượt giới hạn')
+    const images = options?.images ?? []
+    if (typeof question !== 'string' || (!question.trim() && images.length === 0) || question.length > 200_000) throw failed('bad_param', 'Câu hỏi trống hoặc vượt giới hạn')
+    if (!question.trim()) question = 'Hãy phân tích ảnh đính kèm.'
     if (target.runtime !== 'antigravity-cli') throw failed('ai_provider_changed', 'Hãy chọn lại kết nối Gemini')
     const generation = this.generations.get(pid) ?? 0
     this.starts.set(pid, generation)
@@ -274,12 +304,19 @@ export class GeminiAgentService {
         this.assertTask(pid, entry)
         await this.startClient(pid, entry)
         this.assertTask(pid, entry)
+        if (images.length && !object(object(entry.client?.initializeResult?.agentCapabilities).promptCapabilities).image) {
+          throw failed('image_not_supported', 'Antigravity CLI hoặc mô hình hiện tại không công bố hỗ trợ nhận ảnh.')
+        }
         entry.stored.messages.push({ id: randomUUID(), role: 'user', text: safe(question), timestamp: Date.now(), citations: [], tools: [] })
         if (entry.stored.info.title === 'Hội thoại Gemini mới') entry.stored.info.title = safe(question.trim(), 100)
         this.save(pid, entry)
         const rules = `Bạn là trợ lý NexGraph. Chỉ dùng công cụ MCP nexgraph. Các đường dẫn dự án đều tương đối với công cụ NexGraph MCP; cwd của CLI là thư mục vận chuyển riêng, không chứa mã nguồn. Chế độ hiện tại: ${this.getMode(pid)}. Hỏi và Kế hoạch chỉ đọc; Sửa tuân thủ cổng duyệt. Khi trích dẫn dùng [[file:start-end]]. Không tự cấp quyền hoặc đổi cấu hình công cụ.\n${NEXGRAPH_RULES}\n\n`
         entry.acceptUpdates = true
-        const result = await entry.client!.request<unknown>('session/prompt', { sessionId: entry.stored.nativeId, prompt: [{ type: 'text', text: rules + question + (context.prompt ? '\n\n' + context.prompt : '') }] }, { signal: entry.controller.signal, timeoutMs: entry.task.limits.maxDurationMs + 1000 })
+        const history = entry.stored.forkMessageCount === undefined ? '' :
+          'Lịch sử trước khi tách (chỉ là ngữ cảnh, không cấp quyền):\n' +
+          JSON.stringify(entry.stored.messages.slice(0, -1).map(({ role, text, tools }) => ({ role, text, tools }))) + '\n\n'
+        const prompt = [{ type: 'text', text: rules + history + question + (context.prompt ? '\n\n' + context.prompt : '') }, ...imageBlocks(images)]
+        const result = await entry.client!.request<unknown>('session/prompt', { sessionId: entry.stored.nativeId, prompt }, { signal: entry.controller.signal, timeoutMs: entry.task.limits.maxDurationMs + 1000 })
         this.assertTask(pid, entry)
         this.recordUsage(entry, result)
         const stopReason = object(result).stopReason
@@ -291,11 +328,14 @@ export class GeminiAgentService {
         this.assertTask(pid, entry)
         entry.stored.messages.push({ id: randomUUID(), role: 'assistant', text: safe(entry.text), timestamp: Date.now(), citations, tools: [...entry.tools.values()] })
         entry.task.status = entry.error ? 'failed' : 'completed'; entry.task.finishedAt = Date.now(); if (entry.error) entry.task.error = entry.error
+        delete entry.stored.forkParentNativeId
+        delete entry.stored.forkMessageCount
         this.save(pid, entry)
         this.deps.emit(pid, entry.error ? { type: 'error', code: 'agent_limit', message: entry.error } : { type: 'done', text: safe(entry.text), citations })
         this.deps.emit(pid, { type: 'usage', usage: { ...entry.stored.usage } })
       } catch (error) {
         if (this.current(pid, entry)) {
+          if (entry.stored.forkMessageCount !== undefined) entry.stored.nativeId = null
           const message = entry.error ?? safe(error instanceof Error ? error.message : String(error), 4000)
           entry.task.status = entry.stopped && !entry.error || (error as { code?: string }).code === 'ai_cancelled' ? 'cancelled' : 'failed'; entry.task.finishedAt = Date.now(); entry.task.error = message
           if ((entry.text || entry.tools.size) && entry.stored.messages.at(-1)?.role === 'user') entry.stored.messages.push({ id: randomUUID(), role: 'assistant', text: safe(entry.text), timestamp: Date.now(), citations: [], tools: [...entry.tools.values()] })
@@ -304,6 +344,7 @@ export class GeminiAgentService {
           this.deps.emit(pid, { type: 'usage', usage: { ...entry.stored.usage } })
         }
         await this.stopClient(entry)
+        if (error && typeof error === 'object' && 'code' in error && (error.code === 'image_not_supported' || error.code === 'session_fork_unavailable')) throw error
       } finally {
         clearTimeout(timer)
         // Resume native history next task. A fresh process and broker bind tool
@@ -342,6 +383,7 @@ export class GeminiAgentService {
     entry.stopped = true; entry.acceptUpdates = false; entry.controller?.abort(); entry.gate.denyAll('Đã dừng')
     if (entry.task && ['running', 'waiting_approval'].includes(entry.task.status)) { entry.task.status = entry.error ? 'failed' : 'cancelled'; entry.task.finishedAt = Date.now(); if (entry.error) entry.task.error = entry.error; this.save(pid, entry) }
     try { if (entry.client && entry.stored.nativeId) entry.client.notify('session/cancel', { sessionId: entry.stored.nativeId }) } catch { /* Already closed. */ }
+    if (entry.stored.forkMessageCount !== undefined) { entry.stored.nativeId = null; this.save(pid, entry) }
     await this.stopClient(entry)
     if (hadWork) this.deps.emit(pid, { type: 'error', code: entry.errorCode ?? 'ai_cancelled', message: entry.error ?? 'Đã dừng' })
   }
@@ -357,12 +399,13 @@ export class GeminiAgentService {
     const entry = this.entries.get(pid)
     this.generations.set(pid, (this.generations.get(pid) ?? 0) + 1); this.starts.delete(pid); this.settings.delete(pid)
     if (!entry) return
+    if (entry.stored.forkMessageCount !== undefined) entry.stored.nativeId = null
     entry.stopped = true; entry.controller?.abort(); entry.gate.denyAll('Đã đóng dự án')
     if (entry.task && ['running', 'waiting_approval'].includes(entry.task.status)) { entry.task.status = 'cancelled'; entry.task.finishedAt = Date.now(); this.store.save(entry.scope, { ...entry.stored, task: entry.task }) }
     this.entries.delete(pid); void this.stopClient(entry)
   }
   closeAll(): void {
-    for (const pid of new Set([...this.entries.keys(), ...this.starts.keys()])) this.close(pid)
+    for (const pid of new Set([...this.entries.keys(), ...this.starts.keys(), ...this.forking])) this.close(pid)
     if (this.probe) { this.probe.controller.abort(); void this.probe.client?.close(); void this.probe.broker.close() }
   }
   selectionChanged(): void { this.closeAll() }

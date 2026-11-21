@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -39,6 +39,50 @@ describe('persistent Pi session store', () => {
     const restoredBlank = await new SessionStore(dataDir, loadPi).open(scope, 'model-a')
     expect(restoredBlank.record.id).toBe(blank.record.id)
     expect(restoredBlank.manager.buildSessionContext().messages).toEqual([])
+  })
+
+  it('forks an independent branch with the source title and model-visible history but no task', async () => {
+    const { store, scope } = setup()
+    const source = await store.open(scope, 'model-a')
+    source.manager.appendMessage({ role: 'user', content: 'Original question', timestamp: 1 })
+    store.touch(source, 'model-a', 'Original question')
+    store.task(source, { id: randomUUID(), sessionId: source.record.id, status: 'completed', startedAt: 1, turns: 1,
+      limits: { maxTurns: 2, maxDurationMs: 1000, maxTokens: 100 }, checkpointIds: ['a'.repeat(64)] })
+    store.rename(scope, source.record.id, 'Named conversation')
+    const before = readFileSync(source.manager.getSessionFile()!, 'utf8')
+
+    const fork = await store.fork(scope, 'model-a', source.record.id)
+    expect(fork.record.id).not.toBe(source.record.id)
+    expect(fork.record.title).toBe('Named conversation')
+    expect(fork.record.task).toBeUndefined()
+    expect(fork.manager.buildSessionContext().messages).toMatchObject([{ role: 'user', content: 'Original question' }])
+    fork.manager.appendMessage({ role: 'user', content: 'Fork only', timestamp: 2 })
+    store.touch(fork, 'model-a')
+    expect(readFileSync(source.manager.getSessionFile()!, 'utf8')).toBe(before)
+    await expect(store.fork({ ...scope, account: 'other' }, 'model-a', source.record.id)).rejects.toMatchObject({ code: 'session_not_found' })
+  })
+
+  it('forks an empty conversation without needing a source JSONL file', async () => {
+    const { store, scope } = setup()
+    const source = await store.open(scope, 'model-a')
+    const fork = await store.fork(scope, 'model-a', source.record.id)
+    expect(fork.record.id).not.toBe(source.record.id)
+    expect(fork.manager.buildSessionContext().messages).toEqual([])
+  })
+
+  it('refuses to fork a symlinked transcript outside the scoped store', async () => {
+    const { store, scope, base } = setup()
+    const source = await store.open(scope, 'model-a')
+    source.manager.appendMessage({ role: 'user', content: 'secret', timestamp: 1 })
+    store.touch(source, 'model-a')
+    const path = source.manager.getSessionFile()!
+    const external = join(base, 'external.jsonl')
+    const original = readFileSync(path)
+    writeFileSync(external, original)
+    rmSync(path)
+    symlinkSync(external, path)
+    await expect(store.fork(scope, 'model-a', source.record.id)).rejects.toMatchObject({ code: 'session_corrupt' })
+    expect(readFileSync(external)).toEqual(original)
   })
 
   it.each(['projectId', 'root', 'provider', 'baseUrl', 'account'] as const)('isolates a session when %s changes', async (field) => {

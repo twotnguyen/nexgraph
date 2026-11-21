@@ -1,7 +1,7 @@
 import type { AgentService } from './agent/session'
 
 export type AgentRuntimeId = 'pi' | 'antigravity-cli'
-type Methods = 'prompt' | 'abort' | 'setMode' | 'getMode' | 'approve' | 'close' | 'snapshot' | 'listSessions' | 'newSession' | 'switchSession' | 'renameSession' | 'deleteSession' | 'setExecution' | 'getExecution' | 'setLimits' | 'getLimits' | 'checkpoints' | 'rollback'
+type Methods = 'prompt' | 'abort' | 'setMode' | 'getMode' | 'approve' | 'close' | 'snapshot' | 'listSessions' | 'newSession' | 'forkSession' | 'switchSession' | 'renameSession' | 'deleteSession' | 'setExecution' | 'getExecution' | 'setLimits' | 'getLimits' | 'checkpoints' | 'rollback'
 export type AgentRuntime = {
   [K in Methods]: (...args: Parameters<AgentService[K]>) => ReturnType<AgentService[K]> | Promise<Awaited<ReturnType<AgentService[K]>>>
 } & { closeAll(): void; selectionChanged(): void }
@@ -19,6 +19,7 @@ export class AgentRouter {
   snapshot(...args: Parameters<AgentService['snapshot']>) { return this.active.snapshot(...args) }
   listSessions(...args: Parameters<AgentService['listSessions']>) { return this.active.listSessions(...args) }
   newSession(...args: Parameters<AgentService['newSession']>) { return this.active.newSession(...args) }
+  forkSession(...args: Parameters<AgentService['forkSession']>) { return this.active.forkSession(...args) }
   switchSession(...args: Parameters<AgentService['switchSession']>) { return this.active.switchSession(...args) }
   renameSession(...args: Parameters<AgentService['renameSession']>) { return this.active.renameSession(...args) }
   deleteSession(...args: Parameters<AgentService['deleteSession']>) { return this.active.deleteSession(...args) }
