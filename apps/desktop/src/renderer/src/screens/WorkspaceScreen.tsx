@@ -9,6 +9,8 @@ import { GitPanel } from '../components/git/GitPanel'
 import { GitDiffView } from '../components/git/GitDiffView'
 import { DebugPanel, debugKindOf } from '../components/debug/DebugPanel'
 import { debugStep, setDebugOpener, startDebugging, stopDebugging, useDebugState } from '../state/debugState'
+import { CollabBar, CollabTab, JoinDialog } from '../components/collab/CollabUi'
+import { leaveSession, shareActiveFile, useCollab } from '../state/collab'
 import type { AgentContextItem, AgentEditorState } from '@shared/agent-types'
 import type { AgentInspection } from '../components/agent/useAgentWorkbench'
 import { TaskInspector } from '../components/agent/TaskInspector'
@@ -38,7 +40,7 @@ import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi } from '../strings'
 import './workspace.css'
 
-type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | `file:${string}` | `task:${string}` | `diff:${string}`
+type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `task:${string}` | `diff:${string}`
 /** Thẻ diff của Git panel: `s` đã stage, `u` chưa stage. */
 type DiffTab = { file: string; staged: boolean }
 const diffKey = (d: DiffTab): Tab => `diff:${d.staged ? 's' : 'u'}:${d.file}`
@@ -514,6 +516,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('debug.step_into', () => debugStep('stepIn'))
   useCommand('debug.step_out', () => debugStep('stepOut'))
   useCommand('debug.stop', stopDebugging)
+  // Cộng tác LAN: chia sẻ tệp đang mở hoặc tham gia phiên của máy khác (thẻ "collab").
+  const collab = useCollab()
+  const [joining, setJoining] = useState(false)
+  useCommand('collab.share', () => void shareActiveFile(), !hosted)
+  useCommand('collab.join', () => setJoining(true), !hosted)
+  useCommand('collab.leave', leaveSession, !!collab.role)
+  useEffect(() => { if (collab.role !== 'guest' && tab === 'collab') setTab(lastMain) }, [collab.role]) // eslint-disable-line react-hooks/exhaustive-deps
   const [diffs, setDiffs] = useState<DiffTab[]>([])
   const openDiff = (file: string, staged: boolean) => {
     setDiffs((cur) => (cur.some((d) => d.file === file && d.staged === staged) ? cur : [...cur, { file, staged }]))
@@ -626,6 +635,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           </span>
         </header>
         {indexNotice && <div role="status" className="ws-index-status muted">{indexNotice}</div>}
+        <CollabBar />
         {exportScope && (
           <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} initialFormat={exportFormat}
             onClose={() => setExportScope(null)} />
@@ -664,6 +674,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <button id={tabId(`task:${inspection.id}`)} type="button" role="tab" aria-selected={tab === `task:${inspection.id}`} aria-controls={viewId} tabIndex={tab === `task:${inspection.id}` ? 0 : -1} className="tab-name" onClick={() => setTab(`task:${inspection.id}`)}><Icon name="spark" size={14} /><span>{inspection.title}</span></button>
             <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}><Icon name="close" size={12} /></button>
           </span>)}
+          {collab.role === 'guest' && collab.file && <span className={`tab file-tab${tab === 'collab' ? ' active' : ''}`}>
+            <button id={tabId('collab')} type="button" role="tab" aria-selected={tab === 'collab'} aria-controls={viewId} tabIndex={tab === 'collab' ? 0 : -1} className="tab-name"
+              title={`Cộng tác: ${collab.file}`} onClick={() => setTab('collab')}><Icon name="share" size={14} /><span>{baseName(collab.file)} · cộng tác</span></button>
+            <button type="button" className="tab-close" aria-label="Rời phiên cộng tác" onClick={leaveSession}><Icon name="close" size={12} /></button>
+          </span>}
           {diffs.map((d) => <span key={diffKey(d)} className={`tab file-tab${tab === diffKey(d) ? ' active' : ''}`}>
             <button id={tabId(diffKey(d))} type="button" role="tab" aria-selected={tab === diffKey(d)} aria-controls={viewId} tabIndex={tab === diffKey(d) ? 0 : -1} className="tab-name"
               title={`${d.file} (${d.staged ? 'đã stage' : 'chưa stage'})`} onClick={() => setTab(diffKey(d))}><Icon name="commit" size={14} /><span>{baseName(d.file)} · diff</span></button>
@@ -721,6 +736,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ))}
           {sideShown && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
+          {tab === 'collab' && collab.role === 'guest' && collab.file && <CollabTab key={collab.file} file={collab.file} />}
           {diffs.filter((d) => tab === diffKey(d)).map((d) => <GitDiffView key={diffKey(d)} projectId={project.project_id} file={d.file} staged={d.staged}
             onClose={() => closeDiff(d)} onOpenFile={() => openCode(d.file)} />)}
           {feedback && (
@@ -736,6 +752,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       {chatDock === 'right' && <>{resizeHandle}{agentPanel}</>}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
       {finder && <FileFinder projectId={project.project_id} recent={recentFiles} onOpen={(path) => openCode(path)} onClose={() => setFinder(false)} />}
+      {joining && <JoinDialog onClose={() => setJoining(false)} onJoined={() => setTab('collab')} />}
     </div>
   )
 }

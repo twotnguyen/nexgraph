@@ -3,6 +3,7 @@ import type { DebugVariable } from '@shared/api'
 import { Icon } from '../common/icons'
 import { debugStep, selectFrame, setDebugError, startDebugging, stopDebugging, toggleBreakpoint, useDebugState, type DebugKind } from '../../state/debugState'
 import './debug-panel.css'
+import { errorText } from '../../state/errorText'
 
 export const debugKindOf = (file: string | undefined): DebugKind | null => (!file ? null : /\.(m|c)?js$/.test(file) ? 'node' : /\.py$/.test(file) ? 'python' : null)
 const ADAPTER_LABEL: Record<DebugKind, string> = { node: 'js-debug (Node.js)', python: 'debugpy (Python)' }
@@ -49,7 +50,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
       await api.installAdapter(kind)
       setInstalled(await api.adapterStatus())
     } catch (e) {
-      setDebugError(e instanceof Error ? e.message : String(e))
+      setDebugError(errorText(e))
     } finally {
       setInstalling(false)
     }

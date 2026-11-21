@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { DebugBreakpoints, DebugFrame, DebugScope, DebugVariable } from '@shared/api'
+import { errorText } from './errorText'
 
 export type DebugKind = 'node' | 'python'
 export type DebugStatus = 'idle' | 'starting' | 'running' | 'stopped'
@@ -26,7 +27,7 @@ const patch = (next: Partial<State>) => { state = { ...state, ...next }; for (co
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
 export const useDebugState = (): State => useSyncExternalStore(subscribe, () => state)
 
-const message = (e: unknown) => (e instanceof Error ? e.message : String(e))
+const message = errorText
 const api = () => window.nexgraph.debug
 
 /** Mở tệp ở dòng đang dừng; không gian làm việc gán khi mở. */

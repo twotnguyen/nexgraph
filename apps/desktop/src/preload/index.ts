@@ -120,6 +120,13 @@ const api: NexGraphApi = {
     stop: () => call('debug:stop'),
     onEvent: (cb) => subscribe('debug:event', cb)
   },
+  collab: {
+    host: (hello) => call('collab:host', hello),
+    join: (address, code) => call('collab:join', address, code),
+    send: (data) => call('collab:send', data),
+    stop: () => call('collab:stop'),
+    onEvent: (cb) => subscribe('collab:event', cb)
+  },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),
     run: (pid, format, scope) => call('export:run', pid, format, scope),

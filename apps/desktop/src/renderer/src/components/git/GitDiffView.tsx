@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createDiffEditor, languageFor } from '../editor/monaco'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
+import { errorText } from '../../state/errorText'
 
 /** Thẻ diff của Git panel: trái là HEAD/index, phải là index/đĩa; chỉ đọc, làm mới khi tệp đổi trên đĩa. */
 export function GitDiffView({ projectId, file, staged, onClose, onOpenFile }: { projectId: string; file: string; staged: boolean; onClose: () => void; onOpenFile: () => void }) {
@@ -20,7 +21,7 @@ export function GitDiffView({ projectId, file, staged, onClose, onOpenFile }: { 
       if (!live || !host.current) return
       handle = createDiffEditor(host.current, { ...sides, language: languageFor(file) })
       setError(null)
-    }).catch((e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)) })
+    }).catch((e: unknown) => { if (live) setError(errorText(e)) })
     return () => { live = false; handle?.dispose() }
   }, [projectId, file, staged, revision])
 

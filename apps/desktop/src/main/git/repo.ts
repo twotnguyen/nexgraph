@@ -3,9 +3,10 @@ import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import type { GitBlameLine, GitFileChange, GitStatus } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
+import { UserError } from '../user-error'
 
 const run = promisify(execFile)
-const fail = (code: string, message: string): Error => Object.assign(new Error(message), { code })
+const fail = (code: string, message: string): Error => new UserError(code, message)
 
 /** Chạy git trong gốc dự án; lỗi trả về câu git in ra (đã cắt gọn). Không dùng shell. */
 async function git(root: string, args: string[], input?: { okCodes?: number[] }): Promise<string> {

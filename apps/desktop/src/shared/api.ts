@@ -64,6 +64,13 @@ export type DebugEvent =
 export type DebugFrame = { id: number; name: string; file: string | null; line: number; column: number }
 export type DebugScope = { name: string; variablesReference: number; expensive: boolean }
 export type DebugVariable = { name: string; value: string; type: string; variablesReference: number }
+/** Cộng tác LAN: lời chào máy chia sẻ gửi khi có người nối vào. */
+export type CollabHello = { file: string; host: string }
+export type CollabEvent =
+  | { type: 'message'; data: Uint8Array }
+  | { type: 'peers'; count: number }
+  | { type: 'joined' }
+  | { type: 'closed' }
 
 export type HostCommand = { name: string; arg?: unknown }
 
@@ -185,6 +192,14 @@ export interface NexGraphApi {
     variables(variablesReference: number): Promise<DebugVariable[]>
     stop(): Promise<void>
     onEvent(cb: (event: DebugEvent) => void): () => void
+  }
+  /** Cộng tác trong LAN (WebSocket ngang hàng): chia sẻ một tệp đang mở, người khác nối bằng địa chỉ + mã. */
+  collab?: {
+    host(hello: CollabHello): Promise<{ addresses: string[]; port: number; code: string }>
+    join(address: string, code: string): Promise<CollabHello>
+    send(data: Uint8Array): Promise<void>
+    stop(): Promise<void>
+    onEvent(cb: (event: CollabEvent) => void): () => void
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

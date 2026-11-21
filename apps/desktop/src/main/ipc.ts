@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { DebugBreakpoints, TextSearchQuery, WriteOpts } from '../shared/api'
+import type { CollabHello, DebugBreakpoints, TextSearchQuery, WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
@@ -39,6 +39,7 @@ import { gitBlame, gitCommit, gitDiffSides, gitStage, gitStatus, gitUnstage } fr
 import { allToolNames, getDisabledTools, setDisabledTools } from './agent/extension'
 import { DebugManager } from './debug/manager'
 import { adapterInstalled, installAdapter, type DebugKind } from './debug/adapters'
+import { CollabHub } from './collab/hub'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -48,6 +49,7 @@ let geminiConnection: GeminiConnectionManager | null = null
 let editors: EditorStateRegistry | null = null
 let terminals: TerminalManager | null = null
 let debugManager: DebugManager | null = null
+let collab: CollabHub | null = null
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
 export const closeAllAgents = (): void => {
@@ -67,6 +69,7 @@ export const stopEditorProcesses = (): void => {
   lsp.stopAll()
   terminals?.killAll()
   void debugManager?.stop()
+  collab?.stop()
 }
 
 function readJson(file: string): Record<string, string> {
@@ -269,6 +272,16 @@ export function registerIpc(
   on('debug:scopes', async (frameId: number) => dbg.scopes(Number(frameId)))
   on('debug:variables', async (ref: number) => dbg.variables(Number(ref)))
   on('debug:stop', async () => dbg.stop())
+  // Cộng tác LAN: main chỉ mở/nối WebSocket và chuyển tiếp gói nhị phân giữa renderer và các máy khác.
+  collab = new CollabHub((event) => getWindow()?.webContents.send('collab:event', event))
+  const hub = collab
+  on('collab:host', async (hello: CollabHello) => {
+    if (!hello || typeof hello.file !== 'string' || typeof hello.host !== 'string') throw new FsError('bad_param', 'Thiếu tên tệp chia sẻ')
+    return hub.host({ file: hello.file.slice(0, 500), host: hello.host.slice(0, 80) })
+  })
+  on('collab:join', async (address: string, code: string) => hub.join(String(address), String(code)))
+  on('collab:send', async (data: Uint8Array) => { if (data instanceof Uint8Array) hub.send(data) })
+  on('collab:stop', async () => hub.stop())
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {

@@ -8,6 +8,7 @@ import { FileTypeIcon } from '../common/FileTypeIcon'
 import { StatusBarItems } from '../EngineStatusBar'
 import { useBlame, useVimMode } from '../../state/editorPrefs'
 import { toggleBreakpoint, useDebugState } from '../../state/debugState'
+import { leaveSession, setActiveEditor, useCollab } from '../../state/collab'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -309,6 +310,20 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   const fileBreakpoints = debug.breakpoints[file]
   useEffect(() => { if (ready) editor.current?.setBreakpoints?.(fileBreakpoints ?? []) }, [ready, fileBreakpoints])
   useEffect(() => { if (ready) editor.current?.setExecLine?.(debug.at?.file === file ? debug.at.line : null) }, [ready, debug.at, file])
+
+  // Cộng tác: thẻ đang hiện là tệp lệnh "Chia sẻ" dùng; đóng thẻ đang được chia sẻ thì dừng phiên.
+  useEffect(() => {
+    const handle = editor.current
+    if (!ready || !active || !handle) return
+    const entry = { file, handle, text: () => handle.getValue() }
+    setActiveEditor(entry)
+    return () => setActiveEditor(null)
+  }, [ready, active, file])
+  const collab = useCollab()
+  const sharingThis = collab.role === 'host' && collab.file === file
+  const sharingRef = useRef(sharingThis)
+  sharingRef.current = sharingThis
+  useEffect(() => () => { if (sharingRef.current) leaveSession() }, [])
 
   // Nghe cả tài liệu để Ctrl+S hoạt động khi tiêu điểm vừa rời khỏi Monaco. Tiêu điểm trong khung chia đôi thì lưu tệp của khung đó; không thì thẻ đang hiện.
   const activeRef = useRef(active)

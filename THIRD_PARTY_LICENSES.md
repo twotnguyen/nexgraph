@@ -180,6 +180,13 @@ SOFTWARE.
 - debugpy: https://github.com/microsoft/debugpy, bản `1.8.22` (wheel `py2.py3-none-any`, MIT, Copyright (c) Microsoft Corporation). Chạy `python -m debugpy.adapter` bằng Python của người dùng.
 - Cả hai tải từ địa chỉ cố định, kiểm SHA-256 rồi giải nén vào thư mục dữ liệu của app (`debug-adapters/`); giấy phép đi kèm trong thư mục giải nén. Dùng ở `apps/desktop/src/main/debug/`.
 
+## Yjs, y-monaco, y-protocols, ws
+
+- Nguồn: https://github.com/yjs/yjs, https://github.com/yjs/y-monaco, https://github.com/yjs/y-protocols, https://github.com/websockets/ws
+- Phiên bản: yjs `13.6.33`, y-monaco `0.1.6`, y-protocols `1.0.7`, ws `8.23.0` (dùng qua API công khai, không chép mã)
+- Giấy phép: MIT (Yjs, y-monaco, y-protocols: Copyright (c) Kevin Jahns; ws: Copyright (c) Einar Otto Stangvik và các tác giả).
+- Dùng ở: `apps/desktop/src/renderer/src/state/collab.ts` (CRDT và con trỏ), `apps/desktop/src/main/collab/hub.ts` (WebSocket trong LAN).
+
 
 ## react-markdown
 

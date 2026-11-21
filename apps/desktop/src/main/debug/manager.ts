@@ -6,8 +6,9 @@ import type { DebugBreakpoints, DebugEvent, DebugFrame, DebugScope, DebugVariabl
 import { resolveInside } from '../fs/project-fs'
 import { ADAPTERS, adapterDir, findPython, type DebugKind } from './adapters'
 import { DapClient } from './dap-client'
+import { UserError } from '../user-error'
 
-const fail = (code: string, message: string) => Object.assign(new Error(message), { code })
+const fail = (code: string, message: string) => new UserError(code, message)
 
 type Session = {
   kind: DebugKind

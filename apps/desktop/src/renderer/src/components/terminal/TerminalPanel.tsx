@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css'
 import { Icon } from '../common/icons'
 import { observeTheme } from '../../state/useTheme'
 import './terminal.css'
+import { errorText } from '../../state/errorText'
 
 type Tab = { key: number; title: string }
 
@@ -46,7 +47,7 @@ function TerminalView({ projectId, active, onTitle, onExit }: { projectId: strin
       if (!alive) return void api.kill(session.id)
       id = session.id
       callbacks.current.onTitle(session.shell)
-    }).catch((e: unknown) => xterm.write(`\r\nKhông mở được terminal: ${e instanceof Error ? e.message : String(e)}\r\n`))
+    }).catch((e: unknown) => xterm.write(`\r\nKhông mở được terminal: ${errorText(e)}\r\n`))
     const observer = new ResizeObserver(() => { if (host.current?.offsetParent) fitter.fit() })
     observer.observe(host.current)
     return () => {

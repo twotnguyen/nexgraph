@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { UserError } from '../user-error'
 
 const run = promisify(execFile)
 
@@ -35,9 +36,9 @@ export const adapterInstalled = (base: string, kind: DebugKind) => existsSync(jo
 export async function installAdapter(base: string, kind: DebugKind, fetchImpl: typeof fetch = fetch): Promise<void> {
   const spec = ADAPTERS[kind]
   const response = await fetchImpl(spec.url)
-  if (!response.ok) throw Object.assign(new Error(`Không tải được ${spec.label} (HTTP ${response.status})`), { code: 'download_failed' })
+  if (!response.ok) throw new UserError('download_failed', `Không tải được ${spec.label} (HTTP ${response.status})`)
   const bytes = Buffer.from(await response.arrayBuffer())
-  if (createHash('sha256').update(bytes).digest('hex') !== spec.sha256) throw Object.assign(new Error(`Tệp ${spec.label} tải về sai mã băm`), { code: 'bad_checksum' })
+  if (createHash('sha256').update(bytes).digest('hex') !== spec.sha256) throw new UserError('bad_checksum', `Tệp ${spec.label} tải về sai mã băm`)
   const dir = adapterDir(base, kind)
   await rm(dir, { recursive: true, force: true })
   await mkdir(dir, { recursive: true })
@@ -46,7 +47,7 @@ export async function installAdapter(base: string, kind: DebugKind, fetchImpl: t
   // bsdtar đọc được cả .tar.gz lẫn .whl (zip).
   await run('tar', ['-xf', archive, '-C', dir], { windowsHide: true })
   await rm(archive, { force: true })
-  if (!adapterInstalled(base, kind)) throw Object.assign(new Error(`Giải nén ${spec.label} không thành công`), { code: 'install_failed' })
+  if (!adapterInstalled(base, kind)) throw new UserError('install_failed', `Giải nén ${spec.label} không thành công`)
 }
 
 /** Python 3 của người dùng để chạy script và debugpy: python3 rồi python. */
@@ -58,5 +59,5 @@ export async function findPython(): Promise<string> {
       if (/Python 3\./.test(stdout + stderr)) return exe
     } catch { /* thử tiếp */ }
   }
-  throw Object.assign(new Error('Không tìm thấy Python 3 trên máy'), { code: 'no_python' })
+  throw new UserError('no_python', 'Không tìm thấy Python 3 trên máy')
 }

@@ -1,0 +1,8 @@
+/* Thanh phiên cộng tác: một hàng 28px dưới đầu vùng giữa, mã và địa chỉ font mono, chip màu cho từng người. */
+.collab-bar { display: flex; flex: none; align-items: center; gap: 8px; min-height: 28px; padding: 2px 10px; border-bottom: 1px solid var(--color-border); background: color-mix(in srgb, var(--blue, #0090ff) 8%, var(--color-surface)); font-size: 12px; }
+.collab-bar code { padding: 0 4px; border-radius: 4px; background: color-mix(in srgb, var(--color-text) 8%, transparent); font-size: 12px; user-select: all; }
+.collab-bar button { height: 22px; min-height: 0; margin-left: auto; padding: 0 8px; border-radius: 6px; font-size: 12px; }
+.collab-bar button ~ button { margin-left: 0; }
+.collab-peer { padding: 0 6px; border-radius: 9px; color: #fff; font-size: 11px; }
+.collab-error { color: var(--red, #e5484d); }
+.yRemoteSelectionHead { z-index: 1; }

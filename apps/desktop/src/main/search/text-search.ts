@@ -3,6 +3,7 @@ import { Worker } from 'node:worker_threads'
 import type { TextSearchQuery, TextSearchResult, TextReplaceResult } from '../../shared/api'
 import { AgentFileScope } from '../agent/file-scope'
 import { isProtectedRel, readProjectFile, writeProjectFile } from '../fs/project-fs'
+import { UserError } from '../user-error'
 
 /** Thư mục sinh ra, không tìm trong đó (cùng danh sách với ô tìm tệp ⌘P). */
 export const GENERATED_DIRS = ['.git/', '.nexgraph/', '.venv/', 'dist/', '.next/', '.cache/', '.turbo/', '__pycache__/']
@@ -60,7 +61,7 @@ function inWorker(input: WorkerInput): Promise<WorkerOutput> {
   const worker = new Worker(`(${runInWorker.toString()})()`, { eval: true, workerData: input, env: {}, resourceLimits: { maxOldGenerationSizeMb: 512 } })
   // tsconfig chưa có lib es2024 (Promise.withResolvers).
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { void worker.terminate(); reject(Object.assign(new Error('Tìm kiếm quá lâu, hãy thu hẹp mẫu hoặc phạm vi'), { code: 'timeout' })) }, 5_000)
+    const timer = setTimeout(() => { void worker.terminate(); reject(new UserError('timeout', 'Tìm kiếm quá lâu, hãy thu hẹp mẫu hoặc phạm vi')) }, 5_000)
     worker.once('message', (data: WorkerOutput) => { clearTimeout(timer); void worker.terminate(); resolve(data) })
     worker.once('error', (error) => { clearTimeout(timer); reject(error) })
   })
@@ -94,7 +95,7 @@ async function collect(root: string, query: TextSearchQuery, only?: Set<string>)
   return files
 }
 
-const invalid = () => Object.assign(new Error('Biểu thức chính quy không hợp lệ'), { code: 'bad_param' })
+const invalid = () => new UserError('bad_param', 'Biểu thức chính quy không hợp lệ')
 
 export async function searchText(root: string, query: TextSearchQuery): Promise<TextSearchResult> {
   if (!query.query) return { files: [], truncated: false }

@@ -9,6 +9,7 @@ import { TOOL_DEFS, runTool } from '../ai/tools'
 import { toProjectRelative, type ApprovedWrite, type ApprovalGate, type WritePreview } from './approval'
 import { registerScopedFileTools } from './file-tools'
 import type { TaskExecution, ProcessInput } from './process-tools'
+import { UserError } from '../user-error'
 
 const GRAPH_TOOLS = TOOL_DEFS.map((t) => t.function.name)
 export const ASK_TOOLS = ['read', 'grep', 'find', 'ls']
@@ -21,7 +22,7 @@ const disabledTools = new Map<string, ReadonlySet<string>>()
 /** Tên mọi tool NexGraph cho trợ lý (để màn Hồ sơ liệt kê). */
 export const allToolNames = (): string[] => [...ALL_TOOLS]
 export function setDisabledTools(projectId: string, tools: unknown): void {
-  if (!Array.isArray(tools) || tools.some((t) => typeof t !== 'string' || !ALLOWED.has(t))) throw Object.assign(new Error('Danh sách tool không hợp lệ'), { code: 'bad_param' })
+  if (!Array.isArray(tools) || tools.some((t) => typeof t !== 'string' || !ALLOWED.has(t))) throw new UserError('bad_param', 'Danh sách tool không hợp lệ')
   if (tools.length) disabledTools.set(projectId, new Set(tools as string[]))
   else disabledTools.delete(projectId)
 }

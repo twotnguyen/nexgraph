@@ -2,6 +2,9 @@
 /// <reference path="./monaco-json.d.ts" />
 // Gói tối thiểu: lõi soạn thảo + vài tính năng soạn thảo + tô cú pháp Monarch; định nghĩa/gợi ý/hover lấy từ language server ở main (lsp:*).
 import * as monaco from 'monaco-editor/editor/editor.api.js'
+import { MonacoBinding } from 'y-monaco'
+import type { Text as YText } from 'yjs'
+import type { Awareness } from 'y-protocols/awareness'
 import 'monaco-editor/editor/contrib/find/browser/findController.js'
 import 'monaco-editor/editor/contrib/comment/browser/comment.js'
 import 'monaco-editor/editor/contrib/folding/browser/folding.js'
@@ -99,6 +102,8 @@ export interface EditorHandle {
   setExecLine?(line: number | null): void
   /** Bấm lề trái (cột chấm hoặc số dòng) ở một dòng. */
   onGutterClick?(cb: (line: number) => void): void
+  /** Gắn model với Y.Text (cộng tác LAN); trả về hàm gỡ. Con trỏ người khác vẽ theo awareness. */
+  bindCollab?(text: YText, awareness: Awareness): () => void
   dispose(): void
 }
 
@@ -235,6 +240,10 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
       // Chỉ cột chấm (glyph margin): bấm số dòng vẫn để chọn cả dòng như thường.
       if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) cb(e.target.position.lineNumber)
     }),
+    bindCollab: (text, awareness) => {
+      const binding = new MonacoBinding(text, editor.getModel()!, new Set([editor]), awareness)
+      return () => binding.destroy()
+    },
     dispose: () => {
       setVim(null)
       const model = editor.getModel()
