@@ -28,10 +28,24 @@ describe('SettingsScreen', () => {
     expect(api.gemini.forget).not.toHaveBeenCalled()
   })
 
+  it('ô tìm lọc mục và danh mục; vị trí khung chat lưu cho Workspace', async () => {
+    installNexgraph()
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.selectOptions(await screen.findByLabelText('Vị trí'), 'right')
+    expect(localStorage.getItem('nexgraph.chat.dock')).toBe('right')
+    localStorage.removeItem('nexgraph.chat.dock')
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Tìm cài đặt' }), 'ollama')
+    expect(screen.getByRole('button', { name: 'Kết nối Ollama local' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('API key')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Tài khoản AI|Giao diện|Mô hình|Quyền riêng tư/ }).map((b) => b.textContent)).toEqual(['Tài khoản AI'])
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Tìm cài đặt' }), 'zzz')
+    expect(screen.getByText('Không có kết quả')).toBeInTheDocument()
+  })
+
   it('thứ tự ba mục từ trên xuống: key theo nhà cung cấp → nhà cung cấp tuỳ chỉnh → đăng nhập gói đăng ký', async () => {
     installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic', { oauth: true, hasKey: true }), provider('smoke', { custom: true })]) } })
     const { container } = render(<SettingsScreen onBack={() => {}} />)
-    const headings = (await screen.findAllByRole('heading', { level: 2 })).filter((heading) => !heading.textContent?.includes('Gemini'))
+    const headings = (await screen.findAllByRole('heading', { level: 2 })).filter((heading) => /API key|tuỳ chỉnh|gói đăng ký/.test(heading.textContent ?? ''))
     expect(headings[0]).toHaveTextContent('API key')
     expect(headings[1]).toHaveTextContent('tuỳ chỉnh')
     expect(headings[2]).toHaveTextContent('gói đăng ký')
@@ -77,7 +91,7 @@ describe('SettingsScreen', () => {
     const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic'), provider('openai')]) } })
     render(<SettingsScreen onBack={() => {}} />)
     await screen.findByLabelText('API key')
-    const select = screen.getAllByRole('combobox')[0]
+    const select = screen.getByRole('combobox', { name: 'Nhà cung cấp' })
     await userEvent.selectOptions(select, 'openai')
     await userEvent.type(screen.getByLabelText('API key'), 'sk-1')
     await userEvent.click(screen.getByRole('button', { name: 'Lưu key' }))
@@ -102,7 +116,7 @@ describe('SettingsScreen', () => {
     await screen.findByRole('option', { name: 'openai' })
     const key = screen.getByLabelText('API key')
     await userEvent.type(key, 'sk-nhap')
-    await userEvent.selectOptions(screen.getAllByRole('combobox')[0], 'openai')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Nhà cung cấp' }), 'openai')
     expect(key).toHaveValue('')
     expect(screen.getByRole('button', { name: 'Lưu key' })).toBeDisabled()
     expect(api.auth.setKey).not.toHaveBeenCalled()

@@ -1,17 +1,38 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react'
 import type { AiSettings } from '@shared/graph-types'
 import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@shared/agent-types'
 import { vi } from '../strings'
-import { Icon } from '../components/common/icons'
+import { Icon, type IconName } from '../components/common/icons'
+import { THEMES, setTheme, useThemeId } from '../state/useTheme'
 import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
 import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
+import './settings.css'
 
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
+
+// Từ khoá cho ô tìm: tiêu đề và vài chữ người dùng hay gõ của mỗi mục.
+const SECTION_WORDS = {
+  theme: 'Giao diện theme màu sáng tối dark light',
+  chat: 'Giao diện khung chat AI trợ lý vị trí trái phải dock',
+  quick: 'Kết nối nhanh ollama local tài khoản AI',
+  gemini: 'Gemini Google Antigravity tài khoản AI',
+  apikey: 'API key nhà cung cấp OpenAI Anthropic Claude khoá',
+  custom: 'Nhà cung cấp tuỳ chỉnh custom base URL OpenRouter',
+  oauth: 'Đăng nhập gói đăng ký ChatGPT OAuth',
+  model: 'Mô hình model kiểm tra kết nối',
+  privacy: 'Quyền riêng tư dữ liệu bảo mật'
+}
+const PAGES: { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] = [
+  { id: 'appearance', label: 'Giao diện', icon: 'palette', sections: ['theme', 'chat'] },
+  { id: 'ai', label: 'Tài khoản AI', icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
+  { id: 'model', label: 'Mô hình', icon: 'spark', sections: ['model'] },
+  { id: 'privacy', label: 'Quyền riêng tư', icon: 'shield', sections: ['privacy'] }
+]
 
 /** Màn Tài khoản AI: key theo nhà cung cấp → nhà cung cấp tuỳ chỉnh → OAuth gói đăng ký → chọn model → kiểm tra kết nối. */
 export function SettingsScreen({ onBack }: { onBack: () => void }) {
@@ -33,6 +54,10 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const [connecting, setConnecting] = useState<'oauth' | 'api_key' | 'local' | null>(null)
   const loginPending = useRef(false)
   const operation = useRef(false)
+  const themeId = useThemeId()
+  const [query, setQuery] = useState('')
+  const [activePage, setActivePage] = useState('appearance')
+  const [chatDock, setChatDock] = useState(() => { try { return localStorage.getItem('nexgraph.chat.dock') === 'right' ? 'right' : 'left' } catch { return 'left' } })
 
   const load = useCallback(async () => {
     const currentSettings = window.nexgraph.ai.getSettings().then(setSettings).catch((e) => {
@@ -153,21 +178,81 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   const oauthStorageIssue = oauthProviders.find((p) => p.oauthStorageIssue)?.oauthStorageIssue
   const selectedModel = models.find((m) => m.provider === settings?.provider && m.id === settings.model)
 
+  const q = query.trim().toLocaleLowerCase('vi')
+  const shows = (id: keyof typeof SECTION_WORDS) => !q || SECTION_WORDS[id].toLocaleLowerCase('vi').includes(q)
+  const pages = PAGES.filter((page) => page.sections.some(shows))
+  // Bấm danh mục thì giữ mục đó sáng dù trang cuối quá ngắn để cuộn tới đỉnh.
+  const jumped = useRef(0)
+  const goTo = (id: string) => {
+    setActivePage(id)
+    jumped.current = Date.now()
+    document.getElementById(`settings-${id}`)?.scrollIntoView?.({ block: 'start' })
+  }
+  // Đánh dấu trang đang đọc theo vị trí cuộn, như thanh trái của Wu.
+  const onScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (Date.now() - jumped.current < 400) return
+    const top = event.currentTarget.getBoundingClientRect().top + 48
+    const current = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-settings-page]')].filter((el) => el.getBoundingClientRect().top <= top).pop()
+    if (current?.dataset.settingsPage) setActivePage(current.dataset.settingsPage)
+  }
+
   return (
-    <main className="screen settings">
-      <button type="button" className="link page-back" onClick={onBack}>{vi.settings.back}</button>
-      <div className="page-title"><span className="page-icon"><Icon name="sliders" size={23} /></span><h1>{vi.accounts.title}</h1></div>
-      <div className="row">
-        <button type="button" className="primary" disabled={busy} onClick={() => setConnecting('oauth')}>Kết nối nhanh</button>
-        <button type="button" disabled={busy} onClick={() => setConnecting('local')}>Kết nối Ollama local</button>
-      </div>
+    <main className="screen settings settings-wu">
+      <nav className="settings-nav" aria-label="Mục cài đặt">
+        <button type="button" className="settings-back" onClick={onBack}>{vi.settings.back}</button>
+        <label className="settings-search"><Icon name="search" size={14} />
+          <input type="search" aria-label="Tìm cài đặt" placeholder="Tìm cài đặt…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </label>
+        {pages.map((page) => <button key={page.id} type="button" className="settings-nav-item" aria-current={activePage === page.id ? 'true' : undefined} onClick={() => goTo(page.id)}>
+          <Icon name={page.icon} size={15} /><span>{page.label}</span>
+        </button>)}
+      </nav>
+      <div className="settings-content" onScroll={onScroll}>
       {error && <p role="alert" className="inline-message error">{error}</p>}
       {status && <Toast message={status} onDismiss={() => setStatus(null)} />}
+      {pages.length === 0 && <div className="settings-empty"><strong>Không có kết quả</strong><span className="muted">Không có cài đặt nào khớp “{query.trim()}”</span></div>}
 
-      <GeminiAccountSettingsCard active={settings?.runtime === 'antigravity-cli' && !!settings.model} disabled={busy} onConnect={() => setConnecting('oauth')}
-        onApiKey={() => setConnecting('api_key')} onDisconnected={() => void load()} />
+      {pages.some((p) => p.id === 'appearance') && <h1 id="settings-appearance" data-settings-page="appearance" className="settings-page-title">Giao diện</h1>}
+      {shows('theme') && <section className="settings-section" aria-labelledby="settings-theme-title">
+        <h2 id="settings-theme-title">Theme</h2>
+        <div className="settings-row">
+          <div><label htmlFor="settings-theme">Theme</label><p>Màu của toàn bộ app và editor. Cũng mở được bằng ⌘K rồi ⌘T.</p></div>
+          <select id="settings-theme" value={themeId} onChange={(e) => setTheme(e.target.value)}>
+            {THEMES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      </section>}
+      {shows('chat') && <section className="settings-section" aria-labelledby="settings-chat-title">
+        <h2 id="settings-chat-title">Khung chat AI</h2>
+        <div className="settings-row">
+          <div><label htmlFor="settings-chat-dock">Vị trí</label><p>Bên trái dùng chung chỗ với cây tệp như Wu; bên phải đứng cạnh cây tệp. Ẩn/hiện bằng Ctrl+L.</p></div>
+          <select id="settings-chat-dock" value={chatDock} onChange={(e) => {
+            const dock = e.target.value === 'right' ? 'right' : 'left'
+            setChatDock(dock)
+            try { localStorage.setItem('nexgraph.chat.dock', dock) } catch { /* chỉ là tuỳ chọn */ }
+          }}>
+            <option value="left">Bên trái (kiểu Wu)</option>
+            <option value="right">Bên phải</option>
+          </select>
+        </div>
+      </section>}
 
-      <section className="workbench-panel settings-section">
+      {pages.some((p) => p.id === 'ai') && <h1 id="settings-ai" data-settings-page="ai" className="settings-page-title">{vi.accounts.title}</h1>}
+      {shows('quick') && <section className="settings-section" aria-labelledby="settings-quick-title">
+        <h2 id="settings-quick-title">Kết nối nhanh</h2>
+        <div className="settings-row">
+          <div><span className="settings-label">Kết nối</span><p>Chọn nhà cung cấp và đăng nhập trong một hộp thoại, hoặc dùng model chạy trên máy qua Ollama.</p></div>
+          <div className="row">
+            <button type="button" className="primary" disabled={busy} onClick={() => setConnecting('oauth')}>Kết nối nhanh</button>
+            <button type="button" disabled={busy} onClick={() => setConnecting('local')}>Kết nối Ollama local</button>
+          </div>
+        </div>
+      </section>}
+
+      {shows('gemini') && <GeminiAccountSettingsCard active={settings?.runtime === 'antigravity-cli' && !!settings.model} disabled={busy} onConnect={() => setConnecting('oauth')}
+        onApiKey={() => setConnecting('api_key')} onDisconnected={() => void load()} />}
+
+      {shows('apikey') && <section className="settings-section">
         <h2>{vi.accounts.apiKeyTitle}</h2>
         <p className="muted">{vi.accounts.apiKeyLead}</p>
         <label className="field">{vi.accounts.provider}
@@ -189,9 +274,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             {keyTarget?.hasKey && <button type="button" disabled={busy} onClick={removeKey}>{vi.accounts.removeKey}</button>}
           </div>
         </div>
-      </section>
+      </section>}
 
-      <section className="workbench-panel settings-section">
+      {shows('custom') && <section className="settings-section">
         <h2>{vi.accounts.customTitle}</h2>
         <p className="muted">{vi.accounts.customLead}</p>
         <p className="muted small" role="note">{vi.accounts.customSecurityNote}</p>
@@ -221,9 +306,9 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
               disabled={busy || !custom.id.trim() || !custom.label.trim() || !custom.baseUrl.trim() || !custom.model.trim()}>{vi.accounts.saveCustom}</button>
           </div>
         </div>
-      </section>
+      </section>}
 
-      <section className="workbench-panel settings-section">
+      {shows('oauth') && <section className="settings-section">
         <h2>{vi.accounts.oauthTitle}</h2>
         <p className="muted">Đăng nhập ChatGPT và các tài khoản được nhà cung cấp hỗ trợ. Quyền dùng model và hạn mức tùy tài khoản. Claude trong NexGraph dùng Anthropic API key.</p>
         {oauthStorageIssue && <p role="status" className="muted">{oauthStorageIssue}</p>}
@@ -252,8 +337,8 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           </div>
         )}
         {oauthProviders.map((p) => (
-          <div className="row" key={p.id}>
-            <span>{p.label}</span>
+          <div className="row settings-oauth-row" key={p.id}>
+            <span className="settings-oauth-name">{p.label}</span>
             {p.loggedIn
               ? <button type="button" disabled={busy} onClick={() => void run(async () => { await window.nexgraph.auth.logout(p.id) }, vi.accounts.saved)}>{vi.accounts.oauthLogout}</button>
               : <button type="button" disabled={busy || !!p.oauthStorageIssue} onClick={() => login(p.id)}>{vi.accounts.oauthLogin}</button>}
@@ -262,9 +347,10 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
             }, 'Đã bỏ đăng ký ChatGPT đã lưu. Lần đăng nhập tiếp theo có thể chọn tài khoản hoặc workspace khác.')}>Dùng tài khoản hoặc workspace khác</button>}
           </div>
         ))}
-      </section>
+      </section>}
 
-      <section className="workbench-panel settings-section">
+      {pages.some((p) => p.id === 'model') && <h1 id="settings-model" data-settings-page="model" className="settings-page-title">Mô hình</h1>}
+      {shows('model') && <section className="settings-section">
         <h2>{vi.accounts.modelTitle}</h2>
         <label className="field">{vi.accounts.modelTitle}
           <select disabled={busy} value={settings?.provider && selected ? `${settings.provider}/${selected}` : ''} onChange={(e) => {
@@ -286,13 +372,15 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
           <button type="button" disabled={busy} onClick={() => void test()}>{testing ? 'Đang kiểm tra…' : vi.accounts.test}</button>
           {testResult && <span role="status">{testResult}</span>}
         </div>
-      </section>
+      </section>}
 
-      <section className="workbench-panel settings-section">
-        <h2>{vi.settings.privacyTitle}</h2>
+      {pages.some((p) => p.id === 'privacy') && <h1 id="settings-privacy" data-settings-page="privacy" className="settings-page-title">{vi.settings.privacyTitle}</h1>}
+      {shows('privacy') && <section className="settings-section">
+        <h2>Dữ liệu</h2>
         <p>{vi.settings.privacy1}</p>
         <p>{vi.settings.privacy2}</p>
-      </section>
+      </section>}
+      </div>
       {connecting && <ConnectionDialog initialMethod={connecting} onClose={() => setConnecting(null)}
         onConnected={() => { setConnecting(null); void load() }} />}
     </main>
