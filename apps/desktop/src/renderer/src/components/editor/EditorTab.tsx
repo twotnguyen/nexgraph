@@ -8,7 +8,7 @@ import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { StatusBarItems } from '../EngineStatusBar'
 import { EditorDebug } from '../debug/EditorDebug'
-import { getEditorPrefs, observeEditorPrefs, useBlame, useVimMode } from '../../state/editorPrefs'
+import { getEditorPrefs, observeEditorPrefs, useBlame, useEditorPrefs, useVimMode } from '../../state/editorPrefs'
 import { toggleBreakpoint, useDebugState } from '../../state/debugState'
 import { leaveSession, useCollab } from '../../state/collab'
 import { setActiveEditor } from '../../state/activeEditor'
@@ -37,6 +37,8 @@ interface Props {
   onOpenFile?: (file: string, line: number, column?: number) => void
   /** Chuyển SVG từ mã nguồn sang xem ảnh. */
   onViewImage?: () => void
+  /** Chuyển CSV/TSV từ mã nguồn sang xem bảng. */
+  onViewTable?: () => void
   onReadOnlyChange?: (file: string, readOnly: boolean) => void
   onLoadError?: (file: string, error: string | null) => void
 }
@@ -57,16 +59,16 @@ function explain(e: { code?: string; message?: string }): string {
   return e?.message ?? vi.editor.failed
 }
 
-/** "Tác giả, 3 ngày trước • tóm tắt" như inline blame của Wu. */
-export function blameText(line: GitBlameLine, now = Date.now()): string {
+/** "Tác giả, 3 ngày trước • tóm tắt" như inline blame của Wu; `summary` false thì bỏ phần tóm tắt commit. */
+export function blameText(line: GitBlameLine, now = Date.now(), summary = true): string {
   if (line.uncommitted) return 'Bạn • Chưa commit'
   const days = Math.floor((now / 1000 - line.time) / 86_400)
   const ago = days < 1 ? 'hôm nay' : days < 30 ? `${days} ngày trước` : days < 365 ? `${Math.floor(days / 30)} tháng trước` : `${Math.floor(days / 365)} năm trước`
-  return `${line.author}, ${ago} • ${line.summary}`
+  return `${line.author}, ${ago}${summary ? ` • ${line.summary}` : ''}`
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onReadOnlyChange, onLoadError }: Props) {
+export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onViewTable, onReadOnlyChange, onLoadError }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
   const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void; blur: () => void } | null>(null)
@@ -92,6 +94,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const vim = useVimMode()
   const [vimNode, setVimNode] = useState<HTMLElement | null>(null)
   const blameOn = useBlame()
+  const { blameDelay, blameSummary } = useEditorPrefs()
   const [blame, setBlameLines] = useState<Map<number, GitBlameLine> | null>(null)
   const diagnostics = useDiagnostics(projectId)
   const problems = Object.values(diagnostics).flat()
@@ -372,8 +375,13 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   }, [ready, blameOn, projectId, file, saveState])
   useEffect(() => {
     const hit = blame && !modified ? blame.get(cursor.line) : undefined
-    editor.current?.setLineNote?.(cursor.line, hit ? blameText(hit) : null)
-  }, [blame, cursor.line, modified])
+    const show = () => editor.current?.setLineNote?.(cursor.line, hit ? blameText(hit, Date.now(), blameSummary) : null)
+    if (!hit || !blameDelay) return show()
+    // Có độ trễ: chú thích của dòng cũ biến mất ngay, dòng mới hiện sau khi con trỏ đứng yên đủ lâu.
+    editor.current?.setLineNote?.(cursor.line, null)
+    const timer = setTimeout(show, blameDelay)
+    return () => clearTimeout(timer)
+  }, [blame, cursor.line, modified, blameDelay, blameSummary])
 
   // Gỡ lỗi: chấm điểm dừng ở lề và dòng đang dừng của tệp này.
   const debug = useDebugState()
@@ -435,6 +443,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         </ol>
         <span className="ws-editor-actions">
           {onViewImage && <button type="button" onClick={onViewImage} title="Xem ảnh SVG">Xem ảnh</button>}
+          {onViewTable && <button type="button" disabled={!ready} onClick={onViewTable} title="Xem CSV/TSV dạng bảng">Xem bảng</button>}
           {saveLabel && <span role="status" className="ws-save-state" data-state={saveState}>{saveLabel}</span>}
           <button type="button" className="ws-icon-button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
             aria-label="Lưu" title="Lưu (Ctrl/Cmd+S)"><Icon name="save" size={15} /></button>

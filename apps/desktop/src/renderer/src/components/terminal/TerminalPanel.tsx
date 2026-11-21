@@ -7,6 +7,7 @@ import type { TaskDefinition, TerminalEvent } from '@shared/api'
 import '@xterm/xterm/css/xterm.css'
 import { Icon } from '../common/icons'
 import { getEditorPrefs, observeEditorPrefs } from '../../state/editorPrefs'
+import { setTerminalHeight, useTerminalHeight } from '../../state/layoutPrefs'
 import { observeTheme } from '../../state/useTheme'
 import { errorText } from '../../state/errorText'
 import './terminal.css'
@@ -317,7 +318,7 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   const [rename, setRename] = useState('')
   const [tabMenu, setTabMenu] = useState<{ key: number; x: number; y: number } | null>(null)
   const [maximized, setMaximized] = useState(false)
-  const [height, setHeight] = useState(() => { try { return Math.max(120, Number(localStorage.getItem('nexgraph.terminal.height')) || 280) } catch { return 280 } })
+  const height = useTerminalHeight()
   const drag = useRef<{ y: number; height: number } | null>(null)
   const folder = projectPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || projectPath || 'Dự án'
   const titleOf = (tab: Tab) => tab.customTitle || (tab.task ? tab.task.label : `${folder} — ${tab.shell}`)
@@ -398,11 +399,8 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
     return () => window.removeEventListener('keydown', onKey, true)
   }, [hidden, state.active, state.visible.length])
 
-  const resize = (value: number) => {
-    const clamped = Math.round(Math.max(120, Math.min(window.innerHeight - 200, value)))
-    setHeight(clamped)
-    try { localStorage.setItem('nexgraph.terminal.height', String(clamped)) } catch { /* chỉ là tuỳ chọn */ }
-  }
+  // Kho tuỳ chọn tự áp giới hạn dưới và làm tròn; ở đây chỉ chặn để panel không ăn hết cửa sổ.
+  const resize = (value: number) => setTerminalHeight(Math.min(window.innerHeight - 200, value))
   const beginRename = (tab: Tab) => { setRename(titleOf(tab)); setRenaming(tab.key) }
   const activeTab = state.tabs.find((tab) => tab.key === state.active)
   return (

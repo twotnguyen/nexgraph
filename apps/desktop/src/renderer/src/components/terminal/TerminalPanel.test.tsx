@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { StrictMode } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { TerminalEvent } from '@shared/api'
 import { TerminalPanel } from './TerminalPanel'
+import { setTerminalHeight } from '../../state/layoutPrefs'
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: class {
@@ -51,4 +52,25 @@ it('giữ đầu ra và mã lỗi khi task kết thúc trước khi create trả
   expect(screen.getByRole('tab', { name: /Build/ })).toHaveTextContent('Thất bại (23)')
   expect(screen.getAllByRole('tab')).toHaveLength(1)
   expect(create).toHaveBeenCalledTimes(1)
+})
+
+it('chiều cao theo tuỳ chọn bố cục: đổi từ Cài đặt hoặc kéo thanh chia đều đổi biến CSS và được lưu', () => {
+  vi.stubGlobal('nexgraph', { terminal: {
+    create: vi.fn(async () => ({ id: 1, shell: 'sh', cwd: '/project' })), onEvent: () => () => {},
+    write: vi.fn(), resize: vi.fn(), kill: vi.fn(), resolvePath: vi.fn()
+  } })
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => window.setTimeout(() => callback(0), 0))
+  vi.stubGlobal('cancelAnimationFrame', (handle: number) => window.clearTimeout(handle))
+  localStorage.removeItem('nexgraph.terminal.height')
+  render(<TerminalPanel projectId="p1" projectPath="/project" newRequest={0} taskRequest={null} hidden={false}
+    onHide={() => {}} onCloseAll={() => {}} onOpenFile={() => {}} />)
+  const height = () => document.querySelector<HTMLElement>('.terminal-panel')!.style.getPropertyValue('--terminal-height')
+  expect(height()).toBe('280px')
+  act(() => setTerminalHeight(400))
+  expect(height()).toBe('400px')
+  fireEvent.keyDown(screen.getByRole('separator', { name: 'Chiều cao terminal' }), { key: 'ArrowUp' })
+  expect(height()).toBe('420px')
+  expect(localStorage.getItem('nexgraph.terminal.height')).toBe('420')
+  localStorage.removeItem('nexgraph.terminal.height')
 })

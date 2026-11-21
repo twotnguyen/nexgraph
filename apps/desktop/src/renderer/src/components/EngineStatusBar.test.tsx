@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EngineStatusBar, StatusBarItems } from './EngineStatusBar'
+import { setStatusBar } from '../state/layoutPrefs'
+
+afterEach(() => { act(() => setStatusBar(true)) })
 
 describe('EngineStatusBar', () => {
   it('shows starting', () => {
@@ -32,5 +35,18 @@ describe('EngineStatusBar', () => {
     // Thẻ (editor) nằm trước thanh trạng thái trong cây, như trong App.
     render(<><StatusBarItems><span>12:4</span></StatusBarItems><EngineStatusBar status={{ state: 'starting' }} onRestart={() => {}} /></>)
     expect(screen.getByLabelText('Thanh trạng thái').querySelector('.status-right')).toHaveTextContent('12:4')
+  })
+
+  it('ẩn được bằng tuỳ chọn bố cục nhưng engine lỗi thì vẫn hiện để còn nút Khởi động lại', () => {
+    setStatusBar(false)
+    const bar = () => screen.getByLabelText('Thanh trạng thái')
+    const view = render(<EngineStatusBar status={{ state: 'starting' }} onRestart={() => {}} />)
+    expect(bar()).not.toBeVisible()
+    view.rerender(<EngineStatusBar status={{ state: 'error', message: 'exit 5' }} onRestart={() => {}} />)
+    expect(bar()).toBeVisible()
+    view.rerender(<EngineStatusBar status={{ state: 'starting' }} onRestart={() => {}} />)
+    expect(bar()).not.toBeVisible()
+    act(() => setStatusBar(true))
+    expect(bar()).toBeVisible()
   })
 })

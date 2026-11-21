@@ -1,7 +1,10 @@
 import { useState, type KeyboardEvent } from 'react'
-import { COMMANDS, bindingFor, eventToStroke, formatKey, isCustomBinding, setBinding, useKeybindings } from '../../state/commands'
+import { COMMANDS, bindingFor, bindingSource, eventToStroke, formatKey, isCustomBinding, setBaseKeymap, setBinding, useBaseKeymap, useKeybindings } from '../../state/commands'
+import { BASE_KEYMAPS, type BaseKeymapId } from '../../state/baseKeymaps'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { Highlight } from '../layout/Picker'
+
+const SOURCE = { default: 'Mặc định', base: 'Base', user: 'Người dùng' }
 
 const text = (id: string) => {
   const command = COMMANDS.find((item) => item.id === id)!
@@ -29,29 +32,38 @@ function Recorder({ onDone }: { onDone: (key: string | undefined) => void }) {
   )
 }
 
-/** Trang Phím tắt kiểu keymap editor của Wu: tìm lệnh, bấm đúp hoặc nút Đổi để ghi phím, nút Mặc định để bỏ ghi đè. */
+/** Trang Phím tắt kiểu keymap editor của Wu: chọn base keymap, tìm lệnh, bấm đúp hoặc nút Đổi để ghi phím, nút Đặt lại để bỏ ghi đè; cột Nguồn cho biết lớp nào đang giữ phím. */
 export function KeymapEditor() {
   useKeybindings()
+  const base = useBaseKeymap()
   const [query, setQuery] = useState('')
   const [editing, setEditing] = useState<string | null>(null)
   const rows = fuzzyFilter(COMMANDS.map((command) => command.id), query, (id) => `${text(id)} ${bindingFor(id)}`)
   return (
     <div className="keymap">
+      <div className="settings-row">
+        <div><label htmlFor="settings-base-keymap">Base keymap</label><p>Bộ phím nền theo IDE quen thuộc, áp ngay. Phím bạn tự sửa luôn thắng; lệnh không có trong bộ nền giữ phím mặc định.</p></div>
+        <select id="settings-base-keymap" value={base} onChange={(event) => setBaseKeymap(event.target.value as BaseKeymapId)}>
+          {Object.entries(BASE_KEYMAPS).map(([id, { label }]) => <option key={id} value={id}>{label}</option>)}
+        </select>
+      </div>
       <input type="search" aria-label="Tìm lệnh hoặc phím" placeholder="Tìm lệnh hoặc phím…" value={query} onChange={(event) => setQuery(event.target.value)} />
       <table>
-        <thead><tr><th>Lệnh</th><th>Phím</th><th aria-label="Thao tác" /></tr></thead>
+        <thead><tr><th>Lệnh</th><th>Phím</th><th>Nguồn</th><th aria-label="Thao tác" /></tr></thead>
         <tbody>
           {rows.map(({ item: id, positions }) => {
             const key = bindingFor(id)
+            const source = bindingSource(id)
             return (
               <tr key={id} data-command-id={id} onDoubleClick={() => setEditing(id)}>
                 <td><Highlight text={text(id)} positions={positions.filter((p) => p < text(id).length)} /></td>
                 <td>{editing === id
                   ? <Recorder onDone={(next) => { setEditing(null); if (next !== undefined) setBinding(id, next) }} />
                   : key ? <kbd>{formatKey(key)}</kbd> : <span className="muted">—</span>}</td>
+                <td className="keymap-source">{key || source !== 'default' ? SOURCE[source] : null}</td>
                 <td className="keymap-actions">
                   <button type="button" onClick={() => setEditing(id)}>Đổi</button>
-                  {isCustomBinding(id) && <button type="button" onClick={() => setBinding(id, null)}>Mặc định</button>}
+                  {isCustomBinding(id) && <button type="button" title="Về phím của base keymap hoặc mặc định" onClick={() => setBinding(id, null)}>Đặt lại</button>}
                 </td>
               </tr>
             )

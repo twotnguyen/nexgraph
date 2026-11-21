@@ -37,12 +37,16 @@ export type EditorPrefs = {
   autoSave: 'off' | 'afterDelay' | 'onFocusChange'
   autoSaveDelay: number
   iconTheme: 'symbols' | 'mono'
+  /** Chờ bao lâu (ms) sau khi con trỏ đổi dòng mới hiện inline blame; đổi dòng lại thì tính từ đầu. */
+  blameDelay: number
+  /** Inline blame kèm tóm tắt commit. */
+  blameSummary: boolean
 }
 
 const STORE = 'nexgraph.editor.preferences'
 const DEFAULTS: EditorPrefs = {
   fontSize: 13, terminalFontSize: 12, tabSize: 4, wordWrap: 'off', formatOnSave: false,
-  autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols'
+  autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols', blameDelay: 0, blameSummary: true
 }
 const numberIn = (value: unknown, fallback: number, min: number, max: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback
@@ -61,7 +65,9 @@ export function parseEditorPrefs(raw: string | null): EditorPrefs {
     formatOnSave: value.formatOnSave === true,
     autoSave: value.autoSave === 'afterDelay' || value.autoSave === 'onFocusChange' ? value.autoSave : 'off',
     autoSaveDelay: numberIn(value.autoSaveDelay, DEFAULTS.autoSaveDelay, 1, 2147483647),
-    iconTheme: value.iconTheme === 'mono' ? 'mono' : 'symbols'
+    iconTheme: value.iconTheme === 'mono' ? 'mono' : 'symbols',
+    blameDelay: numberIn(value.blameDelay, DEFAULTS.blameDelay, 0, 5000),
+    blameSummary: value.blameSummary !== false
   }
 }
 

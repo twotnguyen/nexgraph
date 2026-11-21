@@ -4,24 +4,25 @@ import { editorFontSize, getEditorPrefs, parseEditorPrefs, setEditorPrefs, zoomE
 
 afterEach(() => {
   zoomEditorFont('reset')
-  setEditorPrefs({ fontSize: 13, terminalFontSize: 12, tabSize: 4, wordWrap: 'off', formatOnSave: false, autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols' })
+  setEditorPrefs({ fontSize: 13, terminalFontSize: 12, tabSize: 4, wordWrap: 'off', formatOnSave: false, autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols', blameDelay: 0, blameSummary: true })
   localStorage.removeItem('nexgraph.editor.preferences')
 })
 
 describe('editor preferences', () => {
   it('uses defaults for missing or malformed settings', () => {
-    const defaults = { fontSize: 13, terminalFontSize: 12, tabSize: 4, wordWrap: 'off', formatOnSave: false, autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols' }
+    const defaults = { fontSize: 13, terminalFontSize: 12, tabSize: 4, wordWrap: 'off', formatOnSave: false, autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols', blameDelay: 0, blameSummary: true }
     expect(parseEditorPrefs(null)).toEqual(defaults)
     expect(parseEditorPrefs('{broken')).toEqual(defaults)
     expect(parseEditorPrefs('null')).toEqual(defaults)
-    expect(parseEditorPrefs('{"fontSize":"20","tabSize":3,"wordWrap":"bad","formatOnSave":"true","autoSave":"bad","autoSaveDelay":null,"iconTheme":"other"}')).toEqual(defaults)
+    expect(parseEditorPrefs('{"fontSize":"20","tabSize":3,"wordWrap":"bad","formatOnSave":"true","autoSave":"bad","autoSaveDelay":null,"iconTheme":"other","blameDelay":"5","blameSummary":"no"}')).toEqual(defaults)
   })
 
   it('clamps numeric values and retains valid choices', () => {
-    expect(parseEditorPrefs('{"fontSize":40,"tabSize":2,"wordWrap":"on","formatOnSave":true,"autoSave":"afterDelay","autoSaveDelay":0,"iconTheme":"mono"}')).toEqual({
-      fontSize: 32, terminalFontSize: 12, tabSize: 2, wordWrap: 'on', formatOnSave: true, autoSave: 'afterDelay', autoSaveDelay: 1, iconTheme: 'mono'
+    expect(parseEditorPrefs('{"fontSize":40,"tabSize":2,"wordWrap":"on","formatOnSave":true,"autoSave":"afterDelay","autoSaveDelay":0,"iconTheme":"mono","blameDelay":300,"blameSummary":false}')).toEqual({
+      fontSize: 32, terminalFontSize: 12, tabSize: 2, wordWrap: 'on', formatOnSave: true, autoSave: 'afterDelay', autoSaveDelay: 1, iconTheme: 'mono', blameDelay: 300, blameSummary: false
     })
-    expect(parseEditorPrefs('{"fontSize":4,"terminalFontSize":35,"autoSaveDelay":999999999999}')).toMatchObject({ fontSize: 8, terminalFontSize: 32, autoSaveDelay: 2147483647 })
+    expect(parseEditorPrefs('{"fontSize":4,"terminalFontSize":35,"autoSaveDelay":999999999999,"blameDelay":99999}')).toMatchObject({ fontSize: 8, terminalFontSize: 32, autoSaveDelay: 2147483647, blameDelay: 5000 })
+    expect(parseEditorPrefs('{"blameDelay":-5}').blameDelay).toBe(0)
   })
 
   it('persists sanitized settings and keeps the snapshot stable between changes', () => {
