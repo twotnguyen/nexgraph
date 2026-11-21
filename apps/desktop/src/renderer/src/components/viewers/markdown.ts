@@ -43,3 +43,11 @@ export function taskEdit(source: string, line: number, column: number, checked: 
   const startColumn = column + match[0].length - 3
   return { line, startColumn, endColumn: startColumn + 3, text: checked ? '[x]' : '[ ]' }
 }
+
+/** Khối code rào (``` hoặc ~~~) đã có dòng đóng; khối chưa đóng kéo dài đến hết tài liệu nên chưa vẽ sơ đồ khi người dùng còn đang gõ. */
+export function isFenceClosed(source: string, start: number, end: number): boolean {
+  const lines = source.slice(start, end).split('\n')
+  const open = /^\s*(`{3,}|~{3,})/.exec(lines[0])
+  const close = /^[\s>]*(`{3,}|~{3,})\s*$/.exec(lines[lines.length - 1])
+  return lines.length > 1 && !!open && !!close && close[1][0] === open[1][0] && close[1].length >= open[1].length
+}

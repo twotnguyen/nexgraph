@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveReference, taskEdit } from './markdown'
+import { isFenceClosed, resolveReference, taskEdit } from './markdown'
 
 describe('Markdown preview references', () => {
   it('resolves relative and project-root paths, decoding URL escapes and retaining fragments', () => {
@@ -26,5 +26,24 @@ describe('Markdown task edit', () => {
     expect(taskEdit('- hello [ ]', 1, 1, true)).toBeNull()
     expect(taskEdit('- [x] already checked', 1, 1, true)).toBeNull()
     expect(taskEdit('- [ ] broken', 2, 1, true)).toBeNull()
+  })
+})
+
+describe('Markdown fence closing', () => {
+  const closed = (source: string) => isFenceClosed(source, 0, source.length)
+  it('accepts a fence closed by a line of the same character and at least the same length', () => {
+    expect(closed('```mermaid\ngraph TD\n```')).toBe(true)
+    expect(closed('````\n```\n````')).toBe(true)
+    expect(closed('~~~mermaid\nA\n~~~~  ')).toBe(true)
+    expect(closed('```mermaid\n```')).toBe(true)
+    expect(closed('```mermaid\n  A\n  ```')).toBe(true)
+    expect(closed('```mermaid\n> A\n> ```')).toBe(true)
+  })
+  it('rejects a block that runs to the end of the document', () => {
+    expect(closed('```mermaid')).toBe(false)
+    expect(closed('```mermaid\ngraph TD\nA-->B')).toBe(false)
+    expect(closed('````\nA\n```')).toBe(false)
+    expect(closed('```mermaid\nA\n~~~')).toBe(false)
+    expect(closed('```mermaid\nA\n```mermaid')).toBe(false)
   })
 })

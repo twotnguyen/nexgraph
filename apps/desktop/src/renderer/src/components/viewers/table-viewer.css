@@ -1,0 +1,8 @@
+.table-viewer .tv-scroll { flex: 1; min-height: 0; overflow: auto; color: var(--color-text); }
+.table-viewer .tv-scroll > p { margin: 0; padding: 16px 20px; }
+.table-viewer table { border-collapse: separate; border-spacing: 0; font: 12px/1.5 var(--font-mono); }
+.table-viewer :is(th, td) { max-width: 360px; padding: 3px 10px; overflow: hidden; border-right: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.table-viewer thead th { position: sticky; top: 0; z-index: 2; background: var(--panel-raised); }
+.table-viewer tbody th { position: sticky; left: 0; z-index: 1; min-width: 4ch; background: var(--panel); color: var(--color-muted); font-weight: 400; text-align: right; }
+.table-viewer thead th:first-child { left: 0; z-index: 3; text-align: right; }
+.table-viewer tbody tr:hover > td { background: var(--track); }

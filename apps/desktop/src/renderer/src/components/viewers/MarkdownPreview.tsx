@@ -4,7 +4,8 @@ import remarkGfm from 'remark-gfm'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { errorText } from '../../state/errorText'
-import { resolveReference, taskEdit } from './markdown'
+import { isFenceClosed, resolveReference, taskEdit } from './markdown'
+import { MermaidBlock } from './MermaidBlock'
 import { observeBuffer, type PreviewBuffer } from './modelBuffer'
 import './markdown-preview.css'
 
@@ -35,24 +36,26 @@ function LocalImage({ projectId, sourceFile, src, alt }: { projectId: string; so
   return result.url ? <img src={result.url} alt={alt ?? ''} /> : <span className="md-image-note">Đang tải ảnh…</span>
 }
 
-type TextNode = { type: string; value?: string; children?: TextNode[]; properties?: Record<string, unknown> }
+type TextNode = { type: string; value?: string; children?: TextNode[]; properties?: Record<string, unknown>; position?: { start: { offset?: number }; end: { offset?: number } } }
 function nodeText(node: TextNode): string {
   return node.type === 'text' ? node.value ?? '' : (node.children ?? []).map(nodeText).join('')
 }
 
-function CodeBlock({ children, node }: { children: ReactNode; node?: TextNode }) {
+function CodeBlock({ children, node, source }: { children: ReactNode; node?: TextNode; source: string }) {
   const [copyState, setCopyState] = useState('Sao chép')
   const code = node?.children?.[0]
   const text = code ? nodeText(code) : ''
   const classes = code?.properties?.className
-  const mermaid = Array.isArray(classes) && classes.includes('language-mermaid')
+  const { start, end } = node?.position ?? {}
+  // Khối mermaid chưa có dòng đóng rào kéo dài đến hết tài liệu: giữ dạng mã cho đến khi gõ xong.
+  const mermaid = Array.isArray(classes) && classes.some((name) => String(name).toLowerCase() === 'language-mermaid')
+    && start?.offset !== undefined && end?.offset !== undefined && isFenceClosed(source, start.offset, end.offset)
   return <div className="md-code-block">
     <button type="button" onClick={() => {
       if (!navigator.clipboard) return setCopyState('Không sao chép được')
       void navigator.clipboard.writeText(text).then(() => setCopyState('Đã sao chép')).catch(() => setCopyState('Không sao chép được'))
     }}>{copyState}</button>
-    {mermaid && <p className="md-image-note">Mermaid được hiển thị dưới dạng mã.</p>}
-    <pre>{children}</pre>
+    {mermaid ? <MermaidBlock code={text}>{children}</MermaidBlock> : <pre>{children}</pre>}
   </div>
 }
 
@@ -120,7 +123,7 @@ export function MarkdownPreview({ projectId, file, active = true, side = false, 
       return <span>{children}</span>
     },
     img: ({ src, alt }) => <LocalImage projectId={projectId} sourceFile={file} src={src} alt={alt} />,
-    pre: ({ children, node }) => <CodeBlock node={node as TextNode | undefined}>{children}</CodeBlock>,
+    pre: ({ children, node }) => <CodeBlock node={node as TextNode | undefined} source={latestText.current ?? ''}>{children}</CodeBlock>,
     table: ({ children }) => <div className="md-table"><table>{children}</table></div>
   }), [file, projectId, readOnly])
   return <div ref={host} tabIndex={-1} data-mirror-file={file} className={`code-viewer editor-tab markdown-preview${side ? ' editor-side' : ''}`} style={active ? undefined : { display: 'none' }}>

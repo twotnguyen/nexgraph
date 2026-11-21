@@ -17,7 +17,12 @@
 .md-code-block { position: relative; margin: 1em 0; }
 .md-code-block > button { position: absolute; top: 6px; right: 6px; font-size: 11px; }
 .md-code-block pre { margin: 0; padding: 14px; overflow: auto; border: 1px solid var(--color-border); border-radius: 5px; background: var(--color-bg); font: 12px/1.5 var(--font-mono); }
-.md-code-block .md-image-note { margin: 0; padding-bottom: 4px; }
+.md-mermaid { overflow-x: auto; padding: 8px 0; text-align: center; }
+.md-mermaid svg { max-width: 100%; height: auto; }
+/* Vùng nháp của mermaid: ngoài màn hình nhưng vẫn có bố cục để đo chữ; tắt chuyển tiếp để số đo là giá trị cuối kể cả khi người dùng bật giảm chuyển động. */
+.md-mermaid-scratch { position: fixed; top: 0; left: -10000px; visibility: hidden; pointer-events: none; }
+.md-mermaid-scratch, .md-mermaid-scratch *, .md-mermaid-scratch *::before, .md-mermaid-scratch *::after { transition: none !important; animation: none !important; }
+.md-code-block .md-mermaid-error { max-height: 9em; margin: 0 0 6px; padding: 6px 10px; overflow: auto; border: 1px solid var(--color-error-red); border-radius: 5px; background: var(--error-soft); color: var(--color-error-red); font: 12px/1.5 var(--font-mono); white-space: pre-wrap; }
 .md-image-note { color: var(--color-muted); font-size: 12px; }
 .md-table { max-width: 100%; overflow-x: auto; }
 .md-table table { width: 100%; border-collapse: collapse; }

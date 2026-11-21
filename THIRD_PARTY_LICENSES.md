@@ -245,3 +245,33 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
 CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+## Mermaid
+
+- Nguồn: https://github.com/mermaid-js/mermaid
+- Phiên bản: 12.3.0 (gói npm `mermaid`, dùng qua API công khai, không chép mã); MIT, Knut Sveidqvist.
+- Phụ thuộc kéo theo: 122 gói, phần lớn MIT hoặc ISC; còn lại BSD-3-Clause, Apache-2.0 (Chevrotain), Unlicense (robust-predicates), DOMPurify (MPL-2.0 hoặc Apache-2.0, dùng theo Apache-2.0) và elkjs (EPL-2.0 hoặc GPL-3.0-or-later, dùng theo EPL-2.0). Mỗi gói giữ giấy phép riêng trong gói npm của nó.
+- Dùng ở: `apps/desktop/src/renderer/src/components/viewers/MermaidBlock.tsx` — vẽ khối ```mermaid trong xem trước Markdown thành SVG (`securityLevel: 'strict'`). Vite gói thành các chunk chỉ nạp khi gặp khối đầu tiên.
+
+The MIT License (MIT)
+
+Copyright (c) 2014 - 2022 Knut Sveidqvist
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
