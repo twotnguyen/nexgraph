@@ -3,6 +3,7 @@ import type { GlobalGraph, GlobalSearchHit } from '@shared/graph-types'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
 import { Icon } from '../components/common/icons'
 import { vi } from '../strings'
+import './global-view.css'
 
 const LIMIT = 300 // overlay xếp lớp bằng ELK: giữ đồ thị gộp vừa phải
 
@@ -61,50 +62,51 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
   const names = graph?.projects.map((p) => p.name).join(', ')
   const cross = graph?.edges.filter((e) => e.cross_repo).length ?? 0
   return (
-    <main className="screen overview">
-      <button type="button" className="link page-back" onClick={onBack}>{vi.globalGraph.back}</button>
-      <div className="page-title">
-        <span className="page-icon"><Icon name="graph" size={23} /></span>
-        <div>
-          <h1>{vi.globalGraph.view}</h1>
-          <p className="muted">{names ? `${names} · ${vi.globalGraph.readOnly}` : vi.globalGraph.readOnly}</p>
+    <main className="screen global-wu">
+      <header className="global-head">
+        <button type="button" className="global-back" onClick={onBack}>{vi.globalGraph.back}</button>
+        <Icon name="graph" size={14} />
+        <h1>{vi.globalGraph.view}</h1>
+        <span className="global-names" title={names}>{names ? `${names} · ${vi.globalGraph.readOnly}` : vi.globalGraph.readOnly}</span>
+        <span className="global-count">{graph ? vi.globalGraph.crossEdges(cross) : vi.globalGraph.loading}</span>
+        <button type="button" className="global-export" disabled={exporting || !graph} onClick={() => void exportMerged()}>
+          <Icon name="export" size={14} /> {vi.globalGraph.export}
+        </button>
+      </header>
+      <div className="global-body">
+        <aside className="global-side">
+          <form role="search" onSubmit={(e) => { e.preventDefault(); void search() }}>
+            <label className="global-search"><Icon name="search" size={14} />
+              <input type="search" aria-label={vi.globalGraph.search} placeholder={vi.globalGraph.searchPlaceholder}
+                value={q} onChange={(e) => setQ(e.target.value)} />
+            </label>
+          </form>
+          {error && <p role="alert" className="inline-message error">{error}</p>}
+          {notice && <p role="status" className="inline-message">{notice}</p>}
+          {graph?.truncated && <p className="global-note">{vi.globalGraph.truncated}</p>}
+          {graph && graph.skipped.length > 0 && <p className="global-note">{vi.globalGraph.skipped(graph.skipped.length)}</p>}
+          {hits && hits.length === 0 && <p className="global-note">{vi.globalGraph.noHits}</p>}
+          {hits && hits.length > 0 && (
+            <ul className="global-hits">
+              {hits.map((h) => {
+                const id = `${h.project_id}::${h.node.id}`
+                return (
+                  <li key={id}>
+                    <button type="button" aria-current={focus === id || undefined} onClick={() => setFocus(id)}>
+                      <b>{h.node.label}</b>
+                      <span className="mono">{h.project_name} · {h.node.file ?? h.node.kind}</span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </aside>
+        <div className="global-canvas">
+          {overlay && <GraphCanvas projectId={key} startNodeId="" overlay={overlay}
+            highlights={focus ? { [focus]: 'current' } : undefined} />}
         </div>
       </div>
-      {error && <p role="alert" className="inline-message error">{error}</p>}
-      {notice && <p role="status" className="inline-message">{notice}</p>}
-      <section className="workbench-panel">
-        <header className="panel-title">
-          <h2>{graph ? vi.globalGraph.crossEdges(cross) : vi.globalGraph.loading}</h2>
-          <button type="button" disabled={exporting || !graph} onClick={() => void exportMerged()}>
-            <Icon name="export" size={16} /> {vi.globalGraph.export}
-          </button>
-        </header>
-        {graph?.truncated && <p className="panel-instruction muted">{vi.globalGraph.truncated}</p>}
-        {graph && graph.skipped.length > 0 && <p className="panel-instruction muted">{vi.globalGraph.skipped(graph.skipped.length)}</p>}
-        <form className="panel-instruction row" role="search" onSubmit={(e) => { e.preventDefault(); void search() }}>
-          <input type="search" aria-label={vi.globalGraph.search} placeholder={vi.globalGraph.searchPlaceholder}
-            value={q} onChange={(e) => setQ(e.target.value)} />
-        </form>
-        {hits && hits.length === 0 && <p className="panel-instruction muted">{vi.globalGraph.noHits}</p>}
-        {hits && hits.length > 0 && (
-          <ul className="recent">
-            {hits.map((h) => (
-              <li key={`${h.project_id}::${h.node.id}`}>
-                <button type="button" className="recent-open" onClick={() => setFocus(`${h.project_id}::${h.node.id}`)}>
-                  <span className="recent-identity"><b>{h.node.label}</b>
-                    <span className="muted mono">{h.project_name} · {h.node.file ?? h.node.kind}</span></span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {overlay && (
-          <div className="global-canvas" style={{ height: 560 }}>
-            <GraphCanvas projectId={key} startNodeId="" overlay={overlay}
-              highlights={focus ? { [focus]: 'current' } : undefined} />
-          </div>
-        )}
-      </section>
     </main>
   )
 }

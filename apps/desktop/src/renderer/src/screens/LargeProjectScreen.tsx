@@ -1,6 +1,7 @@
 import type { ProjectSummary, ScanInfo } from '@shared/graph-types'
 import { vi } from '../strings'
 import { Icon } from '../components/common/icons'
+import './welcome.css'
 
 interface Props {
   project: ProjectSummary
@@ -12,29 +13,32 @@ interface Props {
 
 export function LargeProjectScreen({ project, scan, onChoose, onCancel }: Props) {
   return (
-    <main className="screen task-screen">
-      <div className="page-title">
-        <span className="page-icon"><Icon name="folder" size={23} /></span>
-        <div><h1>{project.name}</h1><p className="muted">Chọn phạm vi lập chỉ mục</p></div>
-      </div>
-      <section className="workbench-panel">
+    <main className="screen task-screen welcome-page large-wu">
+      <div className="welcome">
+        <header className="welcome-head">
+          <span className="welcome-icon"><Icon name="folder" size={22} /></span>
+          <div><h1>{project.name}</h1><p>Chọn phạm vi lập chỉ mục</p></div>
+        </header>
         <div className="inline-message warning">{vi.large.message(scan.files, scan.threshold)}</div>
-        <p className="panel-instruction muted">{vi.large.hint}</p>
-        {scan.top_dirs.length > 0 && <ul className="recent">
-          {scan.top_dirs.map((d) => (
-            <li key={d.path}>
-              <button type="button" className="recent-open" onClick={() => onChoose(d.path)}>
-                <span className="recent-icon"><Icon name="folder" size={16} /></span>
-                <span className="recent-identity"><b className="mono">{d.path}</b><span className="muted">{vi.large.files(d.files)}</span></span>
-                <Icon name="chevron" size={16} />
-              </button>
-            </li>
-          ))}
-        </ul>}
-      </section>
-      <div className="actions">
-        <button type="button" onClick={onCancel}>{vi.large.cancel}</button>
-        <button type="button" className="primary" onClick={() => onChoose(null)}>{vi.large.all}</button>
+        {scan.top_dirs.length > 0 && <section className="welcome-section" aria-labelledby="large-dirs">
+          <h2 id="large-dirs" className="welcome-section-title">Thư mục con</h2>
+          <p className="welcome-hint">{vi.large.hint}</p>
+          <ul className="welcome-list">
+            {scan.top_dirs.map((d) => (
+              <li key={d.path}>
+                <button type="button" className="welcome-row" onClick={() => onChoose(d.path)}>
+                  <Icon name="folder" size={14} />
+                  <span className="welcome-row-main mono">{d.path}</span>
+                  <span className="welcome-row-meta">{vi.large.files(d.files)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>}
+        <div className="actions welcome-actions">
+          <button type="button" onClick={onCancel}>{vi.large.cancel}</button>
+          <button type="button" className="primary" onClick={() => onChoose(null)}>{vi.large.all}</button>
+        </div>
       </div>
     </main>
   )

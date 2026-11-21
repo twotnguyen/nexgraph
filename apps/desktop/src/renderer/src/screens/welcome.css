@@ -98,6 +98,13 @@
 .welcome-page .panel-title > :not(h2) { flex: none; color: var(--color-muted); font-size: 11px; }
 .welcome-page .panel-empty { margin: 0; padding: 4px 6px; font-size: 12px; }
 .welcome-page .inline-message { margin: 8px 0 0; border-radius: 8px; font-size: 12px; }
+.welcome-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.welcome-hint { margin: 0 6px 6px; color: var(--color-muted); font-size: 12px; }
+.welcome-row-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welcome-row-meta { flex: none; color: var(--color-muted); font-size: 11px; white-space: nowrap; }
+.welcome-page .actions { display: flex; justify-content: flex-end; gap: 8px; margin: 0; }
+.welcome-page .actions button { min-height: 28px; padding: 0 12px; border-radius: 6px; font-size: 13px; }
+.large-wu .welcome > .inline-message { margin: -8px 0 0; }
 
 /* Lập chỉ mục: thanh tiến độ mảnh 4px, tên giai đoạn 13px, số bên phải mờ; nút dồn sang phải, cao 28px. */
 .indexing-wu .welcome-icon[data-running] svg { animation: welcome-spin 1.6s linear infinite; }
@@ -111,7 +118,5 @@
 .indexing-wu .bar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--color-text) 9%, transparent); }
 .indexing-wu .bar-fill { border-radius: 2px; }
 .indexing-wu .phase-note, .indexing-wu .task-panel > p { margin: 0 6px 8px; font-size: 12px; }
-.indexing-wu .actions { justify-content: flex-end; gap: 8px; margin: 0; }
-.indexing-wu .actions button { min-height: 28px; padding: 0 12px; border-radius: 6px; font-size: 13px; }
 @keyframes welcome-spin { to { rotate: 360deg; } }
 @media (prefers-reduced-motion: reduce) { .indexing-wu .welcome-icon svg { animation: none; } }
