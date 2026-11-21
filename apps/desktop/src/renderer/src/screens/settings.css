@@ -155,3 +155,19 @@
 .keymap tr:hover .keymap-actions button, .keymap-actions button:focus-visible { opacity: 1; }
 .keymap-actions button:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
 .keymap-recorder { display: inline-block; padding: 1px 6px; border: 1px solid var(--blue); border-radius: 4px; outline: 0; color: var(--color-text); font-size: 12px; }
+
+/* Hồ sơ trợ lý: danh sách hàng 28px, biểu mẫu tên + chế độ + danh sách tool dạng cột. */
+.profile-editor { display: grid; gap: 12px; }
+.profile-list { margin: 0; padding: 0; list-style: none; }
+.profile-list li { display: flex; align-items: center; gap: 6px; min-height: 28px; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent); font-size: 13px; }
+.profile-list li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-list button { height: 24px; min-height: 0; padding: 0 8px; border-radius: 6px; font-size: 12px; }
+.profile-form { display: grid; gap: 8px; }
+.profile-form .row { display: flex; gap: 8px; align-items: center; }
+.settings-wu .profile-form input:not([type='checkbox']) { flex: 1; height: 28px; }
+.settings-wu .profile-form select { width: 200px; }
+.profile-form button { height: 28px; min-height: 0; padding: 0 12px; border-radius: 6px; font-size: 12px; }
+.profile-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 2px 12px; margin: 0; padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 13px; }
+.profile-tools legend { padding: 0 4px; color: var(--color-muted); font-size: 12px; }
+.profile-tools label { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.profile-tools code { font-size: 11px; }
