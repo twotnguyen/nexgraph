@@ -65,7 +65,7 @@ class Api:
         return self.client.get(url, headers={**self.headers, **kw.pop("headers", {})}, **kw)
 
     def post(self, url, **kw):
-        return self.client.post(url, headers=self.headers, **kw)
+        return self.client.post(url, headers={**self.headers, **kw.pop("headers", {})}, **kw)
 
     def delete(self, url, **kw):
         return self.client.delete(url, headers=self.headers, **kw)

@@ -31,7 +31,8 @@ type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | `fil
 const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
 const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
   graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }
-interface OpenFile { file: string; line: number; lineEnd?: number }
+/** `seq`: mỗi lần mở một số mới, để mở lại đúng dòng cũ (đã cuộn đi chỗ khác) vẫn cuộn về. */
+interface OpenFile { file: string; line: number; lineEnd?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
 type Panel = 'explorer' | 'search' | 'changes' | 'tour'
@@ -150,9 +151,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [archContext, setArchContext] = useState<string | undefined>(undefined)
   const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
   const [flowContext, setFlowContext] = useState<number | undefined>(undefined)
+  // Tăng ở mỗi lần mở luồng/khối/tệp: mở lại cùng đích sau khi người dùng đã đi chỗ khác vẫn có tác dụng.
+  const [openSeq, setOpenSeq] = useState(0)
   const openFlow = (id: number) => {
     setFlowContext(undefined)
     setFlowId(id)
+    setOpenSeq((n) => n + 1)
     setTab('flows')
   }
   // Cây dùng cùng bảng duyệt tệp ở cả ứng dụng độc lập và Code-OSS.
@@ -298,6 +302,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const openArch = (blockId: string) => {
     setArchParent(blockId)
     setArchContext(blockId)
+    setOpenSeq((n) => n + 1)
     setTab('arch')
   }
   const openExport = (scope: ExportScope, format: ExportFormat = 'html') => {
@@ -325,7 +330,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const openCode = (file: string, line = 1, lineEnd?: number) => {
     // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.
     if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(messageOf(e)))
-    setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd } : f)) : [...cur, { file, line, lineEnd }]))
+    const seq = openSeq + 1
+    setOpenSeq(seq)
+    setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd, seq } : f)) : [...cur, { file, line, lineEnd, seq }]))
     setTab(`file:${file}`)
   }
   const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set()) // tệp có thay đổi chưa lưu
@@ -541,9 +548,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           </span>)}
         </div>
         <div className="canvas-wrap" id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
-          {tab === 'arch' && <ArchitectureCanvas key={archParent ?? 'root'} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
-          {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
+          {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} openRequest={openSeq} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (
             <>
               <GraphCanvas projectId={project.project_id} revision={revision} startNodeId=".#repository" focusNodeId={focus} highlights={highlights}
@@ -586,7 +593,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
           )}
           {files.map((f) => (
-            <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} active={tab === `file:${f.file}`}
+            <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} revealRequest={f.seq} active={tab === `file:${f.file}`}
               onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} />
           ))}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}

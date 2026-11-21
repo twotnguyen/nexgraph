@@ -10,7 +10,8 @@ from nexgraph_engine.query.context import build_context, locate_json
 from nexgraph_engine.query.explain import explain_json
 from nexgraph_engine.query.paths import find_paths, impact_of
 from nexgraph_engine.query.section import section_json
-from nexgraph_engine.query.source_policy import SourcePolicy
+from nexgraph_engine.query.model_view import ModelGraph
+from nexgraph_engine.query.source_policy import SourcePolicy, protected_source
 from nexgraph_engine.sources import sources_root
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
@@ -42,9 +43,13 @@ def ai_source_scope(project_id: str, request: Request) -> dict:
 
 @router.post("/paths")
 def paths(project_id: str, request: Request, body: PathsBody) -> dict:
-    with open_store(request, project_id) as (store, _):
+    with open_store(request, project_id) as (store, info):
+        if for_model(request):
+            model = ModelGraph(store, info.path)
+            if not all(model.allows_node(node_id) for node_id in body.node_ids):
+                raise protected_source()
         try:
-            return find_paths(store, body.node_ids, body.max_hops, body.directed)
+            return model_payload(request, store, info, find_paths(store, body.node_ids, body.max_hops, body.directed))
         except KeyError as exc:
             raise ApiError(404, "unknown_node", f"Không có nút {exc.args[0]}") from exc
 
@@ -60,9 +65,9 @@ def impact(project_id: str, request: Request, node: str = Query(...)) -> dict:
 
 @router.post("/ask")
 def ask(project_id: str, request: Request, body: AskBody) -> dict:
-    with open_store(request, project_id) as (store, _):
+    with open_store(request, project_id) as (store, info):
         try:
-            return ask_graph(store, body.question, body.depth, body.budget, body.mode)
+            return model_payload(request, store, info, ask_graph(store, body.question, body.depth, body.budget, body.mode))
         except ValueError as exc:
             raise ApiError(400, "bad_param", str(exc)) from exc
 
@@ -79,8 +84,10 @@ def context(project_id: str, request: Request, body: ContextBody) -> dict:
 
 @router.get("/locate")
 def locate(project_id: str, request: Request, file: str = Query(...), line: int = Query(..., ge=1)) -> dict:
-    with open_store(request, project_id) as (store, _):
-        return locate_json(store, file, line)
+    with open_store(request, project_id) as (store, info):
+        if for_model(request) and not SourcePolicy(info.path, store.last_exclude()).allows(file):
+            raise protected_source()
+        return model_payload(request, store, info, locate_json(store, file, line))
 
 
 @router.get("/section")

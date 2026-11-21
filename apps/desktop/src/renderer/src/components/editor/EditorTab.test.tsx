@@ -103,6 +103,17 @@ describe('EditorTab', () => {
     expect(revealLines).toHaveBeenCalledWith(7, 9)
   })
 
+  it('mở lại cùng dòng (yêu cầu mới) cuộn về lần nữa', async () => {
+    installNexgraph({ fs: { read: vi.fn(async () => content()) } })
+    const props = { projectId: 'p1', file: 'lib/a.dart', line: 7, onClose: vi.fn(), onDirtyChange: vi.fn() }
+    const view = render(<EditorTab {...props} revealRequest={1} />)
+    await box()
+    await waitFor(() => expect(revealLines).toHaveBeenCalledWith(7, undefined))
+    const before = revealLines.mock.calls.length
+    view.rerender(<EditorTab {...props} revealRequest={2} />)
+    expect(revealLines).toHaveBeenCalledTimes(before + 1)
+  })
+
   it('sửa rồi Ctrl+S gọi fs.write với eol, bom, expectedVersion từ lần đọc', async () => {
     const { write, onDirtyChange } = setup()
     await typeAndSave()

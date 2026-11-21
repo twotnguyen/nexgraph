@@ -82,6 +82,20 @@ def test_mcp_refuses_questions_about_a_hidden_node(api, copy_fixture, tmp_path):
         assert result.isError and "test_login" not in result.content[0].text, tool
 
 
+def test_http_paths_ask_locate_hide_blocked_sources_for_model(api, copy_fixture):
+    root = copy_fixture("flow_app")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    (root / ".gitignore").write_text("service.py\n", encoding="utf-8")
+    prefix = f"/v1/projects/{pid}"
+    hidden = "service.py::login_user#function"
+    assert api.post(f"{prefix}/paths", json={"node_ids": ["app.py#file", hidden]}, headers=MODEL).status_code == 403
+    assert api.get(f"{prefix}/locate", params={"file": "service.py", "line": 6}, headers=MODEL).status_code == 403
+    assert api.get(f"{prefix}/locate", params={"file": "service.py", "line": 6}).status_code == 200  # người dùng vẫn thấy
+    ask = api.post(f"{prefix}/ask", json={"question": "login"}, headers=MODEL)
+    assert ask.status_code == 200 and '"service.py' not in ask.text  # test_service.py vẫn được phép
+
+
 @pytest.mark.parametrize("parent", ["secrets", ".aws"])
 def test_sensitive_folder_above_the_project_does_not_block_everything(tmp_path, parent):
     root = tmp_path / parent / "proj"

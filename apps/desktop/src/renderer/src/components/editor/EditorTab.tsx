@@ -13,6 +13,8 @@ interface Props {
   file: string
   line: number
   lineEnd?: number
+  /** Đổi mỗi lần mở tệp từ nơi khác: mở lại cùng dòng sau khi đã cuộn đi vẫn cuộn về. */
+  revealRequest?: number
   onClose: () => void
   onDirtyChange: (file: string, dirty: boolean) => void
   onContextReady?: (file: string, getter: EditorContextGetter | null) => void
@@ -37,7 +39,7 @@ function explain(e: { code?: string; message?: string }): string {
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChange, onContextReady, active = true }: Props) {
+export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
   const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void } | null>(null)
@@ -255,7 +257,7 @@ export function EditorTab({ projectId, file, line, lineEnd, onClose, onDirtyChan
 
   useEffect(() => {
     if (ready) editor.current?.revealLines(line, lineEnd)
-  }, [ready, line, lineEnd])
+  }, [ready, line, lineEnd, revealRequest])
 
   // Nghe cả tài liệu để Ctrl+S hoạt động khi tiêu điểm vừa rời khỏi Monaco; chỉ thẻ đang hiện xử lý.
   const activeRef = useRef(active)
