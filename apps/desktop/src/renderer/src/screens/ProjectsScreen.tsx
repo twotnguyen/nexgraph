@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { GlobalMember, ProjectSummary } from '@shared/graph-types'
-import { Icon } from '../components/common/icons'
+import { Icon, Logo } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
 import { waitJob } from '../state/waitJob'
 import { vi } from '../strings'
@@ -156,58 +156,46 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
   }
 
   return (
-    <main className="screen projects-page">
-      <header className="projects-hero">
-        <div className="projects-hero-content">
-          <span className="projects-hero-icon"><Icon name="folder" size={24} /></span>
-          <h1>{vi.projects.title}</h1>
-          <p>Khám phá kiến trúc, luồng thực thi và vùng ảnh hưởng từ mã nguồn của bạn.</p>
-          <div className="projects-hero-actions">
-            <button ref={openButton} type="button" className="primary" disabled={!engineReady || pending !== null} onClick={() => open()}>
-              <Icon name="folder" size={17} /> {pending === 'open' ? 'Đang mở…' : vi.projects.open}
-            </button>
-            <button type="button" disabled={!engineReady || pending !== null} onClick={() => setCloneUrl((v) => v ?? '')}>
-              <Icon name="plug" size={16} /> {vi.sources.cloneOpen}
-            </button>
-            {onOpenSettings && <button type="button" onClick={onOpenSettings}><Icon name="sliders" size={16} /> {vi.projects.settings}</button>}
-          </div>
-          {cloneUrl !== null && (
-            <form className="projects-clone" onSubmit={(e) => { e.preventDefault(); cloneFromUrl(cloneUrl) }}>
-              <label>{vi.sources.cloneLabel}
-                <input type="url" value={cloneUrl} placeholder={vi.sources.clonePlaceholder} disabled={pending === 'clone'}
-                  onChange={(e) => setCloneUrl(e.target.value)} autoFocus />
-              </label>
-              <p className="muted">{cloneStatus ?? vi.sources.cloneHint}</p>
-              <div className="row">
-                <button type="submit" className="primary" disabled={!engineReady || pending !== null || !cloneUrl.trim()}>{vi.sources.cloneSubmit}</button>
-                {pending === 'clone'
-                  ? <button type="button" onClick={() => { if (cloneJob.current) void window.nexgraph.index.cancel(cloneJob.current) }}>{vi.sources.cancel}</button>
-                  : <button type="button" onClick={() => setCloneUrl(null)}>{vi.sources.close}</button>}
-              </div>
-            </form>
-          )}
-        </div>
-        <div className="projects-hero-diagram" aria-hidden="true">
-          <span className="projects-diagram-branch">
-            <span><Icon name="folder" size={19} /></span>
-            <span><Icon name="flows" size={19} /></span>
-          </span>
-          <span className="projects-diagram-main"><Icon name="graph" size={30} /></span>
-          <span className="projects-diagram-branch">
-            <span><Icon name="arch" size={19} /></span>
-            <span><Icon name="tree" size={19} /></span>
-          </span>
+    <main className="screen projects-page projects-wu">
+      <div className="welcome">
+      <header className="welcome-head">
+        <Logo size={45} />
+        <div>
+          <h1>{recent.length ? 'Chào mừng trở lại NexGraph' : 'Chào mừng đến NexGraph'}</h1>
+          <p>Biến mã nguồn thành đồ thị để khám phá kiến trúc, luồng và vùng ảnh hưởng</p>
         </div>
       </header>
+      <section className="welcome-section" aria-labelledby="start-heading">
+        <h2 id="start-heading" className="welcome-section-title">Bắt đầu</h2>
+        <button ref={openButton} type="button" className="welcome-row" disabled={!engineReady || pending !== null} onClick={() => open()}>
+          <Icon name="folder" size={14} /><span>{pending === 'open' ? 'Đang mở…' : vi.projects.open}</span>
+        </button>
+        <button type="button" className="welcome-row" disabled={!engineReady || pending !== null} onClick={() => setCloneUrl((v) => v ?? '')}>
+          <Icon name="download" size={14} /><span>{vi.sources.cloneOpen}</span>
+        </button>
+        {onOpenSettings && <button type="button" className="welcome-row" onClick={onOpenSettings}><Icon name="sliders" size={14} /><span>{vi.projects.settings}</span></button>}
+        {cloneUrl !== null && (
+          <form className="projects-clone" onSubmit={(e) => { e.preventDefault(); cloneFromUrl(cloneUrl) }}>
+            <label>{vi.sources.cloneLabel}
+              <input type="url" value={cloneUrl} placeholder={vi.sources.clonePlaceholder} disabled={pending === 'clone'}
+                onChange={(e) => setCloneUrl(e.target.value)} autoFocus />
+            </label>
+            <p className="muted">{cloneStatus ?? vi.sources.cloneHint}</p>
+            <div className="row">
+              <button type="submit" className="primary" disabled={!engineReady || pending !== null || !cloneUrl.trim()}>{vi.sources.cloneSubmit}</button>
+              {pending === 'clone'
+                ? <button type="button" onClick={() => { if (cloneJob.current) void window.nexgraph.index.cancel(cloneJob.current) }}>{vi.sources.cancel}</button>
+                : <button type="button" onClick={() => setCloneUrl(null)}>{vi.sources.close}</button>}
+            </div>
+          </form>
+        )}
+      </section>
       {!engineReady && <p role="status" className="inline-message">{vi.projects.engineWaiting}</p>}
       {error && <p role="alert" className="inline-message error">{error}</p>}
       {notice && <Toast message={notice} onDismiss={() => setNotice(null)} />}
 
-      <section className="workbench-panel projects-panel" aria-labelledby="recent-heading" aria-busy={engineReady && loading}>
-        <header className="projects-recent-heading">
-          <h2 id="recent-heading">{vi.projects.recent}</h2>
-          {recent.length > 0 && <span>Lập chỉ mục lần cuối</span>}
-        </header>
+      <section className="welcome-section" aria-labelledby="recent-heading" aria-busy={engineReady && loading}>
+        <h2 id="recent-heading" className="welcome-section-title">{vi.projects.recent}</h2>
         {engineReady && loading && <div className="panel-empty"><div className="skeleton-line" /><div className="skeleton-line short" /></div>}
         {listError && (
           <div className="panel-empty"><p role="alert" className="error">{listError}</p>
@@ -221,13 +209,12 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
               const date = project.last_indexed_at != null ? new Date(project.last_indexed_at * 1000) : null
               return (
                 <li className="projects-recent-row" key={project.project_id}>
-                  <button className="recent-open" type="button" disabled={!engineReady || pending !== null} onClick={() => open(project.path)}>
-                    <span className="recent-icon"><Icon name="folder" size={19} /></span>
-                    <span className="recent-identity"><b>{project.name}</b><span className="muted mono" title={project.path}>{project.path}</span></span>
+                  <button className="welcome-row recent-open" type="button" disabled={!engineReady || pending !== null} onClick={() => open(project.path)} title={project.path}>
+                    <Icon name="folder" size={14} />
+                    <span className="recent-identity"><b>{project.name}</b><span className="muted mono">{project.path}</span></span>
                     <span className="projects-recent-date">
                       {date ? <time dateTime={date.toISOString()}>{dateFormat.format(date)}</time> : 'Chưa lập chỉ mục'}
                     </span>
-                    <Icon name="chevron" size={16} />
                   </button>
                   {!memberIds.has(project.project_id) && (
                     <button type="button" className="icon-button recent-remove recent-join" title={vi.globalGraph.addTo(project.name)}
@@ -243,22 +230,22 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
           </ul>
         )}
       </section>
-      <section className="workbench-panel projects-panel" aria-labelledby="global-heading">
-        <header className="projects-recent-heading">
-          <h2 id="global-heading">{vi.globalGraph.title}</h2>
+      <section className="welcome-section" aria-labelledby="global-heading">
+        <h2 id="global-heading" className="welcome-section-title">{vi.globalGraph.title}</h2>
+        <div className="welcome-global-bar">
+          <p className="muted">{members.length ? vi.globalGraph.hint : vi.globalGraph.empty}</p>
           <button type="button" className="primary" disabled={!engineReady || picked.length < 2 || !onOpenGlobal}
             title={vi.globalGraph.viewHint} onClick={() => onOpenGlobal?.(picked)}>
-            <Icon name="graph" size={16} /> {vi.globalGraph.view}
+            <Icon name="graph" size={14} /> {vi.globalGraph.view}
           </button>
-        </header>
-        <p className="panel-instruction muted">{members.length ? vi.globalGraph.hint : vi.globalGraph.empty}</p>
+        </div>
         {members.length > 0 && (
           <ul className="recent">
             {members.map((m) => {
               const name = m.name ?? m.project_id
               return (
                 <li key={m.project_id}>
-                  <label className="recent-open global-member">
+                  <label className="welcome-row recent-open global-member">
                     <input type="checkbox" aria-label={m.available ? name : `${name}: ${vi.globalGraph.unavailable}`} disabled={!m.available} checked={picked.includes(m.project_id)}
                       onChange={(e) => setPicked((ids) => e.target.checked ? [...ids, m.project_id] : ids.filter((id) => id !== m.project_id))} />
                     <span className="recent-identity"><b>{name}</b>
@@ -278,6 +265,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
           </ul>
         )}
       </section>
+      </div>
       {removing && <RemoveProjectDialog project={removing} busy={pending === 'remove'} onCancel={() => setRemoving(null)}
         onRemove={() => remove(removing)} />}
     </main>

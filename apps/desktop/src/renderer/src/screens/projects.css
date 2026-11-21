@@ -1,246 +1,106 @@
-.screen.projects-page {
-  width: 100%;
-  padding-block-start: clamp(24px, 4vw, 44px);
-}
-
-.projects-hero {
-  --diagram-line: color-mix(in srgb, var(--blue) 37%, var(--color-border));
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(230px, 34%);
-  align-items: center;
-  gap: clamp(16px, 4vw, 48px);
-  min-height: 256px;
-  padding: clamp(22px, 4vw, 38px);
-  margin-bottom: 24px;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--blue) 24%, var(--color-border));
-  border-radius: 14px;
-  background:
-    radial-gradient(ellipse at 100% 48%, color-mix(in srgb, var(--blue) 16%, transparent), transparent 64%),
-    var(--color-surface);
-}
-
-.projects-hero::after {
-  position: absolute;
-  z-index: -1;
-  inset: 0 0 0 42%;
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--blue) 27%, transparent) 1px, transparent 1px);
-  background-size: 18px 18px;
-  mask-image: linear-gradient(to right, transparent, black 55%);
-  opacity: .55;
-  pointer-events: none;
-  content: '';
-}
-
-.projects-hero-content {
-  min-width: 0;
-}
-
-.projects-hero-icon,
-.projects-diagram-main,
-.projects-diagram-branch > span {
-  display: inline-grid;
-  place-items: center;
-  color: var(--blue);
-  background: var(--accent-soft);
-}
-
-.projects-hero-icon {
-  width: 48px;
-  height: 48px;
-  border: 1px solid color-mix(in srgb, var(--blue) 27%, transparent);
-  border-radius: 11px;
-}
-
-.projects-hero h1 {
-  margin: 11px 0 7px;
-  font-size: clamp(29px, 4vw, 41px);
-  line-height: 1.18;
-  letter-spacing: -.035em;
-}
-
-.projects-hero p {
-  max-width: 470px;
-  margin: 0;
-  color: var(--color-muted);
-  font-size: 14px;
-  line-height: 1.6;
-  text-wrap: pretty;
-}
-
-.projects-hero-actions {
+/* Màn Dự án kiểu trang Welcome của Wu: một cột rộng tối đa 512px giữa màn, đệm 32px, các mục cách nhau 24px.
+   Đầu trang là logo 45px + lời chào; mỗi mục có tiêu đề chữ nhỏ viết hoa màu mờ kèm đường kẻ;
+   mỗi hàng là nút ma rộng hết cột cao 28px, icon mờ 14px. */
+.screen.projects-page.projects-wu {
   display: flex;
-  flex-wrap: wrap;
-  gap: 9px;
-  margin-top: 20px;
-}
-
-.projects-hero-actions button {
-  display: inline-flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
-  min-height: 38px;
-  padding-inline: 13px;
-  font-weight: 600;
-}
-
-.projects-hero-diagram {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  justify-items: center;
-  gap: 14px;
-  padding: 8px 14px;
-}
-
-.projects-hero-diagram::before {
-  position: absolute;
-  inset: calc(50% - .5px) 17% auto;
-  height: 1px;
-  background: var(--diagram-line);
-  content: '';
-}
-
-.projects-diagram-branch {
-  position: relative;
-  display: grid;
-  gap: 42px;
-}
-
-.projects-diagram-branch::before {
-  position: absolute;
-  inset: 15px auto 15px calc(50% - .5px);
-  width: 1px;
-  background: var(--diagram-line);
-  content: '';
-}
-
-.projects-diagram-main,
-.projects-diagram-branch > span {
-  position: relative;
-  border: 1px solid var(--diagram-line);
-}
-
-.projects-diagram-main {
-  width: 75px;
-  height: 75px;
-  border-radius: 18px;
-  box-shadow: 0 0 0 8px color-mix(in srgb, var(--blue) 6%, transparent);
-}
-
-.projects-diagram-branch > span {
-  width: 40px;
-  height: 40px;
-  border-radius: 9px;
-  background: var(--panel-raised);
-}
-
-.projects-page .projects-panel {
-  --indexed-column: 145px;
-  border-radius: 11px;
-}
-
-.projects-recent-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--indexed-column) 62px;
-  align-items: center;
-  min-height: 48px;
-  padding: 8px 17px;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.projects-recent-heading h2 {
+  max-width: none;
   margin: 0;
-  color: var(--color-text);
-  font-size: 14px;
+  padding: 0;
+  background: var(--color-surface);
 }
 
-.projects-recent-heading > span,
-.projects-recent-date {
+.welcome {
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  gap: 24px;
+  width: 100%;
+  max-width: 512px;
+  min-height: 100%;
+  padding: 32px;
+}
+
+.welcome-head { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
+.welcome-head .logo { flex: none; }
+.welcome-head h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.welcome-head p { margin: 2px 0 0; color: var(--color-muted); font-size: 12px; font-style: italic; }
+
+.welcome-section { display: flex; flex-direction: column; min-width: 0; }
+.welcome-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 0 4px;
   color: var(--color-muted);
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
+.welcome-section-title::after { content: ''; flex: 1; height: 1px; background: var(--color-border); }
 
-.projects-page .projects-panel .projects-recent-row {
-  padding: 0 8px;
-}
-
-.projects-page .projects-panel .recent .recent-open {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) var(--indexed-column) 16px;
-  gap: 12px;
-  min-height: 62px;
-  padding: 9px;
-}
-
-.projects-page .recent-icon {
-  width: 36px;
-  height: 36px;
-}
-
-.projects-page .recent-identity {
-  gap: 4px;
-}
-
-.projects-recent-date time {
-  color: var(--color-text);
-  font-variant-numeric: tabular-nums;
-}
-
-.projects-page .recent-remove:focus-visible,
-.projects-page .recent-open:focus-visible {
-  outline-offset: -2px;
-}
-
-@media (max-width: 700px) {
-  .projects-hero {
-    grid-template-columns: minmax(0, 1fr);
-    min-height: auto;
-    margin-bottom: 18px;
-  }
-
-  .projects-hero-diagram { display: none; }
-}
-
-@media (max-width: 500px) {
-  .projects-recent-heading {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .projects-recent-heading > span { display: none; }
-
-  .projects-page .projects-panel .recent .recent-open {
-    grid-template-columns: 36px minmax(0, 1fr) 16px;
-    gap: 4px 8px;
-  }
-
-  .projects-page .recent-icon { grid-row: 1 / span 2; }
-  .projects-recent-date { grid-area: 2 / 2; }
-  .projects-page .recent-open > svg:last-child { grid-area: 1 / 3 / span 2; }
-}
-
-.projects-clone {
-  display: grid;
+.projects-wu .welcome-row {
+  display: flex;
+  align-items: center;
   gap: 8px;
-  max-width: 520px;
-  margin-top: 16px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  text-align: left;
+  box-shadow: none;
+  transform: none;
 }
+.projects-wu .welcome-row > svg { flex: none; color: var(--color-muted); }
+.projects-wu .welcome-row:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 7%, transparent); box-shadow: none; transform: none; }
+.projects-wu .welcome-row:disabled { opacity: .5; }
 
-.projects-clone label {
-  display: grid;
-  gap: 6px;
+/* Dự án gần đây: tên, đường dẫn mờ cắt bớt, ngày lập chỉ mục bên phải; nút phụ hiện khi rê chuột. */
+.projects-wu .recent { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.projects-wu .recent > li { position: relative; display: flex; align-items: center; min-width: 0; }
+.projects-wu .recent-identity { display: flex; flex: 1; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
+.projects-wu .recent-identity b { flex: none; font-weight: 500; }
+.projects-wu .recent-identity .mono { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.projects-recent-date { flex: none; color: var(--color-muted); font-size: 11px; white-space: nowrap; }
+.projects-wu .recent-remove {
+  position: absolute;
+  right: 4px;
+  display: none;
+  width: 22px;
+  min-width: 0;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-muted);
 }
+.projects-wu .recent-join { right: 30px; }
+.projects-wu .recent > li:is(:hover, :focus-within) .recent-remove { display: grid; place-items: center; }
+.projects-wu .recent > li:is(:hover, :focus-within) .projects-recent-date { visibility: hidden; }
+.projects-wu .recent-remove:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 10%, var(--color-surface)); color: var(--color-text); }
+.projects-wu .recent-remove svg { width: 13px; height: 13px; }
+.projects-wu .recent-open:focus-visible, .projects-wu .recent-remove:focus-visible { outline-offset: -2px; }
 
-.projects-clone p {
-  margin: 0;
-}
+.projects-wu .panel-empty { margin: 0; padding: 4px 6px; font-size: 12px; }
 
-/* Graph chung (W8) */
-.projects-page .projects-panel + .projects-panel { margin-top: 18px; }
-.projects-page .global-member { display: flex; align-items: center; gap: 12px; cursor: pointer; }
-.projects-page .global-member input { flex: none; }
-.workbench-panel .recent .recent-join:hover:not(:disabled) { background: var(--accent-soft); color: var(--blue); }
+/* Graph chung */
+.welcome-global-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; padding: 0 6px; }
+.welcome-global-bar p { flex: 1; margin: 0; font-size: 12px; }
+.welcome-global-bar button { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 10px; border-radius: 6px; font-size: 12px; }
+.projects-wu .global-member { cursor: pointer; }
+.projects-wu .global-member input { flex: none; margin: 0; }
+
+.projects-clone { display: grid; gap: 8px; margin: 8px 6px 0; }
+.projects-clone label { display: grid; gap: 6px; font-size: 13px; }
+.projects-clone p { margin: 0; font-size: 12px; }
+.projects-clone input { height: 32px; padding: 0 10px; border-radius: 6px; }
+.projects-clone button { min-height: 28px; border-radius: 6px; }
