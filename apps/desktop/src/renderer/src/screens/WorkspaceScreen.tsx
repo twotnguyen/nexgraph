@@ -11,6 +11,7 @@ import { SplitEditor } from '../components/editor/SplitEditor'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import { TaskPicker, readTaskHistory, rememberTask } from '../components/terminal/TaskPicker'
 import { GitPanel } from '../components/git/GitPanel'
+import { WorktreePicker } from '../components/git/WorktreePicker'
 import { GitDiffView } from '../components/git/GitDiffView'
 import { DebugPanel, debugKindOf } from '../components/debug/DebugPanel'
 import { clearAllBreakpoints, debugStep, pauseDebugging, restartDebugging, setDebugOpener, setDebugProject, startDebugging, stopDebugging, useDebugState } from '../state/debugState'
@@ -41,6 +42,7 @@ import { Icon, VIEW_TONE } from '../components/common/icons'
 import { openThemePicker } from '../components/layout/ThemePicker'
 import { FileFinder } from '../components/layout/FileFinder'
 import { useCommand } from '../state/commands'
+import { getExplorerOpen, setChatDock, setChatWidth, useChatDock, useChatWidth } from '../state/layoutPrefs'
 import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
 import { startDiagnostics } from '../state/diagnostics'
 import { errorText } from '../state/errorText'
@@ -132,7 +134,6 @@ const ACTIVITIES = [
   { id: 'tour', title: PANEL_TITLES.tour, icon: TourIcon }
 ] satisfies { id: Panel; title: string; icon: typeof SearchIcon }[]
 const AGENT_ACTIVITY = { id: 'agent', title: vi.chat.title, icon: <Icon name="spark" size={20} /> }
-type ChatDock = 'left' | 'right'
 
 interface Props {
   project: ProjectSummary
@@ -140,13 +141,15 @@ interface Props {
   initialFlowId?: number
   onBack?: () => void
   onOpenSettings?: (page?: string) => void
+  /** Mở một thư mục khác làm dự án (App chuyển màn hình); chỉ khi có thì mở được worktree. */
+  onOpenProject?: (project: ProjectSummary) => void
   backLabel?: string
   indexNotice?: string
   initialCommand?: HostCommand
   hidden?: boolean
 }
 
-export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, backLabel = vi.workspace.back, indexNotice, initialCommand, hidden = false }: Props) {
+export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, onOpenProject, backLabel = vi.workspace.back, indexNotice, initialCommand, hidden = false }: Props) {
   const hosted = !!window.nexgraph?.host
   const id = useId()
   const tabList = useRef<HTMLDivElement>(null)
@@ -157,24 +160,17 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const hostInitialHandled = useRef(false)
   const [revision, setRevision] = useState(0)
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [chatDock, setChatDock] = useState<ChatDock>(() => { try { return localStorage.getItem('nexgraph.chat.dock') === 'right' ? 'right' : 'left' } catch { return 'left' } })
+  const chatDock = useChatDock()
   // Kiểu Wu (trái): khung chat dùng chung chỗ với bảng công cụ nên mặc định đóng để cây tệp hiện trước.
   const [chatOpen, setChatOpen] = useState(() => !hosted && chatDock === 'right' && (window.matchMedia?.('(min-width: 980px)').matches ?? true))
   const [connectOpenCode, setConnectOpenCode] = useState(false)
   const editorContexts = useRef(new Map<string, EditorContextGetter>())
   const [inspections, setInspections] = useState<AgentInspection[]>([])
-  const [chatWidth, setChatWidth] = useState(() => { try { return Math.max(300, Math.min(640, Number(localStorage.getItem('nexgraph.chat.width')) || 360)) } catch { return 360 } })
+  const chatWidth = useChatWidth()
   const resize = useRef<{ x: number; width: number } | null>(null)
-  const saveChatWidth = (width: number) => {
-    const next = Math.max(300, Math.min(640, Math.max(300, window.innerWidth - 560), width))
-    setChatWidth(next)
-    try { localStorage.setItem('nexgraph.chat.width', String(next)) } catch { /* preference only */ }
-  }
-  const toggleDock = () => {
-    const next: ChatDock = chatDock === 'left' ? 'right' : 'left'
-    setChatDock(next)
-    try { localStorage.setItem('nexgraph.chat.dock', next) } catch { /* preference only */ }
-  }
+  // Cửa sổ hẹp thì khung chat không được chiếm quá nửa; giới hạn 300–640 do kho tuỳ chọn tự áp.
+  const saveChatWidth = (width: number) => setChatWidth(Math.min(width, Math.max(300, window.innerWidth - 560)))
+  const toggleDock = () => setChatDock(chatDock === 'left' ? 'right' : 'left')
   const leftChat = !hosted && chatOpen && chatDock === 'left'
   const flushEditorState = useCallback(async () => {
     const states: AgentEditorState[] = []
@@ -206,7 +202,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setTab('flows')
   }
   // Cây dùng cùng bảng duyệt tệp ở cả ứng dụng độc lập và Code-OSS.
-  const [panel, setPanel] = useState<Panel | null>(!hosted || initialTab === 'tree' ? 'explorer' : null)
+  const [panel, setPanel] = useState<Panel | null>((!hosted && getExplorerOpen()) || initialTab === 'tree' ? 'explorer' : null)
   const activeEditor = useActiveEditor()
   const documentSymbols = useDocumentSymbols(project.project_id, hidden ? null : activeEditor)
   useLayoutEffect(() => startDiagnostics(), [])
@@ -465,6 +461,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     if (hosted) guardLeave(() => onOpenSettings(page))?.()
     else onOpenSettings(page)
   })
+  // Worktree mở như một dự án: project.open đăng ký thư mục, App chuyển màn hình; còn tệp chưa lưu thì hỏi trước.
+  const [worktrees, setWorktrees] = useState(false)
+  const openWorktree = onOpenProject && !hosted && ((path: string) => guardLeave(() => {
+    void window.nexgraph.project.open(path).then(onOpenProject, (e: unknown) => setFeedback(errorText(e)))
+  })?.())
   const closeFiles = (paths: string[]) => {
     const selected = orderedFiles.filter((item) => paths.includes(item.file))
     if (!selected.length) return
@@ -639,6 +640,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('graph_search.toggle', () => togglePanel('search'))
   useCommand('changes.toggle', () => togglePanel('changes'))
   useCommand('git_panel.toggle', () => togglePanel('git'))
+  useCommand('git.worktree', () => setWorktrees(true), !!openWorktree && !!window.nexgraph.git)
   // Gỡ lỗi: tệp đích là tệp .js/.py mở gần nhất; phiên sống ngoài bảng (state/debugState) nên phím F5… dùng được khi bảng đóng.
   const debugState = useDebugState()
   const [debugTarget, setDebugTarget] = useState<string | undefined>(undefined)
@@ -650,7 +652,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     if (debugState.status === 'stopped') return debugStep('continue')
     const kind = debugKindOf(debugTarget)
     if (panel !== 'debug') togglePanel('debug')
-    if (kind && debugTarget && debugState.status === 'idle') void startDebugging(project.project_id, kind, debugTarget)
+    if (debugState.status === 'idle') void startDebugging(project.project_id, kind, debugTarget ?? null)
   })
   useCommand('debug.step_over', () => debugStep('next'))
   useCommand('debug.step_into', () => debugStep('stepIn'))
@@ -861,7 +863,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               <SearchPanel projectId={project.project_id} revision={revision} onOpen={openNode}
                 onShowSubgraph={(g) => highlightFromChat(g.nodes, g.edges, null)} onOpenFlow={openFlow} />
             )}
-            {panel === 'git' && <GitPanel projectId={project.project_id} onOpenDiff={openDiff} onOpenFile={(file) => openCode(file)} />}
+            {panel === 'git' && <GitPanel projectId={project.project_id} onOpenDiff={openDiff} onOpenFile={(file) => openCode(file)} onOpenWorktrees={openWorktree ? () => setWorktrees(true) : undefined} />}
             {panel === 'debug' && <DebugPanel projectId={project.project_id} target={debugTarget} onOpenFile={(file, line) => openCode(file, line)} />}
             {panel === 'find' && (
               <ProjectSearch projectId={project.project_id} onOpen={(file, line) => openCode(file, line)} dirtyFiles={dirtyFiles} focusRequest={findFocus} />
@@ -1047,6 +1049,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
       {finder && <FileFinder projectId={project.project_id} projectName={project.name} recent={recentFiles} onOpen={(path) => openCode(path)} onClose={() => setFinder(false)} />}
       {taskPicker && <TaskPicker projectId={project.project_id} history={taskHistory} onPick={(task, oneshot) => void runTask(task, oneshot)} onClose={() => setTaskPicker(false)} />}
+      {worktrees && openWorktree && <WorktreePicker projectId={project.project_id} onOpen={openWorktree} onClose={() => setWorktrees(false)} />}
       {joining && <JoinDialog onClose={() => setJoining(false)} onJoined={() => setTab('collab')} />}
     </div>
   )

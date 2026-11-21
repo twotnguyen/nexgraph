@@ -78,6 +78,8 @@ export type GitStatus = {
 export type GitCommit = { sha: string; parents: string[]; subject: string; author: string; time: number; refs: string }
 export type GitHunk = { id: string; header: string; oldStart: number; newStart: number }
 export type GitStash = { ref: string; message: string }
+/** `head`: mã commit đầy đủ; `current`: worktree chứa thư mục dự án đang mở; `prunable`: thư mục đã mất khỏi đĩa. */
+export type GitWorktree = { path: string; head: string; branch: string | null; detached: boolean; locked: boolean; prunable: boolean; main: boolean; current: boolean }
 export type GitBlameLine = { line: number; sha: string; author: string; time: number; summary: string; uncommitted: boolean }
 /** Điểm dừng theo tệp (đường dẫn tương đối dự án → các dòng, tính từ 1). */
 export type DebugBreakpoint = { line: number; enabled: boolean; condition?: string; hitCondition?: string; logMessage?: string }
@@ -90,6 +92,8 @@ export type DebugEvent =
 export type DebugFrame = { id: number; name: string; file: string | null; line: number; column: number }
 export type DebugScope = { name: string; variablesReference: number; expensive: boolean }
 export type DebugVariable = { name: string; value: string; type: string; variablesReference: number }
+/** Cấu hình gỡ lỗi đọc từ `.vscode/launch.json` hoặc `.zed/debug.json` (đã bỏ loại chưa hỗ trợ); `source` là đường dẫn tương đối của tệp. */
+export type DebugConfigInfo = { name: string; source: string; kind: 'node' | 'python'; request: 'launch' | 'attach' }
 /** Cộng tác LAN: lời chào máy chia sẻ gửi khi có người nối vào. */
 export type CollabHello = { file: string; host: string }
 export type CollabEvent =
@@ -246,12 +250,27 @@ export interface NexGraphApi {
     stashSave(projectId: string, message: string): Promise<void>
     stashAction(projectId: string, ref: string, action: 'apply' | 'pop' | 'drop'): Promise<void>
     suggestMessage(projectId: string): Promise<string>
+    worktrees(projectId: string): Promise<GitWorktree[]>
+    /** Tạo worktree cạnh kho cho nhánh mới (từ HEAD) hoặc nhánh có sẵn; trả về thư mục đã tạo. */
+    worktreeAdd(projectId: string, branch: string, existing: boolean): Promise<string>
+    /** Không cưỡng bức: worktree còn thay đổi chưa commit thì lỗi `worktree_dirty`. */
+    worktreeRemove(projectId: string, path: string): Promise<void>
+    /** URL web của tệp tại commit HEAD (có `#L…` khi có dòng); `text` là nội dung đang soạn, để ánh xạ đúng cả khi chưa lưu. `published` false khi remote chưa có HEAD. */
+    permalink(projectId: string, file: string, start?: number, end?: number, text?: string): Promise<{ url: string; published: boolean }>
   }
   /** Gỡ lỗi (DAP): js-debug cho Node, debugpy cho Python; adapter tải về khi người dùng đồng ý. */
   debug?: {
     adapterStatus(): Promise<{ node: boolean; python: boolean }>
     installAdapter(kind: 'node' | 'python'): Promise<void>
     start(projectId: string, kind: 'node' | 'python', file: string, breakpoints: DebugBreakpoints): Promise<void>
+    /** Cấu hình đọc được trong dự án; tệp JSON sai cú pháp báo lỗi. */
+    configs(projectId: string): Promise<DebugConfigInfo[]>
+    /** Tệp cấu hình để mở trong editor (đường dẫn tương đối); tạo `.vscode/launch.json` mẫu nếu dự án chưa có tệp nào. */
+    configFile(projectId: string): Promise<string>
+    /** Chạy cấu hình theo (tệp, tên); `file` là tệp đang mở để thay `${file}`. */
+    startConfig(projectId: string, config: { source: string; name: string }, file: string | null, breakpoints: DebugBreakpoints): Promise<void>
+    /** Nối vào tiến trình đang chờ gỡ lỗi: Node qua `--inspect` (js-debug), Python qua `debugpy.listen`. Dừng chỉ ngắt kết nối, không tắt tiến trình. */
+    attach(projectId: string, kind: 'node' | 'python', host: string, port: number, breakpoints: DebugBreakpoints): Promise<void>
     setBreakpoints(file: string, breakpoints: DebugBreakpoint[]): Promise<void>
     step(action: 'continue' | 'next' | 'stepIn' | 'stepOut', threadId: number): Promise<void>
     pause(): Promise<void>
@@ -357,6 +376,8 @@ export interface NexGraphApi {
     checkpoints(projectId: string, taskId: string): Promise<AgentCheckpointInfo[]>
     rollback(projectId: string, taskId: string): Promise<AgentRollbackResult>
     editorState(projectId: string, states: AgentEditorState[]): Promise<void>
+    /** Thông báo hệ thống; bấm vào thì đưa cửa sổ lên. Renderer tự quyết định có gửi hay không (cửa sổ không focus, đúng cài đặt). Vắng ở host không có thông báo. */
+    notify?(title: string, body: string): Promise<void>
     onEvent(cb: (projectId: string, e: AgentEvent) => void): () => void
   }
   mcp: {

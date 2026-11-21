@@ -152,6 +152,12 @@ export default function App() {
     }).catch(() => {}) // Tổng quan đọc thêm mốc lập chỉ mục từ số liệu đồ thị.
   }
 
+  // Vào một dự án vừa đăng ký (chọn ở danh sách hoặc mở worktree): đã lập chỉ mục thì vào thẳng không gian làm việc, chưa thì quét trước.
+  const enterProject = (project: ProjectSummary) => {
+    setHostError(null)
+    setScreen(project.last_indexed_at != null ? { name: 'workspace', project } : { name: 'scan', project })
+  }
+
   useEffect(() => (window.nexgraph?.host ? undefined : installKeymap()), [])
   useEffect(() => { if (!window.nexgraph?.host) void loadExtensions() }, [])
   // Khi Không gian làm việc hiện, màn đó tự đăng ký lệnh; Cài đặt vẫn mở được trang phím tắt.
@@ -173,10 +179,7 @@ export default function App() {
         <ProjectsScreen engineReady={status.state === 'ready'}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}
           onOpenGlobal={(projectIds) => setScreen({ name: 'global', projectIds })}
-          onOpened={(project) => {
-            setHostError(null)
-            setScreen(project.last_indexed_at != null ? { name: 'workspace', project } : { name: 'scan', project })
-          }} />
+          onOpened={enterProject} />
       )}
       {screen.name === 'scan' && (
         <ScanStep
@@ -222,7 +225,7 @@ export default function App() {
       {workspace && (
         <CommandsEnabled value={!settingsOpen}>
           <WorkspaceScreen key={`${workspace.project.project_id}:${workspace.tab ?? 'arch'}`} project={workspace.project} hidden={settingsOpen}
-            initialTab={workspace.tab} initialCommand={workspace.initialCommand} onOpenSettings={openSettings}
+            initialTab={workspace.tab} initialCommand={workspace.initialCommand} onOpenSettings={openSettings} onOpenProject={enterProject}
             onBack={() => setScreen({ name: 'overview', project: workspace.project })} />
         </CommandsEnabled>
       )}

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react'
+import { BASE_KEYMAPS, type BaseKeymapId } from './baseKeymaps'
 
 /**
  * Lệnh của ứng dụng: danh sách tĩnh (để bảng lệnh và trang Phím tắt biết mọi lệnh) cộng handler do màn đang mở gắn vào.
@@ -26,6 +27,9 @@ export const COMMANDS: CommandDef[] = [
   { id: 'changes.toggle', category: 'Bảng công cụ', title: 'Hiện thay đổi và vùng ảnh hưởng' },
   { id: 'git_panel.toggle', category: 'Git', title: 'Hiện Git panel', key: 'ctrl+shift+g' },
   { id: 'git.blame', category: 'Git', title: 'Bật/tắt blame từng dòng' },
+  { id: 'git.worktree', category: 'Git', title: 'Worktree' },
+  { id: 'git.copy_permalink', category: 'Git', title: 'Sao chép permalink tới dòng' },
+  { id: 'git.open_permalink', category: 'Git', title: 'Mở permalink tới dòng' },
   { id: 'debug.toggle', category: 'Gỡ lỗi', title: 'Hiện bảng Gỡ lỗi', key: 'mod+shift+d' },
   { id: 'debug.start', category: 'Gỡ lỗi', title: 'Bắt đầu / chạy tiếp', key: 'f5' },
   { id: 'debug.step_over', category: 'Gỡ lỗi', title: 'Bước qua', key: 'f10' },
@@ -64,6 +68,7 @@ export const COMMANDS: CommandDef[] = [
   { id: 'editor.code_actions', category: 'Editor', title: 'Thao tác mã', key: 'mod+.' },
   { id: 'markdown.preview', category: 'Markdown', title: 'Mở / đóng xem trước Markdown', key: 'mod+shift+v' },
   { id: 'markdown.preview_side', category: 'Markdown', title: 'Xem trước Markdown bên cạnh', key: 'mod+k v' },
+  { id: 'table.preview', category: 'CSV/TSV', title: 'Chuyển giữa dạng bảng và mã nguồn' },
   { id: 'image.zoom_in', category: 'Ảnh', title: 'Phóng to ảnh', key: 'mod+=' },
   { id: 'image.zoom_out', category: 'Ảnh', title: 'Thu nhỏ ảnh', key: 'mod+-' },
   { id: 'image.reset_zoom', category: 'Ảnh', title: 'Đặt lại độ phóng ảnh', key: 'mod+0' },
@@ -125,8 +130,9 @@ export function runCommand(id: string): boolean {
 /** Lệnh đang chạy được ở màn hiện tại. */
 export const availableCommands = (): CommandDef[] => COMMANDS.filter((command) => handlers.has(command.id))
 
-// --- Phím tắt người dùng: lưu phần khác mặc định ("" = bỏ phím). ---
+// --- Phím tắt: ba lớp mặc định < base keymap < người dùng. Lớp người dùng chỉ lưu phần khác lớp dưới ("" = bỏ phím). ---
 const STORE = 'nexgraph.keybindings'
+const BASE_STORE = 'nexgraph.keymap.base'
 const CHANGED = 'nexgraph:keybindings'
 let overrides: Record<string, string> = (() => {
   try {
@@ -136,14 +142,51 @@ let overrides: Record<string, string> = (() => {
     return {}
   }
 })()
+let baseId: BaseKeymapId = (() => {
+  try {
+    const id = localStorage.getItem(BASE_STORE)
+    return id !== null && Object.hasOwn(BASE_KEYMAPS, id) ? (id as BaseKeymapId) : 'default'
+  } catch {
+    return 'default'
+  }
+})()
 
 const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 // Ngoài macOS phím Ctrl chính là "mod": phím mặc định viết "ctrl+…" (như ctrl+` của Wu) phải khớp với lần nhấn đã chuẩn hoá thành "mod+…".
-const forPlatform = (key: string) => (IS_MAC ? key : key.replace(/\bctrl\+/g, 'mod+'))
-export const bindingFor = (id: string): string => overrides[id] ?? forPlatform(COMMANDS.find((command) => command.id === id)?.key ?? '')
+// ⌃⌘X của macOS (base keymap VS Code) tương ứng Ctrl+Alt+X.
+const forPlatform = (key: string) => (IS_MAC ? key : key.replace(/\bmod\+ctrl\+/g, 'mod+alt+').replace(/\bctrl\+/g, 'mod+'))
+
+export type KeySource = 'default' | 'base' | 'user'
+export type KeyEntry = { key: string; source: KeySource }
+
+/**
+ * Gộp ba lớp phím theo ưu tiên người dùng > base > mặc định. Một phím chỉ thuộc một lệnh:
+ * lớp trên đặt phím nào cho lệnh nào thì lệnh khác của lớp dưới đang giữ đúng phím đó bị bỏ phím.
+ */
+export function layerKeymap(defaults: Record<string, string>, base: Record<string, string>, user: Record<string, string>): Map<string, KeyEntry> {
+  const keymap = new Map<string, KeyEntry>(Object.entries(defaults).map(([id, key]) => [id, { key, source: 'default' }]))
+  for (const [layer, source] of [[base, 'base'], [user, 'user']] as const) {
+    const taken = new Set(Object.entries(layer).filter(([id, key]) => key && keymap.has(id)).map(([, key]) => key))
+    for (const [id, entry] of keymap) if (!Object.hasOwn(layer, id) && taken.has(entry.key)) keymap.set(id, { key: '', source })
+    for (const [id, key] of Object.entries(layer)) if (keymap.has(id)) keymap.set(id, { key, source })
+  }
+  return keymap
+}
+
+const resolve = (user: Record<string, string>) => layerKeymap(
+  Object.fromEntries(COMMANDS.map((command) => [command.id, forPlatform(command.key ?? '')])),
+  Object.fromEntries(Object.entries(BASE_KEYMAPS[baseId].keys).map(([id, key]) => [id, forPlatform(key)])),
+  user
+)
+// Bản gộp được nhớ lại; bỏ đi mỗi khi phím, base keymap hoặc danh sách lệnh đổi.
+let resolved: Map<string, KeyEntry> | null = null
+const keymap = () => (resolved ??= resolve(overrides))
+export const bindingFor = (id: string): string => keymap().get(id)?.key ?? ''
+/** Lớp nào quyết định phím hiện tại của lệnh (lệnh bị lớp trên lấy mất phím cũng tính cho lớp đó). */
+export const bindingSource = (id: string): KeySource => keymap().get(id)?.source ?? 'default'
 export const isCustomBinding = (id: string): boolean => Object.hasOwn(overrides, id)
 
-/** key = null: về mặc định. Một phím chỉ thuộc một lệnh: lệnh khác đang giữ phím đó bị bỏ phím. */
+/** key = null: về phím của base/mặc định. Một phím chỉ thuộc một lệnh: lệnh khác đang giữ phím đó bị bỏ phím. */
 export function setBinding(id: string, key: string | null): void {
   const next = { ...overrides }
   if (key === null) delete next[id]
@@ -151,20 +194,31 @@ export function setBinding(id: string, key: string | null): void {
     for (const command of COMMANDS) if (command.id !== id && bindingFor(command.id) === key) next[command.id] = ''
     next[id] = key
   }
-  for (const command of COMMANDS) if (next[command.id] === forPlatform(command.key ?? '')) delete next[command.id]
+  const lower = resolve({})
+  for (const command of COMMANDS) if (next[command.id] === lower.get(command.id)?.key) delete next[command.id]
   overrides = next
+  resolved = null
   try { localStorage.setItem(STORE, JSON.stringify(next)) } catch { /* bộ nhớ đầy: vẫn áp dụng trong phiên */ }
   window.dispatchEvent(new Event(CHANGED))
+}
+
+/** Đổi base keymap: áp ngay cho bảng phím, bảng lệnh và bộ phân phối phím; phím người dùng đã sửa vẫn thắng. */
+export function setBaseKeymap(id: BaseKeymapId): void {
+  baseId = id
+  try { localStorage.setItem(BASE_STORE, id) } catch { /* bộ nhớ đầy: vẫn áp dụng trong phiên */ }
+  notifyKeymap()
 }
 
 const subscribe = (notify: () => void) => {
   window.addEventListener(CHANGED, notify)
   return () => window.removeEventListener(CHANGED, notify)
 }
-/** Re-render khi phím tắt hoặc danh sách lệnh đổi; trả về bảng ghi đè hiện tại (đổi tham chiếu mỗi lần đổi). */
+/** Re-render khi phím tắt, base keymap hoặc danh sách lệnh đổi; trả về bảng ghi đè hiện tại (đổi tham chiếu mỗi lần đổi). */
 export const useKeybindings = (): Record<string, string> => useSyncExternalStore(subscribe, () => overrides)
-// Danh sách lệnh đổi (extension): đổi tham chiếu bảng ghi đè để useKeybindings vẽ lại.
+export const useBaseKeymap = (): BaseKeymapId => useSyncExternalStore(subscribe, () => baseId)
+// Danh sách lệnh hoặc base keymap đổi: bỏ bản gộp đã nhớ và đổi tham chiếu bảng ghi đè để useKeybindings vẽ lại.
 function notifyKeymap() {
+  resolved = null
   overrides = { ...overrides }
   window.dispatchEvent(new Event(CHANGED))
 }

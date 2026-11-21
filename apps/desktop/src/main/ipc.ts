@@ -41,9 +41,13 @@ import { listTasks, resolveTask } from './tasks'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
 import { gitApplyHunk, gitHunks } from './git/hunks'
+import { gitPermalink } from './git/permalink'
+import { gitWorktreeAdd, gitWorktreeRemove, gitWorktrees } from './git/worktree'
 import { allToolNames, getDisabledTools, setDisabledTools } from './agent/extension'
+import { notifyAgent } from './agent/notify'
 import { DebugManager } from './debug/manager'
 import { adapterInstalled, installAdapter, type DebugKind } from './debug/adapters'
+import { attachSpec, ensureConfigFile, listConfigs, resolveConfig, type DebugSpec } from './debug/launch-config'
 import { CollabHub } from './collab/hub'
 import { ExtensionRegistry } from './extensions/registry'
 
@@ -334,6 +338,10 @@ export function registerIpc(
   on('git:stashes', async (pid: string) => gitStashes(await rootOf(pid)))
   on('git:stash-save', async (pid: string, message: string) => gitStashSave(await rootOf(pid), message))
   on('git:stash-action', async (pid: string, ref: string, action: 'apply' | 'pop' | 'drop') => gitStashAction(await rootOf(pid), ref, action))
+  on('git:worktrees', async (pid: string) => gitWorktrees(await rootOf(pid)))
+  on('git:worktree-add', async (pid: string, branch: string, existing: boolean) => gitWorktreeAdd(await rootOf(pid), branch, existing === true))
+  on('git:worktree-remove', async (pid: string, path: string) => gitWorktreeRemove(await rootOf(pid), path))
+  on('git:permalink', async (pid: string, file: string, start?: number, end?: number, text?: string) => gitPermalink(await rootOf(pid), file, start, end, text))
   // Gỡ lỗi: adapter cài vào thư mục dữ liệu app; mọi đường dẫn tệp là tương đối dự án và phải nằm trong dự án.
   const adaptersBase = join(app.getPath('userData'), 'debug-adapters')
   debugManager = new DebugManager(adaptersBase, (event) => getWindow()?.webContents.send('debug:event', event))
@@ -355,14 +363,39 @@ export function registerIpc(
         ...(p.hitCondition ? { hitCondition: p.hitCondition as string } : {}), ...(p.logMessage ? { logMessage: p.logMessage as string } : {}) }
     })
   }
+  const cleanBreakpoints = (root: string, breakpoints: DebugBreakpoints | undefined): DebugBreakpoints => {
+    const clean: DebugBreakpoints = {}
+    for (const [path, points] of Object.entries(breakpoints ?? {})) { resolveInside(root, path); clean[path] = breakpointList(points) }
+    return clean
+  }
+  const needAdapter = (kind: DebugKind): void => {
+    if (!adapterInstalled(adaptersBase, kind)) throw new FsError('bad_param', 'Chưa cài debug adapter')
+  }
+  /** Python attach nối thẳng vào adapter do tiến trình đích tự chạy (`debugpy.listen`) nên không cần debugpy tải về. */
+  const runSpec = (root: string, spec: DebugSpec, breakpoints: DebugBreakpoints): Promise<void> => {
+    if (spec.kind === 'node' || spec.request === 'launch') needAdapter(spec.kind)
+    return dbg.run(root, spec, breakpoints)
+  }
   on('debug:adapter-status', async () => ({ node: adapterInstalled(adaptersBase, 'node'), python: adapterInstalled(adaptersBase, 'python') }))
   on('debug:install-adapter', async (kind: string) => installAdapter(adaptersBase, debugKind(kind)))
   on('debug:start', async (pid: string, kind: string, file: string, breakpoints: DebugBreakpoints) => {
     const root = await rootOf(pid)
-    const clean: DebugBreakpoints = {}
-    for (const [path, points] of Object.entries(breakpoints ?? {})) { resolveInside(root, path); clean[path] = breakpointList(points) }
-    if (!adapterInstalled(adaptersBase, debugKind(kind))) throw new FsError('bad_param', 'Chưa cài debug adapter')
+    const clean = cleanBreakpoints(root, breakpoints)
+    needAdapter(debugKind(kind))
     return dbg.start(debugKind(kind), root, file, clean)
+  })
+  on('debug:configs', async (pid: string) => listConfigs(await rootOf(pid)))
+  on('debug:config-file', async (pid: string) => ensureConfigFile(await rootOf(pid)))
+  on('debug:start-config', async (pid: string, config: { source?: unknown; name?: unknown } | null, file: string | null, breakpoints: DebugBreakpoints) => {
+    if (!config || typeof config.source !== 'string' || typeof config.name !== 'string' || (file !== null && typeof file !== 'string')) throw new FsError('bad_param', 'Cấu hình gỡ lỗi không hợp lệ')
+    const root = await rootOf(pid)
+    const clean = cleanBreakpoints(root, breakpoints)
+    return runSpec(root, await resolveConfig(root, config.source, config.name, file ?? undefined), clean)
+  })
+  on('debug:attach', async (pid: string, kind: string, host: unknown, port: unknown, breakpoints: DebugBreakpoints) => {
+    const root = await rootOf(pid)
+    const clean = cleanBreakpoints(root, breakpoints)
+    return runSpec(root, attachSpec(debugKind(kind), host, port), clean)
   })
   on('debug:set-breakpoints', async (file: string, points: unknown) => dbg.setBreakpoints(file, breakpointList(points)))
   on('debug:step', async (action: string, threadId: number) => {
@@ -725,6 +758,7 @@ export function registerIpc(
     return agent.rollback(pid, taskId)
   })
   on('agent:editor-state', (pid: string, states: AgentEditorState[]) => editorStates.update(pid, states))
+  on('agent:notify', async (title: string, body: string) => notifyAgent(getWindow(), title, body))
 
   on('export:pick-dir', async (pid: string) => {
     await rootOf(pid) // chỉ dự án đã đăng ký mới có thể chọn thư mục xuất

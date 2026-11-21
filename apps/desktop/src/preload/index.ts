@@ -140,12 +140,20 @@ const api: NexGraphApi = {
     stashes: (pid) => call('git:stashes', pid),
     stashSave: (pid, message) => call('git:stash-save', pid, message),
     stashAction: (pid, ref, action) => call('git:stash-action', pid, ref, action),
-    suggestMessage: (pid) => call('git:suggest-message', pid)
+    suggestMessage: (pid) => call('git:suggest-message', pid),
+    worktrees: (pid) => call('git:worktrees', pid),
+    worktreeAdd: (pid, branch, existing) => call('git:worktree-add', pid, branch, existing),
+    worktreeRemove: (pid, path) => call('git:worktree-remove', pid, path),
+    permalink: (pid, file, start, end, text) => call('git:permalink', pid, file, start, end, text)
   },
   debug: {
     adapterStatus: () => call('debug:adapter-status'),
     installAdapter: (kind) => call('debug:install-adapter', kind),
     start: (pid, kind, file, breakpoints) => call('debug:start', pid, kind, file, breakpoints),
+    configs: (pid) => call('debug:configs', pid),
+    configFile: (pid) => call('debug:config-file', pid),
+    startConfig: (pid, config, file, breakpoints) => call('debug:start-config', pid, config, file, breakpoints),
+    attach: (pid, kind, host, port, breakpoints) => call('debug:attach', pid, kind, host, port, breakpoints),
     setBreakpoints: (file, points) => call('debug:set-breakpoints', file, points),
     step: (action, threadId) => call('debug:step', action, threadId),
     pause: () => call('debug:pause'),
@@ -232,6 +240,7 @@ const api: NexGraphApi = {
     checkpoints: (pid, taskId) => call('agent:checkpoints', pid, taskId),
     rollback: (pid, taskId) => call('agent:rollback', pid, taskId),
     editorState: (pid, states) => call('agent:editor-state', pid, states),
+    notify: (title, body) => call('agent:notify', title, body),
     onEvent: (cb) => subscribe<{ projectId: string; event: AgentEvent }>('agent:event', (v) => cb(v.projectId, v.event))
   },
   mcp: {
