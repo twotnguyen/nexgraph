@@ -5,11 +5,26 @@ import { describe, expect, it, vi } from 'vitest'
 import { emptyGeminiStatus, installNexgraph } from '../test-utils'
 import type { NexGraphApi } from '@shared/api'
 import { SettingsScreen } from './SettingsScreen'
+import { isStatusItemHidden, setStatusItemHidden } from '../state/layoutPrefs'
 
 const provider = (id: string, over: Record<string, unknown> = {}) =>
   ({ id, label: id, hasKey: false, oauth: false, loggedIn: false, custom: false, ...over })
 
 describe('SettingsScreen', () => {
+  it('switch bật lại các mục thanh trạng thái đã ẩn bằng chuột phải', async () => {
+    installNexgraph()
+    const ids = ['diagnostics', 'cursor', 'language', 'eol', 'encoding', 'vim']
+    act(() => { ids.forEach((id) => setStatusItemHidden(id, true)) })
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(screen.getByRole('heading', { name: 'Mục thanh trạng thái' })).toBeInTheDocument()
+    const switches = ids.map((id) => document.getElementById(`settings-status-${id}`)!)
+    for (const sw of switches) expect(sw).toHaveAttribute('aria-checked', 'false')
+    await userEvent.click(switches[1])
+    expect(switches[1]).toHaveAttribute('aria-checked', 'true')
+    expect(isStatusItemHidden('cursor')).toBe(false)
+    act(() => { ids.forEach((id) => setStatusItemHidden(id, false)) })
+  })
+
   it('ngắt Gemini không còn báo đang dùng dù vẫn giữ runtime Google và hồ sơ đăng nhập', async () => {
     const settings = { runtime: 'antigravity-cli' as const, provider: 'google-antigravity', baseUrl: '', model: 'auto', connectionId: 'account-a', hasKey: false }
     const { api } = installNexgraph({

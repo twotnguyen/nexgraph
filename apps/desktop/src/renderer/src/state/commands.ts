@@ -15,10 +15,13 @@ export interface CommandDef {
 /** Lệnh dựng sẵn; extension thêm lệnh vào cuối bằng `addCommands`. */
 export const COMMANDS: CommandDef[] = [
   { id: 'command_palette.toggle', category: 'Bảng lệnh', title: 'Mở bảng lệnh', key: 'mod+shift+p' },
+  { id: 'picker.reopen', category: 'Ứng dụng', title: 'Mở lại bộ chọn gần đây', key: 'mod+k mod+p' },
   { id: 'file_finder.toggle', category: 'Tệp', title: 'Tìm và mở tệp', key: 'mod+p' },
   { id: 'theme_selector.toggle', category: 'Giao diện', title: 'Chọn theme', key: 'mod+k mod+t' },
   { id: 'settings.open', category: 'Ứng dụng', title: 'Mở cài đặt', key: 'mod+,' },
   { id: 'keymap.open', category: 'Ứng dụng', title: 'Mở phím tắt', key: 'mod+k mod+s' },
+  { id: 'notification.clear', category: 'Ứng dụng', title: 'Xoá tất cả thông báo' },
+  { id: 'notifications.toggle', category: 'Ứng dụng', title: 'Mở trung tâm thông báo' },
   { id: 'projects.open', category: 'Ứng dụng', title: 'Về danh sách dự án' },
   { id: 'agent.toggle', category: 'Trợ lý AI', title: 'Bật/tắt khung trợ lý', key: 'mod+l' },
   { id: 'explorer.toggle', category: 'Bảng công cụ', title: 'Hiện cây tệp', key: 'mod+shift+e' },
@@ -52,8 +55,15 @@ export const COMMANDS: CommandDef[] = [
   ...Array.from({ length: 10 }, (_, n) => ({ id: `tab.activate_${n}`, category: 'Thẻ', title: n ? `Mở thẻ ${n}` : 'Mở thẻ cuối', key: `ctrl+${n}` })),
   { id: 'tab.pin', category: 'Thẻ', title: 'Ghim / bỏ ghim thẻ', key: 'mod+k shift+enter' },
   { id: 'dock.left', category: 'Bảng công cụ', title: 'Ẩn / hiện bảng bên trái', key: 'mod+b' },
+  { id: 'dock.right', category: 'Bảng công cụ', title: 'Ẩn / hiện bảng bên phải', key: 'alt+shift+b' }, // mod+alt+b của Wu thuộc editor.implementation trong base JetBrains
+  { id: 'dock.all', category: 'Bảng công cụ', title: 'Ẩn / hiện tất cả bảng', key: 'mod+alt+y' },
   { id: 'dock.bottom', category: 'Terminal', title: 'Ẩn / hiện terminal', key: 'mod+j' },
   { id: 'editor.split_right', category: 'Editor', title: 'Chia đôi sang phải / bỏ chia đôi', key: 'mod+\\' },
+  { id: 'editor.split_up', category: 'Editor', title: 'Chia đôi lên trên / bỏ chia đôi' },
+  { id: 'editor.split_down', category: 'Editor', title: 'Chia đôi xuống dưới / bỏ chia đôi' },
+  { id: 'editor.split_left', category: 'Editor', title: 'Chia đôi sang trái / bỏ chia đôi' },
+  { id: 'focus.next_part', category: 'Editor', title: 'Chuyển tiêu điểm sang phần tiếp theo', key: 'mod+f6' }, // f6 thuộc debug.pause
+  { id: 'focus.previous_part', category: 'Editor', title: 'Chuyển tiêu điểm sang phần trước đó', key: 'mod+shift+f6' }, // shift+f6 thuộc editor.rename trong base JetBrains
   { id: 'editor.toggle_vim', category: 'Editor', title: 'Bật/tắt chế độ Vim' },
   { id: 'editor.goto_line', category: 'Editor', title: 'Đi đến dòng', key: 'ctrl+g' },
   { id: 'editor.document_symbols', category: 'Editor', title: 'Tìm ký hiệu trong tệp', key: 'mod+shift+o' },
@@ -115,6 +125,8 @@ export const COMMANDS: CommandDef[] = [
   { id: 'view.graph', category: 'Xem', title: 'Graph' },
   { id: 'view.tree', category: 'Xem', title: 'Cây' },
   { id: 'view.report', category: 'Xem', title: 'Báo cáo' },
+  { id: 'view.zoom_pane', category: 'Xem', title: 'Phóng to cửa sổ đang chọn', key: 'mod+shift+enter' },
+  { id: 'view.centered_layout', category: 'Xem', title: 'Bố cục giữa' },
   { id: 'graph.export', category: 'Đồ thị', title: 'Xuất đồ thị' },
   { id: 'project.overview', category: 'Dự án', title: 'Về tổng quan dự án' },
   { id: 'search.toggle_case', category: 'Tìm kiếm', title: 'Bật/tắt phân biệt hoa thường', key: 'mod+alt+c' },

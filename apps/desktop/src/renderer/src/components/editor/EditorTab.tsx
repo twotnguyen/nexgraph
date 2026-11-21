@@ -549,12 +549,12 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       <EditorDebug file={file} editor={ready ? editor.current : null} active={active} cursor={cursor.line} />
       {format && active && (
         <StatusBarItems>
-          <button type="button" className="status-item" title={tr('{errors} lỗi, {warnings} cảnh báo', { errors: errorCount, warnings: warningCount })} onClick={() => runCommand('editor.diagnostics')}>{tr('Lỗi {errors} · Cảnh báo {warnings}', { errors: errorCount, warnings: warningCount })}</button>
-          <span className="status-item" title={tr('Dòng {line}, cột {column}', { line: cursor.line, column: cursor.column })}>{cursor.line}:{cursor.column}</span>
-          <button type="button" className="status-item" title={tr('Ngôn ngữ')} onClick={() => setPicker('language')}>{format.language}</button>
-          <button type="button" className="status-item" title={tr('Kiểu xuống dòng')} onClick={() => setPicker('eol')}>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</button>
-          <button type="button" className="status-item" title={tr('Bảng mã')} onClick={() => setNotice(tr('Không đổi được bảng mã: engine chỉ lưu UTF-8 và giữ nguyên BOM theo tệp trên đĩa.'))}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</button>
-          {vim && <span className="status-item vim-status" title={tr('Chế độ Vim')} ref={setVimNode} />}
+          <button type="button" data-status-id="diagnostics" className="status-item" title={tr('{errors} lỗi, {warnings} cảnh báo', { errors: errorCount, warnings: warningCount })} onClick={() => runCommand('editor.diagnostics')}>{tr('Lỗi {errors} · Cảnh báo {warnings}', { errors: errorCount, warnings: warningCount })}</button>
+          <button type="button" data-status-id="cursor" className="status-item" title={tr('Đi đến dòng')} onClick={() => runCommand('editor.goto_line')}>{cursor.line}:{cursor.column}</button>
+          <button type="button" data-status-id="language" className="status-item" title={tr('Ngôn ngữ')} onClick={() => setPicker('language')}>{format.language}</button>
+          <button type="button" data-status-id="eol" className="status-item" title={tr('Kiểu xuống dòng')} onClick={() => setPicker('eol')}>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</button>
+          <button type="button" data-status-id="encoding" className="status-item" title={tr('Bảng mã')} onClick={() => setNotice(tr('Không đổi được bảng mã: engine chỉ lưu UTF-8 và giữ nguyên BOM theo tệp trên đĩa.'))}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</button>
+          {vim && <span data-status-id="vim" className="status-item vim-status" title={tr('Chế độ Vim')} ref={setVimNode} />}
         </StatusBarItems>
       )}
       {picker === 'eol' && <Picker label={tr('Kiểu xuống dòng')} placeholder={tr('Chọn kiểu xuống dòng')} items={EOL_OPTIONS}

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { act, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EngineStatusBar, StatusBarItems } from './EngineStatusBar'
-import { setStatusBar } from '../state/layoutPrefs'
+import { isStatusItemHidden, setStatusBar, setStatusItemHidden } from '../state/layoutPrefs'
 
-afterEach(() => { act(() => setStatusBar(true)) })
+afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false) }) })
 
 describe('EngineStatusBar', () => {
   it('shows starting', () => {
@@ -48,5 +48,24 @@ describe('EngineStatusBar', () => {
     expect(bar()).not.toBeVisible()
     act(() => setStatusBar(true))
     expect(bar()).toBeVisible()
+  })
+
+  it('bấm chuột phải ẩn một mục rồi reload vẫn ẩn', () => {
+    const bar = () => <><StatusBarItems>
+      <button type="button" data-status-id="cursor">12:4</button>
+      <button type="button" data-status-id="language">TypeScript</button>
+    </StatusBarItems><EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={() => {}} /></>
+    render(bar())
+    fireEvent.contextMenu(screen.getByText('12:4'))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ẩn nút này' }))
+    expect(screen.queryByText('12:4')).not.toBeInTheDocument()
+    expect(screen.getByText('TypeScript')).toBeInTheDocument()
+    expect(isStatusItemHidden('cursor')).toBe(true)
+    cleanup()
+    render(bar())
+    expect(screen.queryByText('12:4')).not.toBeInTheDocument()
+    expect(screen.getByText('TypeScript')).toBeInTheDocument()
+    act(() => setStatusItemHidden('cursor', false))
+    expect(screen.getByText('12:4')).toBeInTheDocument()
   })
 })

@@ -9,6 +9,7 @@ import { FileView } from '../components/viewers/FileView'
 import { MarkdownPreview } from '../components/viewers/MarkdownPreview'
 import { MultiBufferView } from '../components/viewers/MultiBufferView'
 import { SplitEditor } from '../components/editor/SplitEditor'
+import { clearNotifications, notify, toggleNotifications } from '../components/common/NotificationCenter'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import { TaskPicker, readTaskHistory, rememberTask } from '../components/terminal/TaskPicker'
 import { GitPanel } from '../components/git/GitPanel'
@@ -24,6 +25,7 @@ import { TaskInspector } from '../components/agent/TaskInspector'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanvas'
 import { ActivityBar } from '../components/layout/ActivityBar'
+import { QuickActionBar } from '../components/layout/WorkbenchBar'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
 import type { HighlightKind } from '../components/graph/kindStyle'
 import { NodeContextMenu } from '../components/graph/NodeContextMenu'
@@ -55,6 +57,7 @@ import { vi, tr } from '../strings'
 import './workspace.css'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
+type SplitSide = 'right' | 'left' | 'up' | 'down'
 /** Thẻ diff có thể xem working tree, stage hoặc một commit lịch sử. */
 type DiffTab = { file: string; staged: boolean; rev?: string; from?: string }
 const diffKey = (d: DiffTab): Tab => `diff:${d.rev ?? (d.staged ? 's' : 'u')}:${d.from ?? ''}:${d.file}`
@@ -163,7 +166,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const impactRequest = useRef(0)
   const hostInitialHandled = useRef(false)
   const [revision, setRevision] = useState(0)
-  const [feedback, setFeedback] = useState<string | null>(null)
+  const [feedback, setFeedbackText] = useState<string | null>(null)
+  // Mọi lỗi/feedback của Workspace cũng vào trung tâm thông báo để chuông trên thanh công cụ đếm đúng.
+  const setFeedback = useCallback((message: string | null) => {
+    setFeedbackText(message)
+    if (message) notify(message)
+  }, [])
   const chatDock = useChatDock()
   // Kiểu Wu (trái): khung chat dùng chung chỗ với bảng công cụ nên mặc định đóng để cây tệp hiện trước.
   const [chatOpen, setChatOpen] = useState(() => !hosted && chatDock === 'right' && (window.matchMedia?.('(min-width: 980px)').matches ?? true))
@@ -192,6 +200,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [finder, setFinder] = useState(false)
   const [side, setSide] = useState<string | null>(null) // tệp ở khung phải khi chia đôi
   const [previewSide, setPreviewSide] = useState<string | null>(null)
+  const [splitSide, setSplitSide] = useState<SplitSide>('right')
   const [findFocus, setFindFocus] = useState(0)
   const [archParent, setArchParent] = useState<string | undefined>(undefined)
   const [archContext, setArchContext] = useState<string | undefined>(undefined)
@@ -327,7 +336,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [menu, setMenu] = useState<{ node: GraphNode; x: number; y: number } | null>(null)
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null)
   const [overlay, setOverlay] = useState<Overlay | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNoticeText] = useState<string | null>(null)
+  // Thông báo trên đồ thị cũng vào trung tâm để chuông đếm cả thao tác tìm đường/hỏi/trích dẫn.
+  const setNotice = useCallback((message: string | null) => {
+    setNoticeText(message)
+    if (message) notify(message)
+  }, [])
   const inspect = (inspection: AgentInspection) => {
     setInspections((current) => current.some((item) => item.id === inspection.id) ? current.map((item) => item.id === inspection.id ? inspection : item) : [...current, inspection])
     setTab(`task:${inspection.id}`)
@@ -787,11 +801,19 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     tabCycle.current = null
     setTabMenu(null)
   }, [hidden])
-  useCommand('editor.split_right', () => {
+  const splitTo = (direction: SplitSide) => {
     if (previewSide) setPreviewSide(null)
-    else if (side) setSide(null)
-    else if (activeFile) setSide(activeFile)
-  })
+    if (side) {
+      if (splitSide === direction) { setSide(null); setSplitSide('right') }
+      else setSplitSide(direction)
+      return
+    }
+    if (activeFile) { setSplitSide(direction); setSide(activeFile) }
+  }
+  useCommand('editor.split_right', () => splitTo('right'))
+  useCommand('editor.split_up', () => splitTo('up'))
+  useCommand('editor.split_down', () => splitTo('down'))
+  useCommand('editor.split_left', () => splitTo('left'))
   useCommand('markdown.preview', () => {
     if (previewFile) return closePreview(previewFile)
     if (!activeFile) return
@@ -862,6 +884,43 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   })
   const previewSideShown = !!activeFile && previewSide === activeFile
   const sideShown = previewSideShown || (side !== null && activeFile !== undefined && files.some((f) => f.file === side))
+  useCommand('notifications.toggle', toggleNotifications)
+  useCommand('notification.clear', clearNotifications)
+  useCommand('dock.right', () => {
+    if (chatDock !== 'right') { setChatDock('right'); setChatOpen(true) }
+    else setChatOpen((value) => !value)
+  }, !hosted)
+  const docked = useRef<{ panel: Panel | null; chatOpen: boolean; terminal: 'closed' | 'open' | 'hidden' } | null>(null)
+  useCommand('dock.all', () => {
+    if (docked.current) {
+      const saved = docked.current
+      docked.current = null
+      setPanel(saved.panel)
+      setChatOpen(saved.chatOpen)
+      setTerminal(saved.terminal)
+    } else {
+      docked.current = { panel, chatOpen, terminal }
+      setPanel(null)
+      setChatOpen(false)
+      if (terminal !== 'closed') setTerminal('hidden')
+    }
+  }, !hosted)
+  const [zoomPane, setZoomPane] = useState(false)
+  useCommand('view.zoom_pane', () => setZoomPane((value) => !value))
+  const [centered, setCentered] = useState(false)
+  useCommand('view.centered_layout', () => setCentered((value) => !value))
+  const focusPart = (step: number) => {
+    const parts = Array.from(document.querySelectorAll<HTMLElement>('.workspace-shell [data-ws-part]'))
+    if (!parts.length) return
+    const current = parts.findIndex((part) => part.contains(document.activeElement))
+    const index = current < 0 ? (step > 0 ? -1 : 0) : current
+    const part = parts[(index + step + parts.length) % parts.length]
+    const target = part.querySelector<HTMLElement>('button, [tabindex="0"], input, textarea') ?? (part.tabIndex >= 0 ? part : null)
+    target?.focus()
+  }
+  useCommand('focus.next_part', () => focusPart(1))
+  useCommand('focus.previous_part', () => focusPart(-1))
+  useCommand('picker.reopen', () => setFinder(true))
 
   return (
     <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px`, display: hidden ? 'none' : undefined } as CSSProperties}>
@@ -878,9 +937,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ]}
         />
       )}
-      {chatDock === 'left' && <>{agentPanel}{resizeHandle}</>}
-      {panel && !leftChat && (
-        <aside id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={PANEL_TITLES[panel]()}>
+      {chatDock === 'left' && !zoomPane && <>{agentPanel}{resizeHandle}</>}
+      {panel && !leftChat && !zoomPane && (
+        <aside data-ws-part id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={PANEL_TITLES[panel]()}>
           <div className="ws-tools-head">
             <h2>{PANEL_TITLES[panel]()}</h2>
             <button type="button" className="ws-icon-button" aria-label={vi.workspace.closePanel} title={vi.workspace.closePanel}
@@ -922,8 +981,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           </div>
         </aside>
       )}
-      <section className="center">
-        <header className="ws-head">
+      <section className="center" style={centered ? { maxWidth: 960, width: '100%', marginInline: 'auto' } : undefined}>
+        <header className="ws-head" data-ws-part>
           {onBack && <button type="button" className="ws-icon-button ws-back" title={backLabel} aria-label={backLabel} onClick={guardLeave(onBack)}>←</button>}
           <span className="ws-path muted mono" title={project.path}>{project.path}</span>
           <span className="ws-actions">
@@ -948,6 +1007,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <button type="button" onClick={() => setPathFrom(null)}>{vi.path.cancel}</button>
           </div>
         )}
+        <QuickActionBar />
         <div className="tabs ws-tabs" role="tablist" aria-label={tr('Các thẻ không gian làm việc')} ref={tabList} onKeyDown={onTabKeys}>
           {MAIN_TABS.map((t) => (
             <button key={t} id={tabId(t)} type="button" role="tab" aria-selected={tab === t} aria-controls={viewId} tabIndex={tab === t ? 0 : -1}
@@ -1019,7 +1079,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             ].map((item) => <button key={item.label} type="button" role="menuitem" onClick={() => { setTabMenu(null); item.action() }}>{item.label}</button>)}
           </div>
         </>}
-        <div className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
+        <div data-ws-part data-split={sideShown ? splitSide : undefined} className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
           {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} openRequest={openSeq} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
@@ -1091,7 +1151,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
           onHide={() => setTerminal('hidden')} onCloseAll={() => { setTerminal('closed'); setTaskRequest(null) }} />}
       </section>
-      {chatDock === 'right' && <>{resizeHandle}{agentPanel}</>}
+      {chatDock === 'right' && !zoomPane && <>{resizeHandle}{agentPanel}</>}
       {!hidden && <EditorTools projectId={project.project_id} editor={activeEditor} symbols={documentSymbols.symbols} symbolsError={documentSymbols.error}
         onOpen={(file, line, column) => openCode(file, line, undefined, column)} onDiagnostics={() => togglePanel('diagnostics')} onError={setFeedback} />}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}

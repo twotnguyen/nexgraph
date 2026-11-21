@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspRange, NexGraphApi } from '@shared/api'
 import type { EditorHandle } from './monaco'
 import type { ActiveEditor } from '../../state/activeEditor'
+import { setLocale } from '../../state/locale'
 import { installKeymap, runCommand } from '../../state/commands'
 import { getEditorPrefs, setEditorPrefs } from '../../state/editorPrefs'
 import { installNexgraph } from '../../test-utils'
@@ -151,6 +152,7 @@ describe('EditorTools E3', () => {
   })
 
   describe('phân cấp lời gọi', () => {
+    afterEach(() => setLocale('vi'))
     const item = (name: string, file: string, line: number): LspCallHierarchyItem => ({
       name, kind: 6, file, range: lspRange(line, 0, line, 10), selectionRange: lspRange(line, 0, line, 10), data: { token: 'keep' }
     })
@@ -200,11 +202,20 @@ describe('EditorTools E3', () => {
       ])
       act(() => { runCommand('editor.call_hierarchy_incoming') })
       fireEvent.click(await screen.findByText('callee'))
-      expect(await screen.findByText('caller — src/c.ts (3 calls)')).toBeTruthy()
+      expect(await screen.findByText('caller — src/c.ts (3 lời gọi)')).toBeTruthy()
       expect(screen.getAllByRole('option')).toHaveLength(1)
       fireEvent.click(screen.getByRole('button', { name: 'Hiện lời gọi' }))
       await waitFor(() => expect(incoming).toHaveBeenLastCalledWith('p1', 'src/c.ts', 'root text', 5, 1, caller))
       expect(incoming.mock.calls[incoming.mock.calls.length - 1][5].data).toEqual({ token: 'keep' })
+    })
+
+    it('có bản Anh cho số lời gọi gộp', async () => {
+      setLocale('en')
+      const { incoming, caller } = setup()
+      incoming.mockResolvedValue([{ from: caller, fromRanges: [lspRange(4, 2, 4, 8), lspRange(7, 3, 7, 9)] }])
+      act(() => { runCommand('editor.call_hierarchy_incoming') })
+      fireEvent.click(await screen.findByText('callee'))
+      expect(await screen.findByText('caller — src/c.ts (2 calls)')).toBeTruthy()
     })
 
     it('nút Quay lại đi lên stack và Đổi hướng gọi API với đúng gốc', async () => {

@@ -188,7 +188,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
                               <span className="ps-context-after">{after.slice(0, end)}{croppedEnd || end < after.length ? '…' : ''}</span>
                             </span>
                           </button>
-                          <button type="button" className="ps-replace" aria-label={tr('Thay chỗ khớp này')} title={tr('Thay chỗ khớp này')} disabled={!replacement || dirtyFiles.has(file) || !api.replaceText} onClick={() => void replaceInFile(file, matches.length)}><Icon name="pencil" size={12} /></button>
+                          <button type="button" className="ps-replace" aria-label={tr('Thay trong tệp này')} title={tr('Thay trong tệp này')} disabled={!replacement || dirtyFiles.has(file) || !api.replaceText} onClick={() => void replaceInFile(file, matches.length)}><Icon name="pencil" size={12} /></button>
                         </li>
                       )
                     })}

@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { Children, cloneElement, isValidElement, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { EngineStatus } from '@shared/engine-status'
-import { useStatusBar } from '../state/layoutPrefs'
+import { isStatusItemHidden, setStatusItemHidden, useHiddenStatusItems, useStatusBar } from '../state/layoutPrefs'
 import { tr } from '../strings'
 
 const RIGHT_SLOT = 'status-bar-right'
@@ -28,9 +28,49 @@ export function EngineStatusBar({ status, onRestart }: Props) {
   )
 }
 
-/** Đưa các mục vào phía phải thanh trạng thái; chỉ thẻ đang hiện nên gắn. */
+/** Đưa các mục vào phía phải thanh trạng thái; chỉ thẻ đang hiện nên gắn. Bấm chuột phải một mục để ẩn riêng mục đó. */
 export function StatusBarItems({ children }: { children: ReactNode }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const hidden = useHiddenStatusItems()
   useEffect(() => setSlot(document.getElementById(RIGHT_SLOT)), [])
-  return slot ? createPortal(children, slot) : null
+  useEffect(() => {
+    if (!menu) return
+    const outside = (event: PointerEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenu(null) }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenu(null) }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [menu])
+  const items = Children.toArray(children).flatMap((child, index) => {
+    if (!isValidElement(child)) return [child]
+    const element = child as ReactElement<Record<string, unknown>>
+    const given = element.props['data-status-id']
+    const id = typeof given === 'string' ? given : `item-${index}`
+    if (hidden.has(id)) return []
+    const previous = element.props.onContextMenu as ((event: ReactMouseEvent) => void) | undefined
+    return [cloneElement(element, {
+      key: id,
+      'data-status-id': id,
+      onContextMenu: (event: ReactMouseEvent) => {
+        previous?.(event)
+        event.preventDefault()
+        setMenu({ id, x: event.clientX, y: event.clientY })
+      }
+    })]
+  })
+  return <>
+    {slot && createPortal(items, slot)}
+    {menu && createPortal(<>
+      <div className="menu-backdrop" onClick={() => setMenu(null)} onContextMenu={(event) => { event.preventDefault(); setMenu(null) }} />
+      <div role="menu" ref={menuRef} aria-label={tr('Tuỳ chọn mục trạng thái')} className="context-menu status-item-menu"
+        style={{ left: Math.max(4, Math.min(menu.x, window.innerWidth - 220)), top: Math.max(4, Math.min(menu.y, window.innerHeight - 80)) }}>
+        <button type="button" role="menuitem" onClick={() => { setStatusItemHidden(menu.id, true); setMenu(null) }}>{tr('Ẩn nút này')}</button>
+      </div>
+    </>, document.body)}
+  </>
 }

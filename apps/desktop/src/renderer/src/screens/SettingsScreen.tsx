@@ -6,7 +6,7 @@ import { formatNumber, setLocale, useLocale } from '../state/locale'
 import { Icon, type IconName } from '../components/common/icons'
 import { THEMES, setTheme, useThemeId, useThemesVersion } from '../state/useTheme'
 import { setBlame, setEditorPrefs, setVimMode, useBlame, useEditorPrefs, useVimMode } from '../state/editorPrefs'
-import { CHAT_WIDTH, TERMINAL_HEIGHT, setChatDock, setChatWidth, setExplorerOpen, setStatusBar, setTerminalHeight, useChatDock, useChatWidth, useExplorerOpen, useStatusBar, useTerminalHeight } from '../state/layoutPrefs'
+import { CHAT_WIDTH, TERMINAL_HEIGHT, setChatDock, setChatWidth, setExplorerOpen, setStatusBar, setStatusItemHidden, setTerminalHeight, useChatDock, useChatWidth, useExplorerOpen, useHiddenStatusItems, useStatusBar, useTerminalHeight } from '../state/layoutPrefs'
 import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
@@ -21,6 +21,14 @@ const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' 
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
+const STATUS_ITEMS = [
+  { id: 'diagnostics', label: 'Chẩn đoán' },
+  { id: 'cursor', label: 'Đi đến dòng' },
+  { id: 'language', label: 'Ngôn ngữ' },
+  { id: 'eol', label: 'Kiểu xuống dòng' },
+  { id: 'encoding', label: 'Bảng mã' },
+  { id: 'vim', label: 'Chế độ Vim' }
+] as const
 
 // Từ khoá cho ô tìm: tiêu đề và vài chữ người dùng hay gõ của mỗi mục.
 const SECTION_WORDS = {
@@ -107,6 +115,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const terminalHeight = useTerminalHeight()
   const explorerOpen = useExplorerOpen()
   const statusBar = useStatusBar()
+  const hiddenStatusItems = useHiddenStatusItems()
   const locale = useLocale()
 
   const load = useCallback(async () => {
@@ -366,6 +375,16 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
         <div className="settings-row">
           <div><label htmlFor="settings-status-bar">{tr('Hiện thanh trạng thái')}</label><p>{tr('Thanh dưới cùng: trạng thái engine, vị trí con trỏ, ngôn ngữ, kiểu xuống dòng. Engine lỗi thì thanh vẫn hiện để còn nút Khởi động lại.')}</p></div>
           <button id="settings-status-bar" type="button" role="switch" aria-checked={statusBar} className={`switch${statusBar ? ' on' : ''}`} onClick={() => setStatusBar(!statusBar)}><span /></button>
+        </div>
+        <div className="settings-status-items">
+          <h3>{tr('Mục thanh trạng thái')}</h3>
+          {STATUS_ITEMS.map(({ id, label }) => {
+            const shown = !hiddenStatusItems.has(id)
+            return <div className="settings-row" key={id}>
+              <div><label htmlFor={`settings-status-${id}`}>{tr(label)}</label></div>
+              <button id={`settings-status-${id}`} type="button" role="switch" aria-checked={shown} className={`switch${shown ? ' on' : ''}`} onClick={() => setStatusItemHidden(id, shown)}><span /></button>
+            </div>
+          })}
         </div>
       </section>}
 

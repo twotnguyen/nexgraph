@@ -19,7 +19,8 @@ function pref<T>(key: string, parse: (raw: string | null) => T, format: (value: 
     try { localStorage.setItem(key, format(parse(format(value)))) } catch { /* chỉ là tuỳ chọn */ }
     window.dispatchEvent(new Event(CHANGED))
   }
-  return [() => useSyncExternalStore(subscribe, read), read, write] as const
+  const fallback = parse(null)
+  return [() => useSyncExternalStore(subscribe, read), read, write, fallback] as const
 }
 
 const int = (min: number, max: number, fallback: number) => (raw: string | null): number => {
@@ -33,10 +34,34 @@ export const CHAT_WIDTH = { min: 300, max: 640 }
 export const TERMINAL_HEIGHT = { min: 120, max: 2000 }
 
 /** Khung trợ lý ở trái (dùng chung chỗ với cây tệp như Wu) hoặc phải. */
-export const [useChatDock, , setChatDock] = pref<'left' | 'right'>('nexgraph.chat.dock', (raw) => (raw === 'right' ? 'right' : 'left'))
-export const [useChatWidth, , setChatWidth] = pref('nexgraph.chat.width', int(CHAT_WIDTH.min, CHAT_WIDTH.max, 360))
+export const [useChatDock, , setChatDock, defaultChatDock] = pref<'left' | 'right'>('nexgraph.chat.dock', (raw) => (raw === 'right' ? 'right' : 'left'))
+export const [useChatWidth, , setChatWidth, defaultChatWidth] = pref('nexgraph.chat.width', int(CHAT_WIDTH.min, CHAT_WIDTH.max, 360))
 /** Chiều cao panel dưới (terminal). */
-export const [useTerminalHeight, , setTerminalHeight] = pref('nexgraph.terminal.height', int(TERMINAL_HEIGHT.min, TERMINAL_HEIGHT.max, 280))
+export const [useTerminalHeight, , setTerminalHeight, defaultTerminalHeight] = pref('nexgraph.terminal.height', int(TERMINAL_HEIGHT.min, TERMINAL_HEIGHT.max, 280))
 /** Vào dự án thì mở sẵn cây tệp (chỉ lần dựng màn đầu tiên; sau đó theo thao tác của người dùng). */
-export const [useExplorerOpen, getExplorerOpen, setExplorerOpen] = pref('nexgraph.layout.explorer', enabled, flag)
-export const [useStatusBar, , setStatusBar] = pref('nexgraph.layout.statusbar', enabled, flag)
+export const [useExplorerOpen, getExplorerOpen, setExplorerOpen, defaultExplorerOpen] = pref('nexgraph.layout.explorer', enabled, flag)
+export const [useStatusBar, , setStatusBar, defaultStatusBar] = pref('nexgraph.layout.statusbar', enabled, flag)
+/** Giá trị mặc định để modal “cài đặt mặc định” lấy từ chính nguồn định nghĩa pref, không cần copy lại. */
+export const LAYOUT_DEFAULTS = { chatDock: defaultChatDock, chatWidth: defaultChatWidth, terminalHeight: defaultTerminalHeight, explorerOpen: defaultExplorerOpen, statusBar: defaultStatusBar }
+
+/** Mục thanh trạng thái bị ẩn: mỗi mục một khoá riêng để Cài đặt bật lại từng cái. */
+export const STATUS_HIDDEN_PREFIX = 'nexgraph.statusbar.hidden:'
+export const statusItemHiddenKey = (id: string) => `${STATUS_HIDDEN_PREFIX}${id}`
+export const isStatusItemHidden = (id: string): boolean => {
+  try { return localStorage.getItem(statusItemHiddenKey(id)) === '1' } catch { return false }
+}
+let hiddenItems: Set<string> | null = null
+const EMPTY_HIDDEN: ReadonlySet<string> = new Set()
+const readHiddenItems = (): ReadonlySet<string> => hiddenItems ??= new Set(
+  Object.keys(localStorage).filter((key) => key.startsWith(STATUS_HIDDEN_PREFIX) && localStorage.getItem(key) === '1')
+    .map((key) => key.slice(STATUS_HIDDEN_PREFIX.length))
+)
+export const useHiddenStatusItems = (): ReadonlySet<string> => useSyncExternalStore(subscribe, readHiddenItems, () => EMPTY_HIDDEN)
+export function setStatusItemHidden(id: string, hidden: boolean): void {
+  try {
+    if (hidden) localStorage.setItem(statusItemHiddenKey(id), '1')
+    else localStorage.removeItem(statusItemHiddenKey(id))
+  } catch { /* chỉ là tuỳ chọn */ }
+  hiddenItems = null
+  window.dispatchEvent(new Event(CHANGED))
+}

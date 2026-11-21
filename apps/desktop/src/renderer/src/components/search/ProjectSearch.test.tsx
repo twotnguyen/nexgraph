@@ -195,7 +195,7 @@ it('summary có bản Anh', async () => {
   expect(tr('Mở rộng tất cả')).toBe('Expand all')
   expect(tr('Thu gọn tất cả')).toBe('Collapse all')
   expect(tr('Mở trong editor')).toBe('Open in editor')
-  expect(tr('Thay chỗ khớp này')).toBe('Replace this match')
+  expect(tr('Thay trong tệp này')).toBe('Replace in this file')
   expect(tr('Đạt giới hạn')).toBe('Limit reached')
 })
 
@@ -248,7 +248,7 @@ it('nút Replace trên dòng kết quả thay đúng tệp khi hover', async () 
   fireEvent.click(screen.getByRole('button', { name: 'Hiện ô thay' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Thay bằng' }), { target: { value: 'bar' } })
 
-  const replaceButtons = screen.getAllByRole('button', { name: 'Thay chỗ khớp này' })
+  const replaceButtons = screen.getAllByRole('button', { name: 'Thay trong tệp này' })
   const row = screen.getByTitle('Dòng 3').closest('li')
   fireEvent.mouseEnter(row as Element)
   expect(row?.classList.contains('ps-hit')).toBe(true)

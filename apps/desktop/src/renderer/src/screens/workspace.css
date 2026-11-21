@@ -598,3 +598,10 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-shell :is(.ws-feedback, .ws-tools, .chat, .canvas-spinner, .react-flow__edge-path) { animation: none !important; }
 }
+/* Chia đôi theo hướng: mặc định sang phải; các hướng khác đổi cạnh ngăn của cùng bộ editor. */
+.workspace-shell .canvas-wrap[data-split='left'] > .code-viewer.editor-tab:not(.editor-side) { right: 0; left: 50%; }
+.workspace-shell .canvas-wrap[data-split='left'] > .editor-side { right: 50%; left: auto; border-left: 0; border-right: 1px solid var(--color-border); }
+.workspace-shell .canvas-wrap[data-split='up'] > .code-viewer.editor-tab:not(.editor-side) { top: 50%; bottom: 0; left: 0; right: 0; }
+.workspace-shell .canvas-wrap[data-split='up'] > .editor-side { bottom: 50%; top: 0; left: 0; right: 0; border-left: 0; border-top: 1px solid var(--color-border); }
+.workspace-shell .canvas-wrap[data-split='down'] > .code-viewer.editor-tab:not(.editor-side) { bottom: 50%; top: 0; left: 0; right: 0; }
+.workspace-shell .canvas-wrap[data-split='down'] > .editor-side { top: 50%; bottom: 0; left: 0; right: 0; border-left: 0; border-top: 1px solid var(--color-border); }

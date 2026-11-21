@@ -208,7 +208,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
           const total = ranges.length
           return {
             key: `${call.from.file}:${call.from.range.start.line}:${call.from.range.start.character}:${index}`,
-            item: call.from, name: total > 1 ? `${call.from.name} — ${call.from.file} (${total} calls)` : call.from.name,
+            item: call.from, name: total > 1 ? `${call.from.name} — ${call.from.file}${tr(' ({count} lời gọi)', { count: total })}` : call.from.name,
             file: call.from.file, line: site.line + 1, column: site.character + 1, isCall: true
           }
         }),

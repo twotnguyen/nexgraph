@@ -8,6 +8,7 @@ import { emptyChanges, installNexgraph, project } from '../test-utils'
 import { buildExcerpts, consumePendingMultiBuffer, requestMultiBuffer } from '../state/multiBuffer'
 import { toggleBookmark } from '../state/bookmarks'
 import { recordNavigation } from '../state/navigationHistory'
+import { NotificationCenter, clearNotifications, notify } from '../components/common/NotificationCenter'
 
 vi.mock('../services/elkLayoutService', async () => ({
   layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
@@ -741,5 +742,63 @@ describe('WorkspaceScreen: multibuffer', () => {
     const marks = within(pane).getByText('lib/a.dart:1-4').closest<HTMLElement>('.multi-buffer')!
     expect(within(marks).getByText('lib/b.dart:3-7')).toBeInTheDocument()
     expect(await within(marks).findAllByLabelText('editor')).toHaveLength(2)
+  })
+})
+describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
+  it('notify tăng badge, nút × xoá một thông báo và lệnh clear xoá hết', async () => {
+    act(() => clearNotifications())
+    render(<><div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div><NotificationCenter /></>)
+    const bell = screen.getByRole('button', { name: 'Thông báo' })
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+    act(() => { notify('Thông báo A'); notify('Thông báo B') })
+    expect(within(bell).getByText('2')).toBeInTheDocument()
+    act(() => { expect(runCommand('notifications.toggle')).toBe(true) })
+    const panel = screen.getByRole('dialog', { name: 'Trung tâm thông báo' })
+    expect(within(panel).getByText('Thông báo A')).toBeInTheDocument()
+    await userEvent.click(within(panel).getAllByRole('button', { name: 'Đóng thông báo' })[0])
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    expect(screen.queryByText('Thông báo A')).not.toBeInTheDocument()
+    act(() => { expect(runCommand('notification.clear')).toBe(true) })
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+    act(() => { runCommand('notifications.toggle'); clearNotifications() })
+  })
+
+  it('thao tác thật trong Workspace (Xem dấu trang) làm badge chuông tăng', async () => {
+    act(() => clearNotifications())
+    installNexgraph()
+    render(<><div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project({ project_id: 'p-badge' })} /></div><NotificationCenter /></>)
+    const bell = screen.getByRole('button', { name: 'Thông báo' })
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+    act(() => { expect(runCommand('editor.view_bookmarks')).toBe(true) })
+    expect(await screen.findByText('Không có dấu trang nào trong dự án này.')).toBeInTheDocument()
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    act(() => { expect(runCommand('notifications.toggle')).toBe(true) })
+    expect(within(screen.getByRole('dialog', { name: 'Trung tâm thông báo' })).getByText('Không có dấu trang nào trong dự án này.')).toBeInTheDocument()
+    act(() => { runCommand('notifications.toggle'); clearNotifications() })
+  })
+
+  it('dock.right đổi bên phải và dock.all ẩn rồi khôi phục các bảng', async () => {
+    localStorage.removeItem('nexgraph.chat.dock')
+    setup()
+    expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).not.toBeInTheDocument()
+    act(() => { expect(runCommand('dock.right')).toBe(true) })
+    await waitFor(() => expect(localStorage.getItem('nexgraph.chat.dock')).toBe('right'))
+    expect(screen.getByRole('complementary', { name: 'Trợ lý AI' })).toBeVisible()
+    act(() => { runCommand('dock.right') })
+    expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).not.toBeInTheDocument()
+    act(() => { runCommand('dock.right'); expect(runCommand('dock.all')).toBe(true) })
+    expect(screen.queryByRole('complementary', { name: 'Duyệt tệp' })).not.toBeInTheDocument()
+    act(() => { expect(runCommand('dock.all')).toBe(true) })
+    expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeInTheDocument()
+  })
+
+  it('các lệnh bố cục, tiêu điểm và chia đôi 4 hướng đều có handler', () => {
+    setup()
+    expect(screen.getByRole('toolbar', { name: 'Thao tác nhanh' })).toBeInTheDocument()
+    for (const id of ['view.zoom_pane', 'view.centered_layout', 'focus.next_part', 'focus.previous_part',
+      'picker.reopen', 'editor.split_up', 'editor.split_down', 'editor.split_left', 'editor.split_right']) {
+      act(() => { expect(runCommand(id)).toBe(true) })
+    }
+    expect(document.querySelector('.workspace .center')).toHaveStyle({ maxWidth: '960px' })
   })
 })
