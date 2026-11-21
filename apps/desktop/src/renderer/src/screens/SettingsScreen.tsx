@@ -45,8 +45,8 @@ const SECTION_WORDS = {
 const PAGES = (): { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] => [
   { id: 'appearance', label: tr('Giao diện'), icon: 'palette', sections: ['theme', 'language', 'editor'] },
   { id: 'keymap', label: tr('Phím tắt'), icon: 'keyboard', sections: ['keymap'] },
-  { id: 'panels', label: tr('Panels'), icon: 'panelLeft', sections: ['chat', 'layout'] },
-  { id: 'vcs', label: tr('Version Control'), icon: 'branch', sections: ['blame'] },
+  { id: 'panels', label: tr('Bảng'), icon: 'panelLeft', sections: ['chat', 'layout'] },
+  { id: 'vcs', label: tr('Quản lý phiên bản'), icon: 'branch', sections: ['blame'] },
   { id: 'agent', label: tr('Trợ lý AI'), icon: 'spark', sections: ['profiles', 'notify'] },
   { id: 'extensions', label: tr('Extension'), icon: 'plug', sections: ['extensions'] },
   { id: 'ai', label: tr('Tài khoản AI'), icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
@@ -275,9 +275,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
         </div>
       </section>}
       {shows('theme') && <section className="settings-section" aria-labelledby="settings-theme-title">
-        <h2 id="settings-theme-title">Theme</h2>
+        <h2 id="settings-theme-title">{tr('Chủ đề màu')}</h2>
         <div className="settings-row">
-          <div><label htmlFor="settings-theme">Theme</label><p>{tr('Màu của toàn bộ app và editor. Cũng mở được bằng ⌘K rồi ⌘T hoặc từ bảng lệnh (⌘⇧P).')}</p></div>
+          <div><label htmlFor="settings-theme">{tr('Chủ đề màu')}</label><p>{tr('Màu của toàn bộ app và editor. Cũng mở được bằng ⌘K rồi ⌘T hoặc từ bảng lệnh (⌘⇧P).')}</p></div>
           <select id="settings-theme" value={themeId} onChange={(e) => setTheme(e.target.value)}>
             {THEMES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -300,7 +300,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
           <NumberSetting id="settings-terminal-font-size" value={editorPrefs.terminalFontSize} min={8} max={32} onChange={(terminalFontSize) => setEditorPrefs({ terminalFontSize })} />
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-tab-size">Tab size</label><p>{tr('Số khoảng trắng mặc định; tệp mới mở có thể tự nhận diện thụt lề.')}</p></div>
+          <div><label htmlFor="settings-tab-size">{tr('Cỡ tab')}</label><p>{tr('Số khoảng trắng mặc định; tệp mới mở có thể tự nhận diện thụt lề.')}</p></div>
           <select id="settings-tab-size" value={editorPrefs.tabSize} onChange={(e) => setEditorPrefs({ tabSize: Number(e.target.value) as 2 | 4 | 8 })}>
             <option value={2}>2</option><option value={4}>4</option><option value={8}>8</option>
           </select>
@@ -338,7 +338,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
         <KeymapEditor />
       </section>}
 
-      {pages.some((p) => p.id === 'panels') && <h1 id="settings-panels" data-settings-page="panels" className="settings-page-title">Panels</h1>}
+      {pages.some((p) => p.id === 'panels') && <h1 id="settings-panels" data-settings-page="panels" className="settings-page-title">{tr('Bảng')}</h1>}
       {shows('chat') && <section className="settings-section" aria-labelledby="settings-chat-title">
         <h2 id="settings-chat-title">{tr('Khung chat AI')}</h2>
         <div className="settings-row">
@@ -369,7 +369,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
         </div>
       </section>}
 
-      {pages.some((p) => p.id === 'vcs') && <h1 id="settings-vcs" data-settings-page="vcs" className="settings-page-title">Version Control</h1>}
+      {pages.some((p) => p.id === 'vcs') && <h1 id="settings-vcs" data-settings-page="vcs" className="settings-page-title">{tr('Quản lý phiên bản')}</h1>}
       {shows('blame') && <section className="settings-section" aria-labelledby="settings-blame-title">
         <h2 id="settings-blame-title">{tr('Blame từng dòng')}</h2>
         <div className="settings-row">

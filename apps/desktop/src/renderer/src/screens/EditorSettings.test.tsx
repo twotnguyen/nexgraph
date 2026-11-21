@@ -17,7 +17,7 @@ it('updates editor settings and icon theme from the settings screen', async () =
   await act(async () => {})
   fireEvent.change(screen.getByLabelText('Cỡ chữ editor'), { target: { value: '18' } })
   fireEvent.change(screen.getByLabelText('Cỡ chữ terminal'), { target: { value: '17' } })
-  fireEvent.change(screen.getByLabelText('Tab size'), { target: { value: '2' } })
+  fireEvent.change(screen.getByLabelText('Cỡ tab'), { target: { value: '2' } })
   fireEvent.change(screen.getByLabelText('Ngắt dòng'), { target: { value: 'on' } })
   fireEvent.click(screen.getByRole('switch', { name: 'Định dạng khi lưu' }))
   fireEvent.change(screen.getByLabelText('Tự lưu'), { target: { value: 'afterDelay' } })

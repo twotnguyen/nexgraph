@@ -18,11 +18,11 @@ async function open() {
   render(<SettingsScreen onBack={vi.fn()} />)
   await act(async () => {})
 }
-const navItems = () => screen.getAllByRole('button', { name: /^(Version Control|Panels|Giao diện|Phím tắt)$/ }).map((button) => button.textContent)
+const navItems = () => screen.getAllByRole('button', { name: /^(Quản lý phiên bản|Bảng|Giao diện|Phím tắt)$/ }).map((button) => button.textContent)
 
 it('trang Version Control: bật blame, độ trễ và tóm tắt ghi vào tuỳ chọn thật', async () => {
   await open()
-  expect(screen.getByRole('heading', { level: 1, name: 'Version Control' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: 'Quản lý phiên bản' })).toBeInTheDocument()
   // Độ trễ và tóm tắt chỉ có nghĩa khi blame bật.
   expect(screen.queryByLabelText('Độ trễ (ms)')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('switch', { name: 'Hiện blame' }))
@@ -37,7 +37,7 @@ it('trang Version Control: bật blame, độ trễ và tóm tắt ghi vào tu�
 
 it('trang Panels: khung chat, terminal, cây tệp mở sẵn và thanh trạng thái ghi vào kho bố cục', async () => {
   await open()
-  expect(screen.getByRole('heading', { level: 1, name: 'Panels' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 1, name: 'Bảng' })).toBeInTheDocument()
   fireEvent.change(screen.getByLabelText('Vị trí'), { target: { value: 'right' } })
   fireEvent.change(screen.getByLabelText('Độ rộng (px)'), { target: { value: '420' } })
   fireEvent.change(screen.getByLabelText('Chiều cao terminal (px)'), { target: { value: '360' } })
@@ -67,10 +67,10 @@ it('ô tìm đưa về đúng trang Version Control hoặc Panels', async () => 
   await open()
   const search = screen.getByRole('searchbox', { name: 'Tìm cài đặt' })
   await userEvent.type(search, 'blame')
-  expect(navItems()).toEqual(['Version Control'])
+  expect(navItems()).toEqual(['Quản lý phiên bản'])
   await userEvent.clear(search)
   await userEvent.type(search, 'thanh trạng thái')
-  expect(navItems()).toEqual(['Panels'])
+  expect(navItems()).toEqual(['Bảng'])
   await userEvent.clear(search)
   await userEvent.type(search, 'vscode')
   expect(navItems()).toEqual(['Phím tắt'])

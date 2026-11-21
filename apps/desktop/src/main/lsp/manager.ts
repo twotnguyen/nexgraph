@@ -128,6 +128,7 @@ export class LspManager {
           definition: { linkSupport: false },
           implementation: { linkSupport: false },
           references: {},
+          callHierarchy: {},
           rename: { prepareSupport: false },
           formatting: {},
           documentSymbol: { hierarchicalDocumentSymbolSupport: true },

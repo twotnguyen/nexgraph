@@ -12,7 +12,7 @@ vi.mock('node:child_process', () => ({ spawn: mocked.spawn }))
 
 import { LspManager } from '../src/main/lsp/manager'
 
-type Message = { id?: number; method: string; params?: { item?: { uri?: string; data?: unknown }; textDocument?: { version?: number } } }
+type Message = { id?: number; method: string; params?: { item?: { uri?: string; data?: unknown }; textDocument?: { version?: number }; capabilities?: { textDocument?: { callHierarchy?: unknown } } } }
 const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 8 } }
 
 class Server extends EventEmitter {
@@ -63,6 +63,23 @@ beforeEach(() => {
   lsp = new LspManager()
 })
 afterEach(() => { lsp.stopAll(); rmSync(root, { recursive: true, force: true }); mocked.spawn.mockReset() })
+
+it('quảng bá callHierarchy: {} và trả caller khi server bật provider', async () => {
+  const uri = pathToFileURL(realpathSync.native(join(root, 'a.ts'))).href
+  const item = { name: 'callee', kind: 12, uri, range, selectionRange: range, data: { id: 7 } }
+  child.replies.set('textDocument/prepareCallHierarchy', [item])
+  child.replies.set('callHierarchy/incomingCalls', [{ from: { ...item, name: 'caller', data: { id: 8 } }, fromRanges: [range] }])
+  const opening = lsp.open(root, 'a.ts', 'a')
+  child.ready({ callHierarchyProvider: true })
+  await opening
+  const initialize = child.requests.find((request) => request.method === 'initialize')
+  expect(initialize?.params?.capabilities?.textDocument?.callHierarchy).toEqual({})
+  const prepared = await lsp.callHierarchyPrepare(root, 'a.ts', 'a', 0, 0)
+  expect(prepared?.map((entry) => entry.name)).toEqual(['callee'])
+  const incoming = await lsp.callHierarchyIncoming(root, 'a.ts', 'a', 0, 0, prepared![0])
+  expect(incoming.map((call) => call.from.name)).toEqual(['caller'])
+  expect(child.requests.find((request) => request.method === 'callHierarchy/incomingCalls')?.params?.item?.data).toEqual({ id: 7 })
+})
 
 it('prepare/incoming/outgoing map URI dự án và giữ nguyên data', async () => {
   writeFileSync(join(root, 'b.ts'), 'function caller() { callee() }\n')
