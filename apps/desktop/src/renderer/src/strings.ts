@@ -537,13 +537,16 @@ export const vi = {
     days: (n: number) => (n === 0 ? 'hôm nay' : `${n} ngày trước`),
     status: {
       'WRONG-BASE': 'Sai nhánh gốc', 'CI-FAIL': 'CI hỏng', 'CHANGES-REQ': 'Cần sửa', DRAFT: 'Bản nháp',
-      STALE: 'Cũ (≥ 14 ngày)', PENDING: 'CI đang chạy', APPROVED: 'Đã duyệt', READY: 'Sẵn sàng'
+      STALE: 'Cũ (≥ 14 ngày)', PENDING: 'CI đang chạy', APPROVED: 'Đã duyệt', READY: 'Sẵn sàng',
+      CLOSED: 'Đã đóng', MERGED: 'Đã merge'
     } as Record<string, string>,
     conflictsTitle: 'PR có thể xung đột',
-    conflictsHint: 'Hai PR cùng đổi một tệp hoặc cùng chạm vào một vùng ảnh hưởng trên graph. Nên merge lần lượt và kiểm lại.',
+    conflictsHint: 'Hai PR cùng đổi một tệp hoặc cùng một symbol. Nên merge lần lượt và kiểm lại.',
     conflict: (a: number, b: number) => `#${a} và #${b}`,
     conflictFiles: (files: string) => `cùng tệp: ${files}`,
-    conflictNodes: (n: number) => `${n} nút chung trong vùng ảnh hưởng`,
+    conflictNodes: (n: number) => `${n} symbol cùng bị đổi`,
+    conflictRelated: (n: number) => `${n} nút chung trong vùng ảnh hưởng`,
+    conflictsTruncated: 'Chỉ hiện các cặp xung đột đáng chú ý nhất.',
     select: (n: number) => `Xem review của PR #${n}`,
     detailLoading: (n: number) => `Đang đọc diff của PR #${n}…`,
     review: (n: number) => `Review cục bộ: PR #${n}`,

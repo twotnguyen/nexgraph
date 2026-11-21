@@ -139,12 +139,14 @@ export function PrsView({ projectId, onOpenNode }: Props) {
         <section>
           <h3>{vi.prs.conflictsTitle}</h3>
           <p className="muted small">{vi.prs.conflictsHint}</p>
+          {list.conflicts_truncated && <p className="warn">{vi.prs.conflictsTruncated}</p>}
           <ul className="report-list">
             {list.conflicts.map((c) => (
               <li key={`${c.a}-${c.b}`}>
                 <b className="mono">{vi.prs.conflict(c.a, c.b)}</b>
                 {c.files.length > 0 && <span className="mono muted small">{vi.prs.conflictFiles(c.files.join(', '))}</span>}
                 {c.nodes > 0 && <span className="muted small">{vi.prs.conflictNodes(c.nodes)}</span>}
+                {c.related > 0 && <span className="muted small">{vi.prs.conflictRelated(c.related)}</span>}
               </li>
             ))}
           </ul>
