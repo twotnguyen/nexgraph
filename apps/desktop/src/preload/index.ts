@@ -108,6 +108,18 @@ const api: NexGraphApi = {
     diff: (pid, file, staged) => call('git:diff', pid, file, staged),
     blame: (pid, file) => call('git:blame', pid, file)
   },
+  debug: {
+    adapterStatus: () => call('debug:adapter-status'),
+    installAdapter: (kind) => call('debug:install-adapter', kind),
+    start: (pid, kind, file, breakpoints) => call('debug:start', pid, kind, file, breakpoints),
+    setBreakpoints: (file, lines) => call('debug:set-breakpoints', file, lines),
+    step: (action, threadId) => call('debug:step', action, threadId),
+    stackTrace: (threadId) => call('debug:stack-trace', threadId),
+    scopes: (frameId) => call('debug:scopes', frameId),
+    variables: (ref) => call('debug:variables', ref),
+    stop: () => call('debug:stop'),
+    onEvent: (cb) => subscribe('debug:event', cb)
+  },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),
     run: (pid, format, scope) => call('export:run', pid, format, scope),

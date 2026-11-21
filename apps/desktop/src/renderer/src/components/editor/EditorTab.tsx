@@ -7,6 +7,7 @@ import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { StatusBarItems } from '../EngineStatusBar'
 import { useBlame, useVimMode } from '../../state/editorPrefs'
+import { toggleBreakpoint, useDebugState } from '../../state/debugState'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -252,6 +253,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
       editor.current = ed
       ed.onChange(updateDirty)
       ed.onCursor?.((line, column) => setCursor({ line, column }))
+      ed.onGutterClick?.((at) => toggleBreakpoint(file, at))
       ed.revealLines(line, lineEnd)
       setReadOnly(c.readOnly ? (c.reason ?? true) : false)
       updateFormat(c)
@@ -301,6 +303,12 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
     const hit = blame && !modified ? blame.get(cursor.line) : undefined
     editor.current?.setLineNote?.(cursor.line, hit ? blameText(hit) : null)
   }, [blame, cursor.line, modified])
+
+  // Gỡ lỗi: chấm điểm dừng ở lề và dòng đang dừng của tệp này.
+  const debug = useDebugState()
+  const fileBreakpoints = debug.breakpoints[file]
+  useEffect(() => { if (ready) editor.current?.setBreakpoints?.(fileBreakpoints ?? []) }, [ready, fileBreakpoints])
+  useEffect(() => { if (ready) editor.current?.setExecLine?.(debug.at?.file === file ? debug.at.line : null) }, [ready, debug.at, file])
 
   // Nghe cả tài liệu để Ctrl+S hoạt động khi tiêu điểm vừa rời khỏi Monaco. Tiêu điểm trong khung chia đôi thì lưu tệp của khung đó; không thì thẻ đang hiện.
   const activeRef = useRef(active)

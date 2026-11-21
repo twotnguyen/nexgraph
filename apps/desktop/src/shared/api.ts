@@ -55,6 +55,15 @@ export type TerminalEvent = { id: number; type: 'data'; data: string } | { id: n
 export type GitFileChange = { path: string; status: string; from?: string }
 export type GitStatus = { repo: boolean; branch: string | null; staged: GitFileChange[]; unstaged: GitFileChange[] }
 export type GitBlameLine = { line: number; sha: string; author: string; time: number; summary: string; uncommitted: boolean }
+/** Điểm dừng theo tệp (đường dẫn tương đối dự án → các dòng, tính từ 1). */
+export type DebugBreakpoints = Record<string, number[]>
+export type DebugEvent =
+  | { type: 'state'; state: 'starting' | 'running' | 'stopped' | 'terminated'; reason?: string; threadId?: number }
+  | { type: 'output'; category: string; text: string }
+/** `file` null khi khung ngăn xếp nằm ngoài dự án (thư viện, mã nội bộ). */
+export type DebugFrame = { id: number; name: string; file: string | null; line: number; column: number }
+export type DebugScope = { name: string; variablesReference: number; expensive: boolean }
+export type DebugVariable = { name: string; value: string; type: string; variablesReference: number }
 
 export type HostCommand = { name: string; arg?: unknown }
 
@@ -163,6 +172,19 @@ export interface NexGraphApi {
     commit(projectId: string, message: string): Promise<string>
     diff(projectId: string, file: string, staged: boolean): Promise<{ before: string; after: string }>
     blame(projectId: string, file: string): Promise<GitBlameLine[]>
+  }
+  /** Gỡ lỗi (DAP): js-debug cho Node, debugpy cho Python; adapter tải về khi người dùng đồng ý. */
+  debug?: {
+    adapterStatus(): Promise<{ node: boolean; python: boolean }>
+    installAdapter(kind: 'node' | 'python'): Promise<void>
+    start(projectId: string, kind: 'node' | 'python', file: string, breakpoints: DebugBreakpoints): Promise<void>
+    setBreakpoints(file: string, lines: number[]): Promise<void>
+    step(action: 'continue' | 'next' | 'stepIn' | 'stepOut', threadId: number): Promise<void>
+    stackTrace(threadId: number): Promise<DebugFrame[]>
+    scopes(frameId: number): Promise<DebugScope[]>
+    variables(variablesReference: number): Promise<DebugVariable[]>
+    stop(): Promise<void>
+    onEvent(cb: (event: DebugEvent) => void): () => void
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

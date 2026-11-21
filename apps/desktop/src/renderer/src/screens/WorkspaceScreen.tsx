@@ -7,6 +7,8 @@ import { SplitEditor } from '../components/editor/SplitEditor'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import { GitPanel } from '../components/git/GitPanel'
 import { GitDiffView } from '../components/git/GitDiffView'
+import { DebugPanel, debugKindOf } from '../components/debug/DebugPanel'
+import { debugStep, setDebugOpener, startDebugging, stopDebugging, useDebugState } from '../state/debugState'
 import type { AgentContextItem, AgentEditorState } from '@shared/agent-types'
 import type { AgentInspection } from '../components/agent/useAgentWorkbench'
 import { TaskInspector } from '../components/agent/TaskInspector'
@@ -47,9 +49,9 @@ const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows
 interface OpenFile { file: string; line: number; lineEnd?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
-type Panel = 'explorer' | 'find' | 'git' | 'search' | 'changes' | 'tour'
+type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour'
 const PANEL_TITLES: Record<Panel, string> = {
-  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', git: 'Git', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
+  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', git: 'Git', debug: 'Gỡ lỗi', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
 }
 const messageOf = (e: unknown): string =>
   e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
@@ -105,6 +107,7 @@ const ACTIVITIES = [
   { id: 'explorer', title: PANEL_TITLES.explorer, icon: FilesIcon },
   { id: 'find', title: PANEL_TITLES.find, icon: FindIcon },
   { id: 'git', title: PANEL_TITLES.git, icon: <Icon name="branch" size={20} /> },
+  { id: 'debug', title: PANEL_TITLES.debug, icon: <Icon name="bug" size={20} /> },
   { id: 'search', title: PANEL_TITLES.search, icon: SearchIcon },
   { id: 'changes', title: PANEL_TITLES.changes, icon: ChangesIcon },
   { id: 'tour', title: PANEL_TITLES.tour, icon: TourIcon }
@@ -495,6 +498,22 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('graph_search.toggle', () => togglePanel('search'))
   useCommand('changes.toggle', () => togglePanel('changes'))
   useCommand('git_panel.toggle', () => togglePanel('git'))
+  // Gỡ lỗi: tệp đích là tệp .js/.py mở gần nhất; phiên sống ngoài bảng (state/debugState) nên phím F5… dùng được khi bảng đóng.
+  const debugState = useDebugState()
+  const [debugTarget, setDebugTarget] = useState<string | undefined>(undefined)
+  useEffect(() => { if (debugKindOf(activeFile) && debugState.status === 'idle') setDebugTarget(activeFile) }, [activeFile, debugState.status])
+  useEffect(() => { setDebugOpener((file, line) => openCode(file, line)); return () => setDebugOpener(null) })
+  useCommand('debug.toggle', () => togglePanel('debug'))
+  useCommand('debug.start', () => {
+    if (debugState.status === 'stopped') return debugStep('continue')
+    const kind = debugKindOf(debugTarget)
+    if (panel !== 'debug') togglePanel('debug')
+    if (kind && debugTarget && debugState.status === 'idle') void startDebugging(project.project_id, kind, debugTarget)
+  })
+  useCommand('debug.step_over', () => debugStep('next'))
+  useCommand('debug.step_into', () => debugStep('stepIn'))
+  useCommand('debug.step_out', () => debugStep('stepOut'))
+  useCommand('debug.stop', stopDebugging)
   const [diffs, setDiffs] = useState<DiffTab[]>([])
   const openDiff = (file: string, staged: boolean) => {
     setDiffs((cur) => (cur.some((d) => d.file === file && d.staged === staged) ? cur : [...cur, { file, staged }]))
@@ -573,6 +592,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
                 onShowSubgraph={(g) => highlightFromChat(g.nodes, g.edges, null)} onOpenFlow={openFlow} />
             )}
             {panel === 'git' && <GitPanel projectId={project.project_id} onOpenDiff={openDiff} />}
+            {panel === 'debug' && <DebugPanel projectId={project.project_id} target={debugTarget} onOpenFile={(file, line) => openCode(file, line)} />}
             {panel === 'find' && (
               <ProjectSearch projectId={project.project_id} onOpen={(file, line) => openCode(file, line)} dirtyFiles={dirtyFiles} focusRequest={findFocus} />
             )}

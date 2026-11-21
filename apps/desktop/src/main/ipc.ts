@@ -2,12 +2,12 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { TextSearchQuery, WriteOpts } from '../shared/api'
+import type { DebugBreakpoints, TextSearchQuery, WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
-import { FsError, fsHandlers, isProtectedRel, isWithin, projectRoot } from './fs/project-fs'
+import { FsError, fsHandlers, isProtectedRel, isWithin, projectRoot, resolveInside } from './fs/project-fs'
 import { AgentFileScope } from './agent/file-scope'
 import { GENERATED_DIRS, replaceText, searchText } from './search/text-search'
 import { LspManager } from './lsp/manager'
@@ -37,6 +37,8 @@ import { externalWebUrl } from './external-links'
 import { TerminalManager } from './terminal/manager'
 import { gitBlame, gitCommit, gitDiffSides, gitStage, gitStatus, gitUnstage } from './git/repo'
 import { allToolNames, getDisabledTools, setDisabledTools } from './agent/extension'
+import { DebugManager } from './debug/manager'
+import { adapterInstalled, installAdapter, type DebugKind } from './debug/adapters'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -45,6 +47,7 @@ let agents: AgentRouter | null = null
 let geminiConnection: GeminiConnectionManager | null = null
 let editors: EditorStateRegistry | null = null
 let terminals: TerminalManager | null = null
+let debugManager: DebugManager | null = null
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
 export const closeAllAgents = (): void => {
@@ -63,6 +66,7 @@ const lsp = new LspManager()
 export const stopEditorProcesses = (): void => {
   lsp.stopAll()
   terminals?.killAll()
+  void debugManager?.stop()
 }
 
 function readJson(file: string): Record<string, string> {
@@ -235,6 +239,36 @@ export function registerIpc(
   on('git:commit', async (pid: string, message: string) => gitCommit(await rootOf(pid), message))
   on('git:diff', async (pid: string, file: string, staged: boolean) => gitDiffSides(await rootOf(pid), file, staged === true))
   on('git:blame', async (pid: string, file: string) => gitBlame(await rootOf(pid), file))
+  // Gỡ lỗi: adapter cài vào thư mục dữ liệu app; mọi đường dẫn tệp là tương đối dự án và phải nằm trong dự án.
+  const adaptersBase = join(app.getPath('userData'), 'debug-adapters')
+  debugManager = new DebugManager(adaptersBase, (event) => getWindow()?.webContents.send('debug:event', event))
+  const dbg = debugManager
+  const debugKind = (kind: unknown): DebugKind => {
+    if (kind !== 'node' && kind !== 'python') throw new FsError('bad_param', 'Loại gỡ lỗi không hợp lệ')
+    return kind
+  }
+  const lineList = (lines: unknown): number[] => {
+    if (!Array.isArray(lines) || lines.some((l) => !Number.isInteger(l) || l < 1)) throw new FsError('bad_param', 'Dòng điểm dừng không hợp lệ')
+    return lines as number[]
+  }
+  on('debug:adapter-status', async () => ({ node: adapterInstalled(adaptersBase, 'node'), python: adapterInstalled(adaptersBase, 'python') }))
+  on('debug:install-adapter', async (kind: string) => installAdapter(adaptersBase, debugKind(kind)))
+  on('debug:start', async (pid: string, kind: string, file: string, breakpoints: DebugBreakpoints) => {
+    const root = await rootOf(pid)
+    const clean: DebugBreakpoints = {}
+    for (const [path, lines] of Object.entries(breakpoints ?? {})) { resolveInside(root, path); clean[path] = lineList(lines) }
+    if (!adapterInstalled(adaptersBase, debugKind(kind))) throw new FsError('bad_param', 'Chưa cài debug adapter')
+    return dbg.start(debugKind(kind), root, file, clean)
+  })
+  on('debug:set-breakpoints', async (file: string, lines: number[]) => dbg.setBreakpoints(file, lineList(lines)))
+  on('debug:step', async (action: string, threadId: number) => {
+    if (action !== 'continue' && action !== 'next' && action !== 'stepIn' && action !== 'stepOut') throw new FsError('bad_param', 'Thao tác không hợp lệ')
+    return dbg.step(action, Number(threadId))
+  })
+  on('debug:stack-trace', async (threadId: number) => dbg.stackTrace(Number(threadId)))
+  on('debug:scopes', async (frameId: number) => dbg.scopes(Number(frameId)))
+  on('debug:variables', async (ref: number) => dbg.variables(Number(ref)))
+  on('debug:stop', async () => dbg.stop())
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {

@@ -1,0 +1,32 @@
+/* Bảng Gỡ lỗi kiểu Wu: thanh điều khiển nút ma 24px, các mục tiêu đề nhỏ viết hoa, hàng 22px. */
+.debug-panel { display: flex; flex-direction: column; gap: 6px; height: 100%; min-height: 0; overflow: auto; padding: 4px 0 8px; font-size: 13px; }
+.dbg-toolbar { display: flex; align-items: center; gap: 2px; padding: 0 6px; }
+.dbg-btn { display: grid; place-items: center; width: 26px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-text); font-size: 13px; }
+.dbg-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 9%, transparent); }
+.dbg-btn:disabled { color: var(--color-muted); opacity: .5; }
+.dbg-run:not(:disabled) { color: var(--green, #3fb950); }
+.dbg-stop:not(:disabled) { color: var(--red, #e5484d); }
+.dbg-status { margin-left: 6px; font-size: 12px; white-space: nowrap; }
+.dbg-target { margin: 0; padding: 0 10px; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.dbg-install { display: grid; gap: 6px; margin: 0 8px; padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; font-size: 12px; }
+.dbg-install button { justify-self: end; height: 26px; min-height: 0; padding: 0 10px; border-radius: 6px; font-size: 12px; }
+.dbg-error { margin: 0 10px; color: var(--red, #e5484d); font-size: 12px; white-space: pre-wrap; }
+.debug-panel h3 { margin: 6px 0 2px; padding: 0 10px; color: var(--color-muted); font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.dbg-list, .dbg-list ul { margin: 0; padding: 0; list-style: none; }
+.dbg-frame, .dbg-var { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 22px; padding: 0 10px; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font-size: 12px; text-align: left; }
+.dbg-frame:hover, .dbg-var:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.dbg-frame[aria-current] { background: color-mix(in srgb, var(--amber, #e5c07b) 18%, transparent); }
+.dbg-frame > span:first-child:not(.dbg-dot) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbg-var { font-family: var(--font-mono, monospace); }
+.dbg-var:disabled { color: var(--color-text); opacity: 1; cursor: default; }
+.dbg-twisty { flex: none; width: 10px; color: var(--color-muted); }
+.dbg-var-name { flex: none; color: var(--blue, #61afef); }
+.dbg-var-name::after { content: ':'; color: var(--color-muted); }
+.dbg-var-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dbg-scope { margin: 2px 0 0; padding: 0 10px; font-size: 11px; }
+.dbg-bp { display: flex; align-items: center; }
+.dbg-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--red, #e5484d); }
+.dbg-remove { display: grid; flex: none; place-items: center; width: 22px; height: 22px; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--color-muted); opacity: 0; }
+.dbg-bp:hover .dbg-remove { opacity: 1; }
+.dbg-empty { margin: 0; padding: 0 10px; font-size: 12px; }
+.dbg-output { max-height: 160px; margin: 0 8px; padding: 6px 8px; overflow: auto; border-radius: 6px; background: color-mix(in srgb, var(--color-text) 5%, transparent); font-size: 11px; white-space: pre-wrap; }

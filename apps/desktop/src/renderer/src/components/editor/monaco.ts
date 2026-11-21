@@ -94,6 +94,11 @@ export interface EditorHandle {
   setVim?(status: HTMLElement | null): void
   /** Chú thích mờ cuối một dòng (inline blame); null để xoá. */
   setLineNote?(line: number, text: string | null): void
+  /** Điểm dừng (chấm đỏ ở lề) và dòng đang dừng khi gỡ lỗi. */
+  setBreakpoints?(lines: number[]): void
+  setExecLine?(line: number | null): void
+  /** Bấm lề trái (cột chấm hoặc số dòng) ở một dòng. */
+  onGutterClick?(cb: (line: number) => void): void
   dispose(): void
 }
 
@@ -185,13 +190,15 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
   const model = opts.path ? monaco.editor.createModel(opts.value, opts.language, modelUri(opts.path, opts.projectId)) : undefined
   const editor = monaco.editor.create(el, {
     ...(model ? { model } : { value: opts.value, language: opts.language }), readOnly: opts.readOnly, theme: editorTheme(),
-    automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
+    automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12, glyphMargin: true,
     ...(font ? { fontFamily: font } : {})
   })
   const hit = editor.createDecorationsCollection()
   const setVim = vimAttacher(editor)
   if (opts.onOpenFile) openers.set(editor, opts.onOpenFile)
   const note = editor.createDecorationsCollection()
+  const breakpoints = editor.createDecorationsCollection()
+  const exec = editor.createDecorationsCollection()
   return {
     getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
     getSelection: () => {
@@ -219,6 +226,15 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
       // Khoảng rỗng ở cuối dòng: phải có showIfCollapsed thì Monaco mới vẽ chữ chèn.
       note.set(text ? [{ range: new monaco.Range(line, end, line, end), options: { showIfCollapsed: true, after: { content: `      ${text}`, inlineClassName: 'editor-line-note' } } }] : [])
     },
+    setBreakpoints: (lines) => breakpoints.set(lines.map((line) => ({ range: new monaco.Range(line, 1, line, 1), options: { glyphMarginClassName: 'editor-breakpoint', glyphMarginHoverMessage: { value: 'Điểm dừng' } } }))),
+    setExecLine: (line) => {
+      exec.set(line ? [{ range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: 'editor-exec-line', glyphMarginClassName: 'editor-exec-arrow' } }] : [])
+      if (line) editor.revealLineInCenterIfOutsideViewport(line)
+    },
+    onGutterClick: (cb) => void editor.onMouseDown((e) => {
+      // Chỉ cột chấm (glyph margin): bấm số dòng vẫn để chọn cả dòng như thường.
+      if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) cb(e.target.position.lineNumber)
+    }),
     dispose: () => {
       setVim(null)
       const model = editor.getModel()

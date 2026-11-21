@@ -174,6 +174,12 @@ SOFTWARE.
 - Giấy phép: MIT, Copyright (c) 2012-2015 Christopher Jeffrey, Copyright (c) 2016 Daniel Imms, Copyright (c) Microsoft Corporation.
 - Dùng ở: `apps/desktop/src/main/terminal/manager.ts` — chạy shell cho terminal tích hợp.
 
+## js-debug và debugpy (tải khi người dùng bấm "Tải về" trong bảng Gỡ lỗi, không đóng gói sẵn)
+
+- js-debug: https://github.com/microsoft/vscode-js-debug, bản `js-debug-dap-v1.140.1` (MIT, Copyright (c) Microsoft Corporation). Chạy `dapDebugServer.js` bằng Node của Electron làm debug adapter cho Node.js.
+- debugpy: https://github.com/microsoft/debugpy, bản `1.8.22` (wheel `py2.py3-none-any`, MIT, Copyright (c) Microsoft Corporation). Chạy `python -m debugpy.adapter` bằng Python của người dùng.
+- Cả hai tải từ địa chỉ cố định, kiểm SHA-256 rồi giải nén vào thư mục dữ liệu của app (`debug-adapters/`); giấy phép đi kèm trong thư mục giải nén. Dùng ở `apps/desktop/src/main/debug/`.
+
 
 ## react-markdown
 
