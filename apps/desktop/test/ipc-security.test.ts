@@ -1,12 +1,14 @@
 // Test bảo mật IPC: mọi handler nhận path phải suy gốc từ projectId đã đăng ký trong main.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import type { NexGraphApi } from '../src/shared/api'
 
 const h = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => Promise<unknown>>(),
+  exposed: null as [string, unknown] | null,
   projects: [] as { project_id: string; path: string }[],
   exports: [] as unknown[][],
   mcpStarts: [] as [string, string][],
@@ -19,6 +21,8 @@ const h = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: { getPath: (name: string) => (name === 'userData' ? h.userData : '/tmp') },
   ipcMain: { handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => Promise<unknown>) => { h.handlers.set(channel, fn) } },
+  contextBridge: { exposeInMainWorld: (name: string, api: unknown) => { h.exposed = [name, api] } },
+  ipcRenderer: { invoke: (channel: string, ...args: unknown[]) => h.handlers.get(channel)!({}, ...args) },
   dialog: { showOpenDialog: h.showOpenDialog },
   shell: { showItemInFolder: h.showItemInFolder },
   safeStorage: { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() }
@@ -53,6 +57,7 @@ vi.mock('../src/main/watch/project-watcher', () => ({
 }))
 
 import { registerIpc } from '../src/main/ipc'
+import '../src/preload/index'
 
 type Result<T = unknown> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 const invoke = (channel: string, ...args: unknown[]): Promise<Result> => {
@@ -112,6 +117,72 @@ describe('IPC: path thô từ renderer bị từ chối', () => {
     expect(await invoke('mcp:start-http', 'p1', '/etc/evil')).toMatchObject({ ok: true })
     expect(h.mcpStarts.at(-1)).toEqual(['p1', root])
   })
+})
+
+describe('IPC: đọc tệp nhị phân trong dự án', () => {
+  it('preload chuyển yêu cầu và lỗi qua IPC', async () => {
+    expect(h.exposed?.[0]).toBe('nexgraph')
+    const api = h.exposed?.[1] as NexGraphApi
+    writeFileSync(join(root, 'binary-bridge.png'), Buffer.from([0x00, 0xff, 0x80]))
+    expect(await api.fs.readBinary!('p1', 'binary-bridge.png')).toEqual({ data: 'AP+A', size: 3 })
+    await expect(api.fs.readBinary!('nope', 'binary-bridge.png'))
+      .rejects.toMatchObject({ code: 'unknown_project' })
+  })
+
+  it('trả byte gốc dưới dạng base64 và chọn đúng gốc theo projectId', async () => {
+    writeFileSync(join(root, 'binary.png'), Buffer.from([0x00, 0x89, 0xff, 0x0a]))
+    writeFileSync(join(root2, 'binary.png'), Buffer.from([0xff]))
+    writeFileSync(join(root, 'empty.png'), '')
+    expect(await invoke('fs:read-binary', 'p1', 'binary.png')).toEqual({
+      ok: true, data: { data: 'AIn/Cg==', size: 4 }
+    })
+    expect(await invoke('fs:read-binary', 'p2', 'binary.png')).toEqual({
+      ok: true, data: { data: '/w==', size: 1 }
+    })
+    expect(await invoke('fs:read-binary', 'p1', 'empty.png')).toEqual({
+      ok: true, data: { data: '', size: 0 }
+    })
+    expect(await invoke('fs:read-binary', 'p1', 'missing.png'))
+      .toMatchObject({ ok: false, error: { code: 'file_not_found' } })
+  })
+
+  it('từ chối project lạ, đường dẫn ngoài và đường dẫn được bảo vệ kể cả qua symlink', async () => {
+    const protectedDir = join(root, '.nexgraph')
+    mkdirSync(protectedDir, { recursive: true })
+    writeFileSync(join(protectedDir, 'secret.png'), 'secret')
+    symlinkSync(root2, join(root, 'binary-outside'), process.platform === 'win32' ? 'junction' : 'dir')
+    symlinkSync(protectedDir, join(root, 'binary-secret'), process.platform === 'win32' ? 'junction' : 'dir')
+    expect(await invoke('fs:read-binary', 'nope', 'binary.png'))
+      .toMatchObject({ ok: false, error: { code: 'unknown_project' } })
+    for (const path of ['../proj2/binary.png', join(root2, 'binary.png'), 'binary-outside/binary.png']) {
+      expect(await invoke('fs:read-binary', 'p1', path))
+        .toMatchObject({ ok: false, error: { code: 'outside_project' } })
+    }
+    for (const path of ['.nexgraph/secret.png', '.env', 'binary-secret/secret.png']) {
+      expect(await invoke('fs:read-binary', 'p1', path))
+        .toMatchObject({ ok: false, error: { code: 'protected_path' } })
+    }
+  })
+
+  it('chấp nhận đúng 50 MiB và từ chối tệp lớn hơn', async () => {
+    const path = join(root, 'binary-limit.png')
+    writeFileSync(path, '')
+    try {
+      truncateSync(path, 50 * 1024 * 1024)
+      const result = await invoke('fs:read-binary', 'p1', 'binary-limit.png')
+      expect(result.ok).toBe(true)
+      const binary = dataOf<{ data: string; size: number }>(result)
+      expect(binary.size).toBe(50 * 1024 * 1024)
+      expect(binary.data).toHaveLength(69905068)
+      expect(binary.data.startsWith('AAAA')).toBe(true)
+      expect(binary.data.endsWith('AAA=')).toBe(true)
+      truncateSync(path, 50 * 1024 * 1024 + 1)
+      expect(await invoke('fs:read-binary', 'p1', 'binary-limit.png'))
+        .toMatchObject({ ok: false, error: { code: 'too_large' } })
+    } finally {
+      unlinkSync(path)
+    }
+  }, 15000)
 })
 
 it('fs:write yêu cầu phiên bản tệp và giữ thay đổi mới trên đĩa khi nhận bản cũ', async () => {
