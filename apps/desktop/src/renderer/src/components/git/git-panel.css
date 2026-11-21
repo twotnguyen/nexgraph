@@ -1,0 +1,32 @@
+/* Git panel kiểu Wu: hàng 24px, chữ trạng thái màu bên phải, nút ma hiện khi rê; ô commit dính đáy. */
+.git-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; font-size: 13px; }
+.git-head { display: flex; flex: none; align-items: center; gap: 6px; height: 28px; padding: 0 8px; color: var(--color-muted); }
+.git-head > span { flex: 1; min-width: 0; overflow: hidden; color: var(--color-text); text-overflow: ellipsis; white-space: nowrap; }
+.git-list { flex: 1; min-height: 0; overflow: auto; }
+.git-section > header { display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; color: var(--color-muted); font-size: 11px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; }
+.git-count { padding: 0 5px; border-radius: 8px; background: color-mix(in srgb, var(--color-text) 10%, transparent); font-weight: 400; }
+.git-link { margin-left: auto; height: 20px; min-height: 0; padding: 0 6px; border: 0; border-radius: 4px; background: transparent; color: var(--color-muted); font-size: 11px; text-transform: none; letter-spacing: 0; opacity: 0; }
+.git-section > header:hover .git-link, .git-link:focus-visible { opacity: 1; }
+.git-link:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.git-section ul { margin: 0; padding: 0; list-style: none; }
+.git-row { display: flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 6px 0 0; }
+.git-row:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.git-file { display: flex; flex: 1; min-width: 0; align-items: center; gap: 6px; height: 24px; min-height: 0; padding: 0 0 0 12px; border: 0; border-radius: 0; background: transparent; color: var(--color-text); text-align: left; }
+.git-name { flex: none; white-space: nowrap; }
+.git-name[data-status='D'] { text-decoration: line-through; color: var(--color-muted); }
+.git-dir { flex: 1; min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.git-status { flex: none; width: 14px; font: 600 11px var(--font-mono, monospace); text-align: center; color: var(--amber, #d19a66); }
+.git-status[data-status='A'], .git-status[data-status='?'] { color: var(--green, #98c379); }
+.git-status[data-status='D'], .git-status[data-status='U'] { color: var(--red, #e06c75); }
+.git-icon { display: grid; flex: none; place-items: center; width: 22px; height: 22px; min-height: 0; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--color-muted); }
+.git-row .git-icon { opacity: 0; }
+.git-row:hover .git-icon, .git-row .git-icon:focus-visible { opacity: 1; }
+.git-icon:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 10%, transparent); color: var(--color-text); }
+.git-error { margin: 4px 8px; color: var(--red, #e06c75); font-size: 12px; white-space: pre-wrap; }
+.git-empty { margin: 8px; font-size: 12px; }
+.git-commit { display: grid; flex: none; gap: 6px; padding: 8px; border-top: 1px solid var(--color-border); }
+.git-commit textarea { min-height: 56px; padding: 6px 8px; border-radius: 6px; font-size: 13px; resize: vertical; }
+.git-commit-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.git-commit-row button { margin-left: auto; height: 28px; min-height: 0; padding: 0 12px; border-radius: 6px; font-size: 12px; }
+/* Diff trong thẻ: đầu thẻ như thẻ tệp. */
+.git-diff .diff-host { flex: 1; min-height: 0; }

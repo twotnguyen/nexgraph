@@ -92,6 +92,8 @@ export interface EditorHandle {
   setReadOnly(v: boolean): void
   /** Bật chế độ Vim (monaco-vim) và ghi trạng thái vào `status`; null để tắt. */
   setVim?(status: HTMLElement | null): void
+  /** Chú thích mờ cuối một dòng (inline blame); null để xoá. */
+  setLineNote?(line: number, text: string | null): void
   dispose(): void
 }
 
@@ -189,6 +191,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
   const hit = editor.createDecorationsCollection()
   const setVim = vimAttacher(editor)
   if (opts.onOpenFile) openers.set(editor, opts.onOpenFile)
+  const note = editor.createDecorationsCollection()
   return {
     getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
     getSelection: () => {
@@ -211,6 +214,11 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     },
     setReadOnly: (v) => editor.updateOptions({ readOnly: v }),
     setVim,
+    setLineNote: (line, text) => {
+      const end = editor.getModel()?.getLineMaxColumn(line) ?? 1
+      // Khoảng rỗng ở cuối dòng: phải có showIfCollapsed thì Monaco mới vẽ chữ chèn.
+      note.set(text ? [{ range: new monaco.Range(line, end, line, end), options: { showIfCollapsed: true, after: { content: `      ${text}`, inlineClassName: 'editor-line-note' } } }] : [])
+    },
     dispose: () => {
       setVim(null)
       const model = editor.getModel()

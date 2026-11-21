@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { FileContent } from '@shared/api'
+import type { FileContent, GitBlameLine } from '@shared/api'
 import type { AgentContextItem } from '@shared/agent-types'
 import { vi } from '../../strings'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { StatusBarItems } from '../EngineStatusBar'
-import { useVimMode } from '../../state/editorPrefs'
+import { useBlame, useVimMode } from '../../state/editorPrefs'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -45,6 +45,14 @@ function explain(e: { code?: string; message?: string }): string {
   return e?.message ?? vi.editor.failed
 }
 
+/** "Tác giả, 3 ngày trước • tóm tắt" như inline blame của Wu. */
+export function blameText(line: GitBlameLine, now = Date.now()): string {
+  if (line.uncommitted) return 'Bạn • Chưa commit'
+  const days = Math.floor((now / 1000 - line.time) / 86_400)
+  const ago = days < 1 ? 'hôm nay' : days < 30 ? `${days} ngày trước` : days < 365 ? `${Math.floor(days / 30)} tháng trước` : `${Math.floor(days / 365)} năm trước`
+  return `${line.author}, ${ago} • ${line.summary}`
+}
+
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
 export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
@@ -67,6 +75,8 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   const [loadAttempt, setLoadAttempt] = useState(0)
   const vim = useVimMode()
   const [vimNode, setVimNode] = useState<HTMLElement | null>(null)
+  const blameOn = useBlame()
+  const [blame, setBlameLines] = useState<Map<number, GitBlameLine> | null>(null)
 
   const setDirty = useCallback((d: boolean) => {
     if (dirty.current === d) return
@@ -277,6 +287,20 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   useEffect(() => {
     editor.current?.setVim?.(ready && vim ? vimNode : null)
   }, [ready, vim, vimNode])
+
+  // Inline blame kiểu Wu: lấy lại sau mỗi lần lưu; chỉ hiện khi bộ đệm khớp đĩa để số dòng đúng.
+  useEffect(() => {
+    if (!ready || !blameOn || !window.nexgraph.git) return setBlameLines(null)
+    let live = true
+    window.nexgraph.git.blame(projectId, file)
+      .then((lines) => { if (live) setBlameLines(new Map(lines.map((l) => [l.line, l]))) })
+      .catch(() => { if (live) setBlameLines(null) })
+    return () => { live = false }
+  }, [ready, blameOn, projectId, file, saveState])
+  useEffect(() => {
+    const hit = blame && !modified ? blame.get(cursor.line) : undefined
+    editor.current?.setLineNote?.(cursor.line, hit ? blameText(hit) : null)
+  }, [blame, cursor.line, modified])
 
   // Nghe cả tài liệu để Ctrl+S hoạt động khi tiêu điểm vừa rời khỏi Monaco. Tiêu điểm trong khung chia đôi thì lưu tệp của khung đó; không thì thẻ đang hiện.
   const activeRef = useRef(active)

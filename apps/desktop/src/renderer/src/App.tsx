@@ -8,7 +8,7 @@ import { WorkbenchBar } from './components/layout/WorkbenchBar'
 import { Icon } from './components/common/icons'
 import { CommandPaletteHost } from './components/layout/CommandPalette'
 import { installKeymap, useCommand } from './state/commands'
-import { setVimMode, useVimMode } from './state/editorPrefs'
+import { setBlame, setVimMode, useBlame, useVimMode } from './state/editorPrefs'
 import { LargeProjectScreen } from './screens/LargeProjectScreen'
 import { IndexingScreen } from './screens/IndexingScreen'
 import { ProjectOverviewScreen, type WorkspaceTab } from './screens/ProjectOverviewScreen'
@@ -156,6 +156,8 @@ export default function App() {
   useCommand('projects.open', () => setScreen({ name: 'projects' }), appCommands && screen.name !== 'projects')
   const vimOn = useVimMode()
   useCommand('editor.toggle_vim', () => setVimMode(!vimOn))
+  const blameOn = useBlame()
+  useCommand('git.blame', () => setBlame(!blameOn))
 
   return (
     <div className="app">

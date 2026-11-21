@@ -5,6 +5,8 @@ import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { EditorTab, type EditorContextGetter } from '../components/editor/EditorTab'
 import { SplitEditor } from '../components/editor/SplitEditor'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
+import { GitPanel } from '../components/git/GitPanel'
+import { GitDiffView } from '../components/git/GitDiffView'
 import type { AgentContextItem, AgentEditorState } from '@shared/agent-types'
 import type { AgentInspection } from '../components/agent/useAgentWorkbench'
 import { TaskInspector } from '../components/agent/TaskInspector'
@@ -34,7 +36,10 @@ import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi } from '../strings'
 import './workspace.css'
 
-type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | `file:${string}` | `task:${string}`
+type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | `file:${string}` | `task:${string}` | `diff:${string}`
+/** Thẻ diff của Git panel: `s` đã stage, `u` chưa stage. */
+type DiffTab = { file: string; staged: boolean }
+const diffKey = (d: DiffTab): Tab => `diff:${d.staged ? 's' : 'u'}:${d.file}`
 const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
 const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
   graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }
@@ -42,9 +47,9 @@ const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows
 interface OpenFile { file: string; line: number; lineEnd?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
-type Panel = 'explorer' | 'find' | 'search' | 'changes' | 'tour'
+type Panel = 'explorer' | 'find' | 'git' | 'search' | 'changes' | 'tour'
 const PANEL_TITLES: Record<Panel, string> = {
-  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
+  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', git: 'Git', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
 }
 const messageOf = (e: unknown): string =>
   e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
@@ -99,6 +104,7 @@ const FileIcon = (
 const ACTIVITIES = [
   { id: 'explorer', title: PANEL_TITLES.explorer, icon: FilesIcon },
   { id: 'find', title: PANEL_TITLES.find, icon: FindIcon },
+  { id: 'git', title: PANEL_TITLES.git, icon: <Icon name="branch" size={20} /> },
   { id: 'search', title: PANEL_TITLES.search, icon: SearchIcon },
   { id: 'changes', title: PANEL_TITLES.changes, icon: ChangesIcon },
   { id: 'tour', title: PANEL_TITLES.tour, icon: TourIcon }
@@ -488,6 +494,16 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('explorer.toggle', () => togglePanel('explorer'))
   useCommand('graph_search.toggle', () => togglePanel('search'))
   useCommand('changes.toggle', () => togglePanel('changes'))
+  useCommand('git_panel.toggle', () => togglePanel('git'))
+  const [diffs, setDiffs] = useState<DiffTab[]>([])
+  const openDiff = (file: string, staged: boolean) => {
+    setDiffs((cur) => (cur.some((d) => d.file === file && d.staged === staged) ? cur : [...cur, { file, staged }]))
+    setTab(diffKey({ file, staged }))
+  }
+  const closeDiff = (d: DiffTab) => {
+    setDiffs((cur) => cur.filter((item) => diffKey(item) !== diffKey(d)))
+    if (tab === diffKey(d)) setTab(lastMain)
+  }
   useCommand('tour.toggle', () => togglePanel('tour'))
   useCommand('view.arch', () => selectView('arch'))
   useCommand('view.map', () => selectView('map'))
@@ -556,6 +572,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               <SearchPanel projectId={project.project_id} revision={revision} onOpen={openNode}
                 onShowSubgraph={(g) => highlightFromChat(g.nodes, g.edges, null)} onOpenFlow={openFlow} />
             )}
+            {panel === 'git' && <GitPanel projectId={project.project_id} onOpenDiff={openDiff} />}
             {panel === 'find' && (
               <ProjectSearch projectId={project.project_id} onOpen={(file, line) => openCode(file, line)} dirtyFiles={dirtyFiles} focusRequest={findFocus} />
             )}
@@ -627,6 +644,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <button id={tabId(`task:${inspection.id}`)} type="button" role="tab" aria-selected={tab === `task:${inspection.id}`} aria-controls={viewId} tabIndex={tab === `task:${inspection.id}` ? 0 : -1} className="tab-name" onClick={() => setTab(`task:${inspection.id}`)}><Icon name="spark" size={14} /><span>{inspection.title}</span></button>
             <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}><Icon name="close" size={12} /></button>
           </span>)}
+          {diffs.map((d) => <span key={diffKey(d)} className={`tab file-tab${tab === diffKey(d) ? ' active' : ''}`}>
+            <button id={tabId(diffKey(d))} type="button" role="tab" aria-selected={tab === diffKey(d)} aria-controls={viewId} tabIndex={tab === diffKey(d) ? 0 : -1} className="tab-name"
+              title={`${d.file} (${d.staged ? 'đã stage' : 'chưa stage'})`} onClick={() => setTab(diffKey(d))}><Icon name="commit" size={14} /><span>{baseName(d.file)} · diff</span></button>
+            <button type="button" className="tab-close" aria-label={`Đóng diff ${baseName(d.file)}`} onClick={() => closeDiff(d)}><Icon name="close" size={12} /></button>
+          </span>)}
         </div>
         <div className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
           {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
@@ -679,6 +701,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ))}
           {sideShown && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
+          {diffs.filter((d) => tab === diffKey(d)).map((d) => <GitDiffView key={diffKey(d)} projectId={project.project_id} file={d.file} staged={d.staged}
+            onClose={() => closeDiff(d)} onOpenFile={() => openCode(d.file)} />)}
           {feedback && (
             <div className="ws-feedback">
               <span role="alert">{feedback}</span>

@@ -51,6 +51,10 @@ export type LspLocation = { file: string; line: number; column: number }
 /** `kind`: CompletionItemKind của LSP (1–25). */
 export type LspCompletionItem = { label: string; kind: number; detail?: string; insertText: string; sortText?: string; filterText?: string }
 export type TerminalEvent = { id: number; type: 'data'; data: string } | { id: number; type: 'exit'; code: number }
+/** `status`: chữ trạng thái của `git status --porcelain` (M, A, D, R, C, U, ? cho tệp mới chưa theo dõi). */
+export type GitFileChange = { path: string; status: string; from?: string }
+export type GitStatus = { repo: boolean; branch: string | null; staged: GitFileChange[]; unstaged: GitFileChange[] }
+export type GitBlameLine = { line: number; sha: string; author: string; time: number; summary: string; uncommitted: boolean }
 
 export type HostCommand = { name: string; arg?: unknown }
 
@@ -150,6 +154,15 @@ export interface NexGraphApi {
     resize(id: number, cols: number, rows: number): Promise<void>
     kill(id: number): Promise<void>
     onEvent(cb: (event: TerminalEvent) => void): () => void
+  }
+  /** Git panel: trạng thái, stage/unstage từng tệp, commit, diff và blame trong gốc dự án. */
+  git?: {
+    status(projectId: string): Promise<GitStatus>
+    stage(projectId: string, files: string[]): Promise<void>
+    unstage(projectId: string, files: string[]): Promise<void>
+    commit(projectId: string, message: string): Promise<string>
+    diff(projectId: string, file: string, staged: boolean): Promise<{ before: string; after: string }>
+    blame(projectId: string, file: string): Promise<GitBlameLine[]>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

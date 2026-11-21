@@ -35,6 +35,7 @@ import type { GeminiConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager } from './terminal/manager'
+import { gitBlame, gitCommit, gitDiffSides, gitStage, gitStatus, gitUnstage } from './git/repo'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -227,6 +228,12 @@ export function registerIpc(
   on('terminal:write', async (id: number, data: string) => { if (typeof data === 'string') term.write(Number(id), data) })
   on('terminal:resize', async (id: number, cols: number, rows: number) => term.resize(Number(id), Number(cols), Number(rows)))
   on('terminal:kill', async (id: number) => term.kill(Number(id)))
+  on('git:status', async (pid: string) => gitStatus(await rootOf(pid)))
+  on('git:stage', async (pid: string, files: string[]) => gitStage(await rootOf(pid), files))
+  on('git:unstage', async (pid: string, files: string[]) => gitUnstage(await rootOf(pid), files))
+  on('git:commit', async (pid: string, message: string) => gitCommit(await rootOf(pid), message))
+  on('git:diff', async (pid: string, file: string, staged: boolean) => gitDiffSides(await rootOf(pid), file, staged === true))
+  on('git:blame', async (pid: string, file: string) => gitBlame(await rootOf(pid), file))
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {

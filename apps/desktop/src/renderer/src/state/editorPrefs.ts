@@ -17,3 +17,13 @@ const subscribe = (notify: () => void) => {
 }
 /** Chế độ Vim cho mọi editor (như cài đặt vim_mode của Wu). */
 export const useVimMode = (): boolean => useSyncExternalStore(subscribe, () => vim)
+
+const BLAME = 'nexgraph.editor.blame'
+let blame = (() => { try { return localStorage.getItem(BLAME) === '1' } catch { return false } })()
+export function setBlame(on: boolean): void {
+  blame = on
+  try { localStorage.setItem(BLAME, on ? '1' : '0') } catch { /* chỉ là tuỳ chọn */ }
+  window.dispatchEvent(new Event(CHANGED))
+}
+/** Blame của Git ở dòng có con trỏ (inline blame của Wu). */
+export const useBlame = (): boolean => useSyncExternalStore(subscribe, () => blame)

@@ -100,6 +100,14 @@ const api: NexGraphApi = {
     kill: (id) => call('terminal:kill', id),
     onEvent: (cb) => subscribe('terminal:event', cb)
   },
+  git: {
+    status: (pid) => call('git:status', pid),
+    stage: (pid, files) => call('git:stage', pid, files),
+    unstage: (pid, files) => call('git:unstage', pid, files),
+    commit: (pid, message) => call('git:commit', pid, message),
+    diff: (pid, file, staged) => call('git:diff', pid, file, staged),
+    blame: (pid, file) => call('git:blame', pid, file)
+  },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),
     run: (pid, format, scope) => call('export:run', pid, format, scope),

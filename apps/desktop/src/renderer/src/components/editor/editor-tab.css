@@ -22,3 +22,5 @@
 .editor-side .editor-path { display: inline-flex; align-items: center; gap: 4px; }
 .vim-status { font-family: var(--font-mono, monospace); font-size: 11px; }
 .vim-status input { width: 12em; border: 0; background: transparent; color: inherit; font: inherit; }
+/* Inline blame: chữ mờ nghiêng cuối dòng có con trỏ. */
+.editor-line-note { color: var(--color-muted); font-style: italic; opacity: .75; }
