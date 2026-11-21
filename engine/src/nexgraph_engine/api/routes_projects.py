@@ -86,6 +86,7 @@ def remove_project(project_id: str, request: Request) -> dict:
         raise ApiError(404, "unknown_project", f"Không có dự án {project_id}") from exc
     except IndexAlreadyRunning as exc:
         raise ApiError(409, "project_busy", "Dự án đang được cập nhật. Hãy đợi hoàn tất hoặc hủy lập chỉ mục rồi thử lại.") from exc
+    request.app.state.services.leave_global(project_id)  # W8: gỡ khỏi app thì gỡ khỏi graph chung
     return {"removed": True}
 
 

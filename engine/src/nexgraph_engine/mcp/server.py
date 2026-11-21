@@ -354,6 +354,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
 
 def _add_global_tools(mcp: FastMCP, root: Path, graph_db: Path, data_dir: Path | None) -> None:
     """`--global` (W8): thêm `list_repositories`, thay `query_graph` bằng bản nhận `repository`. Đều chỉ đọc."""
+    from nexgraph_engine.global_graph.link import cross_repo_edges, visible_cross_repo
     from nexgraph_engine.global_graph.store import GlobalStore
 
     if data_dir is None:
@@ -407,15 +408,12 @@ def _add_global_tools(mcp: FastMCP, root: Path, graph_db: Path, data_dir: Path |
                 except ValueError as exc:
                     raise ToolError(str(exc)) from exc
                 touch_query_stamp(data_dir, s.project_id())
-                ids = {n["id"] for n in out.get("nodes", [])}
-                cross = []
-                for e in store_global.edges(read_only=True):
-                    for side, other, direction in (("nguon", "dich", "out"), ("dich", "nguon", "in")):
-                        if e[f"du_an_{side}"] == pid and e[f"id_nut_{side}"] in ids:
-                            cross.append({"node_id": e[f"id_nut_{side}"], "direction": direction,
-                                          "other_project_id": e[f"du_an_{other}"], "other_node_id": e[f"id_nut_{other}"],
-                                          "type": e["loai_canh"], "subtype": e["loai_con"]})
-                return ModelGraph(s, base).filter({**out, "repository": pid, "cross_repo": cross})
+                # Lọc trước rồi mới lấy id: nút bị loại khỏi AI không được dẫn sang cạnh liên repo.
+                shown = ModelGraph(s, base).filter({**out, "repository": pid})
+                ids = [n["id"] for n in shown.get("nodes", [])]
+                cross = visible_cross_repo(data_dir, pid, cross_repo_edges(data_dir, pid, ids))
+                return {**shown, "cross_repo": [{k: e[k] for k in ("project_id", "node_id", "via", "direction",
+                                                                    "type", "subtype")} for e in cross]}
             except ApiError as exc:
                 raise ToolError(exc.message) from exc
             finally:

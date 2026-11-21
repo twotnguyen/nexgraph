@@ -238,7 +238,8 @@ export interface NexGraphApi {
     list(): Promise<GlobalMember[]>
     add(projectId: string): Promise<{ jobId: string }>
     remove(projectId: string): Promise<void>
-    search(q: string, limit?: number): Promise<GlobalSearchHit[]>
+    /** `projectIds` rỗng hoặc vắng: mọi dự án trong graph chung. */
+    search(q: string, limit?: number, projectIds?: string[]): Promise<GlobalSearchHit[]>
     graph(projectIds: string[], limit?: number): Promise<GlobalGraph>
     /** Hộp thoại chọn thư mục ở main rồi ghi graph.json gộp; `null` khi huỷ. */
     export(projectIds: string[]): Promise<GlobalExportResult | null>

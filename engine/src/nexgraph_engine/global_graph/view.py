@@ -29,26 +29,36 @@ def _cross_edge_json(i: int, e: dict) -> dict:
 
 
 def graph_global(members: list[Member], cross: list[dict], limit: int) -> dict:
-    """Graph gộp: mỗi dự án lấy các nút bậc cao nhất (chia đều `limit`), luôn kèm hai đầu của cạnh liên repo.
+    """Graph gộp, tối đa `limit` nút: trước hết hai đầu của cạnh liên repo, phần còn lại chia đều cho các dự án
+    theo bậc cao nhất.
 
     Id nút có dạng `<project_id>::<id nút>` để hai dự án không đụng nhau.
     """
-    per = max(1, limit // max(1, len(members)))
     nodes, edges, truncated = [], [], False
-    for m in members:
+    budget = limit
+    plan = []
+    for m in members:  # nút ép (hai đầu cạnh liên repo) cũng tính vào `limit`
         store = GraphStore(m.conn)
         forced = [e["id_nut_nguon"] for e in cross if e["du_an_nguon"] == m.project_id]
         forced += [e["id_nut_dich"] for e in cross if e["du_an_dich"] == m.project_id]
         forced_pks = []
-        for node_id in forced:
+        for node_id in dict.fromkeys(forced):
             try:
                 forced_pks.append(store.pk_of(node_id))
             except KeyError:  # cạnh cũ trỏ tới nút đã mất sau lần index mới: bỏ, lần relink sau sẽ dọn
                 pass
+        truncated |= len(forced_pks) > budget
+        forced_pks = forced_pks[:max(0, budget)]
+        budget -= len(forced_pks)
+        plan.append((m, store, forced_pks))
+    per = budget // max(1, len(members))
+    for m, store, forced_pks in plan:
         candidates = [r[0] for r in m.conn.execute(
             "SELECT ma_nut FROM nut WHERE loai_nut NOT IN ('repository', 'directory')")]
-        truncated |= len(candidates) > per
-        pks = list(dict.fromkeys([*forced_pks, *_top_by_degree(store, candidates, per)]))
+        truncated |= len(candidates) > per + len(forced_pks)
+        forced_set = set(forced_pks)
+        top = [pk for pk in _top_by_degree(store, candidates, per + len(forced_pks)) if pk not in forced_set]
+        pks = [*forced_pks, *top[:per]]
         keep = set(pks)
         nodes += [{**node_json(n), "id": gid(m.project_id, n.id), "project_id": m.project_id}
                   for n in store.nodes_by_pk(pks)]

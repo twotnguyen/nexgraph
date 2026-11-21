@@ -88,9 +88,9 @@ def test_search_skips_removed_and_missing(api, copy_fixture, tmp_path):
     r = api.get("/v1/global/search", params={"q": "checkout"})
     assert r.status_code == 200 and r.json() == []
     r = api.get("/v1/global/graph")
-    assert r.status_code == 200 and set(r.json()["skipped"]) == {lib, app}
+    assert r.status_code == 200 and r.json()["skipped"] == [app]  # lib đã rời nhóm khi bị gỡ khỏi app
     listed = {m["project_id"]: m["available"] for m in api.get("/v1/global/projects").json()}
-    assert listed == {lib: False, app: False, third["project_id"]: True}
+    assert listed == {app: False, third["project_id"]: True}
 
 
 def test_graph_merges_with_prefixed_ids(api, copy_fixture):
@@ -123,3 +123,38 @@ def test_export_writes_merged_graph_json(api, copy_fixture, tmp_path):
         link for link in cross if link["target"].endswith("Calculator.add#method")).items()
     assert all(link["confidence"] == "INFERRED" for link in cross)
     assert api.post("/v1/global/export", json={"out_dir": "relative"}).status_code == 400
+
+
+def test_newer_global_db_is_409(api):
+    from nexgraph_engine.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
+    conn = open_global_db(api.app.state.services.data_dir / "global.db")
+    conn.execute(f"PRAGMA user_version = {GLOBAL_SCHEMA_VERSION + 1}")
+    conn.close()
+    r = api.get("/v1/global/projects")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "schema_version"
+    assert api.get("/v1/global/search", params={"q": "x"}).status_code == 409
+
+
+def test_search_filters_projects(api, copy_fixture):
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    assert api.get("/v1/global/search", params={"q": "Calculator", "projects": app}).json() == []
+    hits = api.get("/v1/global/search", params={"q": "Calculator", "projects": f"{lib},{app}"}).json()
+    assert {h["project_id"] for h in hits} == {lib}
+
+
+def test_graph_limit_counts_forced_nodes(api, copy_fixture):
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    for limit in (1, 2, 3, 5):
+        g = api.get("/v1/global/graph", params={"limit": limit}).json()
+        assert len(g["nodes"]) <= limit and g["truncated"]
+
+
+def test_removing_project_from_app_leaves_the_group(api, copy_fixture):
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    assert GlobalStore(api.app.state.services.data_dir).edges()
+    assert api.delete(f"/v1/projects/{lib}").status_code == 200
+    assert [m["project_id"] for m in api.get("/v1/global/projects").json()] == [app]
+    assert GlobalStore(api.app.state.services.data_dir).edges() == []

@@ -41,7 +41,7 @@ describe('GlobalViewScreen', () => {
     expect(screen.getByText('1 cạnh liên repo')).toBeInTheDocument()
 
     await userEvent.type(screen.getByRole('searchbox', { name: 'Tìm trong graph chung' }), 'add{Enter}')
-    expect(api.globalGraph.search).toHaveBeenCalledWith('add', expect.any(Number))
+    expect(api.globalGraph.search).toHaveBeenCalledWith('add', expect.any(Number), ['pa', 'pb'])
     const hit = await screen.findByRole('button', { name: /add/ })
     expect(screen.queryByText('khác')).not.toBeInTheDocument() // chỉ dự án đang xem
     await userEvent.click(hit)

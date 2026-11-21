@@ -120,9 +120,15 @@ def test_cross_repo_impact_uses_shared_graph_when_present(store, monkeypatch, tm
     def fake(data_dir, project_id, node_ids):
         seen.update(data_dir=data_dir, project_id=project_id, node_ids=node_ids)
         return [{"project_id": "other", "node_id": "app.ts::main#function", "via": node_ids[0],
-                 "type": "CALLS", "subtype": None, "file": "app.ts", "line": 3}]
+                 "type": "CALLS", "subtype": None, "file": "app.ts", "line": 3},
+                {"project_id": "other", "node_id": "secret.ts::hidden#function", "via": node_ids[0],
+                 "type": "CALLS", "subtype": None, "file": "secret.ts", "line": 1}]
+
+    def visible(data_dir, project_id, entries, *, for_model=True):  # giả lập SourcePolicy của dự án kia
+        return [e for e in entries if "hidden" not in e["node_id"]]
 
     monkeypatch.setattr(link, "cross_repo_impact", fake)
+    monkeypatch.setattr(link, "visible_cross_repo", visible)
     gh_fake.install(monkeypatch, {("pr", "view", "9"): VIEW, ("pr", "diff", "9"): HELPER_DIFF})
     data_dir = tmp_path / "appdata"
     data_dir.mkdir()
@@ -132,3 +138,4 @@ def test_cross_repo_impact_uses_shared_graph_when_present(store, monkeypatch, tm
     assert seen["project_id"] == store[0].project_id() and seen["node_ids"] == [n["id"] for n in d["changed_nodes"]]
     assert d["cross_repo"][0]["project_id"] == "other"
     assert "repo khác" in d["comment"]
+    assert [c["node_id"] for c in d["cross_repo"]] == ["app.ts::main#function"] and "hidden" not in d["comment"]

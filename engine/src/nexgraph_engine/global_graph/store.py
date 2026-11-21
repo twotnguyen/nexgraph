@@ -6,7 +6,8 @@ import time
 from contextlib import closing
 from pathlib import Path
 
-from nexgraph_engine.schema.db import open_global_db
+from nexgraph_engine.errors import ApiError
+from nexgraph_engine.schema.db import SchemaVersionError, open_global_db
 
 EDGE_COLUMNS = ("du_an_nguon", "id_nut_nguon", "du_an_dich", "id_nut_dich", "loai_canh", "loai_con",
                 "diem_tin_cay", "tep_bang_chung", "dong_bang_chung")
@@ -17,7 +18,10 @@ class GlobalStore:
         self.path = Path(data_dir) / "global.db"
 
     def _conn(self, read_only: bool = False) -> sqlite3.Connection:
-        conn = open_global_db(self.path, read_only=read_only)
+        try:
+            conn = open_global_db(self.path, read_only=read_only)
+        except SchemaVersionError as exc:
+            raise ApiError(409, "schema_version", f"Graph chung do phiên bản NexGraph mới hơn tạo: {exc}") from exc
         conn.execute("PRAGMA busy_timeout = 5000")
         return conn
 
@@ -25,7 +29,12 @@ class GlobalStore:
         if read_only and not self.path.is_file():  # MCP chỉ đọc khi app chưa tạo global.db: nhóm rỗng
             return []
         with closing(self._conn(read_only)) as c:
-            return [(r[0], r[1]) for r in c.execute("SELECT ma_du_an, them_luc FROM du_an_chung ORDER BY them_luc, rowid")]
+            try:
+                return [(r[0], r[1]) for r in c.execute("SELECT ma_du_an, them_luc FROM du_an_chung ORDER BY them_luc, rowid")]
+            except sqlite3.OperationalError:
+                if read_only:  # tiến trình khác đang tạo global.db (user_version còn 0): nhóm rỗng
+                    return []
+                raise
 
     def add(self, project_id: str) -> bool:
         with closing(self._conn()) as c, c:
@@ -51,8 +60,13 @@ class GlobalStore:
         if read_only and not self.path.is_file():
             return []
         with closing(self._conn(read_only)) as c:
-            rows = [dict(r) for r in c.execute(
-                f"SELECT {', '.join(EDGE_COLUMNS)}, muc_tin_cay FROM canh_lien_repo ORDER BY ma_canh")]
+            try:
+                rows = [dict(r) for r in c.execute(
+                    f"SELECT {', '.join(EDGE_COLUMNS)}, muc_tin_cay FROM canh_lien_repo ORDER BY ma_canh")]
+            except sqlite3.OperationalError:
+                if read_only:
+                    return []
+                raise
         if project_ids is None:
             return rows
         wanted = set(project_ids)

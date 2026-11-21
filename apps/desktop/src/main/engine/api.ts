@@ -256,9 +256,10 @@ export class EngineApi {
   async globalRemove(pid: string): Promise<void> {
     await this.request('DELETE', `/v1/global/projects/${encodeURIComponent(pid)}`)
   }
-  globalSearch(q: string, limit?: number): Promise<GlobalSearchHit[]> {
+  globalSearch(q: string, limit?: number, pids?: string[]): Promise<GlobalSearchHit[]> {
     const params = new URLSearchParams({ q })
     if (limit != null) params.set('limit', String(limit))
+    if (pids?.length) params.set('projects', pids.join(','))
     return this.request('GET', `/v1/global/search?${params}`)
   }
   globalGraph(pids: string[], limit?: number): Promise<GlobalGraph> {

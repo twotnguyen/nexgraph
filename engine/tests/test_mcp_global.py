@@ -41,8 +41,9 @@ def test_query_graph_on_other_repository(grouped):
     out = payload(call(server, "query_graph", {"question": "Calculator add", "repository": "global_ts_lib app"}))
     assert out["repository"] == lib
     assert any(n["id"] == "src/calculator.ts::Calculator.add#method" for n in out["nodes"])
-    assert {"node_id": "src/calculator.ts::Calculator.add#method", "direction": "in", "other_project_id": app,
-            "other_node_id": "src/cart.ts::checkout#function", "type": "CALLS", "subtype": "member_call"} in out["cross_repo"]
+    assert {"project_id": app, "node_id": "src/cart.ts::checkout#function", "via": "src/calculator.ts::Calculator.add#method",
+            "direction": "in", "type": "CALLS", "subtype": "member_call"}.items() <= next(
+        e for e in out["cross_repo"] if e["via"] == "src/calculator.ts::Calculator.add#method").items()
     here = payload(call(server, "query_graph", {"question": "checkout"}))
     assert here["repository"] == app
     bad = call(server, "query_graph", {"question": "x", "repository": "khong-co"})
@@ -59,3 +60,15 @@ def test_default_server_has_no_list_repositories(grouped):
 def test_cli_accepts_global_flag():
     args = _build_parser().parse_args(["mcp", "--project", "/x", "--global", "--data-dir", "/d"])
     assert args.global_graph is True
+
+
+def test_cross_repo_hides_nodes_excluded_from_ai(grouped):
+    root, data_dir, lib, app = grouped
+    server = build_server(root, data_dir, global_graph=True)
+    before = payload(call(server, "query_graph", {"question": "checkout"}))["cross_repo"]
+    assert any(e["node_id"] == "src/calculator.ts::Calculator.add#method" for e in before)
+    from nexgraph_engine.store.projects import ProjectRegistry
+    lib_root = ProjectRegistry(data_dir, read_only=True).get(lib).path
+    (lib_root / ".gitignore").write_text("src/calculator.ts\n", encoding="utf-8")
+    after = payload(call(server, "query_graph", {"question": "checkout"}))
+    assert not any("calculator.ts" in str(e) for e in after["cross_repo"])

@@ -55,9 +55,10 @@ def remove_member(project_id: str, request: Request) -> dict:
 
 
 @router.get("/search")
-def global_search(request: Request, q: str = Query(...), limit: int = Query(20, ge=1, le=100)) -> list[dict]:
+def global_search(request: Request, q: str = Query(...), limit: int = Query(20, ge=1, le=100),
+                  projects: str | None = None) -> list[dict]:
     services = request.app.state.services
-    with open_members(services.data_dir, services.registry) as (members, _):
+    with open_members(services.data_dir, services.registry, _ids(projects)) as (members, _):
         return search_global(members, q, limit)
 
 

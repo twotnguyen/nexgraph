@@ -30,7 +30,9 @@ def cross_repo_impact(store: GraphStore, changed: list[Node], data_dir: Path | N
     if data_dir is None or not (data_dir / "global.db").is_file():
         return None
     from nexgraph_engine.global_graph import link
-    return link.cross_repo_impact(data_dir, store.project_id(), [n.id for n in changed])
+    pid = store.project_id()
+    # Luôn lọc theo SourcePolicy hai đầu: nhận xét PR được dán ra ngoài hoặc đưa cho AI.
+    return link.visible_cross_repo(data_dir, pid, link.cross_repo_impact(data_dir, pid, [n.id for n in changed]))
 
 
 def _marks(items: list) -> str:
