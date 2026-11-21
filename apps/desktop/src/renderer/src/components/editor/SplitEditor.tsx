@@ -3,6 +3,7 @@ import { createMirror, type MirrorHandle } from './monaco'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { useVimMode } from '../../state/editorPrefs'
+import { tr } from '../../strings'
 
 /**
  * Khung phải khi chia đôi (⌘\): thêm một view trên cùng model của tệp đã mở, như split pane của Wu.
@@ -46,10 +47,10 @@ export function SplitEditor({ projectId, file, onClose }: { projectId: string; f
         <span className="editor-path mono" title={file}><FileTypeIcon name={file} size={14} /> <span>{file.split('/').pop()}</span></span>
         <span className="ws-editor-actions">
           {vim && <span className="vim-status muted" ref={setVimNode} />}
-          <button type="button" className="ws-icon-button" aria-label="Đóng khung chia đôi" title="Đóng khung chia đôi (⌘\)" onClick={onClose}><Icon name="close" size={15} /></button>
+          <button type="button" className="ws-icon-button" aria-label={tr('Đóng khung chia đôi')} title={tr('Đóng khung chia đôi (⌘\)')} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>
-      {missing && <p role="alert" className="ws-editor-loading muted">Không mở được tệp ở khung này.</p>}
+      {missing && <p role="alert" className="ws-editor-loading muted">{tr('Không mở được tệp ở khung này.')}</p>}
       <div ref={host} className="editor-host" />
     </div>
   )

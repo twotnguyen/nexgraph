@@ -3,6 +3,7 @@ import type { GitStash } from '@shared/api'
 import { errorText } from '../../state/errorText'
 import { Icon } from '../common/icons'
 import { PopoverMenu } from '../common/PopoverMenu'
+import { tr } from '../../strings'
 
 type StashList = { projectId: string; items: GitStash[] | null; error: string | null }
 
@@ -27,7 +28,7 @@ export function StashSection({ projectId, onChanged }: { projectId: string; onCh
     const ticket = ++sequence.current
     setList({ projectId, items: null, error: null })
     try {
-      if (!api) throw new Error('Git không dùng được ở chế độ này.')
+      if (!api) throw new Error(tr('Git không dùng được ở chế độ này.'))
       const items = await api.stashes(projectId)
       if (ticket === sequence.current) setList({ projectId, items, error: null })
     } catch (error) {
@@ -73,29 +74,29 @@ export function StashSection({ projectId, onChanged }: { projectId: string; onCh
   return <section className="git-stash-section" aria-label="Stash" aria-busy={busy || loading}>
     <header className="git-stash-header">
       <span>Stash</span>
-      <button type="button" className="git-stash-refresh" aria-label="Làm mới stash" title="Làm mới stash" disabled={disabled} onClick={() => void refresh()}><Icon name="refresh" size={13} /></button>
+      <button type="button" className="git-stash-refresh" aria-label={tr('Làm mới stash')} title={tr('Làm mới stash')} disabled={disabled} onClick={() => void refresh()}><Icon name="refresh" size={13} /></button>
     </header>
     <form className="git-stash-form" onSubmit={(event) => {
       event.preventDefault()
       if (api) void mutate(() => api.stashSave(projectId, message.trim()), true)
     }}>
-      <input className="git-stash-message" aria-label="Thông điệp stash" placeholder="Thông điệp (tùy chọn)" value={message} disabled={disabled}
+      <input className="git-stash-message" aria-label={tr('Thông điệp stash')} placeholder={tr('Thông điệp (tùy chọn)')} value={message} disabled={disabled}
         onChange={(event) => setDraft({ projectId, message: event.target.value })} />
-      <button type="submit" className="git-stash-save" disabled={disabled}>Lưu stash</button>
+      <button type="submit" className="git-stash-save" disabled={disabled}>{tr('Lưu stash')}</button>
     </form>
     {error && <p className="git-stash-error" role="alert">{error}</p>}
     {currentList?.error && <p className="git-stash-error" role="alert">{currentList.error}</p>}
-    {busy ? <p className="git-stash-status" role="status">Đang xử lý stash…</p>
-      : loading ? <p className="git-stash-status" role="status">Đang tải stash…</p>
-      : currentList?.items?.length === 0 ? <p className="git-stash-empty">Không có stash.</p>
+    {busy ? <p className="git-stash-status" role="status">{tr('Đang xử lý stash…')}</p>
+      : loading ? <p className="git-stash-status" role="status">{tr('Đang tải stash…')}</p>
+      : currentList?.items?.length === 0 ? <p className="git-stash-empty">{tr('Không có stash.')}</p>
         : <ul className="git-stash-list">{currentList?.items?.map((stash) => <li className="git-stash-row" key={stash.ref}>
           <span className="git-stash-ref">{stash.ref}</span><span className="git-stash-description">{stash.message}</span>
           <fieldset className="git-stash-actions" disabled={actionDisabled}>
-            <PopoverMenu label={`Thao tác ${stash.ref}`} buttonClass="git-stash-action-trigger" trigger={<Icon name="more" size={14} />} items={[
-              { label: 'Áp dụng', icon: 'download', onSelect: () => { if (api) void mutate(() => api.stashAction(projectId, stash.ref, 'apply')) } },
-              { label: 'Áp dụng và xóa', icon: 'save', onSelect: () => { if (api) void mutate(() => api.stashAction(projectId, stash.ref, 'pop')) } },
-              { label: 'Xóa stash', icon: 'trash', onSelect: () => {
-                if (api && !busyRef.current && currentProject.current === projectId && window.confirm(`Xóa ${stash.ref} “${stash.message}”? Không thể hoàn tác.`)) {
+            <PopoverMenu label={tr('Thao tác {ref}', { ref: stash.ref })} buttonClass="git-stash-action-trigger" trigger={<Icon name="more" size={14} />} items={[
+              { label: tr('Áp dụng'), icon: 'download', onSelect: () => { if (api) void mutate(() => api.stashAction(projectId, stash.ref, 'apply')) } },
+              { label: tr('Áp dụng và xóa'), icon: 'save', onSelect: () => { if (api) void mutate(() => api.stashAction(projectId, stash.ref, 'pop')) } },
+              { label: tr('Xóa stash'), icon: 'trash', onSelect: () => {
+                if (api && !busyRef.current && currentProject.current === projectId && window.confirm(tr('Xóa {ref} “{message}”? Không thể hoàn tác.', { ref: stash.ref, message: stash.message }))) {
                   void mutate(() => api.stashAction(projectId, stash.ref, 'drop'))
                 }
               } }

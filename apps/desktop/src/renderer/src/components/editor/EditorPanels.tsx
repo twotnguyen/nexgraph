@@ -4,6 +4,7 @@ import type { ActiveEditor } from '../../state/activeEditor'
 import { useDiagnostics } from '../../state/diagnostics'
 import { errorText } from '../../state/errorText'
 import { fuzzyMatch } from '../../state/fuzzy'
+import { tr } from '../../strings'
 import './editor-tools.css'
 
 export type OpenEditorLocation = (file: string, line: number, column?: number) => void
@@ -50,9 +51,9 @@ function SymbolList({ symbols, query, onPick }: { symbols: LspDocumentSymbol[]; 
 export function OutlinePanel({ editor, symbols, error }: { editor: ActiveEditor | null; symbols: LspDocumentSymbol[]; error: string | null }) {
   const [query, setQuery] = useState('')
   return <div className="editor-outline">
-    <input type="search" aria-label="Tìm ký hiệu" placeholder="Tìm ký hiệu…" value={query} onChange={(event) => setQuery(event.target.value)} />
-    {!editor ? <p className="muted">Mở một tệp để xem ký hiệu.</p> : error ? <p role="alert">{error}</p> :
-      symbols.length === 0 ? <p className="muted">Không có ký hiệu trong tệp.</p> :
+    <input type="search" aria-label={tr('Tìm ký hiệu')} placeholder={tr('Tìm ký hiệu…')} value={query} onChange={(event) => setQuery(event.target.value)} />
+    {!editor ? <p className="muted">{tr('Mở một tệp để xem ký hiệu.')}</p> : error ? <p role="alert">{error}</p> :
+      symbols.length === 0 ? <p className="muted">{tr('Không có ký hiệu trong tệp.')}</p> :
       <SymbolList symbols={symbols} query={query} onPick={(symbol) => {
         const { line, character } = symbol.selectionRange.start
         if (editor.handle.revealPosition) editor.handle.revealPosition(line + 1, character + 1)
@@ -65,11 +66,11 @@ export function DiagnosticsPanel({ projectId, onOpen }: { projectId: string; onO
   const diagnostics = useDiagnostics(projectId)
   const files = Object.entries(diagnostics).filter(([, items]) => items.length > 0).sort(([a], [b]) => a.localeCompare(b))
   return <div className="editor-diagnostics">
-    {files.length === 0 ? <p className="muted">Không có lỗi trong dự án</p> : files.map(([file, items]) => <section key={file}>
+    {files.length === 0 ? <p className="muted">{tr('Không có lỗi trong dự án')}</p> : files.map(([file, items]) => <section key={file}>
       <h3 title={file}>{file} <small>({items.length})</small></h3>
       <ul>{items.map((item, index) => {
         const { line, character } = item.range.start
-        const severity = item.severity === 2 ? 'Cảnh báo' : item.severity === 3 ? 'Thông tin' : item.severity === 4 ? 'Gợi ý' : 'Lỗi'
+        const severity = item.severity === 2 ? tr('Cảnh báo') : item.severity === 3 ? tr('Thông tin') : item.severity === 4 ? tr('Gợi ý') : tr('Lỗi')
         return <li key={`${line}:${character}:${index}`}><button type="button" onClick={() => onOpen(file, line + 1, character + 1)}>
           <span>{severity}: {item.message}</span><small>{line + 1}:{character + 1}{item.source ? ` · ${item.source}` : ''}</small>
         </button></li>

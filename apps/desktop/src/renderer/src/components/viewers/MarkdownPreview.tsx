@@ -7,6 +7,7 @@ import { errorText } from '../../state/errorText'
 import { isFenceClosed, resolveReference, taskEdit } from './markdown'
 import { MermaidBlock } from './MermaidBlock'
 import { observeBuffer, type PreviewBuffer } from './modelBuffer'
+import { tr } from '../../strings'
 import './markdown-preview.css'
 
 type Position = { line: number; column: number }
@@ -21,19 +22,19 @@ function LocalImage({ projectId, sourceFile, src, alt }: { projectId: string; so
     setResult({})
     if (!path) return
     const mime = imageTypes[path.split('.').pop()?.toLowerCase() ?? '']
-    if (!mime) { setResult({ error: 'Định dạng ảnh không được hỗ trợ' }); return }
+    if (!mime) { setResult({ error: tr('Định dạng ảnh không được hỗ trợ') }); return }
     let live = true
     const read = window.nexgraph.fs.readBinary
-    if (!read) { setResult({ error: 'Không đọc được ảnh' }); return }
+    if (!read) { setResult({ error: tr('Không đọc được ảnh') }); return }
     void read(projectId, path).then(({ data }) => {
       if (live) setResult({ url: `data:image/${mime};base64,${data}` })
     }).catch((error: unknown) => { if (live) setResult({ error: errorText(error) }) })
     return () => { live = false }
   }, [path, projectId])
   if (target?.kind === 'external') return <a href={target.url} target="_blank" rel="noopener noreferrer">{alt || target.url}</a>
-  if (!path) return <span className="md-image-note">{alt || 'Ảnh không hợp lệ'}</span>
-  if (result.error) return <span className="md-image-note" title={result.error}>{alt || 'Không tải được ảnh'}</span>
-  return result.url ? <img src={result.url} alt={alt ?? ''} /> : <span className="md-image-note">Đang tải ảnh…</span>
+  if (!path) return <span className="md-image-note">{alt || tr('Ảnh không hợp lệ')}</span>
+  if (result.error) return <span className="md-image-note" title={result.error}>{alt || tr('Không tải được ảnh')}</span>
+  return result.url ? <img src={result.url} alt={alt ?? ''} /> : <span className="md-image-note">{tr('Đang tải ảnh…')}</span>
 }
 
 type TextNode = { type: string; value?: string; children?: TextNode[]; properties?: Record<string, unknown>; position?: { start: { offset?: number }; end: { offset?: number } } }
@@ -42,7 +43,7 @@ function nodeText(node: TextNode): string {
 }
 
 function CodeBlock({ children, node, source }: { children: ReactNode; node?: TextNode; source: string }) {
-  const [copyState, setCopyState] = useState('Sao chép')
+  const [copyState, setCopyState] = useState<'copied' | 'failed' | null>(null)
   const code = node?.children?.[0]
   const text = code ? nodeText(code) : ''
   const classes = code?.properties?.className
@@ -52,16 +53,16 @@ function CodeBlock({ children, node, source }: { children: ReactNode; node?: Tex
     && start?.offset !== undefined && end?.offset !== undefined && isFenceClosed(source, start.offset, end.offset)
   return <div className="md-code-block">
     <button type="button" onClick={() => {
-      if (!navigator.clipboard) return setCopyState('Không sao chép được')
-      void navigator.clipboard.writeText(text).then(() => setCopyState('Đã sao chép')).catch(() => setCopyState('Không sao chép được'))
-    }}>{copyState}</button>
+      if (!navigator.clipboard) return setCopyState('failed')
+      void navigator.clipboard.writeText(text).then(() => setCopyState('copied')).catch(() => setCopyState('failed'))
+    }}>{copyState === 'copied' ? tr('Đã sao chép') : copyState === 'failed' ? tr('Không sao chép được') : tr('Sao chép')}</button>
     {mermaid ? <MermaidBlock code={text}>{children}</MermaidBlock> : <pre>{children}</pre>}
   </div>
 }
 
 function Checkbox({ checked, readOnly, onToggle }: { checked: boolean; readOnly: boolean; onToggle: (position: Position, checked: boolean) => void }) {
   const position = useContext(ItemPosition)
-  return <input type="checkbox" checked={checked} disabled={!position || readOnly} aria-label={checked ? 'Bỏ đánh dấu hoàn thành' : 'Đánh dấu hoàn thành'}
+  return <input type="checkbox" checked={checked} disabled={!position || readOnly} aria-label={checked ? tr('Bỏ đánh dấu hoàn thành') : tr('Đánh dấu hoàn thành')}
     onChange={(event) => { if (position) onToggle(position, event.currentTarget.checked) }} />
 }
 
@@ -128,10 +129,10 @@ export function MarkdownPreview({ projectId, file, active = true, side = false, 
   }), [file, projectId, readOnly])
   return <div ref={host} tabIndex={-1} data-mirror-file={file} className={`code-viewer editor-tab markdown-preview${side ? ' editor-side' : ''}`} style={active ? undefined : { display: 'none' }}>
     <header className="code-head">
-      <span className="editor-path mono" title={file}><FileTypeIcon name={file} size={14} /> Xem trước {file}</span>
-      <span className="ws-editor-actions"><button type="button" className="ws-icon-button" aria-label="Đóng xem trước" title="Đóng xem trước" onClick={onClose}><Icon name="close" size={15} /></button></span>
+      <span className="editor-path mono" title={file}><FileTypeIcon name={file} size={14} /> {tr('Xem trước {name}', { name: file })}</span>
+      <span className="ws-editor-actions"><button type="button" className="ws-icon-button" aria-label={tr('Đóng xem trước')} title={tr('Đóng xem trước')} onClick={onClose}><Icon name="close" size={15} /></button></span>
     </header>
-    <div className="md-preview-scroll">{loadError ? <p role="alert" className="error">{loadError}</p> : text === null ? <p className="muted">Đang mở nội dung…</p> :
+    <div className="md-preview-scroll">{loadError ? <p role="alert" className="error">{loadError}</p> : text === null ? <p className="muted">{tr('Đang mở nội dung…')}</p> :
       <article className="md-document"><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml urlTransform={(url) => url} components={components}>{text}</ReactMarkdown></article>}
     </div>
   </div>

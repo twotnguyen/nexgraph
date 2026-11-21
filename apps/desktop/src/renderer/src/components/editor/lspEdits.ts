@@ -1,4 +1,5 @@
 import type { FileContent, FileRevision, LspDiagnostic, LspTextEdit, LspWorkspaceEdit, WriteOpts } from '@shared/api'
+import { tr } from '../../strings'
 
 /** Phạm vi LSP tính từ 0; marker và editor Monaco tính từ 1. */
 export function diagnosticMarker(diagnostic: LspDiagnostic) {
@@ -21,7 +22,7 @@ export function applyTextEdits(text: string, edits: readonly LspTextEdit[]): str
   for (const line of lines) { starts.push(at); at += line.length + 1 }
   const offset = ({ line, character }: LspTextEdit['range']['start']) => {
     if (!Number.isInteger(line) || !Number.isInteger(character) || line < 0 || line >= lines.length || character < 0 || character > lines[line].length) {
-      throw new Error('Phạm vi chỉnh sửa của language server không hợp lệ')
+      throw new Error(tr('Phạm vi chỉnh sửa của language server không hợp lệ'))
     }
     return starts[line] + character
   }
@@ -29,7 +30,7 @@ export function applyTextEdits(text: string, edits: readonly LspTextEdit[]): str
   changes.sort((a, b) => b.start - a.start || b.index - a.index)
   let previous = text.length
   for (const edit of changes) {
-    if (typeof edit.text !== 'string' || edit.end < edit.start || edit.end > previous) throw new Error('Các vùng chỉnh sửa của language server chồng lấn hoặc không hợp lệ')
+    if (typeof edit.text !== 'string' || edit.end < edit.start || edit.end > previous) throw new Error(tr('Các vùng chỉnh sửa của language server chồng lấn hoặc không hợp lệ'))
     text = text.slice(0, edit.start) + edit.text + text.slice(edit.end)
     previous = edit.start
   }
@@ -54,19 +55,19 @@ export async function applyProjectEdits<Model>(edits: LspWorkspaceEdit, adapter:
   for (const [file, changes] of Object.entries(edits)) {
     const model = adapter.findModel(file)
     if (model) {
-      if (adapter.isReadOnly(model)) throw new Error(`Tệp chỉ đọc: ${file}`)
+      if (adapter.isReadOnly(model)) throw new Error(tr('Tệp chỉ đọc: {file}', { file }))
       applyTextEdits(adapter.text(model), changes)
       open.push({ file, model, version: adapter.version(model), edits: changes })
     } else {
       const before = await adapter.read(file)
-      if (before.readOnly) throw new Error(`Tệp chỉ đọc: ${file}`)
+      if (before.readOnly) throw new Error(tr('Tệp chỉ đọc: {file}', { file }))
       closed.push({ file, before, text: applyTextEdits(before.text, changes) })
     }
   }
   const checkOpen = () => {
     if (open.some(({ file, model, version }) => adapter.findModel(file) !== model || adapter.disposed(model) || adapter.version(model) !== version) ||
         closed.some(({ file }) => adapter.findModel(file) !== null)) {
-      throw new Error('Tệp đang mở đã thay đổi; hãy thử lại')
+      throw new Error(tr('Tệp đang mở đã thay đổi; hãy thử lại'))
     }
   }
   const written: { file: string; before: FileContent; version: string }[] = []
@@ -83,7 +84,7 @@ export async function applyProjectEdits<Model>(edits: LspWorkspaceEdit, adapter:
       try { await adapter.write(file, before.text, { eol: before.eol, bom: before.bom, expectedVersion: version }) }
       catch { rollbackFailed = true }
     }
-    if (rollbackFailed) throw new Error('Không hoàn tác được mọi tệp đã ghi; hãy kiểm tra thay đổi trên đĩa')
+    if (rollbackFailed) throw new Error(tr('Không hoàn tác được mọi tệp đã ghi; hãy kiểm tra thay đổi trên đĩa'))
     throw error
   }
   for (const { model, edits: changes } of open) adapter.apply(model, changes)

@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import type { EngineStatus } from '@shared/engine-status'
 import { useStatusBar } from '../state/layoutPrefs'
+import { tr } from '../strings'
 
 const RIGHT_SLOT = 'status-bar-right'
 
@@ -15,13 +16,13 @@ export function EngineStatusBar({ status, onRestart }: Props) {
   const shown = useStatusBar()
   // Ẩn bằng thuộc tính hidden (vẫn dựng sẵn để StatusBarItems tìm được chỗ gắn); engine lỗi thì luôn hiện để còn nút Khởi động lại.
   return (
-    <footer className="status-bar" aria-label="Thanh trạng thái" data-state={status.state} hidden={!shown && status.state !== 'error'}>
+    <footer className="status-bar" aria-label={tr('Thanh trạng thái')} data-state={status.state} hidden={!shown && status.state !== 'error'}>
       <span className="status-item status-engine" role="status">
-        {status.state === 'starting' && 'Engine: đang khởi động…'}
-        {status.state === 'ready' && `Engine: sẵn sàng (v${status.engineVersion})`}
-        {status.state === 'error' && `Engine: lỗi — ${status.message}`}
+        {status.state === 'starting' && tr('Engine: đang khởi động…')}
+        {status.state === 'ready' && tr('Engine: sẵn sàng (v{version})', { version: status.engineVersion })}
+        {status.state === 'error' && tr('Engine: lỗi — {message}', { message: status.message })}
       </span>
-      {status.state === 'error' && <button type="button" className="status-item" onClick={onRestart}>Khởi động lại</button>}
+      {status.state === 'error' && <button type="button" className="status-item" onClick={onRestart}>{tr('Khởi động lại')}</button>}
       <div id={RIGHT_SLOT} className="status-right" />
     </footer>
   )

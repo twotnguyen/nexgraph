@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { tr } from '../../strings'
 import { createDiffEditor, languageFor } from '../editor/monaco'
 import type { AgentInspection } from './useAgentWorkbench'
 
@@ -13,8 +14,8 @@ export function TaskInspector({ inspection }: { inspection: AgentInspection }) {
   }, [inspection, diff])
   return <section className="agent-inspector" aria-label={inspection.title}>
     <header><strong>{inspection.title}</strong><span role="status">{copied}</span><button type="button" onClick={() => {
-      void navigator.clipboard.writeText(diff ? inspection.after! : inspection.text ?? '').then(() => setCopied('Đã sao chép')).catch(() => setCopied('Không truy cập được clipboard'))
-    }}>Sao chép</button></header>
+      void navigator.clipboard.writeText(diff ? inspection.after! : inspection.text ?? '').then(() => setCopied(tr('Đã sao chép'))).catch(() => setCopied(tr('Không truy cập được clipboard')))
+    }}>{tr('Sao chép')}</button></header>
     {diff ? <div ref={element} className="agent-inspector-diff" /> : <pre tabIndex={0}>{inspection.text}</pre>}
   </section>
 }

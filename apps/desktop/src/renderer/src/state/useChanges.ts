@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Changes } from '@shared/graph-types'
+import { tr } from '../strings'
+import { errorText } from './errorText'
 
 const RELOAD_MS = 300
 
@@ -30,7 +32,7 @@ export function useChanges(projectId: string): {
           setError(null)
         })
         .catch((e: { message?: string }) => {
-          if (mine === latest.current) setError(e?.message ?? 'Không đọc được thay đổi')
+          if (mine === latest.current) setError(errorText(e?.message ?? tr('Không đọc được thay đổi')))
         })
         .finally(() => {
           if (mine === latest.current) setLoading(false)

@@ -1,15 +1,17 @@
 import { useSyncExternalStore } from 'react'
+import { tr } from '../strings'
+import { useLocale } from './locale'
 
 export type Theme = 'light' | 'dark'
 const storageKey = 'nexgraph.theme'
 
 /** Bảng màu từng theme nằm trong styles.css (`:root[data-theme='…']`); các theme ngoài light/dark lấy từ theme MIT của Wu. Extension thêm theme bằng `addThemes`. */
 export const THEMES: { id: string; name: string; appearance: Theme }[] = [
-  { id: 'light', name: 'NexGraph Sáng', appearance: 'light' },
+  { id: 'light', get name() { return tr('NexGraph Sáng') }, appearance: 'light' },
   { id: 'wu-light', name: 'Wu Light', appearance: 'light' },
   { id: 'one-light', name: 'One Light', appearance: 'light' },
   { id: 'catppuccin-latte', name: 'Catppuccin Latte', appearance: 'light' },
-  { id: 'dark', name: 'NexGraph Tối', appearance: 'dark' },
+  { id: 'dark', get name() { return tr('NexGraph Tối') }, appearance: 'dark' },
   { id: 'wu-dark', name: 'Wu Dark', appearance: 'dark' },
   { id: 'one-dark', name: 'One Dark', appearance: 'dark' },
   { id: 'catppuccin-frappe', name: 'Catppuccin Frappé', appearance: 'dark' },
@@ -65,10 +67,12 @@ export function observeTheme(onChange: () => void): () => void {
 }
 
 export function useTheme(): Theme {
+  useLocale()
   return useSyncExternalStore(observeTheme, currentTheme)
 }
 
 export function useThemeId(): string {
+  useLocale()
   return useSyncExternalStore(observeTheme, currentThemeId)
 }
 
@@ -92,4 +96,8 @@ export function addThemes(themes: readonly { id: string; name: string; appearanc
 }
 let themesVersion = 0
 /** Số lần danh sách theme đổi: component đọc THEMES dùng để vẽ lại khi extension thêm theme. */
-export const useThemesVersion = (): number => useSyncExternalStore((l) => { window.addEventListener(THEMES_CHANGED, l); return () => window.removeEventListener(THEMES_CHANGED, l) }, () => themesVersion)
+export const useThemesVersion = (): number => {
+  const locale = useLocale()
+  const version = useSyncExternalStore((l) => { window.addEventListener(THEMES_CHANGED, l); return () => window.removeEventListener(THEMES_CHANGED, l) }, () => themesVersion)
+  return version * 2 + (locale === 'en' ? 1 : 0)
+}

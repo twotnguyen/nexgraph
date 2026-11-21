@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { tr } from '../../strings'
 import { Icon } from './icons'
 
 export function Toast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -11,7 +12,7 @@ export function Toast({ message, onDismiss }: { message: string; onDismiss: () =
     <div className="toast">
       <Icon name="check" size={18} />
       <span role="status">{message}</span>
-      <button type="button" aria-label="Đóng thông báo" className="icon-button" onClick={onDismiss}><Icon name="close" size={15} /></button>
+      <button type="button" aria-label={tr('Đóng thông báo')} className="icon-button" onClick={onDismiss}><Icon name="close" size={15} /></button>
     </div>
   )
 }

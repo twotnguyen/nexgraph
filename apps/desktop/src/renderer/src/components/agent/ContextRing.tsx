@@ -1,4 +1,6 @@
 import type { AgentContextUsage } from '@shared/agent-types'
+import { formatNumber } from '../../state/locale'
+import { tr } from '../../strings'
 
 // Ngưỡng cảnh báo như vòng context của Wu: từ 75% vàng, từ 90% đỏ.
 const WARNING = 0.75
@@ -13,11 +15,10 @@ export function contextFraction(context: AgentContextUsage | null | undefined): 
 
 export const contextLevel = (fraction: number): ContextLevel => fraction >= DANGER ? 'danger' : fraction >= WARNING ? 'warning' : 'normal'
 
-const grouped = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
 /** Tooltip: `x / y token (z%)`. */
 export function contextTooltip(context: AgentContextUsage): string {
   const fraction = contextFraction(context) ?? 0
-  return `${grouped.format(context.tokens)} / ${grouped.format(context.window)} token (${Math.round(fraction * 100)}%)`
+  return tr('{used} / {total} token ({percent}%)', { used: formatNumber(context.tokens), total: formatNumber(context.window), percent: Math.round(fraction * 100) })
 }
 
 const RADIUS = 6
@@ -28,7 +29,7 @@ export function ContextRing({ context }: { context: AgentContextUsage | null | u
   const fraction = contextFraction(context)
   if (!context || fraction === null) return null
   const tip = contextTooltip(context)
-  return <span className="agent-context" data-level={contextLevel(fraction)} role="img" aria-label={`Ngữ cảnh đã dùng: ${tip}`} title={tip}>
+  return <span className="agent-context" data-level={contextLevel(fraction)} role="img" aria-label={tr('Ngữ cảnh đã dùng: {tip}', { tip })} title={tip}>
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
       <circle className="agent-context-track" cx="8" cy="8" r={RADIUS} />
       <circle className="agent-context-arc" cx="8" cy="8" r={RADIUS} strokeDasharray={CIRCUMFERENCE} strokeDashoffset={CIRCUMFERENCE * (1 - Math.min(1, fraction))} transform="rotate(-90 8 8)" />

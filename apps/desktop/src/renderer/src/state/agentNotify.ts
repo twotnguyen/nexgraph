@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { tr } from '../strings'
 
 /** Báo khi trợ lý xong lúc cửa sổ không được chọn: thông báo hệ thống (mặc định bật) và tiếng chuông (mặc định tắt). */
 export type NotifyPrefs = { notify: boolean; sound: boolean }
@@ -41,9 +42,9 @@ export const alertsFor = (settings: NotifyPrefs, focused: boolean): NotifyPrefs 
   focused ? { notify: false, sound: false } : settings
 
 const BODY: Record<AgentAlert, string> = {
-  done: 'Trợ lý đã trả lời xong',
-  error: 'Trợ lý gặp lỗi',
-  approval: 'Trợ lý đang chờ bạn duyệt thay đổi'
+  get done() { return tr('Trợ lý đã trả lời xong') },
+  get error() { return tr('Trợ lý gặp lỗi') },
+  get approval() { return tr('Trợ lý đang chờ bạn duyệt thay đổi') }
 }
 // Cao dần = xong, lặp một nốt = cần bạn, thấp dần = lỗi.
 const TONES: Record<AgentAlert, number[]> = { done: [660, 880], approval: [740, 740], error: [330, 247] }

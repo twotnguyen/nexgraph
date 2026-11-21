@@ -8,7 +8,8 @@ import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { McpCard } from '../components/overview/McpCard'
 import { SourcesPanel } from '../components/overview/SourcesPanel'
 import { SemanticDialog } from '../components/overview/SemanticDialog'
-import { vi } from '../strings'
+import { formatDate, formatNumber } from '../state/locale'
+import { vi, tr } from '../strings'
 import './welcome.css'
 import './overview.css'
 
@@ -23,7 +24,6 @@ interface Props {
 }
 
 const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0)
-const num = (n: number) => n.toLocaleString('vi-VN')
 
 function Card({ title, desc, status, onClick, disabled, icon, tone = 'blue' }: { title: string; desc: string; status?: ReactNode; onClick?: () => void; disabled?: boolean; icon: IconName; tone?: Tone }) {
   return (
@@ -92,7 +92,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
   }
 
   const indexedAt = stats?.indexed_at ?? project.last_indexed_at
-  const when = indexedAt == null ? null : new Date(indexedAt * 1000).toLocaleString('vi-VN')
+  const when = indexedAt == null ? null : formatDate(indexedAt * 1000)
   const nodeCount = stats ? sum(stats.nodes_by_kind) : 0
   const noGraph = stats?.files === 0 && nodeCount === 0
   return (
@@ -105,22 +105,22 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       </header>
       <section className="workbench-panel overview-metrics" aria-label={vi.overview.statusLabel} aria-busy={!stats && !statsError}>
         <header className="panel-title">
-          <h2>Tình trạng đồ thị</h2>
+          <h2>{tr('Tình trạng đồ thị')}</h2>
           {when && <span className="muted">{vi.overview.lastIndexed(when)}</span>}
         </header>
         {stats ? (
-          <div className="graph-metrics" aria-label={vi.overview.stats(num(stats.files), num(nodeCount), num(sum(stats.edges_by_type)))}>
-            <div><strong>{num(stats.files)}</strong><span>Tệp đã lập chỉ mục</span></div>
-            <div><strong>{num(nodeCount)}</strong><span>Nút</span></div>
-            <div><strong>{num(sum(stats.edges_by_type))}</strong><span>Quan hệ</span></div>
+          <div className="graph-metrics" aria-label={vi.overview.stats(formatNumber(stats.files), formatNumber(nodeCount), formatNumber(sum(stats.edges_by_type)))}>
+            <div><strong>{formatNumber(stats.files)}</strong><span>{tr('Tệp đã lập chỉ mục')}</span></div>
+            <div><strong>{formatNumber(nodeCount)}</strong><span>{tr('Nút')}</span></div>
+            <div><strong>{formatNumber(sum(stats.edges_by_type))}</strong><span>{tr('Quan hệ')}</span></div>
           </div>
         ) : !statsError && <div className="panel-empty"><p className="muted">{vi.overview.loading}</p><div className="skeleton-line" /></div>}
         {statsError && <div className="inline-message error" role="alert">
-          {statsError} <button type="button" onClick={() => setRefresh((value) => value + 1)}>Tải lại số liệu</button>
+          {statsError} <button type="button" onClick={() => setRefresh((value) => value + 1)}>{tr('Tải lại số liệu')}</button>
         </div>}
-        {noGraph ? <div className="inline-message" role="status">Chưa có dữ liệu đồ thị. Chọn <strong>{vi.overview.reindex}</strong> để đọc lại thư mục này.</div>
+        {noGraph ? <div className="inline-message" role="status">{tr('Chưa có dữ liệu đồ thị. Chọn')} <strong>{vi.overview.reindex}</strong> {tr('để đọc lại thư mục này.')}</div>
           : stats?.stale ? <div className="inline-message warning" role="status"><strong>{vi.overview.stale}</strong><span>{vi.overview.staleHint}</span></div>
-          : stats?.changed_files === null && <div className="inline-message">Chưa xác minh được đồ thị có khớp với mã nguồn hiện tại.</div>}
+          : stats?.changed_files === null && <div className="inline-message">{tr('Chưa xác minh được đồ thị có khớp với mã nguồn hiện tại.')}</div>}
       </section>
       {stats?.generic_languages?.length ? <p className="muted" role="note">{vi.overview.genericLanguages(stats.generic_languages.join(', '))}</p> : null}
 

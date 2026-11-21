@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../common/icons'
 import { MAX_NAME, deletePrompt, savePrompt, suggestName, useSavedPrompts } from '../../state/savedPrompts'
+import { tr } from '../../strings'
 
 type Props = {
   open: boolean
@@ -43,20 +44,20 @@ export function SavedPrompts({ open, onOpenChange, composerText, onInsert }: Pro
     if (!failure) setName(null)
   }
   return <div className="agent-saved-wrap" ref={root}>
-    <button type="button" className="agent-round agent-saved-toggle" aria-label="Tin nhắn đã lưu" title="Tin nhắn đã lưu" aria-haspopup="dialog" aria-expanded={open}
+    <button type="button" className="agent-round agent-saved-toggle" aria-label={tr('Tin nhắn đã lưu')} title={tr('Tin nhắn đã lưu')} aria-haspopup="dialog" aria-expanded={open}
       onClick={() => onOpenChange(!open)}><Icon name="bookmark" size={15} /></button>
-    {open && <div className="agent-saved" role="dialog" aria-label="Tin nhắn đã lưu">
+    {open && <div className="agent-saved" role="dialog" aria-label={tr('Tin nhắn đã lưu')}>
       {composerText.trim() ? <form className="agent-saved-form" onSubmit={(event) => { event.preventDefault(); submit() }}>
-        <input value={name ?? suggestName(composerText)} maxLength={MAX_NAME} aria-label="Tên tin nhắn" placeholder="Tên tin nhắn" onChange={(event) => setName(event.target.value)} />
-        <button type="submit">Lưu ô soạn</button>
-      </form> : <p className="agent-saved-hint">Soạn tin trong ô chat rồi mở lại đây để lưu.</p>}
-      {error && <p role="alert" className="agent-saved-error">{error}</p>}
-      {prompts.length === 0 ? <div className="agent-completion-empty">Chưa có tin nhắn đã lưu.</div>
+        <input value={name ?? suggestName(composerText)} maxLength={MAX_NAME} aria-label={tr('Tên tin nhắn')} placeholder={tr('Tên tin nhắn')} onChange={(event) => setName(event.target.value)} />
+        <button type="submit">{tr('Lưu ô soạn')}</button>
+      </form> : <p className="agent-saved-hint">{tr('Soạn tin trong ô chat rồi mở lại đây để lưu.')}</p>}
+      {error && <p role="alert" className="agent-saved-error">{tr(error)}</p>}
+      {prompts.length === 0 ? <div className="agent-completion-empty">{tr('Chưa có tin nhắn đã lưu.')}</div>
         : <ul className="agent-saved-list">{prompts.map((prompt) => <li key={prompt.id} className="agent-saved-row">
           <button type="button" className="agent-saved-pick" title={prompt.text} onClick={() => { onInsert(prompt.text); onOpenChange(false) }}>
             <b>{prompt.name}</b><span>{prompt.text.replace(/\s+/g, ' ').trim()}</span>
           </button>
-          <button type="button" className="agent-icon-button" aria-label={`Xóa tin đã lưu ${prompt.name}`} title="Xóa" onClick={() => deletePrompt(prompt.id)}><Icon name="trash" size={13} /></button>
+          <button type="button" className="agent-icon-button" aria-label={tr('Xóa tin đã lưu {name}', { name: prompt.name })} title={tr('Xóa')} onClick={() => deletePrompt(prompt.id)}><Icon name="trash" size={13} /></button>
         </li>)}</ul>}
     </div>}
   </div>

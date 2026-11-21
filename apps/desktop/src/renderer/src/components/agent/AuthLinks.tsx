@@ -1,3 +1,4 @@
+import { tr } from '../../strings'
 import type { AuthEventView } from '@shared/agent-types'
 
 function safeUrl(raw: string): string | null {
@@ -14,6 +15,6 @@ export function AuthLinks({ event }: { event: AuthEventView | null }) {
       : event?.type === 'info' ? event.links ?? [] : []
   return <>{links.map((link, index) => {
     const url = safeUrl(link.url)
-    return url ? <p key={index}><a href={url} target="_blank" rel="noopener noreferrer">Mở lại trang xác nhận</a></p> : null
+    return url ? <p key={index}><a href={url} target="_blank" rel="noopener noreferrer">{tr('Mở lại trang xác nhận')}</a></p> : null
   })}</>
 }

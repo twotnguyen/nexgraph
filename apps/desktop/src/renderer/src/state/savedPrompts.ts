@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react'
+import { tr } from '../strings'
+import { formatNumber } from './locale'
 
 /** Tin nhắn soạn sẵn cho trợ lý: lưu ở máy, dùng chung mọi dự án; chọn để chèn lại vào ô soạn. */
 export type SavedPrompt = { id: string; name: string; text: string; savedAt: number }
@@ -52,12 +54,12 @@ function commit(next: SavedPrompt[]): boolean {
 
 /** Lưu nội dung ô soạn. Trả về lý do khi không lưu được, `null` khi xong. Tên trống thì lấy tên gợi ý. */
 export function savePrompt(name: string, text: string): string | null {
-  if (!text.trim()) return 'Ô soạn đang trống.'
-  if (text.length > MAX_TEXT) return `Tin dài quá ${MAX_TEXT.toLocaleString('vi-VN')} ký tự nên không lưu được.`
+  if (!text.trim()) return tr('Ô soạn đang trống.')
+  if (text.length > MAX_TEXT) return tr('Tin dài quá {max} ký tự nên không lưu được.', { max: formatNumber(MAX_TEXT) })
   const title = name.trim().slice(0, MAX_NAME) || suggestName(text)
   const next = upsertPrompt(prompts, title, text, Date.now(), `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`)
-  if (next.length > MAX_SAVED) return `Chỉ lưu tối đa ${MAX_SAVED} tin. Hãy xóa bớt tin cũ.`
-  return commit(next) ? null : 'Không ghi được vào bộ nhớ của ứng dụng.'
+  if (next.length > MAX_SAVED) return tr('Chỉ lưu tối đa {max} tin. Hãy xóa bớt tin cũ.', { max: formatNumber(MAX_SAVED) })
+  return commit(next) ? null : tr('Không ghi được vào bộ nhớ của ứng dụng.')
 }
 
 export function deletePrompt(id: string): void {

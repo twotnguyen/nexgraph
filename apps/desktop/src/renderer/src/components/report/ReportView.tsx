@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { GraphReport } from '@shared/graph-types'
-import { vi } from '../../strings'
+import { vi, tr } from '../../strings'
+import { formatNumber } from '../../state/locale'
 import { kindStyle } from '../graph/kindStyle'
 import { CanvasState } from '../common/CanvasState'
 import { LessonsSection } from './LessonsSection'
@@ -12,8 +13,6 @@ interface Props {
   onAsk: (question: string) => void
   onExportMarkdown: () => void
 }
-
-const num = (n: number) => n.toLocaleString('vi-VN')
 
 export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExportMarkdown }: Props) {
   const [report, setReport] = useState<GraphReport | null>(null)
@@ -50,13 +49,13 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
         <table>
           <thead><tr><th>{vi.report.colName}</th><th>{vi.report.colKind}</th><th>{vi.report.colFile}</th><th>{vi.report.colDegree}</th></tr></thead>
           <tbody>
-            {report.god_nodes.length === 0 && <tr><td colSpan={4} className="muted">Chưa có nút phù hợp.</td></tr>}
+            {report.god_nodes.length === 0 && <tr><td colSpan={4} className="muted">{tr('Chưa có nút phù hợp.')}</td></tr>}
             {report.god_nodes.map(({ node, degree }) => (
               <tr key={node.id}>
                 <td><button type="button" className="link" onClick={() => onOpenNode(node.id)}>{node.label}</button></td>
                 <td><span className="kind" style={{ color: kindStyle(node.kind).color }}>{node.kind}</span></td>
                 <td className="mono muted">{node.file ? `${node.file}${node.line_start ? `:${node.line_start}` : ''}` : ''}</td>
-                <td>{num(degree)}</td>
+                <td>{formatNumber(degree)}</td>
               </tr>
             ))}
           </tbody>
@@ -68,9 +67,9 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
         <table>
           <thead><tr><th>{vi.report.colName}</th><th>{vi.report.colSize}</th><th>{vi.report.colCohesion}</th></tr></thead>
           <tbody>
-            {report.communities.length === 0 && <tr><td colSpan={3} className="muted">Chưa có dữ liệu nhóm.</td></tr>}
+            {report.communities.length === 0 && <tr><td colSpan={3} className="muted">{tr('Chưa có dữ liệu nhóm.')}</td></tr>}
             {report.communities.map((c) => (
-              <tr key={c.id}><td>{c.label}</td><td>{num(c.size)}</td><td>{c.cohesion.toFixed(2)}</td></tr>
+              <tr key={c.id}><td>{c.label}</td><td>{formatNumber(c.size)}</td><td>{c.cohesion.toFixed(2)}</td></tr>
             ))}
           </tbody>
         </table>
@@ -154,7 +153,7 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
       {report.benchmark && (
         <section>
           <h3>{vi.report.benchmark}</h3>
-          <p>{vi.report.benchmarkText(num(report.benchmark.corpus_tokens), num(report.benchmark.graph_tokens), num(Math.round(report.benchmark.reduction)))}</p>
+          <p>{vi.report.benchmarkText(formatNumber(report.benchmark.corpus_tokens), formatNumber(report.benchmark.graph_tokens), formatNumber(Math.round(report.benchmark.reduction)))}</p>
         </section>
       )}
     </div>

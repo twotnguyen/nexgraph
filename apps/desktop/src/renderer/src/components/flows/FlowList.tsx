@@ -1,5 +1,5 @@
 import type { FlowKind, FlowSummary } from '@shared/graph-types'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 
 interface Props {
   flows: FlowSummary[]
@@ -52,7 +52,7 @@ export function FlowList({
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
         />
-        <div className="kind-filter" role="group" aria-label="Loại luồng">
+        <div className="kind-filter" role="group" aria-label={tr('Loại luồng')}>
           {KINDS.map((k) => (
             <button
               key={`${k.key}:${k.label}`}
@@ -68,9 +68,9 @@ export function FlowList({
       </div>
 
       <div className="flow-items" aria-busy={loading}>
-        {loading && <p role="status" className="muted small flow-message">Đang tải danh sách luồng…</p>}
+        {loading && <p role="status" className="muted small flow-message">{tr('Đang tải danh sách luồng…')}</p>}
         {error && <div className="flow-message"><p role="alert" className="error">{error}</p>
-          {onRetry && <button type="button" onClick={onRetry}>Thử lại</button>}</div>}
+          {onRetry && <button type="button" onClick={onRetry}>{tr('Thử lại')}</button>}</div>}
         {flows.length === 0 && !loading && !error ? (
           <p className="muted small center" style={{ padding: 16 }}>
             {query || currentKind ? vi.flows.noMatch : vi.flows.empty}

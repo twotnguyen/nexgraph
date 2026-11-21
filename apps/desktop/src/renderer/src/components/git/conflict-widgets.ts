@@ -1,12 +1,13 @@
+import { tr } from '../../strings'
 import * as monaco from 'monaco-editor/editor/editor.api.js'
 import { parseConflictBlocks, resolveConflictBlock, type ConflictChoice } from './conflicts'
 import './conflicts.css'
 
 const attachments = new WeakMap<monaco.editor.IStandaloneCodeEditor, () => void>()
-const actions: [ConflictChoice, string][] = [
-  ['ours', 'Dùng bản của mình'],
-  ['theirs', 'Dùng bản kia'],
-  ['both', 'Dùng cả hai']
+const conflictActions = (): [ConflictChoice, string][] => [
+  ['ours', tr('Dùng bản của mình')],
+  ['theirs', tr('Dùng bản kia')],
+  ['both', tr('Dùng cả hai')]
 ]
 
 export function attachConflictWidgets(editor: monaco.editor.IStandaloneCodeEditor): () => void {
@@ -40,8 +41,8 @@ export function attachConflictWidgets(editor: monaco.editor.IStandaloneCodeEdito
         const group = document.createElement('div')
         group.className = 'git-conflict-actions'
         group.setAttribute('role', 'group')
-        group.setAttribute('aria-label', `Giải quyết xung đột ở dòng ${block.startLine}`)
-        for (const [choice, label] of actions) {
+        group.setAttribute('aria-label', tr('Giải quyết xung đột ở dòng {line}', { line: block.startLine }))
+        for (const [choice, label] of conflictActions()) {
           const button = document.createElement('button')
           button.type = 'button'
           button.textContent = label

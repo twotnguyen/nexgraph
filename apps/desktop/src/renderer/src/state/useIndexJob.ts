@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IndexOptions, Job, JobState } from '@shared/graph-types'
+import { tr } from '../strings'
+import { errorText } from './errorText'
 
 const POLL_INTERVAL_MS = 1_000
 const REQUEST_TIMEOUT_MS = 5_000
@@ -16,10 +18,6 @@ function canApply(previous: Job | undefined, next: Job): boolean {
     return next.files_done > previous.files_done || (next.files_done === previous.files_done && next.files_total >= previous.files_total)
   }
   return order[next.state] > order[previous.state]
-}
-
-function errorMessage(error: unknown): string {
-  return error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
 }
 
 function withTimeout<T>(request: Promise<T>, ms: number, message: string): Promise<T> {
@@ -70,9 +68,9 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
       if (!alive || !jobId || terminal(current) || polling) return
       polling = true
       try {
-        const next = await withTimeout(api.status(jobId), REQUEST_TIMEOUT_MS, 'Engine không trả trạng thái lập chỉ mục kịp thời')
+        const next = await withTimeout(api.status(jobId), REQUEST_TIMEOUT_MS, tr('Engine không trả trạng thái lập chỉ mục kịp thời'))
         if (!alive) return
-        if (next.job_id !== jobId || next.project_id !== projectId) throw new Error('Engine trả trạng thái công việc khác')
+        if (next.job_id !== jobId || next.project_id !== projectId) throw new Error(tr('Engine trả trạng thái công việc khác'))
         publish(next)
         failures = 0
       } catch (err) {
@@ -80,7 +78,7 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
         failures += 1
         if (failures >= MAX_STATUS_FAILURES || (err as { code?: string })?.code === 'unknown_job') {
           setJob(null)
-          setError(`Không đọc được tiến độ lập chỉ mục. ${errorMessage(err)}. Hãy quay lại và mở dự án.`)
+          setError(tr('Không đọc được tiến độ lập chỉ mục. {detail}. Hãy quay lại và mở dự án.', { detail: errorText(err) }))
           return
         }
       } finally {
@@ -109,7 +107,7 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
       startRequest.current = {
         key,
         result: withTimeout(Object.keys(opts).length ? api.start(projectId, opts) : api.start(projectId),
-          START_TIMEOUT_MS, 'Engine không phản hồi yêu cầu lập chỉ mục. Hãy quay lại và mở dự án.')
+          START_TIMEOUT_MS, tr('Engine không phản hồi yêu cầu lập chỉ mục. Hãy quay lại và mở dự án.'))
       }
     }
     void startRequest.current.result.then(({ jobId: id }) => {
@@ -120,13 +118,13 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
       if (pending) publish(pending)
       void poll()
     }).catch((err) => {
-      if (alive) setError(errorMessage(err))
+      if (alive) setError(errorText(err))
     })
 
     cancelCurrent.current = () => {
       if (!jobId || terminal(current)) return
-      void withTimeout(api.cancel(jobId), REQUEST_TIMEOUT_MS, 'Engine không phản hồi yêu cầu hủy').catch((err) => {
-        if (alive && !terminal(current)) setError(errorMessage(err))
+      void withTimeout(api.cancel(jobId), REQUEST_TIMEOUT_MS, tr('Engine không phản hồi yêu cầu hủy')).catch((err) => {
+        if (alive && !terminal(current)) setError(errorText(err))
       })
     }
     return () => {

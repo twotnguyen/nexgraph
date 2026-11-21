@@ -1,3 +1,4 @@
+import { tr } from '../../strings'
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { StatusBarItems } from '../EngineStatusBar'
 import { Icon } from '../common/icons'
@@ -64,14 +65,14 @@ export function ImageViewer({ projectId, file, active, onClose, onViewSource, so
 
     const load = async () => {
       try {
-        if (!extension) throw new Error('Định dạng ảnh không được hỗ trợ')
+        if (!extension) throw new Error(tr('Định dạng ảnh không được hỗ trợ'))
         if (extension === 'svg' && sourceText !== undefined) {
           const bytes = new TextEncoder().encode(sourceText)
           const text = new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes)
           if (alive) setSource({ url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`, size: bytes.byteLength, id })
         } else {
           const readBinary = window.nexgraph.fs.readBinary
-          if (!readBinary) throw new Error('Không thể đọc tệp ảnh trong môi trường này')
+          if (!readBinary) throw new Error(tr('Không thể đọc tệp ảnh trong môi trường này'))
           const result = await readBinary(projectId, file)
           if (alive) setSource({ url: `data:${MIME[extension]};base64,${result.data}`, size: result.size, id })
         }
@@ -179,24 +180,24 @@ export function ImageViewer({ projectId, file, active, onClose, onViewSource, so
       <header className="code-head image-viewer-head">
         <span className="image-viewer-path mono" title={file}>{file}</span>
         <div className="image-viewer-actions">
-          {extension === 'svg' && onViewSource && <button type="button" className="image-viewer-button" aria-label="Xem mã nguồn SVG" onClick={onViewSource}>Mã nguồn</button>}
-          <button type="button" className="image-viewer-button image-viewer-icon" aria-label="Đóng ảnh" title="Đóng ảnh" onClick={onClose}><Icon name="close" size={15} /></button>
+          {extension === 'svg' && onViewSource && <button type="button" className="image-viewer-button" aria-label={tr('Xem mã nguồn SVG')} onClick={onViewSource}>{tr('Mã nguồn')}</button>}
+          <button type="button" className="image-viewer-button image-viewer-icon" aria-label={tr('Đóng ảnh')} title={tr('Đóng ảnh')} onClick={onClose}><Icon name="close" size={15} /></button>
         </div>
       </header>
-      <div className="image-viewer-toolbar" role="toolbar" aria-label="Điều khiển ảnh">
-        <button type="button" className="image-viewer-button image-viewer-icon" aria-label="Thu nhỏ" title="Thu nhỏ" disabled={!ready || view.zoom <= 0.1} onClick={() => zoomBy(1 / 1.1)}><Icon name="minus" size={15} /></button>
-        <button type="button" className="image-viewer-button image-viewer-zoom" aria-label={`Tỷ lệ ${Math.round(view.zoom * 100)}%, đặt về 100%`} title="Kích thước thực" disabled={!ready} onClick={resetZoom}>{Math.round(view.zoom * 100)}%</button>
-        <button type="button" className="image-viewer-button image-viewer-icon" aria-label="Phóng to" title="Phóng to" disabled={!ready || view.zoom >= 20} onClick={() => zoomBy(1.1)}><Icon name="plus" size={15} /></button>
-        <button type="button" className="image-viewer-button" disabled={!ready} onClick={fitToView}>Vừa khung</button>
+      <div className="image-viewer-toolbar" role="toolbar" aria-label={tr('Điều khiển ảnh')}>
+        <button type="button" className="image-viewer-button image-viewer-icon" aria-label={tr('Thu nhỏ')} title={tr('Thu nhỏ')} disabled={!ready || view.zoom <= 0.1} onClick={() => zoomBy(1 / 1.1)}><Icon name="minus" size={15} /></button>
+        <button type="button" className="image-viewer-button image-viewer-zoom" aria-label={tr('Tỷ lệ {zoom}%, đặt về 100%', { zoom: Math.round(view.zoom * 100) })} title={tr('Kích thước thực')} disabled={!ready} onClick={resetZoom}>{Math.round(view.zoom * 100)}%</button>
+        <button type="button" className="image-viewer-button image-viewer-icon" aria-label={tr('Phóng to')} title={tr('Phóng to')} disabled={!ready || view.zoom >= 20} onClick={() => zoomBy(1.1)}><Icon name="plus" size={15} /></button>
+        <button type="button" className="image-viewer-button" disabled={!ready} onClick={fitToView}>{tr('Vừa khung')}</button>
         <span className="image-viewer-divider" />
-        <div className="image-viewer-actions" role="group" aria-label="Di chuyển ảnh">
-          <button type="button" className="image-viewer-button image-viewer-icon" aria-label="Di chuyển ảnh sang trái" title="Di chuyển ảnh sang trái" disabled={!ready} onClick={() => move(-32, 0)}><Icon name="back" size={15} /></button>
-          <button type="button" className="image-viewer-button image-viewer-icon image-viewer-up" aria-label="Di chuyển ảnh lên" title="Di chuyển ảnh lên" disabled={!ready} onClick={() => move(0, -32)}><Icon name="chevron" size={15} /></button>
-          <button type="button" className="image-viewer-button image-viewer-icon image-viewer-down" aria-label="Di chuyển ảnh xuống" title="Di chuyển ảnh xuống" disabled={!ready} onClick={() => move(0, 32)}><Icon name="chevron" size={15} /></button>
-          <button type="button" className="image-viewer-button image-viewer-icon" aria-label="Di chuyển ảnh sang phải" title="Di chuyển ảnh sang phải" disabled={!ready} onClick={() => move(32, 0)}><Icon name="chevron" size={15} /></button>
+        <div className="image-viewer-actions" role="group" aria-label={tr('Di chuyển ảnh')}>
+          <button type="button" className="image-viewer-button image-viewer-icon" aria-label={tr('Di chuyển ảnh sang trái')} title={tr('Di chuyển ảnh sang trái')} disabled={!ready} onClick={() => move(-32, 0)}><Icon name="back" size={15} /></button>
+          <button type="button" className="image-viewer-button image-viewer-icon image-viewer-up" aria-label={tr('Di chuyển ảnh lên')} title={tr('Di chuyển ảnh lên')} disabled={!ready} onClick={() => move(0, -32)}><Icon name="chevron" size={15} /></button>
+          <button type="button" className="image-viewer-button image-viewer-icon image-viewer-down" aria-label={tr('Di chuyển ảnh xuống')} title={tr('Di chuyển ảnh xuống')} disabled={!ready} onClick={() => move(0, 32)}><Icon name="chevron" size={15} /></button>
+          <button type="button" className="image-viewer-button image-viewer-icon" aria-label={tr('Di chuyển ảnh sang phải')} title={tr('Di chuyển ảnh sang phải')} disabled={!ready} onClick={() => move(32, 0)}><Icon name="chevron" size={15} /></button>
         </div>
       </div>
-      <div ref={stage} className="image-viewer-stage" data-dragging={dragging || undefined} role="region" aria-label="Khung xem ảnh" tabIndex={0}
+      <div ref={stage} className="image-viewer-stage" data-dragging={dragging || undefined} role="region" aria-label={tr('Khung xem ảnh')} tabIndex={0}
         onPointerDown={startDrag} onPointerMove={dragImage} onPointerUp={stopDrag} onPointerCancel={stopDrag} onLostPointerCapture={stopDrag}
         onKeyDown={(event) => {
           if (!ready) return
@@ -204,17 +205,17 @@ export function ImageViewer({ projectId, file, active, onClose, onViewSource, so
           const direction = delta[event.key]
           if (direction) { event.preventDefault(); move(...direction) }
         }}>
-        {!dimensions && !error && <p role="status" className="image-viewer-message">Đang mở ảnh…</p>}
+        {!dimensions && !error && <p role="status" className="image-viewer-message">{tr('Đang mở ảnh…')}</p>}
         {error && <p role="alert" className="image-viewer-message error">{error}</p>}
-        {source && !error && <img key={source.id} className="image-viewer-image" alt={`Ảnh ${file}`} src={source.url} draggable={false}
+        {source && !error && <img key={source.id} className="image-viewer-image" alt={tr('Ảnh {file}', { file })} src={source.url} draggable={false}
           style={{ opacity: dimensions ? 1 : 0, transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
           onLoad={(event) => {
             if (source.id !== request.current) return
             const { naturalWidth: width, naturalHeight: height } = event.currentTarget
             if (width && height) setDimensions({ width, height })
-            else setError(errorText(new Error('Không xác định được kích thước ảnh')))
+            else setError(errorText(new Error(tr('Không xác định được kích thước ảnh'))))
           }}
-          onError={() => { if (source.id === request.current) setError(errorText(new Error('Không thể giải mã ảnh'))) }} />}
+          onError={() => { if (source.id === request.current) setError(errorText(new Error(tr('Không thể giải mã ảnh')))) }} />}
       </div>
       {active && dimensions && source && !error && <StatusBarItems><span className="status-item">{dimensions.width} × {dimensions.height} • {formatSize(source.size)} • {format}</span></StatusBarItems>}
     </div>

@@ -4,13 +4,14 @@ import { errorText } from '../../state/errorText'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from '../layout/Picker'
+import { tr } from '../../strings'
 import './git-panel.css'
 
 type Choice = { kind: 'worktree'; worktree: GitWorktree } | { kind: 'create'; branch: string; existing: boolean }
 
 const label = (worktree: GitWorktree) => ({
   name: worktree.path.split(/[\\/]/).filter(Boolean).pop() ?? worktree.path,
-  detail: worktree.branch ?? 'HEAD tách rời'
+  detail: worktree.branch ?? tr('HEAD tách rời')
 })
 /** Chuỗi để khớp mờ; phần hiển thị tô đúng chỗ khớp theo cùng thứ tự "tên nhánh". */
 const textOf = (item: Choice): string => {
@@ -35,7 +36,7 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
   const mounted = useRef(true)
 
   const load = useCallback(async () => {
-    if (!api) return setLoadError('Git không dùng được ở chế độ này.')
+    if (!api) return setLoadError(tr('Git không dùng được ở chế độ này.'))
     try {
       const [worktrees, branches] = await Promise.all([api.worktrees(projectId), api.branches(projectId)])
       if (mounted.current) { setData({ worktrees, branches }); setLoadError(null) }
@@ -68,19 +69,19 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
   const pick = (choice: Choice) => {
     if (!api || busyRef.current) return
     if (choice.kind === 'create') {
-      void run('Đang tạo worktree…', async () => {
+      void run(tr('Đang tạo worktree…'), async () => {
         const path = await api.worktreeAdd(projectId, choice.branch, choice.existing)
         changed()
         if (mounted.current) { onOpen(path); onClose() }
       })
     } else if (choice.worktree.current) onClose()
-    else if (choice.worktree.prunable) setActionError('Thư mục của worktree này không còn trên đĩa. Hãy xóa nó rồi tạo lại.')
+    else if (choice.worktree.prunable) setActionError(tr('Thư mục của worktree này không còn trên đĩa. Hãy xóa nó rồi tạo lại.'))
     else { onOpen(choice.worktree.path); onClose() }
   }
 
   const remove = (worktree: GitWorktree) => {
-    if (!api || busyRef.current || !window.confirm(`Xóa worktree “${label(worktree).name}”?\nThư mục ${worktree.path} sẽ bị xóa khỏi đĩa; nhánh vẫn được giữ.`)) return
-    void run('Đang xóa worktree…', async () => {
+    if (!api || busyRef.current || !window.confirm(tr('Xóa worktree “{name}”?\nThư mục {path} sẽ bị xóa khỏi đĩa; nhánh vẫn được giữ.', { name: label(worktree).name, path: worktree.path }))) return
+    void run(tr('Đang xóa worktree…'), async () => {
       await api.worktreeRemove(projectId, worktree.path)
       changed()
       await load()
@@ -88,7 +89,7 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
   }
 
   const choices: Choice[] = busy ? [] : (data?.worktrees ?? []).map((worktree) => ({ kind: 'worktree', worktree }))
-  return <Picker label="Worktree" placeholder="Chọn worktree hoặc gõ tên nhánh để tạo mới…" items={choices}
+  return <Picker label="Worktree" placeholder={tr('Chọn worktree hoặc gõ tên nhánh để tạo mới…')} items={choices}
     itemKey={(item) => item.kind === 'create' ? `create:${item.branch}` : `worktree:${item.worktree.path}`} itemText={textOf}
     filter={(items, query) => {
       const matches = fuzzyFilter(items, query, textOf)
@@ -99,27 +100,27 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
       }
       return matches
     }}
-    empty={busy ?? (data ? 'Không có worktree.' : loadError ? 'Không thể tải worktree.' : 'Đang tải worktree…')}
+    empty={busy ?? (data ? tr('Không có worktree.') : loadError ? tr('Không thể tải worktree.') : tr('Đang tải worktree…'))}
     error={actionError ?? loadError} onCancel={() => { if (!busyRef.current) onClose() }} onPick={pick}
     footer={(item, go) => {
-      if (item.kind === 'create') return <button type="button" onClick={go}>Tạo và mở <kbd>↵</kbd></button>
+      if (item.kind === 'create') return <button type="button" onClick={go}>{tr('Tạo và mở')} <kbd>↵</kbd></button>
       const { worktree } = item
-      const why = worktree.main ? 'Không xóa được worktree chính' : worktree.current ? 'Đang mở' : worktree.locked ? 'Worktree đang bị khóa' : undefined
+      const why = worktree.main ? tr('Không xóa được worktree chính') : worktree.current ? tr('Đang mở') : worktree.locked ? tr('Worktree đang bị khóa') : undefined
       return <>
-        <button type="button" disabled={!!why} title={why} onClick={() => remove(worktree)}>Xóa worktree</button>
-        <button type="button" onClick={go}>{worktree.current ? 'Đang mở' : 'Mở'} <kbd>↵</kbd></button>
+        <button type="button" disabled={!!why} title={why} onClick={() => remove(worktree)}>{tr('Xóa worktree')}</button>
+        <button type="button" onClick={go}>{worktree.current ? tr('Đang mở') : tr('Mở')} <kbd>↵</kbd></button>
       </>
     }}
     renderItem={(item, positions) => {
       if (item.kind === 'create') {
         return <>
           <Icon name="plus" size={14} />
-          <span className="git-branch-create">{item.existing ? `Tạo worktree cho nhánh có sẵn “${item.branch}”` : `Tạo worktree với nhánh mới “${item.branch}” từ HEAD`}</span>
+          <span className="git-branch-create">{item.existing ? tr('Tạo worktree cho nhánh có sẵn “{branch}”', { branch: item.branch }) : tr('Tạo worktree với nhánh mới “{branch}” từ HEAD', { branch: item.branch })}</span>
         </>
       }
       const { worktree } = item
       const { name, detail } = label(worktree)
-      const flags = [worktree.main && 'chính', worktree.current && 'đang mở', worktree.locked && 'khóa', worktree.prunable && 'mất thư mục'].filter(Boolean)
+      const flags = [worktree.main && tr('chính'), worktree.current && tr('đang mở'), worktree.locked && tr('khóa'), worktree.prunable && tr('mất thư mục')].filter(Boolean)
       return <>
         <Icon name={worktree.current ? 'check' : 'folder'} size={14} />
         <span title={worktree.path}><Highlight text={name} positions={positions} /></span>

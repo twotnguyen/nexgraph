@@ -4,6 +4,7 @@ import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwareness
 import type { EditorHandle } from '../components/editor/monaco'
 import { errorText } from './errorText'
 import { getActiveEditor } from './activeEditor'
+import { tr } from '../strings'
 
 /**
  * Cộng tác LAN kiểu Wu (ngang hàng, không máy chủ đám mây): một tệp chung là một Y.Doc; bản cập nhật Yjs (gói loại 0)
@@ -27,7 +28,7 @@ const listeners = new Set<() => void>()
 const patch = (next: Partial<CollabState>) => { state = { ...state, ...next }; for (const l of listeners) l() }
 export const useCollab = (): CollabState => useSyncExternalStore((l) => { listeners.add(l); return () => { listeners.delete(l) } }, () => state)
 
-export const collabName = (): string => { try { return localStorage.getItem('nexgraph.collab.name') || 'Người dùng' } catch { return 'Người dùng' } }
+export const collabName = (): string => { try { return localStorage.getItem('nexgraph.collab.name') || tr('Người dùng') } catch { return tr('Người dùng') } }
 export const setCollabName = (name: string): void => { try { localStorage.setItem('nexgraph.collab.name', name.trim().slice(0, 40)) } catch { /* bỏ qua */ } }
 
 type Live = { doc: Y.Doc; awareness: Awareness; off: () => void; unbind: (() => void) | null; style: HTMLStyleElement }
@@ -45,7 +46,7 @@ function paintRemote(awareness: Awareness, style: HTMLStyleElement) {
     if (clientId === awareness.clientID) return
     const user = (value as { user?: { name?: string; color?: string } }).user
     const color = /^#[0-9a-f]{6}$/i.test(user?.color ?? '') ? user!.color! : '#888888'
-    const name = (user?.name ?? 'Khách').replace(/["\\\n]/g, '')
+    const name = (user?.name ?? tr('Khách')).replace(/["\\\n]/g, '')
     remote.push({ name, color })
     rules.push(`.yRemoteSelection-${clientId}{background:${color}33}`,
       `.yRemoteSelectionHead-${clientId}{position:absolute;height:100%;border-left:2px solid ${color}}`,
@@ -77,7 +78,7 @@ function open(role: 'host' | 'guest'): Live {
       send(frame(UPDATE, Y.encodeStateAsUpdate(doc)))
       send(frame(AWARENESS, encodeAwarenessUpdate(awareness, [...awareness.getStates().keys()])))
     } else if (event.type === 'peers') patch({ peers: event.count })
-    else if (event.type === 'closed') { close(); patch({ error: 'Máy chia sẻ đã dừng phiên' }) }
+    else if (event.type === 'closed') { close(); patch({ error: tr('Máy chia sẻ đã dừng phiên') }) }
   }) ?? (() => {})
   live = { doc, awareness, off, unbind: null, style }
   return live
@@ -86,7 +87,7 @@ function open(role: 'host' | 'guest'): Live {
 /** Chia sẻ tệp đang mở: dựng Y.Text từ nội dung hiện tại rồi gắn vào chính editor của thẻ đó. */
 export async function shareActiveFile(): Promise<void> {
   const target = getActiveEditor()
-  if (!window.nexgraph.collab || !target?.handle.bindCollab) return patch({ error: 'Mở một tệp trong editor rồi chia sẻ' })
+  if (!window.nexgraph.collab || !target?.handle.bindCollab) return patch({ error: tr('Mở một tệp trong editor rồi chia sẻ') })
   const session = open('host')
   session.doc.getText('content').insert(0, target.text())
   session.unbind = target.handle.bindCollab(session.doc.getText('content'), session.awareness)

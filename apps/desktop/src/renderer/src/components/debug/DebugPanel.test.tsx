@@ -29,7 +29,7 @@ it('bật tắt điểm dừng, tính watch và console theo frame đang dừng'
   expect(open).toHaveBeenCalledWith('a.py', 4)
   fireEvent.click(screen.getByRole('checkbox', { name: 'Bật điểm dừng a.py:4' }))
   expect(screen.getByRole('checkbox', { name: 'Bật điểm dừng a.py:4' })).not.toBeChecked()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Biểu thức theo dõi' }), { target: { value: 'total * 10' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Thêm biểu thức theo dõi' }), { target: { value: 'total * 10' } })
   fireEvent.click(screen.getByRole('button', { name: 'Thêm biểu thức theo dõi' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Bắt đầu gỡ lỗi' })).toBeEnabled())
   fireEvent.click(screen.getByRole('button', { name: 'Bắt đầu gỡ lỗi' }))

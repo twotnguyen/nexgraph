@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 
 export interface Props {
   count: number
@@ -130,7 +130,7 @@ export function FlowPlayer({ count, index, onChange }: Props) {
                 checked={speedMs === s.ms}
                 onChange={() => setSpeedMs(s.ms)}
               />
-              <span>{s.label}</span>
+              <span>{tr(s.label)}</span>
             </label>
           ))}
         </div>

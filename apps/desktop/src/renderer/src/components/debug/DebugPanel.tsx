@@ -1,3 +1,4 @@
+import { tr } from '../../strings'
 import { useEffect, useRef, useState } from 'react'
 import type { DebugConfigInfo, DebugVariable } from '@shared/api'
 import { Icon } from '../common/icons'
@@ -63,7 +64,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
     if (configs && chosen && !configs.some((item) => configKey(item) === configKey(chosen))) selectDebugConfig(null)
   }, [configs]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!api) return <p className="dbg-empty muted">Gỡ lỗi không dùng được ở chế độ này.</p>
+  if (!api) return <p className="dbg-empty muted">{tr('Gỡ lỗi không dùng được ở chế độ này.')}</p>
   const { status } = debug
   const chosen = debug.config
   const list = configs ?? []
@@ -86,8 +87,8 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
   }
   const banner = (adapter: DebugKind) => (
     <div className="dbg-install">
-      <span>Cần tải {ADAPTER_LABEL[adapter]} (mã nguồn mở, MIT) về thư mục dữ liệu của app.</span>
-      <button type="button" className="primary" disabled={installing} onClick={() => void install(adapter)}>{installing ? 'Đang tải…' : 'Tải về'}</button>
+      <span>{tr('Cần tải {adapter} (mã nguồn mở, MIT) về thư mục dữ liệu của app.', { adapter: ADAPTER_LABEL[adapter] })}</span>
+      <button type="button" className="primary" disabled={installing} onClick={() => void install(adapter)}>{installing ? tr('Đang tải…') : tr('Tải về')}</button>
     </div>
   )
   // Mở tệp cấu hình (tạo .vscode/launch.json mẫu nếu dự án chưa có) rồi đọc lại danh sách.
@@ -102,73 +103,73 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
 
   return (
     <div className="debug-panel">
-      <div className="dbg-toolbar" role="toolbar" aria-label="Điều khiển gỡ lỗi">
+      <div className="dbg-toolbar" role="toolbar" aria-label={tr('Điều khiển gỡ lỗi')}>
         {status === 'idle' || status === 'starting'
-          ? <button type="button" className="dbg-btn dbg-run" disabled={(!chosen && (!kind || !target)) || status === 'starting' || !!needsAdapter} title="Bắt đầu gỡ lỗi (F5)" aria-label="Bắt đầu gỡ lỗi" onClick={() => void startDebugging(projectId, kind, target ?? null)}>▶</button>
+          ? <button type="button" className="dbg-btn dbg-run" disabled={(!chosen && (!kind || !target)) || status === 'starting' || !!needsAdapter} title={tr('Bắt đầu gỡ lỗi (F5)')} aria-label={tr('Bắt đầu gỡ lỗi')} onClick={() => void startDebugging(projectId, kind, target ?? null)}>▶</button>
           : status === 'running'
-            ? <button type="button" className="dbg-btn" title="Tạm dừng (F6)" aria-label="Tạm dừng" onClick={pauseDebugging}>Ⅱ</button>
-            : <button type="button" className="dbg-btn" title="Chạy tiếp (F5)" aria-label="Chạy tiếp" onClick={() => debugStep('continue')}>▶</button>}
-        <button type="button" className="dbg-btn" disabled={status !== 'stopped'} title="Bước qua (F10)" aria-label="Bước qua" onClick={() => debugStep('next')}>↷</button>
-        <button type="button" className="dbg-btn" disabled={status !== 'stopped'} title="Bước vào (F11)" aria-label="Bước vào" onClick={() => debugStep('stepIn')}>↓</button>
-        <button type="button" className="dbg-btn" disabled={status !== 'stopped'} title="Bước ra (⇧F11)" aria-label="Bước ra" onClick={() => debugStep('stepOut')}>↑</button>
-        <button type="button" className="dbg-btn" disabled={status !== 'running' && status !== 'stopped'} title="Chạy lại (⇧⌘F5)" aria-label="Chạy lại phiên" onClick={restartDebugging}>↻</button>
-        <button type="button" className="dbg-btn dbg-stop" disabled={status === 'idle'} title="Dừng (⇧F5)" aria-label="Dừng gỡ lỗi" onClick={stopDebugging}>■</button>
-        <span className="dbg-status muted" role="status">{status === 'idle' ? '' : status === 'starting' ? 'Đang khởi động…' : status === 'running' ? 'Đang chạy' : 'Đang dừng'}</span>
+            ? <button type="button" className="dbg-btn" title={tr('Tạm dừng (F6)')} aria-label={tr('Tạm dừng')} onClick={pauseDebugging}>Ⅱ</button>
+            : <button type="button" className="dbg-btn" title={tr('Chạy tiếp (F5)')} aria-label={tr('Chạy tiếp')} onClick={() => debugStep('continue')}>▶</button>}
+        <button type="button" className="dbg-btn" disabled={status !== 'stopped'} title={tr('Bước qua (F10)')} aria-label={tr('Bước qua')} onClick={() => debugStep('next')}>↷</button>
+        <button type="button" className="dbg-btn" disabled={status !== 'stopped'} title={tr('Bước vào (F11)')} aria-label={tr('Bước vào')} onClick={() => debugStep('stepIn')}>↓</button>
+        <button type="button" className="dbg-btn" disabled={status !== 'stopped'} title={tr('Bước ra (⇧F11)')} aria-label={tr('Bước ra')} onClick={() => debugStep('stepOut')}>↑</button>
+        <button type="button" className="dbg-btn" disabled={status !== 'running' && status !== 'stopped'} title={tr('Chạy lại (⇧⌘F5)')} aria-label={tr('Chạy lại phiên')} onClick={restartDebugging}>↻</button>
+        <button type="button" className="dbg-btn dbg-stop" disabled={status === 'idle'} title={tr('Dừng (⇧F5)')} aria-label={tr('Dừng gỡ lỗi')} onClick={stopDebugging}>■</button>
+        <span className="dbg-status muted" role="status">{status === 'idle' ? '' : status === 'starting' ? tr('Đang khởi động…') : status === 'running' ? tr('Đang chạy') : tr('Đang dừng')}</span>
       </div>
       <p className="dbg-target">{selected
         ? <><b>{selected.name}</b> <span className="muted">· {selected.request} · {ADAPTER_LABEL[selected.kind]}</span></>
-        : target ? <><b>{target}</b> <span className="muted">· {kind ? ADAPTER_LABEL[kind] : 'chỉ gỡ lỗi được tệp .js, .mjs, .cjs, .py'}</span></> : <span className="muted">Mở một tệp .js hoặc .py rồi bấm chạy.</span>}</p>
+        : target ? <><b>{target}</b> <span className="muted">· {kind ? ADAPTER_LABEL[kind] : tr('chỉ gỡ lỗi được tệp .js, .mjs, .cjs, .py')}</span></> : <span className="muted">{tr('Mở một tệp .js hoặc .py rồi bấm chạy.')}</span>}</p>
       {needsAdapter && banner(needsAdapter)}
       {debug.error && <p role="alert" className="dbg-error">{debug.error}</p>}
-      <section aria-label="Cấu hình gỡ lỗi"><div className="dbg-section-head"><h3>Cấu hình</h3>
+      <section aria-label={tr('Cấu hình gỡ lỗi')}><div className="dbg-section-head"><h3>{tr('Cấu hình')}</h3>
         <div className="dbg-actions">
-          <button type="button" className="dbg-btn" title="Tải lại danh sách cấu hình" aria-label="Tải lại cấu hình" onClick={() => void loadConfigs()}><Icon name="refresh" size={13} /></button>
-          <button type="button" className="dbg-btn" title="Mở tệp cấu hình (.vscode/launch.json; tạo mẫu nếu chưa có)" aria-label="Mở tệp cấu hình gỡ lỗi" onClick={() => void openConfigFile()}><Icon name="pencil" size={13} /></button>
+          <button type="button" className="dbg-btn" title={tr('Tải lại danh sách cấu hình')} aria-label={tr('Tải lại cấu hình')} onClick={() => void loadConfigs()}><Icon name="refresh" size={13} /></button>
+          <button type="button" className="dbg-btn" title={tr('Mở tệp cấu hình (.vscode/launch.json; tạo mẫu nếu chưa có)')} aria-label={tr('Mở tệp cấu hình gỡ lỗi')} onClick={() => void openConfigFile()}><Icon name="pencil" size={13} /></button>
         </div></div>
-        <select className="dbg-select" aria-label="Cấu hình khởi chạy" disabled={status !== 'idle'} value={selected ? configKey(selected) : ''}
+        <select className="dbg-select" aria-label={tr('Cấu hình khởi chạy')} disabled={status !== 'idle'} value={selected ? configKey(selected) : ''}
           onChange={(event) => {
             const next = list.find((item) => configKey(item) === event.target.value)
             selectDebugConfig(next ? { source: next.source, name: next.name } : null)
           }}>
-          <option value="">Chạy tệp đang mở</option>
+          <option value="">{tr('Chạy tệp đang mở')}</option>
           {list.map((item) => <option key={configKey(item)} value={configKey(item)} title={item.source}>{item.name} · {item.request}</option>)}
         </select>
         {configError && <p role="alert" className="dbg-error">{configError}</p>}
       </section>
       {status === 'idle' && (
-        <section aria-label="Attach vào tiến trình"><h3>Attach</h3>
+        <section aria-label={tr('Attach vào tiến trình')}><h3>{tr('Attach')}</h3>
           <form className="dbg-input dbg-attach" onSubmit={(event) => { event.preventDefault(); attach() }}>
-            <select aria-label="Loại tiến trình" value={attachKind} onChange={(event) => setAttachKind(event.target.value as DebugKind)}>
+            <select aria-label={tr('Loại tiến trình')} value={attachKind} onChange={(event) => setAttachKind(event.target.value as DebugKind)}>
               <option value="node">Node.js</option><option value="python">Python</option>
             </select>
-            <input aria-label="Địa chỉ" placeholder={ATTACH_DEFAULT[attachKind].host} value={attachHost} onChange={(event) => setAttachHost(event.target.value)} />
-            <input aria-label="Cổng" className="dbg-port" inputMode="numeric" placeholder={String(ATTACH_DEFAULT[attachKind].port)} value={attachPort} onChange={(event) => setAttachPort(event.target.value)} />
-            <button type="submit" disabled={nodeAttachBlocked}>Attach</button>
+            <input aria-label={tr('Địa chỉ')} placeholder={ATTACH_DEFAULT[attachKind].host} value={attachHost} onChange={(event) => setAttachHost(event.target.value)} />
+            <input aria-label={tr('Cổng')} className="dbg-port" inputMode="numeric" placeholder={String(ATTACH_DEFAULT[attachKind].port)} value={attachPort} onChange={(event) => setAttachPort(event.target.value)} />
+            <button type="submit" disabled={nodeAttachBlocked}>{tr('Attach')}</button>
           </form>
-          <p className="dbg-empty muted">{attachKind === 'node' ? 'Chạy tiến trình bằng node --inspect (cổng mặc định 9229).' : 'Mã Python cần gọi debugpy.listen(5678) (cổng mặc định 5678).'}</p>
+          <p className="dbg-empty muted">{attachKind === 'node' ? tr('Chạy tiến trình bằng node --inspect (cổng mặc định 9229).') : tr('Mã Python cần gọi debugpy.listen(5678) (cổng mặc định 5678).')}</p>
           {nodeAttachBlocked && needsAdapter !== 'node' && banner('node')}
         </section>
       )}
-      <section aria-label="Ngăn xếp gọi"><h3>Ngăn xếp gọi</h3>
+      <section aria-label={tr('Ngăn xếp gọi')}><h3>{tr('Ngăn xếp gọi')}</h3>
         <ul className="dbg-list">{debug.frames.map((f) => (
           <li key={f.id}><button type="button" className="dbg-frame" aria-current={f.id === debug.frameId || undefined} onClick={() => void selectFrame(f)}>
-            <span>{f.name}</span><span className="muted">{f.file ? `${f.file.split('/').pop()}:${f.line}` : 'ngoài dự án'}</span>
+            <span>{f.name}</span><span className="muted">{f.file ? `${f.file.split('/').pop()}:${f.line}` : tr('ngoài dự án')}</span>
           </button></li>
         ))}</ul>
       </section>
-      <section aria-label="Theo dõi"><h3>Theo dõi</h3>
+      <section aria-label={tr('Theo dõi')}><h3>{tr('Theo dõi')}</h3>
         <ul className="dbg-list">{debug.watches.map((item) => (
           <li key={item.expression} className="dbg-watch">
             <span className="dbg-watch-value" title={item.value ?? ''}><b>{item.expression}</b>: {item.value ?? '—'}</span>
-            <button type="button" className="dbg-remove" aria-label={`Bỏ theo dõi ${item.expression}`} onClick={() => removeWatch(item.expression)}><Icon name="close" size={11} /></button>
+            <button type="button" className="dbg-remove" aria-label={tr('Bỏ theo dõi {expression}', { expression: item.expression })} onClick={() => removeWatch(item.expression)}><Icon name="close" size={11} /></button>
           </li>
         ))}</ul>
         <form className="dbg-input" onSubmit={(event) => { event.preventDefault(); addWatch(watch); setWatch('') }}>
-          <input aria-label="Biểu thức theo dõi" placeholder="Thêm biểu thức theo dõi" value={watch} onChange={(event) => setWatch(event.target.value)} />
-          <button type="submit" aria-label="Thêm biểu thức theo dõi" title="Thêm biểu thức theo dõi">+</button>
+          <input aria-label={tr('Thêm biểu thức theo dõi')} placeholder={tr('Thêm biểu thức theo dõi')} value={watch} onChange={(event) => setWatch(event.target.value)} />
+          <button type="submit" aria-label={tr('Thêm biểu thức theo dõi')} title={tr('Thêm biểu thức theo dõi')}>+</button>
         </form>
       </section>
-      <section aria-label="Biến"><h3>Biến</h3>
+      <section aria-label={tr('Biến')}><h3>{tr('Biến')}</h3>
         {debug.scopes.map((scope) => (
           <div key={scope.variablesReference}>
             <p className="dbg-scope muted">{scope.name}</p>
@@ -176,25 +177,25 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
           </div>
         ))}
       </section>
-      <section aria-label="Điểm dừng"><div className="dbg-section-head"><h3>Điểm dừng</h3>
-        <button type="button" className="dbg-btn" disabled={!breakpoints.length} title="Xoá tất cả điểm dừng" aria-label="Xoá tất cả điểm dừng" onClick={clearAllBreakpoints}><Icon name="trash" size={13} /></button></div>
-        {breakpoints.length === 0 && <p className="dbg-empty muted">Bấm lề trái của editor để đặt điểm dừng.</p>}
+      <section aria-label={tr('Điểm dừng')}><div className="dbg-section-head"><h3>{tr('Điểm dừng')}</h3>
+        <button type="button" className="dbg-btn" disabled={!breakpoints.length} title={tr('Xoá tất cả điểm dừng')} aria-label={tr('Xoá tất cả điểm dừng')} onClick={clearAllBreakpoints}><Icon name="trash" size={13} /></button></div>
+        {breakpoints.length === 0 && <p className="dbg-empty muted">{tr('Bấm lề trái của editor để đặt điểm dừng.')}</p>}
         <ul className="dbg-list">{breakpoints.map((b) => (
           <li key={`${b.file}:${b.line}`}>
             <div className="dbg-bp">
-              <input type="checkbox" checked={b.enabled} aria-label={`Bật điểm dừng ${b.file}:${b.line}`} onChange={(event) => setBreakpoint(b.file, b.line, { enabled: event.target.checked })} />
+              <input type="checkbox" checked={b.enabled} aria-label={tr('Bật điểm dừng {file}:{line}', { file: b.file, line: b.line })} onChange={(event) => setBreakpoint(b.file, b.line, { enabled: event.target.checked })} />
               <button type="button" className="dbg-frame" title={b.file} onClick={() => onOpenFile(b.file, b.line)}>
                 <span className={`dbg-dot${b.logMessage ? ' dbg-dot-log' : ''}`} />{b.file.split('/').pop()}<span className="muted">:{b.line}</span>
               </button>
-              <button type="button" className="dbg-remove" aria-label={`Sửa điểm dừng ${b.file}:${b.line}`} title="Sửa điểm dừng" onClick={() => setEditing({ file: b.file, line: b.line })}><Icon name="pencil" size={11} /></button>
-              <button type="button" className="dbg-remove" aria-label={`Bỏ điểm dừng ${b.file}:${b.line}`} onClick={() => toggleBreakpoint(b.file, b.line)}><Icon name="close" size={11} /></button>
+              <button type="button" className="dbg-remove" aria-label={tr('Sửa điểm dừng {file}:{line}', { file: b.file, line: b.line })} title={tr('Sửa điểm dừng')} onClick={() => setEditing({ file: b.file, line: b.line })}><Icon name="pencil" size={11} /></button>
+              <button type="button" className="dbg-remove" aria-label={tr('Bỏ điểm dừng {file}:{line}', { file: b.file, line: b.line })} onClick={() => toggleBreakpoint(b.file, b.line)}><Icon name="close" size={11} /></button>
             </div>
-            {(b.condition || b.hitCondition || b.logMessage) && <p className="dbg-bp-info muted">{[b.condition && `Điều kiện: ${b.condition}`, b.hitCondition && `Số lần: ${b.hitCondition}`, b.logMessage && `Log: ${b.logMessage}`].filter(Boolean).join(' · ')}</p>}
+            {(b.condition || b.hitCondition || b.logMessage) && <p className="dbg-bp-info muted">{[b.condition && tr('Điều kiện: {condition}', { condition: b.condition }), b.hitCondition && tr('Số lần: {count}', { count: b.hitCondition }), b.logMessage && tr('Log: {message}', { message: b.logMessage })].filter(Boolean).join(' · ')}</p>}
             {editing?.file === b.file && editing.line === b.line && <BreakpointForm point={b} onSave={(changes) => { setBreakpoint(b.file, b.line, changes); setEditing(null) }} onCancel={() => setEditing(null)} />}
           </li>
         ))}</ul>
       </section>
-      <section aria-label="Debug console"><h3>Debug console</h3>
+      <section aria-label={tr('Debug console')}><h3>{tr('Debug console')}</h3>
         <pre ref={output} className="dbg-output">{debug.output.join('')}</pre>
         <form className="dbg-input" onSubmit={(event) => {
           event.preventDefault()
@@ -205,7 +206,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
           setExpression('')
           setDraft('')
         }}>
-          <input aria-label="Tính biểu thức" placeholder="Tính biểu thức" disabled={status !== 'stopped' || debug.frameId === null} value={expression}
+          <input aria-label={tr('Tính biểu thức')} placeholder={tr('Tính biểu thức')} disabled={status !== 'stopped' || debug.frameId === null} value={expression}
             onChange={(event) => setExpression(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'ArrowUp' && history.length) {
@@ -219,7 +220,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
                 setHistoryIndex(index); setExpression(index === history.length ? draft : history[index])
               }
             }} />
-          <button type="submit" disabled={status !== 'stopped' || debug.frameId === null} aria-label="Tính biểu thức">↵</button>
+          <button type="submit" disabled={status !== 'stopped' || debug.frameId === null} aria-label={tr('Tính biểu thức')}>↵</button>
         </form>
       </section>
     </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@shared/graph-types'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 import { EvidencePopover } from '../architecture/EvidencePopover'
 import { CanvasState } from '../common/CanvasState'
 import { CyclesPopover } from './CyclesPopover'
@@ -126,7 +126,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
         )}
       </div>
       {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
-      {!data && !error && <CanvasState kind="loading" message="Đang tải bản đồ…" />}
+      {!data && !error && <CanvasState kind="loading" message={tr('Đang tải bản đồ…')} />}
       {data && (
       <>
       {showCycles && cycles && <CyclesPopover data={cycles} active={activeCycle} onPick={setActiveCycle} />}

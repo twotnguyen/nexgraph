@@ -45,11 +45,12 @@ import { FileFinder } from '../components/layout/FileFinder'
 import { useCommand } from '../state/commands'
 import { getExplorerOpen, setChatDock, setChatWidth, useChatDock, useChatWidth } from '../state/layoutPrefs'
 import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
+import { listBookmarks } from '../state/bookmarks'
 import { startDiagnostics } from '../state/diagnostics'
 import { errorText } from '../state/errorText'
-import { consumePendingMultiBuffer, getPendingMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
+import { buildExcerpts, consumePendingMultiBuffer, getPendingMultiBuffer, requestMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
-import { vi } from '../strings'
+import { vi, tr } from '../strings'
 import './workspace.css'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
@@ -71,9 +72,9 @@ const readRecentFiles = (projectId: string): string[] => {
 }
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
 type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour' | 'outline' | 'diagnostics'
-const PANEL_TITLES: Record<Panel, string> = {
-  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', git: 'Git', debug: 'Gỡ lỗi', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour,
-  outline: 'Ký hiệu', diagnostics: 'Lỗi trong dự án'
+const PANEL_TITLES: Record<Panel, () => string> = {
+  explorer: () => tr('Duyệt tệp'), find: () => tr('Tìm trong tệp'), git: () => 'Git', debug: () => tr('Gỡ lỗi'), search: () => vi.activity.search, changes: () => vi.activity.changes, tour: () => vi.activity.tour,
+  outline: () => tr('Ký hiệu'), diagnostics: () => tr('Lỗi trong dự án')
 }
 const messageOf = (e: unknown): string =>
   e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
@@ -125,15 +126,15 @@ const FileIcon = (
   </svg>
 )
 
-const ACTIVITIES = [
-  { id: 'explorer', title: PANEL_TITLES.explorer, icon: FilesIcon },
-  { id: 'find', title: PANEL_TITLES.find, icon: FindIcon },
-  { id: 'outline', title: PANEL_TITLES.outline, icon: <Icon name="tree" size={20} /> },
-  { id: 'git', title: PANEL_TITLES.git, icon: <Icon name="branch" size={20} /> },
-  { id: 'debug', title: PANEL_TITLES.debug, icon: <Icon name="bug" size={20} /> },
-  { id: 'search', title: PANEL_TITLES.search, icon: SearchIcon },
-  { id: 'changes', title: PANEL_TITLES.changes, icon: ChangesIcon },
-  { id: 'tour', title: PANEL_TITLES.tour, icon: TourIcon }
+const activities = () => [
+  { id: 'explorer', title: PANEL_TITLES.explorer(), icon: FilesIcon },
+  { id: 'find', title: PANEL_TITLES.find(), icon: FindIcon },
+  { id: 'outline', title: PANEL_TITLES.outline(), icon: <Icon name="tree" size={20} /> },
+  { id: 'git', title: PANEL_TITLES.git(), icon: <Icon name="branch" size={20} /> },
+  { id: 'debug', title: PANEL_TITLES.debug(), icon: <Icon name="bug" size={20} /> },
+  { id: 'search', title: PANEL_TITLES.search(), icon: SearchIcon },
+  { id: 'changes', title: PANEL_TITLES.changes(), icon: ChangesIcon },
+  { id: 'tour', title: PANEL_TITLES.tour(), icon: TourIcon }
 ] satisfies { id: Panel; title: string; icon: typeof SearchIcon }[]
 const AGENT_ACTIVITY = { id: 'agent', title: vi.chat.title, icon: <Icon name="spark" size={20} /> }
 
@@ -221,7 +222,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useEffect(() => {
     let current = true
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
-      if (current) setFeedback(`Không theo dõi được thay đổi của tệp. ${messageOf(error)}`)
+      if (current) setFeedback(tr('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
     })
     return () => {
       current = false
@@ -331,8 +332,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setTab(`task:${inspection.id}`)
   }
   const graphContext: AgentContextItem | undefined = tab === 'graph' && selected ? { kind: 'node', nodeId: selected.id, label: selected.label }
-    : tab === 'flows' && flowContext !== undefined ? { kind: 'flow', flowId: flowContext, label: `Luồng ${flowContext}` }
-    : tab === 'arch' ? { kind: 'architecture', blockId: archContext ?? 'root', label: archContext ?? 'Kiến trúc dự án' } : undefined
+    : tab === 'flows' && flowContext !== undefined ? { kind: 'flow', flowId: flowContext, label: tr('Luồng {id}', { id: flowContext }) }
+    : tab === 'arch' ? { kind: 'architecture', blockId: archContext ?? 'root', label: archContext ?? tr('Kiến trúc dự án') } : undefined
 
   useEffect(() => window.nexgraph.index.onEvent((event) => {
     if (event.type !== 'graph_updated' || event.project_id !== project.project_id) return
@@ -374,7 +375,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setTab('graph')
     setPathFrom(null)
     setOverlay(null)
-    setNotice('Đang tìm đường nối…')
+    setNotice(tr('Đang tìm đường nối…'))
     try {
       const r = await window.nexgraph.graph.paths(project.project_id, [from.id, to.id])
       if (request !== graphRequest.current) return
@@ -634,7 +635,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
   // Kéo thanh chia: khung trái rộng ra khi kéo sang phải, khung phải rộng ra khi kéo sang trái.
   const grow = chatDock === 'left' ? 1 : -1
-  const resizeHandle = !hosted && chatOpen && <div className="agent-resize-handle" role="separator" aria-label="Độ rộng trợ lý AI" aria-orientation="vertical" tabIndex={0} aria-valuemin={300} aria-valuemax={640} aria-valuenow={chatWidth}
+  const resizeHandle = !hosted && chatOpen && <div className="agent-resize-handle" role="separator" aria-label={tr('Độ rộng trợ lý AI')} aria-orientation="vertical" tabIndex={0} aria-valuemin={300} aria-valuemax={640} aria-valuenow={chatWidth}
     onPointerDown={(event) => { resize.current = { x: event.clientX, width: chatWidth }; event.currentTarget.setPointerCapture(event.pointerId) }}
     onPointerMove={(event) => { if (resize.current) saveChatWidth(resize.current.width + grow * (event.clientX - resize.current.x)) }}
     onPointerUp={() => { resize.current = null }} onPointerCancel={() => { resize.current = null }}
@@ -693,6 +694,22 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setMultiBuffers((cur) => cur.filter((item) => item.id !== request.id))
     if (tab === `multi:${request.id}`) setTab(lastMain)
   }
+  // Dấu trang và tệp đang mở thành một thẻ nhiều đoạn; mỗi đoạn dựng một editor.
+  // shortcut: dấu trang không bị giới hạn số đoạn, thêm trần như tệp đang mở nếu danh sách dài.
+  useCommand('editor.view_bookmarks', () => {
+    const marks = listBookmarks(project.project_id)
+    if (!marks.length) return setFeedback(tr('Không có dấu trang nào trong dự án này.'))
+    requestMultiBuffer({ id: `bookmarks-${Date.now()}`, title: tr('Dấu trang'), excerpts: buildExcerpts(marks) })
+  })
+  // Tệp đang hiện đứng đầu (dòng con trỏ nếu biết) để không bị cắt khi mở quá 8 tệp.
+  useCommand('editor.open_multibuffer', () => {
+    const editor = getActiveEditor()
+    const cursor = editor && editor.file === activeFile ? editor.handle.getPosition?.()?.line : undefined
+    const shown = [...files].sort((a, b) => Number(b.file === activeFile) - Number(a.file === activeFile)).slice(0, 8)
+    if (!shown.length) return setFeedback(tr('Chưa mở tệp'))
+    requestMultiBuffer({ id: `open-files-${Date.now()}`, title: tr('Nhiều đoạn mã'),
+      excerpts: buildExcerpts(shown.map((item) => ({ file: item.file, line: item.file === activeFile ? cursor ?? item.line : item.line }))) })
+  })
   useCommand('tour.toggle', () => togglePanel('tour'))
   useCommand('view.arch', () => selectView('arch'))
   useCommand('view.map', () => selectView('map'))
@@ -845,21 +862,21 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
       {!hosted && (
         <ActivityBar
-          items={[...(chatDock === 'left' ? [AGENT_ACTIVITY] : []), ...ACTIVITIES.map((a) => a.id === 'changes' ? { ...a, badge: live.changes?.changed_files.length } : a)]}
+          items={[...(chatDock === 'left' ? [AGENT_ACTIVITY] : []), ...activities().map((a) => a.id === 'changes' ? { ...a, badge: live.changes?.changed_files.length } : a)]}
           active={leftChat ? AGENT_ACTIVITY.id : panel}
           panelId={leftChat ? chatId : toolsId}
           onToggle={togglePanel}
           manage={[
-            ...(openWorkspaceSettings ? [{ label: 'Cài đặt', icon: 'sliders' as const, onSelect: () => openWorkspaceSettings() }] : []),
-            { label: 'Chọn theme…', icon: 'palette', onSelect: openThemePicker }
+            ...(openWorkspaceSettings ? [{ label: tr('Cài đặt'), icon: 'sliders' as const, onSelect: () => openWorkspaceSettings() }] : []),
+            { label: tr('Chọn theme…'), icon: 'palette', onSelect: openThemePicker }
           ]}
         />
       )}
       {chatDock === 'left' && <>{agentPanel}{resizeHandle}</>}
       {panel && !leftChat && (
-        <aside id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={PANEL_TITLES[panel]}>
+        <aside id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={PANEL_TITLES[panel]()}>
           <div className="ws-tools-head">
-            <h2>{PANEL_TITLES[panel]}</h2>
+            <h2>{PANEL_TITLES[panel]()}</h2>
             <button type="button" className="ws-icon-button" aria-label={vi.workspace.closePanel} title={vi.workspace.closePanel}
               onClick={() => setPanel(null)}><Icon name="close" size={15} /></button>
           </div>
@@ -925,7 +942,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <button type="button" onClick={() => setPathFrom(null)}>{vi.path.cancel}</button>
           </div>
         )}
-        <div className="tabs ws-tabs" role="tablist" aria-label="Các thẻ không gian làm việc" ref={tabList} onKeyDown={onTabKeys}>
+        <div className="tabs ws-tabs" role="tablist" aria-label={tr('Các thẻ không gian làm việc')} ref={tabList} onKeyDown={onTabKeys}>
           {MAIN_TABS.map((t) => (
             <button key={t} id={tabId(t)} type="button" role="tab" aria-selected={tab === t} aria-controls={viewId} tabIndex={tab === t ? 0 : -1}
               data-tone={VIEW_TONE[t]} className={`tab${tab === t ? ' active' : ''}`} onClick={() => selectView(t)}>
@@ -948,51 +965,51 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
                 {dirtyFiles.has(f.file) && <span className="dirty-dot" aria-hidden="true"> ●</span>}
               </button>
               {pinned.has(f.file)
-                ? <button type="button" className="tab-close tab-pin" aria-label={`Bỏ ghim ${baseName(f.file)}`} title="Bỏ ghim" onClick={() => togglePinned(f.file)}>
+                ? <button type="button" className="tab-close tab-pin" aria-label={tr('Bỏ ghim {name}', { name: baseName(f.file) })} title={tr('Bỏ ghim')} onClick={() => togglePinned(f.file)}>
                     <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 3 6 6-1 3 3 3-1 1-5-1-5 5 2-6-3-3 1-1 3 1z" /></svg>
                   </button>
-                : <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}><Icon name="close" size={12} /></button>}
+                : <button type="button" className="tab-close" aria-label={tr('Đóng {name}', { name: baseName(f.file) })} onClick={() => closeFile(f.file)}><Icon name="close" size={12} /></button>}
             </span>
           ))}
           {previews.map((file) => <span key={`preview:${file}`} className={`tab file-tab${tab === `preview:${file}` ? ' active' : ''}`}>
             <button id={tabId(`preview:${file}`)} type="button" role="tab" aria-selected={tab === `preview:${file}`} aria-controls={viewId}
               tabIndex={tab === `preview:${file}` ? 0 : -1} title={file} className="tab-name" onClick={() => setTab(`preview:${file}`)}>
-              <FileTypeIcon name={file} /><span>Xem trước {baseName(file)}</span>
+              <FileTypeIcon name={file} /><span>{tr('Xem trước {name}', { name: baseName(file) })}</span>
             </button>
-            <button type="button" className="tab-close" aria-label={`Đóng xem trước ${baseName(file)}`} onClick={() => closePreview(file)}><Icon name="close" size={12} /></button>
+            <button type="button" className="tab-close" aria-label={tr('Đóng xem trước {name}', { name: baseName(file) })} onClick={() => closePreview(file)}><Icon name="close" size={12} /></button>
           </span>)}
           {inspections.map((inspection) => <span key={inspection.id} className={`tab file-tab${tab === `task:${inspection.id}` ? ' active' : ''}`}>
             <button id={tabId(`task:${inspection.id}`)} type="button" role="tab" aria-selected={tab === `task:${inspection.id}`} aria-controls={viewId} tabIndex={tab === `task:${inspection.id}` ? 0 : -1} className="tab-name" onClick={() => setTab(`task:${inspection.id}`)}><Icon name="spark" size={14} /><span>{inspection.title}</span></button>
-            <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}><Icon name="close" size={12} /></button>
+            <button type="button" className="tab-close" aria-label={tr('Đóng {name}', { name: inspection.title })} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}><Icon name="close" size={12} /></button>
           </span>)}
           {collab.role === 'guest' && collab.file && <span className={`tab file-tab${tab === 'collab' ? ' active' : ''}`}>
             <button id={tabId('collab')} type="button" role="tab" aria-selected={tab === 'collab'} aria-controls={viewId} tabIndex={tab === 'collab' ? 0 : -1} className="tab-name"
-              title={`Cộng tác: ${collab.file}`} onClick={() => setTab('collab')}><Icon name="share" size={14} /><span>{baseName(collab.file)} · cộng tác</span></button>
-            <button type="button" className="tab-close" aria-label="Rời phiên cộng tác" onClick={leaveSession}><Icon name="close" size={12} /></button>
+              title={tr('Cộng tác: {file}', { file: collab.file })} onClick={() => setTab('collab')}><Icon name="share" size={14} /><span>{tr('{name} · cộng tác', { name: baseName(collab.file) })}</span></button>
+            <button type="button" className="tab-close" aria-label={tr('Rời phiên cộng tác')} onClick={leaveSession}><Icon name="close" size={12} /></button>
           </span>}
           {diffs.map((d) => <span key={diffKey(d)} className={`tab file-tab${tab === diffKey(d) ? ' active' : ''}`}>
             <button id={tabId(diffKey(d))} type="button" role="tab" aria-selected={tab === diffKey(d)} aria-controls={viewId} tabIndex={tab === diffKey(d) ? 0 : -1} className="tab-name"
-              title={`${d.file} (${d.staged ? 'đã stage' : 'chưa stage'})`} onClick={() => setTab(diffKey(d))}><Icon name="commit" size={14} /><span>{baseName(d.file)} · diff</span></button>
-            <button type="button" className="tab-close" aria-label={`Đóng diff ${baseName(d.file)}`} onClick={() => closeDiff(d)}><Icon name="close" size={12} /></button>
+              title={`${d.file} (${d.staged ? tr('đã stage') : tr('chưa stage')})`} onClick={() => setTab(diffKey(d))}><Icon name="commit" size={14} /><span>{baseName(d.file)} · diff</span></button>
+            <button type="button" className="tab-close" aria-label={tr('Đóng diff {name}', { name: baseName(d.file) })} onClick={() => closeDiff(d)}><Icon name="close" size={12} /></button>
           </span>)}
           {multiBuffers.map((request) => <span key={request.id} className={`tab file-tab${tab === `multi:${request.id}` ? ' active' : ''}`}>
             <button id={tabId(`multi:${request.id}`)} type="button" role="tab" aria-selected={tab === `multi:${request.id}`} aria-controls={viewId}
               tabIndex={tab === `multi:${request.id}` ? 0 : -1} title={request.title} className="tab-name" onClick={() => setTab(`multi:${request.id}`)}>
               <Icon name="tree" size={14} /><span>{request.title}</span>
             </button>
-            <button type="button" className="tab-close" aria-label={`Đóng ${request.title}`} onClick={() => closeMulti(request)}><Icon name="close" size={12} /></button>
+            <button type="button" className="tab-close" aria-label={tr('Đóng {name}', { name: request.title })} onClick={() => closeMulti(request)}><Icon name="close" size={12} /></button>
           </span>)}
         </div>
         {tabMenu && <>
           <div className="menu-backdrop" onClick={() => setTabMenu(null)} onContextMenu={(event) => { event.preventDefault(); setTabMenu(null) }} />
-          <div role="menu" aria-label={`Thẻ ${baseName(tabMenu.file)}`} className="context-menu ws-tab-menu"
+          <div role="menu" aria-label={tr('Thẻ {name}', { name: baseName(tabMenu.file) })} className="context-menu ws-tab-menu"
             style={{ left: Math.max(4, Math.min(tabMenu.x, window.innerWidth - 220)), top: Math.max(4, Math.min(tabMenu.y, window.innerHeight - 200)) }}>
             {[
-              { label: 'Đóng', action: () => closeFile(tabMenu.file) },
-              { label: 'Đóng thẻ khác', action: () => closeFiles(orderedFiles.filter((item) => item.file !== tabMenu.file && !pinned.has(item.file)).map((item) => item.file)) },
-              { label: 'Đóng thẻ bên phải', action: () => closeFiles(orderedFiles.slice(orderedFiles.findIndex((item) => item.file === tabMenu.file) + 1).filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
-              { label: 'Đóng tất cả', action: () => closeFiles(orderedFiles.filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
-              { label: pinned.has(tabMenu.file) ? 'Bỏ ghim thẻ' : 'Ghim thẻ', action: () => togglePinned(tabMenu.file) }
+              { label: tr('Đóng'), action: () => closeFile(tabMenu.file) },
+              { label: tr('Đóng thẻ khác'), action: () => closeFiles(orderedFiles.filter((item) => item.file !== tabMenu.file && !pinned.has(item.file)).map((item) => item.file)) },
+              { label: tr('Đóng thẻ bên phải'), action: () => closeFiles(orderedFiles.slice(orderedFiles.findIndex((item) => item.file === tabMenu.file) + 1).filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
+              { label: tr('Đóng tất cả'), action: () => closeFiles(orderedFiles.filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
+              { label: pinned.has(tabMenu.file) ? tr('Bỏ ghim thẻ') : tr('Ghim thẻ'), action: () => togglePinned(tabMenu.file) }
             ].map((item) => <button key={item.label} type="button" role="menuitem" onClick={() => { setTabMenu(null); item.action() }}>{item.label}</button>)}
           </div>
         </>}
@@ -1027,12 +1044,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           {tab === 'tree' && (
             <div className="ws-editor-empty">
               <span className="ws-editor-empty-icon">{FileIcon}</span>
-              <h2>{hosted ? 'Xem mã nguồn' : 'Chưa mở tệp'}</h2>
+              <h2>{hosted ? tr('Xem mã nguồn') : tr('Chưa mở tệp')}</h2>
               <p className="muted">{hosted
-                ? 'Chọn một tệp trong cây để mở bằng trình soạn thảo của nền.'
-                : 'Chọn một tệp trong cây bên trái để xem và chỉnh sửa mã.'}</p>
+                ? tr('Chọn một tệp trong cây để mở bằng trình soạn thảo của nền.')
+                : tr('Chọn một tệp trong cây bên trái để xem và chỉnh sửa mã.')}</p>
               {panel !== 'explorer' && (
-                <button type="button" onClick={() => setPanel('explorer')}>Mở cây tệp</button>
+                <button type="button" onClick={() => setPanel('explorer')}>{tr('Mở cây tệp')}</button>
               )}
             </div>
           )}
@@ -1060,7 +1077,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           {feedback && (
             <div className="ws-feedback">
               <span role="alert">{feedback}</span>
-              <button type="button" className="ws-icon-button" aria-label="Đóng thông báo" onClick={() => setFeedback(null)}>×</button>
+              <button type="button" className="ws-icon-button" aria-label={tr('Đóng thông báo')} onClick={() => setFeedback(null)}>×</button>
             </div>
           )}
         </div>

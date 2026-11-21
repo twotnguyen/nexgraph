@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { Icon } from '../common/icons'
+import { useLocale } from '../../state/locale'
+import { tr } from '../../strings'
 import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
 
 export interface ActivityItem {
@@ -21,8 +23,9 @@ interface Props {
 }
 
 export function ActivityBar({ items, active, panelId, onToggle, manage }: Props) {
+  useLocale()
   return (
-    <nav className="activity-bar" aria-label="Thanh hoạt động">
+    <nav className="activity-bar" aria-label={tr('Thanh hoạt động')}>
       {items.map((it) => (
         <button key={it.id} type="button" title={it.badge ? `${it.title} · ${it.badge}` : it.title} aria-label={it.title} aria-pressed={active === it.id}
           aria-controls={active === it.id ? panelId : undefined} onClick={() => onToggle(it.id)}>
@@ -30,7 +33,7 @@ export function ActivityBar({ items, active, panelId, onToggle, manage }: Props)
           {!!it.badge && <span className="activity-badge" aria-hidden="true">{it.badge > 99 ? '99+' : it.badge}</span>}
         </button>
       ))}
-      {manage && <PopoverMenu className="activity-bar-manage popover-up-right" label="Quản lý" trigger={<Icon name="gear" size={20} />} items={manage} />}
+      {manage && <PopoverMenu className="activity-bar-manage popover-up-right" label={tr('Quản lý')} trigger={<Icon name="gear" size={20} />} items={manage} />}
     </nav>
   )
 }

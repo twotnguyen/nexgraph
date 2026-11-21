@@ -3,6 +3,7 @@ import { Icon } from '../common/icons'
 import { THEMES, currentThemeId, previewTheme, setTheme, useThemesVersion } from '../../state/useTheme'
 import { runCommand, useCommand } from '../../state/commands'
 import { Highlight, Picker } from './Picker'
+import { tr } from '../../strings'
 
 export const openThemePicker = (): void => void runCommand('theme_selector.toggle')
 
@@ -25,14 +26,14 @@ export function ThemePicker({ onClose }: { onClose: () => void }) {
   const version = useThemesVersion()
   const items = useMemo(ordered, [version])
   return (
-    <Picker label="Chọn theme" placeholder="Chọn theme…" className="theme-picker" items={items} itemKey={themeKey} itemText={themeName}
-      initialKey={original.current} empty="Không có theme khớp" itemData={(theme) => ({ 'data-theme-id': theme.id })}
+    <Picker label={tr('Chọn theme')} placeholder={tr('Chọn theme…')} className="theme-picker" items={items} itemKey={themeKey} itemText={themeName}
+      initialKey={original.current} empty={tr('Không có theme khớp')} itemData={(theme) => ({ 'data-theme-id': theme.id })}
       onActive={(theme) => previewTheme(theme.id)}
       onCancel={() => { previewTheme(original.current); onClose() }}
       onPick={(theme) => { setTheme(theme.id); onClose() }}
       renderItem={(theme, positions) => <>
         <span><Highlight text={theme.name} positions={positions} /></span>
-        <small>{theme.appearance === 'dark' ? 'Tối' : 'Sáng'}</small>
+        <small>{theme.appearance === 'dark' ? tr('Tối') : tr('Sáng')}</small>
         {theme.id === original.current && <Icon name="check" size={14} />}
       </>} />
   )

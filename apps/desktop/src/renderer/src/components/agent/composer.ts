@@ -1,3 +1,5 @@
+import { tr } from '../../strings'
+
 export type CompletionToken = { kind: 'command' | 'mention'; start: number; end: number; query: string }
 
 /** Chỉ mở gợi ý ở đầu một từ; đường dẫn tuyệt đối không phải lệnh. */
@@ -30,9 +32,9 @@ export function filterSlashCommands<T extends { name: string }>(commands: readon
 }
 
 export function imageError(file: Pick<File, 'name' | 'type' | 'size'>): string | null {
-  if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type)) return `${file.name}: chỉ hỗ trợ ảnh PNG, JPG, GIF hoặc WebP.`
-  if (file.size === 0) return `${file.name}: tệp ảnh rỗng.`
-  if (file.size > 24 * 1024 * 1024) return `${file.name}: ảnh lớn hơn 24 MB.`
+  if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type)) return tr('{name}: chỉ hỗ trợ ảnh PNG, JPG, GIF hoặc WebP.', { name: file.name })
+  if (file.size === 0) return tr('{name}: tệp ảnh rỗng.', { name: file.name })
+  if (file.size > 24 * 1024 * 1024) return tr('{name}: ảnh lớn hơn 24 MB.', { name: file.name })
   return null
 }
 

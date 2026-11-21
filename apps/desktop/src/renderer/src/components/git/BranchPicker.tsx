@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { tr } from '../../strings'
 import { errorText } from '../../state/errorText'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { Icon } from '../common/icons'
@@ -29,7 +30,7 @@ export function BranchPicker({ projectId, onClose, onChanged }: {
     let active = true
     setResult({ projectId, branches: null, error: null })
     if (!api) {
-      setResult({ projectId, branches: null, error: 'Git không dùng được ở chế độ này.' })
+      setResult({ projectId, branches: null, error: tr('Git không dùng được ở chế độ này.') })
     } else {
       api.branches(projectId).then((branches) => {
         if (active) setResult({ projectId, branches, error: null })
@@ -67,7 +68,7 @@ export function BranchPicker({ projectId, onClose, onChanged }: {
   }
 
   return <div className="git-branch-container" aria-busy={busy || loading}>
-    <Picker label="Chuyển nhánh" placeholder="Tìm hoặc tạo nhánh…" className="git-branch-picker" items={choices}
+    <Picker label={tr('Chuyển nhánh')} placeholder={tr('Tìm hoặc tạo nhánh…')} className="git-branch-picker" items={choices}
       itemKey={(item) => `${item.create ? 'create' : 'branch'}:${item.name}`} itemText={(item) => item.name}
       filter={(items, query) => {
         const matches = fuzzyFilter(items, query, (item) => item.name)
@@ -75,11 +76,11 @@ export function BranchPicker({ projectId, onClose, onChanged }: {
         if (branches && !busy && name && !branches.includes(name)) matches.push({ item: { name, create: true }, positions: [] })
         return matches
       }}
-      empty={busy ? 'Đang chuyển nhánh…' : loading ? 'Đang tải nhánh…' : loadError ? 'Không thể tải nhánh.' : 'Không có nhánh.'}
+      empty={busy ? tr('Đang chuyển nhánh…') : loading ? tr('Đang tải nhánh…') : loadError ? tr('Không thể tải nhánh.') : tr('Không có nhánh.')}
       error={error} onCancel={() => { if (!busyRef.current) onClose() }} onPick={(item) => void pick(item)}
       renderItem={(item, positions) => item.create ? <>
         <Icon name="plus" size={14} />
-        <span className="git-branch-create">Tạo nhánh “{item.name}” từ HEAD</span>
+        <span className="git-branch-create">{tr('Tạo nhánh “{name}” từ HEAD', { name: item.name })}</span>
       </> : <>
         <Icon name="branch" size={14} />
         <span className="git-branch-name"><Highlight text={item.name} positions={positions} /></span>

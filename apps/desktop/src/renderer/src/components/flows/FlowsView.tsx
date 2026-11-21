@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FlowDetail, FlowKind, FlowList as FlowListType, GraphEdge } from '@shared/graph-types'
 import type { HighlightKind } from '../graph/kindStyle'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 import { useDebounced } from '../../state/useDebounced'
 import { CanvasState } from '../common/CanvasState'
 import { GraphCanvas } from '../graph/GraphCanvas'
@@ -211,7 +211,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
       <section className="canvas-col">
         {!detail ? (
           <div className="canvas-area">
-            {detailLoading ? <CanvasState kind="loading" message="Đang tải các bước…" />
+            {detailLoading ? <CanvasState kind="loading" message={tr('Đang tải các bước…')} />
               : detailError ? <CanvasState kind="error" message={detailError} onRetry={() => setDetailRetry((n) => n + 1)} />
                 : <CanvasState kind="empty" message={vi.flows.pick} />}
           </div>

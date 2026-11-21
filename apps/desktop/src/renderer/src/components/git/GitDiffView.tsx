@@ -4,6 +4,7 @@ import { createDiffEditor, languageFor } from '../editor/monaco'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import { errorText } from '../../state/errorText'
+import { tr } from '../../strings'
 
 /** Thẻ diff Git, gồm các khối có thể stage hoặc bỏ stage riêng. */
 export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpenFile }: { projectId: string; file: string; staged: boolean; rev?: string; from?: string; onClose: () => void; onOpenFile: () => void }) {
@@ -35,7 +36,7 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
     setError(null)
     const api = window.nexgraph.git
     if (!api) {
-      setError('Git không dùng được ở chế độ này.')
+      setError(tr('Git không dùng được ở chế độ này.'))
       return () => { live = false }
     }
     const sides = rev === undefined ? api.diff(projectId, file, staged) : api.commitDiff(projectId, rev, file, from)
@@ -70,23 +71,23 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
   return (
     <div className="code-viewer editor-tab git-diff">
       <header className="code-head">
-        <span className="editor-path mono" title={file}><FileTypeIcon name={file} size={14} /> {file} <span className="muted">· {rev !== undefined ? `commit ${rev.slice(0, 7)}` : staged ? 'đã stage' : 'chưa stage'}</span></span>
+        <span className="editor-path mono" title={file}><FileTypeIcon name={file} size={14} /> {file} <span className="muted">· {rev !== undefined ? `commit ${rev.slice(0, 7)}` : staged ? tr('đã stage') : tr('chưa stage')}</span></span>
         <span className="ws-editor-actions">
-          <button type="button" className="ws-icon-button" aria-label="Mở tệp" title="Mở tệp" onClick={onOpenFile}><Icon name="pencil" size={15} /></button>
-          <button type="button" className="ws-icon-button" aria-label="Đóng diff" title="Đóng diff" onClick={onClose}><Icon name="close" size={15} /></button>
+          <button type="button" className="ws-icon-button" aria-label={tr('Mở tệp')} title={tr('Mở tệp')} onClick={onOpenFile}><Icon name="pencil" size={15} /></button>
+          <button type="button" className="ws-icon-button" aria-label={tr('Đóng diff')} title={tr('Đóng diff')} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>
       {error && <p role="alert" className="ws-editor-loading error">{error}</p>}
       {actionError && <p role="alert" className="ws-editor-loading error git-hunk-error">{actionError}</p>}
       {rev === undefined && hunks.length > 0 && (
-        <section className="git-hunk-bar" aria-label="Các khối thay đổi">
-          <header className="git-head">Các khối thay đổi</header>
+        <section className="git-hunk-bar" aria-label={tr('Các khối thay đổi')}>
+          <header className="git-head">{tr('Các khối thay đổi')}</header>
           {hunks.map((hunk, i) => (
             <div className="git-row git-hunk-row" key={hunk.id}>
               <code className="mono git-hunk-header" title={hunk.header}>{hunk.header}</code>
               <button type="button" className="btn-action git-hunk-action" disabled={busy}
-                aria-label={`${staged ? 'Bỏ stage' : 'Stage'} khối ${i + 1}: ${hunk.header}`} onClick={() => void applyHunk(hunk.id)}>
-                {staged ? 'Bỏ stage khối' : 'Stage khối'}
+                aria-label={tr('{action} khối {index}: {header}', { action: staged ? tr('Bỏ stage') : 'Stage', index: i + 1, header: hunk.header })} onClick={() => void applyHunk(hunk.id)}>
+                {staged ? tr('Bỏ stage khối') : tr('Stage khối')}
               </button>
             </div>
           ))}

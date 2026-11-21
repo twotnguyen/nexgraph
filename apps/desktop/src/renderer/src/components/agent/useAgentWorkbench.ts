@@ -1,3 +1,5 @@
+import { tr } from '../../strings'
+
 import { useEffect, useRef, useState } from 'react'
 import type { AgentContextUsage, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot, AgentTask, AgentToolRun, AgentUsage } from '@shared/agent-types'
 
@@ -15,7 +17,6 @@ const readPins = (projectId: string): string[] => {
 const writePins = (projectId: string, ids: string[]): boolean => {
   try { localStorage.setItem(pinKeyPrefix + projectId, JSON.stringify(ids)); return true } catch { return false }
 }
-const pinStorageError = 'Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'
 
 /** Telemetry and durable history are separate from the in-flight composer draft. */
 export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: AgentSessionSnapshot) => void) {
@@ -92,8 +93,8 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
         ? current.map((t) => t.id === event.tool.id ? event.tool : t) : [...current, event.tool])
       if (event.type === 'usage') setUsage(event.usage)
       if (event.type === 'context') setContext(event.context)
-      if (event.type === 'retry') setNotice(`Đang thử lại ${event.attempt}/${event.maxAttempts} sau ${Math.ceil(event.delayMs / 1000)} giây. ${event.message}`)
-      if (event.type === 'compaction') setNotice(event.active ? 'Đang tóm tắt ngữ cảnh để tiếp tục…' : 'Đã tóm tắt ngữ cảnh.')
+      if (event.type === 'retry') setNotice(tr('Đang thử lại {attempt}/{max} sau {seconds} giây. {message}', { attempt: event.attempt, max: event.maxAttempts, seconds: Math.ceil(event.delayMs / 1000), message: event.message }))
+      if (event.type === 'compaction') setNotice(event.active ? tr('Đang tóm tắt ngữ cảnh để tiếp tục…') : tr('Đã tóm tắt ngữ cảnh.'))
       if (event.type === 'command_output') setTools((current) => current.map((t) => t.id === event.id ? { ...t, output: (t.output + event.delta).slice(-65_536) } : t))
       if (event.type === 'done' || event.type === 'error') void refresh().catch(() => {})
     })
@@ -131,14 +132,14 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     togglePin: (id: string) => {
       const next = pinnedIds.includes(id) ? pinnedIds.filter((pin) => pin !== id) : [...pinnedIds, id]
       setPins({ projectId, ids: next })
-      setError(writePins(projectId, next) ? '' : pinStorageError)
+      setError(writePins(projectId, next) ? '' : tr('Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'))
     },
     rename: (id: string, title: string) => mutate(() => window.nexgraph.agent.renameSession(projectId, id, title)),
     remove: (id: string) => mutate(async () => {
       const generation = mutationSeq.current
       await window.nexgraph.agent.deleteSession(projectId, id)
       const saved = readPins(projectId)
-      if (saved.includes(id) && !writePins(projectId, saved.filter((pin) => pin !== id)) && alive.current && activeProject.current === projectId) setError(pinStorageError)
+      if (saved.includes(id) && !writePins(projectId, saved.filter((pin) => pin !== id)) && alive.current && activeProject.current === projectId) setError(tr('Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'))
       if (alive.current && activeProject.current === projectId)
         setPins((current) => ({ projectId, ids: (current.projectId === projectId ? current.ids : saved).filter((pin) => pin !== id) }))
       return alive.current && generation === mutationSeq.current ? window.nexgraph.agent.snapshot(projectId) : null
@@ -150,7 +151,8 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       const checkpoints = await window.nexgraph.agent.checkpoints(projectId, task.id)
       return { result, remaining: checkpoints.filter((checkpoint) => !checkpoint.restored).map((checkpoint) => checkpoint.id) }
     }, ({ result, remaining }) => {
-      setNotice(`Đã khôi phục ${result.restored.length} tệp.${result.conflicts.length ? ' Xung đột: ' + result.conflicts.map((c) => `${c.path}: ${c.reason}`).join('; ') : ''}`)
+      const conflicts = result.conflicts.length ? tr(' Xung đột: {items}', { items: result.conflicts.map((c) => `${c.path}: ${c.reason}`).join('; ') }) : ''
+      setNotice(tr('Đã khôi phục {count} tệp.{conflicts}', { count: result.restored.length, conflicts }))
       setTask({ ...task, checkpointIds: remaining })
     }) : Promise.resolve()
   }

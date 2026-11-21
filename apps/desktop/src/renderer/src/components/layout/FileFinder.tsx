@@ -4,6 +4,7 @@ import { fuzzyMatch } from '../../state/fuzzy'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from './Picker'
+import { tr } from '../../strings'
 
 type FileItem = { path: string; kind: 'file' | 'recent' | 'create' }
 const fileKey = (item: FileItem) => `${item.kind}:${item.path}`
@@ -47,7 +48,7 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
     let live = true
     setError(null)
     const load = window.nexgraph.fs.files
-    if (!load) { setError('Không liệt kê được tệp ở chế độ này'); return }
+    if (!load) { setError(tr('Không liệt kê được tệp ở chế độ này')); return }
     load(projectId).then(({ files: all }) => {
       if (live) setListing({ projectId, files: all })
     }).catch((e: unknown) => { if (live) setError(errorText(e)) })
@@ -71,7 +72,7 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
     setError(null)
     if (item.kind !== 'create') { onClose(); onOpen(item.path); return }
     const createFile = window.nexgraph.fs.createFile
-    if (!createFile) { setError('Không tạo được tệp ở chế độ này'); return }
+    if (!createFile) { setError(tr('Không tạo được tệp ở chế độ này')); return }
     creating.current = true
     try {
       await createFile(projectId, item.path)
@@ -84,20 +85,20 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
   }
 
   return (
-    <Picker label="Tìm tệp" placeholder="Tìm tệp…" className="file-finder" items={items} itemKey={fileKey} itemText={fileText} filter={filter}
-      empty={files ? 'Không có tệp khớp' : error ? 'Không có tệp để tìm' : 'Đang liệt kê tệp…'} error={error} onCancel={onClose}
+    <Picker label={tr('Tìm tệp')} placeholder={tr('Tìm tệp…')} className="file-finder" items={items} itemKey={fileKey} itemText={fileText} filter={filter}
+      empty={files ? tr('Không có tệp khớp') : error ? tr('Không có tệp để tìm') : tr('Đang liệt kê tệp…')} error={error} onCancel={onClose}
       onPick={(item) => { void pick(item) }}
       itemData={(item) => ({ 'data-path': item.path })}
       renderItem={(item, positions) => {
         const { path } = item
-        if (item.kind === 'create') return <><Icon name="plus" size={16} /><span>Tạo tệp {path}?</span></>
+        if (item.kind === 'create') return <><Icon name="plus" size={16} /><span>{tr('Tạo tệp {path}?', { path })}</span></>
         const cut = path.lastIndexOf('/') + 1
         const offset = Array.from(path.slice(0, cut)).length
         return <>
           <FileTypeIcon name={path.slice(cut)} />
           <b><Highlight text={path.slice(cut)} positions={positions.filter((p) => p >= offset)} offset={offset} /></b>
           <span className="picker-dir">{projectName}/<Highlight text={path.slice(0, cut)} positions={positions.filter((p) => p < offset)} /></span>
-          {item.kind === 'recent' && <span className="picker-history" role="img" aria-label="Mở gần đây" title="Mở gần đây"><Icon name="history" size={14} /></span>}
+          {item.kind === 'recent' && <span className="picker-history" role="img" aria-label={tr('Mở gần đây')} title={tr('Mở gần đây')}><Icon name="history" size={14} /></span>}
         </>
       }} />
   )

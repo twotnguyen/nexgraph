@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AskResult, GraphEdge, GraphNode, SearchHit } from '@shared/graph-types'
 import { useDebounced } from '../../state/useDebounced'
-import { vi } from '../../strings'
+import { vi, tr } from '../../strings'
 import { kindStyle } from '../graph/kindStyle'
 
 interface Props {
@@ -71,9 +71,9 @@ function SymbolSearch({ projectId, revision = 0, onOpen }: Props) {
         }}
         autoFocus
       />
-      {loading && <p role="status" className="muted small">Đang tìm ký hiệu…</p>}
+      {loading && <p role="status" className="muted small">{tr('Đang tìm ký hiệu…')}</p>}
       {error && <div className="panel-error"><p role="alert" className="error">{error}</p>
-        <button type="button" onClick={() => setRetry((value) => value + 1)}>Thử lại</button></div>}
+        <button type="button" onClick={() => setRetry((value) => value + 1)}>{tr('Thử lại')}</button></div>}
       {hits && hits.length === 0 && !error && <p className="muted">{vi.search.empty}</p>}
       {hits && hits.length > 0 && (
         <ul className="search-results">

@@ -1,5 +1,5 @@
 import type { ProjectSummary, ScanInfo } from '@shared/graph-types'
-import { vi } from '../strings'
+import { vi, tr } from '../strings'
 import { Icon } from '../components/common/icons'
 import './welcome.css'
 
@@ -17,11 +17,11 @@ export function LargeProjectScreen({ project, scan, onChoose, onCancel }: Props)
       <div className="welcome">
         <header className="welcome-head">
           <span className="welcome-icon"><Icon name="folder" size={22} /></span>
-          <div><h1>{project.name}</h1><p>Chọn phạm vi lập chỉ mục</p></div>
+          <div><h1>{project.name}</h1><p>{tr('Chọn phạm vi lập chỉ mục')}</p></div>
         </header>
         <div className="inline-message warning">{vi.large.message(scan.files, scan.threshold)}</div>
         {scan.top_dirs.length > 0 && <section className="welcome-section" aria-labelledby="large-dirs">
-          <h2 id="large-dirs" className="welcome-section-title">Thư mục con</h2>
+          <h2 id="large-dirs" className="welcome-section-title">{tr('Thư mục con')}</h2>
           <p className="welcome-hint">{vi.large.hint}</p>
           <ul className="welcome-list">
             {scan.top_dirs.map((d) => (

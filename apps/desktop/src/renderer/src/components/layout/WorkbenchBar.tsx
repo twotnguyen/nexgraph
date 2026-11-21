@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { tr } from '../../strings'
 import { Icon, Logo } from '../common/icons'
 import { THEMES, useTheme, useThemeId } from '../../state/useTheme'
 import { ThemePickerHost, openThemePicker } from './ThemePicker'
@@ -29,9 +30,9 @@ export function WorkbenchBar({ project }: { project?: { project_id: string; name
       <div className="workbench-brand">
         <Logo size={16} />
         {project ? <span className="workbench-project" title={project.name}>{project.name}</span> : <span>NexGraph</span>}
-        {branch && <span className="workbench-branch" title={`Nhánh ${branch}`}><Icon name="branch" size={13} />{branch}</span>}
+        {branch && <span className="workbench-branch" title={tr('Nhánh {name}', { name: branch })}><Icon name="branch" size={13} />{branch}</span>}
       </div>
-      <button type="button" className="theme-toggle" data-theme-id={themeId} aria-label={`Giao diện: ${themeName}`} title="Chọn theme · ⌘K ⌘T" aria-haspopup="dialog" onClick={openThemePicker}>
+      <button type="button" className="theme-toggle" data-theme-id={themeId} aria-label={tr('Giao diện: {name}', { name: themeName })} title={tr('Chọn theme · ⌘K ⌘T')} aria-haspopup="dialog" onClick={openThemePicker}>
         <Icon name={dark ? 'moon' : 'sun'} size={14} />
         <span>{themeName}</span>
       </button>

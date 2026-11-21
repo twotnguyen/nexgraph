@@ -40,6 +40,7 @@ import { currentTheme, observeTheme } from '../../state/useTheme'
 import { installFontKeys, monacoOptions } from './monacoPrefs'
 import { applyProjectEdits, diagnosticMarker } from './lspEdits'
 import { getDiagnostics, subscribeDiagnostics } from '../../state/diagnostics'
+import { tr } from '../../strings'
 
 
 // Bản tối thiểu không có UI chọn formatter: luôn dùng provider đầu tiên (LSP).
@@ -419,7 +420,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     setBreakpoints: (points) => breakpoints.set(points.map((point) => ({
       range: new monaco.Range(point.line, 1, point.line, 1),
       options: { glyphMarginClassName: `editor-breakpoint${point.enabled ? '' : ' editor-breakpoint-disabled'}${point.logMessage ? ' editor-breakpoint-log' : point.condition || point.hitCondition ? ' editor-breakpoint-condition' : ''}`,
-        glyphMarginHoverMessage: { value: point.logMessage ? 'Log point' : point.condition || point.hitCondition ? 'Điểm dừng có điều kiện' : 'Điểm dừng' } }
+        glyphMarginHoverMessage: { value: point.logMessage ? tr('Log point') : point.condition || point.hitCondition ? tr('Điểm dừng có điều kiện') : tr('Điểm dừng') } }
     }))),
     setExecLine: (line) => {
       exec.set(line ? [{ range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: 'editor-exec-line', glyphMarginClassName: 'editor-exec-arrow' } }] : [])

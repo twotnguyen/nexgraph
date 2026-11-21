@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ScanInfo } from '@shared/graph-types'
 import { installNexgraph, progress, project } from './test-utils'
+import { formatDate } from './state/locale'
 import App from './App'
 
 // jsdom không chạy được Monaco (thiếu matchMedia khi nạp phần gợi ý/hover); test này không mở editor.
@@ -135,7 +136,7 @@ describe('App flow after opening a project', () => {
     act(() => h.emit(progress('done', 10, 10)))
     await userEvent.click(screen.getByRole('button', { name: 'Bắt đầu khám phá' }))
     await userEvent.click(await screen.findByRole('button', { name: '← Tổng quan' }))
-    expect(await screen.findByText(`Index lần cuối: ${new Date(indexedAt * 1000).toLocaleString('vi-VN')}`)).toBeInTheDocument()
+    expect(await screen.findByText(`Index lần cuối: ${formatDate(indexedAt * 1000)}`)).toBeInTheDocument()
     expect(list).toHaveBeenCalledTimes(2)
   })
 

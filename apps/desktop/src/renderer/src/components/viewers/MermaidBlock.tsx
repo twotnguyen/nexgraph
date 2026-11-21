@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { errorText } from '../../state/errorText'
 import { useDebounced } from '../../state/useDebounced'
 import { useTheme } from '../../state/useTheme'
+import { tr } from '../../strings'
 
 // Nạp khi cần để gói mermaid không nằm trong bản tải lúc khởi động; mọi khối dùng chung một lần nạp.
 let loading: Promise<Mermaid> | undefined
@@ -39,7 +40,7 @@ export function MermaidBlock({ code, children }: { code: string; children: React
   // SVG do mermaid trả về ở securityLevel 'strict' (đã qua DOMPurify), không chèn HTML nào khác.
   if (result.svg) return <div className="md-mermaid" dangerouslySetInnerHTML={{ __html: result.svg }} />
   return <>
-    {result.error && <p role="alert" className="md-mermaid-error">Không vẽ được sơ đồ: {result.error}</p>}
+    {result.error && <p role="alert" className="md-mermaid-error">{tr('Không vẽ được sơ đồ: {error}', { error: result.error })}</p>}
     <pre>{children}</pre>
   </>
 }

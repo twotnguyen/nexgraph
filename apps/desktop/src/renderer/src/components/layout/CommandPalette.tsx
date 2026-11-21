@@ -1,5 +1,8 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 import { availableCommands, bindingFor, eventToStroke, formatKey, runCommand, setBinding, useCommand, useKeybindings, type CommandDef } from '../../state/commands'
+import { localizeCommand } from '../../state/commandLabels'
+import { useLocale } from '../../state/locale'
+import { tr } from '../../strings'
 import { Highlight, Picker } from './Picker'
 
 const HITS = 'nexgraph.command.hits'
@@ -11,7 +14,6 @@ const readHits = (): Record<string, number> => {
     return {}
   }
 }
-const label = (command: CommandDef) => `${command.category}: ${command.title}`
 const commandKey = (command: CommandDef) => command.id
 
 function Recorder({ onDone }: { onDone: (key: string | undefined, restoreFocus?: boolean) => void }) {
@@ -26,14 +28,19 @@ function Recorder({ onDone }: { onDone: (key: string | undefined, restoreFocus?:
     const stroke = eventToStroke(event.nativeEvent)
     if (stroke) setStrokes((current) => [...current, stroke].slice(-2))
   }
-  return <span className="picker-recorder" data-keymap-recorder tabIndex={0} role="textbox" aria-label="Nhấn tổ hợp phím mới"
+  return <span className="picker-recorder" data-keymap-recorder tabIndex={0} role="textbox" aria-label={tr('Nhấn tổ hợp phím mới')}
     ref={(element) => element?.focus()} onKeyDown={onKeyDown} onBlur={() => onDone(undefined, false)}>
-    {strokes.length ? formatKey(strokes.join(' ')) : 'Nhấn phím… (Enter lưu, Esc huỷ)'}
+    {strokes.length ? formatKey(strokes.join(' ')) : tr('Nhấn phím… (Enter lưu, Esc huỷ)')}
   </span>
 }
 
 /** Gắn một lần ở gốc app: ⌘⇧P mở bảng lệnh kiểu Wu; lệnh dùng nhiều đứng trước khi chưa gõ. */
 export function CommandPaletteHost() {
+  useLocale()
+  const label = (command: CommandDef) => {
+    const { title, category } = localizeCommand(command)
+    return `${category}: ${title}`
+  }
   const [items, setItems] = useState<CommandDef[] | null>(null)
   const [recording, setRecording] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -50,8 +57,8 @@ export function CommandPaletteHost() {
   if (!items) return null
   const close = () => { setRecording(null); setItems(null) }
   return (
-    <Picker label="Bảng lệnh" placeholder="Chạy lệnh…" className="command-palette" items={items} itemKey={commandKey} itemText={label}
-      empty="Không có lệnh khớp" onCancel={close} inputRef={inputRef}
+    <Picker label={tr('Bảng lệnh')} placeholder={tr('Chạy lệnh…')} className="command-palette" items={items} itemKey={commandKey} itemText={label}
+      empty={tr('Không có lệnh khớp')} onCancel={close} inputRef={inputRef}
       onActive={(command) => setRecording((current) => current && current !== command.id ? null : current)}
       onSecondary={(command) => setRecording(command.id)}
       footer={(command, pick) => recording === command.id
@@ -62,9 +69,9 @@ export function CommandPaletteHost() {
         }} />
         : <>
           <button type="button" onClick={() => setRecording(command.id)}>
-            {bindingFor(command.id) ? 'Đổi phím tắt…' : 'Thêm phím tắt…'} <kbd>⌘↵</kbd>
+            {bindingFor(command.id) ? tr('Đổi phím tắt…') : tr('Thêm phím tắt…')} <kbd>⌘↵</kbd>
           </button>
-          <button type="button" onClick={pick}>Chạy <kbd>↵</kbd></button>
+          <button type="button" onClick={pick}>{tr('Chạy')} <kbd>↵</kbd></button>
         </>}
       onPick={(command) => {
         close()

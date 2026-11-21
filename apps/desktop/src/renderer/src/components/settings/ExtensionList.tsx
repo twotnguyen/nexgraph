@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { installExtension, removeExtension, useExtensions } from '../../state/extensions'
 import { errorText } from '../../state/errorText'
+import { tr } from '../../strings'
 
 /** Trang Extension trong Cài đặt: danh sách đã cài (theme, lệnh), nút cài từ thư mục, gỡ, lỗi manifest. */
 export function ExtensionList() {
@@ -17,12 +18,12 @@ export function ExtensionList() {
       <div className="row">
         <button type="button" className="primary" disabled={busy || !window.nexgraph.extensions} onClick={() => void act(async () => {
           const ext = await installExtension()
-          if (ext) setMessage(`Đã cài ${ext.name} ${ext.version}`)
-        })}>Cài từ thư mục…</button>
+          if (ext) setMessage(tr('Đã cài {name} {version}', { name: ext.name, version: ext.version }))
+        })}>{tr('Cài từ thư mục…')}</button>
         {message && <span role="status" className="muted">{message}</span>}
       </div>
       {error && <p role="alert" className="error">{error}</p>}
-      {extensions.length === 0 && <p className="muted">Chưa cài extension nào.</p>}
+      {extensions.length === 0 && <p className="muted">{tr('Chưa cài extension nào.')}</p>}
       <ul>
         {extensions.map((ext) => (
           <li key={ext.id}>
@@ -30,11 +31,11 @@ export function ExtensionList() {
               <b>{ext.name}</b> <span className="muted">{ext.version} · {ext.id}</span>
               {ext.description && <p className="muted">{ext.description}</p>}
               <p className="muted">
-                {ext.themes.length > 0 && <>Theme: {ext.themes.map((t) => t.name).join(', ')}. </>}
-                {ext.commands.length > 0 && <>Lệnh: {ext.commands.map((c) => c.title).join(', ')}.</>}
+                {ext.themes.length > 0 && <>{tr('Theme: {names}.', { names: ext.themes.map((t) => t.name).join(', ') })}{' '}</>}
+                {ext.commands.length > 0 && <>{tr('Lệnh: {titles}.', { titles: ext.commands.map((c) => c.title).join(', ') })}</>}
               </p>
             </div>
-            <button type="button" disabled={busy} onClick={() => void act(() => removeExtension(ext.id))}>Gỡ</button>
+            <button type="button" disabled={busy} onClick={() => void act(() => removeExtension(ext.id))}>{tr('Gỡ')}</button>
           </li>
         ))}
         {errors.map((e) => (

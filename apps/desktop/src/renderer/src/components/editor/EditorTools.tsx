@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspLocation, LspWorkspaceSymbol } from '@shared/api'
+import { tr } from '../../strings'
 import { useCommand } from '../../state/commands'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { errorText } from '../../state/errorText'
@@ -47,9 +48,9 @@ function GoToLineDialog({ editor, close }: { editor: ActiveEditor; close: (resto
     close()
   }
   return <div className="picker-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) close() }}>
-    <form className="picker editor-tool-dialog" role="dialog" aria-modal="true" aria-label="Đi đến dòng" onSubmit={submit} onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); close() } }}>
-      <label htmlFor="goto-line-input">Đi đến dòng</label>
-      <input id="goto-line-input" autoFocus value={value} placeholder="Dòng[:cột] hoặc +/- số dòng" aria-describedby="goto-line-help" aria-invalid={invalid}
+    <form className="picker editor-tool-dialog" role="dialog" aria-modal="true" aria-label={tr('Đi đến dòng')} onSubmit={submit} onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); close() } }}>
+      <label htmlFor="goto-line-input">{tr('Đi đến dòng')}</label>
+      <input id="goto-line-input" autoFocus value={value} placeholder={tr('Dòng[:cột] hoặc +/- số dòng')} aria-describedby="goto-line-help" aria-invalid={invalid}
         onChange={(event) => {
           const next = event.target.value
           setValue(next)
@@ -58,9 +59,9 @@ function GoToLineDialog({ editor, close }: { editor: ActiveEditor; close: (resto
           if (target) editor.handle.previewPosition?.(target.line)
           else { editor.handle.clearPreview?.(); if (scroll) editor.handle.setScrollPosition?.(scroll) }
         }} />
-      <p id="goto-line-help">Dòng hiện tại: {position.line} / {lineCount} (cột {position.column})</p>
-      {invalid && <p className="editor-tool-error" role="alert">Nhập dòng hoặc dòng:cột hợp lệ.</p>}
-      <div className="editor-tool-actions"><button type="button" onClick={() => close()}>Hủy</button><button type="submit">Đi đến</button></div>
+      <p id="goto-line-help">{tr('Dòng hiện tại: {line} / {lineCount} (cột {column})', { line: position.line, lineCount, column: position.column })}</p>
+      {invalid && <p className="editor-tool-error" role="alert">{tr('Nhập dòng hoặc dòng:cột hợp lệ.')}</p>}
+      <div className="editor-tool-actions"><button type="button" onClick={() => close()}>{tr('Hủy')}</button><button type="submit">{tr('Đi đến')}</button></div>
     </form>
   </div>
 }
@@ -75,26 +76,26 @@ function RenameDialog({ projectId, editor, close }: { projectId: string; editor:
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
-    if (!name.trim()) { setError('Nhập tên mới.'); return }
-    if (!position || !window.nexgraph?.lsp?.rename) { setError('Không thể đổi tên ký hiệu trong tệp này.'); return }
+    if (!name.trim()) { setError(tr('Nhập tên mới.')); return }
+    if (!position || !window.nexgraph?.lsp?.rename) { setError(tr('Không thể đổi tên ký hiệu trong tệp này.')); return }
     setBusy(true)
     setError(null)
     try {
       await editorMonaco.syncProjectModels(projectId)
       const text = editor.text()
       const edit = await window.nexgraph.lsp.rename(projectId, editor.file, text, position.line, position.column, name.trim())
-      if (editor.text() !== text) throw new Error('Tệp đã thay đổi trong khi đổi tên. Hãy thử lại.')
+      if (editor.text() !== text) throw new Error(tr('Tệp đã thay đổi trong khi đổi tên. Hãy thử lại.'))
       await editorMonaco.applyWorkspaceEdit(projectId, edit)
       close()
     } catch (e) { setError(errorText(e)); setBusy(false) }
   }
   return <div className="picker-layer" onPointerDown={(event) => { if (!busy && event.target === event.currentTarget) close() }}>
-    <form className="picker editor-tool-dialog" role="dialog" aria-modal="true" aria-label="Đổi tên ký hiệu" onSubmit={(event) => void submit(event)}
+    <form className="picker editor-tool-dialog" role="dialog" aria-modal="true" aria-label={tr('Đổi tên ký hiệu')} onSubmit={(event) => void submit(event)}
       onKeyDown={(event) => { if (event.key === 'Escape' && !busy) { event.preventDefault(); close() } }}>
-      <label htmlFor="rename-symbol-input">Tên mới</label>
+      <label htmlFor="rename-symbol-input">{tr('Tên mới')}</label>
       <input id="rename-symbol-input" ref={input} autoFocus value={name} onChange={(event) => setName(event.target.value)} disabled={busy} aria-invalid={!!error} />
       {error && <p className="editor-tool-error" role="alert">{error}</p>}
-      <div className="editor-tool-actions"><button type="button" disabled={busy} onClick={() => close()}>Hủy</button><button type="submit" disabled={busy}>Đổi tên</button></div>
+      <div className="editor-tool-actions"><button type="button" disabled={busy} onClick={() => close()}>{tr('Hủy')}</button><button type="submit" disabled={busy}>{tr('Đổi tên')}</button></div>
     </form>
   </div>
 }
@@ -102,21 +103,21 @@ function RenameDialog({ projectId, editor, close }: { projectId: string; editor:
 function WorkspaceSymbolPicker({ projectId, onOpen, close }: { projectId: string; onOpen: OpenEditorLocation; close: (restore?: boolean) => void }) {
   const [query, setQuery] = useState('')
   const [symbols, setSymbols] = useState<LspWorkspaceSymbol[]>([])
-  const [status, setStatus] = useState('Đang tìm ký hiệu…')
+  const [status, setStatus] = useState(() => tr('Đang tìm ký hiệu…'))
   useEffect(() => {
     let live = true
     const timer = setTimeout(() => {
       const api = window.nexgraph?.lsp?.workspaceSymbols
-      if (!api) { setStatus('Không hỗ trợ tìm ký hiệu trong dự án.'); return }
+      if (!api) { setStatus(tr('Không hỗ trợ tìm ký hiệu trong dự án.')); return }
       void Promise.resolve().then(() => api(projectId, query)).then((items) => {
-        if (live) { setSymbols(items.slice(0, 100)); setStatus('Không có ký hiệu khớp') }
+        if (live) { setSymbols(items.slice(0, 100)); setStatus(tr('Không có ký hiệu khớp')) }
       }).catch((error: unknown) => { if (live) setStatus(errorText(error)) })
     }, 200)
     return () => { live = false; clearTimeout(timer) }
   }, [projectId, query])
-  return <Picker label="Tìm ký hiệu trong dự án" placeholder="Tìm ký hiệu trong dự án…" items={symbols}
+  return <Picker label={tr('Tìm ký hiệu trong dự án')} placeholder={tr('Tìm ký hiệu trong dự án…')} items={symbols}
     itemKey={(item) => `${item.file}:${item.range.start.line}:${item.range.start.character}:${item.name}`} itemText={(item) => item.name}
-    filter={(items) => items.map((item) => ({ item, positions: [] }))} onQueryChange={(value) => { setSymbols([]); setStatus('Đang tìm ký hiệu…'); setQuery(value) }}
+    filter={(items) => items.map((item) => ({ item, positions: [] }))} onQueryChange={(value) => { setSymbols([]); setStatus(tr('Đang tìm ký hiệu…')); setQuery(value) }}
     empty={status} onCancel={() => close()} onPick={(symbol) => { close(false); onOpen(symbol.file, symbol.range.start.line + 1, symbol.range.start.character + 1) }}
     renderItem={(symbol) => <><span>{symbol.name}{symbol.containerName ? ` · ${symbol.containerName}` : ''}</span><small>{symbol.file}:{symbol.range.start.line + 1}</small></>} />
 }
@@ -175,12 +176,12 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   }
   const loadCalls = async (direction: 'incoming' | 'outgoing', root: LspCallHierarchyItem) => {
     const serial = ++hierarchySerial.current
-    setMode({ kind: 'hierarchy', direction, root, rows: [], status: 'Đang tải lời gọi…' })
+    setMode({ kind: 'hierarchy', direction, root, rows: [], status: tr('Đang tải lời gọi…') })
     try {
       const api = window.nexgraph?.lsp
-      if (!api?.callHierarchyIncoming || !api.callHierarchyOutgoing) { onError('Phân cấp lời gọi không dùng được trong tệp này.'); return }
+      if (!api?.callHierarchyIncoming || !api.callHierarchyOutgoing) { onError(tr('Phân cấp lời gọi không dùng được trong tệp này.')); return }
       const text = editor && root.file === editor.file ? editor.text() : await window.nexgraph?.fs?.read(projectId, root.file).then((read) => read.text)
-      if (text === undefined) { onError('Không đọc được tệp chứa ký hiệu.'); return }
+      if (text === undefined) { onError(tr('Không đọc được tệp chứa ký hiệu.')); return }
       const line = root.range.start.line + 1
       const column = root.range.start.character + 1
       const calls: LspCallHierarchyCall[] = direction === 'incoming'
@@ -197,7 +198,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
             line: site.line + 1, column: site.character + 1, isCall: true
           }
         }),
-        status: calls.length ? '' : (direction === 'incoming' ? 'Không có lời gọi vào.' : 'Không có lời gọi ra.')
+        status: calls.length ? '' : (direction === 'incoming' ? tr('Không có lời gọi vào.') : tr('Không có lời gọi ra.'))
       } : current)
     } catch (error) { if (serial === hierarchySerial.current) { onError(errorText(error)); close() } }
   }
@@ -213,7 +214,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     const position = editor.handle.getPosition?.()
     const api = window.nexgraph?.lsp
     if (!position || !api?.callHierarchyPrepare || !api.callHierarchyIncoming || !api.callHierarchyOutgoing) {
-      onError('Phân cấp lời gọi không dùng được trong tệp này.')
+      onError(tr('Phân cấp lời gọi không dùng được trong tệp này.'))
       return
     }
     const serial = ++hierarchySerial.current
@@ -225,7 +226,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
         item, name: item.name, file: item.file,
         line: item.range.start.line + 1, column: item.range.start.character + 1, isCall: false
       }))
-      open({ kind: 'hierarchy', direction, root: null, rows, status: rows.length ? '' : 'Không có ký hiệu gọi được tại con trỏ.' })
+      open({ kind: 'hierarchy', direction, root: null, rows, status: rows.length ? '' : tr('Không có ký hiệu gọi được tại con trỏ.') })
     } catch (error) { if (serial === hierarchySerial.current) onError(errorText(error)) }
   }
   const action = (id: string) => {
@@ -236,26 +237,26 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     if (!editor) return
     const position = editor.handle.getPosition?.()
     const api = window.nexgraph?.lsp?.[kind]
-    if (!position || !api) { onError('Không hỗ trợ điều hướng ký hiệu trong tệp này.'); return }
+    if (!position || !api) { onError(tr('Không hỗ trợ điều hướng ký hiệu trong tệp này.')); return }
     try {
       const found = await api(projectId, editor.file, editor.text(), position.line, position.column)
-      if (!found.length) { onError(kind === 'references' ? 'Không tìm thấy tham chiếu.' : 'Không tìm thấy phần triển khai.'); return }
+      if (!found.length) { onError(kind === 'references' ? tr('Không tìm thấy tham chiếu.') : tr('Không tìm thấy phần triển khai.')); return }
       if (found.length === 1) onOpen(found[0].file, found[0].line, found[0].column)
-      else open({ kind: 'locations', title: kind === 'references' ? 'Tham chiếu' : 'Phần triển khai', locations: found })
+      else open({ kind: 'locations', title: kind === 'references' ? tr('Tham chiếu') : tr('Phần triển khai'), locations: found })
     } catch (error) { onError(errorText(error)) }
   }
   // Permalink kiểu Wu: vùng chọn (không có thì dòng con trỏ) tại commit HEAD trên remote; main quy số dòng về HEAD.
   const permalink = async (copy: boolean) => {
     if (!editor) return
     const api = window.nexgraph?.git
-    if (!api) { onError('Git không dùng được ở chế độ này.'); return }
+    if (!api) { onError(tr('Git không dùng được ở chế độ này.')); return }
     const selection = editor.handle.getSelection?.()
     const line = editor.handle.getPosition?.().line
     try {
       const { url, published } = await api.permalink(projectId, editor.file, selection?.start ?? line, selection?.end ?? line, editor.text())
       if (copy) await navigator.clipboard.writeText(url)
       else window.open(url, '_blank', 'noopener,noreferrer') // main chỉ mở http(s) (setWindowOpenHandler → externalWebUrl)
-      if (!published) onError('Lưu ý: commit HEAD chưa có trên remote nên liên kết có thể không mở được. Hãy push trước khi chia sẻ.')
+      if (!published) onError(tr('Lưu ý: commit HEAD chưa có trên remote nên liên kết có thể không mở được. Hãy push trước khi chia sẻ.'))
     } catch (error) { onError(errorText(error)) }
   }
   useCommand('editor.goto_line', () => { if (editor) open({ kind: 'goto', editor }) }, !!editor)
@@ -281,11 +282,11 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   if (mode.kind === 'goto') return <GoToLineDialog editor={mode.editor} close={close} />
   if (mode.kind === 'rename') return <RenameDialog projectId={projectId} editor={mode.editor} close={close} />
   if (mode.kind === 'workspace') return <WorkspaceSymbolPicker projectId={projectId} onOpen={onOpen} close={close} />
-  if (mode.kind === 'locations') return <Picker label={mode.title} placeholder="Lọc vị trí…" items={mode.locations.map((location, index) => ({ location, index }))}
+  if (mode.kind === 'locations') return <Picker label={mode.title} placeholder={tr('Lọc vị trí…')} items={mode.locations.map((location, index) => ({ location, index }))}
     itemKey={(item) => String(item.index)} itemText={(item) => `${item.location.file}:${item.location.line}:${item.location.column}`}
-    empty="Không có vị trí khớp" onCancel={() => close()} onPick={({ location }) => { close(false); onOpen(location.file, location.line, location.column) }}
+    empty={tr('Không có vị trí khớp')} onCancel={() => close()} onPick={({ location }) => { close(false); onOpen(location.file, location.line, location.column) }}
     renderItem={({ location }, positions) => <span><Highlight text={`${location.file}:${location.line}:${location.column}`} positions={positions} /></span>} />
-  if (mode.kind === 'hierarchy') return <Picker label="Phân cấp lời gọi" placeholder="Lọc ký hiệu hoặc lời gọi…" items={mode.rows}
+  if (mode.kind === 'hierarchy') return <Picker label={tr('Phân cấp lời gọi')} placeholder={tr('Lọc ký hiệu hoặc lời gọi…')} items={mode.rows}
     itemKey={(row) => row.key} itemText={(row) => row.name}
     renderItem={(row, positions) => <><span><Highlight text={row.name} positions={positions} /></span><small>{row.file}:{row.line}</small></>}
     empty={mode.status} onCancel={() => close()} onPick={(row) => {
@@ -294,8 +295,8 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
       onOpen(row.file, row.line, row.column)
     }} />
   const rows = flattenSymbols(symbols)
-  return <Picker label="Tìm ký hiệu trong tệp" placeholder="Tìm ký hiệu trong tệp…" items={rows} itemKey={(item) => item.id} itemText={(item) => item.symbol.name}
-    empty={symbolsError ?? 'Không có ký hiệu khớp'} onCancel={() => close()} onPick={({ symbol }) => {
+  return <Picker label={tr('Tìm ký hiệu trong tệp')} placeholder={tr('Tìm ký hiệu trong tệp…')} items={rows} itemKey={(item) => item.id} itemText={(item) => item.symbol.name}
+    empty={symbolsError ?? tr('Không có ký hiệu khớp')} onCancel={() => close()} onPick={({ symbol }) => {
       close(false)
       const { line, character } = symbol.selectionRange.start
       if (mode.editor.handle.revealPosition) mode.editor.handle.revealPosition(line + 1, character + 1)

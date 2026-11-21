@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TourStep } from '@shared/graph-types'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 
 interface Props {
   projectId: string
@@ -46,8 +46,8 @@ export function TourPanel({ projectId, revision = 0, projectName, onOpenFlow, on
   }
 
   if (error) return <div className="panel-error"><p role="alert" className="error">{error}</p>
-    <button type="button" onClick={() => setRetry((n) => n + 1)}>Thử lại</button></div>
-  if (!steps) return <p role="status" className="muted">Đang chuẩn bị chuyến tham quan…</p>
+    <button type="button" onClick={() => setRetry((n) => n + 1)}>{tr('Thử lại')}</button></div>
+  if (!steps) return <p role="status" className="muted">{tr('Đang chuẩn bị chuyến tham quan…')}</p>
   if (steps.length === 0) return <p className="muted">{vi.tour.empty}</p>
   const last = index === steps.length - 1
   return (

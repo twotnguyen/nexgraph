@@ -12,7 +12,7 @@ interface Props {
 /** Một thẻ gồm nhiều đoạn mã: mỗi đoạn là một EditorTab gắn đúng đường dẫn tệp gốc. */
 export function MultiBufferView({ projectId, request, active = true, onClose, onDirtyChange }: Props) {
   return (
-    <div className="multi-buffer" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+    <div className="multi-buffer" style={{ position: 'absolute', inset: 0, display: active ? 'flex' : 'none', flexDirection: 'column', overflow: 'auto' }}>
       {request.excerpts.map((excerpt) => {
         const range = `${excerpt.file}:${excerpt.startLine}-${excerpt.endLine}`
         return (

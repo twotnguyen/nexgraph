@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TextSearchQuery, TextSearchResult } from '@shared/api'
 import { useDebounced } from '../../state/useDebounced'
+import { tr } from '../../strings'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import './project-search.css'
@@ -55,11 +56,12 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
     if (!result || !api.replaceText) return
     const files = result.files.map((f) => f.file).filter((f) => !dirtyFiles.has(f))
     const held = result.files.length - files.length
-    if (!files.length || !window.confirm(`Thay ${total} chỗ trong ${files.length} tệp bằng “${replacement}”?`)) return
+    if (!files.length || !window.confirm(tr('Thay {count} chỗ trong {files} tệp bằng “{text}”?', { count: total, files: files.length, text: replacement }))) return
     try {
       const done = await api.replaceText(projectId, debounced, replacement, files)
       const skipped = done.skipped.length + held
-      setStatus(`Đã thay ${done.replacements} chỗ trong ${done.files} tệp${skipped ? `; bỏ qua ${skipped} tệp đang sửa hoặc vừa đổi` : ''}.`)
+      const skippedText = skipped ? tr('; bỏ qua {count} tệp đang sửa hoặc vừa đổi', { count: skipped }) : ''
+      setStatus(tr('Đã thay {count} chỗ trong {files} tệp{skipped}.', { count: done.replacements, files: done.files, skipped: skippedText }))
       setRuns((n) => n + 1)
     } catch (e) {
       setError(message(e))
@@ -69,22 +71,22 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
   return (
     <div className="project-search">
       <div className="ps-row">
-        <button type="button" className="ps-toggle ps-expand" aria-label={showReplace ? 'Ẩn ô thay' : 'Hiện ô thay'} aria-expanded={showReplace} onClick={() => setShowReplace((v) => !v)}>
+        <button type="button" className="ps-toggle ps-expand" aria-label={showReplace ? tr('Ẩn ô thay') : tr('Hiện ô thay')} aria-expanded={showReplace} onClick={() => setShowReplace((v) => !v)}>
           <Icon name="chevron" size={12} />
         </button>
         <div className="ps-field">
-          <input ref={input} type="text" aria-label="Tìm trong tệp" placeholder="Tìm trong tệp…" value={query.query} onChange={(e) => set({ query: e.target.value })} />
-          {toggle('caseSensitive', 'Phân biệt hoa thường', 'Aa')}
-          {toggle('wholeWord', 'Khớp nguyên từ', 'ab')}
-          {toggle('regex', 'Biểu thức chính quy', '.*')}
-          <button type="button" className="ps-toggle" aria-label="Lọc tệp" aria-pressed={showFilters} title="Lọc tệp" onClick={() => setShowFilters((v) => !v)}>…</button>
+          <input ref={input} type="text" aria-label={tr('Tìm trong tệp')} placeholder={tr('Tìm trong tệp…')} value={query.query} onChange={(e) => set({ query: e.target.value })} />
+          {toggle('caseSensitive', tr('Phân biệt hoa thường'), 'Aa')}
+          {toggle('wholeWord', tr('Khớp nguyên từ'), 'ab')}
+          {toggle('regex', tr('Biểu thức chính quy'), '.*')}
+          <button type="button" className="ps-toggle" aria-label={tr('Lọc tệp')} aria-pressed={showFilters} title={tr('Lọc tệp')} onClick={() => setShowFilters((v) => !v)}>…</button>
         </div>
       </div>
       {showReplace && (
         <div className="ps-row ps-indent">
           <div className="ps-field">
-            <input aria-label="Thay bằng" placeholder="Thay bằng…" value={replacement} onChange={(e) => setReplacement(e.target.value)} />
-            <button type="button" className="ps-toggle" aria-label="Thay tất cả" title="Thay tất cả" disabled={!total || busy} onClick={() => void replaceAll()}>
+            <input aria-label={tr('Thay bằng')} placeholder={tr('Thay bằng…')} value={replacement} onChange={(e) => setReplacement(e.target.value)} />
+            <button type="button" className="ps-toggle" aria-label={tr('Thay tất cả')} title={tr('Thay tất cả')} disabled={!total || busy} onClick={() => void replaceAll()}>
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M4 7h12m-3-3 3 3-3 3M20 17H8m3-3-3 3 3 3" />
               </svg>
@@ -94,15 +96,15 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
       )}
       {showFilters && (
         <div className="ps-filters ps-indent">
-          <input aria-label="Chỉ trong tệp" placeholder="Chỉ trong: src/**, *.ts" value={query.include ?? ''} onChange={(e) => set({ include: e.target.value })} />
-          <input aria-label="Bỏ qua tệp" placeholder="Bỏ qua: **/*.test.ts" value={query.exclude ?? ''} onChange={(e) => set({ exclude: e.target.value })} />
+          <input aria-label={tr('Chỉ trong tệp')} placeholder={tr('Chỉ trong: src/**, *.ts')} value={query.include ?? ''} onChange={(e) => set({ include: e.target.value })} />
+          <input aria-label={tr('Bỏ qua tệp')} placeholder={tr('Bỏ qua: **/*.test.ts')} value={query.exclude ?? ''} onChange={(e) => set({ exclude: e.target.value })} />
         </div>
       )}
       <p className="ps-summary muted" role="status">
-        {error ?? status ?? (busy ? 'Đang tìm…' : result ? (total ? `${total} kết quả trong ${result.files.length} tệp${result.truncated ? ' (đã rút gọn)' : ''}` : 'Không có kết quả') : '')}
+        {error ?? status ?? (busy ? tr('Đang tìm…') : result ? (total ? tr('{count} kết quả trong {files} tệp{truncated}', { count: total, files: result.files.length, truncated: result.truncated ? tr(' (đã rút gọn)') : '' }) : tr('Không có kết quả')) : '')}
       </p>
       {result && (
-        <ul className="ps-results" aria-label="Kết quả tìm">
+        <ul className="ps-results" aria-label={tr('Kết quả tìm')}>
           {result.files.map(({ file, matches }) => {
             const cut = file.lastIndexOf('/') + 1
             const open = !collapsed.has(file)
@@ -133,7 +135,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
                       const croppedEnd = text.length - at === 200 || at + m.length > text.length
                       return (
                         <li key={`${m.line}:${m.column}`}>
-                          <button type="button" className="ps-match" onClick={() => onOpen(file, m.line)} title={`Dòng ${m.line}`}>
+                          <button type="button" className="ps-match" onClick={() => onOpen(file, m.line)} title={tr('Dòng {line}', { line: m.line })}>
                             <span className="ps-line muted">{m.line}</span>
                             <span className="ps-preview">
                               <span className="ps-context-before">{m.previewStart > 0 || start > 0 ? '…' : ''}{before.slice(start)}</span>

@@ -1,3 +1,4 @@
+import { tr } from '../strings'
 /**
  * Base keymap: bộ phím nền phủ lên phím mặc định của NexGraph (state/commands.ts); phím người dùng tự sửa vẫn thắng.
  * Soạn theo phím macOS của từng IDE và chỉ gồm lệnh NexGraph có chức năng tương đương thật; lệnh không có ở đây giữ phím mặc định.
@@ -8,7 +9,7 @@
 export type BaseKeymapId = 'default' | 'vscode' | 'jetbrains' | 'sublime'
 
 export const BASE_KEYMAPS: Record<BaseKeymapId, { label: string; keys: Record<string, string> }> = {
-  default: { label: 'NexGraph (mặc định)', keys: {} },
+  default: { get label() { return tr('NexGraph (mặc định)') }, keys: {} },
   // Phím mặc định của NexGraph vốn theo VS Code (như Wu) nên chỉ liệt kê chỗ khác nhau.
   vscode: {
     label: 'VS Code',

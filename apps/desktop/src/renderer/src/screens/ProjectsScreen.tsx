@@ -3,7 +3,8 @@ import type { GlobalMember, ProjectSummary } from '@shared/graph-types'
 import { Icon, Logo } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
 import { waitJob } from '../state/waitJob'
-import { vi } from '../strings'
+import { formatDate } from '../state/locale'
+import { vi, tr } from '../strings'
 import './welcome.css'
 import './projects.css'
 
@@ -18,11 +19,9 @@ interface Props {
 function message(err: unknown) {
   const failure = err as { code?: string; message?: string } | null
   if (failure?.code === 'bad_path') return vi.projects.openFailed
-  if (failure?.code === 'project_busy') return 'Dự án đang cập nhật đồ thị. Đợi hoàn tất hoặc hủy lập chỉ mục rồi thử lại.'
+  if (failure?.code === 'project_busy') return tr('Dự án đang cập nhật đồ thị. Đợi hoàn tất hoặc hủy lập chỉ mục rồi thử lại.')
   return failure?.message ?? String(err)
 }
-
-const dateFormat = new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' })
 
 function RemoveProjectDialog({ project, busy, onCancel, onRemove }: {
   project: ProjectSummary
@@ -40,11 +39,11 @@ function RemoveProjectDialog({ project, busy, onCancel, onRemove }: {
   return (
     <dialog className="modal" ref={dialog} aria-labelledby="remove-project-title"
       onCancel={(e) => { e.preventDefault(); if (!busy) onCancel() }}>
-      <h2 id="remove-project-title">Gỡ dự án khỏi danh sách</h2>
-      <p><strong>{project.name}</strong> sẽ biến mất khỏi danh sách dự án gần đây. Mã nguồn và đồ thị đã lưu vẫn được giữ để mở lại sau.</p>
+      <h2 id="remove-project-title">{tr('Gỡ dự án khỏi danh sách')}</h2>
+      <p><strong>{project.name}</strong> {tr('sẽ biến mất khỏi danh sách dự án gần đây. Mã nguồn và đồ thị đã lưu vẫn được giữ để mở lại sau.')}</p>
       <footer>
-        <button type="button" autoFocus disabled={busy} onClick={onCancel}>Hủy</button>
-        <button type="button" className="danger" disabled={busy} onClick={onRemove}>{busy ? 'Đang gỡ…' : 'Gỡ dự án'}</button>
+        <button type="button" autoFocus disabled={busy} onClick={onCancel}>{tr('Hủy')}</button>
+        <button type="button" className="danger" disabled={busy} onClick={onRemove}>{busy ? tr('Đang gỡ…') : tr('Gỡ dự án')}</button>
       </footer>
     </dialog>
   )
@@ -151,7 +150,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
       }
       if (!mounted.current) return
       setRecent((projects) => projects.filter((item) => item.project_id !== project.project_id))
-      setNotice(`Đã gỡ ${project.name} khỏi danh sách gần đây.`)
+      setNotice(tr('Đã gỡ {name} khỏi danh sách gần đây.', { name: project.name }))
       window.requestAnimationFrame(() => openButton.current?.focus())
     })
   }
@@ -162,14 +161,14 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
       <header className="welcome-head">
         <Logo size={45} />
         <div>
-          <h1>{recent.length ? 'Chào mừng trở lại NexGraph' : 'Chào mừng đến NexGraph'}</h1>
-          <p>Biến mã nguồn thành đồ thị để khám phá kiến trúc, luồng và vùng ảnh hưởng</p>
+          <h1>{recent.length ? tr('Chào mừng trở lại NexGraph') : tr('Chào mừng đến NexGraph')}</h1>
+          <p>{tr('Biến mã nguồn thành đồ thị để khám phá kiến trúc, luồng và vùng ảnh hưởng')}</p>
         </div>
       </header>
       <section className="welcome-section" aria-labelledby="start-heading">
-        <h2 id="start-heading" className="welcome-section-title">Bắt đầu</h2>
+        <h2 id="start-heading" className="welcome-section-title">{tr('Bắt đầu')}</h2>
         <button ref={openButton} type="button" className="welcome-row" disabled={!engineReady || pending !== null} onClick={() => open()}>
-          <Icon name="folder" size={14} /><span>{pending === 'open' ? 'Đang mở…' : vi.projects.open}</span>
+          <Icon name="folder" size={14} /><span>{pending === 'open' ? tr('Đang mở…') : vi.projects.open}</span>
         </button>
         <button type="button" className="welcome-row" disabled={!engineReady || pending !== null} onClick={() => setCloneUrl((v) => v ?? '')}>
           <Icon name="download" size={14} /><span>{vi.sources.cloneOpen}</span>
@@ -200,7 +199,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
         {engineReady && loading && <div className="panel-empty"><div className="skeleton-line" /><div className="skeleton-line short" /></div>}
         {listError && (
           <div className="panel-empty"><p role="alert" className="error">{listError}</p>
-            <button type="button" disabled={pending !== null} onClick={() => setRefresh((v) => v + 1)}>Tải lại danh sách</button>
+            <button type="button" disabled={pending !== null} onClick={() => setRefresh((v) => v + 1)}>{tr('Tải lại danh sách')}</button>
           </div>
         )}
         {recent.length === 0 && !listError && !(engineReady && loading) && <p className="panel-empty muted">{vi.projects.noRecent}</p>}
@@ -214,7 +213,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
                     <Icon name="folder" size={14} />
                     <span className="recent-identity"><b>{project.name}</b><span className="muted mono">{project.path}</span></span>
                     <span className="projects-recent-date">
-                      {date ? <time dateTime={date.toISOString()}>{dateFormat.format(date)}</time> : 'Chưa lập chỉ mục'}
+                      {date ? <time dateTime={date.toISOString()}>{formatDate(date, { dateStyle: 'medium' })}</time> : tr('Chưa lập chỉ mục')}
                     </span>
                   </button>
                   {!memberIds.has(project.project_id) && (
@@ -222,8 +221,8 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
                       aria-label={vi.globalGraph.addTo(project.name)} disabled={!engineReady || pending !== null}
                       onClick={() => changeMembership(() => window.nexgraph.globalGraph.add(project.project_id))}><Icon name="graph" size={16} /></button>
                   )}
-                  <button type="button" className="icon-button recent-remove" title="Gỡ khỏi danh sách"
-                    aria-label={`Gỡ ${project.name} khỏi danh sách`} disabled={!engineReady || loading || pending !== null}
+                  <button type="button" className="icon-button recent-remove" title={tr('Gỡ khỏi danh sách')}
+                    aria-label={tr('Gỡ {name} khỏi danh sách', { name: project.name })} disabled={!engineReady || loading || pending !== null}
                     onClick={() => setRemoving(project)}><Icon name="close" size={16} /></button>
                 </li>
               )

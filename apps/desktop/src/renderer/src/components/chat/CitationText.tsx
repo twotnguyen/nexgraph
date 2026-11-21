@@ -2,7 +2,8 @@ import { useMemo, useRef } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Citation } from '@shared/graph-types'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
+import { useLocale } from '../../state/locale'
 import './citation-text.css'
 
 interface Props {
@@ -50,6 +51,7 @@ function citationPlugin(citations: Citation[]) {
 }
 
 export function CitationText({ text, citations, onOpen }: Props) {
+  const locale = useLocale()
   const plugin = useMemo(() => citationPlugin(citations), [citations])
   const open = useRef(onOpen)
   open.current = onOpen
@@ -67,9 +69,9 @@ export function CitationText({ text, citations, onOpen }: Props) {
       const safe = externalUrl(href)
       return safe ? <a href={safe} target="_blank" rel="noopener noreferrer">{children}</a> : <span>{children}</span>
     },
-    img: ({ alt }) => <span className="markdown-image">{alt ? `Hình ảnh · ${alt}` : 'Hình ảnh'}</span>,
+    img: ({ alt }) => <span className="markdown-image">{alt ? tr('Hình ảnh · {alt}', { alt }) : tr('Hình ảnh')}</span>,
     table: ({ children }) => <div className="markdown-table"><table>{children}</table></div>
-  }), [citations])
+  }), [citations, locale])
   return (
     <div className="chat-text markdown-body">
       <ReactMarkdown remarkPlugins={[remarkGfm, plugin]} skipHtml

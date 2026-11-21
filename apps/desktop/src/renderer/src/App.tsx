@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { vi } from './strings'
+import { useLocale } from './state/locale'
 import type { HostCommand } from '@shared/api'
 import type { EngineStatus } from '@shared/engine-status'
 import type { IndexOptions, ProjectSummary, ScanInfo } from '@shared/graph-types'
@@ -57,6 +58,7 @@ function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan:
 }
 
 export default function App() {
+  useLocale()
   const [status, setStatus] = useState<EngineStatus>({ state: 'starting' })
   const [screen, setScreen] = useState<Screen>({ name: 'projects' })
   const initialHostCommand = useRef(window.nexgraph?.host?.initialCommand)

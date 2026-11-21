@@ -2,7 +2,7 @@ import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/r
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { GraphEdge, GraphNode, Neighborhood } from '@shared/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 import { useTheme } from '../../state/useTheme'
 import { AutoFit } from '../common/AutoFit'
 import { CanvasState } from '../common/CanvasState'
@@ -176,8 +176,8 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
     <div className="graph-canvas" ref={box} aria-busy={!view && !error}>
       {toolbar}
       {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
-      {!view && !error && <CanvasState kind="loading" message="Đang tải đồ thị…" />}
-      {view?.raw.size === 0 && <CanvasState kind="empty" message="Không có nút trong vùng đã chọn." />}
+      {!view && !error && <CanvasState kind="loading" message={tr('Đang tải đồ thị…')} />}
+      {view?.raw.size === 0 && <CanvasState kind="empty" message={tr('Không có nút trong vùng đã chọn.')} />}
       {view?.truncated && (
         <p role="status" className="muted">
           {view.total != null ? vi.graph.truncatedOf(view.raw.size, view.total) : vi.graph.truncated}

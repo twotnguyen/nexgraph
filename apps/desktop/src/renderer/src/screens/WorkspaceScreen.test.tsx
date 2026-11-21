@@ -6,6 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
 import { buildExcerpts, consumePendingMultiBuffer, requestMultiBuffer } from '../state/multiBuffer'
+import { toggleBookmark } from '../state/bookmarks'
 
 vi.mock('../services/elkLayoutService', async () => ({
   layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
@@ -35,7 +36,7 @@ vi.mock('../components/editor/monaco', () => ({
 }))
 
 import { WorkspaceScreen } from './WorkspaceScreen'
-import { installKeymap } from '../state/commands'
+import { installKeymap, runCommand } from '../state/commands'
 
 beforeAll(() => {
   class RO { observe() {} unobserve() {} disconnect() {} }
@@ -645,5 +646,84 @@ describe('WorkspaceScreen: multibuffer', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Đóng Hai đoạn' }))
     expect(screen.queryByRole('tab', { name: 'Hai đoạn' })).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'a.dart' })).toBeInTheDocument()
+  })
+
+  it('chỉ thẻ nhiều đoạn đang chọn được hiện; đổi thẻ thì đoạn mã ẩn hẳn và không chặn trình soạn thảo bên dưới', async () => {
+    const file = { ...gnode('lib/a.dart#file', 'a.dart'), kind: 'file' as const, line_start: 1 }
+    const child = { id: 1, source: '.#repository', target: file.id, type: 'CONTAINS' as const, evidence: null,
+      subtype: null, confidence: 'EXTRACTED' as const, confidence_score: 1, origin: 'ast' as const }
+    installNexgraph({ graph: { neighbors: vi.fn(async () => ({ nodes: [file], edges: [child], truncated: false })) } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    const item = await screen.findByRole('treeitem', { name: 'a.dart' })
+    item.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    const fileEditor = await screen.findByLabelText('editor') // lúc này mới có editor của tệp a.dart
+
+    act(() => requestMultiBuffer({ id: 'm1', title: 'Thẻ một', excerpts: buildExcerpts([{ file: 'lib/b.dart', line: 5 }, { file: 'lib/c.dart', line: 9 }]) }))
+    expect(await screen.findByRole('tab', { name: 'Thẻ một', selected: true })).toBeInTheDocument()
+    act(() => requestMultiBuffer({ id: 'm2', title: 'Thẻ hai', excerpts: buildExcerpts([{ file: 'lib/d.dart', line: 2 }, { file: 'lib/e.dart', line: 6 }]) }))
+    expect(await screen.findByRole('tab', { name: 'Thẻ hai', selected: true })).toBeInTheDocument()
+    const pane = screen.getByRole('tabpanel', { name: 'Thẻ hai' })
+    const [first, second] = Array.from(pane.querySelectorAll<HTMLElement>('.multi-buffer'))
+
+    // jsdom không có bố cục nên không dò được phần tử nằm đè: thẻ ẩn phải là display:none thì mới không còn lớp nào đè hay chặn nhấp chuột.
+    // Thẻ hai đang chọn: chỉ nó hiện và nhận được nhấp chuột; thẻ một và tệp gốc ẩn.
+    expect(first).toHaveStyle({ display: 'none' })
+    expect(second).toHaveStyle({ display: 'flex' })
+    expect(within(first).getByText('lib/b.dart:3-7')).not.toBeVisible()
+    expect(within(second).getByText('lib/d.dart:1-4')).toBeVisible()
+    expect(fileEditor).not.toBeVisible()
+    const [picked] = await within(second).findAllByLabelText('editor')
+    expect(picked).toBeVisible()
+    await userEvent.click(picked)
+    expect(picked).toHaveFocus()
+
+    // Chọn thẻ một: hai thẻ đổi vai.
+    await userEvent.click(screen.getByRole('tab', { name: 'Thẻ một' }))
+    expect(first).toHaveStyle({ display: 'flex' })
+    expect(second).toHaveStyle({ display: 'none' })
+    expect(within(first).getByText('lib/b.dart:3-7')).toBeVisible()
+    expect(within(second).getByText('lib/d.dart:1-4')).not.toBeVisible()
+
+    // Về thẻ tệp: cả hai thẻ nhiều đoạn ẩn hẳn (tiêu đề đoạn cũng biến mất), editor của tệp hiện và nhận được nhấp chuột.
+    await userEvent.click(screen.getByRole('tab', { name: 'a.dart' }))
+    expect(first).toHaveStyle({ display: 'none' })
+    expect(second).toHaveStyle({ display: 'none' })
+    expect(within(first).getByText('lib/b.dart:3-7')).not.toBeVisible()
+    expect(within(second).getByText('lib/d.dart:1-4')).not.toBeVisible()
+    expect(fileEditor).toBeVisible()
+    await userEvent.click(fileEditor)
+    expect(fileEditor).toHaveFocus()
+  })
+
+  it('lệnh Xem dấu trang và Mở multibuffer dựng thẻ nhiều đoạn từ dấu trang và tệp đang mở', async () => {
+    const file = { ...gnode('lib/a.dart#file', 'a.dart'), kind: 'file' as const, line_start: 1 }
+    const child = { id: 1, source: '.#repository', target: file.id, type: 'CONTAINS' as const, evidence: null,
+      subtype: null, confidence: 'EXTRACTED' as const, confidence_score: 1, origin: 'ast' as const }
+    installNexgraph({ graph: { neighbors: vi.fn(async () => ({ nodes: [file], edges: [child], truncated: false })) } })
+    const demo = project({ project_id: 'p-bookmarks' }) // dự án riêng để dấu trang không dính sang test khác
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={demo} /></div>)
+    const item = await screen.findByRole('treeitem', { name: 'a.dart' })
+    item.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    // Workspace đang mount nhận và xoá request ngay (getPendingMultiBuffer() luôn rỗng), nên kiểm qua thẻ đã dựng.
+    const run = (id: string) => act(() => { expect(runCommand(id)).toBe(true) })
+
+    run('editor.open_multibuffer')
+    expect(await screen.findByRole('tab', { name: 'Nhiều đoạn mã', selected: true })).toBeInTheDocument()
+    expect(within(screen.getByRole('tabpanel', { name: 'Nhiều đoạn mã' })).getByText('lib/a.dart:1-3')).toBeInTheDocument()
+
+    run('editor.view_bookmarks')
+    expect(await screen.findByText('Không có dấu trang nào trong dự án này.')).toBeInTheDocument()
+
+    act(() => { toggleBookmark(demo.project_id, 'lib/a.dart', 2); toggleBookmark(demo.project_id, 'lib/b.dart', 5) })
+    run('editor.view_bookmarks')
+    expect(await screen.findByRole('tab', { name: 'Dấu trang', selected: true })).toBeInTheDocument()
+    const pane = screen.getByRole('tabpanel', { name: 'Dấu trang' })
+    const marks = within(pane).getByText('lib/a.dart:1-4').closest<HTMLElement>('.multi-buffer')!
+    expect(within(marks).getByText('lib/b.dart:3-7')).toBeInTheDocument()
+    expect(await within(marks).findAllByLabelText('editor')).toHaveLength(2)
   })
 })

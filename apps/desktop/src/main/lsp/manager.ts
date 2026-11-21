@@ -142,6 +142,7 @@ export class LspManager {
       const caps = (result as { capabilities?: { codeActionProvider?: { resolveProvider?: boolean } | boolean; callHierarchyProvider?: unknown } } | null)?.capabilities
       const provider = caps?.codeActionProvider
       server.resolveCodeActions = typeof provider === 'object' && provider !== null && provider.resolveProvider === true
+      rpc.notify('initialized', {})
       server.callHierarchy = !!caps?.callHierarchyProvider
     })
     this.servers.set(key, server)

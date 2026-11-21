@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugFrame, DebugScope, DebugVariable, NexGraphApi } from '@shared/api'
 import { errorText } from './errorText'
+import { tr } from '../strings'
 
 export type DebugKind = 'node' | 'python'
 export type DebugStatus = 'idle' | 'starting' | 'running' | 'stopped'
@@ -79,7 +80,7 @@ function changeBreakpoints(file: string, points: DebugBreakpoint[]): void {
   patch({ breakpoints })
   if (project) {
     try { localStorage.setItem(storageKey(project), JSON.stringify(breakpoints)) }
-    catch { patch({ error: 'Không lưu được điểm dừng cho dự án' }) }
+    catch { patch({ error: tr('Không lưu được điểm dừng cho dự án') }) }
   }
   if (state.status !== 'idle' && !switching) {
     const current = generation

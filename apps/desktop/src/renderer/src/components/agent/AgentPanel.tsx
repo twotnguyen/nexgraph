@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 import { Icon } from '../common/icons'
 import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -50,19 +50,21 @@ type PendingConsent = { question: string; target: AiConsentTarget; model: string
 
 const NO_CITATIONS: Citation[] = []
 
-const slashCommands = [
-  { name: 'new', detail: 'Tạo phiên mới' },
-  { name: 'model', detail: 'Chọn model' },
-  { name: 'resume', detail: 'Mở lịch sử trò chuyện' },
-  { name: 'clear', detail: 'Bắt đầu phiên mới' },
-  { name: 'stop', detail: 'Dừng trợ lý' },
-  { name: 'login', detail: 'Kết nối AI' },
-  { name: 'settings', detail: 'Mở cài đặt' },
-  { name: 'files', detail: 'Mở cây tệp' },
-  { name: 'terminal', detail: 'Mở terminal' },
-  { name: 'diff', detail: 'Mở thay đổi' },
-  { name: 'saved', detail: 'Tin nhắn đã lưu' }
-]
+function slashCommands() {
+  return [
+    { name: 'new', detail: tr('Tạo phiên mới') },
+    { name: 'model', detail: tr('Chọn model') },
+    { name: 'resume', detail: tr('Mở lịch sử trò chuyện') },
+    { name: 'clear', detail: tr('Bắt đầu phiên mới') },
+    { name: 'stop', detail: tr('Dừng trợ lý') },
+    { name: 'login', detail: tr('Kết nối AI') },
+    { name: 'settings', detail: tr('Mở cài đặt') },
+    { name: 'files', detail: tr('Mở cây tệp') },
+    { name: 'terminal', detail: tr('Mở terminal') },
+    { name: 'diff', detail: tr('Mở thay đổi') },
+    { name: 'saved', detail: tr('Tin nhắn đã lưu') }
+  ]
+}
 
 /** Câu hỏi của lượt mà câu trả lời thứ `i` thuộc về. */
 function questionBefore(msgs: Msg[], i: number): string {
@@ -81,10 +83,10 @@ function targetOf(settings: AiSettings): AiConsentTarget | null {
 }
 
 function connectionLabel(settings: AiSettings | null): string {
-  return settings?.runtime === 'antigravity-cli' ? `${settings.model === 'auto' || settings.model.toLowerCase().startsWith('gemini') ? 'Gemini' : 'Antigravity'} · Tài khoản Google` : settings?.provider === 'google' ? 'Gemini · API key'
-    : settings?.provider === 'ollama-local' ? 'Ollama · Trên máy' : settings?.provider === 'openai' ? 'ChatGPT / OpenAI'
+  return settings?.runtime === 'antigravity-cli' ? `${settings.model === 'auto' || settings.model.toLowerCase().startsWith('gemini') ? 'Gemini' : 'Antigravity'} · ${tr('Tài khoản Google')}` : settings?.provider === 'google' ? 'Gemini · API key'
+    : settings?.provider === 'ollama-local' ? tr('Ollama · Trên máy') : settings?.provider === 'openai' ? 'ChatGPT / OpenAI'
       : settings?.provider === 'openai-codex' ? 'Codex · ChatGPT' : settings?.provider === 'anthropic' ? 'Claude · API key'
-        : settings?.provider === 'openrouter' ? 'OpenRouter · API key' : settings?.provider ?? 'Chưa có kết nối'
+        : settings?.provider === 'openrouter' ? 'OpenRouter · API key' : settings?.provider ?? tr('Chưa có kết nối')
 }
 
 function errorCode(e: unknown): string {
@@ -113,8 +115,8 @@ function isApproval(value: unknown): value is ApprovalRequest {
 }
 
 const contextLabel = (item: AgentContextItem): string => item.kind === 'file'
-  ? `${item.file}${item.start ? `:${item.start}${item.end && item.end !== item.start ? `-${item.end}` : ''}` : ''}${item.dirty ? ' · bản nháp' : ''}`
-  : item.label ?? (item.kind === 'node' ? item.nodeId : item.kind === 'flow' ? `Luồng ${item.flowId}` : item.blockId)
+  ? `${item.file}${item.start ? `:${item.start}${item.end && item.end !== item.start ? `-${item.end}` : ''}` : ''}${item.dirty ? ` · ${tr('bản nháp')}` : ''}`
+  : item.label ?? (item.kind === 'node' ? item.nodeId : item.kind === 'flow' ? tr('Luồng {id}', { id: item.flowId }) : item.blockId)
 
 export function AgentPanel(props: Props) {
   return <ProjectAgentPanel key={props.projectId} {...props} />
@@ -432,7 +434,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const run = (value: ComposerDraft, target: AiConsentTarget, model: string, clearComposer: boolean) => {
     const mode = modeRef.current
     if (!mode) return
-    const question = value.text.trim() || (value.images.length ? 'Hãy xem hình ảnh đính kèm.' : 'Hãy xem ngữ cảnh đính kèm.')
+    const question = value.text.trim() || (value.images.length ? tr('Hãy xem hình ảnh đính kèm.') : tr('Hãy xem ngữ cảnh đính kèm.'))
     const id = ++turnSeq.current
     const current = { id, q: question, context: value.context, attachments: value.attachments, images: value.images, target, model, sessionId: work.sessionId, tools: [] as string[], mode, cancelled: false, completed: false }
     turn.current = current
@@ -485,7 +487,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       }
       const selected = targetOf(settings)
       if (queued && (!sameConsentTarget(selected, queued.target) || settings.model !== queued.model || queued.sessionId !== sessionIdRef.current))
-        throw new Error('Phiên hoặc model đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.')
+        throw new Error(tr('Phiên hoặc model đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.'))
       const target = applySettings(settings)
       if (!target) throw new Error(vi.chat.notConfigured)
       const allowed = await window.nexgraph.ai.hasConsent(projectId, target)
@@ -493,7 +495,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         if (queued && mounted.current) updateQueue((items) => [queued, ...items])
         return
       }
-      if (queued && queued.sessionId !== sessionIdRef.current) throw new Error('Phiên đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.')
+      if (queued && queued.sessionId !== sessionIdRef.current) throw new Error(tr('Phiên đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.'))
       if (allowed) run(value, target, settings.model, !queued)
       else setConsent({ question: value.text, target, model: settings.model, context: value.context, attachments: value.attachments, images: value.images, queued })
     } catch (e) {
@@ -518,13 +520,13 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       return
     }
     const command = value.text.trim().match(/^\/([\w-]+)$/)?.[1]
-    if (!value.attachments.length && !value.images.length && !value.context && command && slashCommands.some((item) => item.name === command)) {
+    if (!value.attachments.length && !value.images.length && !value.context && command && slashCommands().some((item) => item.name === command)) {
       executeSlash(command)
       return
     }
     const selectedModel = models.find((model) => model.provider === cfg?.provider && model.id === cfg?.model)
-    if (value.images.length && selectedModel?.supportsImages === false) { setError('Model hiện tại không nhận ảnh. Hãy đổi sang model hỗ trợ hình ảnh.'); return }
-    if (value.images.some((image) => cfg?.runtime === 'antigravity-cli') && !window.confirm('Gemini có thể không nhận ảnh trong phiên bản CLI này. Nếu không hỗ trợ, lượt gửi sẽ báo lỗi rõ ràng. Tiếp tục?')) return
+    if (value.images.length && selectedModel?.supportsImages === false) { setError(tr('Model hiện tại không nhận ảnh. Hãy đổi sang model hỗ trợ hình ảnh.')); return }
+    if (value.images.some((image) => cfg?.runtime === 'antigravity-cli') && !window.confirm(tr('Gemini có thể không nhận ảnh trong phiên bản CLI này. Nếu không hỗ trợ, lượt gửi sẽ báo lỗi rõ ràng. Tiếp tục?'))) return
     if (busy || activeRun.current || queueRef.current.some((item) => item.sessionId === work.sessionId && sameConsentTarget(item.target, scope.current))) {
       const target = scope.current
       if (!target || !cfg?.model) { setError(vi.chat.notConfigured); return }
@@ -544,11 +546,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const settings = await window.nexgraph.ai.getSettings()
       if (!isCurrent(id)) { if (pending.queued && mounted.current) updateQueue((items) => [pending.queued!, ...items]); return }
       const current = applySettings(settings)
-      if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.')
+      if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error(tr('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.'))
       if (!sameConsentTarget(current, pending.target) || settings.model !== pending.model)
         throw new Error(vi.chat.errors.ai_provider_changed)
       await window.nexgraph.ai.grantConsent(projectId, pending.target)
-      if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.')
+      if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error(tr('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.'))
       if (isCurrent(id)) run({ text: pending.question, context: pending.context, attachments: pending.attachments ?? [], images: pending.images ?? [] }, pending.target, pending.model, !pending.queued)
       else if (pending.queued && mounted.current) updateQueue((items) => [pending.queued!, ...items])
     } catch (e) {
@@ -669,7 +671,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
 
   const executeSlash = (name: string, erase = true) => {
     if (['new', 'clear', 'model', 'resume', 'login'].includes(name) && (busy || !!activeRun.current || checking || work.pending || work.loading)) {
-      setError('Dừng trợ lý trước khi đổi phiên hoặc model.')
+      setError(tr('Dừng trợ lý trước khi đổi phiên hoặc model.'))
       return false
     }
     if (erase) setComposer({ ...composerRef.current, text: '' })
@@ -677,7 +679,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (name === 'new' || name === 'clear') { void work.create(); setView('chat') }
     else if (name === 'resume') { setView('history'); void work.refresh().catch((e) => setError(errorMessage(e))) }
     else if (name === 'model') {
-      if (!modelSelect.current) setError('Chưa có danh sách model. Hãy kết nối AI trước.')
+      if (!modelSelect.current) setError(tr('Chưa có danh sách model. Hãy kết nối AI trước.'))
       else { modelSelect.current.focus(); modelSelect.current.showPicker?.() }
     } else if (name === 'stop') stop()
     else if (name === 'login') setConnect(true)
@@ -705,11 +707,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (completion?.kind !== 'mention' || projectFiles !== null || fileListError) return
     let live = true
     const load = window.nexgraph.fs.files
-    if (!load) { setFileListError('Không liệt kê được tệp ở chế độ này.'); return }
+    if (!load) { setFileListError(tr('Không liệt kê được tệp ở chế độ này.')); return }
     void load(projectId).then(({ files }) => { if (live) setProjectFiles(files) }).catch((e) => { if (live) setFileListError(errorMessage(e)) })
     return () => { live = false }
   }, [completion?.kind, projectFiles, fileListError, projectId])
-  const commandRows = completion?.kind === 'command' ? filterSlashCommands(slashCommands, completion.query) : []
+  const commandRows = completion?.kind === 'command' ? filterSlashCommands(slashCommands(), completion.query) : []
   const fileRows = completion?.kind === 'mention' ? rankFiles(projectFiles ?? [], completion.query).slice(0, 50).map((row) => row.item) : []
   const completionCount = completion?.kind === 'command' ? commandRows.length : fileRows.length
   const selectedCompletion = completionCount ? completionIndex % completionCount : 0
@@ -723,7 +725,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const file = fileRows[index]
       if (!file) return
       if (!attachments.some((item) => item.kind === 'file' && item.file === file)) {
-        if (attachments.length >= 12) { setError('Mỗi lượt hỗ trợ tối đa 12 mục ngữ cảnh.'); return }
+        if (attachments.length >= 12) { setError(tr('Mỗi lượt hỗ trợ tối đa 12 mục ngữ cảnh.')); return }
         setAttachments((current) => [...current, { kind: 'file', file }])
       }
     }
@@ -761,9 +763,9 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const added = await Promise.all(valid.map((file) => new Promise<ImageAttachment>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => typeof reader.result === 'string'
-          ? resolve({ id: ++imageSeq.current, name: file.name || 'Ảnh', mimeType: file.type, dataUrl: reader.result }) : reject(new Error('Không đọc được ảnh.'))
-        reader.onerror = () => reject(new Error(`Không đọc được ${file.name}.`))
-        reader.onabort = () => reject(new Error(`Đã hủy đọc ${file.name}.`))
+          ? resolve({ id: ++imageSeq.current, name: file.name || tr('Ảnh'), mimeType: file.type, dataUrl: reader.result }) : reject(new Error(tr('Không đọc được ảnh.')))
+        reader.onerror = () => reject(new Error(tr('Không đọc được {name}.', { name: file.name })))
+        reader.onabort = () => reject(new Error(tr('Đã hủy đọc {name}.', { name: file.name })))
         reader.readAsDataURL(file)
       })))
       if (mounted.current) setImages((current) => [...current, ...added])
@@ -775,33 +777,33 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const sessionTitle = work.sessions.find((session) => session.id === work.sessionId)?.title
   alertTitle.current = sessionTitle ?? projectName
   const usage = workbenchUsage(work)
-  const modeHint = mode === 'edit' ? work.execution.policy === 'auto' ? 'Tự động sửa mã trong phạm vi đã cấp quyền.' : vi.agent.editHint : mode === 'plan' ? 'Phân tích đồ thị và lập kế hoạch triển khai, chỉ đọc.' : vi.agent.askHint
+  const modeHint = mode === 'edit' ? work.execution.policy === 'auto' ? tr('Tự động sửa mã trong phạm vi đã cấp quyền.') : vi.agent.editHint : mode === 'plan' ? tr('Phân tích đồ thị và lập kế hoạch triển khai, chỉ đọc.') : vi.agent.askHint
   const menu: MenuItem[] = [
-    { label: 'Kết nối AI', icon: 'plug', disabled: busy || checking, onSelect: () => setConnect(true) },
+    { label: tr('Kết nối AI'), icon: 'plug', disabled: busy || checking, onSelect: () => setConnect(true) },
     ...(onConnectOpenCode ? [{ label: vi.chat.connectOpenCode, icon: 'plug' as const, onSelect: onConnectOpenCode }] : []),
-    { label: 'Quyền & giới hạn', icon: 'shield', onSelect: () => setView('settings') },
+    { label: tr('Quyền & giới hạn'), icon: 'shield', onSelect: () => setView('settings') },
     // Chuyển bên làm khung dựng lại từ đầu, nên khoá khi đang có lượt chạy để không huỷ lượt đó.
-    ...(onToggleDock ? [{ label: dock === 'left' ? 'Chuyển khung chat sang phải' : 'Chuyển khung chat sang trái', icon: dock === 'left' ? 'panelRight' as const : 'panelLeft' as const, disabled: busy || checking, onSelect: onToggleDock }] : []),
+    ...(onToggleDock ? [{ label: dock === 'left' ? tr('Chuyển khung chat sang phải') : tr('Chuyển khung chat sang trái'), icon: dock === 'left' ? 'panelRight' as const : 'panelLeft' as const, disabled: busy || checking, onSelect: onToggleDock }] : []),
     { label: vi.chat.settings, icon: 'sliders', onSelect: onOpenSettings }
   ]
 
   return (
     <aside id={id} className="chat agent-panel" data-dock={dock} aria-label={vi.chat.title} hidden={hidden}>
       <header className="agent-head">
-        {view !== 'chat' && <button type="button" className="agent-icon-button" aria-label="Về cuộc trò chuyện" title="Về cuộc trò chuyện" onClick={() => setView('chat')}><Icon name="back" size={16} /></button>}
-        <h2 title={view === 'chat' ? sessionTitle : undefined}>{view === 'history' ? 'Trò chuyện' : view === 'settings' ? 'Quyền & giới hạn' : sessionTitle ?? vi.chat.title}</h2>
+        {view !== 'chat' && <button type="button" className="agent-icon-button" aria-label={tr('Về cuộc trò chuyện')} title={tr('Về cuộc trò chuyện')} onClick={() => setView('chat')}><Icon name="back" size={16} /></button>}
+        <h2 title={view === 'chat' ? sessionTitle : undefined}>{view === 'history' ? tr('Trò chuyện') : view === 'settings' ? tr('Quyền & giới hạn') : sessionTitle ?? vi.chat.title}</h2>
         <div className="agent-actions">
-          <button type="button" className="agent-icon-button" aria-label="Lịch sử" title="Lịch sử trò chuyện" aria-pressed={view === 'history'} disabled={workLocked}
+          <button type="button" className="agent-icon-button" aria-label={tr('Lịch sử')} title={tr('Lịch sử trò chuyện')} aria-pressed={view === 'history'} disabled={workLocked}
             onClick={() => { setView(view === 'history' ? 'chat' : 'history'); void work.refresh().catch(() => {}) }}><Icon name="history" size={16} /></button>
-          <button type="button" className="agent-icon-button" aria-label="Phiên mới" title="Phiên mới" disabled={workLocked} onClick={() => { void work.create(); setView('chat') }}><Icon name="plus" size={16} /></button>
-          <PopoverMenu label="Thêm thao tác" buttonClass="agent-icon-button" trigger={<Icon name="more" size={16} />} items={menu} />
+          <button type="button" className="agent-icon-button" aria-label={tr('Phiên mới')} title={tr('Phiên mới')} disabled={workLocked} onClick={() => { void work.create(); setView('chat') }}><Icon name="plus" size={16} /></button>
+          <PopoverMenu label={tr('Thêm thao tác')} buttonClass="agent-icon-button" trigger={<Icon name="more" size={16} />} items={menu} />
           {onClose && <button type="button" className="agent-icon-button" onClick={onClose} aria-label={vi.chat.close} title={vi.chat.close}><Icon name="close" size={15} /></button>}
         </div>
       </header>
       {view === 'history' && <WorkbenchHistory work={work} busy={busy || checking} onPicked={() => setView('chat')} />}
       {view === 'settings' && <div className="agent-settings-view"><WorkbenchSettings projectId={projectId} work={work} busy={busy || checking} mode={mode} runtime={cfg?.runtime} onSuggest={(suggestion) => { setText(suggestion); setView('chat'); input.current?.focus() }} /></div>}
       <div className="agent-thread" hidden={view !== 'chat'}>
-        {toolsUnavailable && <p className="agent-notice">Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.</p>}
+        {toolsUnavailable && <p className="agent-notice">{tr('Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.')}</p>}
         {error && <p role="alert" className="error">{error}</p>}
         <div className="msgs" ref={messages} onScroll={(event) => {
           const el = event.currentTarget
@@ -822,7 +824,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
                 <span className="agent-welcome-icon"><Icon name="spark" size={22} /></span>
                 <h3>{vi.chat.setupTitle}</h3>
                 <p className="muted">{vi.chat.setupDescription}</p>
-                <button type="button" className="primary" onClick={() => setConnect(true)}>Kết nối AI</button>
+                <button type="button" className="primary" onClick={() => setConnect(true)}>{tr('Kết nối AI')}</button>
               </>}
             </div>
           )}
@@ -858,45 +860,45 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         <div className="agent-workbench-status"><WorkbenchStatus projectId={projectId} work={work} busy={busy || checking} onInspect={onInspect} /></div>
         {approvals.length > 0 && (
           <div className="approvals">
-            {approvals.map((a) => <ApprovalCard key={a.id} request={a} disabled={changingMode} onDecide={(allow) => decide(a.id, allow)} onInspect={(request) => onInspect?.({ id: request.id, title: `Đề xuất · ${request.path}`, file: request.path, before: request.before, after: request.after })} />)}
+            {approvals.map((a) => <ApprovalCard key={a.id} request={a} disabled={changingMode} onDecide={(allow) => decide(a.id, allow)} onInspect={(request) => onInspect?.({ id: request.id, title: tr('Đề xuất · {path}', { path: request.path }), file: request.path, before: request.before, after: request.after })} />)}
           </div>
         )}
         <div className="compose">
-          {sessionQueue.length > 0 && <div className="agent-queue" aria-label="Hàng đợi tin nhắn">
+          {sessionQueue.length > 0 && <div className="agent-queue" aria-label={tr('Hàng đợi tin nhắn')}>
             {sessionQueue.map((item) => <div className="agent-queue-row" key={item.id}>
               {editingQueue?.id === item.id ? <>
-                <span>Đang sửa trong ô soạn tin</span>
-                <button type="button" disabled={stagingImages} onClick={() => void submit()}>Lưu</button>
-                <button type="button" disabled={stagingImages} onClick={() => { setComposer(editingQueue.draft); setEditingQueue(null); setQueueWake((count) => count + 1) }}>Hủy</button>
+                <span>{tr('Đang sửa trong ô soạn tin')}</span>
+                <button type="button" disabled={stagingImages} onClick={() => void submit()}>{tr('Lưu')}</button>
+                <button type="button" disabled={stagingImages} onClick={() => { setComposer(editingQueue.draft); setEditingQueue(null); setQueueWake((count) => count + 1) }}>{tr('Hủy')}</button>
               </> : <>
                 {item.images[0] && <img src={item.images[0].dataUrl} alt="" />}
-                <span title={item.text}>{item.text.trim() || (item.images.length ? 'Hình ảnh' : 'Ngữ cảnh đính kèm')}</span>
-                <button type="button" className="agent-icon-button" aria-label="Gỡ tin khỏi hàng đợi" title="Gỡ" disabled={stopping || stagingImages || !!editingQueue} onClick={() => updateQueue((items) => removeQueued(items, item.id))}><Icon name="trash" size={13} /></button>
-                <button type="button" className="agent-icon-button" aria-label="Sửa tin trong hàng đợi" title="Sửa" disabled={stopping || stagingImages} onClick={() => {
+                <span title={item.text}>{item.text.trim() || (item.images.length ? tr('Hình ảnh') : tr('Ngữ cảnh đính kèm'))}</span>
+                <button type="button" className="agent-icon-button" aria-label={tr('Gỡ tin khỏi hàng đợi')} title={tr('Gỡ')} disabled={stopping || stagingImages || !!editingQueue} onClick={() => updateQueue((items) => removeQueued(items, item.id))}><Icon name="trash" size={13} /></button>
+                <button type="button" className="agent-icon-button" aria-label={tr('Sửa tin trong hàng đợi')} title={tr('Sửa')} disabled={stopping || stagingImages} onClick={() => {
                   const draft = editingQueue?.draft ?? composerRef.current
                   setEditingQueue({ id: item.id, draft })
                   setComposer(item)
                   input.current?.focus()
                 }}><Icon name="pencil" size={13} /></button>
-                <button type="button" title="Dừng trợ lý và gửi ngay tin này" disabled={stopping || stagingImages || !!editingQueue || checking || work.pending || work.loading || !!consent} onClick={() => void sendNow(item)}>Gửi ngay</button>
+                <button type="button" title={tr('Dừng trợ lý và gửi ngay tin này')} disabled={stopping || stagingImages || !!editingQueue || checking || work.pending || work.loading || !!consent} onClick={() => void sendNow(item)}>{tr('Gửi ngay')}</button>
               </>}
             </div>)}
           </div>}
           <div className="agent-composer" onDragOver={(event) => { if (event.dataTransfer.types.includes('Files')) event.preventDefault() }}
             onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages(Array.from(event.dataTransfer.files)) } }}>
-            {completion && <div id="agent-completions" className="agent-completions" role="listbox" aria-label={completion.kind === 'command' ? 'Lệnh' : 'Tệp trong dự án'}>
+            {completion && <div id="agent-completions" className="agent-completions" role="listbox" aria-label={completion.kind === 'command' ? tr('Lệnh') : tr('Tệp trong dự án')}>
               {completion.kind === 'command' ? commandRows.map((command, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={command.name} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><b>/{command.name}</b><span>{command.detail}</span></button>)
                 : fileRows.map((file, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={file} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><FileTypeIcon name={file} /><b>{file.slice(file.lastIndexOf('/') + 1)}</b><span>{file.slice(0, file.lastIndexOf('/') + 1)}</span></button>)}
-              {!completionCount && <div className="agent-completion-empty">{completion.kind === 'command' ? 'Không có lệnh khớp' : fileListError || (projectFiles ? 'Không có tệp khớp' : 'Đang liệt kê tệp…')}</div>}
+              {!completionCount && <div className="agent-completion-empty">{completion.kind === 'command' ? tr('Không có lệnh khớp') : fileListError || (projectFiles ? tr('Không có tệp khớp') : tr('Đang liệt kê tệp…'))}</div>}
             </div>}
             {(attachments.length > 0 || fileContext || images.length > 0 || stagingImages) && <div className="agent-attachments">
-              {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{item.kind === 'file' ? '@' : ''}{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={checking || stopping} aria-label={`Gỡ ${contextLabel(item)}`} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={11} /></button></div>)}
+              {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{item.kind === 'file' ? '@' : ''}{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={checking || stopping} aria-label={tr('Gỡ {name}', { name: contextLabel(item) })} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={11} /></button></div>)}
               {fileContext && <div className="agent-attachment">
                 <span className="mono" title={fileReference(fileContext)}>{fileReference(fileContext)}</span>
                 <button type="button" className="agent-icon-button" disabled={composerLocked} aria-label={vi.chat.removeFile} onClick={() => setFileContext(undefined)}><Icon name="close" size={11} /></button>
               </div>}
-              {images.map((image) => <div className="agent-image" key={image.id}><img src={image.dataUrl} alt={image.name} /><button type="button" className="agent-icon-button" aria-label={`Gỡ ảnh ${image.name}`} title="Gỡ ảnh" onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))}><Icon name="close" size={11} /></button></div>)}
-              {stagingImages && <span className="agent-image-loading">Đang chuẩn bị ảnh…</span>}
+              {images.map((image) => <div className="agent-image" key={image.id}><img src={image.dataUrl} alt={image.name} /><button type="button" className="agent-icon-button" aria-label={tr('Gỡ ảnh {name}', { name: image.name })} title={tr('Gỡ ảnh')} onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))}><Icon name="close" size={11} /></button></div>)}
+              {stagingImages && <span className="agent-image-loading">{tr('Đang chuẩn bị ảnh…')}</span>}
             </div>}
             <textarea ref={input} value={text} aria-label={vi.chat.message} placeholder={vi.chat.placeholder} rows={3} disabled={modeLocked || stopping}
               aria-autocomplete="list" aria-expanded={!!completion} aria-controls={completion ? 'agent-completions' : undefined} aria-activedescendant={completionCount ? `agent-completion-${selectedCompletion}` : undefined}
@@ -905,39 +907,39 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
               onPaste={(event) => { const files = Array.from(event.clipboardData.items).filter((item) => item.kind === 'file').map((item) => item.getAsFile()).filter((file): file is File => !!file); if (files.length) { event.preventDefault(); void addImages(files) } }} />
             <div className="agent-composer-actions">
               <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden onChange={(event) => { void addImages(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = '' }} />
-              <button type="button" className="agent-round" aria-label="Đính kèm ảnh" title="Đính kèm ảnh" disabled={composerLocked || stagingImages} onClick={() => imageInput.current?.click()}><Icon name="plus" size={17} /></button>
+              <button type="button" className="agent-round" aria-label={tr('Đính kèm ảnh')} title={tr('Đính kèm ảnh')} disabled={composerLocked || stagingImages} onClick={() => imageInput.current?.click()}><Icon name="plus" size={17} /></button>
               <button type="button" className="agent-round" aria-label={vi.chat.attachFile} disabled={composerLocked || !activeFile || (!getEditorContext && fileReference(activeFile) === (fileContext && fileReference(fileContext)))}
                 title={activeFile ? `${vi.chat.attachFile}: ${fileReference(activeFile)}` : vi.chat.noActiveFile} onClick={attachEditor}><Icon name="folder" size={15} /></button>
               <SavedPrompts open={savedOpen} onOpenChange={setSavedOpen} composerText={text} onInsert={insertSaved} />
-              {graphContext && <button type="button" className="agent-chip" disabled={composerLocked || attachments.some((item) => item.kind === graphContext.kind && contextLabel(item) === contextLabel(graphContext))} title={`Đính kèm ${contextLabel(graphContext)}`} aria-label="Đính kèm đồ thị" onClick={() => setAttachments((current) => [...current, { ...graphContext }])}><Icon name="graph" size={14} />Đồ thị</button>}
-              {availableModels.length > 0 && configured ? <select ref={modelSelect} className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
-                {!availableModels.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model === 'auto' ? 'Tự động' : cfg?.model}</option>}
-                {availableModels.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.id === 'auto' ? 'Tự động' : model.label}</option>)}
-              </select> : <span className="agent-model" title={configured ? `${connectionLabel(cfg)} · ${cfg?.model}` : undefined}>{configured ? cfg?.model === 'auto' ? 'Tự động' : cfg?.model : 'Chưa chọn model'}</span>}
+              {graphContext && <button type="button" className="agent-chip" disabled={composerLocked || attachments.some((item) => item.kind === graphContext.kind && contextLabel(item) === contextLabel(graphContext))} title={tr('Đính kèm {name}', { name: contextLabel(graphContext) })} aria-label={tr('Đính kèm đồ thị')} onClick={() => setAttachments((current) => [...current, { ...graphContext }])}><Icon name="graph" size={14} />{tr('Đồ thị')}</button>}
+              {availableModels.length > 0 && configured ? <select ref={modelSelect} className="agent-model-select" aria-label={tr('Mô hình AI')} value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
+                {!availableModels.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model === 'auto' ? tr('Tự động') : cfg?.model}</option>}
+                {availableModels.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.id === 'auto' ? tr('Tự động') : model.label}</option>)}
+              </select> : <span className="agent-model" title={configured ? `${connectionLabel(cfg)} · ${cfg?.model}` : undefined}>{configured ? cfg?.model === 'auto' ? tr('Tự động') : cfg?.model : tr('Chưa chọn model')}</span>}
               {busy && !text.trim() && !attachments.length && !fileContext && !images.length && !editingQueue
                 ? <button type="button" className="agent-send" aria-label={vi.chat.stop} title={vi.chat.stop} disabled={stopping} onClick={stop}><span className="agent-stop-square" /></button>
-                : <button type="button" className="agent-send" aria-label={editingQueue ? 'Lưu vào hàng đợi' : busy ? 'Xếp hàng' : vi.chat.send} title={editingQueue ? 'Lưu vào hàng đợi' : busy ? 'Xếp hàng' : vi.chat.send} disabled={(text.trim() !== '/login' && composerLocked) || stagingImages || (!text.trim() && !attachments.length && !fileContext && !images.length)} onClick={() => void submit()}><Icon name="send" size={15} /></button>}
+                : <button type="button" className="agent-send" aria-label={editingQueue ? tr('Lưu vào hàng đợi') : busy ? tr('Xếp hàng') : vi.chat.send} title={editingQueue ? tr('Lưu vào hàng đợi') : busy ? tr('Xếp hàng') : vi.chat.send} disabled={(text.trim() !== '/login' && composerLocked) || stagingImages || (!text.trim() && !attachments.length && !fileContext && !images.length)} onClick={() => void submit()}><Icon name="send" size={15} /></button>}
             </div>
           </div>
           <div className="agent-composer-foot">
             <span className="mode" role="group" aria-label={vi.agent.modeTitle} title={mode ? modeHint : undefined}>
               <button type="button" disabled={modeLocked || (busy && disabledTools.length > 0)} aria-pressed={mode === 'ask' && !activeProfile} onClick={() => void pickProfile(null, 'ask')}>{vi.agent.ask}</button>
-              <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan' && !activeProfile} onClick={() => void pickProfile(null, 'plan')}>Kế hoạch</button>
+              <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan' && !activeProfile} onClick={() => void pickProfile(null, 'plan')}>{tr('Kế hoạch')}</button>
               <button type="button" disabled={modeLocked || busy || toolsUnavailable} aria-pressed={mode === 'edit' && !activeProfile} onClick={() => void pickProfile(null, 'edit')}>{vi.agent.edit}</button>
               {profiles.map((profile) => (
                 <button key={profile.id} type="button" disabled={modeLocked || busy || (profile.mode === 'edit' && toolsUnavailable)} aria-pressed={activeProfile?.id === profile.id}
-                  title={`Hồ sơ tự tạo: ${profile.mode === 'edit' ? vi.agent.edit : profile.mode === 'plan' ? 'Kế hoạch' : vi.agent.ask}, tắt ${profile.disabledTools.length} tool`}
+                  title={tr('Hồ sơ tự tạo: {mode}, tắt {count} tool', { mode: profile.mode === 'edit' ? vi.agent.edit : profile.mode === 'plan' ? tr('Kế hoạch') : vi.agent.ask, count: profile.disabledTools.length })}
                   onClick={() => void pickProfile(profile, profile.mode)}>{profile.name}</button>
               ))}
             </span>
             {configured && <span className="agent-connection-label" data-runtime={cfg?.runtime} title={connectionLabel(cfg)}><Icon name="plug" size={11} />{connectionLabel(cfg)}</span>}
-            {usage && <span className="agent-usage" title="Token tích lũy của phiên; chi phí ước tính khi nhà cung cấp có bảng giá">{usage}</span>}
+            {usage && <span className="agent-usage" title={tr('Token tích lũy của phiên; chi phí ước tính khi nhà cung cấp có bảng giá')}>{usage}</span>}
             <ContextRing context={work.context} />
           </div>
           {mode && <p className="mode-description">{modeHint}</p>}
         </div>
       </div>
-      {attachedFile?.kind === 'file' && attachedFile.dirty && <span className="sr-only">Ngữ cảnh gồm bản nháp chưa lưu.</span>}
+      {attachedFile?.kind === 'file' && attachedFile.dirty && <span className="sr-only">{tr('Ngữ cảnh gồm bản nháp chưa lưu.')}</span>}
       {connect && !hidden && <ConnectionDialog projectId={projectId} initialProvider={cfg?.runtime === 'antigravity-cli' || cfg?.provider === 'google' ? 'gemini' : cfg?.provider?.startsWith('openai') ? 'openai' : cfg?.provider === 'ollama-local' ? 'local' : cfg?.provider ? 'other' : undefined} initialMethod={cfg?.provider === 'google' ? 'api_key' : undefined} onClose={() => setConnect(false)} onConnected={() => {
         setConnect(false)
         void Promise.all([window.nexgraph.ai.getSettings(), window.nexgraph.auth.models()]).then(async ([settings, available]) => { if (!mounted.current) return; applySettings(settings); setModels(available); await work.restore() }).catch((e) => setError(errorMessage(e)))

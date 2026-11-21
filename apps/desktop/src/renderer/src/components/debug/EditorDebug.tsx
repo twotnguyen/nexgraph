@@ -1,3 +1,4 @@
+import { tr } from '../../strings'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { EditorHandle } from '../editor/monaco'
@@ -30,10 +31,10 @@ export function EditorDebug({ file, editor, active, cursor }: { file: string; ed
   return <>
     {menu && <>
       <div className="menu-backdrop" onClick={() => setMenu(null)} onContextMenu={(event) => { event.preventDefault(); setMenu(null) }} />
-      <div className="context-menu" role="menu" aria-label={`Điểm dừng dòng ${menu.line}`} style={{ left: menu.x, top: menu.y }}>
-        <button type="button" role="menuitem" onClick={() => editAt(menu.line, 'condition')}>Sửa điểm dừng…</button>
+      <div className="context-menu" role="menu" aria-label={tr('Điểm dừng dòng {line}', { line: menu.line })} style={{ left: menu.x, top: menu.y }}>
+        <button type="button" role="menuitem" onClick={() => editAt(menu.line, 'condition')}>{tr('Sửa điểm dừng…')}</button>
         <button type="button" role="menuitem" onClick={() => { toggleBreakpoint(file, menu.line); setMenu(null) }}>
-          {debug.breakpoints[file]?.some((item) => item.line === menu.line) ? 'Bỏ điểm dừng' : 'Đặt điểm dừng'}
+          {debug.breakpoints[file]?.some((item) => item.line === menu.line) ? tr('Bỏ điểm dừng') : tr('Đặt điểm dừng')}
         </button>
       </div>
     </>}

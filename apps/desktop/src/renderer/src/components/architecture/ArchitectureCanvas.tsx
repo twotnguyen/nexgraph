@@ -2,7 +2,7 @@ import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/r
 import { useCallback, useEffect, useState } from 'react'
 import type { ArchBlock, ArchEvidence, ArchLink, ArchView } from '@shared/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 import { useTheme } from '../../state/useTheme'
 import { AutoFit } from '../common/AutoFit'
 import { CanvasState } from '../common/CanvasState'
@@ -102,7 +102,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
       </nav>
       <div className="legend muted"><span>{vi.arch.legendArrow}</span><span>{vi.arch.legendCount}</span></div>
       {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
-      {!laid && !error && <CanvasState kind="loading" message="Đang tải kiến trúc…" />}
+      {!laid && !error && <CanvasState kind="loading" message={tr('Đang tải kiến trúc…')} />}
       {laid?.view.blocks.length === 0 && !error && <CanvasState kind="empty" message={vi.arch.empty} />}
       {laid && laid.view.links.length > 0 && (
         <ul className="relations" aria-label={vi.arch.relations}>

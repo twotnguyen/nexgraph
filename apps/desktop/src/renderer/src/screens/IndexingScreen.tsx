@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import type { IndexOptions, ProjectSummary } from '@shared/graph-types'
 import { useIndexJob } from '../state/useIndexJob'
 import { Icon } from '../components/common/icons'
-import { vi } from '../strings'
+import { vi, tr } from '../strings'
 import './welcome.css'
 
 interface Props {
@@ -66,23 +66,23 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
         <span className="welcome-icon" data-done={completed || undefined} data-running={running || preparing || undefined}><Icon name={completed ? 'check' : 'refresh'} size={22} /></span>
         <div><h1>{title}</h1><p className="mono" title={project.path}>{subdir ? vi.large.subdir(subdir) : project.path}</p></div>
       </header>
-      <section className="task-panel welcome-section" aria-label="Tiến độ lập chỉ mục" aria-busy={running || preparing}>
-        <h2 className="welcome-section-title" aria-hidden="true">Tiến độ</h2>
+      <section className="task-panel welcome-section" aria-label={tr('Tiến độ lập chỉ mục')} aria-busy={running || preparing}>
+        <h2 className="welcome-section-title" aria-hidden="true">{tr('Tiến độ')}</h2>
         {!job && !error && <p role="status" className="muted">{vi.indexing.preparing}</p>}
         {(preparing || job && (running || completed)) && <>
           <Bar label={vi.indexing.phase1} value={phase1Done ? job?.files_total : job?.files_done}
             max={job?.files_total} pending={preparing}
-            hint={preparing ? vi.indexing.preparingFiles : job?.files_total === 0 ? 'Không có tệp phù hợp' : undefined} />
+            hint={preparing ? vi.indexing.preparingFiles : job?.files_total === 0 ? tr('Không có tệp phù hợp') : undefined} />
           {job && state === 'structure' && (job.message || (!job.files_done && job.files_total > 0)) && (
-            <p role="status" className="phase-note">{job.message || 'Đang phân tích những tệp đầu tiên…'}</p>
+            <p role="status" className="phase-note">{job.message || tr('Đang phân tích những tệp đầu tiên…')}</p>
           )}
           {phase1Done ? (
             <Bar label={vi.indexing.phase2} value={completed ? 1 : undefined} max={1}
               pending={!completed} hint={completed ? vi.indexing.done : vi.indexing.phase2Hint} />
-          ) : <div className="phase-head phase-next"><span>{vi.indexing.phase2}</span><span>Đang chờ</span></div>}
+          ) : <div className="phase-head phase-next"><span>{vi.indexing.phase2}</span><span>{tr('Đang chờ')}</span></div>}
         </>}
         {message && <p role="alert" className="inline-message error">{vi.indexing.error(message)}</p>}
-        {state === 'cancelled' && <p role="status" className="muted">Bạn có thể thử lại hoặc quay về dự án.</p>}
+        {state === 'cancelled' && <p role="status" className="muted">{tr('Bạn có thể thử lại hoặc quay về dự án.')}</p>}
         {rebuild && !completed && <p role="status" className="inline-message">{vi.indexing.existingGraph}</p>}
       </section>
       <div className="actions">
@@ -96,7 +96,7 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
         ) : (
           <button type="button" className="primary" disabled={!completed} onClick={onExplore}>{vi.indexing.explore}</button>
         )}
-        {!running && !preparing && !completed && onRetry && <button type="button" onClick={onRetry}>Thử lại</button>}
+        {!running && !preparing && !completed && onRetry && <button type="button" onClick={onRetry}>{tr('Thử lại')}</button>}
       </div>
       </div>
     </main>

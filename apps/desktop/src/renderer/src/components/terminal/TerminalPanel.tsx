@@ -1,3 +1,4 @@
+import { tr } from '../../strings'
 import { useEffect, useReducer, useRef, useState, type CSSProperties } from 'react'
 import { Terminal, type ILink } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
@@ -204,7 +205,7 @@ function TerminalView({ projectId, tab, title, visible, focused, hidden, pane, s
               void api.resolvePath(projectId, path).then((file) => {
                 if (alive && file) callbacks.current.onOpenFile(file, line, column)
               }).catch((error: unknown) => {
-                if (alive) xterm.write(`\r\nKhông mở được tệp: ${errorText(error)}\r\n`)
+                if (alive) xterm.write(`\r\n${tr('Không mở được tệp: {error}', { error: errorText(error) })}\r\n`)
               })
             }
           })
@@ -246,13 +247,13 @@ function TerminalView({ projectId, tab, title, visible, focused, hidden, pane, s
         const early = pending.get(id)
         pending.clear()
         if (early?.data) xterm.write(early.data)
-        if (early?.overflow) xterm.write('\r\n[Đầu ra quá lớn trước khi terminal sẵn sàng; một phần đã bị bỏ qua.]\r\n')
+        if (early?.overflow) xterm.write(`\r\n[${tr('Đầu ra quá lớn trước khi terminal sẵn sàng; một phần đã bị bỏ qua.')}]\r\n`)
         if (early?.code !== undefined) callbacks.current.onExit(early.code)
         fitVisible()
       }).catch((error: unknown) => {
         pending.clear()
         if (!alive) return
-        xterm.write(`\r\nKhông mở được terminal: ${errorText(error)}\r\n`)
+        xterm.write(`\r\n${tr('Không mở được terminal: {error}', { error: errorText(error) })}\r\n`)
         callbacks.current.onError()
       })
     }, 0)
@@ -288,7 +289,7 @@ function TerminalView({ projectId, tab, title, visible, focused, hidden, pane, s
       style={{ order: pane }} onFocus={onSelect} onPointerDown={onSelect}>
       {split && visible && <div className="terminal-pane-head">
         <span title={title}>{title}</span>
-        <button type="button" className="terminal-icon" aria-label={`Đóng khung ${title}`} title="Đóng khung" onClick={onClose}><Icon name="close" size={12} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Đóng khung {title}', { title })} title={tr('Đóng khung')} onClick={onClose}><Icon name="close" size={12} /></button>
       </div>}
       <div ref={host} className="terminal-surface" />
     </div>
@@ -320,7 +321,7 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   const [maximized, setMaximized] = useState(false)
   const height = useTerminalHeight()
   const drag = useRef<{ y: number; height: number } | null>(null)
-  const folder = projectPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || projectPath || 'Dự án'
+  const folder = projectPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || projectPath || tr('Dự án')
   const titleOf = (tab: Tab) => tab.customTitle || (tab.task ? tab.task.label : `${folder} — ${tab.shell}`)
   const add = (task?: TaskDefinition, split = false) => {
     dispatch({ type: 'add', split, tab: { key: next.current++, shell: 'Terminal', task, taskState: task ? { type: 'running' } : undefined } })
@@ -406,21 +407,21 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   return (
     <section ref={panel} className="terminal-panel" aria-label="Terminal" hidden={hidden} data-maximized={maximized || undefined}
       style={{ '--terminal-height': `${height}px` } as CSSProperties}>
-      {!maximized && <div className="terminal-resize" role="separator" aria-orientation="horizontal" aria-label="Chiều cao terminal" tabIndex={0}
+      {!maximized && <div className="terminal-resize" role="separator" aria-orientation="horizontal" aria-label={tr('Chiều cao terminal')} tabIndex={0}
         onPointerDown={(event) => { drag.current = { y: event.clientY, height }; event.currentTarget.setPointerCapture(event.pointerId) }}
         onPointerMove={(event) => { if (drag.current) resize(drag.current.height + drag.current.y - event.clientY) }}
         onPointerUp={() => { drag.current = null }}
         onPointerCancel={() => { drag.current = null }}
         onKeyDown={(event) => { if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); resize(height + (event.key === 'ArrowUp' ? 20 : -20)) } }} />}
       <div className="terminal-tabs">
-        <div className="terminal-tab-list" role="tablist" aria-label="Các terminal">
+        <div className="terminal-tab-list" role="tablist" aria-label={tr('Các terminal')}>
           {state.tabs.map((tab) => {
             const title = titleOf(tab)
-            const status = tab.taskState?.type === 'running' ? 'Đang chạy'
-              : tab.taskState?.type === 'error' ? 'Không khởi chạy'
-                : tab.taskState?.type === 'exited' ? `${tab.taskState.code === 0 ? 'Thành công' : 'Thất bại'} (${tab.taskState.code})` : null
+            const status = tab.taskState?.type === 'running' ? tr('Đang chạy')
+              : tab.taskState?.type === 'error' ? tr('Không khởi chạy')
+                : tab.taskState?.type === 'exited' ? `${tab.taskState.code === 0 ? tr('Thành công') : tr('Thất bại')} (${tab.taskState.code})` : null
             return <span key={tab.key} className="terminal-tab" data-active={tab.key === state.active || undefined}>
-              {renaming === tab.key ? <input className="terminal-rename" aria-label="Tên terminal" value={rename} autoFocus
+              {renaming === tab.key ? <input className="terminal-rename" aria-label={tr('Tên terminal')} value={rename} autoFocus
                 onFocus={(event) => event.currentTarget.select()} onChange={(event) => setRename(event.target.value)}
                 onBlur={() => {
                   if (!cancelRename.current) dispatch({ type: 'rename', key: tab.key, title: rename.trim() })
@@ -436,24 +437,24 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
                   <Icon name="terminal" size={13} /><span className="terminal-tab-title">{title}</span>
                   {status && <span className="terminal-task-status" data-status={tab.taskState?.type === 'exited' ? (tab.taskState.code === 0 ? 'success' : 'failed') : tab.taskState?.type}>{status}</span>}
                 </button>}
-              <button type="button" className="terminal-tab-close" aria-label={`Đóng ${title}`} onClick={() => dispatch({ type: 'close', key: tab.key })}><Icon name="close" size={11} /></button>
+              <button type="button" className="terminal-tab-close" aria-label={tr('Đóng {title}', { title })} onClick={() => dispatch({ type: 'close', key: tab.key })}><Icon name="close" size={11} /></button>
             </span>
           })}
         </div>
-        <button type="button" className="terminal-icon" aria-label="Terminal mới" title="Terminal mới (⌃⇧`)" onClick={() => add()}><Icon name="plus" size={14} /></button>
-        <button type="button" className="terminal-icon" aria-label="Chia terminal sang phải" title="Chia terminal sang phải (⌘D)" disabled={state.visible.length >= 2} onClick={() => add(undefined, true)}><Icon name="panelRight" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Terminal mới')} title={tr('Terminal mới (⌃⇧`)')} onClick={() => add()}><Icon name="plus" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Chia terminal sang phải')} title={tr('Chia terminal sang phải (⌘D)')} disabled={state.visible.length >= 2} onClick={() => add(undefined, true)}><Icon name="panelRight" size={14} /></button>
         <span className="terminal-spacer" />
-        <button type="button" className="terminal-icon" aria-label="Đổi tên terminal" title="Đổi tên terminal" disabled={!activeTab} onClick={() => { if (activeTab) beginRename(activeTab) }}><Icon name="pencil" size={14} /></button>
-        <button type="button" className="terminal-icon" aria-label="Tìm trong terminal" title="Tìm trong terminal (⌘F)" onClick={() => openSearch(true)}><Icon name="search" size={14} /></button>
-        <button type="button" className="terminal-icon" aria-label={maximized ? 'Khôi phục terminal' : 'Phóng to terminal'} title={`${maximized ? 'Khôi phục' : 'Phóng to'} terminal (⇧Esc)`} aria-pressed={maximized}
+        <button type="button" className="terminal-icon" aria-label={tr('Đổi tên terminal')} title={tr('Đổi tên terminal')} disabled={!activeTab} onClick={() => { if (activeTab) beginRename(activeTab) }}><Icon name="pencil" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Tìm trong terminal')} title={tr('Tìm trong terminal (⌘F)')} onClick={() => openSearch(true)}><Icon name="search" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={maximized ? tr('Khôi phục terminal') : tr('Phóng to terminal')} title={`${maximized ? tr('Khôi phục') : tr('Phóng to')} terminal (⇧Esc)`} aria-pressed={maximized}
           onClick={() => setMaximized((value) => !value)}><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             {maximized ? <path d="M4 9h5V4m11 5h-5V4M4 15h5v5m11-5h-5v5" /> : <path d="M4 9V4h5m6 0h5v5M4 15v5h5m6 0h5v-5" />}
           </svg></button>
-        <button type="button" className="terminal-icon" aria-label="Ẩn terminal" title="Ẩn terminal (⌃`)" onClick={onHide}><Icon name="close" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Ẩn terminal')} title={tr('Ẩn terminal (⌃`)')} onClick={onHide}><Icon name="close" size={14} /></button>
       </div>
         {tabMenu && <div role="menu" className="terminal-tab-menu" style={{ left: tabMenu.x, top: tabMenu.y }}
           onPointerDown={(event) => event.stopPropagation()}>
-          <button type="button" role="menuitem" onClick={() => { const tab = state.tabs.find((item) => item.key === tabMenu.key); setTabMenu(null); if (tab) beginRename(tab) }}>Đổi tên</button>
+          <button type="button" role="menuitem" onClick={() => { const tab = state.tabs.find((item) => item.key === tabMenu.key); setTabMenu(null); if (tab) beginRename(tab) }}>{tr('Đổi tên')}</button>
         </div>}
       <div className="terminal-body">
         {state.tabs.map((tab) => <TerminalView key={tab.key} projectId={projectId} tab={tab} title={titleOf(tab)}
@@ -463,16 +464,16 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
           onReady={(shell) => dispatch({ type: 'ready', key: tab.key, shell })}
           onExit={(code) => dispatch({ type: 'exit', key: tab.key, code })}
           onError={() => dispatch({ type: 'error', key: tab.key })} onOpenFile={onOpenFile} />)}
-        {showSearch && <div className="terminal-search" role="search" aria-label="Tìm trong terminal">
-          <input ref={searchInput} aria-label="Từ cần tìm trong terminal" value={query} placeholder="Tìm trong terminal"
+        {showSearch && <div className="terminal-search" role="search" aria-label={tr('Tìm trong terminal')}>
+          <input ref={searchInput} aria-label={tr('Từ cần tìm trong terminal')} value={query} placeholder={tr('Tìm trong terminal')}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') { event.preventDefault(); activeControls()?.search(query, event.shiftKey) }
               else if (event.key === 'Escape' && !event.shiftKey) { event.preventDefault(); closeSearch() }
             }} />
-          <button type="button" className="terminal-icon terminal-search-previous" aria-label="Kết quả trước" title="Kết quả trước (⇧Enter)" onClick={() => activeControls()?.search(query, true)}><Icon name="chevron" size={14} /></button>
-          <button type="button" className="terminal-icon terminal-search-next" aria-label="Kết quả tiếp theo" title="Kết quả tiếp theo (Enter)" onClick={() => activeControls()?.search(query)}><Icon name="chevron" size={14} /></button>
-          <button type="button" className="terminal-icon" aria-label="Đóng tìm kiếm" onClick={closeSearch}><Icon name="close" size={14} /></button>
+          <button type="button" className="terminal-icon terminal-search-previous" aria-label={tr('Kết quả trước')} title={tr('Kết quả trước (⇧Enter)')} onClick={() => activeControls()?.search(query, true)}><Icon name="chevron" size={14} /></button>
+          <button type="button" className="terminal-icon terminal-search-next" aria-label={tr('Kết quả tiếp theo')} title={tr('Kết quả tiếp theo (Enter)')} onClick={() => activeControls()?.search(query)}><Icon name="chevron" size={14} /></button>
+          <button type="button" className="terminal-icon" aria-label={tr('Đóng tìm kiếm')} onClick={closeSearch}><Icon name="close" size={14} /></button>
         </div>}
       </div>
     </section>

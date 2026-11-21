@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileContent, GitBlameLine } from '@shared/api'
 import type { AgentContextItem } from '@shared/agent-types'
-import { vi } from '../../strings'
+import { vi, tr } from '../../strings'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
 import { createAutoSave } from './autoSave'
 import { Icon } from '../common/icons'
@@ -49,7 +49,7 @@ type Conflict = { disk: FileContent | null; detail?: string }
 type EditorFormat = { language: string; eol: FileContent['eol']; bom: boolean }
 
 const LANGUAGE_NAMES: Record<string, string> = {
-  plaintext: 'Văn bản thuần', typescript: 'TypeScript', javascript: 'JavaScript',
+  typescript: 'TypeScript', javascript: 'JavaScript',
   python: 'Python', dart: 'Dart', csharp: 'C#', json: 'JSON', yaml: 'YAML',
   markdown: 'Markdown', html: 'HTML', css: 'CSS'
 }
@@ -62,9 +62,9 @@ function explain(e: { code?: string; message?: string }): string {
 
 /** "Tác giả, 3 ngày trước • tóm tắt" như inline blame của Wu; `summary` false thì bỏ phần tóm tắt commit. */
 export function blameText(line: GitBlameLine, now = Date.now(), summary = true): string {
-  if (line.uncommitted) return 'Bạn • Chưa commit'
+  if (line.uncommitted) return tr('Bạn • Chưa commit')
   const days = Math.floor((now / 1000 - line.time) / 86_400)
-  const ago = days < 1 ? 'hôm nay' : days < 30 ? `${days} ngày trước` : days < 365 ? `${Math.floor(days / 30)} tháng trước` : `${Math.floor(days / 365)} năm trước`
+  const ago = days < 1 ? tr('hôm nay') : days < 30 ? tr('{days} ngày trước', { days }) : days < 365 ? tr('{months} tháng trước', { months: Math.floor(days / 30) }) : tr('{years} năm trước', { years: Math.floor(days / 365) })
   return `${line.author}, ${ago}${summary ? ` • ${line.summary}` : ''}`
 }
 
@@ -150,7 +150,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
     let saveGeneration = 0
     const language = languageFor(file)
     const updateFormat = ({ eol, bom, reason }: FileContent) => {
-      setFormat(reason ? null : { language: LANGUAGE_NAMES[language] ?? language, eol, bom })
+      setFormat(reason ? null : { language: language === 'plaintext' ? tr('Văn bản thuần') : LANGUAGE_NAMES[language] ?? language, eol, bom })
     }
 
     setReady(false)
@@ -451,7 +451,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   }, [file])
 
   const readOnlyNote = readOnly === 'too_large' ? vi.editor.readOnlyTooLarge : readOnly === 'not_text' ? vi.editor.readOnlyNotText : readOnly ? vi.editor.readOnly : null
-  const saveLabel = saveState === 'saving' ? 'Đang lưu…' : modified ? 'Chưa lưu' : saveState === 'saved' ? 'Đã lưu' : null
+  const saveLabel = saveState === 'saving' ? tr('Đang lưu…') : modified ? tr('Chưa lưu') : saveState === 'saved' ? tr('Đã lưu') : null
   const parts = file.split('/')
   const visiblePath = parts.length > 4 ? ['…', ...parts.slice(-4)] : parts
   const bookmarkLine = editor.current?.getPosition?.()?.line ?? cursor.line
@@ -460,7 +460,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   return (
     <div className="code-viewer editor-tab" style={active ? undefined : { display: 'none' }}>
       <header className="code-head">
-        <ol className="editor-path mono" aria-label={`Đường dẫn tệp ${file}`} title={file}>
+        <ol className="editor-path mono" aria-label={tr('Đường dẫn tệp {file}', { file })} title={file}>
           {visiblePath.map((segment, index) => (
             <li key={index} aria-current={index === visiblePath.length - 1 ? 'true' : undefined}>
               {index > 0 && <Icon name="chevron" size={12} />}
@@ -470,24 +470,24 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           ))}
         </ol>
         <span className="ws-editor-actions">
-          {onViewImage && <button type="button" onClick={onViewImage} title="Xem ảnh SVG">Xem ảnh</button>}
-          {onViewTable && <button type="button" disabled={!ready} onClick={onViewTable} title="Xem CSV/TSV dạng bảng">Xem bảng</button>}
+          {onViewImage && <button type="button" onClick={onViewImage} title={tr('Xem ảnh SVG')}>{tr('Xem ảnh')}</button>}
+          {onViewTable && <button type="button" disabled={!ready} onClick={onViewTable} title={tr('Xem CSV/TSV dạng bảng')}>{tr('Xem bảng')}</button>}
           {saveLabel && <span role="status" className="ws-save-state" data-state={saveState}>{saveLabel}</span>}
           <button type="button" className="ws-icon-button" disabled={!ready} aria-pressed={bookmarked}
-            aria-label={bookmarked ? 'Bỏ đánh dấu dòng' : 'Đánh dấu dòng'}
-            title={bookmarked ? 'Bỏ đánh dấu dòng' : 'Đánh dấu dòng'} onClick={toggleAtCursor}>
+            aria-label={bookmarked ? tr('Bỏ đánh dấu dòng') : tr('Đánh dấu dòng')}
+            title={bookmarked ? tr('Bỏ đánh dấu dòng') : tr('Đánh dấu dòng')} onClick={toggleAtCursor}>
             <Icon name="bookmark" size={15} />
           </button>
           <button type="button" className="ws-icon-button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
-            aria-label="Lưu" title="Lưu (Ctrl/Cmd+S)"><Icon name="save" size={15} /></button>
-          {onSplit && <button type="button" className="ws-icon-button" disabled={!ready} aria-label="Chia đôi sang phải" title="Chia đôi sang phải (⌘\)" onClick={onSplit}><Icon name="panelRight" size={15} /></button>}
+            aria-label={tr('Lưu')} title={tr('Lưu (Ctrl/Cmd+S)')}><Icon name="save" size={15} /></button>
+          {onSplit && <button type="button" className="ws-icon-button" disabled={!ready} aria-label={tr('Chia đôi sang phải')} title={tr('Chia đôi sang phải (⌘\)')} onClick={onSplit}><Icon name="panelRight" size={15} /></button>}
           <button type="button" className="ws-icon-button" aria-label={vi.editor.close} title={vi.editor.close} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>
-      {!ready && !error && <p role="status" className="ws-editor-loading muted">Đang mở tệp…</p>}
+      {!ready && !error && <p role="status" className="ws-editor-loading muted">{tr('Đang mở tệp…')}</p>}
       {error && <div className="ws-editor-error">
         <p role="alert" className="error">{error}</p>
-        {!ready && <button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>Thử lại</button>}
+        {!ready && <button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>{tr('Thử lại')}</button>}
       </div>}
       {readOnlyNote && <p role="status" className="stale-banner">{readOnlyNote}</p>}
       {conflict && (
@@ -504,12 +504,12 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       <EditorDebug file={file} editor={ready ? editor.current : null} active={active} cursor={cursor.line} />
       {format && active && (
         <StatusBarItems>
-          <button type="button" className="status-item" title={`${errorCount} lỗi, ${warningCount} cảnh báo`} onClick={() => runCommand('editor.diagnostics')}>Lỗi {errorCount} · Cảnh báo {warningCount}</button>
-          <span className="status-item" title={`Dòng ${cursor.line}, cột ${cursor.column}`}>{cursor.line}:{cursor.column}</span>
-          <span className="status-item" title="Ngôn ngữ">{format.language}</span>
-          <span className="status-item" title="Kiểu xuống dòng">{format.eol === '\r\n' ? 'CRLF' : 'LF'}</span>
-          <span className="status-item" title="Bảng mã">{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</span>
-          {vim && <span className="status-item vim-status" title="Chế độ Vim" ref={setVimNode} />}
+          <button type="button" className="status-item" title={tr('{errors} lỗi, {warnings} cảnh báo', { errors: errorCount, warnings: warningCount })} onClick={() => runCommand('editor.diagnostics')}>{tr('Lỗi {errors} · Cảnh báo {warnings}', { errors: errorCount, warnings: warningCount })}</button>
+          <span className="status-item" title={tr('Dòng {line}, cột {column}', { line: cursor.line, column: cursor.column })}>{cursor.line}:{cursor.column}</span>
+          <span className="status-item" title={tr('Ngôn ngữ')}>{format.language}</span>
+          <span className="status-item" title={tr('Kiểu xuống dòng')}>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</span>
+          <span className="status-item" title={tr('Bảng mã')}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</span>
+          {vim && <span className="status-item vim-status" title={tr('Chế độ Vim')} ref={setVimNode} />}
         </StatusBarItems>
       )}
     </div>

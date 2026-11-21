@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { AgentMode } from '@shared/agent-types'
+import { tr } from '../strings'
 
 /** Hồ sơ trợ lý kiểu Wu: chế độ nền (Hỏi/Kế hoạch/Sửa) cộng danh sách tool bị tắt. */
 export interface AgentProfile {
@@ -51,6 +52,6 @@ export function matchProfile(list: readonly AgentProfile[], mode: AgentMode | nu
 
 /** Nhãn dễ đọc cho tool; tool đồ thị giữ tên gốc. */
 export const TOOL_LABELS: Record<string, string> = {
-  read: 'Đọc tệp', grep: 'Tìm trong tệp', find: 'Tìm tệp', ls: 'Liệt kê thư mục',
-  edit: 'Sửa tệp', write: 'Ghi tệp mới', run_process: 'Chạy lệnh (test, build)'
+  get read() { return tr('Đọc tệp') }, get grep() { return tr('Tìm trong tệp') }, get find() { return tr('Tìm tệp') }, get ls() { return tr('Liệt kê thư mục') },
+  get edit() { return tr('Sửa tệp') }, get write() { return tr('Ghi tệp mới') }, get run_process() { return tr('Chạy lệnh (test, build)') }
 }

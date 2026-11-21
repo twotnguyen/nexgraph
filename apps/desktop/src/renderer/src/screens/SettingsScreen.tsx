@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react'
 import type { AiSettings } from '@shared/graph-types'
 import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@shared/agent-types'
-import { vi } from '../strings'
+import { tr, vi } from '../strings'
+import { formatNumber, setLocale, useLocale } from '../state/locale'
 import { Icon, type IconName } from '../components/common/icons'
 import { THEMES, setTheme, useThemeId, useThemesVersion } from '../state/useTheme'
 import { setBlame, setEditorPrefs, setVimMode, useBlame, useEditorPrefs, useVimMode } from '../state/editorPrefs'
@@ -23,33 +24,34 @@ const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
 
 // Từ khoá cho ô tìm: tiêu đề và vài chữ người dùng hay gõ của mỗi mục.
 const SECTION_WORDS = {
-  theme: 'Giao diện theme màu sáng tối dark light bộ icon tệp file icons',
-  chat: 'Khung chat AI trợ lý vị trí trái phải dock độ rộng panels bảng',
-  editor: 'Trình soạn thảo editor vim chế độ phím cỡ chữ font size tab ngắt dòng wrap định dạng lưu format auto save tự lưu terminal',
-  keymap: 'Phím tắt keymap keybinding shortcut lệnh bàn phím base keymap vs code vscode jetbrains sublime nguồn',
-  blame: 'Version Control Git blame inline từng dòng tác giả commit tóm tắt độ trễ',
-  layout: 'Panels bảng bố cục terminal chiều cao cây tệp explorer mở sẵn thanh trạng thái status bar',
-  profiles: 'Hồ sơ trợ lý profile tool công cụ chạy lệnh agent',
-  notify: 'Thông báo hệ thống âm thanh chuông trợ lý xong lỗi chờ duyệt cửa sổ nền notification sound',
-  extensions: 'Extension tiện ích mở rộng plugin theme lệnh cài',
-  quick: 'Kết nối nhanh ollama local tài khoản AI',
-  gemini: 'Gemini Google Antigravity tài khoản AI',
-  apikey: 'API key nhà cung cấp OpenAI Anthropic Claude khoá',
-  custom: 'Nhà cung cấp tuỳ chỉnh custom base URL OpenRouter',
-  oauth: 'Đăng nhập gói đăng ký ChatGPT OAuth',
-  model: 'Mô hình model kiểm tra kết nối',
-  privacy: 'Quyền riêng tư dữ liệu bảo mật'
+  theme: () => tr('Giao diện theme màu sáng tối dark light bộ icon tệp file icons'),
+  chat: () => tr('Khung chat AI trợ lý vị trí trái phải dock độ rộng panels bảng'),
+  editor: () => tr('Trình soạn thảo editor vim chế độ phím cỡ chữ font size tab ngắt dòng wrap định dạng lưu format auto save tự lưu terminal'),
+  keymap: () => tr('Phím tắt keymap keybinding shortcut lệnh bàn phím base keymap vs code vscode jetbrains sublime nguồn'),
+  blame: () => tr('Version Control Git blame inline từng dòng tác giả commit tóm tắt độ trễ'),
+  layout: () => tr('Panels bảng bố cục terminal chiều cao cây tệp explorer mở sẵn thanh trạng thái status bar'),
+  profiles: () => tr('Hồ sơ trợ lý profile tool công cụ chạy lệnh agent'),
+  notify: () => tr('Thông báo hệ thống âm thanh chuông trợ lý xong lỗi chờ duyệt cửa sổ nền notification sound'),
+  extensions: () => tr('Extension tiện ích mở rộng plugin theme lệnh cài'),
+  quick: () => tr('Kết nối nhanh ollama local tài khoản AI'),
+  gemini: () => tr('Gemini Google Antigravity tài khoản AI'),
+  apikey: () => tr('API key nhà cung cấp OpenAI Anthropic Claude khoá'),
+  custom: () => tr('Nhà cung cấp tuỳ chỉnh custom base URL OpenRouter'),
+  oauth: () => tr('Đăng nhập gói đăng ký ChatGPT OAuth'),
+  model: () => tr('Mô hình model kiểm tra kết nối'),
+  privacy: () => tr('Quyền riêng tư dữ liệu bảo mật'),
+  language: () => tr('Ngôn ngữ giao diện language locale Tiếng Việt English')
 }
-const PAGES: { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] = [
-  { id: 'appearance', label: 'Giao diện', icon: 'palette', sections: ['theme', 'editor'] },
-  { id: 'keymap', label: 'Phím tắt', icon: 'keyboard', sections: ['keymap'] },
-  { id: 'panels', label: 'Panels', icon: 'panelLeft', sections: ['chat', 'layout'] },
-  { id: 'vcs', label: 'Version Control', icon: 'branch', sections: ['blame'] },
-  { id: 'agent', label: 'Trợ lý AI', icon: 'spark', sections: ['profiles', 'notify'] },
-  { id: 'extensions', label: 'Extension', icon: 'plug', sections: ['extensions'] },
-  { id: 'ai', label: 'Tài khoản AI', icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
-  { id: 'model', label: 'Mô hình', icon: 'spark', sections: ['model'] },
-  { id: 'privacy', label: 'Quyền riêng tư', icon: 'shield', sections: ['privacy'] }
+const PAGES = (): { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] => [
+  { id: 'appearance', label: tr('Giao diện'), icon: 'palette', sections: ['theme', 'language', 'editor'] },
+  { id: 'keymap', label: tr('Phím tắt'), icon: 'keyboard', sections: ['keymap'] },
+  { id: 'panels', label: tr('Panels'), icon: 'panelLeft', sections: ['chat', 'layout'] },
+  { id: 'vcs', label: tr('Version Control'), icon: 'branch', sections: ['blame'] },
+  { id: 'agent', label: tr('Trợ lý AI'), icon: 'spark', sections: ['profiles', 'notify'] },
+  { id: 'extensions', label: tr('Extension'), icon: 'plug', sections: ['extensions'] },
+  { id: 'ai', label: tr('Tài khoản AI'), icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
+  { id: 'model', label: tr('Mô hình'), icon: 'spark', sections: ['model'] },
+  { id: 'privacy', label: tr('Quyền riêng tư'), icon: 'shield', sections: ['privacy'] }
 ]
 
 function NumberSetting({ id, value, min, max, onChange }: { id: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
@@ -105,6 +107,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const terminalHeight = useTerminalHeight()
   const explorerOpen = useExplorerOpen()
   const statusBar = useStatusBar()
+  const locale = useLocale()
 
   const load = useCallback(async () => {
     const currentSettings = window.nexgraph.ai.getSettings().then(setSettings).catch((e) => {
@@ -226,8 +229,8 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const selectedModel = models.find((m) => m.provider === settings?.provider && m.id === settings.model)
 
   const q = query.trim().toLocaleLowerCase('vi')
-  const shows = (id: keyof typeof SECTION_WORDS) => !q || SECTION_WORDS[id].toLocaleLowerCase('vi').includes(q)
-  const pages = PAGES.filter((page) => page.sections.some(shows))
+  const shows = (id: keyof typeof SECTION_WORDS) => !q || SECTION_WORDS[id]().toLocaleLowerCase('vi').includes(q)
+  const pages = PAGES().filter((page) => page.sections.some(shows))
   // Bấm danh mục thì giữ mục đó sáng dù trang cuối quá ngắn để cuộn tới đỉnh.
   const jumped = useRef(0)
   const goTo = (id: string) => {
@@ -246,10 +249,10 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
 
   return (
     <main className="screen settings settings-wu">
-      <nav className="settings-nav" aria-label="Mục cài đặt">
+      <nav className="settings-nav" aria-label={tr('Mục cài đặt')}>
         <button type="button" className="settings-back" onClick={onBack}>{vi.settings.back}</button>
         <label className="settings-search"><Icon name="search" size={14} />
-          <input type="search" aria-label="Tìm cài đặt" placeholder="Tìm cài đặt…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input type="search" aria-label={tr('Tìm cài đặt')} placeholder={tr('Tìm cài đặt…')} value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
         {pages.map((page) => <button key={page.id} type="button" className="settings-nav-item" aria-current={activePage === page.id ? 'true' : undefined} onClick={() => goTo(page.id)}>
           <Icon name={page.icon} size={15} /><span>{page.label}</span>
@@ -258,159 +261,169 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       <div className="settings-content" onScroll={onScroll}>
       {error && <p role="alert" className="inline-message error">{error}</p>}
       {status && <Toast message={status} onDismiss={() => setStatus(null)} />}
-      {pages.length === 0 && <div className="settings-empty"><strong>Không có kết quả</strong><span className="muted">Không có cài đặt nào khớp “{query.trim()}”</span></div>}
+      {pages.length === 0 && <div className="settings-empty"><strong>{tr('Không có kết quả')}</strong><span className="muted">{tr('Không có cài đặt nào khớp “{query}”', { query: query.trim() })}</span></div>}
 
-      {pages.some((p) => p.id === 'appearance') && <h1 id="settings-appearance" data-settings-page="appearance" className="settings-page-title">Giao diện</h1>}
+      {pages.some((p) => p.id === 'appearance') && <h1 id="settings-appearance" data-settings-page="appearance" className="settings-page-title">{tr('Giao diện')}</h1>}
+      {shows('language') && <section className="settings-section" aria-labelledby="settings-language-title">
+        <h2 id="settings-language-title">{tr('Ngôn ngữ')}</h2>
+        <div className="settings-row">
+          <div><label htmlFor="settings-locale">{tr('Ngôn ngữ giao diện')}</label><p>{tr('Đổi ngay, không cần khởi động lại.')}</p></div>
+          <select id="settings-locale" value={locale} onChange={(e) => setLocale(e.target.value === 'en' ? 'en' : 'vi')}>
+            <option value="vi">{tr('Tiếng Việt')}</option>
+            <option value="en">{tr('English')}</option>
+          </select>
+        </div>
+      </section>}
       {shows('theme') && <section className="settings-section" aria-labelledby="settings-theme-title">
         <h2 id="settings-theme-title">Theme</h2>
         <div className="settings-row">
-          <div><label htmlFor="settings-theme">Theme</label><p>Màu của toàn bộ app và editor. Cũng mở được bằng ⌘K rồi ⌘T hoặc từ bảng lệnh (⌘⇧P).</p></div>
+          <div><label htmlFor="settings-theme">Theme</label><p>{tr('Màu của toàn bộ app và editor. Cũng mở được bằng ⌘K rồi ⌘T hoặc từ bảng lệnh (⌘⇧P).')}</p></div>
           <select id="settings-theme" value={themeId} onChange={(e) => setTheme(e.target.value)}>
             {THEMES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-icon-theme">Bộ icon tệp</label><p>Icon dùng trong cây tệp, thẻ editor và tìm tệp.</p></div>
+          <div><label htmlFor="settings-icon-theme">{tr('Bộ icon tệp')}</label><p>{tr('Icon dùng trong cây tệp, thẻ editor và tìm tệp.')}</p></div>
           <select id="settings-icon-theme" value={editorPrefs.iconTheme} onChange={(e) => setEditorPrefs({ iconTheme: e.target.value === 'mono' ? 'mono' : 'symbols' })}>
-            <option value="symbols">Symbols (có màu)</option><option value="mono">Đơn sắc</option>
+            <option value="symbols">{tr('Symbols (có màu)')}</option><option value="mono">{tr('Đơn sắc')}</option>
           </select>
         </div>
       </section>}
       {shows('editor') && <section className="settings-section" aria-labelledby="settings-editor-title">
-        <h2 id="settings-editor-title">Trình soạn thảo</h2>
+        <h2 id="settings-editor-title">{tr('Trình soạn thảo')}</h2>
         <div className="settings-row">
-          <div><label htmlFor="settings-font-size">Cỡ chữ editor</label><p>Cỡ chữ cho nội dung tệp (8–32). ⌘= / ⌘- thu phóng tạm thời, ⌘0 đặt lại.</p></div>
+          <div><label htmlFor="settings-font-size">{tr('Cỡ chữ editor')}</label><p>{tr('Cỡ chữ cho nội dung tệp (8–32). ⌘= / ⌘- thu phóng tạm thời, ⌘0 đặt lại.')}</p></div>
           <NumberSetting id="settings-font-size" value={editorPrefs.fontSize} min={8} max={32} onChange={(fontSize) => setEditorPrefs({ fontSize })} />
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-terminal-font-size">Cỡ chữ terminal</label><p>Cỡ chữ trong terminal (8–32).</p></div>
+          <div><label htmlFor="settings-terminal-font-size">{tr('Cỡ chữ terminal')}</label><p>{tr('Cỡ chữ trong terminal (8–32).')}</p></div>
           <NumberSetting id="settings-terminal-font-size" value={editorPrefs.terminalFontSize} min={8} max={32} onChange={(terminalFontSize) => setEditorPrefs({ terminalFontSize })} />
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-tab-size">Tab size</label><p>Số khoảng trắng mặc định; tệp mới mở có thể tự nhận diện thụt lề.</p></div>
+          <div><label htmlFor="settings-tab-size">Tab size</label><p>{tr('Số khoảng trắng mặc định; tệp mới mở có thể tự nhận diện thụt lề.')}</p></div>
           <select id="settings-tab-size" value={editorPrefs.tabSize} onChange={(e) => setEditorPrefs({ tabSize: Number(e.target.value) as 2 | 4 | 8 })}>
             <option value={2}>2</option><option value={4}>4</option><option value={8}>8</option>
           </select>
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-wrap">Ngắt dòng</label><p>Ngắt dòng dài theo chiều rộng editor.</p></div>
+          <div><label htmlFor="settings-wrap">{tr('Ngắt dòng')}</label><p>{tr('Ngắt dòng dài theo chiều rộng editor.')}</p></div>
           <select id="settings-wrap" value={editorPrefs.wordWrap} onChange={(e) => setEditorPrefs({ wordWrap: e.target.value === 'on' ? 'on' : 'off' })}>
-            <option value="off">Tắt</option><option value="on">Theo khung</option>
+            <option value="off">{tr('Tắt')}</option><option value="on">{tr('Theo khung')}</option>
           </select>
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-format-save">Định dạng khi lưu</label><p>Định dạng tệp trước khi lưu nếu có formatter cho ngôn ngữ đó.</p></div>
+          <div><label htmlFor="settings-format-save">{tr('Định dạng khi lưu')}</label><p>{tr('Định dạng tệp trước khi lưu nếu có formatter cho ngôn ngữ đó.')}</p></div>
           <button id="settings-format-save" type="button" role="switch" aria-checked={editorPrefs.formatOnSave}
             className={`switch${editorPrefs.formatOnSave ? ' on' : ''}`} onClick={() => setEditorPrefs({ formatOnSave: !editorPrefs.formatOnSave })}><span /></button>
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-auto-save">Tự lưu</label><p>Khi nào lưu các thay đổi trong editor.</p></div>
+          <div><label htmlFor="settings-auto-save">{tr('Tự lưu')}</label><p>{tr('Khi nào lưu các thay đổi trong editor.')}</p></div>
           <select id="settings-auto-save" value={editorPrefs.autoSave} onChange={(e) => setEditorPrefs({ autoSave: e.target.value === 'afterDelay' || e.target.value === 'onFocusChange' ? e.target.value : 'off' })}>
-            <option value="off">Tắt</option><option value="afterDelay">Sau khi dừng gõ</option><option value="onFocusChange">Khi rời editor</option>
+            <option value="off">{tr('Tắt')}</option><option value="afterDelay">{tr('Sau khi dừng gõ')}</option><option value="onFocusChange">{tr('Khi rời editor')}</option>
           </select>
         </div>
         {editorPrefs.autoSave === 'afterDelay' && <div className="settings-row">
-          <div><label htmlFor="settings-auto-save-delay">Thời gian chờ (ms)</label><p>Lưu sau khoảng thời gian không gõ.</p></div>
+          <div><label htmlFor="settings-auto-save-delay">{tr('Thời gian chờ (ms)')}</label><p>{tr('Lưu sau khoảng thời gian không gõ.')}</p></div>
           <NumberSetting id="settings-auto-save-delay" value={editorPrefs.autoSaveDelay} min={1} max={2147483647} onChange={(autoSaveDelay) => setEditorPrefs({ autoSaveDelay })} />
         </div>}
         <div className="settings-row">
-          <div><label htmlFor="settings-vim">Chế độ Vim</label><p>Phím kiểu Vim trong editor (normal/insert/visual); trạng thái hiện ở thanh dưới. Bật/tắt cũng được từ bảng lệnh.</p></div>
+          <div><label htmlFor="settings-vim">{tr('Chế độ Vim')}</label><p>{tr('Phím kiểu Vim trong editor (normal/insert/visual); trạng thái hiện ở thanh dưới. Bật/tắt cũng được từ bảng lệnh.')}</p></div>
           <button id="settings-vim" type="button" role="switch" aria-checked={vimMode} className={`switch${vimMode ? ' on' : ''}`} onClick={() => setVimMode(!vimMode)}><span /></button>
         </div>
       </section>}
 
-      {pages.some((p) => p.id === 'keymap') && <h1 id="settings-keymap" data-settings-page="keymap" className="settings-page-title">Phím tắt</h1>}
-      {shows('keymap') && <section className="settings-section" aria-label="Phím tắt">
-        <p className="muted">Bấm Đổi hoặc bấm đúp một dòng rồi nhấn tổ hợp mới; hợp âm hai bước như ⌘K ⌘T cũng được. Một phím chỉ thuộc một lệnh.</p>
+      {pages.some((p) => p.id === 'keymap') && <h1 id="settings-keymap" data-settings-page="keymap" className="settings-page-title">{tr('Phím tắt')}</h1>}
+      {shows('keymap') && <section className="settings-section" aria-label={tr('Phím tắt')}>
+        <p className="muted">{tr('Bấm Đổi hoặc bấm đúp một dòng rồi nhấn tổ hợp mới; hợp âm hai bước như ⌘K ⌘T cũng được. Một phím chỉ thuộc một lệnh.')}</p>
         <KeymapEditor />
       </section>}
 
       {pages.some((p) => p.id === 'panels') && <h1 id="settings-panels" data-settings-page="panels" className="settings-page-title">Panels</h1>}
       {shows('chat') && <section className="settings-section" aria-labelledby="settings-chat-title">
-        <h2 id="settings-chat-title">Khung chat AI</h2>
+        <h2 id="settings-chat-title">{tr('Khung chat AI')}</h2>
         <div className="settings-row">
-          <div><label htmlFor="settings-chat-dock">Vị trí</label><p>Bên trái dùng chung chỗ với cây tệp như Wu; bên phải đứng cạnh cây tệp. Ẩn/hiện bằng ⌘L.</p></div>
+          <div><label htmlFor="settings-chat-dock">{tr('Vị trí')}</label><p>{tr('Bên trái dùng chung chỗ với cây tệp như Wu; bên phải đứng cạnh cây tệp. Ẩn/hiện bằng ⌘L.')}</p></div>
           <select id="settings-chat-dock" value={chatDock} onChange={(e) => setChatDock(e.target.value === 'right' ? 'right' : 'left')}>
-            <option value="left">Bên trái (kiểu Wu)</option>
-            <option value="right">Bên phải</option>
+            <option value="left">{tr('Bên trái (kiểu Wu)')}</option>
+            <option value="right">{tr('Bên phải')}</option>
           </select>
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-chat-width">Độ rộng (px)</label><p>Độ rộng khung chat ({CHAT_WIDTH.min}–{CHAT_WIDTH.max}); cũng kéo được thanh chia cạnh khung.</p></div>
+          <div><label htmlFor="settings-chat-width">{tr('Độ rộng (px)')}</label><p>{tr('Độ rộng khung chat ({min}–{max}); cũng kéo được thanh chia cạnh khung.', { min: CHAT_WIDTH.min, max: CHAT_WIDTH.max })}</p></div>
           <NumberSetting id="settings-chat-width" value={chatWidth} min={CHAT_WIDTH.min} max={CHAT_WIDTH.max} onChange={setChatWidth} />
         </div>
       </section>}
       {shows('layout') && <section className="settings-section" aria-labelledby="settings-layout-title">
-        <h2 id="settings-layout-title">Bố cục</h2>
+        <h2 id="settings-layout-title">{tr('Bố cục')}</h2>
         <div className="settings-row">
-          <div><label htmlFor="settings-terminal-height">Chiều cao terminal (px)</label><p>Chiều cao panel terminal ở dưới ({TERMINAL_HEIGHT.min}–{TERMINAL_HEIGHT.max}, không vượt quá cửa sổ); cũng kéo được thanh chia phía trên terminal.</p></div>
+          <div><label htmlFor="settings-terminal-height">{tr('Chiều cao terminal (px)')}</label><p>{tr('Chiều cao panel terminal ở dưới ({min}–{max}, không vượt quá cửa sổ); cũng kéo được thanh chia phía trên terminal.', { min: TERMINAL_HEIGHT.min, max: TERMINAL_HEIGHT.max })}</p></div>
           <NumberSetting id="settings-terminal-height" value={terminalHeight} min={TERMINAL_HEIGHT.min} max={TERMINAL_HEIGHT.max} onChange={setTerminalHeight} />
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-explorer-open">Mở sẵn cây tệp</label><p>Vào dự án thì hiện sẵn cây tệp ở bên trái. Áp dụng từ lần mở dự án tiếp theo.</p></div>
+          <div><label htmlFor="settings-explorer-open">{tr('Mở sẵn cây tệp')}</label><p>{tr('Vào dự án thì hiện sẵn cây tệp ở bên trái. Áp dụng từ lần mở dự án tiếp theo.')}</p></div>
           <button id="settings-explorer-open" type="button" role="switch" aria-checked={explorerOpen} className={`switch${explorerOpen ? ' on' : ''}`} onClick={() => setExplorerOpen(!explorerOpen)}><span /></button>
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-status-bar">Hiện thanh trạng thái</label><p>Thanh dưới cùng: trạng thái engine, vị trí con trỏ, ngôn ngữ, kiểu xuống dòng. Engine lỗi thì thanh vẫn hiện để còn nút Khởi động lại.</p></div>
+          <div><label htmlFor="settings-status-bar">{tr('Hiện thanh trạng thái')}</label><p>{tr('Thanh dưới cùng: trạng thái engine, vị trí con trỏ, ngôn ngữ, kiểu xuống dòng. Engine lỗi thì thanh vẫn hiện để còn nút Khởi động lại.')}</p></div>
           <button id="settings-status-bar" type="button" role="switch" aria-checked={statusBar} className={`switch${statusBar ? ' on' : ''}`} onClick={() => setStatusBar(!statusBar)}><span /></button>
         </div>
       </section>}
 
       {pages.some((p) => p.id === 'vcs') && <h1 id="settings-vcs" data-settings-page="vcs" className="settings-page-title">Version Control</h1>}
       {shows('blame') && <section className="settings-section" aria-labelledby="settings-blame-title">
-        <h2 id="settings-blame-title">Blame từng dòng</h2>
+        <h2 id="settings-blame-title">{tr('Blame từng dòng')}</h2>
         <div className="settings-row">
-          <div><label htmlFor="settings-blame">Hiện blame</label><p>Tác giả và thời điểm sửa dòng có con trỏ, hiện mờ ở cuối dòng khi tệp không có thay đổi chưa lưu. Bật/tắt cũng được từ bảng lệnh.</p></div>
+          <div><label htmlFor="settings-blame">{tr('Hiện blame')}</label><p>{tr('Tác giả và thời điểm sửa dòng có con trỏ, hiện mờ ở cuối dòng khi tệp không có thay đổi chưa lưu. Bật/tắt cũng được từ bảng lệnh.')}</p></div>
           <button id="settings-blame" type="button" role="switch" aria-checked={blameOn} className={`switch${blameOn ? ' on' : ''}`} onClick={() => setBlame(!blameOn)}><span /></button>
         </div>
         {blameOn && <>
           <div className="settings-row">
-            <div><label htmlFor="settings-blame-delay">Độ trễ (ms)</label><p>Chờ con trỏ đứng yên trên dòng bấy lâu rồi mới hiện blame (0–5000); 0 là hiện ngay.</p></div>
+            <div><label htmlFor="settings-blame-delay">{tr('Độ trễ (ms)')}</label><p>{tr('Chờ con trỏ đứng yên trên dòng bấy lâu rồi mới hiện blame (0–5000); 0 là hiện ngay.')}</p></div>
             <NumberSetting id="settings-blame-delay" value={editorPrefs.blameDelay} min={0} max={5000} onChange={(blameDelay) => setEditorPrefs({ blameDelay })} />
           </div>
           <div className="settings-row">
-            <div><label htmlFor="settings-blame-summary">Kèm tóm tắt commit</label><p>Thêm dòng đầu thông điệp commit sau tên tác giả và thời điểm.</p></div>
+            <div><label htmlFor="settings-blame-summary">{tr('Kèm tóm tắt commit')}</label><p>{tr('Thêm dòng đầu thông điệp commit sau tên tác giả và thời điểm.')}</p></div>
             <button id="settings-blame-summary" type="button" role="switch" aria-checked={editorPrefs.blameSummary}
               className={`switch${editorPrefs.blameSummary ? ' on' : ''}`} onClick={() => setEditorPrefs({ blameSummary: !editorPrefs.blameSummary })}><span /></button>
           </div>
         </>}
       </section>}
 
-      {pages.some((p) => p.id === 'agent') && <h1 id="settings-agent" data-settings-page="agent" className="settings-page-title">Trợ lý AI</h1>}
+      {pages.some((p) => p.id === 'agent') && <h1 id="settings-agent" data-settings-page="agent" className="settings-page-title">{tr('Trợ lý AI')}</h1>}
       {shows('profiles') && <section className="settings-section" aria-labelledby="settings-profiles-title">
-        <h2 id="settings-profiles-title">Hồ sơ trợ lý</h2>
-        <p className="muted">Ba hồ sơ dựng sẵn là Hỏi, Kế hoạch và Sửa. Hồ sơ tự tạo chọn một chế độ nền rồi tắt bớt tool (ví dụ Sửa nhưng không chạy lệnh); hồ sơ hiện cạnh ba chế độ ở chân khung chat. Mọi thao tác ghi vẫn phải được duyệt.</p>
+        <h2 id="settings-profiles-title">{tr('Hồ sơ trợ lý')}</h2>
+        <p className="muted">{tr('Ba hồ sơ dựng sẵn là Hỏi, Kế hoạch và Sửa. Hồ sơ tự tạo chọn một chế độ nền rồi tắt bớt tool (ví dụ Sửa nhưng không chạy lệnh); hồ sơ hiện cạnh ba chế độ ở chân khung chat. Mọi thao tác ghi vẫn phải được duyệt.')}</p>
         <ProfileEditor />
       </section>}
 
       {shows('notify') && <section className="settings-section" aria-labelledby="settings-notify-title">
-        <h2 id="settings-notify-title">Khi trợ lý xong</h2>
-        <p className="muted">Chỉ báo khi cửa sổ NexGraph không được chọn (đang ở ứng dụng khác hoặc đã thu nhỏ). Báo khi trợ lý trả lời xong, gặp lỗi hoặc chờ bạn duyệt thay đổi.</p>
+        <h2 id="settings-notify-title">{tr('Khi trợ lý xong')}</h2>
+        <p className="muted">{tr('Chỉ báo khi cửa sổ NexGraph không được chọn (đang ở ứng dụng khác hoặc đã thu nhỏ). Báo khi trợ lý trả lời xong, gặp lỗi hoặc chờ bạn duyệt thay đổi.')}</p>
         <div className="settings-row">
-          <div><label htmlFor="settings-agent-notify">Thông báo hệ thống</label><p>Hiện thông báo của hệ điều hành; bấm vào để quay lại NexGraph.</p></div>
+          <div><label htmlFor="settings-agent-notify">{tr('Thông báo hệ thống')}</label><p>{tr('Hiện thông báo của hệ điều hành; bấm vào để quay lại NexGraph.')}</p></div>
           <button id="settings-agent-notify" type="button" role="switch" aria-checked={notifyPrefs.notify} className={`switch${notifyPrefs.notify ? ' on' : ''}`} onClick={() => setNotifyPrefs({ notify: !notifyPrefs.notify })}><span /></button>
         </div>
         <div className="settings-row">
-          <div><label htmlFor="settings-agent-sound">Âm thanh</label><p>Phát một tiếng chuông ngắn, riêng cho xong, lỗi và chờ duyệt.</p></div>
+          <div><label htmlFor="settings-agent-sound">{tr('Âm thanh')}</label><p>{tr('Phát một tiếng chuông ngắn, riêng cho xong, lỗi và chờ duyệt.')}</p></div>
           <button id="settings-agent-sound" type="button" role="switch" aria-checked={notifyPrefs.sound} className={`switch${notifyPrefs.sound ? ' on' : ''}`} onClick={() => setNotifyPrefs({ sound: !notifyPrefs.sound })}><span /></button>
         </div>
       </section>}
 
       {pages.some((p) => p.id === 'extensions') && <h1 id="settings-extensions" data-settings-page="extensions" className="settings-page-title">Extension</h1>}
       {shows('extensions') && <section className="settings-section" aria-labelledby="settings-extensions-title">
-        <h2 id="settings-extensions-title">Extension đã cài</h2>
-        <p className="muted">Extension là một thư mục có <code>extension.json</code>, đóng góp theme (bảng màu) và lệnh (chèn văn bản hoặc chạy chuỗi lệnh có sẵn) cho bảng lệnh ⌘⇧P. Extension không chạy mã trong app. Mẫu ở <code>nexgraph/examples/extension-sample</code>.</p>
+        <h2 id="settings-extensions-title">{tr('Extension đã cài')}</h2>
+        <p className="muted">{tr('Extension là một thư mục có')} <code>extension.json</code>{tr(', đóng góp theme (bảng màu) và lệnh (chèn văn bản hoặc chạy chuỗi lệnh có sẵn) cho bảng lệnh ⌘⇧P. Extension không chạy mã trong app. Mẫu ở')} <code>nexgraph/examples/extension-sample</code>.</p>
         <ExtensionList />
       </section>}
 
       {pages.some((p) => p.id === 'ai') && <h1 id="settings-ai" data-settings-page="ai" className="settings-page-title">{vi.accounts.title}</h1>}
       {shows('quick') && <section className="settings-section" aria-labelledby="settings-quick-title">
-        <h2 id="settings-quick-title">Kết nối nhanh</h2>
+        <h2 id="settings-quick-title">{tr('Kết nối nhanh')}</h2>
         <div className="settings-row">
-          <div><span className="settings-label">Kết nối</span><p>Chọn nhà cung cấp và đăng nhập trong một hộp thoại, hoặc dùng model chạy trên máy qua Ollama.</p></div>
+          <div><span className="settings-label">{tr('Kết nối')}</span><p>{tr('Chọn nhà cung cấp và đăng nhập trong một hộp thoại, hoặc dùng model chạy trên máy qua Ollama.')}</p></div>
           <div className="row">
-            <button type="button" className="primary" disabled={busy} onClick={() => setConnecting('oauth')}>Kết nối nhanh</button>
-            <button type="button" disabled={busy} onClick={() => setConnecting('local')}>Kết nối Ollama local</button>
+            <button type="button" className="primary" disabled={busy} onClick={() => setConnecting('oauth')}>{tr('Kết nối nhanh')}</button>
+            <button type="button" disabled={busy} onClick={() => setConnecting('local')}>{tr('Kết nối Ollama local')}</button>
           </div>
         </div>
       </section>}
@@ -476,7 +489,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
 
       {shows('oauth') && <section className="settings-section">
         <h2>{vi.accounts.oauthTitle}</h2>
-        <p className="muted">Đăng nhập ChatGPT và các tài khoản được nhà cung cấp hỗ trợ. Quyền dùng model và hạn mức tùy tài khoản. Claude trong NexGraph dùng Anthropic API key.</p>
+        <p className="muted">{tr('Đăng nhập ChatGPT và các tài khoản được nhà cung cấp hỗ trợ. Quyền dùng model và hạn mức tùy tài khoản. Claude trong NexGraph dùng Anthropic API key.')}</p>
         {oauthStorageIssue && <p role="status" className="muted">{oauthStorageIssue}</p>}
         {loginEvent && <p className="muted">{'userCode' in loginEvent ? `${vi.accounts.oauthUserCode}: ${loginEvent.userCode}` : 'url' in loginEvent ? loginEvent.instructions ?? loginEvent.url : loginEvent.message}</p>}
         <AuthLinks event={loginEvent} />
@@ -510,12 +523,12 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
               : <button type="button" disabled={busy || !!p.oauthStorageIssue} onClick={() => login(p.id)}>{vi.accounts.oauthLogin}</button>}
             {p.id === 'openai' && !p.loggedIn && <button type="button" disabled={busy} onClick={() => void run(async () => {
               await window.nexgraph.auth.forgetRegistration()
-            }, 'Đã bỏ đăng ký ChatGPT đã lưu. Lần đăng nhập tiếp theo có thể chọn tài khoản hoặc workspace khác.')}>Dùng tài khoản hoặc workspace khác</button>}
+            }, tr('Đã bỏ đăng ký ChatGPT đã lưu. Lần đăng nhập tiếp theo có thể chọn tài khoản hoặc workspace khác.'))}>{tr('Dùng tài khoản hoặc workspace khác')}</button>}
           </div>
         ))}
       </section>}
 
-      {pages.some((p) => p.id === 'model') && <h1 id="settings-model" data-settings-page="model" className="settings-page-title">Mô hình</h1>}
+      {pages.some((p) => p.id === 'model') && <h1 id="settings-model" data-settings-page="model" className="settings-page-title">{tr('Mô hình')}</h1>}
       {shows('model') && <section className="settings-section">
         <h2>{vi.accounts.modelTitle}</h2>
         <label className="field">{vi.accounts.modelTitle}
@@ -524,25 +537,25 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
             if (m) void run(() => window.nexgraph.auth.selectModel(m.provider, m.id))
           }}>
             <option value="">{vi.accounts.modelPlaceholder}</option>
-            {models.filter((m) => settings?.runtime === 'antigravity-cli' ? m.runtime === 'antigravity-cli' || m.provider === 'google-antigravity' : m.runtime !== 'antigravity-cli' && m.provider !== 'google-antigravity').map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.id === 'auto' ? 'Tự động' : m.label} ({m.provider === 'google-antigravity' ? 'Tài khoản Google' : m.provider})</option>)}
+            {models.filter((m) => settings?.runtime === 'antigravity-cli' ? m.runtime === 'antigravity-cli' || m.provider === 'google-antigravity' : m.runtime !== 'antigravity-cli' && m.provider !== 'google-antigravity').map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.id === 'auto' ? tr('Tự động') : m.label} ({m.provider === 'google-antigravity' ? tr('Tài khoản Google') : m.provider})</option>)}
           </select>
         </label>
         {selectedModel && <p className="muted small">
-          Context {selectedModel.contextWindow?.toLocaleString() ?? 'chưa xác định'} token · Đầu ra {selectedModel.maxTokens?.toLocaleString() ?? 'chưa xác định'} token
-          {' · '}{selectedModel.pricing === 'local' ? 'Chạy trên máy' : selectedModel.pricing === 'subscription' ? 'Theo hạn mức tài khoản'
-            : selectedModel.pricing === 'free' ? 'Miễn phí, có quota' : selectedModel.cost?.input != null && selectedModel.cost?.output != null
-              ? `USD / 1M token vào ${selectedModel.cost.input}, ra ${selectedModel.cost.output}` : 'Chi phí chưa xác định'}
+          {tr('Context {context} token · Đầu ra {output} token', { context: selectedModel.contextWindow != null ? formatNumber(selectedModel.contextWindow) : tr('chưa xác định'), output: selectedModel.maxTokens != null ? formatNumber(selectedModel.maxTokens) : tr('chưa xác định') })}
+          {' · '}{selectedModel.pricing === 'local' ? tr('Chạy trên máy') : selectedModel.pricing === 'subscription' ? tr('Theo hạn mức tài khoản')
+            : selectedModel.pricing === 'free' ? tr('Miễn phí, có quota') : selectedModel.cost?.input != null && selectedModel.cost?.output != null
+              ? tr('USD / 1M token vào {input}, ra {output}', { input: selectedModel.cost.input, output: selectedModel.cost.output }) : tr('Chi phí chưa xác định')}
         </p>}
 
         <div className="row">
-          <button type="button" disabled={busy} onClick={() => void test()}>{testing ? 'Đang kiểm tra…' : vi.accounts.test}</button>
+          <button type="button" disabled={busy} onClick={() => void test()}>{testing ? tr('Đang kiểm tra…') : vi.accounts.test}</button>
           {testResult && <span role="status">{testResult}</span>}
         </div>
       </section>}
 
       {pages.some((p) => p.id === 'privacy') && <h1 id="settings-privacy" data-settings-page="privacy" className="settings-page-title">{vi.settings.privacyTitle}</h1>}
       {shows('privacy') && <section className="settings-section">
-        <h2>Dữ liệu</h2>
+        <h2>{tr('Dữ liệu')}</h2>
         <p>{vi.settings.privacy1}</p>
         <p>{vi.settings.privacy2}</p>
       </section>}

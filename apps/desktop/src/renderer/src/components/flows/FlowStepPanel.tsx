@@ -1,5 +1,5 @@
 import type { FlowStep } from '@shared/graph-types'
-import { vi } from '../../strings'
+import { tr, vi } from '../../strings'
 
 interface Props {
   steps: FlowStep[]
@@ -36,7 +36,7 @@ export function FlowStepPanel({
   return (
     <aside className="step-panel-col">
       <div className="step-list-header">
-        {`Các bước trong luồng (${steps.length})`}
+        {tr('Các bước trong luồng ({count})', { count: steps.length })}
       </div>
 
       <div className="step-list">

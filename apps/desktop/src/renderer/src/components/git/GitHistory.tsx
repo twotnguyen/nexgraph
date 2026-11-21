@@ -4,6 +4,8 @@ import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import { errorText } from '../../state/errorText'
 import { assignLanes, type GraphRow } from './graph'
+import { localeTag } from '../../state/locale'
+import { tr } from '../../strings'
 
 interface Props {
   projectId: string
@@ -14,8 +16,14 @@ type HistoryState = { projectId: string; graph: boolean; commits: GitCommit[] | 
 type FilesState = { projectId: string; sha: string; files: GitFileChange[] | null; error: string | null }
 
 const laneX = (lane: number) => lane * 14 + 9
-const relativeTime = new Intl.RelativeTimeFormat('vi', { numeric: 'auto' })
-const STATUS: Record<string, string> = { A: 'Thêm mới', M: 'Đã sửa', D: 'Đã xoá', R: 'Đổi tên', C: 'Sao chép', T: 'Đổi loại' }
+const relativeFormats = new Map<string, Intl.RelativeTimeFormat>()
+const relativeTime = (): Intl.RelativeTimeFormat => {
+  const tag = localeTag()
+  let format = relativeFormats.get(tag)
+  if (!format) { format = new Intl.RelativeTimeFormat(tag, { numeric: 'auto' }); relativeFormats.set(tag, format) }
+  return format
+}
+const statusLabels = (): Record<string, string> => ({ A: tr('Thêm mới'), M: tr('Đã sửa'), D: tr('Đã xoá'), R: tr('Đổi tên'), C: tr('Sao chép'), T: tr('Đổi loại') })
 
 function timeAgo(time: number): string {
   const seconds = time - Date.now() / 1000
@@ -23,7 +31,7 @@ function timeAgo(time: number): string {
     [31536000, 'year'], [2592000, 'month'], [604800, 'week'], [86400, 'day'], [3600, 'hour'], [60, 'minute'], [1, 'second']
   ]
   const [size, unit] = spans.find(([n]) => Math.abs(seconds) >= n) ?? spans[spans.length - 1]
-  return relativeTime.format(Math.round(seconds / size), unit)
+  return relativeTime().format(Math.round(seconds / size), unit)
 }
 
 function HistoryGraph({ row, width }: { row: GraphRow; width: number }) {
@@ -46,6 +54,7 @@ function HistoryGraph({ row, width }: { row: GraphRow; width: number }) {
 
 export function GitHistory({ projectId, onOpenDiff }: Props) {
   const api = window.nexgraph.git
+  const labels = statusLabels()
   const [graph, setGraph] = useState(false)
   const [refresh, setRefresh] = useState(0)
   const [history, setHistory] = useState<HistoryState | null>(null)
@@ -89,18 +98,18 @@ export function GitHistory({ projectId, onOpenDiff }: Props) {
     return () => { live = false }
   }, [api, projectId, expanded])
 
-  if (!api) return <p className="git-history-empty muted">Git không dùng được ở chế độ này.</p>
+  if (!api) return <p className="git-history-empty muted">{tr('Git không dùng được ở chế độ này.')}</p>
 
   return (
     <div className="git-history">
-      <div className="git-history-toolbar" aria-label="Chế độ lịch sử">
-        <button type="button" className="git-history-mode" aria-pressed={!graph} onClick={() => setGraph(false)}>Danh sách</button>
-        <button type="button" className="git-history-mode" aria-pressed={graph} onClick={() => setGraph(true)}>Đồ thị</button>
-        <button type="button" className="git-history-mode" aria-label="Làm mới lịch sử" title="Làm mới" onClick={() => setRefresh((n) => n + 1)}><Icon name="refresh" size={14} /></button>
+      <div className="git-history-toolbar" aria-label={tr('Chế độ lịch sử')}>
+        <button type="button" className="git-history-mode" aria-pressed={!graph} onClick={() => setGraph(false)}>{tr('Danh sách')}</button>
+        <button type="button" className="git-history-mode" aria-pressed={graph} onClick={() => setGraph(true)}>{tr('Đồ thị')}</button>
+        <button type="button" className="git-history-mode" aria-label={tr('Làm mới lịch sử')} title={tr('Làm mới')} onClick={() => setRefresh((n) => n + 1)}><Icon name="refresh" size={14} /></button>
       </div>
       {current?.error && <p className="git-history-error" role="alert">{current.error}</p>}
-      {!current?.error && !commits && <p className="git-history-empty muted" role="status">Đang tải lịch sử…</p>}
-      {commits?.length === 0 && <p className="git-history-empty muted">Chưa có commit.</p>}
+      {!current?.error && !commits && <p className="git-history-empty muted" role="status">{tr('Đang tải lịch sử…')}</p>}
+      {commits?.length === 0 && <p className="git-history-empty muted">{tr('Chưa có commit.')}</p>}
       {!!commits?.length && <ul className="git-history-list">
         {commits.map((commit, index) => {
           const row = rows[index]
@@ -112,7 +121,7 @@ export function GitHistory({ projectId, onOpenDiff }: Props) {
               <div className="git-history-row">
                 {graph && row && <HistoryGraph row={row} width={graphWidth} />}
                 <button type="button" className="git-history-commit" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : { projectId, sha: commit.sha })}>
-                  <span className="git-history-subject" title={commit.subject}>{commit.subject || '(Không có tiêu đề)'}</span>
+                  <span className="git-history-subject" title={commit.subject}>{commit.subject || tr('(Không có tiêu đề)')}</span>
                   {commit.refs && <span className="git-history-refs" title={commit.refs}>{commit.refs}</span>}
                   <span className="git-history-meta">{commit.sha.slice(0, 7)} · {commit.author} · <time dateTime={Number.isFinite(date.getTime()) ? date.toISOString() : undefined}>{timeAgo(commit.time)}</time></span>
                 </button>
@@ -124,15 +133,15 @@ export function GitHistory({ projectId, onOpenDiff }: Props) {
                     x1={laneX(lane)} x2={laneX(lane)} y1="0" y2="100%" stroke="currentColor" strokeWidth="1.5" />)}
                 </svg>}
                 {files?.error && <p className="git-history-error" role="alert">{files.error}</p>}
-                {!files?.error && !files?.files && <p className="git-history-empty muted" role="status">Đang tải tệp…</p>}
-                {files?.files?.length === 0 && <p className="git-history-empty muted">Không có tệp thay đổi trong dự án.</p>}
+                {!files?.error && !files?.files && <p className="git-history-empty muted" role="status">{tr('Đang tải tệp…')}</p>}
+                {files?.files?.length === 0 && <p className="git-history-empty muted">{tr('Không có tệp thay đổi trong dự án.')}</p>}
                 {!!files?.files?.length && <ul className="git-history-files">
                   {files.files.map((file) => <li key={file.path}>
                     <button type="button" className="git-history-file" title={file.from ? `${file.from} → ${file.path}` : file.path}
                       onClick={() => onOpenDiff(file.path, false, commit.sha, file.from)}>
                       <FileTypeIcon name={file.path} size={14} />
                       <span className="git-history-file-path">{file.path}</span>
-                      <span className="git-history-file-status" data-status={file.status} aria-label={STATUS[file.status] ?? file.status}>{file.status}</span>
+                      <span className="git-history-file-status" data-status={file.status} aria-label={labels[file.status] ?? file.status}>{file.status}</span>
                     </button>
                   </li>)}
                 </ul>}
