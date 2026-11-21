@@ -3,6 +3,7 @@ import * as Y from 'yjs'
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness'
 import type { EditorHandle } from '../components/editor/monaco'
 import { errorText } from './errorText'
+import { getActiveEditor } from './activeEditor'
 
 /**
  * Cộng tác LAN kiểu Wu (ngang hàng, không máy chủ đám mây): một tệp chung là một Y.Doc; bản cập nhật Yjs (gói loại 0)
@@ -31,10 +32,6 @@ export const setCollabName = (name: string): void => { try { localStorage.setIte
 
 type Live = { doc: Y.Doc; awareness: Awareness; off: () => void; unbind: (() => void) | null; style: HTMLStyleElement }
 let live: Live | null = null
-
-/** Tệp đang mở và editor của nó (thẻ tệp đang hiện báo vào), để lệnh "Chia sẻ" biết chia sẻ gì. */
-let activeEditor: { file: string; handle: EditorHandle; text: () => string } | null = null
-export const setActiveEditor = (next: typeof activeEditor): void => { activeEditor = next }
 
 const frame = (kind: number, body: Uint8Array) => { const out = new Uint8Array(body.length + 1); out[0] = kind; out.set(body, 1); return out }
 const send = (data: Uint8Array) => void window.nexgraph.collab?.send(data).catch(() => {})
@@ -88,7 +85,7 @@ function open(role: 'host' | 'guest'): Live {
 
 /** Chia sẻ tệp đang mở: dựng Y.Text từ nội dung hiện tại rồi gắn vào chính editor của thẻ đó. */
 export async function shareActiveFile(): Promise<void> {
-  const target = activeEditor
+  const target = getActiveEditor()
   if (!window.nexgraph.collab || !target?.handle.bindCollab) return patch({ error: 'Mở một tệp trong editor rồi chia sẻ' })
   const session = open('host')
   session.doc.getText('content').insert(0, target.text())

@@ -40,6 +40,7 @@ import { allToolNames, getDisabledTools, setDisabledTools } from './agent/extens
 import { DebugManager } from './debug/manager'
 import { adapterInstalled, installAdapter, type DebugKind } from './debug/adapters'
 import { CollabHub } from './collab/hub'
+import { ExtensionRegistry } from './extensions/registry'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -282,6 +283,16 @@ export function registerIpc(
   on('collab:join', async (address: string, code: string) => hub.join(String(address), String(code)))
   on('collab:send', async (data: Uint8Array) => { if (data instanceof Uint8Array) hub.send(data) })
   on('collab:stop', async () => hub.stop())
+  // Extension: thư mục người dùng chọn được kiểm tra rồi chép vào <userData>/extensions; renderer chỉ nhận manifest đã kiểm.
+  const extensions = new ExtensionRegistry(join(app.getPath('userData'), 'extensions'))
+  on('extensions:list', async () => extensions.list())
+  on('extensions:install', async () => {
+    const win = getWindow()
+    const opts = { properties: ['openDirectory' as const], title: 'Chọn thư mục extension (có extension.json)' }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    return r.canceled || !r.filePaths[0] ? null : extensions.install(r.filePaths[0])
+  })
+  on('extensions:remove', async (id: string) => extensions.remove(String(id)))
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {

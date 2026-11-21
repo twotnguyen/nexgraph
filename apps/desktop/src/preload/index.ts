@@ -127,6 +127,11 @@ const api: NexGraphApi = {
     stop: () => call('collab:stop'),
     onEvent: (cb) => subscribe('collab:event', cb)
   },
+  extensions: {
+    list: () => call('extensions:list'),
+    install: () => call('extensions:install'),
+    remove: (id) => call('extensions:remove', id)
+  },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),
     run: (pid, format, scope) => call('export:run', pid, format, scope),

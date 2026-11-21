@@ -8,7 +8,8 @@ import { FileTypeIcon } from '../common/FileTypeIcon'
 import { StatusBarItems } from '../EngineStatusBar'
 import { useBlame, useVimMode } from '../../state/editorPrefs'
 import { toggleBreakpoint, useDebugState } from '../../state/debugState'
-import { leaveSession, setActiveEditor, useCollab } from '../../state/collab'
+import { leaveSession, useCollab } from '../../state/collab'
+import { setActiveEditor } from '../../state/activeEditor'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null

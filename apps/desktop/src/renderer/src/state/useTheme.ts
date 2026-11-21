@@ -3,8 +3,8 @@ import { useSyncExternalStore } from 'react'
 export type Theme = 'light' | 'dark'
 const storageKey = 'nexgraph.theme'
 
-/** Bảng màu từng theme nằm trong styles.css (`:root[data-theme='…']`); các theme ngoài light/dark lấy từ theme MIT của Wu. */
-export const THEMES: ReadonlyArray<{ id: string; name: string; appearance: Theme }> = [
+/** Bảng màu từng theme nằm trong styles.css (`:root[data-theme='…']`); các theme ngoài light/dark lấy từ theme MIT của Wu. Extension thêm theme bằng `addThemes`. */
+export const THEMES: { id: string; name: string; appearance: Theme }[] = [
   { id: 'light', name: 'NexGraph Sáng', appearance: 'light' },
   { id: 'wu-light', name: 'Wu Light', appearance: 'light' },
   { id: 'one-light', name: 'One Light', appearance: 'light' },
@@ -71,3 +71,25 @@ export function useTheme(): Theme {
 export function useThemeId(): string {
   return useSyncExternalStore(observeTheme, currentThemeId)
 }
+
+const THEMES_CHANGED = 'nexgraph:themes'
+/** Theme của extension: thêm vào danh sách và áp bảng màu bằng một thẻ <style> (biến màu đã kiểm ở main). Theme đã lưu là theme extension thì áp lại. */
+export function addThemes(themes: readonly { id: string; name: string; appearance: Theme; colors: Record<string, string> }[]): void {
+  let style = document.getElementById('nexgraph-extension-themes')
+  if (!style) {
+    style = document.createElement('style')
+    style.id = 'nexgraph-extension-themes'
+    document.head.appendChild(style)
+  }
+  for (let i = THEMES.length - 1; i >= 0; i--) if (THEMES[i].id.startsWith('ext-')) THEMES.splice(i, 1)
+  THEMES.push(...themes.map(({ id, name, appearance }) => ({ id, name, appearance })))
+  style.textContent = themes.map((t) => `:root[data-theme='${t.id}']{${Object.entries(t.colors).map(([k, v]) => `${k}:${v}`).join(';')}}`).join('\n')
+  let saved: string | null = null
+  try { saved = localStorage.getItem(storageKey) } catch { /* bỏ qua */ }
+  if (saved?.startsWith('ext-') && themes.some((t) => t.id === saved) && currentThemeId() !== saved) previewTheme(saved)
+  themesVersion++
+  window.dispatchEvent(new Event(THEMES_CHANGED))
+}
+let themesVersion = 0
+/** Số lần danh sách theme đổi: component đọc THEMES dùng để vẽ lại khi extension thêm theme. */
+export const useThemesVersion = (): number => useSyncExternalStore((l) => { window.addEventListener(THEMES_CHANGED, l); return () => window.removeEventListener(THEMES_CHANGED, l) }, () => themesVersion)

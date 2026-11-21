@@ -71,6 +71,10 @@ export type CollabEvent =
   | { type: 'peers'; count: number }
   | { type: 'joined' }
   | { type: 'closed' }
+/** Extension nạp từ thư mục: theme (biến màu) và lệnh khai báo (không chạy mã của extension). */
+export type ExtensionTheme = { id: string; name: string; appearance: 'light' | 'dark'; colors: Record<string, string> }
+export type ExtensionCommand = { id: string; title: string; action: { type: 'insertText'; text: string } | { type: 'runCommands'; commands: string[] } }
+export type ExtensionInfo = { id: string; name: string; version: string; description: string; themes: ExtensionTheme[]; commands: ExtensionCommand[] }
 
 export type HostCommand = { name: string; arg?: unknown }
 
@@ -200,6 +204,13 @@ export interface NexGraphApi {
     send(data: Uint8Array): Promise<void>
     stop(): Promise<void>
     onEvent(cb: (event: CollabEvent) => void): () => void
+  }
+  /** Extension cài từ thư mục vào thư mục dữ liệu app. */
+  extensions?: {
+    list(): Promise<{ extensions: ExtensionInfo[]; errors: { folder: string; message: string }[] }>
+    /** Mở hộp thoại chọn thư mục extension rồi cài; `null` khi huỷ. */
+    install(): Promise<ExtensionInfo | null>
+    remove(id: string): Promise<void>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

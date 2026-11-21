@@ -11,7 +11,8 @@ export interface CommandDef {
   key?: string
 }
 
-export const COMMANDS: readonly CommandDef[] = [
+/** Lệnh dựng sẵn; extension thêm lệnh vào cuối bằng `addCommands`. */
+export const COMMANDS: CommandDef[] = [
   { id: 'command_palette.toggle', category: 'Bảng lệnh', title: 'Mở bảng lệnh', key: 'mod+shift+p' },
   { id: 'file_finder.toggle', category: 'Tệp', title: 'Tìm và mở tệp', key: 'mod+p' },
   { id: 'theme_selector.toggle', category: 'Giao diện', title: 'Chọn theme', key: 'mod+k mod+t' },
@@ -52,21 +53,31 @@ export const COMMANDS: readonly CommandDef[] = [
 
 const handlers = new Map<string, (() => void)[]>()
 
-/** Gắn handler cho lệnh khi component còn mount; component gắn sau cùng thắng. */
+/** Gắn handler cho một lệnh; trả về hàm gỡ. Handler gắn sau cùng thắng. */
+export function registerHandler(id: string, fn: () => void): () => void {
+  handlers.set(id, [...(handlers.get(id) ?? []), fn])
+  return () => {
+    const rest = (handlers.get(id) ?? []).filter((item) => item !== fn)
+    if (rest.length) handlers.set(id, rest)
+    else handlers.delete(id)
+  }
+}
+
+/** Gắn handler cho lệnh khi component còn mount. */
 export function useCommand(id: string, run: () => void, enabled = true): void {
   const latest = useRef(run)
   latest.current = run
-  useEffect(() => {
-    if (!enabled) return
-    const fn = () => latest.current()
-    const list = handlers.get(id) ?? []
-    handlers.set(id, [...list, fn])
-    return () => {
-      const rest = (handlers.get(id) ?? []).filter((item) => item !== fn)
-      if (rest.length) handlers.set(id, rest)
-      else handlers.delete(id)
-    }
-  }, [id, enabled])
+  useEffect(() => (enabled ? registerHandler(id, () => latest.current()) : undefined), [id, enabled])
+}
+
+/** Thêm lệnh của extension (bỏ id trùng); trang Phím tắt và bảng lệnh thấy ngay. */
+export function addCommands(defs: readonly CommandDef[]): void {
+  for (const def of defs) if (!COMMANDS.some((c) => c.id === def.id)) COMMANDS.push(def)
+  notifyKeymap()
+}
+export function removeCommands(prefix: string): void {
+  for (let i = COMMANDS.length - 1; i >= 0; i--) if (COMMANDS[i].id.startsWith(prefix)) COMMANDS.splice(i, 1)
+  notifyKeymap()
 }
 
 export function runCommand(id: string): boolean {
@@ -115,8 +126,13 @@ const subscribe = (notify: () => void) => {
   window.addEventListener(CHANGED, notify)
   return () => window.removeEventListener(CHANGED, notify)
 }
-/** Re-render khi phím tắt đổi; trả về bảng ghi đè hiện tại (đổi tham chiếu mỗi lần lưu). */
+/** Re-render khi phím tắt hoặc danh sách lệnh đổi; trả về bảng ghi đè hiện tại (đổi tham chiếu mỗi lần đổi). */
 export const useKeybindings = (): Record<string, string> => useSyncExternalStore(subscribe, () => overrides)
+// Danh sách lệnh đổi (extension): đổi tham chiếu bảng ghi đè để useKeybindings vẽ lại.
+function notifyKeymap() {
+  overrides = { ...overrides }
+  window.dispatchEvent(new Event(CHANGED))
+}
 
 const MODIFIERS: Record<string, true> = { Meta: true, Control: true, Alt: true, Shift: true }
 

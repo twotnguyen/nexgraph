@@ -9,6 +9,7 @@ import { Icon } from './components/common/icons'
 import { CommandPaletteHost } from './components/layout/CommandPalette'
 import { installKeymap, useCommand } from './state/commands'
 import { setBlame, setVimMode, useBlame, useVimMode } from './state/editorPrefs'
+import { loadExtensions } from './state/extensions'
 import { LargeProjectScreen } from './screens/LargeProjectScreen'
 import { IndexingScreen } from './screens/IndexingScreen'
 import { ProjectOverviewScreen, type WorkspaceTab } from './screens/ProjectOverviewScreen'
@@ -148,6 +149,7 @@ export default function App() {
   }
 
   useEffect(() => (window.nexgraph?.host ? undefined : installKeymap()), [])
+  useEffect(() => { if (!window.nexgraph?.host) void loadExtensions() }, [])
   // Màn làm việc tự gắn các lệnh này (có hỏi trước khi bỏ tệp chưa lưu); các màn khác dùng của App.
   const appCommands = !(screen.name === 'workspace' || (screen.name === 'indexing' && screen.exploring))
   const openSettings = (page?: string) => setScreen((s) => s.name === 'settings' ? { ...s, page } : { name: 'settings', back: s, page })

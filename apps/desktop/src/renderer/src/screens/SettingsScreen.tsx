@@ -3,7 +3,7 @@ import type { AiSettings } from '@shared/graph-types'
 import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@shared/agent-types'
 import { vi } from '../strings'
 import { Icon, type IconName } from '../components/common/icons'
-import { THEMES, setTheme, useThemeId } from '../state/useTheme'
+import { THEMES, setTheme, useThemeId, useThemesVersion } from '../state/useTheme'
 import { setVimMode, useVimMode } from '../state/editorPrefs'
 import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
@@ -11,6 +11,7 @@ import { AuthLinks } from '../components/agent/AuthLinks'
 import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
 import { KeymapEditor } from '../components/settings/KeymapEditor'
 import { ProfileEditor } from '../components/settings/ProfileEditor'
+import { ExtensionList } from '../components/settings/ExtensionList'
 import './settings.css'
 
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
@@ -25,6 +26,7 @@ const SECTION_WORDS = {
   editor: 'Trình soạn thảo editor vim chế độ phím',
   keymap: 'Phím tắt keymap keybinding shortcut lệnh bàn phím',
   profiles: 'Hồ sơ trợ lý profile tool công cụ chạy lệnh agent',
+  extensions: 'Extension tiện ích mở rộng plugin theme lệnh cài',
   quick: 'Kết nối nhanh ollama local tài khoản AI',
   gemini: 'Gemini Google Antigravity tài khoản AI',
   apikey: 'API key nhà cung cấp OpenAI Anthropic Claude khoá',
@@ -37,6 +39,7 @@ const PAGES: { id: string; label: string; icon: IconName; sections: (keyof typeo
   { id: 'appearance', label: 'Giao diện', icon: 'palette', sections: ['theme', 'chat', 'editor'] },
   { id: 'keymap', label: 'Phím tắt', icon: 'keyboard', sections: ['keymap'] },
   { id: 'agent', label: 'Trợ lý AI', icon: 'spark', sections: ['profiles'] },
+  { id: 'extensions', label: 'Extension', icon: 'plug', sections: ['extensions'] },
   { id: 'ai', label: 'Tài khoản AI', icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
   { id: 'model', label: 'Mô hình', icon: 'spark', sections: ['model'] },
   { id: 'privacy', label: 'Quyền riêng tư', icon: 'shield', sections: ['privacy'] }
@@ -63,6 +66,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const loginPending = useRef(false)
   const operation = useRef(false)
   const themeId = useThemeId()
+  useThemesVersion()
   const vimMode = useVimMode()
   const [query, setQuery] = useState('')
   const [activePage, setActivePage] = useState('appearance')
@@ -265,6 +269,13 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
         <h2 id="settings-profiles-title">Hồ sơ trợ lý</h2>
         <p className="muted">Ba hồ sơ dựng sẵn là Hỏi, Kế hoạch và Sửa. Hồ sơ tự tạo chọn một chế độ nền rồi tắt bớt tool (ví dụ Sửa nhưng không chạy lệnh); hồ sơ hiện cạnh ba chế độ ở chân khung chat. Mọi thao tác ghi vẫn phải được duyệt.</p>
         <ProfileEditor />
+      </section>}
+
+      {pages.some((p) => p.id === 'extensions') && <h1 id="settings-extensions" data-settings-page="extensions" className="settings-page-title">Extension</h1>}
+      {shows('extensions') && <section className="settings-section" aria-labelledby="settings-extensions-title">
+        <h2 id="settings-extensions-title">Extension đã cài</h2>
+        <p className="muted">Extension là một thư mục có <code>extension.json</code>, đóng góp theme (bảng màu) và lệnh (chèn văn bản hoặc chạy chuỗi lệnh có sẵn) cho bảng lệnh ⌘⇧P. Extension không chạy mã trong app. Mẫu ở <code>nexgraph/examples/extension-sample</code>.</p>
+        <ExtensionList />
       </section>}
 
       {pages.some((p) => p.id === 'ai') && <h1 id="settings-ai" data-settings-page="ai" className="settings-page-title">{vi.accounts.title}</h1>}

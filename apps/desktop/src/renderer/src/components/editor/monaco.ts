@@ -104,6 +104,8 @@ export interface EditorHandle {
   onGutterClick?(cb: (line: number) => void): void
   /** Gắn model với Y.Text (cộng tác LAN); trả về hàm gỡ. Con trỏ người khác vẽ theo awareness. */
   bindCollab?(text: YText, awareness: Awareness): () => void
+  /** Chèn văn bản tại con trỏ (thay vùng chọn), một bước undo. */
+  insertText?(text: string): void
   dispose(): void
 }
 
@@ -243,6 +245,12 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     bindCollab: (text, awareness) => {
       const binding = new MonacoBinding(text, editor.getModel()!, new Set([editor]), awareness)
       return () => binding.destroy()
+    },
+    insertText: (text) => {
+      const selection = editor.getSelection()
+      if (!selection || editor.getOption(monaco.editor.EditorOption.readOnly)) return
+      editor.executeEdits('nexgraph', [{ range: selection, text, forceMoveMarkers: true }])
+      editor.focus()
     },
     dispose: () => {
       setVim(null)

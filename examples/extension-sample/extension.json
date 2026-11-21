@@ -1,0 +1,54 @@
+{
+  "id": "nexgraph-sample",
+  "name": "Mẫu NexGraph",
+  "version": "1.0.0",
+  "description": "Extension mẫu: một theme tối tông xanh rêu và một lệnh chèn dòng giấy phép SPDX vào tệp đang mở.",
+  "contributes": {
+    "themes": [
+      {
+        "id": "moss",
+        "name": "Rêu Đêm",
+        "appearance": "dark",
+        "colors": {
+          "--color-bg": "#141a16",
+          "--color-surface": "#141a16",
+          "--panel": "#141a16",
+          "--panel-raised": "#1d2620",
+          "--chrome": "#141a16",
+          "--track": "#1f2922",
+          "--color-text": "#e3ede5",
+          "--color-muted": "#9bb0a0",
+          "--color-border": "#2a372e",
+          "--blue": "#7fb8d6",
+          "--violet": "#a99be8",
+          "--teal": "#6fd0c0",
+          "--magenta": "#d59ad6",
+          "--green": "#8fd18a",
+          "--amber": "#e6c46a",
+          "--orange": "#e6a26a",
+          "--color-error-red": "#ef7f7f",
+          "--syntax-keyword": "#a99be8",
+          "--syntax-string": "#8fd18a",
+          "--syntax-comment": "#6f8574",
+          "--syntax-number": "#e6c46a",
+          "--syntax-type": "#d59ad6",
+          "--syntax-function": "#7fb8d6",
+          "--syntax-variable": "#e3ede5",
+          "--syntax-constant": "#e6c46a"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "id": "insert-spdx",
+        "title": "Chèn dòng giấy phép SPDX (Apache-2.0)",
+        "action": { "type": "insertText", "text": "// SPDX-License-Identifier: Apache-2.0\n" }
+      },
+      {
+        "id": "focus-search",
+        "title": "Mở tìm trong tệp và cây tệp",
+        "action": { "type": "runCommands", "commands": ["explorer.toggle", "project_search.toggle"] }
+      }
+    ]
+  }
+}
