@@ -15,3 +15,10 @@
 .editor-path li svg { flex: none; }
 .editor-path li > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .editor-path li[aria-current='true'] { flex-shrink: 0.3; color: var(--color-text); }
+
+/* Chia đôi kiểu Wu: thẻ tệp bên trái, khung cùng bộ đệm bên phải, ngăn bằng viền 1px. */
+.canvas-wrap.split > .code-viewer.editor-tab:not(.editor-side) { right: 50%; }
+.canvas-wrap.split > .editor-side { left: 50%; border-left: 1px solid var(--color-border); }
+.editor-side .editor-path { display: inline-flex; align-items: center; gap: 4px; }
+.vim-status { font-family: var(--font-mono, monospace); font-size: 11px; }
+.vim-status input { width: 12em; border: 0; background: transparent; color: inherit; font: inherit; }

@@ -86,7 +86,26 @@ export interface EditorHandle {
   onCursor?(cb: (line: number, column: number) => void): void
   revealLines(start: number, end?: number): void
   setReadOnly(v: boolean): void
+  /** Bật chế độ Vim (monaco-vim) và ghi trạng thái vào `status`; null để tắt. */
+  setVim?(status: HTMLElement | null): void
   dispose(): void
+}
+
+const modelUri = (path: string) => monaco.Uri.from({ scheme: 'nexgraph', path: `/${path}` })
+
+/** Nạp monaco-vim khi cần; trả về hàm bật/tắt. */
+function vimAttacher(editor: monaco.editor.IStandaloneCodeEditor): (status: HTMLElement | null) => void {
+  let mode: { dispose(): void } | null = null
+  let seq = 0
+  return (status) => {
+    const ticket = ++seq
+    mode?.dispose()
+    mode = null
+    if (!status) return
+    void import('monaco-vim').then(({ initVimMode }) => {
+      if (ticket === seq) mode = initVimMode(editor, status)
+    })
+  }
 }
 
 /** Ngôn ngữ theo tên tệp hoặc đuôi tệp; không khớp thì `plaintext`. */
@@ -98,14 +117,18 @@ export function languageFor(file: string): string {
   return hit?.id ?? 'plaintext'
 }
 
-export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean }): EditorHandle {
+/** `path`: model gắn với đường dẫn tệp để khung chia đôi (createMirror) dùng chung cùng bộ đệm và undo. */
+export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean; path?: string }): EditorHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
+  if (opts.path) monaco.editor.getModel(modelUri(opts.path))?.dispose()
+  const model = opts.path ? monaco.editor.createModel(opts.value, opts.language, modelUri(opts.path)) : undefined
   const editor = monaco.editor.create(el, {
-    value: opts.value, language: opts.language, readOnly: opts.readOnly, theme: editorTheme(),
+    ...(model ? { model } : { value: opts.value, language: opts.language }), readOnly: opts.readOnly, theme: editorTheme(),
     automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
     ...(font ? { fontFamily: font } : {})
   })
   const hit = editor.createDecorationsCollection()
+  const setVim = vimAttacher(editor)
   return {
     getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
     getSelection: () => {
@@ -127,11 +150,36 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
       editor.revealLinesInCenter(start, end)
     },
     setReadOnly: (v) => editor.updateOptions({ readOnly: v }),
+    setVim,
     dispose: () => {
+      setVim(null)
       const model = editor.getModel()
       editor.dispose()
       model?.dispose()
     }
+  }
+}
+
+export interface MirrorHandle {
+  dispose(): void
+  setVim(status: HTMLElement | null): void
+  onDisposeModel(cb: () => void): void
+}
+
+/** Khung thứ hai trên cùng model của một tệp đang mở (chia đôi kiểu Wu); null nếu tệp chưa nạp xong. */
+export function createMirror(el: HTMLElement, path: string): MirrorHandle | null {
+  const model = monaco.editor.getModel(modelUri(path))
+  if (!model) return null
+  const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
+  const editor = monaco.editor.create(el, {
+    model, theme: editorTheme(), automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
+    ...(font ? { fontFamily: font } : {})
+  })
+  const setVim = vimAttacher(editor)
+  return {
+    setVim,
+    onDisposeModel: (cb) => void model.onWillDispose(cb),
+    dispose: () => { setVim(null); editor.dispose() }
   }
 }
 

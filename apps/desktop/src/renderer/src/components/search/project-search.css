@@ -1,0 +1,29 @@
+/* Tìm trong tệp kiểu project search của Wu: ô nhập 28px bo 6 có nút bật/tắt bên trong, kết quả hàng 24px nhóm theo tệp. */
+.project-search { display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 6px 8px; }
+.ps-row { display: flex; align-items: center; gap: 4px; }
+.ps-indent { padding-left: 24px; }
+.ps-field { display: flex; flex: 1; min-width: 0; align-items: center; gap: 2px; height: 28px; padding: 0 4px 0 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); }
+.ps-field:focus-within { border-color: var(--blue); }
+.project-search .ps-field input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--color-text); font-size: 13px; }
+.ps-toggle { display: grid; flex: none; place-items: center; min-width: 22px; height: 22px; min-height: 0; padding: 0 4px; border: 0; border-radius: 4px; background: transparent; color: var(--color-muted); font: 12px var(--font-mono, monospace); }
+.ps-toggle:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.ps-toggle[aria-pressed='true'] { background: color-mix(in srgb, var(--blue) 18%, transparent); color: var(--color-text); }
+.ps-expand svg { transition: transform .1s; }
+.ps-expand[aria-expanded='true'] svg { transform: rotate(90deg); }
+.ps-action { flex: none; height: 28px; min-height: 0; padding: 0 10px; border-radius: 6px; font-size: 12px; }
+.ps-filters { display: grid; gap: 4px; }
+.project-search .ps-filters input { height: 28px; padding: 0 8px; border-radius: 6px; font-size: 12px; }
+.ps-summary { margin: 2px 0 0; font-size: 12px; }
+.ps-results, .ps-results ul { margin: 0; padding: 0; list-style: none; }
+.ps-results { flex: 1; min-height: 0; overflow: auto; margin: 0 -8px; }
+.ps-file, .ps-match { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 24px; padding: 2px 8px; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font-size: 13px; text-align: left; }
+.ps-file:hover, .ps-match:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.ps-file > svg { flex: none; color: var(--color-muted); transition: transform .1s; }
+.ps-file[aria-expanded='true'] > svg { transform: rotate(90deg); }
+.ps-name { flex: none; white-space: nowrap; }
+.ps-dir { flex: 1; min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.ps-count { flex: none; min-width: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--color-text) 10%, transparent); color: var(--color-muted); font-size: 11px; text-align: center; }
+.ps-match { padding-left: 34px; font: 12px var(--font-mono, monospace); }
+.ps-line { flex: none; min-width: 3ch; text-align: right; }
+.ps-preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.ps-preview mark { border-radius: 2px; background: color-mix(in srgb, var(--amber, #e5c07b) 35%, transparent); color: inherit; }

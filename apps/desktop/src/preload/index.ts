@@ -82,7 +82,9 @@ const api: NexGraphApi = {
     list: (pid, directory) => call('fs:list', pid, directory),
     read: (pid, relPath) => call('fs:read', pid, relPath),
     files: (pid) => call('fs:files', pid),
-    write: (pid, relPath, text, opts) => call('fs:write', pid, relPath, text, opts)
+    write: (pid, relPath, text, opts) => call('fs:write', pid, relPath, text, opts),
+    searchText: (pid, query) => call('fs:search-text', pid, query),
+    replaceText: (pid, query, replacement, files) => call('fs:replace-text', pid, query, replacement, files)
   },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),

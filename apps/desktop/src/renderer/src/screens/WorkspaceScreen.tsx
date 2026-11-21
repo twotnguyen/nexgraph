@@ -3,6 +3,7 @@ import type { Changes, ExportFormat, ExportScope, GraphEdge, GraphNode, NodeImpa
 import type { HostCommand } from '@shared/api'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { EditorTab, type EditorContextGetter } from '../components/editor/EditorTab'
+import { SplitEditor } from '../components/editor/SplitEditor'
 import type { AgentContextItem, AgentEditorState } from '@shared/agent-types'
 import type { AgentInspection } from '../components/agent/useAgentWorkbench'
 import { TaskInspector } from '../components/agent/TaskInspector'
@@ -16,6 +17,7 @@ import { NodeInspector } from '../components/graph/NodeInspector'
 import { ReportView } from '../components/report/ReportView'
 import { TreeView } from '../components/tree/TreeView'
 import { SearchPanel } from '../components/search/SearchPanel'
+import { ProjectSearch } from '../components/search/ProjectSearch'
 import { FlowsView } from '../components/flows/FlowsView'
 import { TourPanel } from '../components/tour/TourPanel'
 import { AgentPanel } from '../components/agent/AgentPanel'
@@ -39,9 +41,9 @@ const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows
 interface OpenFile { file: string; line: number; lineEnd?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
-type Panel = 'explorer' | 'search' | 'changes' | 'tour'
+type Panel = 'explorer' | 'find' | 'search' | 'changes' | 'tour'
 const PANEL_TITLES: Record<Panel, string> = {
-  explorer: 'Duyệt tệp', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
+  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
 }
 const messageOf = (e: unknown): string =>
   e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
@@ -81,6 +83,12 @@ const FilesIcon = (
   </svg>
 )
 
+const FindIcon = (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 6h9M4 11h5M4 16h4" /><circle cx="15.5" cy="14.5" r="3.5" /><path d="m18 17 3 3" />
+  </svg>
+)
+
 const FileIcon = (
   <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M6 3h8l4 4v14H6zM13 3v5h5M9.5 12l-1.5 1.5 1.5 1.5M14.5 12l1.5 1.5-1.5 1.5" />
@@ -89,6 +97,7 @@ const FileIcon = (
 
 const ACTIVITIES = [
   { id: 'explorer', title: PANEL_TITLES.explorer, icon: FilesIcon },
+  { id: 'find', title: PANEL_TITLES.find, icon: FindIcon },
   { id: 'search', title: PANEL_TITLES.search, icon: SearchIcon },
   { id: 'changes', title: PANEL_TITLES.changes, icon: ChangesIcon },
   { id: 'tour', title: PANEL_TITLES.tour, icon: TourIcon }
@@ -151,6 +160,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     void flushEditorState().catch(() => {})
   }, [flushEditorState])
   const [finder, setFinder] = useState(false)
+  const [side, setSide] = useState<string | null>(null) // tệp ở khung phải khi chia đôi
+  const [findFocus, setFindFocus] = useState(0)
   const [archParent, setArchParent] = useState<string | undefined>(undefined)
   const [archContext, setArchContext] = useState<string | undefined>(undefined)
   const [flowId, setFlowId] = useState<number | undefined>(initialFlowId)
@@ -494,7 +505,14 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setTab(lastMain)
     }
   })
+  useCommand('editor.split_right', () => { if (side) setSide(null); else if (activeFile) setSide(activeFile) })
+  useCommand('project_search.toggle', () => {
+    if (leftChat) setChatOpen(false)
+    setPanel('find')
+    setFindFocus((n) => n + 1)
+  })
   const recentFiles = useMemo(() => files.map((f) => f.file).reverse(), [files])
+  const sideShown = side !== null && activeFile !== undefined && files.some((f) => f.file === side)
 
   return (
     <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px` } as CSSProperties}>
@@ -531,6 +549,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             {panel === 'search' && (
               <SearchPanel projectId={project.project_id} revision={revision} onOpen={openNode}
                 onShowSubgraph={(g) => highlightFromChat(g.nodes, g.edges, null)} onOpenFlow={openFlow} />
+            )}
+            {panel === 'find' && (
+              <ProjectSearch projectId={project.project_id} onOpen={(file, line) => openCode(file, line)} dirtyFiles={dirtyFiles} focusRequest={findFocus} />
             )}
             {panel === 'tour' && (
               <TourPanel projectId={project.project_id} revision={revision} projectName={project.name} onOpenFlow={openFlow} onOpenNode={openNodeId} onOpenArch={openArch} />
@@ -601,7 +622,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}><Icon name="close" size={12} /></button>
           </span>)}
         </div>
-        <div className="canvas-wrap" id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
+        <div className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
           {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} openRequest={openSeq} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
@@ -648,8 +669,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
           {files.map((f) => (
             <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} revealRequest={f.seq} active={tab === `file:${f.file}`}
-              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} />
+              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => setSide(f.file)} />
           ))}
+          {sideShown && <SplitEditor key={side} file={side} onClose={() => setSide(null)} />}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
           {feedback && (
             <div className="ws-feedback">

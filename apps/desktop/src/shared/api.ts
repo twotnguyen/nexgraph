@@ -40,6 +40,13 @@ export type ProjectDirectory = {
   truncated: boolean
 }
 
+/** Tìm trong tệp (⌘⇧F). `include`/`exclude`: glob cách nhau dấu phẩy. */
+export type TextSearchQuery = { query: string; regex?: boolean; caseSensitive?: boolean; wholeWord?: boolean; include?: string; exclude?: string }
+/** `column` tính từ 1; `preview` là dòng chứa (cắt quanh chỗ khớp nếu dài), bắt đầu ở ký tự `previewStart` của dòng. */
+export type TextSearchMatch = { line: number; column: number; length: number; preview: string; previewStart: number }
+export type TextSearchResult = { files: { file: string; matches: TextSearchMatch[] }[]; truncated: boolean }
+export type TextReplaceResult = { files: number; replacements: number; skipped: string[] }
+
 export type HostCommand = { name: string; arg?: unknown }
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
@@ -118,6 +125,10 @@ export interface NexGraphApi {
     files?(projectId: string): Promise<{ files: string[]; truncated: boolean }>
     /** Ghi nguyên tử trong gốc dự án. Nếu tệp lệch phiên bản yêu cầu thì báo `conflict`. */
     write(projectId: string, relPath: string, text: string, opts: WriteOpts & { expectedVersion: string | null }): Promise<FileRevision>
+    /** Tìm văn bản trong mọi tệp của dự án (theo .gitignore). */
+    searchText?(projectId: string, query: TextSearchQuery): Promise<TextSearchResult>
+    /** Thay mọi chỗ khớp trong các tệp `files`; tệp đổi giữa chừng nằm trong `skipped`. */
+    replaceText?(projectId: string, query: TextSearchQuery, replacement: string, files: string[]): Promise<TextReplaceResult>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

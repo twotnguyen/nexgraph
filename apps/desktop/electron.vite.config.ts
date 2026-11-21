@@ -10,7 +10,13 @@ export default defineConfig({
     resolve: { alias: { '@shared': resolve('src/shared') } }
   },
   renderer: {
-    resolve: { alias: { '@shared': resolve('src/shared') } },
+    resolve: {
+      alias: [
+        { find: '@shared', replacement: resolve('src/shared') },
+        // monaco-vim nhập "monaco-editor/esm/vs/…" nhưng exports của monaco-editor đã tự thêm esm/vs.
+        { find: /^monaco-editor\/esm\/vs\/(.*)$/, replacement: 'monaco-editor/$1' }
+      ]
+    },
     plugins: [react()],
     worker: { format: 'es' }
   }

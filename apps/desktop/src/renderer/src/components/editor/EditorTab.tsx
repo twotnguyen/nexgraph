@@ -6,6 +6,7 @@ import { createEditor, languageFor, type EditorHandle } from './monaco'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { StatusBarItems } from '../EngineStatusBar'
+import { useVimMode } from '../../state/editorPrefs'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -22,6 +23,8 @@ interface Props {
   onContextReady?: (file: string, getter: EditorContextGetter | null) => void
   /** Thẻ đang hiện; thẻ ẩn vẫn gắn kết để giữ nội dung, con trỏ và undo, và không nhận Ctrl+S. */
   active?: boolean
+  /** Mở tệp này ở khung phải (chia đôi, cùng bộ đệm). */
+  onSplit?: () => void
 }
 
 type OpenFile = { editor: EditorHandle; base: FileContent }
@@ -41,7 +44,7 @@ function explain(e: { code?: string; message?: string }): string {
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true }: Props) {
+export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
   const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void } | null>(null)
@@ -58,6 +61,8 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   const [modified, setModified] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [loadAttempt, setLoadAttempt] = useState(0)
+  const vim = useVimMode()
+  const [vimNode, setVimNode] = useState<HTMLElement | null>(null)
 
   const setDirty = useCallback((d: boolean) => {
     if (dirty.current === d) return
@@ -227,7 +232,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
     })
     fs.read(projectId, file).then((c) => {
       if (!alive || !host.current) return
-      const ed = createEditor(host.current, { value: c.text, language, readOnly: c.readOnly })
+      const ed = createEditor(host.current, { value: c.text, language, readOnly: c.readOnly, path: file })
       open = { editor: ed, base: c }
       editor.current = ed
       ed.onChange(updateDirty)
@@ -263,19 +268,25 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
     if (ready) editor.current?.revealLines(line, lineEnd)
   }, [ready, line, lineEnd, revealRequest])
 
-  // Nghe cả tài liệu để Ctrl+S hoạt động khi tiêu điểm vừa rời khỏi Monaco; chỉ thẻ đang hiện xử lý.
+  useEffect(() => {
+    editor.current?.setVim?.(ready && vim ? vimNode : null)
+  }, [ready, vim, vimNode])
+
+  // Nghe cả tài liệu để Ctrl+S hoạt động khi tiêu điểm vừa rời khỏi Monaco. Tiêu điểm trong khung chia đôi thì lưu tệp của khung đó; không thì thẻ đang hiện.
   const activeRef = useRef(active)
   activeRef.current = active
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (activeRef.current && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return
+      const mirror = document.activeElement?.closest('[data-mirror-file]')?.getAttribute('data-mirror-file')
+      if (mirror ? mirror === file : activeRef.current) {
         e.preventDefault()
         if (!e.repeat) actions.current?.save()
       }
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [])
+  }, [file])
 
   const readOnlyNote = readOnly === 'too_large' ? vi.editor.readOnlyTooLarge : readOnly === 'not_text' ? vi.editor.readOnlyNotText : readOnly ? vi.editor.readOnly : null
   const saveLabel = saveState === 'saving' ? 'Đang lưu…' : modified ? 'Chưa lưu' : saveState === 'saved' ? 'Đã lưu' : null
@@ -298,6 +309,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
           {saveLabel && <span role="status" className="ws-save-state" data-state={saveState}>{saveLabel}</span>}
           <button type="button" className="ws-icon-button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
             aria-label="Lưu" title="Lưu (Ctrl/Cmd+S)"><Icon name="save" size={15} /></button>
+          {onSplit && <button type="button" className="ws-icon-button" disabled={!ready} aria-label="Chia đôi sang phải" title="Chia đôi sang phải (⌘\)" onClick={onSplit}><Icon name="panelRight" size={15} /></button>}
           <button type="button" className="ws-icon-button" aria-label={vi.editor.close} title={vi.editor.close} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>
@@ -324,6 +336,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
           <span className="status-item" title="Ngôn ngữ">{format.language}</span>
           <span className="status-item" title="Kiểu xuống dòng">{format.eol === '\r\n' ? 'CRLF' : 'LF'}</span>
           <span className="status-item" title="Bảng mã">{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</span>
+          {vim && <span className="status-item vim-status" title="Chế độ Vim" ref={setVimNode} />}
         </StatusBarItems>
       )}
     </div>

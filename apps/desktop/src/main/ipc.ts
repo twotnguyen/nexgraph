@@ -2,13 +2,14 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { WriteOpts } from '../shared/api'
+import type { TextSearchQuery, WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
 import { toIpcResult } from './ipc-result'
 import { FsError, fsHandlers, isProtectedRel, isWithin, projectRoot } from './fs/project-fs'
 import { AgentFileScope } from './agent/file-scope'
+import { GENERATED_DIRS, replaceText, searchText } from './search/text-search'
 import { AgentError, AgentService } from './agent/session'
 import { AccountService } from './agent/accounts'
 import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentExecutionSettings, AgentRunLimits, AgentPromptOptions, AgentEditorState } from '../shared/agent-types'
@@ -185,7 +186,7 @@ export function registerIpc(
   on('fs:read', fsh.read)
   // Tìm tệp (⌘P): mọi tệp theo .gitignore, bỏ thư mục sinh ra và tệp được bảo vệ; tối đa 20.000 mục duyệt.
   on('fs:files', async (pid: string) => {
-    const scope = new AgentFileScope(await rootOf(pid), ['.git/', '.nexgraph/', '.venv/', 'dist/', '.next/', '.cache/', '.turbo/', '__pycache__/'])
+    const scope = new AgentFileScope(await rootOf(pid), GENERATED_DIRS)
     const state = { limited: false }
     const files: string[] = []
     for await (const entry of scope.entries(scope.entry('.'), true, state)) {
@@ -193,6 +194,9 @@ export function registerIpc(
     }
     return { files, truncated: state.limited }
   })
+  on('fs:search-text', async (pid: string, query: TextSearchQuery) => searchText(await rootOf(pid), query))
+  on('fs:replace-text', async (pid: string, query: TextSearchQuery, replacement: string, files: string[]) =>
+    replaceText(await rootOf(pid), query, String(replacement ?? ''), Array.isArray(files) ? files.filter((f) => typeof f === 'string') : []))
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {

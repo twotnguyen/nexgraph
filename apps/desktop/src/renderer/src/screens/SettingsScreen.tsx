@@ -4,6 +4,7 @@ import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@sh
 import { vi } from '../strings'
 import { Icon, type IconName } from '../components/common/icons'
 import { THEMES, setTheme, useThemeId } from '../state/useTheme'
+import { setVimMode, useVimMode } from '../state/editorPrefs'
 import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
@@ -20,6 +21,7 @@ const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
 const SECTION_WORDS = {
   theme: 'Giao diện theme màu sáng tối dark light',
   chat: 'Giao diện khung chat AI trợ lý vị trí trái phải dock',
+  editor: 'Trình soạn thảo editor vim chế độ phím',
   keymap: 'Phím tắt keymap keybinding shortcut lệnh bàn phím',
   quick: 'Kết nối nhanh ollama local tài khoản AI',
   gemini: 'Gemini Google Antigravity tài khoản AI',
@@ -30,7 +32,7 @@ const SECTION_WORDS = {
   privacy: 'Quyền riêng tư dữ liệu bảo mật'
 }
 const PAGES: { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] = [
-  { id: 'appearance', label: 'Giao diện', icon: 'palette', sections: ['theme', 'chat'] },
+  { id: 'appearance', label: 'Giao diện', icon: 'palette', sections: ['theme', 'chat', 'editor'] },
   { id: 'keymap', label: 'Phím tắt', icon: 'keyboard', sections: ['keymap'] },
   { id: 'ai', label: 'Tài khoản AI', icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
   { id: 'model', label: 'Mô hình', icon: 'spark', sections: ['model'] },
@@ -58,6 +60,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const loginPending = useRef(false)
   const operation = useRef(false)
   const themeId = useThemeId()
+  const vimMode = useVimMode()
   const [query, setQuery] = useState('')
   const [activePage, setActivePage] = useState('appearance')
   const [chatDock, setChatDock] = useState(() => { try { return localStorage.getItem('nexgraph.chat.dock') === 'right' ? 'right' : 'left' } catch { return 'left' } })
@@ -238,6 +241,13 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
             <option value="left">Bên trái (kiểu Wu)</option>
             <option value="right">Bên phải</option>
           </select>
+        </div>
+      </section>}
+      {shows('editor') && <section className="settings-section" aria-labelledby="settings-editor-title">
+        <h2 id="settings-editor-title">Trình soạn thảo</h2>
+        <div className="settings-row">
+          <div><label htmlFor="settings-vim">Chế độ Vim</label><p>Phím kiểu Vim trong editor (normal/insert/visual); trạng thái hiện ở thanh dưới. Bật/tắt cũng được từ bảng lệnh.</p></div>
+          <button id="settings-vim" type="button" role="switch" aria-checked={vimMode} className={`switch${vimMode ? ' on' : ''}`} onClick={() => setVimMode(!vimMode)}><span /></button>
         </div>
       </section>}
 
