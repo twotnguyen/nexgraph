@@ -136,7 +136,9 @@ def test_hook_guard_skips_heavy_imports(proj):
     code = ("import sys, io; from nexgraph_engine.cli import main; sys.stdin = io.TextIOWrapper(io.BytesIO(b'{}'));"
             f"main(['hook-guard', 'read', '--project', {str(root)!r}, '--data-dir', {str(data)!r}]);"
             "print(sorted(m for m in ('uvicorn', 'fastapi', 'mcp.server.fastmcp', 'nexgraph_engine.api.app') if m in sys.modules), file=sys.stderr)")
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    # Lời nhắc tiếng Việt: ép UTF-8 cả hai đầu, Windows mặc định cp1252.
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, encoding="utf-8",
+                       env={**os.environ, "PYTHONIOENCODING": "utf-8"})
     assert r.returncode == 0 and r.stderr.strip().endswith("[]"), r.stderr
 
 
