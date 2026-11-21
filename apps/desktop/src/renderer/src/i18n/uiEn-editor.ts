@@ -222,4 +222,7 @@ export const uiEnEditor: Record<string, string> = {
   'Mặc định': 'Default',
   'Base': 'Base',
   'Người dùng': 'User',
+  'Quay lại': 'Back',
+  'Hiện lời gọi': 'Show Calls',
+  'Đổi hướng': 'Switch Direction',
 }

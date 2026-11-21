@@ -12,7 +12,16 @@
 .ps-expand[aria-expanded='true'] svg { transform: rotate(90deg); }
 .ps-filters { display: grid; gap: 4px; }
 .project-search .ps-filters input { height: 28px; padding: 0 8px; border-radius: 6px; font-size: 12px; }
-.ps-summary { margin: 2px 0 0; font-size: 12px; }
+.ps-summary { display: flex; align-items: center; gap: 8px; min-height: 20px; margin: 2px 0 0; font-size: 12px; }
+.ps-summary > .muted { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-summary-actions { display: flex; flex: none; align-items: center; gap: 1px; }
+.ps-summary-actions .ps-toggle { min-width: 18px; height: 18px; padding: 0 3px; }
+.ps-hit { display: flex; align-items: center; }
+.ps-hit .ps-match { flex: 1; min-width: 0; }
+.ps-replace { display: grid; flex: none; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--color-muted); opacity: 0; }
+.ps-hit:hover .ps-replace, .ps-hit:focus-within .ps-replace { opacity: 1; }
+.ps-replace:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.ps-replace:disabled { opacity: 0; }
 .ps-results, .ps-results ul { margin: 0; padding: 0; list-style: none; }
 .ps-results { flex: 1; min-height: 0; overflow: auto; margin: 0 -8px; }
 .ps-file, .ps-match { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 24px; padding: 2px 8px; border: 0; border-radius: 0; background: transparent; color: var(--color-text); font-size: 13px; text-align: left; }
@@ -28,3 +37,4 @@
 .ps-context-before { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; direction: rtl; text-align: left; text-overflow: ellipsis; unicode-bidi: plaintext; }
 .ps-context-after { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ps-preview mark { flex: none; max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; border-radius: 2px; background: color-mix(in srgb, var(--amber, #e5c07b) 35%, transparent); color: inherit; }
+.ps-summary-actions .ps-toggle:disabled, .ps-replace:disabled { cursor: default; }

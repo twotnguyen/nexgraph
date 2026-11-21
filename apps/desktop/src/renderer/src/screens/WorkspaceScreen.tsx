@@ -46,6 +46,7 @@ import { useCommand } from '../state/commands'
 import { getExplorerOpen, setChatDock, setChatWidth, useChatDock, useChatWidth } from '../state/layoutPrefs'
 import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
 import { listBookmarks } from '../state/bookmarks'
+import { navigationBack, navigationForward, recordNavigation, type NavigationEntry } from '../state/navigationHistory'
 import { startDiagnostics } from '../state/diagnostics'
 import { errorText } from '../state/errorText'
 import { buildExcerpts, consumePendingMultiBuffer, getPendingMultiBuffer, requestMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
@@ -440,7 +441,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     }
   }
 
-  const openCode = (file: string, line = 1, lineEnd?: number, column?: number) => {
+  const openCode = (file: string, line = 1, lineEnd?: number, column?: number, record = true) => {
+    // Các lệnh đi tới/quay lại chỉ di chuyển con trỏ trong lịch sử, không thêm mục mới.
+    if (record) recordNavigation(project.project_id, { file, line, column: column ?? 1 })
     // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.
     if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(messageOf(e)))
     const seq = openSeq + 1
@@ -648,6 +651,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Lệnh cho bảng lệnh và phím tắt (state/commands.ts); rời màn hình thì hỏi trước nếu còn tệp chưa lưu.
   useCommand('agent.toggle', () => setChatOpen((v) => !v), !hosted)
   useCommand('file_finder.toggle', () => setFinder((v) => !v))
+  const openHistoryLocation = (entry: NavigationEntry | null) => { if (entry) openCode(entry.file, entry.line, undefined, entry.column, false) }
+  useCommand('navigation.back', () => openHistoryLocation(navigationBack(project.project_id)))
+  useCommand('navigation.forward', () => openHistoryLocation(navigationForward(project.project_id)))
   useCommand('explorer.toggle', () => togglePanel('explorer'))
   useCommand('graph_search.toggle', () => togglePanel('search'))
   useCommand('changes.toggle', () => togglePanel('changes'))

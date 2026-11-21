@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { TextSearchQuery, TextSearchResult } from '@shared/api'
+import { useCommand } from '../../state/commands'
 import { useDebounced } from '../../state/useDebounced'
 import { tr } from '../../strings'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -36,7 +37,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
   useEffect(() => { input.current?.focus(); input.current?.select() }, [focusRequest])
 
   useEffect(() => {
-    if (!debounced.query || !api.searchText) { setResult(null); setError(null); return }
+    if (!debounced.query || !api.searchText) { setResult(null); setError(null); setBusy(false); return }
     let live = true
     setBusy(true)
     api.searchText(projectId, debounced)
@@ -48,15 +49,40 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
 
   const total = useMemo(() => result?.files.reduce((n, f) => n + f.matches.length, 0) ?? 0, [result])
   const set = (patch: Partial<TextSearchQuery>) => { setStatus(null); setQuery((q) => ({ ...q, ...patch })) }
+  const flip = (key: 'caseSensitive' | 'wholeWord' | 'regex') => set({ [key]: !query[key] })
+  const refresh = () => setRuns((n) => n + 1)
+  const clear = () => {
+    setQuery({ query: '' })
+    setReplacement('')
+    setResult(null)
+    setError(null)
+    setStatus(null)
+    setBusy(false)
+    setCollapsed(new Set())
+  }
+  const collapseAll = () => {
+    const files = result?.files.map((f) => f.file) ?? []
+    setCollapsed(files.length > 0 && files.every((file) => collapsed.has(file)) ? new Set() : new Set(files))
+  }
+  const openInEditor = () => {
+    const first = result?.files.find((f) => f.matches.length)
+    if (first) onOpen(first.file, first.matches[0].line)
+  }
+  useCommand('search.toggle_case', () => flip('caseSensitive'))
+  useCommand('search.toggle_whole_word', () => flip('wholeWord'))
+  useCommand('search.toggle_regex', () => flip('regex'))
+  useCommand('search.toggle_replace', () => setShowReplace((v) => !v))
+  useCommand('search.toggle_filters', () => setShowFilters((v) => !v))
+  useCommand('search.refresh', refresh, !!debounced.query)
+  useCommand('search.clear', clear)
+  useCommand('search.collapse_all', collapseAll, !!result?.files.length)
+  useCommand('search.open_in_editor', openInEditor, !!result?.files.length)
   const toggle = (key: 'caseSensitive' | 'wholeWord' | 'regex', label: string, text: string) => (
-    <button type="button" className="ps-toggle" aria-label={label} title={label} aria-pressed={!!query[key]} onClick={() => set({ [key]: !query[key] })}>{text}</button>
+    <button type="button" className="ps-toggle" aria-label={label} title={label} aria-pressed={!!query[key]} onClick={() => flip(key)}>{text}</button>
   )
 
-  const replaceAll = async () => {
-    if (!result || !api.replaceText) return
-    const files = result.files.map((f) => f.file).filter((f) => !dirtyFiles.has(f))
-    const held = result.files.length - files.length
-    if (!files.length || !window.confirm(tr('Thay {count} chỗ trong {files} tệp bằng “{text}”?', { count: total, files: files.length, text: replacement }))) return
+  const replace = async (files: string[], count: number, held = 0) => {
+    if (!api.replaceText || !files.length || !window.confirm(tr('Thay {count} chỗ trong {files} tệp bằng “{text}”?', { count, files: files.length, text: replacement }))) return
     try {
       const done = await api.replaceText(projectId, debounced, replacement, files)
       const skipped = done.skipped.length + held
@@ -67,6 +93,17 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
       setError(message(e))
     }
   }
+  const replaceAll = async () => {
+    if (!result) return
+    const files = result.files.map((f) => f.file).filter((f) => !dirtyFiles.has(f))
+    await replace(files, total, result.files.length - files.length)
+  }
+  const replaceInFile = async (file: string, count: number) => {
+    if (!result || dirtyFiles.has(file)) return
+    await replace([file], count)
+  }
+  const allCollapsed = !!result?.files.length && result.files.every((f) => collapsed.has(f.file))
+  const summary = error ?? status ?? (busy ? tr('Đang tìm…') : result ? (total ? tr('{count} kết quả trong {files} tệp{truncated}', { count: total, files: result.files.length, truncated: result.truncated ? ` — ${tr('Đạt giới hạn')}` : '' }) : tr('Không có kết quả')) : '')
 
   return (
     <div className="project-search">
@@ -79,7 +116,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
           {toggle('caseSensitive', tr('Phân biệt hoa thường'), 'Aa')}
           {toggle('wholeWord', tr('Khớp nguyên từ'), 'ab')}
           {toggle('regex', tr('Biểu thức chính quy'), '.*')}
-          <button type="button" className="ps-toggle" aria-label={tr('Lọc tệp')} aria-pressed={showFilters} title={tr('Lọc tệp')} onClick={() => setShowFilters((v) => !v)}>…</button>
+
         </div>
       </div>
       {showReplace && (
@@ -100,9 +137,17 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
           <input aria-label={tr('Bỏ qua tệp')} placeholder={tr('Bỏ qua: **/*.test.ts')} value={query.exclude ?? ''} onChange={(e) => set({ exclude: e.target.value })} />
         </div>
       )}
-      <p className="ps-summary muted" role="status">
-        {error ?? status ?? (busy ? tr('Đang tìm…') : result ? (total ? tr('{count} kết quả trong {files} tệp{truncated}', { count: total, files: result.files.length, truncated: result.truncated ? tr(' (đã rút gọn)') : '' }) : tr('Không có kết quả')) : '')}
-      </p>
+      <div className="ps-summary">
+        <span className="muted" role="status">{summary}</span>
+        <div className="ps-summary-actions">
+          <button type="button" className="ps-toggle" aria-label={tr('Làm mới')} title={tr('Làm mới')} disabled={!debounced.query} onClick={refresh}><Icon name="refresh" size={12} /></button>
+          <button type="button" className="ps-toggle" aria-label={tr('Xóa tìm kiếm')} title={tr('Xóa tìm kiếm')} onClick={clear}><Icon name="close" size={12} /></button>
+          <button type="button" className="ps-toggle" aria-label={allCollapsed ? tr('Mở rộng tất cả') : tr('Thu gọn tất cả')} title={allCollapsed ? tr('Mở rộng tất cả') : tr('Thu gọn tất cả')} aria-pressed={allCollapsed} disabled={!result?.files.length} onClick={collapseAll}><Icon name="chevron" size={12} /></button>
+          <button type="button" className="ps-toggle" aria-label={tr('Mở trong editor')} title={tr('Mở trong editor')} disabled={!result?.files.length} onClick={openInEditor}><Icon name="export" size={12} /></button>
+          <button type="button" className="ps-toggle" aria-label={tr('Lọc tệp')} title={tr('Lọc tệp')} aria-pressed={showFilters} onClick={() => setShowFilters((v) => !v)}><Icon name="more" size={12} /></button>
+        </div>
+      </div>
+
       {result && (
         <ul className="ps-results" aria-label={tr('Kết quả tìm')}>
           {result.files.map(({ file, matches }) => {
@@ -134,7 +179,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
                       // shortcut: a preview ending at the API's 200-unit limit may not be cropped; upgrade when the API exposes the line end.
                       const croppedEnd = text.length - at === 200 || at + m.length > text.length
                       return (
-                        <li key={`${m.line}:${m.column}`}>
+                        <li key={`${m.line}:${m.column}`} className="ps-hit">
                           <button type="button" className="ps-match" onClick={() => onOpen(file, m.line)} title={tr('Dòng {line}', { line: m.line })}>
                             <span className="ps-line muted">{m.line}</span>
                             <span className="ps-preview">
@@ -143,6 +188,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
                               <span className="ps-context-after">{after.slice(0, end)}{croppedEnd || end < after.length ? '…' : ''}</span>
                             </span>
                           </button>
+                          <button type="button" className="ps-replace" aria-label={tr('Thay chỗ khớp này')} title={tr('Thay chỗ khớp này')} disabled={!replacement || dirtyFiles.has(file) || !api.replaceText} onClick={() => void replaceInFile(file, matches.length)}><Icon name="pencil" size={12} /></button>
                         </li>
                       )
                     })}

@@ -116,7 +116,20 @@ export const COMMANDS: CommandDef[] = [
   { id: 'view.tree', category: 'Xem', title: 'Cây' },
   { id: 'view.report', category: 'Xem', title: 'Báo cáo' },
   { id: 'graph.export', category: 'Đồ thị', title: 'Xuất đồ thị' },
-  { id: 'project.overview', category: 'Dự án', title: 'Về tổng quan dự án' }
+  { id: 'project.overview', category: 'Dự án', title: 'Về tổng quan dự án' },
+  { id: 'search.toggle_case', category: 'Tìm kiếm', title: 'Bật/tắt phân biệt hoa thường', key: 'mod+alt+c' },
+  { id: 'search.toggle_whole_word', category: 'Tìm kiếm', title: 'Bật/tắt toàn từ', key: 'mod+alt+w' },
+  { id: 'search.toggle_regex', category: 'Tìm kiếm', title: 'Bật/tắt regex', key: 'mod+alt+shift+r' }, // mod+alt+r thuộc task.rerun
+  { id: 'search.toggle_replace', category: 'Tìm kiếm', title: 'Bật/tắt thay thế', key: 'mod+alt+shift+h' }, // mod+alt+h thuộc editor.call_hierarchy_outgoing
+  { id: 'search.toggle_filters', category: 'Tìm kiếm', title: 'Bật/tắt bộ lọc', key: 'mod+alt+f' },
+  { id: 'search.refresh', category: 'Tìm kiếm', title: 'Làm mới kết quả', key: 'mod+alt+g' },
+  { id: 'search.clear', category: 'Tìm kiếm', title: 'Xoá tìm kiếm', key: 'mod+alt+k' },
+  { id: 'search.collapse_all', category: 'Tìm kiếm', title: 'Thu gọn tất cả', key: 'mod+alt+shift+x' },
+  { id: 'search.open_in_editor', category: 'Tìm kiếm', title: 'Mở trong editor', key: 'mod+alt+shift+o' }, // mod+alt+o của editor.workspace_symbols trong base JetBrains
+  { id: 'navigation.back', category: 'Điều hướng', title: 'Quay lại', key: 'alt+arrowleft' }, // ctrl+- thành mod+- ngoài macOS, trùng image.zoom_out
+  { id: 'navigation.forward', category: 'Điều hướng', title: 'Tiến tới', key: 'ctrl+shift+-' },
+  { id: 'hierarchy.switch_direction', category: 'Editor', title: 'Đổi hướng lời gọi', key: 'mod+k mod+shift+h' }, // alt+mod+h chuẩn hoá thành mod+alt+h của outgoing
+  { id: 'hierarchy.back', category: 'Editor', title: 'Quay lại lời gọi trước' }
 ]
 
 const handlers = new Map<string, (() => void)[]>()

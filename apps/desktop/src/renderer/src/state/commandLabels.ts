@@ -104,7 +104,20 @@ const EN: Record<string, readonly [title: string, category: string]> = {
   'view.tree': ['Tree', 'View'],
   'view.report': ['Report', 'View'],
   'graph.export': ['Export Graph', 'Graph'],
-  'project.overview': ['Back to Project Overview', 'Project']
+  'project.overview': ['Back to Project Overview', 'Project'],
+  'search.toggle_case': ['Toggle Match Case', 'Search'],
+  'search.toggle_whole_word': ['Toggle Match Whole Word', 'Search'],
+  'search.toggle_regex': ['Toggle Regex', 'Search'],
+  'search.toggle_replace': ['Toggle Replace', 'Search'],
+  'search.toggle_filters': ['Toggle Filters', 'Search'],
+  'search.refresh': ['Refresh Results', 'Search'],
+  'search.clear': ['Clear Search', 'Search'],
+  'search.collapse_all': ['Collapse All', 'Search'],
+  'search.open_in_editor': ['Open in Editor', 'Search'],
+  'navigation.back': ['Back', 'Navigation'],
+  'navigation.forward': ['Forward', 'Navigation'],
+  'hierarchy.switch_direction': ['Switch Call Hierarchy Direction', 'Editor'],
+  'hierarchy.back': ['Go Back in Call Hierarchy', 'Editor'],
 }
 for (let n = 0; n < 10; n++) EN[`tab.activate_${n}`] = [n ? `Open Tab ${n}` : 'Open Last Tab', 'Tabs']
 

@@ -13,11 +13,12 @@ import type { OpenEditorLocation } from './EditorPanels'
 import './editor-tools.css'
 
 type HierarchyRow = { key: string; item: LspCallHierarchyItem; name: string; file: string; line: number; column: number; isCall: boolean }
+type HierarchyMode = { kind: 'hierarchy'; direction: 'incoming' | 'outgoing'; roots: HierarchyRow[]; stack: LspCallHierarchyItem[]; rows: HierarchyRow[]; status: string }
 type Mode =
   | { kind: 'goto' | 'rename' | 'document'; editor: ActiveEditor }
   | { kind: 'workspace' }
   | { kind: 'locations'; title: string; locations: LspLocation[] }
-  | { kind: 'hierarchy'; direction: 'incoming' | 'outgoing'; root: LspCallHierarchyItem | null; rows: HierarchyRow[]; status: string }
+  | HierarchyMode
 type SymbolRow = { id: string; symbol: LspDocumentSymbol }
 
 function flattenSymbols(symbols: LspDocumentSymbol[], prefix = ''): SymbolRow[] {
@@ -175,9 +176,11 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     editor.handle.selectRange({ startLine: start.line + 1, startColumn: start.character + 1, endLine: end.line + 1, endColumn: end.character + 1 })
     syntaxState.current = { file: editor.file, symbols, current, history }
   }
-  const loadCalls = async (direction: 'incoming' | 'outgoing', root: LspCallHierarchyItem) => {
+  const loadCalls = async (direction: 'incoming' | 'outgoing', stack: LspCallHierarchyItem[], roots: HierarchyRow[]) => {
+    const root = stack[stack.length - 1]
+    if (!root) return
     const serial = ++hierarchySerial.current
-    setMode({ kind: 'hierarchy', direction, root, rows: [], status: tr('Đang tải lời gọi…') })
+    setMode({ kind: 'hierarchy', direction, roots, stack, rows: [], status: tr('Đang tải lời gọi…') })
     try {
       const api = window.nexgraph?.lsp
       if (!api?.callHierarchyIncoming || !api.callHierarchyOutgoing) { onError(tr('Phân cấp lời gọi không dùng được trong tệp này.')); return }
@@ -189,14 +192,24 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
         ? await api.callHierarchyIncoming(projectId, root.file, text, line, column, root)
         : await api.callHierarchyOutgoing(projectId, root.file, text, line, column, root)
       if (serial !== hierarchySerial.current) return
-      setMode((current) => current?.kind === 'hierarchy' ? {
+      // Một caller có thể gọi nhiều lần: gộp các fromRanges để chỉ hiện một dòng có số lượt gọi.
+      const groups = new Map<string, { call: LspCallHierarchyCall; ranges: LspCallHierarchyCall['fromRanges'] }>()
+      for (const call of calls) {
+        const from = call.from
+        const key = `${from.file}:${from.range.start.line}:${from.range.start.character}:${from.name}`
+        const group = groups.get(key)
+        if (group) group.ranges.push(...call.fromRanges)
+        else groups.set(key, { call, ranges: [...call.fromRanges] })
+      }
+      setMode((current) => current?.kind === 'hierarchy' && serial === hierarchySerial.current ? {
         ...current,
-        rows: calls.map((call, index) => {
-          const site = call.fromRanges[0]?.start ?? call.from.range.start
+        rows: [...groups.values()].map(({ call, ranges }, index) => {
+          const site = ranges[0]?.start ?? call.from.range.start
+          const total = ranges.length
           return {
             key: `${call.from.file}:${call.from.range.start.line}:${call.from.range.start.character}:${index}`,
-            item: call.from, name: call.from.name, file: call.from.file,
-            line: site.line + 1, column: site.character + 1, isCall: true
+            item: call.from, name: total > 1 ? `${call.from.name} — ${call.from.file} (${total} calls)` : call.from.name,
+            file: call.from.file, line: site.line + 1, column: site.character + 1, isCall: true
           }
         }),
         status: calls.length ? '' : (direction === 'incoming' ? tr('Không có lời gọi vào.') : tr('Không có lời gọi ra.'))
@@ -208,7 +221,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     const shown = mode?.kind === 'hierarchy' ? mode : null
     if (shown) {
       if (shown.direction === direction) close()
-      else if (shown.root) void loadCalls(direction, shown.root)
+      else if (shown.stack.length) void loadCalls(direction, shown.stack, shown.roots)
       else setMode({ ...shown, direction })
       return
     }
@@ -227,8 +240,24 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
         item, name: item.name, file: item.file,
         line: item.range.start.line + 1, column: item.range.start.character + 1, isCall: false
       }))
-      open({ kind: 'hierarchy', direction, root: null, rows, status: rows.length ? '' : tr('Không có ký hiệu gọi được tại con trỏ.') })
+      open({ kind: 'hierarchy', direction, roots: rows, stack: [], rows, status: rows.length ? '' : tr('Không có ký hiệu gọi được tại con trỏ.') })
     } catch (error) { if (serial === hierarchySerial.current) onError(errorText(error)) }
+  }
+  const hierarchyBack = () => {
+    const shown = mode?.kind === 'hierarchy' ? mode : null
+    if (!shown || !shown.stack.length) return
+    if (shown.stack.length === 1) {
+      setMode({ ...shown, stack: [], rows: shown.roots, status: shown.roots.length ? '' : tr('Không có ký hiệu gọi được tại con trỏ.') })
+      return
+    }
+    void loadCalls(shown.direction, shown.stack.slice(0, -1), shown.roots)
+  }
+  const hierarchyShowCalls = (shown: HierarchyMode, row: HierarchyRow) => {
+    void loadCalls(shown.direction, row.isCall ? [...shown.stack, row.item] : [row.item], shown.roots)
+  }
+  const hierarchySwitch = (shown: HierarchyMode, row?: HierarchyRow) => {
+    const direction = shown.direction === 'incoming' ? 'outgoing' : 'incoming'
+    void loadCalls(direction, shown.stack.length ? shown.stack : row ? [row.item] : [], shown.roots)
   }
   const action = (id: string) => {
     if (!editor) return
@@ -289,6 +318,8 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   useCommand('editor.previous_syntax', () => syntax('previous'), !!editor)
   useCommand('editor.call_hierarchy_incoming', () => void hierarchy('incoming'), !!editor)
   useCommand('editor.call_hierarchy_outgoing', () => void hierarchy('outgoing'), !!editor)
+  useCommand('hierarchy.back', () => hierarchyBack(), mode?.kind === 'hierarchy')
+  useCommand('hierarchy.switch_direction', () => { if (mode?.kind === 'hierarchy') hierarchySwitch(mode, mode.rows[0]) }, mode?.kind === 'hierarchy')
   useCommand('git.copy_permalink', () => void permalink(true), !!editor)
   useCommand('git.open_permalink', () => void permalink(false), !!editor)
   useCommand('editor.toggle_line_numbers', () => setEditorPrefs({ lineNumbers: !getEditorPrefs().lineNumbers }))
@@ -322,14 +353,22 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     itemKey={(item) => String(item.index)} itemText={(item) => `${item.location.file}:${item.location.line}:${item.location.column}`}
     empty={tr('Không có vị trí khớp')} onCancel={() => close()} onPick={({ location }) => { close(false); onOpen(location.file, location.line, location.column) }}
     renderItem={({ location }, positions) => <span><Highlight text={`${location.file}:${location.line}:${location.column}`} positions={positions} /></span>} />
-  if (mode.kind === 'hierarchy') return <Picker label={tr('Phân cấp lời gọi')} placeholder={tr('Lọc ký hiệu hoặc lời gọi…')} items={mode.rows}
-    itemKey={(row) => row.key} itemText={(row) => row.name}
-    renderItem={(row, positions) => <><span><Highlight text={row.name} positions={positions} /></span><small>{row.file}:{row.line}</small></>}
-    empty={mode.status} onCancel={() => close()} onPick={(row) => {
-      if (!row.isCall) { void loadCalls(mode.direction, row.item); return }
-      close(false)
-      onOpen(row.file, row.line, row.column)
-    }} />
+  if (mode.kind === 'hierarchy') {
+    const shown = mode
+    return <Picker label={tr('Phân cấp lời gọi')} placeholder={tr('Lọc ký hiệu hoặc lời gọi…')} items={shown.rows}
+      itemKey={(row) => row.key} itemText={(row) => row.name}
+      renderItem={(row, positions) => <><span><Highlight text={row.name} positions={positions} /></span><small>{row.file}:{row.line}</small></>}
+      empty={shown.status} onCancel={() => close()} onPick={(row) => {
+        if (!row.isCall) { void loadCalls(shown.direction, [row.item], shown.roots); return }
+        close(false)
+        onOpen(row.file, row.line, row.column)
+      }}
+      footer={(row) => <>
+        <button type="button" disabled={!shown.stack.length} onClick={() => hierarchyBack()}>{tr('Quay lại')}</button>
+        <button type="button" onClick={() => hierarchyShowCalls(shown, row)}>{tr('Hiện lời gọi')}</button>
+        <button type="button" onClick={() => hierarchySwitch(shown, row)}>{tr('Đổi hướng')}</button>
+      </>} />
+  }
   const rows = flattenSymbols(symbols)
   return <Picker label={tr('Tìm ký hiệu trong tệp')} placeholder={tr('Tìm ký hiệu trong tệp…')} items={rows} itemKey={(item) => item.id} itemText={(item) => item.symbol.name}
     empty={symbolsError ?? tr('Không có ký hiệu khớp')} onCancel={() => close()} onPick={({ symbol }) => {

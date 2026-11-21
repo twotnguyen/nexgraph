@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspRange, NexGraphApi } from '@shared/api'
 import type { EditorHandle } from './monaco'
 import type { ActiveEditor } from '../../state/activeEditor'
-import { runCommand } from '../../state/commands'
+import { installKeymap, runCommand } from '../../state/commands'
 import { getEditorPrefs, setEditorPrefs } from '../../state/editorPrefs'
 import { installNexgraph } from '../../test-utils'
 import { EditorTools } from './EditorTools'
@@ -190,6 +190,55 @@ describe('EditorTools E3', () => {
       fireEvent.click(await screen.findByText('callee'))
       fireEvent.click(await screen.findByText('caller'))
       expect(onOpen).toHaveBeenCalledWith('src/c.ts', 5, 3)
+    })
+
+    it('gộp nhiều lời gọi của cùng caller thành một dòng, giữ nguyên item.data', async () => {
+      const { incoming, caller } = setup()
+      incoming.mockResolvedValue([
+        { from: caller, fromRanges: [lspRange(4, 2, 4, 8), lspRange(7, 3, 7, 9)] },
+        { from: caller, fromRanges: [lspRange(9, 1, 9, 5)] }
+      ])
+      act(() => { runCommand('editor.call_hierarchy_incoming') })
+      fireEvent.click(await screen.findByText('callee'))
+      expect(await screen.findByText('caller — src/c.ts (3 calls)')).toBeTruthy()
+      expect(screen.getAllByRole('option')).toHaveLength(1)
+      fireEvent.click(screen.getByRole('button', { name: 'Hiện lời gọi' }))
+      await waitFor(() => expect(incoming).toHaveBeenLastCalledWith('p1', 'src/c.ts', 'root text', 5, 1, caller))
+      expect(incoming.mock.calls[incoming.mock.calls.length - 1][5].data).toEqual({ token: 'keep' })
+    })
+
+    it('nút Quay lại đi lên stack và Đổi hướng gọi API với đúng gốc', async () => {
+      const { incoming, outgoing, root, caller } = setup()
+      const outer = item('outer', 'src/d.ts', 12)
+      incoming.mockImplementation(async (_p, _f, _t, _l, _c, requested) =>
+        requested === root
+          ? [{ from: caller, fromRanges: [lspRange(4, 2, 4, 8)] }]
+          : [{ from: outer, fromRanges: [lspRange(12, 1, 12, 6)] }])
+      act(() => { runCommand('editor.call_hierarchy_incoming') })
+      fireEvent.click(await screen.findByText('callee'))
+      expect(await screen.findByText('caller')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Hiện lời gọi' }))
+      expect(await screen.findByText('outer')).toBeTruthy()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }))
+      await waitFor(() => expect(incoming).toHaveBeenLastCalledWith('p1', 'src/b.ts', 'root text', 3, 1, root))
+      expect(await screen.findByText('caller')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Đổi hướng' }))
+      await waitFor(() => expect(outgoing).toHaveBeenCalledWith('p1', 'src/b.ts', 'root text', 3, 1, root))
+      act(() => { runCommand('hierarchy.back') })
+      expect(await screen.findByText('callee')).toBeTruthy()
+    })
+
+    it('đổi hướng bằng phím tắt khi picker phân cấp đang mở', async () => {
+      const { outgoing, root } = setup()
+      act(() => { runCommand('editor.call_hierarchy_incoming') })
+      const dialog = await screen.findByRole('dialog', { name: 'Phân cấp lời gọi' })
+      const uninstall = installKeymap(window)
+      try {
+        fireEvent.keyDown(dialog, { key: 'k', code: 'KeyK', ctrlKey: true })
+        fireEvent.keyDown(dialog, { key: 'H', code: 'KeyH', ctrlKey: true, shiftKey: true })
+        await waitFor(() => expect(outgoing).toHaveBeenCalledWith('p1', 'src/b.ts', 'root text', 3, 1, root))
+      } finally { uninstall() }
     })
 
     it('báo ngắn khi backend không hỗ trợ phân cấp lời gọi', () => {

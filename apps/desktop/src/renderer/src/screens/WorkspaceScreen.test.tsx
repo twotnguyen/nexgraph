@@ -7,6 +7,7 @@ import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
 import { buildExcerpts, consumePendingMultiBuffer, requestMultiBuffer } from '../state/multiBuffer'
 import { toggleBookmark } from '../state/bookmarks'
+import { recordNavigation } from '../state/navigationHistory'
 
 vi.mock('../services/elkLayoutService', async () => ({
   layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
@@ -336,6 +337,21 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
     return { api, code }
   }
+
+  it('lệnh quay lại/đi tới mở lại đúng tệp và dòng đã điều hướng', async () => {
+    recordNavigation('p1', { file: 'a.ts', line: 2, column: 1 })
+    recordNavigation('p1', { file: 'b.ts', line: 7, column: 4 })
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries: [], truncated: false })), read: read() } })
+    render(<WorkspaceScreen project={project()} />)
+    act(() => { runCommand('navigation.back') })
+    expect(await screen.findByRole('tab', { name: 'a.ts', selected: true })).toBeTruthy()
+    await waitFor(() => expect(revealLines).toHaveBeenCalledWith(2, undefined))
+
+    revealLines.mockClear()
+    act(() => { runCommand('navigation.forward') })
+    expect(await screen.findByRole('tab', { name: 'b.ts', selected: true })).toBeTruthy()
+    await waitFor(() => expect(revealLines).toHaveBeenCalledWith(7, undefined))
+  })
 
   it('chuyển thẻ theo lần dùng gần nhất, ghim và mở lại thẻ đã đóng', async () => {
     localStorage.removeItem('nexgraph.recentFiles:p1')
