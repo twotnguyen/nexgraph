@@ -1,9 +1,12 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { gitBlame, gitCommit, gitDiffSides, gitStage, gitStatus, gitUnstage } from '../src/main/git/repo'
+import {
+  gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction,
+  gitStashSave, gitStashes, gitStatus, gitSwitchBranch, gitUnstage
+} from '../src/main/git/repo'
 
 let repo: string
 let root: string // dự án là thư mục con của kho
@@ -26,11 +29,15 @@ it('status chỉ trong thư mục dự án; stage, unstage, commit từng tệp;
   writeFileSync(join(root, 'src/a.ts'), 'one\nTWO\n')
   writeFileSync(join(root, 'new.md'), '# mới\n')
   writeFileSync(join(repo, 'outside.txt'), 'changed\n')
-  expect(await gitStatus(root)).toEqual({ repo: true, branch: 'main', staged: [], unstaged: [{ path: 'new.md', status: '?' }, { path: 'src/a.ts', status: 'M' }] })
+  expect(await gitStatus(root)).toMatchObject({
+    repo: true, branch: 'main', staged: [], conflicts: [], upstream: null, ahead: 0, behind: 0, remote: null,
+    unstaged: [{ path: 'new.md', status: '?', added: 1, deleted: 0 }, { path: 'src/a.ts', status: 'M', added: 1, deleted: 1 }],
+    lastCommit: { subject: 'đầu tiên', message: 'đầu tiên', hasParent: false, pushed: false }
+  })
 
   await gitStage(root, ['src/a.ts'])
   const staged = await gitStatus(root)
-  expect(staged.staged).toEqual([{ path: 'src/a.ts', status: 'M' }])
+  expect(staged.staged).toEqual([{ path: 'src/a.ts', status: 'M', added: 1, deleted: 1 }])
   expect(await gitDiffSides(root, 'src/a.ts', true)).toEqual({ before: 'one\ntwo\n', after: 'one\nTWO\n' })
   expect(await gitDiffSides(root, 'new.md', false)).toEqual({ before: '', after: '# mới\n' })
 
@@ -55,6 +62,172 @@ it('blame theo nội dung trên đĩa: dòng đã commit có tác giả, dòng m
 
 it('thư mục không phải kho git', async () => {
   const plain = mkdtempSync(join(tmpdir(), 'ng-plain-'))
-  expect(await gitStatus(plain)).toEqual({ repo: false, branch: null, staged: [], unstaged: [] })
+  expect(await gitStatus(plain)).toEqual({
+    repo: false, branch: null, staged: [], unstaged: [], conflicts: [], upstream: null,
+    ahead: 0, behind: 0, remote: null, lastCommit: null
+  })
   rmSync(plain, { recursive: true, force: true })
+})
+
+it('đếm numstat NUL-safe, đổi tên, nhị phân và tệp chưa theo dõi', async () => {
+  const oldName = 'src/old\tname.ts'
+  const newName = 'src/new\tline\nfile.ts'
+  writeFileSync(join(root, oldName), 'one\ntwo\nthree\n')
+  writeFileSync(join(root, 'binary.bin'), Buffer.from([0, 1]))
+  sh('add', '.')
+  sh('commit', '-q', '-m', 'fixtures')
+  sh('mv', `app/${oldName}`, `app/${newName}`)
+  writeFileSync(join(root, 'binary.bin'), Buffer.from([0, 2]))
+  await gitStage(root, ['binary.bin'])
+  writeFileSync(join(root, 'binary.bin'), Buffer.from([0, 3]))
+  writeFileSync(join(root, 'untracked.txt'), 'no newline\nlast')
+  writeFileSync(join(root, 'untracked.bin'), Buffer.from([0, 4]))
+  const status = await gitStatus(root)
+  expect(status.staged).toEqual(expect.arrayContaining([
+    { path: newName, from: oldName, status: 'R', added: 0, deleted: 0 },
+    { path: 'binary.bin', status: 'M', added: null, deleted: null }
+  ]))
+  expect(status.unstaged).toEqual(expect.arrayContaining([
+    { path: 'binary.bin', status: 'M', added: null, deleted: null },
+    { path: 'untracked.txt', status: '?', added: 2, deleted: 0 },
+    { path: 'untracked.bin', status: '?', added: null, deleted: null }
+  ]))
+})
+
+it('pathspec tệp luôn literal, kể cả tên giống glob', async () => {
+  writeFileSync(join(root, 'src/[x].ts'), 'brackets\n')
+  writeFileSync(join(root, 'src/x.ts'), 'ordinary\n')
+  await gitStage(root, ['src/[x].ts'])
+  const status = await gitStatus(root)
+  expect(status.staged.map((f) => f.path)).toEqual(['src/[x].ts'])
+  expect(status.unstaged.map((f) => f.path)).toEqual(['src/x.ts'])
+  await expect(gitStage(root, ['../outside.txt'])).rejects.toMatchObject({ code: 'outside_project' })
+  await expect(gitStage(root, ['bad\0name'])).rejects.toMatchObject({ code: 'bad_param' })
+})
+
+it('bỏ stage trong kho chưa có commit mà không xoá tệp', async () => {
+  const empty = join(repo, 'empty')
+  mkdirSync(empty)
+  sh('init', '-q', empty)
+  writeFileSync(join(empty, 'first.txt'), 'first\n')
+  await gitStage(empty, ['first.txt'])
+  await gitUnstage(empty, ['first.txt'])
+  expect(readFileSync(join(empty, 'first.txt'), 'utf8')).toBe('first\n')
+  expect((await gitStatus(empty)).unstaged).toEqual([{ path: 'first.txt', status: '?', added: 1, deleted: 0 }])
+})
+
+it('phân loại xung đột vào nhóm riêng', async () => {
+  sh('switch', '-q', '-c', 'other')
+  writeFileSync(join(root, 'src/a.ts'), 'other\n')
+  sh('commit', '-qam', 'other')
+  sh('switch', '-q', 'main')
+  writeFileSync(join(root, 'src/a.ts'), 'main\n')
+  sh('commit', '-qam', 'main')
+  try { sh('merge', 'other') } catch { /* expected merge conflict */ }
+  const status = await gitStatus(root)
+  expect(status.conflicts).toEqual([{ path: 'src/a.ts', status: 'UU' }])
+  expect(status.staged).toEqual([])
+  expect(status.unstaged).toEqual([])
+})
+
+it('tạo và chuyển nhánh an toàn; amend không tạo thêm commit', async () => {
+  await gitSwitchBranch(root, 'feature/test', true)
+  expect(await gitBranches(root)).toEqual(['feature/test', 'main'])
+  writeFileSync(join(root, 'src/a.ts'), 'amended\n')
+  await gitStage(root, ['src/a.ts'])
+  const sha = await gitCommit(root, 'amended message', true)
+  expect(sh('rev-list', '--count', 'HEAD').trim()).toBe('1')
+  expect(sh('log', '-1', '--format=%h %s').trim()).toBe(`${sha} amended message`)
+  await gitSwitchBranch(root, 'main', false)
+  expect(sh('branch', '--show-current').trim()).toBe('main')
+  await expect(gitSwitchBranch(root, '--force', true)).rejects.toMatchObject({ code: 'bad_param' })
+  await expect(gitSwitchBranch(root, '../outside', false)).rejects.toMatchObject({ code: 'bad_param' })
+})
+
+it('restore giữ index và đưa tệp chưa theo dõi vào thùng rác', async () => {
+  const target = join(root, 'src/a.ts')
+  writeFileSync(target, 'staged\n')
+  await gitStage(root, ['src/a.ts'])
+  writeFileSync(target, 'unstaged\n')
+  const trash = join(repo, 'trashed')
+  await gitRestore(root, 'src/a.ts', async (path) => renameSync(path, trash))
+  expect(readFileSync(target, 'utf8')).toBe('staged\n')
+  expect(sh('show', ':app/src/a.ts')).toBe('staged\n')
+  writeFileSync(join(root, 'new.txt'), 'untracked\n')
+  await gitRestore(root, 'new.txt', async (path) => renameSync(path, trash))
+  expect(existsSync(join(root, 'new.txt'))).toBe(false)
+  expect(readFileSync(trash, 'utf8')).toBe('untracked\n')
+  await expect(gitRestore(root, '../outside.txt', async () => {})).rejects.toMatchObject({ code: 'outside_project' })
+})
+
+it('stash chỉ lưu thư mục dự án, pop khôi phục cả tệp mới', async () => {
+  writeFileSync(join(root, 'src/a.ts'), 'stashed\n')
+  writeFileSync(join(root, 'new.txt'), 'new\n')
+  writeFileSync(join(repo, 'outside.txt'), 'outside change\n')
+  await gitStashSave(root, 'app work')
+  const stashes = await gitStashes(root)
+  expect(stashes).toHaveLength(1)
+  expect(stashes[0].ref).toBe('stash@{0}')
+  expect(stashes[0].message).toContain('app work')
+  expect(readFileSync(join(root, 'src/a.ts'), 'utf8')).toBe('one\ntwo\n')
+  expect(existsSync(join(root, 'new.txt'))).toBe(false)
+  expect(readFileSync(join(repo, 'outside.txt'), 'utf8')).toBe('outside change\n')
+  await gitStashAction(root, stashes[0].ref, 'pop')
+  expect(readFileSync(join(root, 'src/a.ts'), 'utf8')).toBe('stashed\n')
+  expect(readFileSync(join(root, 'new.txt'), 'utf8')).toBe('new\n')
+  expect(await gitStashes(root)).toEqual([])
+  await expect(gitStashAction(root, '--all', 'drop')).rejects.toMatchObject({ code: 'bad_param' })
+})
+
+it('amend bị từ chối nếu commit nằm trên remote ref đã biết', async () => {
+  const bare = mkdtempSync(join(tmpdir(), 'ng-remote-'))
+  try {
+    sh('init', '--bare', '-q', bare)
+    sh('remote', 'add', 'origin', bare)
+    sh('push', '-qu', 'origin', 'main')
+    writeFileSync(join(root, 'src/a.ts'), 'published elsewhere\n')
+    await gitStage(root, ['src/a.ts'])
+    await gitCommit(root, 'published elsewhere')
+    sh('push', '-q', 'origin', 'main')
+    await expect(gitCommit(root, 'sửa commit đã push', true)).rejects.toMatchObject({ code: 'git_failed' })
+    expect(sh('log', '-1', '--format=%s').trim()).toBe('published elsewhere')
+  } finally {
+    rmSync(bare, { recursive: true, force: true })
+  }
+})
+
+it('không có remote thì lastCommit chưa xuất bản', async () => {
+  writeFileSync(join(root, 'src/a.ts'), 'another\n')
+  await gitStage(root, ['src/a.ts'])
+  await gitCommit(root, 'another')
+  expect((await gitStatus(root)).lastCommit?.pushed).toBe(false)
+})
+
+it('push, fetch và pull dùng kho bare cục bộ', async () => {
+  const bare = mkdtempSync(join(tmpdir(), 'ng-remote-'))
+  const clone = mkdtempSync(join(tmpdir(), 'ng-clone-'))
+  try {
+    sh('init', '--bare', '-q', bare)
+    sh('remote', 'add', 'origin', bare)
+    sh('push', '-qu', 'origin', 'main')
+    writeFileSync(join(root, 'src/a.ts'), 'pushed\n')
+    await gitStage(root, ['src/a.ts'])
+    await gitCommit(root, 'pushed')
+    expect(await gitRemote(root, 'push')).toContain('main')
+    expect(execFileSync('git', ['--git-dir', bare, 'log', '-1', '--format=%s', 'main'], { encoding: 'utf8' }).trim()).toBe('pushed')
+    sh('clone', '-q', '-b', 'main', bare, clone)
+    sh('-C', clone, 'config', 'user.email', 'other@example.com')
+    sh('-C', clone, 'config', 'user.name', 'Other')
+    writeFileSync(join(clone, 'app/src/a.ts'), 'fetched\n')
+    sh('-C', clone, 'commit', '-qam', 'fetched')
+    sh('-C', clone, 'push', '-q')
+    await gitRemote(root, 'fetch')
+    expect((await gitStatus(root)).behind).toBe(1)
+    await gitRemote(root, 'pull')
+    expect(readFileSync(join(root, 'src/a.ts'), 'utf8')).toBe('fetched\n')
+    await expect(gitRemote(root, 'push --force' as 'push')).rejects.toMatchObject({ code: 'bad_param' })
+  } finally {
+    rmSync(bare, { recursive: true, force: true })
+    rmSync(clone, { recursive: true, force: true })
+  }
 })

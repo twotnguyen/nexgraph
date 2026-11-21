@@ -1,84 +1,170 @@
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { promisify } from 'node:util'
+import { relative } from 'node:path'
 import type { GitBlameLine, GitFileChange, GitStatus } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
 import { UserError } from '../user-error'
 
-const run = promisify(execFile)
-const fail = (code: string, message: string): Error => new UserError(code, message)
+export const fail = (code: string, message: string): Error => new UserError(code, message)
 
-/** Chạy git trong gốc dự án; lỗi trả về câu git in ra (đã cắt gọn). Không dùng shell. */
-async function git(root: string, args: string[], input?: { okCodes?: number[] }): Promise<string> {
-  try {
-    const { stdout } = await run('git', ['-c', 'core.quotepath=off', '-c', 'color.ui=false', ...args], {
-      cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' }
-    })
-    return stdout
-  } catch (error) {
-    const e = error as { code?: number | string; stdout?: string; stderr?: string }
-    if (typeof e.code === 'number' && input?.okCodes?.includes(e.code)) return e.stdout ?? ''
-    if (e.code === 'ENOENT') throw fail('no_git', 'Không tìm thấy lệnh git trên máy')
-    throw fail('git_failed', (e.stderr || String(error)).trim().split('\n').slice(-3).join('\n'))
-  }
+/** Trả về đường dẫn tệp tương đối gốc dự án, không bị thoát khỏi dự án bởi ../ hoặc symlink. */
+const relativePath = (root: string, file: string) => relative(resolveInside(root, '.'), resolveInside(root, file)).split('\\').join('/')
+export async function git(root: string, args: string[], options?: { okCodes?: number[]; stdin?: string; includeStderr?: boolean }): Promise<string> {
+  let done!: (value: string) => void
+  let failed!: (error: Error) => void
+  const output = new Promise<string>((resolve, reject) => { done = resolve; failed = reject })
+  const child = execFile('git', ['-c', 'core.quotepath=off', '-c', 'color.ui=false', ...args], {
+    cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true,
+    env: { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'false', SSH_ASKPASS: 'false', SSH_ASKPASS_REQUIRE: 'never', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }
+  }, (error, stdout, stderr) => {
+    if (!error || (typeof error.code === 'number' && options?.okCodes?.includes(error.code))) {
+      done(options?.includeStderr && stderr ? [stdout, stderr].filter(Boolean).join('\n') : stdout)
+    } else if (error.code === 'ENOENT') {
+      failed(fail('no_git', 'Không tìm thấy lệnh git trên máy'))
+    } else {
+      failed(fail('git_failed', [stderr, stdout].filter(Boolean).join('\n').trim() || error.message))
+    }
+  })
+  child.stdin?.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EPIPE') failed(fail('git_failed', error.message))
+  })
+  child.stdin?.end(options?.stdin)
+  return output
 }
 
+
 /** Đường dẫn do renderer gửi: phải là tương đối và nằm trong dự án. */
-function safePaths(root: string, files: unknown): string[] {
-  if (!Array.isArray(files) || files.some((f) => typeof f !== 'string' || !f)) throw fail('bad_param', 'Danh sách tệp không hợp lệ')
+export function safePaths(root: string, files: unknown): string[] {
+  if (!Array.isArray(files) || !files.length || files.some((f) => typeof f !== 'string' || !f || f.includes('\0'))) throw fail('bad_param', 'Danh sách tệp không hợp lệ')
   for (const file of files as string[]) resolveInside(root, file)
   return files as string[]
 }
 
-/**
- * Trạng thái kiểu Git panel của Wu: tệp đã stage và chưa stage (gồm tệp mới) trong phạm vi thư mục dự án.
- * Đường dẫn trả về tương đối với gốc dự án (dự án có thể là thư mục con của kho).
- */
+type Counts = { added: number | null; deleted: number | null }
+
+function numstat(raw: string): Map<string, Counts> {
+  const parts = raw.split('\0')
+  const result = new Map<string, Counts>()
+  for (let i = 0; i < parts.length; i++) {
+    const row = parts[i]
+    const first = row.indexOf('\t')
+    const second = row.indexOf('\t', first + 1)
+    if (first < 0 || second < 0) continue
+    const added = row.slice(0, first)
+    const deleted = row.slice(first + 1, second)
+    let path = row.slice(second + 1)
+    if (!path) { i++; path = parts[++i] ?? '' }
+    if (path) result.set(path, { added: added === '-' ? null : Number(added), deleted: deleted === '-' ? null : Number(deleted) })
+  }
+  return result
+}
+
+async function untrackedCounts(root: string, file: string): Promise<Counts> {
+  try {
+    const data = await readFile(resolveInside(root, file))
+    if (data.subarray(0, 8000).includes(0)) return { added: null, deleted: null }
+    let lines = 0
+    for (const byte of data) if (byte === 10) lines++
+    return { added: lines + (data.length > 0 && data[data.length - 1] !== 10 ? 1 : 0), deleted: 0 }
+  } catch {
+    return { added: null, deleted: null }
+  }
+}
+
+/** Chỉ chắc chắn chưa xuất bản khi không có remote nào; remote không đọc được thì coi như đã xuất bản. */
+export async function gitHeadPublished(root: string): Promise<boolean> {
+  return !!(await git(root, ['for-each-ref', '--contains=HEAD', '--format=%(refname)', 'refs/remotes/'])).trim() ||
+    !!(await git(root, ['remote'])).trim()
+}
+
+/** Amend an toàn chỉ khi HEAD không nằm trên remote ref đã biết. */
+export async function gitHeadKnownPublished(root: string): Promise<boolean> {
+  return !!(await git(root, ['for-each-ref', '--contains=HEAD', '--format=%(refname)', 'refs/remotes/'])).trim()
+}
+
+/** Trạng thái tệp tương đối với dự án, kể cả khi dự án là thư mục con của kho. */
 export async function gitStatus(root: string): Promise<GitStatus> {
   let prefix: string
   try {
-    prefix = (await git(root, ['rev-parse', '--show-prefix'])).trim()
+    prefix = (await git(root, ['rev-parse', '--show-prefix'])).replace(/\n$/, '')
   } catch (error) {
-    if ((error as { code?: string }).code === 'git_failed') return { repo: false, branch: null, staged: [], unstaged: [] }
+    if ((error as Error).message.includes('not a git repository')) {
+      return { repo: false, branch: null, staged: [], unstaged: [], conflicts: [], upstream: null, ahead: 0, behind: 0, remote: null, lastCommit: null }
+    }
     throw error
   }
-  const branch = (await git(root, ['branch', '--show-current'])).trim() || null
-  const raw = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.'])
+  const [branchRaw, head, raw, stagedRaw, unstagedRaw, remotesRaw] = await Promise.all([
+    git(root, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { okCodes: [1] }),
+    git(root, ['rev-parse', '--verify', '-q', 'HEAD'], { okCodes: [1] }),
+    git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--', '.']),
+    git(root, ['diff', '--cached', '--numstat', '-z', '--no-ext-diff', '--relative', '--', '.']),
+    git(root, ['diff', '--numstat', '-z', '--no-ext-diff', '--relative', '--', '.']),
+    git(root, ['remote'])
+  ])
+  const branch = branchRaw.trim() || null
+  const upstream = branch && head.trim()
+    ? (await git(root, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], { okCodes: [128] })).trim() || null
+    : null
+  const [ahead, behind] = upstream
+    ? (await git(root, ['rev-list', '--left-right', '--count', 'HEAD...@{upstream}'])).trim().split(/\s+/).map(Number)
+    : [0, 0]
+  const remotes = remotesRaw.split('\n').filter(Boolean)
+  const branchRemote = branch ? (await git(root, ['config', '--get', `branch.${branch}.remote`], { okCodes: [1] })).trim() : ''
+  const remote = remotes.includes(branchRemote) ? branchRemote : remotes.includes('origin') ? 'origin' : remotes[0] ?? null
+  let lastCommit: GitStatus['lastCommit'] = null
+  if (head.trim()) {
+    const [log, pushed] = await Promise.all([
+      git(root, ['log', '-1', '--format=%H%x00%s%x00%B%x00%P%x00']),
+      gitHeadPublished(root)
+    ])
+    const [sha, subject, message, parents] = log.split('\0')
+    lastCommit = { sha, subject, message: message.replace(/\n$/, ''), hasParent: !!parents, pushed }
+  }
   const parts = raw.split('\0')
   const staged: GitFileChange[] = []
   const unstaged: GitFileChange[] = []
-  const local = (path: string) => (prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path)
+  const conflicts: GitFileChange[] = []
+  const stagedCounts = numstat(stagedRaw)
+  const unstagedCounts = numstat(unstagedRaw)
+  const local = (path: string) => prefix && path.startsWith(prefix) ? path.slice(prefix.length) : path
   for (let i = 0; i < parts.length; i++) {
     const entry = parts[i]
     if (entry.length < 4) continue
     const x = entry[0]
     const y = entry[1]
     const path = local(entry.slice(3))
-    // Đổi tên/chép: mục kế tiếp là tên cũ.
-    const from = x === 'R' || x === 'C' ? local(parts[++i] ?? '') : undefined
-    if (x === '?' && y === '?') { unstaged.push({ path, status: '?' }); continue }
-    if (x !== ' ' && x !== '?') staged.push({ path, status: x, ...(from ? { from } : {}) })
-    if (y !== ' ' && y !== '?') unstaged.push({ path, status: y })
+    const oldPath = (x === 'R' || x === 'C' || y === 'R' || y === 'C') ? parts[++i] : ''
+    const from = oldPath && (!prefix || oldPath.startsWith(prefix)) ? local(oldPath) : undefined
+    if (x === '?' && y === '?') {
+      unstaged.push({ path, status: '?', ...await untrackedCounts(root, path) })
+    } else if (['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(x + y)) {
+      conflicts.push({ path, status: x + y })
+    } else {
+      if (x !== ' ' && x !== '?') staged.push({ path, status: x, ...(from ? { from } : {}), ...stagedCounts.get(path) })
+      if (y !== ' ' && y !== '?') unstaged.push({ path, status: y, ...(from && (y === 'R' || y === 'C') ? { from } : {}), ...unstagedCounts.get(path) })
+    }
   }
   const byPath = (a: GitFileChange, b: GitFileChange) => a.path.localeCompare(b.path)
-  return { repo: true, branch, staged: staged.sort(byPath), unstaged: unstaged.sort(byPath) }
+  return { repo: true, branch, staged: staged.sort(byPath), unstaged: unstaged.sort(byPath), conflicts: conflicts.sort(byPath), upstream, ahead, behind, remote, lastCommit }
 }
 
 export async function gitStage(root: string, files: unknown): Promise<void> {
-  await git(root, ['add', '--', ...safePaths(root, files)])
+  await git(root, ['add', '--', ...safePaths(root, files).map((path) => `:(literal)${path}`)])
 }
 
 export async function gitUnstage(root: string, files: unknown): Promise<void> {
   const paths = safePaths(root, files)
   // Kho chưa có commit nào thì không có HEAD để restore: bỏ khỏi index bằng rm --cached.
   const hasHead = await git(root, ['rev-parse', '--verify', '-q', 'HEAD'], { okCodes: [1] })
-  await git(root, hasHead.trim() ? ['restore', '--staged', '--', ...paths] : ['rm', '-q', '--cached', '--', ...paths])
+  const literal = paths.map((path) => `:(literal)${path}`)
+  await git(root, hasHead.trim() ? ['restore', '--staged', '--', ...literal] : ['rm', '-q', '-r', '--cached', '--', ...literal])
 }
 
-/** Commit những gì đã stage; trả về mã commit ngắn. */
-export async function gitCommit(root: string, message: unknown): Promise<string> {
-  if (typeof message !== 'string' || !message.trim()) throw fail('bad_param', 'Cần thông điệp commit')
-  await git(root, ['commit', '-q', '-m', message])
+/** Commit những gì đã stage; trả về mã commit ngắn. Không sửa commit đã xuất bản. */
+export async function gitCommit(root: string, message: unknown, amend = false): Promise<string> {
+  if (typeof message !== 'string' || !message.trim() || typeof amend !== 'boolean') throw fail('bad_param', 'Cần thông điệp commit hợp lệ')
+  if (amend && await gitHeadKnownPublished(root)) throw fail('git_failed', 'Không thể sửa commit đã xuất bản')
+  await git(root, ['commit', '-q', ...(amend ? ['--amend'] : []), '-m', message])
   return (await git(root, ['rev-parse', '--short', 'HEAD'])).trim()
 }
 
@@ -87,28 +173,31 @@ export async function gitCommit(root: string, message: unknown): Promise<string>
  * Phía không tồn tại (tệp mới, tệp đã xoá) là chuỗi rỗng.
  */
 export async function gitDiffSides(root: string, file: unknown, staged: boolean): Promise<{ before: string; after: string }> {
-  const [path] = safePaths(root, [file])
+  const path = relativePath(root, safePaths(root, [file])[0])
   const show = (spec: string) => git(root, ['show', spec]).catch(() => '')
   const rel = `./${path}`
   if (staged) return { before: await show(`HEAD:${rel}`), after: await show(`:${rel}`) }
   const after = await readFile(resolveInside(root, path), 'utf8').catch(() => '')
-  const indexed = await git(root, ['ls-files', '--', path])
-  return { before: indexed.trim() ? await show(`:${rel}`) : '', after }
+  const indexed = await git(root, ['ls-files', '-z', '--', `:(literal)${path}`])
+  return { before: indexed.split('\0').filter(Boolean).length ? await show(`:${rel}`) : '', after }
 }
 
 /** Blame từng dòng của bản trên đĩa (dòng chưa commit có `uncommitted`). */
 export async function gitBlame(root: string, file: unknown): Promise<GitBlameLine[]> {
-  const [path] = safePaths(root, [file])
+  const [input] = safePaths(root, [file])
+  const path = relativePath(root, input)
   const contents = await readFile(resolveInside(root, path), 'utf8')
   // --contents -: blame theo nội dung hiện tại để số dòng khớp editor kể cả khi tệp đã sửa.
-  const out = await new Promise<string>((resolve, reject) => {
-    const child = execFile('git', ['-c', 'core.quotepath=off', 'blame', '--porcelain', '--contents', '-', '--', path],
-      { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
-        if (error) reject(fail('git_failed', (stderr || String(error)).trim().split('\n').slice(-2).join('\n')))
-        else resolve(stdout)
-      })
-    child.stdin?.end(contents)
-  })
+  let done!: (value: string) => void
+  let failed!: (error: Error) => void
+  const outPromise = new Promise<string>((resolve, reject) => { done = resolve; failed = reject })
+  const child = execFile('git', ['-c', 'core.quotepath=off', 'blame', '--porcelain', '--contents', '-', '--', path],
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
+      if (error) failed(fail('git_failed', (stderr || String(error)).trim().split('\n').slice(-2).join('\n')))
+      else done(stdout)
+    })
+  child.stdin?.end(contents)
+  const out = await outPromise
   const commits = new Map<string, { author: string; time: number; summary: string }>()
   const lines: GitBlameLine[] = []
   let current: { sha: string; line: number } | null = null
@@ -127,3 +216,5 @@ export async function gitBlame(root: string, file: unknown): Promise<GitBlameLin
   }
   return lines
 }
+
+export { gitRestore, gitBranches, gitSwitchBranch, gitRemote, gitStashes, gitStashSave, gitStashAction } from './operations'
