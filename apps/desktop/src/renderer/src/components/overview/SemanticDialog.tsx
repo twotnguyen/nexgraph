@@ -6,10 +6,12 @@ import { vi } from '../../strings'
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 const num = (n: number) => n.toLocaleString('vi-VN')
 const SHOWN_FILES = 50
+const TITLE: Partial<Record<SemanticTarget, string>> = { labels: vi.semantic.labelsTitle, pr_triage: vi.semantic.triageTitle }
+const CONSENT: Partial<Record<SemanticTarget, string>> = { labels: vi.semantic.consentLabels, pr_triage: vi.semantic.consentTriage }
 
 interface Props {
   projectId: string
-  /** Cố định target (nút "Đặt tên cụm bằng AI"); bỏ trống thì cho chọn docs/deep/images/dedup. */
+  /** Cố định target (nút "Đặt tên cụm bằng AI", "Xếp hạng bằng AI" ở tab PR); bỏ trống thì cho chọn docs/deep/images/dedup. */
   target?: SemanticTarget
   onClose: () => void
   onSettings?: (s: ProjectAiSettings) => void
@@ -69,14 +71,14 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   const changed = !local && estimate !== null && model !== null && settings?.model !== model
   return (
     <div className="modal-backdrop">
-      <div role="dialog" aria-modal="true" aria-label={fixed === 'labels' ? vi.semantic.labelsTitle : vi.semantic.title} className="modal">
-        <h2>{fixed === 'labels' ? vi.semantic.labelsTitle : vi.semantic.title}</h2>
+      <div role="dialog" aria-modal="true" aria-label={(fixed && TITLE[fixed]) || vi.semantic.title} className="modal">
+        <h2>{(fixed && TITLE[fixed]) || vi.semantic.title}</h2>
         {settings && !settings.enabled && (
           <>
             <p>{vi.semantic.enableIntro}</p>
             <label><input type="radio" name="transport" checked={transport === 'app'} onChange={() => setTransport('app')} /> {vi.semantic.transportApp}</label>
             <label><input type="radio" name="transport" checked={transport === 'direct'} onChange={() => setTransport('direct')} /> {vi.semantic.transportDirect}</label>
-            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {fixed === 'labels' ? vi.semantic.consentLabels : vi.semantic.consent}</label>
+            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {(fixed && CONSENT[fixed]) || vi.semantic.consent}</label>
           </>
         )}
         {settings?.enabled && (
@@ -114,8 +116,11 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
         {job && <p role="status">{job.state === 'waiting_llm' ? vi.semantic.waiting : vi.semantic.running(job.files_done, job.files_total)}</p>}
         {result && (
           <div role="status" className="inline-message">
-            <p>{result.target === 'labels' ? vi.semantic.labelsDone(Object.keys(result.labels).length)
-              : result.target === 'dedup' ? vi.semantic.merged(result.merged) : vi.semantic.done(result.nodes_added, result.edges_added)}</p>
+            {result.target === 'pr_triage' ? (result.triage?.length
+              ? <ol>{result.triage.map((t) => <li key={t.number}>{vi.semantic.triageItem(t.number, t.priority, t.action)}</li>)}</ol>
+              : <p>{vi.semantic.triageEmpty}</p>)
+            : <p>{result.target === 'labels' ? vi.semantic.labelsDone(Object.keys(result.labels).length)
+              : result.target === 'dedup' ? vi.semantic.merged(result.merged) : vi.semantic.done(result.nodes_added, result.edges_added)}</p>}
             {result.chunks.failed > 0 && <p>{vi.semantic.failedChunks(result.chunks.failed)}</p>}
             {(result.usage.input_tokens > 0 || result.usage.output_tokens > 0) &&
               <p className="muted">{vi.semantic.cost(num(result.usage.input_tokens), num(result.usage.output_tokens))}</p>}

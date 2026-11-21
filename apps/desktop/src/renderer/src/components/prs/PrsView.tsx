@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SemanticDialog } from '../overview/SemanticDialog'
 import type { GraphNode, PrDetail, PrList } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { CanvasState } from '../common/CanvasState'
@@ -87,6 +88,7 @@ export function PrsView({ projectId, onOpenNode }: Props) {
   const [picked, setPicked] = useState<number | null>(null)
   const [detail, setDetail] = useState<PrDetail | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [triage, setTriage] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -113,7 +115,9 @@ export function PrsView({ projectId, onOpenNode }: Props) {
       <header className="report-head">
         <h2>{vi.prs.title}</h2>
         <span className="muted small">{vi.prs.base(list.repo ?? '', list.base)}</span>
+        {list.prs.length > 0 && <button type="button" onClick={() => setTriage(true)}>{vi.prs.triageAi}</button>}
       </header>
+      {triage && <SemanticDialog projectId={projectId} target="pr_triage" onClose={() => setTriage(false)} />}
       {list.truncated && <p className="warn">{vi.prs.truncated}</p>}
       <section>
         {list.prs.length === 0 ? <p className="muted">{vi.prs.empty}</p> : (

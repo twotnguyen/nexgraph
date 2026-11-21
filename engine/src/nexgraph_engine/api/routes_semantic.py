@@ -101,6 +101,22 @@ def put_ai(project_id: str, body: AiSettingsBody, request: Request) -> dict:
                                              model=body.model)
 
 
+def _prs(body, store: GraphStore, info) -> list[dict]:
+    """`pr_triage` không kèm `prs` (tab PR): lấy hàng PR mở qua `gh`, lọc theo SourcePolicy vì sẽ gửi cho model."""
+    if body.targets != "pr_triage" or body.prs:
+        return [p.model_dump() for p in body.prs]
+    from nexgraph_engine.prs import gh
+    from nexgraph_engine.prs.listing import list_prs_json, triage_items, triage_json
+    from nexgraph_engine.query.model_view import ModelGraph
+    try:
+        prs = triage_items(triage_json(list_prs_json(store, info.path, model=ModelGraph(store, info.path))))
+    except gh.GhError as exc:
+        raise exc.api_error() from exc
+    if not prs:
+        raise ApiError(400, "bad_param", "Không có pull request nào để xếp hạng")
+    return prs
+
+
 @router.post("/projects/{project_id}/semantic/estimate")
 def semantic_estimate(project_id: str, body: EstimateBody, request: Request) -> dict:
     services, info = _project(request, project_id)
@@ -108,7 +124,7 @@ def semantic_estimate(project_id: str, body: EstimateBody, request: Request) -> 
         store = GraphStore(conn)
         if not store.has_published_graph():
             raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục")
-        return estimate(plan(body.targets, store, _sources(services, info), [p.model_dump() for p in body.prs]), store,
+        return estimate(plan(body.targets, store, _sources(services, info), _prs(body, store, info)), store,
                         no_cache=body.no_cache)
 
 
@@ -117,11 +133,11 @@ def semantic_start(project_id: str, body: SemanticBody, request: Request):
     services, info = _project(request, project_id)
     if not services.registry.ai_settings(project_id)["enabled"]:
         raise ApiError(403, "ai_disabled", "Chưa bật phân tích bằng AI cho dự án này")
-    if body.targets == "pr_triage" and not body.prs:
-        raise ApiError(400, "bad_param", "pr_triage cần danh sách prs")
     with closing(open_graph_db(info.graph_db, read_only=True)) as conn:
-        if not GraphStore(conn).has_published_graph():
+        store = GraphStore(conn)
+        if not store.has_published_graph():
             raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục")
+        prs = _prs(body, store, info)
     if body.transport.kind == "direct":
         try:
             check_base_url(body.transport.base_url)
@@ -131,7 +147,7 @@ def semantic_start(project_id: str, body: SemanticBody, request: Request):
     else:
         transport = LlmQueue()
     work = make_work(graph_db=info.graph_db, src=_sources(services, info),
-                     req=SemanticRequest(body.targets, body.max_tokens_budget, [p.model_dump() for p in body.prs],
+                     req=SemanticRequest(body.targets, body.max_tokens_budget, prs,
                                          body.no_cache),
                      transport=transport,
                      on_written=lambda: services.bus.publish({"type": "graph_updated", "project_id": project_id}))

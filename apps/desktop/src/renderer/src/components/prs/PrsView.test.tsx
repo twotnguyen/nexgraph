@@ -30,6 +30,14 @@ const detail: PrDetail = {
 }
 
 describe('PrsView', () => {
+  it('nút Xếp hạng bằng AI mở hộp thoại đồng ý với target pr_triage', async () => {
+    const { api } = installNexgraph({ prs: { list: vi.fn(async () => list) } })
+    render(<PrsView projectId="p1" onOpenNode={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Xếp hạng bằng AI' }))
+    expect(await screen.findByRole('dialog', { name: 'Xếp hạng pull request bằng AI' })).toBeInTheDocument()
+    expect(api.semantic.getSettings).toHaveBeenCalledWith('p1')
+  })
+
   it('liệt kê PR với nhãn và xung đột', async () => {
     installNexgraph({ prs: { list: vi.fn(async () => list) } })
     render(<PrsView projectId="p1" onOpenNode={vi.fn()} />)

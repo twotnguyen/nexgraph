@@ -44,6 +44,19 @@ describe('SemanticDialog', () => {
     expect(await screen.findByText('Xong: đặt tên 2 cụm.')).toBeInTheDocument()
   })
 
+  it('xếp hạng pull request: hiện thứ tự và việc cần làm do AI đề xuất', async () => {
+    const triage = { ...done, result: { ...result, target: 'pr_triage', triage: [{ number: 8, priority: 1, action: 'Review ngay.' }] } }
+    const { api } = installNexgraph({
+      index: { status: vi.fn(async () => triage) },
+      semantic: { getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'openai / gpt-test' })) }
+    })
+    render(<SemanticDialog projectId="p1" target="pr_triage" onClose={() => {}} />)
+    expect(await screen.findByRole('dialog', { name: 'Xếp hạng pull request bằng AI' })).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'Đồng ý và chạy' }))
+    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'pr_triage', undefined, false)
+    expect(await screen.findByText('#8 · ưu tiên 1: Review ngay.')).toBeInTheDocument()
+  })
+
   it('không có tài liệu thì không cho chạy', async () => {
     installNexgraph({ semantic: {
       getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'm' })),

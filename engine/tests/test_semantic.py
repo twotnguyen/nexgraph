@@ -379,8 +379,6 @@ def test_pr_triage_returns_result_without_graph_write(api, docs_pid, llm):
     conn = graph(api, docs_pid)
     assert conn.execute("SELECT count(*) FROM nut").fetchone()[0] == before
     conn.close()
-    r = api.post(f"/v1/projects/{docs_pid}/semantic", json={"targets": "pr_triage", "transport": direct(llm)})
-    assert r.status_code == 400
 
 
 # --- sửa sau kiểm thử độc lập ---------------------------------------------------------------------
@@ -529,3 +527,22 @@ def test_no_cache_calls_model_again(api, docs_pid, llm):
     assert est["cached_chunks"] == 0
     job = wait_job(api, run(api, docs_pid, "docs", direct(llm), no_cache=True))
     assert job["result"]["chunks"]["cached"] == 0 and len(llm.requests) == 2 * sent
+
+
+def test_pr_triage_without_prs_lists_open_prs_from_gh(api, docs_pid, llm, monkeypatch):
+    """Tab PR (W7) chỉ gửi target: engine tự lấy hàng PR qua `gh`, bỏ PR sai nhánh gốc/cũ như triage theo luật."""
+    import gh_fake
+    from nexgraph_engine.prs import gh
+    enable(api, docs_pid)
+    gh_fake.install(monkeypatch, {})
+    llm.reply = lambda body: json.dumps({"triage": [{"number": 8, "priority": 1, "action": "Review ngay."}]})
+    est = api.post(f"/v1/projects/{docs_pid}/semantic/estimate", json={"targets": "pr_triage"})
+    assert est.status_code == 200 and est.json()["chunks"] == 1, est.text
+    job = wait_job(api, run(api, docs_pid, "pr_triage", direct(llm)))
+    assert job["state"] == "done", job
+    sent = llm.requests[0]["messages"][1]["content"]
+    assert "Sẵn sàng" in sent and "Sai nhánh gốc" not in sent
+    assert job["result"]["triage"] == [{"number": 8, "priority": 1, "action": "Review ngay."}]
+    gh_fake.install(monkeypatch, {("repo", "view"): gh.GhError("gh_missing", "x")})
+    r = api.post(f"/v1/projects/{docs_pid}/semantic", json={"targets": "pr_triage", "transport": direct(llm)})
+    assert r.status_code >= 400 and r.json()["error"]["code"] == "gh_missing"

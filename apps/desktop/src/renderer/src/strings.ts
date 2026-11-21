@@ -578,6 +578,7 @@ export const vi = {
     back: 'Dự án'
   },
   prs: {
+    triageAi: 'Xếp hạng bằng AI',
     tab: 'Pull request',
     loading: 'Đang tải pull request từ GitHub…',
     title: 'Pull request đang mở',
@@ -628,6 +629,7 @@ export const vi = {
   semantic: {
     title: 'Phân tích ngữ nghĩa bằng AI',
     labelsTitle: 'Đặt tên cụm bằng AI',
+    triageTitle: 'Xếp hạng pull request bằng AI',
     labelsCard: 'Đặt tên cụm bằng AI',
     labelsDesc: 'Gửi tên node của mỗi cụm (không gửi mã) để AI đặt tên dễ hiểu.',
     cardDesc: 'Rút khái niệm từ tài liệu, PDF, bản chép lời và ảnh. Mã nguồn không được gửi.',
@@ -638,6 +640,7 @@ export const vi = {
     transportDirect: 'Engine gọi trực tiếp API tương thích OpenAI (Ollama, nhà cung cấp tuỳ chỉnh có API key)',
     consent: 'Tôi đồng ý gửi tài liệu của dự án này tới nhà cung cấp AI đã chọn',
     consentLabels: 'Tôi đồng ý gửi tên symbol và tên tệp của từng cụm (không gửi mã nguồn) tới nhà cung cấp AI đã chọn',
+    consentTriage: 'Tôi đồng ý gửi tiêu đề, trạng thái và tác giả của các pull request đang mở (không gửi mã nguồn) tới nhà cung cấp AI đã chọn',
     sends: {
       docs: 'Sẽ gửi: nội dung tài liệu, PDF, bản chép lời (không gửi mã nguồn).',
       deep: 'Sẽ gửi: nội dung tài liệu, PDF, bản chép lời (không gửi mã nguồn).',
@@ -675,6 +678,8 @@ export const vi = {
     close: 'Đóng',
     done: (nodes: number, edges: number) => `Xong: thêm ${nodes} node, ${edges} quan hệ suy luận bởi AI.`,
     labelsDone: (n: number) => `Xong: đặt tên ${n} cụm.`,
+    triageItem: (n: number, priority: number, action: string) => `#${n} · ưu tiên ${priority}: ${action}`,
+    triageEmpty: 'AI không trả về thứ tự nào.',
     merged: (n: number) => `Xong: gộp ${n} khái niệm trùng.`,
     failedChunks: (n: number) => `${n} khối lỗi (model trả kết quả hỏng hoặc không gọi được).`,
     cost: (input: string, output: string) => `Đã dùng ${input} token đầu vào, ${output} token đầu ra.`,

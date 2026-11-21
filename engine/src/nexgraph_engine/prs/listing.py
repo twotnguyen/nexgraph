@@ -123,6 +123,13 @@ def triage_json(listing: dict) -> dict:
                         "nodes_affected": p["nodes_affected"], "action": _ACTIONS[p["status"]]} for p in ranked]}
 
 
+def triage_items(triage: dict) -> list[dict]:
+    """Hàng PR của `triage_json` theo dạng `prs` của job semantic `pr_triage` (W9): chỉ metadata, không có mã."""
+    return [{"number": p["number"], "title": p["title"][:500], "status": p["status"], "ci": p["ci"] or "",
+             "review": p["review"] or "", "age_days": max(0, p["days_old"]), "author": (p["author"] or "")[:100],
+             "blast_radius": f"{p['nodes_affected']} nodes"} for p in triage["ranked"][:200]]
+
+
 def triage_prompt(triage: dict) -> str:
     """Điểm móc cho job `semantic` với `targets="pr_triage"` (W9): prompt giống `triage_with_opus` của graphify.
     Engine không tự gọi LLM ở đây."""
