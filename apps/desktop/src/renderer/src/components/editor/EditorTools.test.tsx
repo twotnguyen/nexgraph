@@ -5,6 +5,7 @@ import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, Lsp
 import type { EditorHandle } from './monaco'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { runCommand } from '../../state/commands'
+import { getEditorPrefs, setEditorPrefs } from '../../state/editorPrefs'
 import { installNexgraph } from '../../test-utils'
 import { EditorTools } from './EditorTools'
 
@@ -21,7 +22,11 @@ function handle(): EditorHandle {
 const props = (active: ActiveEditor) => ({ projectId: 'p1', editor: active, symbols: [], symbolsError: null,
   onOpen: vi.fn(), onDiagnostics: vi.fn(), onError: vi.fn() })
 
-beforeEach(() => { localStorage.clear() })
+beforeEach(() => {
+  localStorage.clear()
+  setEditorPrefs({ lineNumbers: true, minimap: false, renderWhitespace: 'selection', stickyScroll: false, breadcrumbs: true,
+    inlayHints: false, semanticHighlighting: false, codeLens: false, colorizeBrackets: false })
+})
 
 describe('EditorTools', () => {
   it('previews go-to-line input and restores scroll on escape', () => {
@@ -195,6 +200,67 @@ describe('EditorTools E3', () => {
       act(() => { runCommand('editor.call_hierarchy_incoming') })
       expect(p.onError).toHaveBeenCalledWith('Phân cấp lời gọi không dùng được trong tệp này.')
     })
+  })
+})
+
+describe('EditorTools view commands', () => {
+  const setup = (over: Partial<EditorHandle> = {}) => {
+    const runAction = vi.fn(async (_id: string) => {})
+    const active = { file: 'a.ts', handle: { ...handle(), runAction, ...over } as EditorHandle, text: () => 'one\ntwo\nthree' }
+    return { ...props(active), runAction }
+  }
+
+  it('persists toggles issued from the command palette', () => {
+    render(<EditorTools {...setup()} />)
+    act(() => { runCommand('editor.toggle_minimap') })
+    act(() => { runCommand('editor.toggle_whitespace') })
+    act(() => { runCommand('editor.toggle_line_numbers') })
+    expect(getEditorPrefs()).toMatchObject({ minimap: true, renderWhitespace: 'trailing', lineNumbers: false })
+    expect(JSON.parse(localStorage.getItem('nexgraph.editor.preferences')!)).toMatchObject({ minimap: true, renderWhitespace: 'trailing', lineNumbers: false })
+  })
+
+  it('runs the real Monaco multi-cursor and line actions', () => {
+    const p = setup()
+    render(<EditorTools {...p} />)
+    const ids = ['editor.select_next_occurrence', 'editor.select_all_occurrences', 'editor.add_cursor_above', 'editor.add_cursor_below',
+      'editor.move_line_up', 'editor.move_line_down', 'editor.duplicate_line', 'editor.toggle_comment']
+    for (const id of ids) act(() => { runCommand(id) })
+    expect(p.runAction.mock.calls.map(([id]) => id)).toEqual([
+      'editor.action.addSelectionToNextFindMatch', 'editor.action.selectHighlights', 'editor.action.insertCursorAbove',
+      'editor.action.insertCursorBelow', 'editor.action.moveLinesUpAction', 'editor.action.moveLinesDownAction',
+      'editor.action.copyLinesDownAction', 'editor.action.commentLine'
+    ])
+  })
+
+  it('copies the selection with common indentation removed and never edits the buffer', async () => {
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const setValue = vi.fn()
+    const active = { file: 'a.ts', handle: { ...handle(), setValue, runAction: vi.fn(async () => {}),
+      getSelection: () => ({ text: '    one\n      two\n\n    three', start: 1, end: 4 }) }, text: () => 'root text' }
+    const p = props(active)
+    render(<EditorTools {...p} />)
+    act(() => { runCommand('editor.copy_and_trim') })
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('one\n  two\n\nthree'))
+    expect(setValue).not.toHaveBeenCalled()
+    expect(p.onError).not.toHaveBeenCalled()
+  })
+
+  it('copies the cursor line when nothing is selected', async () => {
+    const writeText = vi.fn(async (_text: string) => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const active = { file: 'a.ts', handle: handle(), text: () => 'one\n      two\nthree' }
+    render(<EditorTools {...props(active)} />)
+    act(() => { runCommand('editor.copy_and_trim') })
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('two'))
+  })
+
+  it('reports clipboard failures from copy and trim', async () => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(async () => { throw new Error('Không có clipboard') }) }, configurable: true })
+    const p = props({ file: 'a.ts', handle: handle(), text: () => 'one\ntwo\nthree' })
+    render(<EditorTools {...p} />)
+    act(() => { runCommand('editor.copy_and_trim') })
+    await waitFor(() => expect(p.onError).toHaveBeenCalledWith('Không có clipboard'))
   })
 })
 })

@@ -9,9 +9,10 @@ import { installNexgraph } from '../../test-utils'
 const revealLines = vi.hoisted(() => vi.fn())
 const revealPosition = vi.hoisted(() => vi.fn())
 const setBookmarks = vi.hoisted(() => vi.fn())
-const cursorPosition = vi.hoisted(() => ({ line: 1, column: 1 }))
+const setEOL = vi.hoisted(() => vi.fn())
+const setLanguage = vi.hoisted(() => vi.fn())
 const created = vi.hoisted(() => vi.fn())
-
+const cursorPosition = vi.hoisted(() => ({ line: 1, column: 1 }))
 // jsdom không chạy Monaco: thay bằng một <textarea> có cùng giao diện EditorHandle.
 vi.mock('./monaco', () => ({
   languageFor: (f: string) => (f.endsWith('.dart') ? 'dart' : 'plaintext'),
@@ -35,14 +36,20 @@ vi.mock('./monaco', () => ({
       setBookmarks,
       revealPosition,
       revealLines,
+      setEOL,
       setReadOnly: (v: boolean) => { ta.readOnly = v },
+      getLanguage: () => opts.language,
+      setLanguage,
       dispose: () => ta.remove()
     }
   }
 }))
 
 import { EditorTab, type EditorContextGetter } from './EditorTab'
+import { setEditorPrefs } from '../../state/editorPrefs'
+import { setLocale } from '../../state/locale'
 import { listBookmarks, toggleBookmark } from '../../state/bookmarks'
+import { getActiveEditor } from '../../state/activeEditor'
 import { runCommand } from '../../state/commands'
 
 const revision = (mtimeMs: number): FileRevision => ({ mtimeMs, version: `version-${mtimeMs}` })
@@ -78,8 +85,10 @@ function pending<T>() {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  setLocale('vi')
   localStorage.clear()
+  setEditorPrefs({ breadcrumbs: true })
+  document.body.innerHTML = '<div id="status-bar-right"></div>'
   cursorPosition.line = 1
   cursorPosition.column = 1
 })
@@ -359,6 +368,18 @@ describe('EditorTab', () => {
     await waitFor(() => expect(write).toHaveBeenCalledTimes(1))
     expect(write).toHaveBeenCalledWith('p1', 'lib/b.dart', 'void a() {}\nB', expect.anything())
   })
+  it('picker commands open only on the visible tab', async () => {
+    installNexgraph({ fs: { read: vi.fn(async () => content()) } })
+    const base = { projectId: 'p-pickers', line: 1, onClose: vi.fn(), onDirtyChange: vi.fn() }
+    render(<><EditorTab {...base} file="lib/hidden.dart" active={false} /><EditorTab {...base} file="lib/shown.dart" /></>)
+    await screen.findAllByLabelText('editor')
+    await act(async () => {})
+    expect(runCommand('editor.select_line_ending')).toBe(true)
+    expect(await screen.findByRole('dialog', { name: 'Kiểu xuống dòng' })).toBeTruthy()
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Kiểu xuống dòng' }), { key: 'Escape' })
+    expect(runCommand('editor.select_language')).toBe(true)
+    expect(await screen.findByRole('dialog', { name: 'Ngôn ngữ' })).toBeTruthy()
+  })
 
   it('lỗi đọc hiện thông báo theo code', async () => {
     installNexgraph({ fs: { read: vi.fn(async () => { throw rejection('file_not_found') }) } })
@@ -411,5 +432,75 @@ describe('EditorTab', () => {
     cursorPosition.line = 3
     runCommand('editor.previous_bookmark')
     expect(revealPosition).toHaveBeenLastCalledWith(7, 1)
+  })
+})
+
+describe('EditorTab view controls', () => {
+  const open = (over: Parameters<typeof installNexgraph>[0] = {}, column = 1) => {
+    const write = vi.fn<NexGraphApi['fs']['write']>(async () => revision(200))
+    installNexgraph({ fs: { read: vi.fn(async () => content()), write }, ...over })
+    if (over.lsp) (window.nexgraph as unknown as { lsp: unknown }).lsp = over.lsp
+    render(<EditorTab projectId="p1" file="src/math.ts" line={1} column={column} active onClose={vi.fn()} onDirtyChange={vi.fn()} />)
+    return { write }
+  }
+  const ready = async () => {
+    await box()
+    await waitFor(() => expect(document.querySelector('#status-bar-right')?.childElementCount).toBeGreaterThan(0))
+  }
+
+  it('shows the symbol at the cursor in the breadcrumb and hides it when toggled', async () => {
+    const symbol = { name: 'twice', kind: 6, range: { start: { line: 0, character: 0 }, end: { line: 4, character: 0 } },
+      selectionRange: { start: { line: 0, character: 9 }, end: { line: 0, character: 14 } } }
+    cursorPosition.line = 1
+    cursorPosition.column = 12
+    const documentSymbols = vi.fn(async () => [symbol])
+    open({ lsp: { documentSymbols, open: vi.fn(async () => {}), close: vi.fn(async () => {}) } }, 12)
+    expect((window.nexgraph as unknown as { lsp: { documentSymbols: unknown } }).lsp.documentSymbols).toBe(documentSymbols)
+    await waitFor(() => expect(getActiveEditor()?.file).toBe('src/math.ts'))
+    await waitFor(() => expect(documentSymbols).toHaveBeenCalled())
+    expect(await screen.findByText('twice()')).toBeTruthy()
+    expect(screen.getByLabelText('Đường dẫn tệp src/math.ts').textContent).toContain('math.ts')
+    await act(async () => { setEditorPrefs({ breadcrumbs: false }) })
+    expect(screen.queryByLabelText('Đường dẫn tệp src/math.ts')).toBeNull()
+    expect(screen.queryByText('twice()')).toBeNull()
+  })
+
+  it('changes the buffer EOL from the status bar picker and saves it', async () => {
+    const { write } = open()
+    await ready()
+    await userEvent.click(screen.getByTitle('Kiểu xuống dòng'))
+    expect(screen.getByRole('dialog', { name: 'Kiểu xuống dòng' })).toBeTruthy()
+    await userEvent.click(screen.getByText('LF'))
+    expect(setEOL).toHaveBeenCalledWith('\n')
+    expect(screen.getByTitle('Kiểu xuống dòng').textContent).toBe('LF')
+    expect(screen.getByText('Chưa lưu')).toBeTruthy()
+    await userEvent.keyboard('{Control>}s{/Control}')
+    await waitFor(() => expect(write).toHaveBeenCalledWith('p1', 'src/math.ts', 'void a() {}\n', { eol: '\n', bom: true, expectedVersion: 'version-100' }))
+    expect(await screen.findByText('Đã lưu')).toBeTruthy()
+  })
+
+  it('changes the model language from the status bar picker', async () => {
+    open()
+    await ready()
+    await userEvent.click(screen.getByTitle('Ngôn ngữ'))
+    const dialog = screen.getByRole('dialog', { name: 'Ngôn ngữ' })
+    await userEvent.click(within(dialog).getByText('TypeScript'))
+    expect(setLanguage).toHaveBeenCalledWith('typescript')
+    expect(screen.getByTitle('Ngôn ngữ').textContent).toBe('TypeScript')
+  })
+  it('translates language options after switching locale', async () => {
+    setLocale('en')
+    open()
+    await ready()
+    act(() => { expect(runCommand('editor.select_language')).toBe(true) })
+    const dialog = screen.getByRole('dialog', { name: 'Language' })
+    expect(within(dialog).getByText('Plain text')).toBeTruthy()
+  })
+
+  it('explains why the encoding cannot be changed', async () => {
+    open()
+    await ready()
+    await userEvent.click(screen.getByTitle('Bảng mã'))
+    expect((await screen.findByRole('status')).textContent).toContain('engine chỉ lưu UTF-8')
   })
 })

@@ -41,13 +41,27 @@ export type EditorPrefs = {
   blameDelay: number
   /** Inline blame kèm tóm tắt commit. */
   blameSummary: boolean
+  lineNumbers: boolean
+  minimap: boolean
+  renderWhitespace: 'none' | 'boundary' | 'selection' | 'trailing' | 'all'
+  stickyScroll: boolean
+  breadcrumbs: boolean
+  inlayHints: boolean
+  semanticHighlighting: boolean
+  codeLens: boolean
+  colorizeBrackets: boolean
 }
 
 const STORE = 'nexgraph.editor.preferences'
 const DEFAULTS: EditorPrefs = {
   fontSize: 13, terminalFontSize: 12, tabSize: 4, wordWrap: 'off', formatOnSave: false,
-  autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols', blameDelay: 0, blameSummary: true
+  autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols', blameDelay: 0, blameSummary: true,
+  lineNumbers: true, minimap: false, renderWhitespace: 'selection', stickyScroll: false,
+  breadcrumbs: true, inlayHints: false, semanticHighlighting: false,
+  codeLens: false, colorizeBrackets: false
 }
+const boolIn = (value: unknown, fallback: boolean): boolean => typeof value === 'boolean' ? value : fallback
+const WHITESPACE = ['none', 'boundary', 'selection', 'trailing', 'all'] as const
 const numberIn = (value: unknown, fallback: number, min: number, max: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback
 
@@ -67,7 +81,16 @@ export function parseEditorPrefs(raw: string | null): EditorPrefs {
     autoSaveDelay: numberIn(value.autoSaveDelay, DEFAULTS.autoSaveDelay, 1, 2147483647),
     iconTheme: value.iconTheme === 'mono' ? 'mono' : 'symbols',
     blameDelay: numberIn(value.blameDelay, DEFAULTS.blameDelay, 0, 5000),
-    blameSummary: value.blameSummary !== false
+    blameSummary: value.blameSummary !== false,
+    lineNumbers: boolIn(value.lineNumbers, DEFAULTS.lineNumbers),
+    minimap: boolIn(value.minimap, DEFAULTS.minimap),
+    renderWhitespace: WHITESPACE.find((mode) => mode === value.renderWhitespace) ?? DEFAULTS.renderWhitespace,
+    stickyScroll: boolIn(value.stickyScroll, DEFAULTS.stickyScroll),
+    breadcrumbs: boolIn(value.breadcrumbs, DEFAULTS.breadcrumbs),
+    inlayHints: boolIn(value.inlayHints, DEFAULTS.inlayHints),
+    semanticHighlighting: boolIn(value.semanticHighlighting, DEFAULTS.semanticHighlighting),
+    codeLens: boolIn(value.codeLens, DEFAULTS.codeLens),
+    colorizeBrackets: boolIn(value.colorizeBrackets, DEFAULTS.colorizeBrackets)
   }
 }
 

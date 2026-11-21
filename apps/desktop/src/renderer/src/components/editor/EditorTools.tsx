@@ -8,6 +8,7 @@ import { largerSymbolAt, positionInRange, previousFromHistory, siblingSymbol, sm
 import { Highlight, Picker } from '../layout/Picker'
 import * as editorMonaco from './monaco'
 import { parseGoToLine } from './goToLine'
+import { getEditorPrefs, setEditorPrefs } from '../../state/editorPrefs'
 import type { OpenEditorLocation } from './EditorPanels'
 import './editor-tools.css'
 
@@ -231,7 +232,8 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   }
   const action = (id: string) => {
     if (!editor) return
-    void editor.handle.runAction?.(id).catch((error: unknown) => onError(errorText(error)))
+    if (!editor.handle.runAction) return
+    void editor.handle.runAction(id).catch((error: unknown) => onError(errorText(error)))
   }
   const locations = async (kind: 'references' | 'implementation') => {
     if (!editor) return
@@ -259,6 +261,17 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
       if (!published) onError(tr('Lưu ý: commit HEAD chưa có trên remote nên liên kết có thể không mở được. Hãy push trước khi chia sẻ.'))
     } catch (error) { onError(errorText(error)) }
   }
+  const copyTrimmed = async () => {
+    if (!editor) return
+    const position = editor.handle.getPosition?.()
+    const source = editor.handle.getSelection?.()?.text
+      ?? (position ? editor.text().split('\n')[position.line - 1] ?? '' : editor.text())
+    const lines = source.replace(/\r\n?/g, '\n').split('\n')
+    const indents = lines.filter((line) => line.trim()).map((line) => /^[ \t]*/.exec(line)?.[0].length ?? 0)
+    const cut = indents.length ? Math.min(...indents) : 0
+    const text = lines.map((line) => line.replace(/^[ \t]*/, (space) => space.slice(cut))).join(editor.handle.getEOL?.() ?? '\n')
+    try { await navigator.clipboard.writeText(text) } catch (error) { onError(errorText(error)) }
+  }
   useCommand('editor.goto_line', () => { if (editor) open({ kind: 'goto', editor }) }, !!editor)
   useCommand('editor.document_symbols', () => { if (editor) open({ kind: 'document', editor }) }, !!editor)
   useCommand('editor.workspace_symbols', () => open({ kind: 'workspace' }))
@@ -278,6 +291,29 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   useCommand('editor.call_hierarchy_outgoing', () => void hierarchy('outgoing'), !!editor)
   useCommand('git.copy_permalink', () => void permalink(true), !!editor)
   useCommand('git.open_permalink', () => void permalink(false), !!editor)
+  useCommand('editor.toggle_line_numbers', () => setEditorPrefs({ lineNumbers: !getEditorPrefs().lineNumbers }))
+  useCommand('editor.toggle_minimap', () => setEditorPrefs({ minimap: !getEditorPrefs().minimap }))
+  useCommand('editor.toggle_soft_wrap', () => setEditorPrefs({ wordWrap: getEditorPrefs().wordWrap === 'on' ? 'off' : 'on' }))
+  useCommand('editor.toggle_whitespace', () => {
+    const modes = ['none', 'boundary', 'selection', 'trailing', 'all'] as const
+    const current = getEditorPrefs().renderWhitespace
+    setEditorPrefs({ renderWhitespace: modes[(modes.indexOf(current) + 1) % modes.length] })
+  })
+  useCommand('editor.toggle_sticky_scroll', () => setEditorPrefs({ stickyScroll: !getEditorPrefs().stickyScroll }))
+  useCommand('editor.toggle_breadcrumbs', () => setEditorPrefs({ breadcrumbs: !getEditorPrefs().breadcrumbs }))
+  useCommand('editor.toggle_inlay_hints', () => setEditorPrefs({ inlayHints: !getEditorPrefs().inlayHints }))
+  useCommand('editor.toggle_semantic_highlights', () => setEditorPrefs({ semanticHighlighting: !getEditorPrefs().semanticHighlighting }))
+  useCommand('editor.toggle_code_lens', () => setEditorPrefs({ codeLens: !getEditorPrefs().codeLens }))
+  useCommand('editor.toggle_colorize_brackets', () => setEditorPrefs({ colorizeBrackets: !getEditorPrefs().colorizeBrackets }))
+  useCommand('editor.select_next_occurrence', () => action('editor.action.addSelectionToNextFindMatch'), !!editor)
+  useCommand('editor.select_all_occurrences', () => action('editor.action.selectHighlights'), !!editor)
+  useCommand('editor.add_cursor_above', () => action('editor.action.insertCursorAbove'), !!editor)
+  useCommand('editor.add_cursor_below', () => action('editor.action.insertCursorBelow'), !!editor)
+  useCommand('editor.move_line_up', () => action('editor.action.moveLinesUpAction'), !!editor)
+  useCommand('editor.move_line_down', () => action('editor.action.moveLinesDownAction'), !!editor)
+  useCommand('editor.duplicate_line', () => action('editor.action.copyLinesDownAction'), !!editor)
+  useCommand('editor.copy_and_trim', () => { void copyTrimmed() }, !!editor)
+  useCommand('editor.toggle_comment', () => action('editor.action.commentLine'), !!editor)
   if (!mode) return null
   if (mode.kind === 'goto') return <GoToLineDialog editor={mode.editor} close={close} />
   if (mode.kind === 'rename') return <RenameDialog projectId={projectId} editor={mode.editor} close={close} />

@@ -114,6 +114,10 @@ export interface EditorHandle {
   watchChanges?(cb: () => void): () => void
   getPosition?(): { line: number; column: number }
   getLineCount?(): number
+  getEOL?(): '\n' | '\r\n'
+  setEOL?(eol: '\n' | '\r\n'): void
+  getLanguage?(): string
+  setLanguage?(language: string): void
   getWordAtCursor?(): string
   getScrollPosition?(): { top: number; left: number }
   setScrollPosition?(position: { top: number; left: number }): void
@@ -380,6 +384,10 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     watchChanges: (cb) => { const disposable = editor.onDidChangeModelContent(cb); return () => disposable.dispose() },
     getPosition: () => { const p = editor.getPosition(); return { line: p?.lineNumber ?? 1, column: p?.column ?? 1 } },
     getLineCount: () => editor.getModel()?.getLineCount() ?? 1,
+    getEOL: () => (editor.getModel()?.getEOL() === '\r\n' ? '\r\n' : '\n'),
+    setEOL: (eol) => editor.getModel()?.pushEOL(eol === '\r\n' ? monaco.editor.EndOfLineSequence.CRLF : monaco.editor.EndOfLineSequence.LF),
+    getLanguage: () => editor.getModel()?.getLanguageId() ?? opts.language,
+    setLanguage: (language) => { const model = editor.getModel(); if (model) monaco.editor.setModelLanguage(model, language) },
     getWordAtCursor: () => { const p = editor.getPosition(); return p ? editor.getModel()?.getWordAtPosition(p)?.word ?? '' : '' },
     getScrollPosition: () => ({ top: editor.getScrollTop(), left: editor.getScrollLeft() }),
     setScrollPosition: ({ top, left }) => editor.setScrollPosition({ scrollTop: top, scrollLeft: left }),
@@ -399,7 +407,12 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
       editor.setSelection(range)
       editor.revealRangeInCenter(range)
     },
-    runAction: async (id) => { editor.focus(); await editor.getAction(id)?.run() },
+    runAction: async (id) => {
+      editor.focus()
+      const found = editor.getAction(id)
+      if (!found) throw new Error(tr('Lệnh editor "{id}" không có trong phiên bản Monaco này.', { id }))
+      await found.run()
+    },
     formatDocument: async () => { await editor.getAction('editor.action.formatDocument')?.run() },
     onCursor: (cb) => void editor.onDidChangeCursorPosition((e) => cb(e.position.lineNumber, e.position.column)),
     revealLines: (start, end = start) => {

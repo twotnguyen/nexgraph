@@ -77,6 +77,27 @@ export const COMMANDS: CommandDef[] = [
   { id: 'editor.call_hierarchy_incoming', category: 'Editor', title: 'Xem lời gọi đến', key: 'mod+k mod+h' },
   { id: 'editor.call_hierarchy_outgoing', category: 'Editor', title: 'Xem lời gọi đi', key: 'mod+alt+h' },
   { id: 'editor.open_multibuffer', category: 'Editor', title: 'Mở multibuffer', key: 'mod+k mod+m' },
+  { id: 'editor.toggle_line_numbers', category: 'Editor', title: 'Bật/tắt số dòng', key: 'mod+;' },
+  { id: 'editor.toggle_minimap', category: 'Editor', title: 'Bật/tắt bản đồ thu nhỏ', key: 'mod+alt+m' },
+  { id: 'editor.toggle_soft_wrap', category: 'Editor', title: 'Bật/tắt xuống dòng mềm', key: 'mod+k z' },
+  { id: 'editor.toggle_whitespace', category: 'Editor', title: 'Bật/tắt khoảng trắng', key: 'mod+k mod+w' },
+  { id: 'editor.toggle_sticky_scroll', category: 'Editor', title: 'Bật/tắt cuộn dính', key: 'mod+alt+s' },
+  { id: 'editor.toggle_breadcrumbs', category: 'Editor', title: 'Bật/tắt thanh điều hướng', key: 'mod+alt+shift+c' }, // mod+alt+b thuộc Implementation của base JetBrains
+  { id: 'editor.toggle_inlay_hints', category: 'Editor', title: 'Bật/tắt gợi ý trong dòng', key: 'mod+alt+shift+i' }, // mod+ctrl+i của base VS Code thành mod+alt+i ngoài macOS
+  { id: 'editor.toggle_semantic_highlights', category: 'Editor', title: 'Bật/tắt tô sáng ngữ nghĩa', key: 'mod+alt+shift+s' },
+  { id: 'editor.toggle_code_lens', category: 'Editor', title: 'Bật/tắt Code Lens', key: 'mod+alt+shift+l' }, // mod+alt+l thuộc Reformat Code của base JetBrains
+  { id: 'editor.toggle_colorize_brackets', category: 'Editor', title: 'Bật/tắt tô màu ngoặc', key: 'mod+alt+shift+b' },
+  { id: 'editor.select_next_occurrence', category: 'Editor', title: 'Chọn lần xuất hiện tiếp theo', key: 'mod+d' },
+  { id: 'editor.select_all_occurrences', category: 'Editor', title: 'Chọn tất cả lần xuất hiện', key: 'mod+alt+shift+a' }, // mod+shift+l thuộc Chat của base JetBrains
+  { id: 'editor.add_cursor_above', category: 'Editor', title: 'Thêm con trỏ phía trên', key: 'mod+alt+shift+arrowup' }, // mod+alt+arrowup là Syntax Node trước đó ngoài macOS
+  { id: 'editor.add_cursor_below', category: 'Editor', title: 'Thêm con trỏ phía dưới', key: 'mod+alt+shift+arrowdown' }, // mod+alt+arrowdown là Syntax Node tiếp theo ngoài macOS
+  { id: 'editor.move_line_up', category: 'Editor', title: 'Di chuyển dòng lên', key: 'alt+arrowup' },
+  { id: 'editor.move_line_down', category: 'Editor', title: 'Di chuyển dòng xuống', key: 'alt+arrowdown' },
+  { id: 'editor.duplicate_line', category: 'Editor', title: 'Nhân đôi dòng', key: 'alt+shift+arrowdown' },
+  { id: 'editor.copy_and_trim', category: 'Editor', title: 'Sao chép và cắt bỏ', key: 'mod+k c' },
+  { id: 'editor.toggle_comment', category: 'Editor', title: 'Bật/tắt chú thích', key: 'mod+/' },
+  { id: 'editor.select_line_ending', category: 'Editor', title: 'Chọn kết thúc dòng' },
+  { id: 'editor.select_language', category: 'Editor', title: 'Chọn ngôn ngữ', key: 'mod+k l' },
   { id: 'markdown.preview', category: 'Markdown', title: 'Mở / đóng xem trước Markdown', key: 'mod+shift+v' },
   { id: 'markdown.preview_side', category: 'Markdown', title: 'Xem trước Markdown bên cạnh', key: 'mod+k v' },
   { id: 'table.preview', category: 'CSV/TSV', title: 'Chuyển giữa dạng bảng và mã nguồn' },

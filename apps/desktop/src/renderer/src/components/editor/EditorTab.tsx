@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { FileContent, GitBlameLine } from '@shared/api'
+import type { FileContent, GitBlameLine, LspDocumentSymbol } from '@shared/api'
 import type { AgentContextItem } from '@shared/agent-types'
 import { vi, tr } from '../../strings'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
@@ -16,6 +16,10 @@ import { useDiagnostics } from '../../state/diagnostics'
 import { runCommand, useCommand } from '../../state/commands'
 import { listBookmarks, nextBookmark, subscribeBookmarks, toggleBookmark } from '../../state/bookmarks'
 import './editor-tab.css'
+import { largerSymbolAt, smallestSymbolAt } from '../../state/syntaxSelection'
+import { useActiveEditor } from '../../state/activeEditor'
+import { useDocumentSymbols } from './EditorPanels'
+import { Picker } from '../layout/Picker'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
 
@@ -53,6 +57,26 @@ const LANGUAGE_NAMES: Record<string, string> = {
   python: 'Python', dart: 'Dart', csharp: 'C#', json: 'JSON', yaml: 'YAML',
   markdown: 'Markdown', html: 'HTML', css: 'CSS'
 }
+const FUNCTION_KINDS = new Set([6, 8, 9])
+const EOL_OPTIONS = [{ id: '\n', name: 'LF' }, { id: '\r\n', name: 'CRLF' }] as const
+const languageOptions = () => [{ id: 'plaintext', name: tr('Văn bản thuần') }, ...Object.entries(LANGUAGE_NAMES).map(([id, name]) => ({ id, name }))]
+
+const symbolLabel = (symbol: LspDocumentSymbol): string =>
+  FUNCTION_KINDS.has(symbol.kind) && !symbol.name.endsWith('()') ? `${symbol.name}()` : symbol.name
+
+/** Ký hiệu chứa con trỏ cùng các ký hiệu bao ngoài, theo thứ tự từ gốc tới lá. */
+function symbolTrail(symbols: readonly LspDocumentSymbol[], line: number, column: number): LspDocumentSymbol[] {
+  const position = { line: line - 1, character: column - 1 }
+  const leaf = smallestSymbolAt(symbols, position)
+  if (!leaf) return []
+  const trail = [leaf]
+  let parent = largerSymbolAt(symbols, leaf, position)
+  while (parent) {
+    trail.unshift(parent)
+    parent = largerSymbolAt(symbols, parent, position)
+  }
+  return trail
+}
 
 function explain(e: { code?: string; message?: string }): string {
   if (e?.code === 'file_not_found') return vi.editor.missing
@@ -72,7 +96,7 @@ export function blameText(line: GitBlameLine, now = Date.now(), summary = true):
 export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onViewTable, onReadOnlyChange, onLoadError }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
-  const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void; blur: () => void } | null>(null)
+  const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void; blur: () => void; eolChanged: () => void } | null>(null)
   const dirty = useRef(false)
   const contextCallback = useRef(onContextReady)
   contextCallback.current = onContextReady
@@ -88,6 +112,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const [reloading, setReloading] = useState(false)
   const [ready, setReady] = useState(false)
   const [format, setFormat] = useState<EditorFormat | null>(null)
+  const formatRef = useRef<EditorFormat | null>(null)
+  formatRef.current = format
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
   const [modified, setModified] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
@@ -95,9 +121,13 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const vim = useVimMode()
   const [vimNode, setVimNode] = useState<HTMLElement | null>(null)
   const blameOn = useBlame()
-  const { blameDelay, blameSummary } = useEditorPrefs()
+  const { blameDelay, blameSummary, breadcrumbs } = useEditorPrefs()
   const [blame, setBlameLines] = useState<Map<number, GitBlameLine> | null>(null)
   const diagnostics = useDiagnostics(projectId)
+  const [picker, setPicker] = useState<'eol' | 'language' | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const activeEditor = useActiveEditor()
+  const symbols = useDocumentSymbols(projectId, activeEditor?.file === file ? activeEditor : null)
   const problems = Object.values(diagnostics).flat()
   const errorCount = problems.filter((item) => (item.severity ?? 1) === 1).length
   const warningCount = problems.filter((item) => item.severity === 2).length
@@ -126,6 +156,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   useCommand('editor.toggle_bookmark', toggleAtCursor, active && ready)
   useCommand('editor.next_bookmark', () => stepBookmark(1), active && ready)
   useCommand('editor.previous_bookmark', () => stepBookmark(-1), active && ready)
+  useCommand('editor.select_line_ending', () => { if (active && ready) setPicker('eol') }, active && ready)
+  useCommand('editor.select_language', () => { if (active && ready) setPicker('language') }, active && ready)
 
   const setDirty = useCallback((d: boolean) => {
     if (dirty.current === d) return
@@ -166,7 +198,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
     const updateDirty = () => {
       if (!open) return
       const text = open.editor.getValue()
-      setDirty(text !== open.base.text || (writing !== undefined && text !== writing)
+      const eol = formatRef.current?.eol ?? open.base.eol
+      setDirty(text !== open.base.text || eol !== open.base.eol || (writing !== undefined && text !== writing)
         || (pendingSave !== undefined && text !== pendingSave))
     }
 
@@ -211,16 +244,17 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
 
     const write = async (current: OpenFile, text: string) => {
       const b = current.base
-      if (diskConflict || b.readOnly || b.text === text) {
+      const eol = formatRef.current?.eol ?? b.eol
+      if (diskConflict || b.readOnly || (b.text === text && eol === b.eol)) {
         updateDirty()
         return
       }
       writing = text
       setSaveState('saving')
       try {
-        const revision = await fs.write(projectId, file, text, { eol: b.eol, bom: b.bom, expectedVersion: b.version })
+        const revision = await fs.write(projectId, file, text, { eol, bom: b.bom, expectedVersion: b.version })
         if (!alive) return
-        current.base = { ...b, ...revision, text }
+        current.base = { ...b, ...revision, text, eol }
         setError(null)
         setSaveState('saved')
       } catch (e) {
@@ -274,7 +308,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         const queueSave = () => {
           if (!alive || generation !== saveGeneration || open !== current || current.base.readOnly || diskConflict || isReloading) return
           const text = current.editor.getValue()
-          pendingSave = text === current.base.text && writing === undefined ? undefined : text
+          const eol = formatRef.current?.eol ?? current.base.eol
+          pendingSave = text === current.base.text && eol === current.base.eol && writing === undefined ? undefined : text
           updateDirty()
           if (pendingSave !== undefined) void flush()
         }
@@ -304,7 +339,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         setError(null)
         updateConflict(null)
       },
-      blur: () => autoSave.blur()
+      blur: () => autoSave.blur(),
+      eolChanged: () => { updateDirty(); autoSave.change() }
     }
     const autoSave = createAutoSave(() => actions.current?.save(),
       () => !!(alive && open && dirty.current && !open.base.readOnly && !diskConflict && !isReloading), getEditorPrefs)
@@ -456,19 +492,27 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const visiblePath = parts.length > 4 ? ['…', ...parts.slice(-4)] : parts
   const bookmarkLine = editor.current?.getPosition?.()?.line ?? cursor.line
   const bookmarked = bookmarkLines.includes(bookmarkLine)
+  const crumbPosition = editor.current?.getPosition?.() ?? cursor
+  const trail = breadcrumbs && ready ? symbolTrail(symbols.symbols, crumbPosition.line, crumbPosition.column) : []
 
   return (
     <div className="code-viewer editor-tab" style={active ? undefined : { display: 'none' }}>
       <header className="code-head">
-        <ol className="editor-path mono" aria-label={tr('Đường dẫn tệp {file}', { file })} title={file}>
+        {breadcrumbs && <ol className="editor-path mono" aria-label={tr('Đường dẫn tệp {file}', { file })} title={file}>
           {visiblePath.map((segment, index) => (
-            <li key={index} aria-current={index === visiblePath.length - 1 ? 'true' : undefined}>
+            <li key={`path-${index}`} aria-current={!trail.length && index === visiblePath.length - 1 ? 'true' : undefined}>
               {index > 0 && <Icon name="chevron" size={12} />}
               {index === visiblePath.length - 1 && <FileTypeIcon name={file} size={14} />}
               <span>{segment}</span>
             </li>
           ))}
-        </ol>
+          {trail.map((symbol, index) => (
+            <li key={`symbol-${index}`} aria-current={index === trail.length - 1 ? 'true' : undefined}>
+              <Icon name="chevron" size={12} />
+              <span>{symbolLabel(symbol)}</span>
+            </li>
+          ))}
+        </ol>}
         <span className="ws-editor-actions">
           {onViewImage && <button type="button" onClick={onViewImage} title={tr('Xem ảnh SVG')}>{tr('Xem ảnh')}</button>}
           {onViewTable && <button type="button" disabled={!ready} onClick={onViewTable} title={tr('Xem CSV/TSV dạng bảng')}>{tr('Xem bảng')}</button>}
@@ -500,18 +544,39 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           )}
         </p>
       )}
+      {notice && <p role="status" className="stale-banner">{notice}</p>}
       <div ref={host} className="editor-host" />
       <EditorDebug file={file} editor={ready ? editor.current : null} active={active} cursor={cursor.line} />
       {format && active && (
         <StatusBarItems>
           <button type="button" className="status-item" title={tr('{errors} lỗi, {warnings} cảnh báo', { errors: errorCount, warnings: warningCount })} onClick={() => runCommand('editor.diagnostics')}>{tr('Lỗi {errors} · Cảnh báo {warnings}', { errors: errorCount, warnings: warningCount })}</button>
           <span className="status-item" title={tr('Dòng {line}, cột {column}', { line: cursor.line, column: cursor.column })}>{cursor.line}:{cursor.column}</span>
-          <span className="status-item" title={tr('Ngôn ngữ')}>{format.language}</span>
-          <span className="status-item" title={tr('Kiểu xuống dòng')}>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</span>
-          <span className="status-item" title={tr('Bảng mã')}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</span>
+          <button type="button" className="status-item" title={tr('Ngôn ngữ')} onClick={() => setPicker('language')}>{format.language}</button>
+          <button type="button" className="status-item" title={tr('Kiểu xuống dòng')} onClick={() => setPicker('eol')}>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</button>
+          <button type="button" className="status-item" title={tr('Bảng mã')} onClick={() => setNotice(tr('Không đổi được bảng mã: engine chỉ lưu UTF-8 và giữ nguyên BOM theo tệp trên đĩa.'))}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</button>
           {vim && <span className="status-item vim-status" title={tr('Chế độ Vim')} ref={setVimNode} />}
         </StatusBarItems>
       )}
+      {picker === 'eol' && <Picker label={tr('Kiểu xuống dòng')} placeholder={tr('Chọn kiểu xuống dòng')} items={EOL_OPTIONS}
+        itemKey={(item) => item.id} itemText={(item) => item.name} initialKey={editor.current?.getEOL?.()}
+        empty={tr('Không có tuỳ chọn')} onCancel={() => setPicker(null)}
+        onPick={(item) => {
+          editor.current?.setEOL?.(item.id)
+          // Cập nhật ref ngay: Save/autoSave đọc EOL ở đây trước khi React kịp render lại.
+          const next = format && { ...format, eol: item.id }
+          formatRef.current = next
+          setFormat(next)
+          actions.current?.eolChanged()
+          setPicker(null)
+        }} renderItem={(item) => <span>{item.name}</span>} />}
+      {picker === 'language' && <Picker label={tr('Ngôn ngữ')} placeholder={tr('Chọn ngôn ngữ…')} items={languageOptions()}
+        itemKey={(item) => item.id} itemText={(item) => item.name} initialKey={editor.current?.getLanguage?.()}
+        empty={tr('Không có ngôn ngữ')} onCancel={() => setPicker(null)}
+        onPick={(item) => {
+          editor.current?.setLanguage?.(item.id)
+          setFormat((old) => old ? { ...old, language: item.name } : old)
+          setPicker(null)
+        }} renderItem={(item) => <span>{item.name}</span>} />}
     </div>
   )
 }
