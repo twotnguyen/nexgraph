@@ -88,7 +88,7 @@ describe('IPC: path thô từ renderer bị từ chối', () => {
   })
 
   it('mcp:config/hook:* /mcp:plan /mcp:apply /mcp:start-http từ chối projectId lạ', async () => {
-    for (const channel of ['mcp:config', 'hook:status', 'hook:preview', 'hook:install', 'hook:uninstall', 'mcp:start-http']) {
+    for (const channel of ['mcp:config', 'hook:status', 'hook:preview', 'hook:install', 'hook:uninstall', 'hook:branch', 'mcp:start-http']) {
       expect(await invoke(channel, 'nope', '/etc')).toMatchObject({ ok: false, error: { code: 'unknown_project' } })
     }
     for (const channel of ['mcp:plan', 'mcp:apply']) {

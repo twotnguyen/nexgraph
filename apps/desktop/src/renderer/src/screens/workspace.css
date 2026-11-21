@@ -2,9 +2,11 @@
   --ws-rail: 46px;
   --ws-tools: clamp(194px, 18vw, 266px);
   --ws-chat: clamp(286px, 25vw, 384px);
-  --ws-header: 44px;
+  --ws-header: 34px;
+  /* Kiểu Wu: mọi vùng cùng một nền, chỉ ngăn bằng viền 1px; chip tab đang mở sáng hơn nền một chút. */
+  --ws-tab-active: color-mix(in srgb, var(--color-text) 9%, var(--color-surface));
   position: relative;
-  background: var(--color-bg);
+  background: var(--color-surface);
   isolation: isolate;
   overflow: hidden;
 }
@@ -15,7 +17,7 @@
   gap: 0;
   padding: 5px 0 0;
   border-right: 1px solid var(--color-border);
-  background: var(--panel);
+  background: var(--color-surface);
   z-index: 4;
 }
 
@@ -50,7 +52,8 @@
   padding: 0;
   gap: 0;
   word-break: normal;
-  background: var(--panel);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
 .ws-tools-head {
@@ -59,17 +62,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 12px 0 15px;
+  padding: 0 8px 0 12px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .ws-tools-head h2 {
   margin: 0;
   color: var(--color-text);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .055em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .ws-project-root {
@@ -138,9 +139,9 @@
 }
 
 .workspace-shell .tree-row {
-  min-height: 26px;
+  min-height: 24px;
   min-width: 0;
-  border-radius: 2px;
+  border-radius: 4px;
 }
 
 .workspace-shell .tree-label {
@@ -154,9 +155,10 @@
 .workspace-shell .tree-compact .link { flex: none; }
 .workspace-shell .tree-compact > p { margin-inline: 10px; }
 .workspace-shell .tree-compact .tree-row { cursor: pointer; padding-inline-end: 6px; gap: 5px; }
+.workspace-shell .tree-compact .tree-row:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
 .workspace-shell .tree-compact .tree-row[aria-selected='true'] {
   background: var(--accent-soft);
-  box-shadow: inset 2px 0 var(--blue);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--blue) 70%, transparent);
 }
 .workspace-shell .tree-compact .twisty { flex: 0 0 16px; }
 .workspace-shell .tree-icon {
@@ -165,13 +167,13 @@
   place-items: center;
   color: var(--color-muted);
 }
-.workspace-shell .tree-icon-folder { color: var(--amber); }
-.workspace-shell .tree-icon-file { color: var(--blue); }
+.workspace-shell .tree-icon-folder { color: var(--color-muted); }
+.file-type-icon { flex: none; display: block; }
 
 .workspace-shell > .center {
   min-width: 0;
   min-height: 0;
-  background: var(--color-bg);
+  background: var(--color-surface);
 }
 
 .workspace-shell .ws-head {
@@ -179,10 +181,10 @@
   flex: 0 0 var(--ws-header);
   gap: 10px;
   padding: 0 12px;
-  background: var(--panel-raised, var(--color-surface));
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
 }
 
-.workspace-shell .ws-head .ws-name { font-size: 13px; max-width: 45%; }
 .workspace-shell .ws-head .ws-path { font-size: 11px; }
 .workspace-shell .ws-head .ws-actions { gap: 5px; }
 .workspace-shell .ws-actions button {
@@ -206,10 +208,12 @@
 
 .workspace-shell .ws-tabs {
   flex: none;
-  gap: 0;
-  min-height: 35px;
-  padding: 0;
-  background: var(--panel);
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
   scrollbar-width: thin;
   overscroll-behavior-inline: contain;
 }
@@ -219,12 +223,10 @@
   flex: none;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
-  padding: 0 11px;
-  border: 1px solid transparent;
-  border-width: 2px 1px 0 0;
-  border-right-color: var(--color-border);
-  border-radius: 0;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
   color: var(--color-muted);
   font-size: 12px;
   font-weight: 500;
@@ -232,18 +234,17 @@
 
 .workspace-shell .ws-tabs .tab[data-tone]::before { display: none; }
 .workspace-shell .ws-tabs .tab > svg { color: var(--tone); }
-.workspace-shell .ws-tabs .tab:hover { color: var(--color-text); background: var(--track); }
+.workspace-shell .ws-tabs .tab:hover { color: var(--color-text); background: color-mix(in srgb, var(--ws-tab-active) 60%, transparent); }
 .workspace-shell .ws-tabs .tab.active {
-  border-top-color: var(--blue);
-  background: var(--color-surface);
+  background: var(--ws-tab-active);
   color: var(--color-text);
   box-shadow: none;
 }
 
 .workspace-shell .ws-tabs .file-tab {
-  gap: 4px;
+  gap: 2px;
   max-width: 210px;
-  padding: 0 4px 0 8px;
+  padding: 0 3px 0 6px;
 }
 
 .workspace-shell .ws-tabs .file-tab .tab-name {
@@ -262,7 +263,20 @@
 }
 
 .workspace-shell .ws-tabs .tab-name svg { flex: none; color: var(--teal); }
-.workspace-shell .ws-tabs .tab-close { min-width: 20px; border-radius: 3px; }
+.workspace-shell .ws-tabs .tab-close {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  color: var(--color-muted);
+  background: transparent;
+  opacity: 0;
+}
+.workspace-shell .ws-tabs .file-tab:is(:hover, :focus-within) .tab-close { opacity: 1; }
 .workspace-shell .ws-tabs .tab-close:hover { color: var(--color-text); background: var(--track); }
 .workspace-shell .canvas-wrap { background: var(--color-surface); }
 .workspace-shell :is(.activity-bar button, .tab, .tab-name, .tab-close, .tree-row):focus-visible {
@@ -270,7 +284,7 @@
   outline-offset: -2px;
 }
 
-.workspace-shell .ws-index-status { font-size: 12px; background: var(--panel); }
+.workspace-shell .ws-index-status { font-size: 12px; background: var(--color-surface); }
 .workspace-shell .pick-banner { flex-wrap: wrap; }
 
 .ws-feedback {
@@ -382,10 +396,11 @@
   animation: workspace-spin .8s linear infinite;
 }
 
-.workspace-shell .code-head { min-height: 34px; gap: 8px; background: var(--panel); }
+.workspace-shell .code-head { min-height: 34px; gap: 8px; padding-block: 0; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
 .workspace-shell .code-head .mono { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; word-break: normal; }
-.workspace-shell .ws-editor-actions { display: flex; align-items: center; flex: none; gap: 5px; white-space: nowrap; }
-.workspace-shell .ws-editor-actions button { padding: 3px 8px; border-radius: 4px; font-size: 12px; }
+.workspace-shell .ws-editor-actions { display: flex; align-items: center; flex: none; gap: 1px; white-space: nowrap; }
+.workspace-shell .ws-editor-actions .ws-icon-button { width: 24px; height: 24px; border: 0; }
+.workspace-shell .ws-editor-actions .ws-icon-button:disabled { opacity: .4; }
 .workspace-shell .ws-save-state { color: var(--color-muted); font-size: 11px; }
 .workspace-shell .ws-save-state[data-state='saving'] { color: var(--blue); }
 .workspace-shell .ws-editor-loading { margin: 0; padding: 8px 14px; font-size: 12px; }
@@ -439,7 +454,7 @@
   width: min(var(--ws-chat), max(300px, calc(100vw - 560px)));
   min-width: 0;
 }
-.agent-resize-handle { flex: 0 0 4px; width: 4px; cursor: col-resize; touch-action: none; background: var(--color-border); }
+.agent-resize-handle { flex: 0 0 4px; width: 4px; cursor: col-resize; touch-action: none; background: linear-gradient(var(--color-border), var(--color-border)) center / 1px 100% no-repeat; }
 .agent-resize-handle:hover, .agent-resize-handle:focus-visible { background: var(--blue); outline: none; }
 .agent-inspector { display: flex; flex-direction: column; position: absolute; inset: 0; min-height: 0; background: var(--color-surface); }
 .agent-inspector > header { display: flex; flex: none; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--color-border); font-size: 12px; }

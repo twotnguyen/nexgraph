@@ -4,6 +4,7 @@ import type { AgentContextItem } from '@shared/agent-types'
 import { vi } from '../../strings'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
 import { Icon } from '../common/icons'
+import { FileTypeIcon } from '../common/FileTypeIcon'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -285,15 +286,16 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
           {visiblePath.map((segment, index) => (
             <li key={index} aria-current={index === visiblePath.length - 1 ? 'true' : undefined}>
               {index > 0 && <Icon name="chevron" size={12} />}
+              {index === visiblePath.length - 1 && <FileTypeIcon name={file} size={14} />}
               <span>{segment}</span>
             </li>
           ))}
         </ol>
         <span className="ws-editor-actions">
           {saveLabel && <span role="status" className="ws-save-state" data-state={saveState}>{saveLabel}</span>}
-          <button type="button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
-            title="Lưu (Ctrl/Cmd+S)">Lưu</button>
-          <button type="button" onClick={onClose}>{vi.editor.close}</button>
+          <button type="button" className="ws-icon-button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
+            aria-label="Lưu" title="Lưu (Ctrl/Cmd+S)"><Icon name="save" size={15} /></button>
+          <button type="button" className="ws-icon-button" aria-label={vi.editor.close} title={vi.editor.close} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>
       {!ready && !error && <p role="status" className="ws-editor-loading muted">Đang mở tệp…</p>}

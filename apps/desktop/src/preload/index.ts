@@ -94,7 +94,8 @@ const api: NexGraphApi = {
     status: (pid) => call('hook:status', pid),
     preview: (pid) => call('hook:preview', pid),
     install: (pid) => call('hook:install', pid),
-    uninstall: (pid) => call('hook:uninstall', pid)
+    uninstall: (pid) => call('hook:uninstall', pid),
+    branch: (pid) => call('hook:branch', pid)
   },
   ai: {
     getSettings: () => call('ai:get-settings'),

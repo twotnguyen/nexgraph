@@ -18,7 +18,7 @@
   inset-block: 0;
   inset-inline-start: 0;
   pointer-events: none;
-  background: repeating-linear-gradient(to right, transparent 7px, var(--color-border) 7px 8px, transparent 8px 12px);
+  background: repeating-linear-gradient(to right, transparent 7px, var(--color-border) 7px 8px, transparent 8px 20px);
 }
 
 .tree-compact .tree-row .twisty {
@@ -29,10 +29,6 @@
 }
 
 .tree-compact .tree-row[aria-expanded='true'] .twisty svg { transform: rotate(90deg); }
-.workspace-shell .tree-compact .tree-icon-file[data-tone='amber'] { color: var(--amber); }
-.workspace-shell .tree-compact .tree-icon-file[data-tone='orange'] { color: var(--orange); }
-.workspace-shell .tree-compact .tree-icon-file[data-tone='teal'] { color: var(--teal); }
-.workspace-shell .tree-compact .tree-icon-file[data-tone='default'] { color: var(--color-muted); }
 
 .tree-error {
   margin: 4px 6px;

@@ -146,7 +146,7 @@ export default function App() {
 
   return (
     <div className="app">
-      {!window.nexgraph?.host && <WorkbenchBar />}
+      {!window.nexgraph?.host && <WorkbenchBar project={'project' in screen ? screen.project : null} />}
       {hostError && screen.name === 'projects' && <p role="alert" className="inline-message error">{hostError}</p>}
       {screen.name === 'projects' && (
         <ProjectsScreen engineReady={status.state === 'ready'}

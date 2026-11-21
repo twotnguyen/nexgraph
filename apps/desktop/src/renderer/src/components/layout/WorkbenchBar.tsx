@@ -1,14 +1,36 @@
+import { useEffect, useState } from 'react'
 import { Icon, Logo } from '../common/icons'
 import { THEMES, setTheme, useTheme, useThemeId } from '../../state/useTheme'
 
-export function WorkbenchBar() {
+export function WorkbenchBar({ project }: { project?: { project_id: string; name: string } | null }) {
   const dark = useTheme() === 'dark'
   const themeId = useThemeId()
+  const [branch, setBranch] = useState<string | null>(null)
+  const projectId = project?.project_id
+
+  useEffect(() => {
+    setBranch(null)
+    if (!projectId) return
+    let alive = true
+    // Đọc lại khi cửa sổ được focus: người dùng hay đổi nhánh ở terminal ngoài app.
+    const load = () => void window.nexgraph.hook.branch(projectId).then((b) => alive && setBranch(b), () => {})
+    load()
+    window.addEventListener('focus', load)
+    return () => {
+      alive = false
+      window.removeEventListener('focus', load)
+    }
+  }, [projectId])
+
   return (
     <header className="workbench-bar">
-      <div className="workbench-brand"><Logo size={19} /> <span>NexGraph</span></div>
+      <div className="workbench-brand">
+        <Logo size={16} />
+        {project ? <span className="workbench-project" title={project.name}>{project.name}</span> : <span>NexGraph</span>}
+        {branch && <span className="workbench-branch" title={`Nhánh ${branch}`}><Icon name="branch" size={13} />{branch}</span>}
+      </div>
       <label className="theme-toggle" title="Giao diện">
-        <Icon name={dark ? 'moon' : 'sun'} size={16} />
+        <Icon name={dark ? 'moon' : 'sun'} size={14} />
         <select aria-label="Giao diện" value={themeId} onChange={(e) => setTheme(e.target.value)}>
           <optgroup label="Sáng">{THEMES.filter((t) => t.appearance === 'light').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>
           <optgroup label="Tối">{THEMES.filter((t) => t.appearance === 'dark').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>

@@ -95,6 +95,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Bộ icon tệp Symbols
+
+- Nguồn: thư mục `assets/icon_themes/symbols/` của Wu (https://github.com/dstrml/wu), commit `288f144420fc9f22016b6d65dacbd2a3d77842b3`; gốc là bộ Symbols của Miguel Solorio.
+- Giấy phép: MIT, Copyright (c) 2020-22 Miguel Solorio. Bản đầy đủ ở `apps/desktop/src/renderer/src/assets/file-icons/LICENSE`.
+- Dùng ở: `apps/desktop/src/renderer/src/assets/file-icons/` (66 SVG chép nguyên, biến thể tối có hậu tố `.dark.svg`) và bảng tra đuôi tệp → icon trong `apps/desktop/src/renderer/src/components/common/FileTypeIcon.tsx` (phần con của `icon_theme.json`).
+
 ## pi coding-agent
 
 - Nguồn: https://github.com/earendil-works/pi

@@ -25,7 +25,7 @@
   min-height: 23px;
   padding: 2px 11px;
   border-top: 1px solid var(--color-border);
-  background: var(--panel);
+  background: var(--color-surface);
   color: var(--color-muted);
   font-size: 10px;
 }

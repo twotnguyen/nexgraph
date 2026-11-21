@@ -23,7 +23,8 @@ import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { MapView } from '../components/map/MapView'
 import { PrsView } from '../components/prs/PrsView'
 import { useChanges } from '../state/useChanges'
-import { Icon, Logo, VIEW_TONE } from '../components/common/icons'
+import { Icon, VIEW_TONE } from '../components/common/icons'
+import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi } from '../strings'
 import './workspace.css'
 
@@ -495,7 +496,6 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       <section className="center">
         <header className="ws-head">
           {onBack && <button type="button" className="ws-icon-button ws-back" title={backLabel} aria-label={backLabel} onClick={guardLeave(onBack)}>←</button>}
-          <b className="ws-name"><Logo size={18} /> <span title={project.name}>{project.name}</span></b>
           <span className="ws-path muted mono" title={project.path}>{project.path}</span>
           <span className="ws-actions">
             {!hosted && <button type="button" aria-label={vi.chat.toggle} title={`${vi.chat.toggle} · Ctrl+L`} aria-pressed={chatOpen}
@@ -536,15 +536,15 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               <button id={tabId(`file:${f.file}`)} type="button" role="tab" aria-selected={tab === `file:${f.file}`} aria-controls={viewId}
                 aria-label={baseName(f.file)} tabIndex={tab === `file:${f.file}` ? 0 : -1}
                 title={f.file} className="tab-name" onClick={() => setTab(`file:${f.file}`)}>
-                {FileIcon}<span>{baseName(f.file)}</span>
+                <FileTypeIcon name={f.file} /><span>{baseName(f.file)}</span>
                 {dirtyFiles.has(f.file) && <span className="dirty-dot" aria-hidden="true"> ●</span>}
               </button>
-              <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}>×</button>
+              <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}><Icon name="close" size={12} /></button>
             </span>
           ))}
           {inspections.map((inspection) => <span key={inspection.id} className={`tab file-tab${tab === `task:${inspection.id}` ? ' active' : ''}`}>
             <button id={tabId(`task:${inspection.id}`)} type="button" role="tab" aria-selected={tab === `task:${inspection.id}`} aria-controls={viewId} tabIndex={tab === `task:${inspection.id}` ? 0 : -1} className="tab-name" onClick={() => setTab(`task:${inspection.id}`)}><Icon name="spark" size={14} /><span>{inspection.title}</span></button>
-            <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}>×</button>
+            <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}><Icon name="close" size={12} /></button>
           </span>)}
         </div>
         <div className="canvas-wrap" id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>

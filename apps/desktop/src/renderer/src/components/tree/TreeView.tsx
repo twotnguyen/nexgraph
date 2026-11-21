@@ -3,6 +3,7 @@ import type { GraphNode, NodeKind } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { kindStyle } from '../graph/kindStyle'
 import { Icon } from '../common/icons'
+import { FileTypeIcon } from '../common/FileTypeIcon'
 import './tree-view.css'
 
 interface Props {
@@ -26,14 +27,6 @@ const sortKids = (kids: TreeNode[]) =>
 
 interface Loaded { kids: TreeNode[]; truncated: boolean }
 interface Row { node: TreeNode; level: number; parent: string | null }
-
-function fileTone(file: string): string {
-  if (/\.(tsx?|mts|cts|dart|cs)$/i.test(file)) return 'blue'
-  if (/\.(jsx?|mjs|cjs|json|ya?ml|toml)$/i.test(file)) return 'amber'
-  if (/\.(html?|css|scss|vue|svelte)$/i.test(file)) return 'orange'
-  if (/\.(mdx?|txt|rst|py)$/i.test(file)) return 'teal'
-  return 'default'
-}
 
 export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, activeFile, revision }: Props) {
   const list = compact && !window.nexgraph.host ? window.nexgraph.fs.list : undefined
@@ -208,7 +201,7 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
           const file = n.kind === 'file'
           const canOpen = CONTAINERS.includes(n.kind)
           const isOpen = expanded.has(n.id)
-          const indent = Math.min(r.level - 1, compact ? 8 : 24) * (compact ? 12 : 16)
+          const indent = Math.min(r.level - 1, compact ? 8 : 24) * (compact ? 20 : 16)
           const branch = loaded.get(n.id)
           const empty = list && isOpen && !errors.has(n.id) && branch && branch.kids.length === 0 && !branch.truncated
           return (
@@ -235,12 +228,8 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
                   </button>
                 ) : <span className="twisty" />}
                 {compact && (
-                  <span className={`tree-icon tree-icon-${folder ? 'folder' : file ? 'file' : 'symbol'}`} data-tone={file ? fileTone(n.label) : undefined} aria-hidden="true">
-                    {folder ? <Icon name="folder" size={15} /> : file ? (
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round">
-                        <path d="M6 3h8l4 4v14H6zM13 3v5h5M9 13h6m-6 4h6" />
-                      </svg>
-                    ) : '•'}
+                  <span className={`tree-icon tree-icon-${folder ? 'folder' : file ? 'file' : 'symbol'}`} aria-hidden="true">
+                    {folder ? <Icon name="folder" size={15} /> : file ? <FileTypeIcon name={n.label} /> : '•'}
                   </span>
                 )}
                 <span className="tree-label" title={n.file ?? n.label} onClick={compact ? undefined : () => open(n)}>{n.label}</span>

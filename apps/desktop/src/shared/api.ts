@@ -133,6 +133,8 @@ export interface NexGraphApi {
     preview(projectId: string): Promise<string>
     install(projectId: string): Promise<void>
     uninstall(projectId: string): Promise<void>
+    /** Nhánh git đang checkout, `null` khi không có. */
+    branch(projectId: string): Promise<string | null>
   }
   ai: {
     /** Cấu hình của đích nhận dữ liệu đang chọn. */

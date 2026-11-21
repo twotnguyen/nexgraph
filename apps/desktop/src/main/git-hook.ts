@@ -65,6 +65,17 @@ const needDir = (projectPath: string): HooksDir => {
   return found
 }
 
+/** Nhánh đang checkout để hiện trên thanh tiêu đề; `null` khi không phải kho git, HEAD tách rời hoặc git lỗi. */
+export function gitBranch(projectPath: string): string | null {
+  try {
+    return execFileSync('git', ['-C', projectPath, 'branch', '--show-current'], {
+      encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true
+    }).trim() || null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Chạy nền để lệnh git không chậm đi và không bao giờ thất bại vì NexGraph; luật bỏ qua nằm trong `refresh --hook`.
  * Trạng thái git (rebase/merge/cherry-pick, sequencer) phải chụp đồng bộ ở đây: khi engine khởi động xong thì git đã đi tiếp.
