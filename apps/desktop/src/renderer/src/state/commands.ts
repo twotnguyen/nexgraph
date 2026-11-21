@@ -27,6 +27,8 @@ export const COMMANDS: readonly CommandDef[] = [
   { id: 'tab.close', category: 'Thẻ', title: 'Đóng thẻ đang mở', key: 'mod+w' },
   { id: 'editor.split_right', category: 'Editor', title: 'Chia đôi sang phải / bỏ chia đôi', key: 'mod+\\' },
   { id: 'editor.toggle_vim', category: 'Editor', title: 'Bật/tắt chế độ Vim' },
+  { id: 'terminal.toggle', category: 'Terminal', title: 'Bật/tắt terminal', key: 'ctrl+`' },
+  { id: 'terminal.new', category: 'Terminal', title: 'Terminal mới', key: 'ctrl+shift+`' },
   { id: 'view.arch', category: 'Xem', title: 'Kiến trúc' },
   { id: 'view.map', category: 'Xem', title: 'Bản đồ' },
   { id: 'view.flows', category: 'Xem', title: 'Luồng' },
@@ -78,7 +80,10 @@ let overrides: Record<string, string> = (() => {
   }
 })()
 
-export const bindingFor = (id: string): string => overrides[id] ?? COMMANDS.find((command) => command.id === id)?.key ?? ''
+const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
+// Ngoài macOS phím Ctrl chính là "mod": phím mặc định viết "ctrl+…" (như ctrl+` của Wu) phải khớp với lần nhấn đã chuẩn hoá thành "mod+…".
+const forPlatform = (key: string) => (IS_MAC ? key : key.replace(/\bctrl\+/g, 'mod+'))
+export const bindingFor = (id: string): string => overrides[id] ?? forPlatform(COMMANDS.find((command) => command.id === id)?.key ?? '')
 export const isCustomBinding = (id: string): boolean => Object.hasOwn(overrides, id)
 
 /** key = null: về mặc định. Một phím chỉ thuộc một lệnh: lệnh khác đang giữ phím đó bị bỏ phím. */
@@ -89,7 +94,7 @@ export function setBinding(id: string, key: string | null): void {
     for (const command of COMMANDS) if (command.id !== id && bindingFor(command.id) === key) next[command.id] = ''
     next[id] = key
   }
-  for (const command of COMMANDS) if (next[command.id] === (command.key ?? '')) delete next[command.id]
+  for (const command of COMMANDS) if (next[command.id] === forPlatform(command.key ?? '')) delete next[command.id]
   overrides = next
   try { localStorage.setItem(STORE, JSON.stringify(next)) } catch { /* bộ nhớ đầy: vẫn áp dụng trong phiên */ }
   window.dispatchEvent(new Event(CHANGED))
@@ -102,14 +107,16 @@ const subscribe = (notify: () => void) => {
 /** Re-render khi phím tắt đổi; trả về bảng ghi đè hiện tại (đổi tham chiếu mỗi lần lưu). */
 export const useKeybindings = (): Record<string, string> => useSyncExternalStore(subscribe, () => overrides)
 
-const IS_MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform)
 const MODIFIERS: Record<string, true> = { Meta: true, Control: true, Alt: true, Shift: true }
 
-/** Một lần nhấn → "mod+shift+p"; null nếu chỉ là phím bổ trợ. Dùng code cho chữ/số để Option (macOS) và bố cục bàn phím không làm đổi phím. */
+// Phím ký hiệu đọc theo code để Shift không đổi ký tự (shift+` ra "~" trên bàn phím US).
+const SYMBOL_CODE: Record<string, string> = { Backquote: '`', Backslash: '\\', Comma: ',', Period: '.', Slash: '/', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'" }
+
+/** Một lần nhấn → "mod+shift+p"; null nếu chỉ là phím bổ trợ. Dùng code cho chữ/số/ký hiệu để Option (macOS), Shift và bố cục bàn phím không làm đổi phím. */
 export function eventToStroke(event: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>): string | null {
   if (MODIFIERS[event.key]) return null
   const code = /^(?:Key([A-Z])|Digit(\d))$/.exec(event.code)
-  const key = code ? (code[1] ?? code[2]).toLowerCase() : event.key === ' ' ? 'space' : event.key.toLowerCase()
+  const key = code ? (code[1] ?? code[2]).toLowerCase() : SYMBOL_CODE[event.code] ?? (event.key === ' ' ? 'space' : event.key.toLowerCase())
   const parts: string[] = []
   if (IS_MAC ? event.metaKey : event.ctrlKey) parts.push('mod')
   if (IS_MAC && event.ctrlKey) parts.push('ctrl')

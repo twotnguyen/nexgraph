@@ -93,6 +93,13 @@ const api: NexGraphApi = {
     close: (pid, file) => call('lsp:close', pid, file),
     open: (pid, file, text) => call('lsp:open', pid, file, text)
   },
+  terminal: {
+    create: (pid, cols, rows) => call('terminal:create', pid, cols, rows),
+    write: (id, data) => call('terminal:write', id, data),
+    resize: (id, cols, rows) => call('terminal:resize', id, cols, rows),
+    kill: (id) => call('terminal:kill', id),
+    onEvent: (cb) => subscribe('terminal:event', cb)
+  },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),
     run: (pid, format, scope) => call('export:run', pid, format, scope),

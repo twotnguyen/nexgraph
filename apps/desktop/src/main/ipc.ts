@@ -34,6 +34,7 @@ import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
+import { TerminalManager } from './terminal/manager'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -41,6 +42,7 @@ let mcpHttp: McpHttpManager | null = null
 let agents: AgentRouter | null = null
 let geminiConnection: GeminiConnectionManager | null = null
 let editors: EditorStateRegistry | null = null
+let terminals: TerminalManager | null = null
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
 export const closeAllAgents = (): void => {
@@ -55,7 +57,11 @@ export const closeAllAgents = (): void => {
 export const stopAllMcpHttp = (): Promise<void> => mcpHttp?.stopAll() ?? Promise.resolve()
 /** Language server cho editor; khởi động khi mở tệp TS/JS/Python đầu tiên. */
 const lsp = new LspManager()
-export const stopAllLanguageServers = (): void => lsp.stopAll()
+/** Dừng language server và mọi terminal khi thoát app. */
+export const stopEditorProcesses = (): void => {
+  lsp.stopAll()
+  terminals?.killAll()
+}
 
 function readJson(file: string): Record<string, string> {
   try {
@@ -211,6 +217,16 @@ export function registerIpc(
   on('lsp:hover', async (pid: string, file: string, text: string, line: number, column: number) => lsp.hover(await rootOf(pid), file, ...lspArgs(text, line, column)))
   on('lsp:close', async (pid: string, file: string) => lsp.close(await rootOf(pid), file))
   on('lsp:open', async (pid: string, file: string, text: string) => lsp.open(await rootOf(pid), file, lspArgs(text, 1, 1)[0]))
+  // Terminal: shell của người dùng trong gốc dự án; dữ liệu về renderer qua 'terminal:event'.
+  terminals = new TerminalManager({
+    data: (id, chunk) => getWindow()?.webContents.send('terminal:event', { id, type: 'data', data: chunk }),
+    exit: (id, code) => getWindow()?.webContents.send('terminal:event', { id, type: 'exit', code })
+  })
+  const term = terminals
+  on('terminal:create', async (pid: string, cols: number, rows: number) => term.create(await rootOf(pid), Number(cols), Number(rows)))
+  on('terminal:write', async (id: number, data: string) => { if (typeof data === 'string') term.write(Number(id), data) })
+  on('terminal:resize', async (id: number, cols: number, rows: number) => term.resize(Number(id), Number(cols), Number(rows)))
+  on('terminal:kill', async (id: number) => term.kill(Number(id)))
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {

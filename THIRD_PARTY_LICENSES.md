@@ -160,6 +160,20 @@ SOFTWARE.
 - Giấy phép: MIT, Copyright (c) Microsoft Corporation.
 - Dùng ở: `apps/desktop/src/main/lsp/manager.ts` — định nghĩa, gợi ý, hover cho tệp Python trong editor.
 
+## xterm.js
+
+- Nguồn: https://github.com/xtermjs/xterm.js
+- Phiên bản: `@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0 (dùng qua API công khai, không chép mã)
+- Giấy phép: MIT, Copyright (c) 2017-2019 The xterm.js authors; Copyright (c) 2014-2016 SourceLair Private Company; Copyright (c) 2012-2013 Christopher Jeffrey.
+- Dùng ở: `apps/desktop/src/renderer/src/components/terminal/TerminalPanel.tsx` — terminal tích hợp.
+
+## node-pty
+
+- Nguồn: https://github.com/microsoft/node-pty
+- Phiên bản: `1.2.0-beta.18` (dùng qua API công khai, không chép mã; bản dựng N-API có sẵn trong gói)
+- Giấy phép: MIT, Copyright (c) 2012-2015 Christopher Jeffrey, Copyright (c) 2016 Daniel Imms, Copyright (c) Microsoft Corporation.
+- Dùng ở: `apps/desktop/src/main/terminal/manager.ts` — chạy shell cho terminal tích hợp.
+
 
 ## react-markdown
 

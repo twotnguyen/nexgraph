@@ -7,6 +7,9 @@ allowBuilds:
   '@google/genai': false
   protobufjs: false
   electron-winstaller: false # chỉ dùng cho Squirrel.Windows; NexGraph dùng NSIS
+  # install chỉ kiểm tra có bản dựng N-API sẵn (prebuilds/ cho macOS, Windows) nên không biên dịch; postinstall cấp quyền chạy cho spawn-helper.
+  node-pty: true
 onlyBuiltDependencies:
   - electron
   - esbuild
+  - node-pty

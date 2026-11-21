@@ -50,6 +50,7 @@ export type TextReplaceResult = { files: number; replacements: number; skipped: 
 export type LspLocation = { file: string; line: number; column: number }
 /** `kind`: CompletionItemKind của LSP (1–25). */
 export type LspCompletionItem = { label: string; kind: number; detail?: string; insertText: string; sortText?: string; filterText?: string }
+export type TerminalEvent = { id: number; type: 'data'; data: string } | { id: number; type: 'exit'; code: number }
 
 export type HostCommand = { name: string; arg?: unknown }
 
@@ -141,6 +142,14 @@ export interface NexGraphApi {
     hover(projectId: string, file: string, text: string, line: number, column: number): Promise<string | null>
     close(projectId: string, file: string): Promise<void>
     open(projectId: string, file: string, text: string): Promise<void>
+  }
+  /** Terminal tích hợp (node-pty): shell của người dùng trong gốc dự án. */
+  terminal?: {
+    create(projectId: string, cols: number, rows: number): Promise<{ id: number; shell: string }>
+    write(id: number, data: string): Promise<void>
+    resize(id: number, cols: number, rows: number): Promise<void>
+    kill(id: number): Promise<void>
+    onEvent(cb: (event: TerminalEvent) => void): () => void
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

@@ -11,8 +11,9 @@ files:
     to: NOTICE
   - from: ../../LICENSE
     to: LICENSE
-# Language server cho editor chạy thành tiến trình con (Node của Electron) nên không được nằm trong app.asar.
+# Language server và terminal chạy tiến trình con (Node của Electron, spawn-helper của node-pty) nên không được nằm trong app.asar.
 asarUnpack:
+  - node_modules/node-pty/**
   - node_modules/typescript-language-server/**
   - node_modules/typescript/**
   - node_modules/pyright/**

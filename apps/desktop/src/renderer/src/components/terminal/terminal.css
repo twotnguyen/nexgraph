@@ -1,0 +1,19 @@
+/* Bảng terminal kiểu Wu: dock dưới vùng giữa, viền trên 1px, hàng thẻ 32px, thẻ là nút ma bo 6. */
+.terminal-panel { position: relative; display: flex; flex: none; flex-direction: column; height: var(--terminal-height, 280px); min-height: 120px; border-top: 1px solid var(--color-border); background: var(--color-surface); }
+.terminal-panel[hidden] { display: none; }
+.terminal-tabs { display: flex; flex: none; align-items: center; gap: 2px; height: 32px; padding: 0 6px; }
+.terminal-tab { display: inline-flex; align-items: center; border-radius: 6px; }
+.terminal-tab[data-active] { background: color-mix(in srgb, var(--color-text) 9%, transparent); }
+.terminal-tab > button { display: inline-flex; align-items: center; gap: 6px; height: 24px; min-height: 0; padding: 0 6px; border: 0; background: transparent; color: var(--color-muted); font-size: 12px; }
+.terminal-tab[data-active] > button, .terminal-tab > button:hover { color: var(--color-text); }
+.terminal-tab .terminal-tab-close { width: 20px; padding: 0; justify-content: center; opacity: 0; }
+.terminal-tab:hover .terminal-tab-close, .terminal-tab[data-active] .terminal-tab-close { opacity: 1; }
+.terminal-icon { display: grid; place-items: center; width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-muted); }
+.terminal-icon:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.terminal-spacer { flex: 1; }
+.terminal-body { position: relative; flex: 1; min-height: 0; }
+.terminal-view { position: absolute; inset: 0 4px 4px 10px; display: none; }
+.terminal-view[data-active] { display: block; }
+.terminal-view .xterm { height: 100%; }
+.terminal-resize { position: absolute; z-index: 2; top: -3px; right: 0; left: 0; height: 5px; cursor: row-resize; }
+.terminal-resize:hover, .terminal-resize:focus-visible { background: var(--blue); outline: 0; }

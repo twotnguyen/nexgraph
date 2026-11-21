@@ -4,6 +4,7 @@ import type { HostCommand } from '@shared/api'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { EditorTab, type EditorContextGetter } from '../components/editor/EditorTab'
 import { SplitEditor } from '../components/editor/SplitEditor'
+import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import type { AgentContextItem, AgentEditorState } from '@shared/agent-types'
 import type { AgentInspection } from '../components/agent/useAgentWorkbench'
 import { TaskInspector } from '../components/agent/TaskInspector'
@@ -506,6 +507,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     }
   })
   useCommand('editor.split_right', () => { if (side) setSide(null); else if (activeFile) setSide(activeFile) })
+  // Terminal: 'closed' chưa mở (không có phiên), 'hidden' ẩn nhưng phiên vẫn chạy như Wu.
+  const [terminal, setTerminal] = useState<'closed' | 'open' | 'hidden'>('closed')
+  const [terminalNew, setTerminalNew] = useState(0)
+  useCommand('terminal.toggle', () => setTerminal((cur) => (cur === 'open' ? 'hidden' : 'open')), !hosted)
+  useCommand('terminal.new', () => { if (terminal === 'open') setTerminalNew((n) => n + 1); else setTerminal('open') }, !hosted)
   useCommand('project_search.toggle', () => {
     if (leftChat) setChatOpen(false)
     setPanel('find')
@@ -680,6 +686,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             </div>
           )}
         </div>
+        {terminal !== 'closed' && <TerminalPanel projectId={project.project_id} newRequest={terminalNew} hidden={terminal === 'hidden'}
+          onHide={() => setTerminal('hidden')} onCloseAll={() => setTerminal('closed')} />}
       </section>
       {chatDock === 'right' && <>{resizeHandle}{agentPanel}</>}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}

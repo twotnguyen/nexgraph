@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
-import { closeAllAgents, registerIpc, stopAllLanguageServers, stopAllMcpHttp, stopAllWatchers } from './ipc'
+import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers, stopEditorProcesses } from './ipc'
 import { closesAgents, confirmUnload } from './unload-guard'
 import { basename, join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
@@ -199,6 +199,6 @@ app.on('before-quit', (e) => {
   quitting = true
   stopAllWatchers()
   closeAllAgents()
-  stopAllLanguageServers()
+  stopEditorProcesses()
   void Promise.all([supervisor.stop(), stopAllMcpHttp()]).finally(() => app.quit())
 })
