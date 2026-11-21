@@ -36,7 +36,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
     if (!q.trim()) return
     setError(null)
     try {
-      const found = await window.nexgraph.globalGraph.search(q.trim(), 50)
+      const found = await window.nexgraph.globalGraph.search(q.trim(), 50, projectIds)
       setHits(found.filter((h) => projectIds.includes(h.project_id)))
     } catch (err) {
       setError((err as { message?: string })?.message ?? String(err))

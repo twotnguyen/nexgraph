@@ -173,7 +173,7 @@ const api: NexGraphApi = {
     list: () => call('global:list'),
     add: (pid) => call('global:add', pid),
     remove: (pid) => call('global:remove', pid),
-    search: (q, limit) => call('global:search', q, limit),
+    search: (q, limit, pids) => call('global:search', q, limit, pids),
     graph: (pids, limit) => call('global:graph', pids, limit),
     export: (pids) => call('global:export', pids)
   }

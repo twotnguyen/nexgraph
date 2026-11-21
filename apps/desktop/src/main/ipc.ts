@@ -538,7 +538,7 @@ export function registerIpc(
   on('global:list', () => api().globalList())
   on('global:add', async (pid: string) => ({ jobId: (await api().globalAdd(pid)).job_id }))
   on('global:remove', (pid: string) => api().globalRemove(pid))
-  on('global:search', (q: string, limit?: number) => api().globalSearch(q, limit))
+  on('global:search', (q: string, limit?: number, pids?: string[]) => api().globalSearch(q, limit, pids))
   on('global:graph', (pids: string[], limit?: number) => api().globalGraph(pids, limit))
   on('global:export', async (pids: string[]) => {
     const win = getWindow()
