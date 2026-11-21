@@ -119,7 +119,7 @@ def test_bridge_marks_documents(docs_root, tmp_path):
 
 def test_html_headings_become_document_nodes(docs_root, tmp_path):
     (docs_root / "guide.html").write_text("<html><body><h1>Hướng dẫn</h1><p>Mở <b>app</b>.</p>"
-                                          "<script>var x=1</script><h2>Cài đặt</h2><p>Chạy.</p></body></html>")
+                                          "<script>var x=1</script><h2>Cài đặt</h2><p>Chạy.</p></body></html>", encoding="utf-8")
     store = run_index(docs_root, tmp_path / "g.db", include_docs=True)
     docs = nodes_of(store, NodeKind.DOCUMENT)
     assert "guide.html::Hướng dẫn#document" in docs and "guide.html::Cài đặt#document" in docs

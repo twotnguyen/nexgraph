@@ -448,7 +448,8 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
   hit(back, 'Về Tổng quan').click()
   const projects = await button('.overview .page-back', '← Dự án')
   projects.click()
-  const remove = await waitFor(() => document.querySelector<HTMLButtonElement>('.recent-remove:not(:disabled)'), 'gỡ dự án mẫu')
+  // `.recent-join` (thêm vào Graph chung) cùng kiểu nút nên phải loại ra.
+  const remove = await waitFor(() => document.querySelector<HTMLButtonElement>('.recent-remove:not(.recent-join):not(:disabled)'), 'gỡ dự án mẫu')
   remove.click()
   const cancelRemoval = await button('dialog[open] button', 'Hủy')
   cancelRemoval.click()

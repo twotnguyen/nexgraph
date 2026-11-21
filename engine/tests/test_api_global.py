@@ -84,6 +84,8 @@ def test_search_skips_removed_and_missing(api, copy_fixture, tmp_path):
     assert {h["project_id"] for h in hits} == {lib}
     assert hits[0]["project_name"] == "global_ts_lib app" and hits[0]["node"]["label"] == "Calculator"
     assert api.delete(f"/v1/projects/{lib}").status_code in (200, 204)  # gỡ khỏi app
+    for t in list(api.app.state.services.jobs._threads):  # job relink do việc gỡ khởi chạy còn mở graph.db (Windows khoá tệp)
+        t.join(30)
     shutil.rmtree(api.app.state.services.registry.get(app).path)  # mất thư mục
     r = api.get("/v1/global/search", params={"q": "checkout"})
     assert r.status_code == 200 and r.json() == []

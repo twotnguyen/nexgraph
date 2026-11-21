@@ -1,7 +1,6 @@
 """Nguồn ngoài thư mục (W6): mở dự án từ URL GitHub/GitLab, thêm/xem/xoá nguồn tải từ URL."""
 from __future__ import annotations
 
-import shutil
 import uuid
 
 from fastapi import APIRouter, Query, Request
@@ -12,7 +11,7 @@ from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.api.routes_projects import _summary
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.sources import ingest_url, list_sources, remove_source, sources_root
-from nexgraph_engine.sources.clone import MAX_CLONE_DEPTH, clone_repo, parse_repo_url
+from nexgraph_engine.sources.clone import MAX_CLONE_DEPTH, clone_repo, parse_repo_url, remove_tree
 
 router = APIRouter(prefix="/v1")
 
@@ -38,7 +37,7 @@ def clone_project(body: CloneBody, request: Request) -> dict:
         try:
             info = services.registry.open_project(dest)
         except BaseException:
-            shutil.rmtree(dest, ignore_errors=True)
+            remove_tree(dest)
             raise
         return {"project": {**_summary(info), "last_indexed_at": None, "last_index_commit": None}}
 

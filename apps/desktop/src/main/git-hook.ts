@@ -40,7 +40,8 @@ function hooksDir(projectPath: string): HooksDir | null {
   let out: string
   let root: string
   try {
-    root = realpathSync(projectPath)
+    // native: Windows mở rộng tên 8.3 (RUNNER~1) để so được với đường dẫn dài mà git trả về.
+    root = realpathSync.native(projectPath)
     out = execFileSync('git', ['-C', root, 'rev-parse', '--show-toplevel', '--git-common-dir', '--git-path', 'hooks'], {
       encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true
     })

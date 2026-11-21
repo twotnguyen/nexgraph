@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import stat
 import subprocess
 import threading
 import time
@@ -49,6 +50,23 @@ def _dir_bytes(path: Path) -> int:
     return total
 
 
+def remove_tree(path: Path) -> None:
+    """Xoá thư mục clone, kể cả tệp chỉ đọc (pack của git trên Windows) mà `rmtree(ignore_errors=True)` bỏ sót.
+    Thử lại tới ~3 s: trên Windows tiến trình con của git vừa bị kill có thể còn giữ handle một lúc."""
+    def onexc(func, target, _exc) -> None:
+        try:
+            os.chmod(target, stat.S_IWRITE)
+            func(target)
+        except OSError:
+            pass
+    for _ in range(15):
+        if not path.exists():
+            return
+        shutil.rmtree(path, onexc=onexc)
+        if path.exists():
+            time.sleep(0.2)
+
+
 def clone_repo(url: str, dest: Path, *, depth: int, cancel: threading.Event, max_bytes: int | None = None) -> None:
     """`git clone --depth` có thể huỷ, dừng khi `dest` vượt `max_bytes` (mặc định MAX_CLONE_BYTES); lỗi thì xoá `dest`."""
     limit = max_bytes or MAX_CLONE_BYTES
@@ -82,5 +100,5 @@ def clone_repo(url: str, dest: Path, *, depth: int, cancel: threading.Event, max
             if _dir_bytes(dest) > limit:  # clone xong trước lần đo đầu
                 raise too_big
         except BaseException:
-            shutil.rmtree(dest, ignore_errors=True)
+            remove_tree(dest)
             raise

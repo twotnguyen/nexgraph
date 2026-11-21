@@ -89,7 +89,7 @@ describe('21 nền tảng', () => {
     expect(pre.slice(0, 2)).toEqual([mine, other])
     expect(pre.slice(2).map((g: { matcher: string }) => g.matcher)).toEqual(['Bash|Grep', 'Read|Glob'])
     expect(pre[3].hooks[0]).toEqual({ type: 'command', timeout: 10,
-      command: `/Apps/NexGraph/engine hook-guard read --project ${root.includes(' ') ? `"${root}"` : root} --data-dir "/data dir" --strict` })
+      command: `/Apps/NexGraph/engine hook-guard read --project ${/[\s\\]/.test(root) ? `"${root}"` : root} --data-dir "/data dir" --strict` })
     applyPlatform('claude', root, cmd, dataDir, { strict: true })
     expect(planPlatform('claude', root, cmd, dataDir).find((p) => p.part === 'hook')!.status).toBe('update') // bỏ strict
     applyUninstall('claude', root, cmd, dataDir)

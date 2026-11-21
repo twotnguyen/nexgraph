@@ -152,7 +152,7 @@ describe('git hook', () => {
     const wt = join(realpathSync(mkdtempSync(join(tmpdir(), 'ng-wt-'))), 'wt')
     git(root, 'worktree', 'add', '-q', wt)
     installHook(wt, cmd, dataDir)
-    expect(readFileSync(hook, 'utf8')).toContain(`'${wt}'`)
+    expect(readFileSync(hook, 'utf8')).toContain(`'${wt.replace(/\\/g, '/')}'`) // quote() đổi \ thành / cho sh của git
     expect(hookStatus(wt, cmd, dataDir)).toBe('on')
     mkdirSync(join(root, 'sub'))
     expect(hookStatus(join(root, 'sub'), cmd, dataDir)).toBe('off')
