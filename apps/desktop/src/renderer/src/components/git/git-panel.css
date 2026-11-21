@@ -106,3 +106,5 @@
 .git-stash-description { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .git-stash-actions { min-width: 0; margin: 0; padding: 0; border: 0; }
 .git-stash-action-trigger { display: grid; place-items: center; width: 22px; height: 22px; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--color-muted); }
+.picker-footer button:disabled { opacity: .45; cursor: default; }
+.picker-footer button:disabled:hover { background: transparent; color: var(--color-muted); }

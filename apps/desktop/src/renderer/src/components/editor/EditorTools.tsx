@@ -145,6 +145,20 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
       else open({ kind: 'locations', title: kind === 'references' ? 'Tham chiếu' : 'Phần triển khai', locations: found })
     } catch (error) { onError(errorText(error)) }
   }
+  // Permalink kiểu Wu: vùng chọn (không có thì dòng con trỏ) tại commit HEAD trên remote; main quy số dòng về HEAD.
+  const permalink = async (copy: boolean) => {
+    if (!editor) return
+    const api = window.nexgraph?.git
+    if (!api) { onError('Git không dùng được ở chế độ này.'); return }
+    const selection = editor.handle.getSelection?.()
+    const line = editor.handle.getPosition?.().line
+    try {
+      const { url, published } = await api.permalink(projectId, editor.file, selection?.start ?? line, selection?.end ?? line, editor.text())
+      if (copy) await navigator.clipboard.writeText(url)
+      else window.open(url, '_blank', 'noopener,noreferrer') // main chỉ mở http(s) (setWindowOpenHandler → externalWebUrl)
+      if (!published) onError('Lưu ý: commit HEAD chưa có trên remote nên liên kết có thể không mở được. Hãy push trước khi chia sẻ.')
+    } catch (error) { onError(errorText(error)) }
+  }
   useCommand('editor.goto_line', () => { if (editor) open({ kind: 'goto', editor }) }, !!editor)
   useCommand('editor.document_symbols', () => { if (editor) open({ kind: 'document', editor }) }, !!editor)
   useCommand('editor.workspace_symbols', () => open({ kind: 'workspace' }))
@@ -156,6 +170,8 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   useCommand('editor.previous_diagnostic', () => action('editor.action.marker.prev'), !!editor)
   useCommand('editor.format', () => action('editor.action.formatDocument'), !!editor)
   useCommand('editor.code_actions', () => action('editor.action.quickFix'), !!editor)
+  useCommand('git.copy_permalink', () => void permalink(true), !!editor)
+  useCommand('git.open_permalink', () => void permalink(false), !!editor)
   if (!mode) return null
   if (mode.kind === 'goto') return <GoToLineDialog editor={mode.editor} close={close} />
   if (mode.kind === 'rename') return <RenameDialog projectId={projectId} editor={mode.editor} close={close} />

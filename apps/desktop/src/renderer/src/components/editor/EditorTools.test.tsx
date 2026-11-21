@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
 import type { EditorHandle } from './monaco'
 import type { ActiveEditor } from '../../state/activeEditor'
@@ -45,5 +45,48 @@ describe('EditorTools', () => {
     act(() => runCommand('editor.rename'))
     fireEvent.click(screen.getByRole('button', { name: 'Đổi tên' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Không có ký hiệu')
+  })
+
+  describe('permalink', () => {
+    const url = 'https://github.com/o/r/blob/abc/src/a.ts#L3-L5'
+    const writeText = vi.fn(async (_text: string) => {})
+    const setup = (result: () => Promise<{ url: string; published: boolean }>, selection: { text: string; start: number; end: number } | null) => {
+      installNexgraph()
+      const permalink = vi.fn(result)
+      ;(window.nexgraph as NexGraphApi).git = { permalink } as unknown as NexGraphApi['git']
+      const active = { file: 'src/a.ts', handle: { ...handle(), getSelection: () => selection }, text: () => 'one\ntwo\nthree' }
+      const p = props(active)
+      render(<EditorTools {...p} />)
+      return { permalink, onError: p.onError }
+    }
+    beforeEach(() => { Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true }) })
+    afterEach(() => { writeText.mockClear(); vi.restoreAllMocks() })
+
+    it('copies the link of the selected lines and says nothing when HEAD is on the remote', async () => {
+      const { permalink, onError } = setup(async () => ({ url, published: true }), { text: 'x', start: 3, end: 5 })
+      act(() => runCommand('git.copy_permalink'))
+      await waitFor(() => expect(writeText).toHaveBeenCalledWith(url))
+      expect(permalink).toHaveBeenCalledWith('p1', 'src/a.ts', 3, 5, 'one\ntwo\nthree')
+      expect(onError).not.toHaveBeenCalled()
+    })
+
+    it('uses the cursor line without a selection, opens the link in the browser and warns when HEAD is unpublished', async () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null)
+      const { permalink, onError } = setup(async () => ({ url, published: false }), null)
+      act(() => runCommand('git.open_permalink'))
+      await waitFor(() => expect(open).toHaveBeenCalledWith(url, '_blank', 'noopener,noreferrer'))
+      expect(permalink).toHaveBeenCalledWith('p1', 'src/a.ts', 2, 2, 'one\ntwo\nthree')
+      expect(writeText).not.toHaveBeenCalled()
+      expect(onError).toHaveBeenCalledWith(expect.stringContaining('chưa có trên remote'))
+    })
+
+    it('shows the main-process error and neither copies nor opens anything', async () => {
+      const open = vi.spyOn(window, 'open').mockReturnValue(null)
+      const { onError } = setup(async () => { throw { code: 'unsupported_remote', message: 'Remote chưa được hỗ trợ' } }, null)
+      act(() => runCommand('git.copy_permalink'))
+      await waitFor(() => expect(onError).toHaveBeenCalledWith('Remote chưa được hỗ trợ'))
+      expect(writeText).not.toHaveBeenCalled()
+      expect(open).not.toHaveBeenCalled()
+    })
   })
 })

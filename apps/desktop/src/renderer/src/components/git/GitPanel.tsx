@@ -16,10 +16,12 @@ interface Props {
   projectId: string
   onOpenDiff: (file: string, staged: boolean, rev?: string, from?: string) => void
   onOpenFile: (file: string) => void
+  /** Có thì hiện nút mở bộ chọn worktree cạnh nút nhánh (trang chứa lo việc mở worktree làm dự án). */
+  onOpenWorktrees?: () => void
 }
 
 /** Git panel: thay đổi, lịch sử và các thao tác trên nhánh hiện tại. */
-export function GitPanel({ projectId, onOpenDiff, onOpenFile }: Props) {
+export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }: Props) {
   const api = window.nexgraph.git
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [tab, setTab] = useState<'changes' | 'history'>('changes')
@@ -178,6 +180,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile }: Props) {
       <div className="git-bottom">
         <div className="git-branch-row">
           <button type="button" className="git-branch" disabled={busy} title="Chọn nhánh" onClick={() => setShowBranches(true)}><Icon name="branch" size={13} /><span>{status?.branch ?? (status ? 'HEAD tách rời' : '…')}</span></button>
+          {onOpenWorktrees && <button type="button" className="git-icon" disabled={busy} aria-label="Worktree" title="Worktree" onClick={onOpenWorktrees}><Icon name="folder" size={14} /></button>}
           <div className="git-split git-remote">
             <button type="button" disabled={busy} onClick={() => remote(primaryRemote)}>{status?.behind ? `↓${status.behind} ` : ''}{status?.ahead ? `↑${status.ahead} ` : ''}{primaryRemote === 'pull' ? 'Pull' : primaryRemote === 'fetch' ? 'Fetch' : status?.upstream ? 'Push' : 'Publish'}</button>
             <PopoverMenu label="Tác vụ remote" trigger={<Icon name="chevron" size={12} />} buttonClass="git-chevron" items={[
