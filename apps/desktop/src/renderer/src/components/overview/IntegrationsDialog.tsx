@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AGENT_IDS, type AgentId, type IntegrationPlan } from '@shared/integration-types'
 import type { ProjectSummary } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { Icon } from '../common/icons'
 
 const STRICT_AGENTS: AgentId[] = ['claude', 'codebuddy'] // nền tảng có hook PreToolUse
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
@@ -68,7 +69,7 @@ export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }
   return (
     <div className="modal-backdrop">
       <div role="dialog" aria-label={vi.integrate.title} className="modal">
-        <header><h2>{vi.integrate.title}</h2><button type="button" aria-label={vi.integrate.close} onClick={onClose}>×</button></header>
+        <header><h2>{vi.integrate.title}</h2><button type="button" aria-label={vi.integrate.close} onClick={onClose}><Icon name="close" size={14} /></button></header>
         <label className="row">
           <span>{vi.integrate.agentLabel}</span>
           <select aria-label={vi.integrate.agentLabel} value={agent} onChange={(e) => pick(e.target.value as AgentId)}>

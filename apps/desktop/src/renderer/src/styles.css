@@ -2793,3 +2793,79 @@ dialog.modal::backdrop { background: var(--overlay); }
 /* W9: kết quả suy luận bởi AI */
 .react-flow__edge.ai-inferred path { stroke: var(--violet); stroke-dasharray: 5 4; }
 .ai-inferred[role='note'] { color: var(--violet); }
+
+/* --- Hộp thoại kiểu Wu (Modal trong crate ui): neo cách đỉnh 80px, nền nổi, viền 1px, bo 8.
+   Đầu: đệm 8/12px, tiêu đề 15px, nút đóng là nút ma 24px. Chân: kẻ trên, đệm 8px, nút 28px dồn phải cách 4px. --- */
+.modal-backdrop { place-items: start center; padding: 80px 16px 16px; overflow-y: auto; background: rgb(0 0 0 / 28%); }
+:is(.modal-backdrop > .modal, dialog.modal) {
+  gap: 12px;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 112px);
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--panel-raised, var(--color-surface));
+  box-shadow: 0 2px 4px rgb(0 0 0 / 8%), 0 16px 40px rgb(0 0 0 / 28%);
+  color: var(--color-text);
+  font-size: 13px;
+}
+dialog.modal { padding: 12px; }
+dialog.modal::backdrop { background: rgb(0 0 0 / 28%); }
+.modal-backdrop > .modal.connection-dialog { width: min(600px, calc(100vw - 32px)); }
+.modal-backdrop > .modal > header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  align-items: center;
+  margin: 0 -12px;
+  padding: 8px 8px 4px 12px;
+  background: var(--panel-raised, var(--color-surface));
+}
+.modal-backdrop > .modal > header :is(b, h2),
+dialog.modal h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.modal-backdrop > .modal > header p { margin: 2px 0 0; font-size: 12px; }
+.modal-backdrop > .modal > header > button:last-child {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 16px;
+  line-height: 1;
+}
+.modal-backdrop > .modal > header > button:last-child:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+:is(.modal-backdrop > .modal > footer, dialog.modal > footer) {
+  position: sticky;
+  bottom: 0;
+  gap: 4px;
+  margin: 4px -12px 0;
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+  background: var(--panel-raised, var(--color-surface));
+}
+dialog.modal > footer { margin: 12px -12px -12px; }
+.modal .connection-footer { gap: 4px; margin-top: 16px; padding-top: 8px; }
+.modal :is(footer, .connection-footer, .row) button,
+.modal .field button { min-height: 28px; padding: 0 12px; border-radius: 6px; font-size: 13px; }
+.modal :is(input:not([type='checkbox'], [type='radio']), select) { height: 32px; padding: 0 10px; border-radius: 6px; font-size: 13px; }
+.modal textarea { border-radius: 6px; font-size: 13px; }
+.modal fieldset { padding: 8px 10px; border-radius: 6px; }
+.modal legend { padding: 0 4px; color: var(--color-muted); font-size: 12px; }
+.modal .export-formats label { border-radius: 6px; }
+.modal .export-formats label:has(input:checked) { border-color: color-mix(in srgb, var(--blue) 60%, var(--color-border)); background: color-mix(in srgb, var(--blue) 8%, transparent); }
+.modal .connection-heading h2 { margin-bottom: 0; }
+.modal .connection-heading p { margin-bottom: 0; }
+.modal .connection-provider-picker { margin: 0; gap: 6px; }
+.modal .connection-provider-card { min-height: 56px; padding: 8px 10px; border-radius: 8px; background: transparent; }
+.modal .connection-provider-card:hover:not(:disabled) { border-color: var(--color-border); background: color-mix(in srgb, var(--color-text) 6%, transparent); }
+.modal .connection-provider-card[aria-pressed=true] { border-color: color-mix(in srgb, var(--blue) 60%, var(--color-border)); background: color-mix(in srgb, var(--blue) 8%, transparent); }
+.modal .connection-provider-icon { flex-basis: 28px; width: 28px; height: 28px; border-radius: 6px; }
+.modal .connection-provider-detail { padding: 12px; border-radius: 8px; background: transparent; }
+.modal .connection-method-choice button { border-radius: 6px; }
+.modal .connection-methods { border-radius: 6px; }

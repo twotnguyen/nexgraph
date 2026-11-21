@@ -1,13 +1,14 @@
-/* Tổng quan dự án kiểu Wu: số liệu là ba ô chữ gọn; mỗi "thẻ" thành một hàng nút ma: icon mờ 14px, tên, mô tả mờ, trạng thái bên phải. */
-.welcome-page .graph-metrics { display: flex; gap: 32px; padding: 4px 6px; }
-.welcome-page .graph-metrics > div { display: grid; gap: 2px; padding: 0; border: 0; }
-.welcome-page .graph-metrics strong { font-size: 18px; font-weight: 600; }
-.welcome-page .graph-metrics span { color: var(--color-muted); font-size: 11px; }
-.welcome-page .overview-metrics { overflow: visible; }
-.welcome-page > .welcome > p[role='note'] { margin: -12px 6px 0; font-size: 12px; }
+/* Tổng quan dự án kiểu Wu: số liệu là ba ô chữ gọn; mỗi "thẻ" thành một hàng nút ma: icon mờ 14px, tên, mô tả mờ, trạng thái bên phải.
+   Tiền tố .screen.welcome-page để thắng các luật .overview .card cũ trong styles.css bất kể thứ tự nạp CSS. */
+.screen.welcome-page .graph-metrics { display: flex; gap: 32px; padding: 4px 6px; }
+.screen.welcome-page .graph-metrics > div { display: grid; gap: 2px; padding: 0; border: 0; }
+.screen.welcome-page .graph-metrics strong { font-size: 18px; font-weight: 600; }
+.screen.welcome-page .graph-metrics span { color: var(--color-muted); font-size: 11px; }
+.screen.welcome-page .overview-metrics { overflow: visible; }
+.screen.welcome-page > .welcome > p[role='note'] { margin: -12px 6px 0; font-size: 12px; }
 
-.welcome-page .cards { display: flex; flex-direction: column; gap: 0; }
-.welcome-page .card {
+.screen.welcome-page .cards { display: flex; flex-direction: column; gap: 0; }
+.screen.welcome-page .card {
   display: grid;
   grid-template-columns: 14px auto minmax(0, 1fr) auto;
   align-items: center;
@@ -21,24 +22,24 @@
   font-size: 13px;
   text-align: left;
 }
-.welcome-page .card > * { grid-column: auto; grid-row: auto; }
-.welcome-page .card > .card-icon { width: 14px; height: 14px; border-radius: 0; background: none; color: var(--color-muted); }
-.welcome-page .card > .card-icon svg { width: 14px; height: 14px; }
-.welcome-page .card b { font-size: 13px; font-weight: 400; white-space: nowrap; }
-.welcome-page .card > .muted { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.welcome-page .card-status { color: var(--color-muted); font-size: 11px; font-weight: 400; white-space: nowrap; }
-.welcome-page button.card:hover:not(:disabled) { border: 0; background: color-mix(in srgb, var(--color-text) 7%, transparent); box-shadow: none; transform: none; }
-.welcome-page button.card:hover:not(:disabled) .card-icon { background: none; color: var(--color-text); }
-.welcome-page button.card:disabled { opacity: .5; }
+.screen.welcome-page .card > * { grid-column: auto; grid-row: auto; }
+.screen.welcome-page .card > .card-icon { width: 14px; height: 14px; border-radius: 0; background: none; color: var(--color-muted); }
+.screen.welcome-page .card > .card-icon svg { width: 14px; height: 14px; }
+.screen.welcome-page .card b { font-size: 13px; font-weight: 400; white-space: nowrap; }
+.screen.welcome-page .card > .muted { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.screen.welcome-page .card-status { color: var(--color-muted); font-size: 11px; font-weight: 400; white-space: nowrap; }
+.screen.welcome-page button.card:hover:not(:disabled) { border: 0; background: color-mix(in srgb, var(--color-text) 7%, transparent); box-shadow: none; transform: none; }
+.screen.welcome-page button.card:hover:not(:disabled) .card-icon { background: none; color: var(--color-text); }
+.screen.welcome-page button.card:disabled { opacity: .5; }
 
 /* Thẻ MCP có nút và công tắc bên trong: giữ dạng khối, chỉ bỏ khung. */
-.welcome-page .mcp-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 6px; }
-.welcome-page .mcp-card > * { grid-column: 1; }
-.welcome-page .mcp-card .muted { white-space: normal; }
-.welcome-page .mcp-card button:not(.switch, .link) { min-height: 26px; border-radius: 6px; font-size: 12px; }
+.screen.welcome-page .mcp-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 8px 6px; }
+.screen.welcome-page .mcp-card > * { grid-column: 1; }
+.screen.welcome-page .mcp-card .muted { white-space: normal; }
+.screen.welcome-page .mcp-card button:not(.switch, .link) { min-height: 26px; border-radius: 6px; font-size: 12px; }
 
 /* Nguồn thêm (SourcesPanel) */
-.welcome-page .workbench-panel > p { margin: 0 6px 8px; font-size: 12px; }
-.welcome-page .workbench-panel > form.row { display: flex; gap: 8px; padding: 0 6px; }
-.welcome-page .workbench-panel > form.row input { flex: 1; height: 28px; padding: 0 8px; border-radius: 6px; font-size: 13px; }
-.welcome-page .workbench-panel > form.row button { min-height: 28px; border-radius: 6px; font-size: 12px; }
+.screen.welcome-page .workbench-panel > p { margin: 0 6px 8px; font-size: 12px; }
+.screen.welcome-page .workbench-panel > form.row { display: flex; gap: 8px; padding: 0 6px; }
+.screen.welcome-page .workbench-panel > form.row input { flex: 1; height: 28px; padding: 0 8px; border-radius: 6px; font-size: 13px; }
+.screen.welcome-page .workbench-panel > form.row button { min-height: 28px; border-radius: 6px; font-size: 12px; }

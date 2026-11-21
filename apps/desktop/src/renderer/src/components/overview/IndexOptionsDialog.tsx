@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { IndexOptions } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { Icon } from '../common/icons'
 
 interface Props {
   projectId: string
@@ -95,7 +96,7 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
       <div role="dialog" aria-modal="true" aria-label={vi.overview.optionsTitle} className="modal">
         <header>
           <b>{vi.overview.optionsTitle}</b>
-          <button type="button" aria-label={vi.export.close} onClick={onClose}>×</button>
+          <button type="button" aria-label={vi.export.close} onClick={onClose}><Icon name="close" size={14} /></button>
         </header>
         <label className="field">
           <span>{vi.overview.excludeLabel}</span>

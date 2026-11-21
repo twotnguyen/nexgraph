@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ExportFormat, ExportScope } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { Icon } from '../common/icons'
 
 type Choice = ExportFormat | 'png' | 'neo4j' | 'falkordb'
 
@@ -103,7 +104,7 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
       <div role="dialog" aria-modal="true" aria-label={vi.export.title(projectName)} className="modal export-dialog">
         <header>
           <b>{vi.export.title(projectName)}</b>
-          <button type="button" aria-label={vi.export.close} onClick={onClose}>×</button>
+          <button type="button" aria-label={vi.export.close} onClick={onClose}><Icon name="close" size={14} /></button>
         </header>
 
         {scopeLabel && choice !== 'png' && (
