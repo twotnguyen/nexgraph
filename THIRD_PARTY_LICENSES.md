@@ -163,7 +163,7 @@ SOFTWARE.
 ## xterm.js
 
 - Nguồn: https://github.com/xtermjs/xterm.js
-- Phiên bản: `@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0 (dùng qua API công khai, không chép mã)
+- Phiên bản: `@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0, `@xterm/addon-search` 0.16.0, `@xterm/addon-web-links` 0.12.0 (dùng qua API công khai, không chép mã)
 - Giấy phép: MIT, Copyright (c) 2017-2019 The xterm.js authors; Copyright (c) 2014-2016 SourceLair Private Company; Copyright (c) 2012-2013 Christopher Jeffrey.
 - Dùng ở: `apps/desktop/src/renderer/src/components/terminal/TerminalPanel.tsx` — terminal tích hợp.
 

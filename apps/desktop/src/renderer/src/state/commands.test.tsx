@@ -68,6 +68,16 @@ describe('bảng lệnh và phím tắt', () => {
     press({ key: 'e', code: 'KeyE', ctrlKey: true })
     expect(exported).toHaveBeenCalledOnce()
   })
+
+  it('để terminal nhận Ctrl+K thay vì bắt đầu hợp âm toàn cục', () => {
+    const exported = vi.fn()
+    setBinding('graph.export', 'mod+k mod+e')
+    render(<><Probe onExport={exported} /><section className="terminal-panel"><div className="terminal-view"><textarea aria-label="Terminal" /></div></section></>)
+    const input = screen.getByRole('textbox', { name: 'Terminal' })
+    expect(fireEvent.keyDown(input, { key: 'k', code: 'KeyK', ctrlKey: true })).toBe(true)
+    press({ key: 'e', code: 'KeyE', ctrlKey: true })
+    expect(exported).not.toHaveBeenCalled()
+  })
 })
 
 describe('khớp mờ', () => {

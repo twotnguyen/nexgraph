@@ -1,19 +1,41 @@
-/* Bảng terminal kiểu Wu: dock dưới vùng giữa, viền trên 1px, hàng thẻ 32px, thẻ là nút ma bo 6. */
+/* Bảng terminal neo dưới vùng giữa; thẻ và các khung chia sẻ phiên đang chạy. */
 .terminal-panel { position: relative; display: flex; flex: none; flex-direction: column; height: var(--terminal-height, 280px); min-height: 120px; border-top: 1px solid var(--color-border); background: var(--color-surface); }
 .terminal-panel[hidden] { display: none; }
+.workspace-shell > .center:has(> .terminal-panel[data-maximized]:not([hidden])) { position: relative; }
+.terminal-panel[data-maximized] { position: absolute; z-index: 20; inset: 0; height: auto; min-height: 0; border-top: 0; }
 .terminal-tabs { display: flex; flex: none; align-items: center; gap: 2px; height: 32px; padding: 0 6px; }
-.terminal-tab { display: inline-flex; align-items: center; border-radius: 6px; }
+.terminal-tab-list { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+.terminal-tab { display: inline-flex; flex: none; align-items: center; max-width: 280px; border-radius: 6px; }
 .terminal-tab[data-active] { background: color-mix(in srgb, var(--color-text) 9%, transparent); }
-.terminal-tab > button { display: inline-flex; align-items: center; gap: 6px; height: 24px; min-height: 0; padding: 0 6px; border: 0; background: transparent; color: var(--color-muted); font-size: 12px; }
+.terminal-tab > button { display: inline-flex; align-items: center; gap: 6px; height: 24px; min-height: 0; min-width: 0; padding: 0 6px; border: 0; background: transparent; color: var(--color-muted); font-size: 12px; white-space: nowrap; }
 .terminal-tab[data-active] > button, .terminal-tab > button:hover { color: var(--color-text); }
-.terminal-tab .terminal-tab-close { width: 20px; padding: 0; justify-content: center; opacity: 0; }
-.terminal-tab:hover .terminal-tab-close, .terminal-tab[data-active] .terminal-tab-close { opacity: 1; }
-.terminal-icon { display: grid; place-items: center; width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-muted); }
-.terminal-icon:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.terminal-tab-title { overflow: hidden; text-overflow: ellipsis; }
+.terminal-task-status { flex: none; font-size: 10px; color: var(--color-muted); }
+.terminal-task-status[data-status="success"] { color: var(--green, #2c9b62); }
+.terminal-task-status[data-status="failed"], .terminal-task-status[data-status="error"] { color: var(--red, #dc5353); }
+.terminal-tab .terminal-tab-close { flex: none; width: 20px; padding: 0; justify-content: center; opacity: 0; }
+.terminal-tab:hover .terminal-tab-close, .terminal-tab[data-active] .terminal-tab-close, .terminal-tab .terminal-tab-close:focus-visible { opacity: 1; }
+.terminal-rename { width: 150px; min-width: 0; height: 23px; padding: 0 5px; border: 1px solid var(--blue); border-radius: 4px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
+.terminal-tab-menu { position: fixed; z-index: 30; min-width: 120px; padding: 4px; border: 1px solid var(--color-border); border-radius: 7px; background: var(--panel-raised, var(--color-surface)); box-shadow: 0 3px 12px #0003; }
+.terminal-tab-menu button { display: block; width: 100%; padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--color-text); font-size: 12px; text-align: left; }
+.terminal-tab-menu button:hover { background: color-mix(in srgb, var(--color-text) 10%, transparent); }
+.terminal-icon { display: grid; flex: none; place-items: center; width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-muted); }
+.terminal-icon:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.terminal-icon:disabled { opacity: .4; cursor: default; }
+.terminal-panel button:focus-visible, .terminal-panel input:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .terminal-spacer { flex: 1; }
-.terminal-body { position: relative; flex: 1; min-height: 0; }
-.terminal-view { position: absolute; inset: 0 4px 4px 10px; display: none; }
-.terminal-view[data-active] { display: block; }
-.terminal-view .xterm { height: 100%; }
+.terminal-body { position: relative; display: flex; flex: 1; min-height: 0; overflow: hidden; }
+.terminal-view { position: relative; display: none; flex: 1 1 0; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.terminal-view[data-visible] { display: flex; }
+.terminal-view[data-pane="1"] { border-left: 1px solid var(--color-border); }
+.terminal-pane-head { display: flex; flex: none; align-items: center; gap: 6px; height: 24px; padding: 0 4px 0 10px; color: var(--color-muted); font-size: 11px; }
+.terminal-view[data-focused] .terminal-pane-head { color: var(--color-text); }
+.terminal-pane-head > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal-surface { flex: 1; min-height: 0; padding: 0 4px 4px 10px; }
+.terminal-surface .xterm { height: 100%; }
+.terminal-search { position: absolute; z-index: 3; top: 4px; right: 8px; display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); box-shadow: 0 3px 12px #0003; }
+.terminal-search input { width: 180px; min-width: 70px; height: 24px; padding: 0 6px; border: 1px solid var(--color-border); border-radius: 4px; background: var(--color-bg); color: var(--color-text); font-size: 12px; }
+.terminal-search-previous svg { transform: rotate(-90deg); }
+.terminal-search-next svg { transform: rotate(90deg); }
 .terminal-resize { position: absolute; z-index: 2; top: -3px; right: 0; left: 0; height: 5px; cursor: row-resize; }
 .terminal-resize:hover, .terminal-resize:focus-visible { background: var(--blue); outline: 0; }
