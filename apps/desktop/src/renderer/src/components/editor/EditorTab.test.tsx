@@ -199,6 +199,21 @@ describe('EditorTab', () => {
     await userEvent.keyboard('{Control>}s{/Control}')
     expect(write).not.toHaveBeenCalled()
   })
+  it('khoá của người dùng chặn Ctrl+S và nút Lưu dù buffer còn dirty', async () => {
+    const read = vi.fn(async () => content())
+    const write = vi.fn<NexGraphApi['fs']['write']>(async () => revision(200))
+    installNexgraph({ fs: { read, write } })
+    const props = { projectId: 'p1', file: 'lib/a.dart', line: 1, onClose: vi.fn(), onDirtyChange: vi.fn() }
+    const view = render(<EditorTab {...props} />)
+    const ta = await box()
+    await userEvent.type(ta, '!')
+    expect(screen.getByText('Chưa lưu')).toBeInTheDocument()
+    view.rerender(<EditorTab {...props} locked />)
+    expect(ta.readOnly).toBe(true)
+    expect(screen.getByRole('button', { name: 'Lưu' })).toBeDisabled()
+    await saveKey()
+    expect(write).not.toHaveBeenCalled()
+  })
 
   it('tệp đổi trên đĩa khi thẻ sạch thì tự nạp lại', async () => {
     const { read, emit } = setup()

@@ -33,6 +33,17 @@ const readView = (key: string): GitView => {
 const writeView = (key: string, view: GitView) => { try { localStorage.setItem(key, JSON.stringify(view)) } catch { /* storage unavailable */ } }
 const readDraft = (key: string) => { try { return localStorage.getItem(key) ?? '' } catch { return '' } }
 const writeDraft = (key: string, draft: string) => { try { draft ? localStorage.setItem(key, draft) : localStorage.removeItem(key) } catch { /* storage unavailable */ } }
+type CoAuthorDraft = { enabled: boolean; value: string }
+const coKey = (projectId: string) => `nexgraph.git.coauthors:${projectId}`
+const defaultCo: CoAuthorDraft = { enabled: false, value: '' }
+const readCo = (key: string): CoAuthorDraft => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) ?? 'null') as Partial<CoAuthorDraft> | null
+    if (!saved) return defaultCo
+    return { enabled: saved.enabled === true, value: typeof saved.value === 'string' ? saved.value : '' }
+  } catch { return defaultCo }
+}
+const writeCo = (key: string, value: CoAuthorDraft) => { try { localStorage.setItem(key, JSON.stringify(value)) } catch { /* storage unavailable */ } }
 /** Đổi dự án thì đọc lại theo khoá mới trước khi ghi, tránh ghi đè draft của dự án cũ. */
 function useStored<T>(key: string, read: (key: string) => T, write: (key: string, value: T) => void) {
   const [value, setValue] = useState(() => read(key))
@@ -64,6 +75,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
   const busyRef = useRef(false)
   const [view, setView] = useStored(viewKey(projectId), readView, writeView)
   const [draft, setDraft] = useStored(draftKey(projectId), readDraft, writeDraft)
+  const [coAuthor, setCoAuthor] = useStored(coKey(projectId), readCo, writeCo)
   const [expanded, setExpanded] = useState(false)
   const [aiEnabled, setAiEnabled] = useState(false)
   const [amend, setAmend] = useState(false)
@@ -122,7 +134,8 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
     if (!api || !canCommit) return
     if (amend && !window.confirm(tr('Amend sẽ thay commit cuối trên máy này và không tự push. Nhánh remote đã biết sẽ được kiểm tra trước khi thực hiện. Tiếp tục?'))) return
     void act(async () => {
-      const sha = await api.commit(projectId, draft.trim(), amend)
+      const authors = coAuthor.enabled ? coAuthor.value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean) : []
+      const sha = await api.commit(projectId, draft.trim(), amend, authors)
       setDraft('')
       setAmend(false)
       setNotice({ text: tr('Đã {action} {sha}', { action: amend ? 'amend' : 'commit', sha }) })
@@ -264,6 +277,11 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
         </div>
         <div className="git-commit">
           <textarea aria-label={tr('Thông điệp commit')} placeholder={tr('Thông điệp commit (⌘↩ để commit)')} rows={expanded ? 10 : 3} data-expanded={expanded} value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={onKey} />
+          <label className="git-coauthor">
+            <input type="checkbox" checked={coAuthor.enabled} aria-label={tr('Thêm đồng tác giả')} onChange={(event) => setCoAuthor((v) => ({ ...v, enabled: event.target.checked }))} />
+            <span>{tr('Đồng tác giả')}</span>
+            <input type="text" value={coAuthor.value} aria-label={tr('Tên và email đồng tác giả')} placeholder={tr('Tên <email>')} onChange={(event) => setCoAuthor((v) => ({ ...v, value: event.target.value }))} />
+          </label>
           <button type="button" className="git-icon git-expand" aria-label={expanded ? tr('Thu nhỏ') : tr('Phóng to')} title={expanded ? tr('Thu nhỏ') : tr('Phóng to')} aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}><Icon name="chevron" size={13} /></button>
           <div className="git-commit-row">
             <button type="button" className="git-icon" disabled={!aiEnabled || busy || !status?.staged.length} aria-label={tr('Viết thông điệp commit')} title={aiEnabled ? tr('Viết thông điệp commit bằng AI từ diff đã stage') : tr('Bật “Tạo thông điệp bằng AI” trong Tuỳ chọn commit')} onClick={suggest}><Icon name="spark" size={14} /></button>

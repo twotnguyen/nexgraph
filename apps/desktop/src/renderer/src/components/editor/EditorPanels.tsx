@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LspDiagnostic, LspDocumentSymbol } from '@shared/api'
 import type { ActiveEditor } from '../../state/activeEditor'
-import { useDiagnostics } from '../../state/diagnostics'
+import { refreshDiagnostics, useDiagnostics } from '../../state/diagnostics'
 import { errorText } from '../../state/errorText'
 import { fuzzyMatch } from '../../state/fuzzy'
 import { smallestSymbolAt } from '../../state/syntaxSelection'
@@ -160,6 +160,8 @@ const readAcked = (projectId: string): Set<string> => {
 export function DiagnosticsPanel({ projectId, onOpen }: { projectId: string; onOpen: OpenEditorLocation }) {
   const diagnostics = useDiagnostics(projectId)
   const [acked, setAcked] = useState(() => readAcked(projectId))
+  const [includeWarnings, setIncludeWarnings] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const loaded = useRef(projectId)
   useEffect(() => {
     if (loaded.current === projectId) return
@@ -167,7 +169,16 @@ export function DiagnosticsPanel({ projectId, onOpen }: { projectId: string; onO
     setAcked(readAcked(projectId))
   }, [projectId])
 
-  const files = Object.entries(diagnostics).filter(([, items]) => items.length > 0).sort(([a], [b]) => a.localeCompare(b))
+  const files = Object.entries(diagnostics)
+    .map(([file, items]) => [file, includeWarnings ? items : items.filter((item) => item.severity !== 2)] as [string, LspDiagnostic[]])
+    .filter(([, items]) => items.length > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+  const refresh = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try { await refreshDiagnostics(projectId) }
+    finally { setRefreshing(false) }
+  }
   const acknowledge = (file: string, line: number) => {
     const next = new Set(acked).add(`${file}:${line}`)
     setAcked(next)
@@ -184,6 +195,14 @@ export function DiagnosticsPanel({ projectId, onOpen }: { projectId: string; onO
     </li>
   }
   return <div className="editor-diagnostics">
+    <div className="editor-tool-actions" style={{ justifyContent: 'flex-start', margin: '6px 0' }}>
+      <button type="button" aria-pressed={includeWarnings} title={tr('Bao gồm cảnh báo')}
+        style={{ width: 'auto', display: 'inline-flex', padding: '3px 6px' }}
+        onClick={() => setIncludeWarnings((value) => !value)}>{tr('Bao gồm cảnh báo')}</button>
+      <button type="button" disabled={refreshing} title={tr('Làm mới chẩn đoán')} aria-label={tr('Làm mới chẩn đoán')}
+        style={{ width: 'auto', display: 'inline-flex', padding: '3px 6px' }}
+        onClick={() => void refresh()}>{refreshing ? tr('Đang làm mới…') : tr('Làm mới')}</button>
+    </div>
     {files.length === 0 ? <p className="muted">{tr('Không có lỗi trong dự án')}</p> : files.map(([file, items]) => {
       const unseen = items.filter((item) => !acked.has(`${file}:${item.range.start.line}`))
       const seen = items.filter((item) => acked.has(`${file}:${item.range.start.line}`))

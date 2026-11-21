@@ -52,6 +52,17 @@ it('status chỉ trong thư mục dự án; stage, unstage, commit từng tệp;
   await expect(gitCommit(root, '  ')).rejects.toMatchObject({ code: 'bad_param' })
 })
 
+it('commit thêm trailer Co-authored-by từ giá trị người dùng và chặn giá trị có dòng mới', async () => {
+  writeFileSync(join(root, 'src/a.ts'), 'one\nthree\n')
+  await gitStage(root, ['src/a.ts'])
+  await gitCommit(root, 'có đồng tác giả', false, ['Bình <b@example.com>', ' An <a@example.com> '])
+  expect(sh('log', '-1', '--format=%B').trim()).toBe('có đồng tác giả\n\nCo-authored-by: Bình <b@example.com>\nCo-authored-by: An <a@example.com>')
+  writeFileSync(join(root, 'src/a.ts'), 'one\nfour\n')
+  await gitStage(root, ['src/a.ts'])
+  await expect(gitCommit(root, 'x', false, ['A\nx'])).rejects.toMatchObject({ code: 'bad_param' })
+  await expect(gitCommit(root, 'x', false, 'nope')).rejects.toMatchObject({ code: 'bad_param' })
+})
+
 it('blame theo nội dung trên đĩa: dòng đã commit có tác giả, dòng mới là chưa commit', async () => {
   writeFileSync(join(root, 'src/a.ts'), 'zero\none\ntwo\n')
   const lines = await gitBlame(root, 'src/a.ts')

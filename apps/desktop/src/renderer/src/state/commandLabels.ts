@@ -53,6 +53,7 @@ const EN: Record<string, readonly [title: string, category: string]> = {
   'focus.next_part': ['Focus Next Part', 'Editor'],
   'focus.previous_part': ['Focus Previous Part', 'Editor'],
   'editor.toggle_vim': ['Toggle Vim Mode', 'Editor'],
+  'editor.toggle_read_only': ['Toggle Read-Only for Tab', 'Editor'],
   'editor.goto_line': ['Go to Line', 'Editor'],
   'editor.document_symbols': ['Find Symbol in File', 'Editor'],
   'editor.workspace_symbols': ['Find Symbol in Project', 'Editor'],

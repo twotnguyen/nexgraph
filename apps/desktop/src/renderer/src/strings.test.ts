@@ -38,4 +38,16 @@ describe('i18n', () => {
     expect(tr(`${missing} {name}`, { name: 'demo' })).toBe(`${missing} demo`)
     expect(tr(`${missing} n={n}`, { n: 2 })).toBe(`${missing} n=2`)
   })
+
+  it('dịch nhãn chẩn đoán và đồng tác giả sang tiếng Anh', () => {
+    setLocale('en')
+    expect(tr('Bao gồm cảnh báo')).toBe('Include warnings')
+    expect(tr('Làm mới chẩn đoán')).toBe('Refresh diagnostics')
+    expect(tr('Đang làm mới…')).toBe('Refreshing…')
+    expect(tr('Đang tải…')).toBe('Downloading…')
+    expect(tr('Đồng tác giả')).toBe('Co-authors')
+    expect(tr('Thêm đồng tác giả')).toBe('Add co-author')
+    expect(tr('Tên và email đồng tác giả')).toBe('Co-author name and email')
+    expect(tr('Tên <email>')).toBe('Name <email>')
+  })
 })

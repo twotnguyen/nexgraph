@@ -27,6 +27,9 @@
 .git-commit { display: grid; flex: none; gap: 6px; padding: 8px; border-top: 1px solid var(--color-border); }
 .git-commit textarea { min-height: 56px; padding: 6px 8px; border-radius: 6px; font-size: 13px; resize: vertical; }
 .git-commit-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.git-coauthor { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--color-muted); }
+.git-coauthor input[type='checkbox'] { flex: none; width: 14px; height: 14px; margin: 0; accent-color: var(--blue); }
+.git-coauthor input[type='text'] { flex: 1; min-width: 0; height: 22px; padding: 0 6px; font-size: 11px; }
 .git-commit-row button { margin-left: auto; height: 28px; min-height: 0; padding: 0 12px; border-radius: 6px; font-size: 12px; }
 /* Diff trong thẻ: đầu thẻ như thẻ tệp. */
 .git-diff .diff-host { flex: 1; min-height: 0; }

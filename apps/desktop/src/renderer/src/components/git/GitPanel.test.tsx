@@ -63,7 +63,7 @@ it('bật amend và commit dùng thông điệp commit cuối', async () => {
   expect(git.commit).not.toHaveBeenCalled()
   confirm.mockReturnValue(true)
   fireEvent.click(screen.getByRole('button', { name: 'Amend 1 tệp' }))
-  await waitFor(() => expect(git.commit).toHaveBeenCalledWith('p1', 'trước đó', true))
+  await waitFor(() => expect(git.commit).toHaveBeenCalledWith('p1', 'trước đó', true, []))
   confirm.mockRestore()
 })
 
@@ -228,4 +228,27 @@ it('Group By None giữ hai dòng MM với khoá riêng và mở đúng diff t�
   expect(onOpenDiff).toHaveBeenLastCalledWith('both.txt', false)
   expect(errors.mock.calls.flat().join(' ')).not.toMatch(/same key/i)
   errors.mockRestore()
+})
+
+it('bật đồng tác giả thì commit gửi đúng danh sách và giữ nhập liệu theo repo', async () => {
+  const { git, unmount } = setup({ ...status, conflicts: [] })
+  await screen.findByText('staged.txt')
+  fireEvent.change(screen.getByLabelText('Thông điệp commit'), { target: { value: 'msg' } })
+  fireEvent.click(screen.getByLabelText('Thêm đồng tác giả'))
+  fireEvent.change(screen.getByLabelText('Tên và email đồng tác giả'), { target: { value: 'Bình <b@example.com>' } })
+  fireEvent.click(screen.getByRole('button', { name: /^Commit/ }))
+  await waitFor(() => expect(git.commit).toHaveBeenCalledWith('p1', 'msg', false, ['Bình <b@example.com>']))
+  unmount()
+  setup({ ...status, conflicts: [] })
+  expect(screen.getByLabelText('Thêm đồng tác giả')).toBeChecked()
+  expect(screen.getByLabelText('Tên và email đồng tác giả')).toHaveValue('Bình <b@example.com>')
+})
+
+it('tắt đồng tác giả thì commit không gửi co-author dù ô nhập có giá trị', async () => {
+  const { git } = setup({ ...status, conflicts: [] })
+  await screen.findByText('staged.txt')
+  fireEvent.change(screen.getByLabelText('Thông điệp commit'), { target: { value: 'msg' } })
+  fireEvent.change(screen.getByLabelText('Tên và email đồng tác giả'), { target: { value: 'Bình <b@example.com>' } })
+  fireEvent.click(screen.getByRole('button', { name: /^Commit/ }))
+  await waitFor(() => expect(git.commit).toHaveBeenCalledWith('p1', 'msg', false, []))
 })

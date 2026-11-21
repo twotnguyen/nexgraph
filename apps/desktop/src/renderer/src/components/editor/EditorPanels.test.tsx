@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LspDiagnosticsEvent, LspDocumentSymbol, LspRange } from '@shared/api'
 import type { ActiveEditor } from '../../state/activeEditor'
@@ -116,11 +116,15 @@ describe('OutlinePanel', () => {
 describe('DiagnosticsPanel', () => {
   let emit: (event: LspDiagnosticsEvent) => void = () => {}
   let stop: () => void = () => {}
+  let open = vi.fn(async () => {})
 
   beforeEach(() => {
     localStorage.clear()
+    open = vi.fn(async () => {})
+    const close = vi.fn(async () => {})
     Object.assign(window, { nexgraph: {
-      lsp: { onDiagnostics: (cb: (event: LspDiagnosticsEvent) => void) => { emit = cb; return () => {} } }
+      fs: { read: vi.fn(async () => ({ text: 'nội dung từ đĩa' })) },
+      lsp: { onDiagnostics: (cb: (event: LspDiagnosticsEvent) => void) => { emit = cb; return () => {} }, open, close }
     } })
     stop = startDiagnostics()
   })
@@ -146,5 +150,31 @@ describe('DiagnosticsPanel', () => {
     render(<DiagnosticsPanel projectId="p1" onOpen={vi.fn()} />)
     expect(within(screen.getByRole('list', { name: 'Chưa xem' })).queryByText('Lỗi: Lỗi đầu')).toBeNull()
     expect(within(screen.getByRole('list', { name: 'Đã xem' })).getByText('Lỗi: Lỗi đầu')).toBeTruthy()
+  })
+  it('ẩn và hiện cảnh báo bằng nút toggle', () => {
+    act(() => emit({ projectId: 'p1', file: 'warn.ts', diagnostics: [
+      { range: range(1, 1), severity: 1, message: 'Lỗi giữ lại' },
+      { range: range(2, 2), severity: 2, message: 'Cảnh báo ẩn' }
+    ] }))
+    render(<DiagnosticsPanel projectId="p1" onOpen={vi.fn()} />)
+    const toggle = screen.getByRole('button', { name: 'Bao gồm cảnh báo' })
+    expect(screen.getByText('Cảnh báo: Cảnh báo ẩn')).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(screen.queryByText('Cảnh báo: Cảnh báo ẩn')).toBeNull()
+    expect(screen.getByText('Lỗi: Lỗi giữ lại')).toBeTruthy()
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(toggle)
+    expect(screen.getByText('Cảnh báo: Cảnh báo ẩn')).toBeTruthy()
+  })
+
+  it('refresh mở lại đúng tệp của project hiện tại', async () => {
+    act(() => {
+      emit({ projectId: 'p1', file: 'a.ts', diagnostics: [{ range: range(0, 0), severity: 1, message: 'Lỗi A' }] })
+      emit({ projectId: 'p2', file: 'b.ts', diagnostics: [{ range: range(0, 0), severity: 1, message: 'Lỗi B' }] })
+    })
+    render(<DiagnosticsPanel projectId="p1" onOpen={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Làm mới chẩn đoán' }))
+    await waitFor(() => expect(open).toHaveBeenCalledWith('p1', 'a.ts', 'nội dung từ đĩa'))
+    expect(open).not.toHaveBeenCalledWith('p2', 'b.ts', expect.anything())
   })
 })

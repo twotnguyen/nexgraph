@@ -59,6 +59,7 @@ export const COMMANDS: CommandDef[] = [
   { id: 'dock.all', category: 'Bảng công cụ', title: 'Ẩn / hiện tất cả bảng', key: 'mod+alt+y' },
   { id: 'dock.bottom', category: 'Terminal', title: 'Ẩn / hiện terminal', key: 'mod+j' },
   { id: 'editor.split_right', category: 'Editor', title: 'Chia đôi sang phải / bỏ chia đôi', key: 'mod+\\' },
+  { id: 'editor.toggle_read_only', category: 'Editor', title: 'Bật/tắt chế độ chỉ đọc cho thẻ', key: 'mod+k shift+r' },
   { id: 'editor.split_up', category: 'Editor', title: 'Chia đôi lên trên / bỏ chia đôi' },
   { id: 'editor.split_down', category: 'Editor', title: 'Chia đôi xuống dưới / bỏ chia đôi' },
   { id: 'editor.split_left', category: 'Editor', title: 'Chia đôi sang trái / bỏ chia đôi' },

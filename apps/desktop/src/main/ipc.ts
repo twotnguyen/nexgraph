@@ -333,7 +333,7 @@ export function registerIpc(
   on('git:status', async (pid: string) => gitStatus(await rootOf(pid)))
   on('git:stage', async (pid: string, files: string[]) => gitStage(await rootOf(pid), files))
   on('git:unstage', async (pid: string, files: string[]) => gitUnstage(await rootOf(pid), files))
-  on('git:commit', async (pid: string, message: string, amend: boolean) => gitCommit(await rootOf(pid), message, amend === true))
+  on('git:commit', async (pid: string, message: string, amend: boolean, coAuthors?: string[]) => gitCommit(await rootOf(pid), message, amend === true, coAuthors ?? []))
   on('git:diff', async (pid: string, file: string, staged: boolean) => gitDiffSides(await rootOf(pid), file, staged === true))
   on('git:blame', async (pid: string, file: string) => gitBlame(await rootOf(pid), file))
   on('git:restore', async (pid: string, file: string) => gitRestore(await rootOf(pid), file, (path) => shell.trashItem(path)))

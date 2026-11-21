@@ -41,3 +41,18 @@ export function startDiagnostics(): () => void {
     if (--mounts === 0) { off?.(); off = undefined }
   }
 }
+
+/** Gửi lại tài liệu cho language server để lấy diagnostic mới (chưa có API refresh/stop riêng). */
+export async function refreshDiagnostics(projectId: string): Promise<void> {
+  const api = window.nexgraph
+  if (!api?.lsp?.open) return
+  for (const file of Object.keys(projects.get(projectId) ?? empty)) {
+    try {
+      // shortcut: đọc từ đĩa, không lấy buffer chưa lưu của editor.
+      const content = await api.fs?.read(projectId, file)
+      if (!content) continue
+      await api.lsp.close?.(projectId, file)
+      await api.lsp.open(projectId, file, content.text)
+    } catch { /* tệp có thể đã bị xoá hoặc nằm ngoài dự án */ }
+  }
+}

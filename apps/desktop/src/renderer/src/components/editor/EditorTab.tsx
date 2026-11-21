@@ -46,6 +46,8 @@ interface Props {
   onViewTable?: () => void
   onReadOnlyChange?: (file: string, readOnly: boolean) => void
   onLoadError?: (file: string, error: string | null) => void
+  /** Khoá chỉ đọc do người dùng bật từ thẻ tệp; không đổi nội dung trên đĩa. */
+  locked?: boolean
 }
 
 type OpenFile = { editor: EditorHandle; base: FileContent }
@@ -93,7 +95,7 @@ export function blameText(line: GitBlameLine, now = Date.now(), summary = true):
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onViewTable, onReadOnlyChange, onLoadError }: Props) {
+export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onViewTable, onReadOnlyChange, onLoadError, locked }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
   const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void; blur: () => void; eolChanged: () => void } | null>(null)
@@ -106,11 +108,16 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   readOnlyCallback.current = onReadOnlyChange
   const loadErrorCallback = useRef(onLoadError)
   loadErrorCallback.current = onLoadError
+  const lockedRef = useRef(locked === true)
+  lockedRef.current = locked === true
   const [readOnly, setReadOnly] = useState<FileContent['reason'] | boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<Conflict | null>(null)
   const [reloading, setReloading] = useState(false)
   const [ready, setReady] = useState(false)
+  useEffect(() => {
+    editor.current?.setReadOnly(locked === true || !!readOnly)
+  }, [locked, readOnly, ready, file])
   const [format, setFormat] = useState<EditorFormat | null>(null)
   const formatRef = useRef<EditorFormat | null>(null)
   formatRef.current = format
@@ -214,7 +221,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       pendingSave = undefined
       current.base = disk
       current.editor.setValue(disk.text)
-      current.editor.setReadOnly(disk.readOnly)
+      current.editor.setReadOnly(lockedRef.current || disk.readOnly)
       readOnlyCallback.current?.(file, disk.readOnly)
       setReadOnly(disk.readOnly ? (disk.reason ?? true) : false)
       updateFormat(disk)
@@ -302,11 +309,12 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
 
     actions.current = {
       save: () => {
+        if (lockedRef.current) return
         const current = open
-        if (!current || current.base.readOnly || diskConflict || isReloading) return
+        if (!current) return
         const generation = ++saveGeneration
         const queueSave = () => {
-          if (!alive || generation !== saveGeneration || open !== current || current.base.readOnly || diskConflict || isReloading) return
+          if (!alive || lockedRef.current || generation !== saveGeneration || open !== current || current.base.readOnly || diskConflict || isReloading) return
           const text = current.editor.getValue()
           const eol = formatRef.current?.eol ?? current.base.eol
           pendingSave = text === current.base.text && eol === current.base.eol && writing === undefined ? undefined : text
@@ -343,7 +351,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       eolChanged: () => { updateDirty(); autoSave.change() }
     }
     const autoSave = createAutoSave(() => actions.current?.save(),
-      () => !!(alive && open && dirty.current && !open.base.readOnly && !diskConflict && !isReloading), getEditorPrefs)
+      () => !!(alive && open && !lockedRef.current && dirty.current && !open.base.readOnly && !diskConflict && !isReloading), getEditorPrefs)
     let { autoSave: autoSaveMode, autoSaveDelay } = getEditorPrefs()
     const offPrefs = observeEditorPrefs(() => {
       const next = getEditorPrefs()
@@ -369,7 +377,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
     })
     fs.read(projectId, file).then((c) => {
       if (!alive || !host.current) return
-      const ed = createEditor(host.current, { value: c.text, language, readOnly: c.readOnly, path: file, projectId, onOpenFile: (target, at, col) => openFileRef.current?.(target, at, col) })
+      const ed = createEditor(host.current, { value: c.text, language, readOnly: lockedRef.current || c.readOnly, path: file, projectId, onOpenFile: (target, at, col) => openFileRef.current?.(target, at, col) })
       readOnlyCallback.current?.(file, c.readOnly)
       void window.nexgraph.lsp?.open(projectId, file, c.text).catch(() => {})
       open = { editor: ed, base: c }
@@ -522,7 +530,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
             title={bookmarked ? tr('Bỏ đánh dấu dòng') : tr('Đánh dấu dòng')} onClick={toggleAtCursor}>
             <Icon name="bookmark" size={15} />
           </button>
-          <button type="button" className="ws-icon-button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
+          <button type="button" className="ws-icon-button" disabled={!ready || locked === true || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
             aria-label={tr('Lưu')} title={tr('Lưu (Ctrl/Cmd+S)')}><Icon name="save" size={15} /></button>
           {onSplit && <button type="button" className="ws-icon-button" disabled={!ready} aria-label={tr('Chia đôi sang phải')} title={tr('Chia đôi sang phải (⌘\)')} onClick={onSplit}><Icon name="panelRight" size={15} /></button>}
           <button type="button" className="ws-icon-button" aria-label={vi.editor.close} title={vi.editor.close} onClick={onClose}><Icon name="close" size={15} /></button>

@@ -32,7 +32,7 @@ vi.mock('../components/editor/monaco', () => ({
     return {
       getValue: () => ta.value, setValue: (v: string) => { ta.value = v },
       onChange: (cb: () => void) => ta.addEventListener('input', cb), revealLines, dispose: () => ta.remove(),
-      setReadOnly: () => {}
+      setReadOnly: (value: boolean) => { ta.readOnly = value },
     }
   }
 }))
@@ -411,6 +411,91 @@ describe('WorkspaceScreen: editor tabs', () => {
     expect(screen.getByRole('tab', { name: 'a.ts', selected: true })).toBeInTheDocument()
     fireEvent.keyDown(document, { key: '0', code: 'Digit0', ctrlKey: true })
     expect(screen.getByRole('tab', { name: 'c.ts', selected: true })).toBeInTheDocument()
+  })
+  it('kéo thả thay đổi thứ tự các thẻ tệp', async () => {
+    const entries = ['a.ts', 'b.ts', 'c.ts'].map((name) => ({ path: name, name, kind: 'file' as const }))
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    for (const name of ['a.ts', 'b.ts', 'c.ts']) await userEvent.click(await screen.findByRole('treeitem', { name }))
+    const tabNames = () => Array.from(document.querySelectorAll<HTMLElement>('.ws-tabs .file-tab .tab-name')).map((node) => node.textContent?.trim() ?? '').filter((name) => !name.startsWith('Xem trước'))
+    expect(tabNames()).toEqual(['a.ts', 'b.ts', 'c.ts'])
+    const data: Record<string, string> = {}
+    const dataTransfer = {
+      setData: (type: string, value: string) => { data[type] = value },
+      getData: (type: string) => data[type] ?? '', effectAllowed: '', dropEffect: ''
+    }
+    fireEvent.dragStart(screen.getByRole('tab', { name: 'a.ts' }).closest('.file-tab') as HTMLElement, { dataTransfer })
+    fireEvent.dragOver(screen.getByRole('tab', { name: 'c.ts' }).closest('.file-tab') as HTMLElement, { dataTransfer })
+    fireEvent.drop(screen.getByRole('tab', { name: 'c.ts' }).closest('.file-tab') as HTMLElement, { dataTransfer })
+    expect(tabNames()).toEqual(['b.ts', 'c.ts', 'a.ts'])
+  })
+  it('click giữa đóng đúng thẻ tệp', async () => {
+    const entries = ['a.ts', 'b.ts', 'c.ts'].map((name) => ({ path: name, name, kind: 'file' as const }))
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    for (const name of ['a.ts', 'b.ts', 'c.ts']) await userEvent.click(await screen.findByRole('treeitem', { name }))
+    fireEvent(screen.getByRole('tab', { name: 'b.ts' }), new MouseEvent('auxclick', { bubbles: true, button: 1 }))
+    expect(screen.queryByRole('tab', { name: 'b.ts' })).toBeNull()
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'c.ts' })).toBeInTheDocument()
+  })
+  it('nút khoá và lệnh editor.toggle_read_only bật/tắt chế độ chỉ đọc thật', async () => {
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })), read: read() } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.dblClick(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    const editor = await within(screen.getByRole('tabpanel', { name: 'a.ts' })).findByLabelText('editor')
+    expect((editor as HTMLTextAreaElement).readOnly).toBe(false)
+    await userEvent.click(screen.getByRole('button', { name: 'Khóa chỉ đọc a.ts' }))
+    expect((editor as HTMLTextAreaElement).readOnly).toBe(true)
+    expect(screen.getByRole('button', { name: 'Bỏ khóa chỉ đọc a.ts' })).toHaveAttribute('aria-pressed', 'true')
+    act(() => { runCommand('editor.toggle_read_only') })
+    expect((editor as HTMLTextAreaElement).readOnly).toBe(false)
+  })
+  it('readOnly từ đĩa không bật nút khoá và không ghi đè khoá của người dùng', async () => {
+    let disk = { text: 'one\ntwo\nthree', eol: '\n' as const, bom: false, mtimeMs: 1, version: 'ro-1', readOnly: true }
+    const code = vi.fn(async () => disk)
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    const { emit } = installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })), read: code } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.dblClick(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    const editor = await within(screen.getByRole('tabpanel', { name: 'a.ts' })).findByLabelText('editor')
+    expect((editor as HTMLTextAreaElement).readOnly).toBe(true)
+    expect(screen.getByRole('button', { name: 'Khóa chỉ đọc a.ts' })).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(screen.getByRole('button', { name: 'Khóa chỉ đọc a.ts' }))
+    expect(screen.getByRole('button', { name: 'Bỏ khóa chỉ đọc a.ts' })).toHaveAttribute('aria-pressed', 'true')
+    disk = { ...disk, version: 'ro-2', readOnly: false }
+    await act(async () => { emit({ type: 'changes_updated', project_id: 'p1' }) })
+    await waitFor(() => expect(code.mock.calls.length).toBeGreaterThan(1))
+    expect(screen.getByRole('button', { name: 'Bỏ khóa chỉ đọc a.ts' })).toHaveAttribute('aria-pressed', 'true')
+    expect((editor as HTMLTextAreaElement).readOnly).toBe(true)
+  })
+  it('đổi tên tệp đang khoá thì khoá theo path mới', async () => {
+    let entries = [{ path: 'old.ts', name: 'old.ts', kind: 'file' as const }]
+    const list = vi.fn(async () => ({ entries, truncated: false }))
+    const rename = vi.fn(async (_pid: string, _from: string, to: string) => { entries = [{ path: to, name: to, kind: 'file' }] })
+    installNexgraph({ fs: { list, rename, trash: vi.fn(async () => {}), createFile: vi.fn(async () => {}) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'old.ts' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Khóa chỉ đọc old.ts' }))
+    expect(screen.getByRole('button', { name: 'Bỏ khóa chỉ đọc old.ts' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.contextMenu(screen.getByRole('treeitem', { name: 'old.ts' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Đổi tên' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Đổi tên' }), { target: { value: 'new.ts' } })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Đổi tên' }), { key: 'Enter' })
+    expect(await screen.findByRole('button', { name: 'Bỏ khóa chỉ đọc new.ts' })).toHaveAttribute('aria-pressed', 'true')
+  })
+  it('đóng rồi mở lại cùng path thì khoá được xoá', async () => {
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })), read: read() } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Khóa chỉ đọc a.ts' }))
+    expect(screen.getByRole('button', { name: 'Bỏ khóa chỉ đọc a.ts' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Đóng a.ts' }))
+    expect(screen.queryByRole('button', { name: 'Bỏ khóa chỉ đọc a.ts' })).toBeNull()
+    await userEvent.click(screen.getByRole('treeitem', { name: 'a.ts' }))
+    expect(screen.getByRole('button', { name: 'Khóa chỉ đọc a.ts' })).toHaveAttribute('aria-pressed', 'false')
   })
   it('cây đổi tên và xoá cập nhật thẻ đang mở', async () => {
     let entries = [{ path: 'old.ts', name: 'old.ts', kind: 'file' as const }]

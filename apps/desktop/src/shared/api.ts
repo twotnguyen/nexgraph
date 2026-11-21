@@ -242,7 +242,7 @@ export interface NexGraphApi {
     status(projectId: string): Promise<GitStatus>
     stage(projectId: string, files: string[]): Promise<void>
     unstage(projectId: string, files: string[]): Promise<void>
-    commit(projectId: string, message: string, amend?: boolean): Promise<string>
+    commit(projectId: string, message: string, amend?: boolean, coAuthors?: string[]): Promise<string>
     diff(projectId: string, file: string, staged: boolean): Promise<{ before: string; after: string }>
     blame(projectId: string, file: string): Promise<GitBlameLine[]>
     restore(projectId: string, file: string): Promise<void>

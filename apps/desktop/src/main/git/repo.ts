@@ -161,10 +161,17 @@ export async function gitUnstage(root: string, files: unknown): Promise<void> {
 }
 
 /** Commit những gì đã stage; trả về mã commit ngắn. Không sửa commit đã xuất bản. */
-export async function gitCommit(root: string, message: unknown, amend = false): Promise<string> {
+export async function gitCommit(root: string, message: unknown, amend = false, coAuthors: unknown = []): Promise<string> {
   if (typeof message !== 'string' || !message.trim() || typeof amend !== 'boolean') throw fail('bad_param', 'Cần thông điệp commit hợp lệ')
+  if (!Array.isArray(coAuthors)) throw fail('bad_param', 'Danh sách đồng tác giả không hợp lệ')
+  const trailers = coAuthors.map((value) => {
+    if (typeof value !== 'string') throw fail('bad_param', 'Đồng tác giả không hợp lệ')
+    const line = value.trim()
+    if (!line || /[\r\n\0]/.test(line)) throw fail('bad_param', 'Đồng tác giả không hợp lệ')
+    return `Co-authored-by: ${line}`
+  })
   if (amend && await gitHeadKnownPublished(root)) throw fail('git_failed', 'Không thể sửa commit đã xuất bản')
-  await git(root, ['commit', '-q', ...(amend ? ['--amend'] : []), '-m', message])
+  await git(root, ['commit', '-q', ...(amend ? ['--amend'] : []), '-m', message, ...(trailers.length ? ['-m', trailers.join('\n')] : [])])
   return (await git(root, ['rev-parse', '--short', 'HEAD'])).trim()
 }
 

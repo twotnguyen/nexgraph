@@ -282,6 +282,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [files, setFiles] = useState<OpenFile[]>([])
   const [previews, setPreviews] = useState<string[]>([])
   const [readOnlyFiles, setReadOnlyFiles] = useState<Record<string, boolean>>({})
+  const [lockedFiles, setLockedFiles] = useState<Set<string>>(new Set())
   const [viewerErrors, setViewerErrors] = useState<Record<string, string | null>>({})
   const [pinned, setPinned] = useState<Set<string>>(new Set())
   const [tabMenu, setTabMenu] = useState<{ file: string; x: number; y: number } | null>(null)
@@ -291,6 +292,24 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [recentStore, setRecentStore] = useState(() => ({ projectId: project.project_id, paths: readRecentFiles(project.project_id) }))
   const recentFiles = recentStore.projectId === project.project_id ? recentStore.paths : []
   const orderedFiles = useMemo(() => [...files.filter((f) => pinned.has(f.file)), ...files.filter((f) => !pinned.has(f.file))], [files, pinned])
+  const draggedTab = useRef<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<string | null>(null)
+  const moveTab = (from: string, to: string) => {
+    if (!from || from === to) return
+    const order = orderedFiles.map((item) => item.file)
+    const fromIndex = order.indexOf(from)
+    const toIndex = order.indexOf(to)
+    if (fromIndex < 0 || toIndex < 0) return
+    order.splice(toIndex, 0, ...order.splice(fromIndex, 1))
+    setFiles((cur) => [...cur].sort((a, b) => order.indexOf(a.file) - order.indexOf(b.file)))
+    tabCycle.current = null
+  }
+  const toggleLocked = (file: string) => setLockedFiles((cur) => {
+    const next = new Set(cur)
+    if (next.has(file)) next.delete(file)
+    else next.add(file)
+    return next
+  })
   useEffect(() => {
     setRecentStore({ projectId: project.project_id, paths: readRecentFiles(project.project_id) })
     fileMru.current = []
@@ -526,6 +545,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setReadOnlyFiles((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !closing.has(file))))
     setViewerErrors((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !closing.has(file))))
     setPinned((cur) => new Set([...cur].filter((item) => !closing.has(item))))
+    setLockedFiles((cur) => new Set([...cur].filter((item) => !closing.has(item))))
     setSide((cur) => cur && closing.has(cur) ? null : cur)
     setPreviewSide((cur) => cur && closing.has(cur) ? null : cur)
   }
@@ -543,6 +563,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setReadOnlyFiles((cur) => Object.fromEntries(Object.entries(cur).map(([file, value]) => [remap(file), value])))
     setViewerErrors((cur) => Object.fromEntries(Object.entries(cur).map(([file, value]) => [remap(file), value])))
     setPinned((cur) => new Set([...cur].map(remap)))
+    setLockedFiles((cur) => new Set([...cur].map(remap)))
     setSide((cur) => cur ? remap(cur) : cur)
     setPreviewSide((cur) => cur ? remap(cur) : cur)
     setTab((cur) => {
@@ -562,6 +583,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setReadOnlyFiles((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !containsPath(path, file))))
     setViewerErrors((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !containsPath(path, file))))
     setPinned((cur) => new Set([...cur].filter((item) => !containsPath(path, item))))
+    setLockedFiles((cur) => new Set([...cur].filter((item) => !containsPath(path, item))))
     setSide((cur) => cur && containsPath(path, cur) ? null : cur)
     setPreviewSide((cur) => cur && containsPath(path, cur) ? null : cur)
     if ((activeFile && containsPath(path, activeFile)) || (previewFile && containsPath(path, previewFile))) setTab(lastMain)
@@ -781,6 +803,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     if (item) openCode(item.file, item.line, item.lineEnd, item.column)
   }, !hosted)
   useCommand('tab.pin', () => { if (activeFile) togglePinned(activeFile) }, !hosted && !!activeFile)
+  useCommand('editor.toggle_read_only', () => { if (activeFile) toggleLocked(activeFile) }, !!activeFile)
   const activateFile = (index: number) => {
     tabCycle.current = null
     const item = index === 0 ? orderedFiles.at(-1) : orderedFiles[index - 1]
@@ -1028,8 +1051,16 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               <Icon name="pr" size={16} /><span>{vi.prs.tab}</span>
             </button>
           )}
-          {orderedFiles.map((f) => (
-            <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`}
+          {orderedFiles.map((f) => {
+            const locked = lockedFiles.has(f.file)
+            return <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`} style={dropTarget === f.file ? { outline: '2px solid var(--teal)', outlineOffset: -2 } : undefined}
+              draggable
+              onDragStart={(event) => { draggedTab.current = f.file; if (event.dataTransfer) { event.dataTransfer.setData('text/plain', f.file); event.dataTransfer.effectAllowed = 'move' } }}
+              onDragOver={(event) => { event.preventDefault(); if (draggedTab.current && draggedTab.current !== f.file) setDropTarget(f.file) }}
+              onDragLeave={() => setDropTarget((cur) => cur === f.file ? null : cur)}
+              onDrop={(event) => { event.preventDefault(); const from = draggedTab.current ?? event.dataTransfer?.getData('text/plain') ?? ''; moveTab(from, f.file); draggedTab.current = null; setDropTarget(null) }}
+              onDragEnd={() => { draggedTab.current = null; setDropTarget(null) }}
+              onAuxClick={(event) => { if (event.button === 1) { event.preventDefault(); closeFile(f.file) } }}
               onContextMenu={(event) => { event.preventDefault(); setTabMenu({ file: f.file, x: event.clientX, y: event.clientY }) }}>
               <button id={tabId(`file:${f.file}`)} type="button" role="tab" aria-selected={tab === `file:${f.file}`} aria-controls={viewId}
                 aria-label={baseName(f.file)} tabIndex={tab === `file:${f.file}` ? 0 : -1}
@@ -1037,13 +1068,21 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
                 <FileTypeIcon name={f.file} /><span>{baseName(f.file)}</span>
                 {dirtyFiles.has(f.file) && <span className="dirty-dot" aria-hidden="true"> ●</span>}
               </button>
+              <button type="button" className="tab-close tab-lock" style={{ opacity: 1, color: locked ? 'var(--amber)' : undefined }} aria-pressed={locked}
+                aria-label={locked ? tr('Bỏ khóa chỉ đọc {name}', { name: baseName(f.file) }) : tr('Khóa chỉ đọc {name}', { name: baseName(f.file) })}
+                title={locked ? tr('Cho phép sửa thẻ') : tr('Chỉ đọc thẻ')} onClick={() => toggleLocked(f.file)}>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <rect x="5" y="10" width="14" height="10" rx="2" />
+                  <path d={locked ? 'M8 10V7a4 4 0 0 1 8 0v3' : 'M8 10V7a4 4 0 0 1 7-2.6'} />
+                </svg>
+              </button>
               {pinned.has(f.file)
                 ? <button type="button" className="tab-close tab-pin" aria-label={tr('Bỏ ghim {name}', { name: baseName(f.file) })} title={tr('Bỏ ghim')} onClick={() => togglePinned(f.file)}>
                     <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 3 6 6-1 3 3 3-1 1-5-1-5 5 2-6-3-3 1-1 3 1z" /></svg>
                   </button>
                 : <button type="button" className="tab-close" aria-label={tr('Đóng {name}', { name: baseName(f.file) })} onClick={() => closeFile(f.file)}><Icon name="close" size={12} /></button>}
             </span>
-          ))}
+          })}
           {previews.map((file) => <span key={`preview:${file}`} className={`tab file-tab${tab === `preview:${file}` ? ' active' : ''}`}>
             <button id={tabId(`preview:${file}`)} type="button" role="tab" aria-selected={tab === `preview:${file}`} aria-controls={viewId}
               tabIndex={tab === `preview:${file}` ? 0 : -1} title={file} className="tab-name" onClick={() => setTab(`preview:${file}`)}>
@@ -1082,6 +1121,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               { label: tr('Đóng thẻ khác'), action: () => closeFiles(orderedFiles.filter((item) => item.file !== tabMenu.file && !pinned.has(item.file)).map((item) => item.file)) },
               { label: tr('Đóng thẻ bên phải'), action: () => closeFiles(orderedFiles.slice(orderedFiles.findIndex((item) => item.file === tabMenu.file) + 1).filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
               { label: tr('Đóng tất cả'), action: () => closeFiles(orderedFiles.filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
+              { label: lockedFiles.has(tabMenu.file) ? tr('Cho phép sửa thẻ') : tr('Chỉ đọc thẻ'), action: () => toggleLocked(tabMenu.file) },
               { label: pinned.has(tabMenu.file) ? tr('Bỏ ghim thẻ') : tr('Ghim thẻ'), action: () => togglePinned(tabMenu.file) }
             ].map((item) => <button key={item.label} type="button" role="menuitem" onClick={() => { setTabMenu(null); item.action() }}>{item.label}</button>)}
           </div>
@@ -1132,7 +1172,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
           )}
           {files.map((f) => (
-            <FileView key={f.file} projectId={project.project_id} file={f.file} line={f.line} column={f.column} lineEnd={f.lineEnd} revealRequest={f.seq} active={!hidden && (tab === `file:${f.file}` || tab === `preview:${f.file}` && !isMarkdownFile(f.file))}
+            <FileView key={f.file} projectId={project.project_id} file={f.file} line={f.line} column={f.column} lineEnd={f.lineEnd} revealRequest={f.seq} active={!hidden && (tab === `file:${f.file}` || tab === `preview:${f.file}` && !isMarkdownFile(f.file))} locked={lockedFiles.has(f.file)}
               onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => { setPreviewSide(null); setSide(f.file) }}
               onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
               onReadOnlyChange={(file, readOnly) => setReadOnlyFiles((cur) => cur[file] === readOnly ? cur : { ...cur, [file]: readOnly })}
