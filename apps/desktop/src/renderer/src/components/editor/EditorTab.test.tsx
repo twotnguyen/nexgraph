@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FileContent, FileRevision, NexGraphApi } from '@shared/api'
@@ -7,6 +7,9 @@ import type { EngineEvent } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
 
 const revealLines = vi.hoisted(() => vi.fn())
+const revealPosition = vi.hoisted(() => vi.fn())
+const setBookmarks = vi.hoisted(() => vi.fn())
+const cursorPosition = vi.hoisted(() => ({ line: 1, column: 1 }))
 const created = vi.hoisted(() => vi.fn())
 
 // jsdom không chạy Monaco: thay bằng một <textarea> có cùng giao diện EditorHandle.
@@ -28,6 +31,9 @@ vi.mock('./monaco', () => ({
       } : null,
       setValue: (v: string) => { ta.value = v },
       onChange: (cb: () => void) => ta.addEventListener('input', cb),
+      getPosition: () => cursorPosition,
+      setBookmarks,
+      revealPosition,
       revealLines,
       setReadOnly: (v: boolean) => { ta.readOnly = v },
       dispose: () => ta.remove()
@@ -36,6 +42,8 @@ vi.mock('./monaco', () => ({
 }))
 
 import { EditorTab, type EditorContextGetter } from './EditorTab'
+import { listBookmarks, toggleBookmark } from '../../state/bookmarks'
+import { runCommand } from '../../state/commands'
 
 const revision = (mtimeMs: number): FileRevision => ({ mtimeMs, version: `version-${mtimeMs}` })
 const content = (over: Partial<FileContent> = {}): FileContent => ({
@@ -69,7 +77,12 @@ function pending<T>() {
   return { result, finish }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  localStorage.clear()
+  cursorPosition.line = 1
+  cursorPosition.column = 1
+})
 
 describe('EditorTab', () => {
   it('reads a live selection or unsaved buffer with the current disk version for AI context', async () => {
@@ -358,5 +371,45 @@ describe('EditorTab', () => {
     await box()
     await userEvent.click(screen.getByRole('button', { name: 'Đóng' }))
     expect(onClose).toHaveBeenCalled()
+  })
+  it('nút bookmark bật/tắt mốc của đúng dự án và tệp trên thẻ đang hiện', async () => {
+    const projectId = 'p-bookmark-ui'
+    installNexgraph({ fs: { read: vi.fn(async () => content()) } })
+    const base = { projectId, line: 1, onClose: vi.fn(), onDirtyChange: vi.fn() }
+    const hidden = render(<EditorTab {...base} file="lib/other.dart" active={false} />)
+    const view = render(<EditorTab {...base} file="lib/a.dart" />)
+    await within(view.container).findByLabelText('editor')
+    await act(async () => {})
+    expect(within(hidden.container).getByRole('button', { name: 'Đánh dấu dòng', hidden: true })).toBeInTheDocument()
+
+    await userEvent.click(within(view.container).getByRole('button', { name: 'Đánh dấu dòng' }))
+    await waitFor(() => expect(listBookmarks(projectId)).toEqual([{ file: 'lib/a.dart', line: 1 }]))
+    expect(setBookmarks).toHaveBeenCalledWith([1])
+
+    await userEvent.click(await within(view.container).findByRole('button', { name: 'Bỏ đánh dấu dòng' }))
+    await waitFor(() => expect(listBookmarks(projectId)).toEqual([]))
+  })
+
+  it('lệnh next/previous bookmark nhảy dòng rồi wrap', async () => {
+    const projectId = 'p-bookmark-nav'
+    toggleBookmark(projectId, 'lib/a.dart', 3)
+    toggleBookmark(projectId, 'lib/a.dart', 7)
+    installNexgraph({ fs: { read: vi.fn(async () => content()) } })
+    render(<EditorTab projectId={projectId} file="lib/a.dart" line={1} onClose={vi.fn()} onDirtyChange={vi.fn()} />)
+    await box()
+    await act(async () => {})
+
+    cursorPosition.line = 1
+    expect(runCommand('editor.next_bookmark')).toBe(true)
+    expect(revealPosition).toHaveBeenLastCalledWith(3, 1)
+    cursorPosition.line = 3
+    runCommand('editor.next_bookmark')
+    expect(revealPosition).toHaveBeenLastCalledWith(7, 1)
+    cursorPosition.line = 7
+    runCommand('editor.next_bookmark')
+    expect(revealPosition).toHaveBeenLastCalledWith(3, 1)
+    cursorPosition.line = 3
+    runCommand('editor.previous_bookmark')
+    expect(revealPosition).toHaveBeenLastCalledWith(7, 1)
   })
 })

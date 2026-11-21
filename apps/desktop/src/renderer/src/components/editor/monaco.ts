@@ -97,6 +97,13 @@ function editorTheme(): string {
 }
 const stopObservingTheme = observeTheme(() => monaco.editor.setTheme(editorTheme()))
 import.meta.hot?.dispose(stopObservingTheme)
+// Bookmark có glyph riêng, không dùng lại class của điểm dừng.
+if (!document.getElementById('nexgraph-bookmark-glyph')) {
+  const style = document.createElement('style')
+  style.id = 'nexgraph-bookmark-glyph'
+  style.textContent = '.editor-bookmark::before{content:"🔖";display:block;margin-left:3px;font-size:11px}'
+  document.head.appendChild(style)
+}
 
 export interface EditorHandle {
   getValue(): string
@@ -112,6 +119,8 @@ export interface EditorHandle {
   previewPosition?(line: number): void
   clearPreview?(): void
   revealPosition?(line: number, column: number): void
+  /** Chọn vùng theo toạ độ 1-based của Monaco (dòng, cột). */
+  selectRange?(range: { startLine: number; startColumn: number; endLine: number; endColumn: number }): void
   runAction?(id: string): Promise<void>
   formatDocument?(): Promise<void>
   onCursor?(cb: (line: number, column: number) => void): void
@@ -124,6 +133,8 @@ export interface EditorHandle {
   /** Điểm dừng (chấm đỏ ở lề) và dòng đang dừng khi gỡ lỗi. */
   setBreakpoints?(points: DebugBreakpoint[]): void
   setExecLine?(line: number | null): void
+  /** Bookmark ở lề (dòng 1-based); truyền [] để xoá. */
+  setBookmarks?(lines: number[]): void
   /** Bấm lề trái (cột chấm hoặc số dòng) ở một dòng. */
   onGutterClick?(cb: (line: number) => void): void
   onGutterContext?(cb: (line: number, x: number, y: number) => void): () => void
@@ -140,6 +151,15 @@ const fromUri = (uri: monaco.Uri) => ({ projectId: decodeURIComponent(uri.author
 
 const toRange = ({ start, end }: LspRange) => new monaco.Range(start.line + 1, start.character + 1, end.line + 1, end.character + 1)
 const readOnlyModels = new WeakSet<monaco.editor.ITextModel>()
+// Nhiều tab/mirror mở cùng một tệp thì dùng chung model; chỉ huỷ khi không còn ai giữ.
+const modelRefs = new WeakMap<monaco.editor.ITextModel, number>()
+const retainModel = (model: monaco.editor.ITextModel) => modelRefs.set(model, (modelRefs.get(model) ?? 0) + 1)
+const releaseModel = (model: monaco.editor.ITextModel) => {
+  const refs = modelRefs.get(model) ?? 1
+  if (refs > 1) { modelRefs.set(model, refs - 1); return }
+  modelRefs.delete(model)
+  if (!model.isDisposed()) model.dispose()
+}
 
 /** Đưa mọi buffer đang mở lên server trước một thao tác đổi tên liên tệp. */
 export async function syncProjectModels(projectId: string): Promise<void> {
@@ -314,8 +334,9 @@ export function languageFor(file: string): string {
 /** `path`: model gắn với đường dẫn tệp để khung chia đôi (createMirror) dùng chung bộ đệm; có `projectId` thì F12/gợi ý/hover hỏi language server. */
 export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean; path?: string; projectId?: string; onOpenFile?: (file: string, line: number, column?: number) => void }): EditorHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
-  if (opts.path) monaco.editor.getModel(modelUri(opts.path, opts.projectId))?.dispose()
-  const model = opts.path ? monaco.editor.createModel(opts.value, opts.language, modelUri(opts.path, opts.projectId)) : undefined
+  const uri = opts.path ? modelUri(opts.path, opts.projectId) : null
+  const model = uri ? monaco.editor.getModel(uri) ?? monaco.editor.createModel(opts.value, opts.language, uri) : undefined
+  if (model) retainModel(model)
   if (model && opts.readOnly) readOnlyModels.add(model)
   const setMarkers = () => {
     if (model && opts.projectId && opts.path && !model.isDisposed()) {
@@ -339,6 +360,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
   const note = editor.createDecorationsCollection()
   const breakpoints = editor.createDecorationsCollection()
   const exec = editor.createDecorationsCollection()
+  const bookmarks = editor.createDecorationsCollection()
   return {
     getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
     getSelection: () => {
@@ -371,6 +393,11 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
       editor.revealPositionInCenter({ lineNumber: line, column })
       editor.focus()
     },
+    selectRange: ({ startLine, startColumn, endLine, endColumn }) => {
+      const range = new monaco.Range(startLine, startColumn, endLine, endColumn)
+      editor.setSelection(range)
+      editor.revealRangeInCenter(range)
+    },
     runAction: async (id) => { editor.focus(); await editor.getAction(id)?.run() },
     formatDocument: async () => { await editor.getAction('editor.action.formatDocument')?.run() },
     onCursor: (cb) => void editor.onDidChangeCursorPosition((e) => cb(e.position.lineNumber, e.position.column)),
@@ -398,6 +425,10 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
       exec.set(line ? [{ range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: 'editor-exec-line', glyphMarginClassName: 'editor-exec-arrow' } }] : [])
       if (line) editor.revealLineInCenterIfOutsideViewport(line)
     },
+    setBookmarks: (lines) => bookmarks.set(lines.map((line) => ({
+      range: new monaco.Range(line, 1, line, 1),
+      options: { glyphMarginClassName: 'editor-bookmark' }
+    }))),
     onGutterClick: (cb) => void editor.onMouseDown((e) => {
       // Chỉ cột chấm (glyph margin): bấm số dòng vẫn để chọn cả dòng như thường.
       if (e.event.leftButton && e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) cb(e.target.position.lineNumber)
@@ -432,9 +463,10 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     dispose: () => {
       setVim(null)
       detachConflicts()
+      bookmarks.clear()
       const model = editor.getModel()
       editor.dispose()
-      model?.dispose()
+      if (model) releaseModel(model)
     }
   }
 }
@@ -449,6 +481,7 @@ export interface MirrorHandle {
 export function createMirror(el: HTMLElement, path: string, projectId?: string): MirrorHandle | null {
   const model = monaco.editor.getModel(modelUri(path, projectId))
   if (!model) return null
+  retainModel(model)
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const editor = monaco.editor.create(el, {
     model, theme: editorTheme(), automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
@@ -459,7 +492,7 @@ export function createMirror(el: HTMLElement, path: string, projectId?: string):
   return {
     setVim,
     onDisposeModel: (cb) => void model.onWillDispose(cb),
-    dispose: () => { setVim(null); editor.dispose() }
+    dispose: () => { setVim(null); editor.dispose(); releaseModel(model) }
   }
 }
 

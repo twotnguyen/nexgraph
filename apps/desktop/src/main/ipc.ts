@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { CollabHello, DebugBreakpoints, LspRange, TaskDefinition, TextSearchQuery, WriteOpts } from '../shared/api'
+import type { CollabHello, DebugBreakpoints, LspCallHierarchyItem, LspRange, TaskDefinition, TextSearchQuery, WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi, EngineApiError } from './engine/api'
 import type { EngineCommand, EngineHandle } from './engine/launcher'
@@ -289,6 +289,12 @@ export function registerIpc(
     return lsp.format(root, file, text, options)
   }))
   on('lsp:document-symbols', lspRequest((root, file: string, text: string) => lsp.documentSymbols(root, file, lspArgs(text, 1, 1)[0])))
+  on('lsp:call-hierarchy-prepare', lspRequest((root, file: string, text: string, line: number, column: number) =>
+    lsp.callHierarchyPrepare(root, file, text, ...lspPos(text, line, column))))
+  on('lsp:call-hierarchy-incoming', lspRequest((root, file: string, text: string, line: number, column: number, item: LspCallHierarchyItem) =>
+    lsp.callHierarchyIncoming(root, file, text, ...lspPos(text, line, column), item)))
+  on('lsp:call-hierarchy-outgoing', lspRequest((root, file: string, text: string, line: number, column: number, item: LspCallHierarchyItem) =>
+    lsp.callHierarchyOutgoing(root, file, text, ...lspPos(text, line, column), item)))
   on('lsp:workspace-symbols', lspRequest((root, query: string) => {
     if (typeof query !== 'string') throw new FsError('bad_param', 'Truy vấn không hợp lệ')
     return lsp.workspaceSymbols(root, query)

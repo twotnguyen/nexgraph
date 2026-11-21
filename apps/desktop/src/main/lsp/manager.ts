@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, extname, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { LspCodeAction, LspCompletionItem, LspDiagnostic, LspDocumentSymbol, LspLocation, LspRange, LspSignatureHelp, LspTextEdit, LspWorkspaceEdit, LspWorkspaceSymbol } from '../../shared/api'
+import type { LspCallHierarchyCall, LspCallHierarchyItem, LspCodeAction, LspCompletionItem, LspDiagnostic, LspDocumentSymbol, LspLocation, LspRange, LspSignatureHelp, LspTextEdit, LspWorkspaceEdit, LspWorkspaceSymbol } from '../../shared/api'
 import { FsError, resolveInside } from '../fs/project-fs'
 import { LspConnection } from './connection'
 import { isLspRange, normalizeDiagnostics, normalizeSignatureHelp, normalizeWorkspaceEdit, projectFile } from './protocol'
@@ -42,6 +42,7 @@ type Server = {
   versions: Map<string, { version: number; text: string }>
   diagnostics: Map<string, LspDiagnostic[]>
   resolveCodeActions: boolean
+  callHierarchy: boolean
 }
 
 /** Một phần nội dung hover của LSP (chuỗi, MarkedString hoặc MarkupContent) → Markdown. */
@@ -49,6 +50,28 @@ function hoverText(part: unknown): string {
   if (typeof part === 'string') return part
   if (!part || typeof part !== 'object' || !('value' in part) || typeof part.value !== 'string') return ''
   return 'language' in part && typeof part.language === 'string' ? `\`\`\`${part.language}\n${part.value}\n\`\`\`` : part.value
+}
+/** Đổi item call hierarchy của server sang đường dẫn dự án, giữ `data` để gửi lại server. */
+function callHierarchyItem(root: string, value: unknown): LspCallHierarchyItem | null {
+  if (!value || typeof value !== 'object') return null
+  const item = value as { uri?: unknown; name?: unknown; kind?: unknown; range?: unknown; selectionRange?: unknown; detail?: unknown; data?: unknown }
+  const file = projectFile(root, item.uri)
+  if (!file || typeof item.name !== 'string' || typeof item.kind !== 'number' || !isLspRange(item.range) || !isLspRange(item.selectionRange)) return null
+  return { name: item.name, kind: item.kind, file, range: item.range, selectionRange: item.selectionRange,
+    ...(typeof item.detail === 'string' ? { detail: item.detail } : {}), ...('data' in item ? { data: item.data } : {}) }
+}
+
+function callHierarchyCalls(root: string, raw: unknown, key: 'from' | 'to'): LspCallHierarchyCall[] {
+  if (!Array.isArray(raw)) return []
+  const out: LspCallHierarchyCall[] = []
+  for (const value of raw) {
+    if (!value || typeof value !== 'object') continue
+    const call = value as { from?: unknown; to?: unknown; fromRanges?: unknown }
+    const from = callHierarchyItem(root, call[key])
+    if (!from || !Array.isArray(call.fromRanges)) continue
+    out.push({ from, fromRanges: call.fromRanges.filter(isLspRange) })
+  }
+  return out
 }
 
 /** Một language server cho mỗi (gốc dự án, loại server); khởi động khi mở tệp đầu tiên, tắt khi đóng dự án/thoát app. */
@@ -72,7 +95,7 @@ export class LspManager {
       const items = params && typeof params === 'object' && 'items' in params && Array.isArray(params.items) ? params.items : []
       return items.map(() => null)
     }
-    const server: Server = { process: child, rpc, versions: new Map(), diagnostics: new Map(), resolveCodeActions: false, ready: Promise.resolve() }
+    const server: Server = { process: child, rpc, versions: new Map(), diagnostics: new Map(), resolveCodeActions: false, callHierarchy: false, ready: Promise.resolve() }
     rpc.onNotification = (method, params) => {
       if (method !== 'textDocument/publishDiagnostics' || this.servers.get(key) !== server) return
       const event = normalizeDiagnostics(root, params)
@@ -116,9 +139,10 @@ export class LspManager {
       },
       initializationOptions: kind === 'ts' ? { tsserver: { path: join(pkgDir('typescript'), 'lib', 'tsserver.js') } } : {}
     }, 60_000).then((result) => {
-      const provider = (result as { capabilities?: { codeActionProvider?: { resolveProvider?: boolean } | boolean } } | null)?.capabilities?.codeActionProvider
+      const caps = (result as { capabilities?: { codeActionProvider?: { resolveProvider?: boolean } | boolean; callHierarchyProvider?: unknown } } | null)?.capabilities
+      const provider = caps?.codeActionProvider
       server.resolveCodeActions = typeof provider === 'object' && provider !== null && provider.resolveProvider === true
-      rpc.notify('initialized', {})
+      server.callHierarchy = !!caps?.callHierarchyProvider
     })
     this.servers.set(key, server)
     return server
@@ -247,6 +271,47 @@ export class LspManager {
       return { name: item.name, kind: item.kind, range, selectionRange, ...(children ? { children } : {}) }
     }
     return raw.map(convert).filter((item): item is LspDocumentSymbol => item !== null)
+  }
+
+  /** Item do client gửi lại: dựng URI từ đường dẫn dự án nhưng giữ nguyên `data` của server. */
+  private callHierarchyParam(root: string, item: LspCallHierarchyItem): { item: Record<string, unknown> } | null {
+    if (!item || typeof item !== 'object' || typeof item.file !== 'string' || !isLspRange(item.range) || !isLspRange(item.selectionRange)) return null
+    try {
+      const { file, ...rest } = item
+      return { item: { ...rest, uri: pathToFileURL(resolveInside(root, file)).href } }
+    } catch {
+      return null
+    }
+  }
+
+  async callHierarchyPrepare(root: string, file: string, text: string, line: number, character: number): Promise<LspCallHierarchyItem[] | null> {
+    if (!Number.isInteger(line) || line < 0 || !Number.isInteger(character) || character < 0) return []
+    const doc = await this.withDoc(root, file, text)
+    if (!doc || !doc.server.callHierarchy) return []
+    const raw = await doc.server.rpc.request<unknown>('textDocument/prepareCallHierarchy', { textDocument: { uri: doc.uri }, position: { line, character } })
+    if (raw === null) return null
+    if (!Array.isArray(raw)) return []
+    return raw.map((value) => callHierarchyItem(root, value)).filter((item): item is LspCallHierarchyItem => item !== null)
+  }
+
+  async callHierarchyIncoming(root: string, file: string, text: string, line: number, character: number, item: LspCallHierarchyItem): Promise<LspCallHierarchyCall[]> {
+    if (!Number.isInteger(line) || line < 0 || !Number.isInteger(character) || character < 0) return []
+    const doc = await this.withDoc(root, file, text)
+    if (!doc || !doc.server.callHierarchy) return []
+    const param = this.callHierarchyParam(root, item)
+    if (!param) return []
+    const raw = await doc.server.rpc.request<unknown>('callHierarchy/incomingCalls', param)
+    return callHierarchyCalls(root, raw, 'from')
+  }
+
+  async callHierarchyOutgoing(root: string, file: string, text: string, line: number, character: number, item: LspCallHierarchyItem): Promise<LspCallHierarchyCall[]> {
+    if (!Number.isInteger(line) || line < 0 || !Number.isInteger(character) || character < 0) return []
+    const doc = await this.withDoc(root, file, text)
+    if (!doc || !doc.server.callHierarchy) return []
+    const param = this.callHierarchyParam(root, item)
+    if (!param) return []
+    const raw = await doc.server.rpc.request<unknown>('callHierarchy/outgoingCalls', param)
+    return callHierarchyCalls(root, raw, 'to')
   }
 
   async workspaceSymbols(root: string, query: string): Promise<LspWorkspaceSymbol[]> {

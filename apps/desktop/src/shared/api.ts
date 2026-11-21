@@ -58,6 +58,9 @@ export type LspTextEdit = { range: LspRange; newText: string }
 export type LspWorkspaceEdit = Record<string, LspTextEdit[]>
 export type LspDocumentSymbol = { name: string; kind: number; range: LspRange; selectionRange: LspRange; children?: LspDocumentSymbol[] }
 export type LspWorkspaceSymbol = { name: string; kind: number; file: string; range: LspRange; containerName?: string }
+/** Mục phân cấp lời gọi; `data` do server tạo và phải gửi lại nguyên vẹn cho incoming/outgoing. */
+export type LspCallHierarchyItem = { name: string; kind: number; file: string; range: LspRange; selectionRange: LspRange; detail?: string; data?: unknown }
+export type LspCallHierarchyCall = { from: LspCallHierarchyItem; fromRanges: LspRange[] }
 export type LspMarkup = string | { kind: 'plaintext' | 'markdown'; value: string }
 export type LspSignatureHelp = {
   signatures: { label: string; documentation?: LspMarkup; parameters?: { label: string | [number, number]; documentation?: LspMarkup }[]; activeParameter?: number }[]
@@ -208,6 +211,9 @@ export interface NexGraphApi {
     rename(projectId: string, file: string, text: string, line: number, column: number, newName: string): Promise<LspWorkspaceEdit>
     format(projectId: string, file: string, text: string, options: { tabSize: number; insertSpaces: boolean }): Promise<LspTextEdit[]>
     documentSymbols(projectId: string, file: string, text: string): Promise<LspDocumentSymbol[]>
+    callHierarchyPrepare(projectId: string, file: string, text: string, line: number, column: number): Promise<LspCallHierarchyItem[] | null>
+    callHierarchyIncoming(projectId: string, file: string, text: string, line: number, column: number, item: LspCallHierarchyItem): Promise<LspCallHierarchyCall[]>
+    callHierarchyOutgoing(projectId: string, file: string, text: string, line: number, column: number, item: LspCallHierarchyItem): Promise<LspCallHierarchyCall[]>
     workspaceSymbols(projectId: string, query: string): Promise<LspWorkspaceSymbol[]>
     signatureHelp(projectId: string, file: string, text: string, line: number, column: number): Promise<LspSignatureHelp | null>
     codeActions(projectId: string, file: string, text: string, range: LspRange): Promise<LspCodeAction[]>

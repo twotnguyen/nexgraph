@@ -1,15 +1,21 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import type { LspDocumentSymbol, LspLocation, LspWorkspaceSymbol } from '@shared/api'
+import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspLocation, LspWorkspaceSymbol } from '@shared/api'
 import { useCommand } from '../../state/commands'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { errorText } from '../../state/errorText'
+import { largerSymbolAt, positionInRange, previousFromHistory, siblingSymbol, smallestSymbolAt } from '../../state/syntaxSelection'
 import { Highlight, Picker } from '../layout/Picker'
 import * as editorMonaco from './monaco'
 import { parseGoToLine } from './goToLine'
 import type { OpenEditorLocation } from './EditorPanels'
 import './editor-tools.css'
 
-type Mode = { kind: 'goto' | 'rename' | 'document'; editor: ActiveEditor } | { kind: 'workspace' } | { kind: 'locations'; title: string; locations: LspLocation[] }
+type HierarchyRow = { key: string; item: LspCallHierarchyItem; name: string; file: string; line: number; column: number; isCall: boolean }
+type Mode =
+  | { kind: 'goto' | 'rename' | 'document'; editor: ActiveEditor }
+  | { kind: 'workspace' }
+  | { kind: 'locations'; title: string; locations: LspLocation[] }
+  | { kind: 'hierarchy'; direction: 'incoming' | 'outgoing'; root: LspCallHierarchyItem | null; rows: HierarchyRow[]; status: string }
 type SymbolRow = { id: string; symbol: LspDocumentSymbol }
 
 function flattenSymbols(symbols: LspDocumentSymbol[], prefix = ''): SymbolRow[] {
@@ -120,14 +126,107 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   onOpen: OpenEditorLocation; onDiagnostics: () => void; onError: (message: string) => void
 }) {
   const [mode, setMode] = useState<Mode | null>(null)
+  const syntaxState = useRef<{ file: string; symbols: LspDocumentSymbol[]; current: LspDocumentSymbol; history: LspDocumentSymbol[] } | null>(null)
+  const hierarchySerial = useRef(0)
   const origin = useRef<HTMLElement | null>(null)
   const open = (next: Mode) => {
     origin.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     setMode(next)
   }
   const close = (restore = true) => {
+    hierarchySerial.current++
     setMode(null)
     if (restore) { const target = origin.current; window.setTimeout(() => { if (target?.isConnected) target.focus() }, 0) }
+  }
+  useEffect(() => { syntaxState.current = null }, [editor, symbols])
+  useEffect(() => editor?.handle.watchChanges?.(() => { syntaxState.current = null }), [editor])
+  const syntax = (kind: 'larger' | 'smaller' | 'next' | 'previous') => {
+    if (!editor || !symbols.length || !editor.handle.selectRange) return
+    const position = editor.handle.getPosition?.()
+    if (!position) return
+    const cursor = { line: position.line - 1, character: position.column - 1 }
+    const state = syntaxState.current
+    const cached = state && state.file === editor.file && state.symbols === symbols && positionInRange(state.current.range, cursor) ? state : null
+    let current = cached?.current ?? smallestSymbolAt(symbols, cursor)
+    let history = cached?.history ?? []
+    if (!current) { syntaxState.current = null; return }
+    if (kind === 'larger') {
+      if (cached) {
+        const parent = largerSymbolAt(symbols, current, cursor)
+        if (!parent) return
+        current = parent
+      }
+      history = [...history, current]
+    } else if (kind === 'smaller') {
+      const previous = previousFromHistory(history)
+      if (!previous) return
+      current = previous
+      history = history.slice(0, -1)
+    } else {
+      const sibling = siblingSymbol(symbols, current, kind === 'next' ? 1 : -1)
+      if (!sibling) return
+      current = sibling
+      history = []
+    }
+    // LSP là 0-based, selectRange nhận 1-based cho cả dòng lẫn cột.
+    const { start, end } = current.range
+    editor.handle.selectRange({ startLine: start.line + 1, startColumn: start.character + 1, endLine: end.line + 1, endColumn: end.character + 1 })
+    syntaxState.current = { file: editor.file, symbols, current, history }
+  }
+  const loadCalls = async (direction: 'incoming' | 'outgoing', root: LspCallHierarchyItem) => {
+    const serial = ++hierarchySerial.current
+    setMode({ kind: 'hierarchy', direction, root, rows: [], status: 'Đang tải lời gọi…' })
+    try {
+      const api = window.nexgraph?.lsp
+      if (!api?.callHierarchyIncoming || !api.callHierarchyOutgoing) { onError('Phân cấp lời gọi không dùng được trong tệp này.'); return }
+      const text = editor && root.file === editor.file ? editor.text() : await window.nexgraph?.fs?.read(projectId, root.file).then((read) => read.text)
+      if (text === undefined) { onError('Không đọc được tệp chứa ký hiệu.'); return }
+      const line = root.range.start.line + 1
+      const column = root.range.start.character + 1
+      const calls: LspCallHierarchyCall[] = direction === 'incoming'
+        ? await api.callHierarchyIncoming(projectId, root.file, text, line, column, root)
+        : await api.callHierarchyOutgoing(projectId, root.file, text, line, column, root)
+      if (serial !== hierarchySerial.current) return
+      setMode((current) => current?.kind === 'hierarchy' ? {
+        ...current,
+        rows: calls.map((call, index) => {
+          const site = call.fromRanges[0]?.start ?? call.from.range.start
+          return {
+            key: `${call.from.file}:${call.from.range.start.line}:${call.from.range.start.character}:${index}`,
+            item: call.from, name: call.from.name, file: call.from.file,
+            line: site.line + 1, column: site.character + 1, isCall: true
+          }
+        }),
+        status: calls.length ? '' : (direction === 'incoming' ? 'Không có lời gọi vào.' : 'Không có lời gọi ra.')
+      } : current)
+    } catch (error) { if (serial === hierarchySerial.current) { onError(errorText(error)); close() } }
+  }
+  const hierarchy = async (direction: 'incoming' | 'outgoing') => {
+    if (!editor) return
+    const shown = mode?.kind === 'hierarchy' ? mode : null
+    if (shown) {
+      if (shown.direction === direction) close()
+      else if (shown.root) void loadCalls(direction, shown.root)
+      else setMode({ ...shown, direction })
+      return
+    }
+    const position = editor.handle.getPosition?.()
+    const api = window.nexgraph?.lsp
+    if (!position || !api?.callHierarchyPrepare || !api.callHierarchyIncoming || !api.callHierarchyOutgoing) {
+      onError('Phân cấp lời gọi không dùng được trong tệp này.')
+      return
+    }
+    const serial = ++hierarchySerial.current
+    try {
+      const items = await api.callHierarchyPrepare(projectId, editor.file, editor.text(), position.line, position.column)
+      if (serial !== hierarchySerial.current) return
+      const rows: HierarchyRow[] = (items ?? []).map((item, index) => ({
+        key: `${item.file}:${item.range.start.line}:${item.range.start.character}:${index}`,
+        item, name: item.name, file: item.file,
+        line: item.range.start.line + 1, column: item.range.start.character + 1, isCall: false
+      }))
+      open({ kind: 'hierarchy', direction, root: null, rows, status: rows.length ? '' : 'Không có ký hiệu gọi được tại con trỏ.' })
+    } catch (error) { if (serial === hierarchySerial.current) onError(errorText(error)) }
   }
   const action = (id: string) => {
     if (!editor) return
@@ -170,6 +269,12 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   useCommand('editor.previous_diagnostic', () => action('editor.action.marker.prev'), !!editor)
   useCommand('editor.format', () => action('editor.action.formatDocument'), !!editor)
   useCommand('editor.code_actions', () => action('editor.action.quickFix'), !!editor)
+  useCommand('editor.select_larger', () => syntax('larger'), !!editor)
+  useCommand('editor.select_smaller', () => syntax('smaller'), !!editor)
+  useCommand('editor.next_syntax', () => syntax('next'), !!editor)
+  useCommand('editor.previous_syntax', () => syntax('previous'), !!editor)
+  useCommand('editor.call_hierarchy_incoming', () => void hierarchy('incoming'), !!editor)
+  useCommand('editor.call_hierarchy_outgoing', () => void hierarchy('outgoing'), !!editor)
   useCommand('git.copy_permalink', () => void permalink(true), !!editor)
   useCommand('git.open_permalink', () => void permalink(false), !!editor)
   if (!mode) return null
@@ -180,6 +285,14 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     itemKey={(item) => String(item.index)} itemText={(item) => `${item.location.file}:${item.location.line}:${item.location.column}`}
     empty="Không có vị trí khớp" onCancel={() => close()} onPick={({ location }) => { close(false); onOpen(location.file, location.line, location.column) }}
     renderItem={({ location }, positions) => <span><Highlight text={`${location.file}:${location.line}:${location.column}`} positions={positions} /></span>} />
+  if (mode.kind === 'hierarchy') return <Picker label="Phân cấp lời gọi" placeholder="Lọc ký hiệu hoặc lời gọi…" items={mode.rows}
+    itemKey={(row) => row.key} itemText={(row) => row.name}
+    renderItem={(row, positions) => <><span><Highlight text={row.name} positions={positions} /></span><small>{row.file}:{row.line}</small></>}
+    empty={mode.status} onCancel={() => close()} onPick={(row) => {
+      if (!row.isCall) { void loadCalls(mode.direction, row.item); return }
+      close(false)
+      onOpen(row.file, row.line, row.column)
+    }} />
   const rows = flattenSymbols(symbols)
   return <Picker label="Tìm ký hiệu trong tệp" placeholder="Tìm ký hiệu trong tệp…" items={rows} itemKey={(item) => item.id} itemText={(item) => item.symbol.name}
     empty={symbolsError ?? 'Không có ký hiệu khớp'} onCancel={() => close()} onPick={({ symbol }) => {

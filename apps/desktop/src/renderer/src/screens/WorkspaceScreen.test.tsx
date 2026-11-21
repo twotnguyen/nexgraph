@@ -2,9 +2,10 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
 import userEvent from '@testing-library/user-event'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
+import { buildExcerpts, consumePendingMultiBuffer, requestMultiBuffer } from '../state/multiBuffer'
 
 vi.mock('../services/elkLayoutService', async () => ({
   layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
@@ -45,6 +46,7 @@ beforeAll(() => {
 beforeEach(() => localStorage.setItem('nexgraph.chat.dock', 'right'))
 // App cài bộ phân phối phím; ở đây màn được render riêng nên tự cài.
 beforeAll(() => installKeymap())
+afterEach(() => consumePendingMultiBuffer())
 
 const gnode = (id: string, label = id): GraphNode => ({
   id, kind: 'method', label, qualified_name: id, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,
@@ -616,5 +618,32 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Báo cáo' }))
     await userEvent.click(await screen.findByRole('button', { name: 'q1?' }))
     expect(await screen.findByText('Không tìm thấy node nào khớp câu hỏi')).toBeInTheDocument()
+  })
+})
+describe('WorkspaceScreen: multibuffer', () => {
+  it('mở thẻ nhiều đoạn từ request và giữ thẻ tệp gốc khi đóng thẻ đó', async () => {
+    const file = { ...gnode('lib/a.dart#file', 'a.dart'), kind: 'file' as const, line_start: 1 }
+    const child = { id: 1, source: '.#repository', target: file.id, type: 'CONTAINS' as const, evidence: null,
+      subtype: null, confidence: 'EXTRACTED' as const, confidence_score: 1, origin: 'ast' as const }
+    installNexgraph({ graph: { neighbors: vi.fn(async () => ({ nodes: [file], edges: [child], truncated: false })) } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    const item = await screen.findByRole('treeitem', { name: 'a.dart' })
+    item.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+
+    act(() => requestMultiBuffer({ id: 'm1', title: 'Hai đoạn', excerpts: buildExcerpts([
+      { file: 'lib/a.dart', line: 2 }, { file: 'lib/b.dart', line: 5 }
+    ]) }))
+    expect(await screen.findByRole('tab', { name: 'Hai đoạn', selected: true })).toBeInTheDocument()
+    const pane = screen.getByRole('tabpanel', { name: 'Hai đoạn' })
+    expect(within(pane).getByText('lib/a.dart:1-4')).toBeInTheDocument()
+    expect(within(pane).getByText('lib/b.dart:3-7')).toBeInTheDocument()
+    const multi = pane.querySelector<HTMLElement>('.multi-buffer')!
+    expect(await within(multi).findAllByLabelText('editor')).toHaveLength(2)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Đóng Hai đoạn' }))
+    expect(screen.queryByRole('tab', { name: 'Hai đoạn' })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'a.dart' })).toBeInTheDocument()
   })
 })

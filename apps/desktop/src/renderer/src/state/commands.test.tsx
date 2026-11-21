@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CommandPaletteHost } from '../components/layout/CommandPalette'
 import { rankFiles } from '../components/layout/FileFinder'
 import { KeymapEditor } from '../components/settings/KeymapEditor'
-import { bindingFor, eventToStroke, formatKey, installKeymap, setBinding, useCommand } from './commands'
+import { COMMANDS, bindingFor, eventToStroke, formatKey, installKeymap, registerHandler, runCommand, setBinding, useCommand } from './commands'
 import { fuzzyMatch } from './fuzzy'
 
 function Probe({ onExport }: { onExport: () => void }) {
@@ -15,6 +15,11 @@ function Probe({ onExport }: { onExport: () => void }) {
 
 // jsdom không phải macOS: mod = Ctrl.
 const press = (init: KeyboardEventInit & { code?: string }) => fireEvent.keyDown(document.body, init)
+const E3_IDS = [
+  'editor.toggle_bookmark', 'editor.next_bookmark', 'editor.previous_bookmark', 'editor.view_bookmarks',
+  'editor.select_larger', 'editor.select_smaller', 'editor.next_syntax', 'editor.previous_syntax',
+  'editor.call_hierarchy_incoming', 'editor.call_hierarchy_outgoing', 'editor.open_multibuffer'
+] as const
 
 describe('bảng lệnh và phím tắt', () => {
   let uninstall: () => void
@@ -25,6 +30,29 @@ describe('bảng lệnh và phím tắt', () => {
     uninstall = installKeymap()
   })
   afterEach(() => uninstall())
+
+  it('mười một lệnh mới có handler khi đăng ký giả', () => {
+    const registered = E3_IDS.map((id) => {
+      const fn = vi.fn()
+      return { id, fn, off: registerHandler(id, fn) }
+    })
+    try {
+      for (const { id, fn } of registered) {
+        expect(COMMANDS.some((command) => command.id === id), id).toBe(true)
+        expect(runCommand(id), id).toBe(true)
+        expect(fn).toHaveBeenCalledOnce()
+      }
+    } finally {
+      for (const { off } of registered) off()
+    }
+  })
+
+  it('phím mặc định không trùng và không có phím đơn nào nuốt hợp âm', () => {
+    const keys = COMMANDS.map((command) => command.key).filter((key): key is string => !!key)
+    expect(new Set(keys).size).toBe(keys.length)
+    const singles = new Set(keys.filter((key) => !key.includes(' ')))
+    expect(keys.filter((key) => key.includes(' ') && singles.has(key.split(' ')[0]))).toEqual([])
+  })
 
   it('Ctrl+Shift+P mở bảng lệnh, gõ mờ không dấu rồi Enter chạy lệnh', () => {
     const exported = vi.fn()

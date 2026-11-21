@@ -7,6 +7,7 @@ import { DiagnosticsPanel, OutlinePanel, useDocumentSymbols } from '../component
 import { EditorTools } from '../components/editor/EditorTools'
 import { FileView } from '../components/viewers/FileView'
 import { MarkdownPreview } from '../components/viewers/MarkdownPreview'
+import { MultiBufferView } from '../components/viewers/MultiBufferView'
 import { SplitEditor } from '../components/editor/SplitEditor'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import { TaskPicker, readTaskHistory, rememberTask } from '../components/terminal/TaskPicker'
@@ -46,11 +47,12 @@ import { getExplorerOpen, setChatDock, setChatWidth, useChatDock, useChatWidth }
 import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
 import { startDiagnostics } from '../state/diagnostics'
 import { errorText } from '../state/errorText'
+import { consumePendingMultiBuffer, getPendingMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi } from '../strings'
 import './workspace.css'
 
-type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}`
+type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
 /** Thẻ diff có thể xem working tree, stage hoặc một commit lịch sử. */
 type DiffTab = { file: string; staged: boolean; rev?: string; from?: string }
 const diffKey = (d: DiffTab): Tab => `diff:${d.rev ?? (d.staged ? 's' : 'u')}:${d.from ?? ''}:${d.file}`
@@ -252,8 +254,17 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const previewFile = tab.startsWith('preview:') ? tab.slice('preview:'.length) : undefined
   const [lastMain, setLastMain] = useState<Tab>(initialTab ?? 'arch')
   useEffect(() => {
-    if (!tab.startsWith('file:') && !tab.startsWith('preview:') && !tab.startsWith('task:')) setLastMain(tab)
+    if (!tab.startsWith('file:') && !tab.startsWith('preview:') && !tab.startsWith('task:') && !tab.startsWith('multi:')) setLastMain(tab)
   }, [tab])
+  const [multiBuffers, setMultiBuffers] = useState<MultiBufferRequest[]>([])
+  useEffect(() => subscribeMultiBuffer(() => {
+    const request = getPendingMultiBuffer()
+    if (!request) return
+    setMultiBuffers((cur) => cur.some((item) => item.id === request.id)
+      ? cur.map((item) => item.id === request.id ? request : item) : [...cur, request])
+    setTab(`multi:${request.id}`)
+    consumePendingMultiBuffer()
+  }), [])
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [files, setFiles] = useState<OpenFile[]>([])
@@ -678,6 +689,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setDiffs((cur) => cur.filter((item) => diffKey(item) !== diffKey(d)))
     if (tab === diffKey(d)) setTab(lastMain)
   }
+  const closeMulti = (request: MultiBufferRequest) => {
+    setMultiBuffers((cur) => cur.filter((item) => item.id !== request.id))
+    if (tab === `multi:${request.id}`) setTab(lastMain)
+  }
   useCommand('tour.toggle', () => togglePanel('tour'))
   useCommand('view.arch', () => selectView('arch'))
   useCommand('view.map', () => selectView('map'))
@@ -690,7 +705,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('settings.open', () => openWorkspaceSettings?.(), !!openWorkspaceSettings)
   useCommand('keymap.open', () => openWorkspaceSettings?.('keymap'), !!openWorkspaceSettings)
   useCommand('tab.close', () => {
-    if (previewFile) return closePreview(previewFile)
+    const currentMulti = multiBuffers.find((item) => `multi:${item.id}` === tab)
+    if (currentMulti) return closeMulti(currentMulti)
     if (activeFile && pinned.has(activeFile)) {
       const next = orderedFiles.find((item) => !pinned.has(item.file))
       if (next) setTab(`file:${next.file}`)
@@ -959,6 +975,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               title={`${d.file} (${d.staged ? 'đã stage' : 'chưa stage'})`} onClick={() => setTab(diffKey(d))}><Icon name="commit" size={14} /><span>{baseName(d.file)} · diff</span></button>
             <button type="button" className="tab-close" aria-label={`Đóng diff ${baseName(d.file)}`} onClick={() => closeDiff(d)}><Icon name="close" size={12} /></button>
           </span>)}
+          {multiBuffers.map((request) => <span key={request.id} className={`tab file-tab${tab === `multi:${request.id}` ? ' active' : ''}`}>
+            <button id={tabId(`multi:${request.id}`)} type="button" role="tab" aria-selected={tab === `multi:${request.id}`} aria-controls={viewId}
+              tabIndex={tab === `multi:${request.id}` ? 0 : -1} title={request.title} className="tab-name" onClick={() => setTab(`multi:${request.id}`)}>
+              <Icon name="tree" size={14} /><span>{request.title}</span>
+            </button>
+            <button type="button" className="tab-close" aria-label={`Đóng ${request.title}`} onClick={() => closeMulti(request)}><Icon name="close" size={12} /></button>
+          </span>)}
         </div>
         {tabMenu && <>
           <div className="menu-backdrop" onClick={() => setTabMenu(null)} onContextMenu={(event) => { event.preventDefault(); setTabMenu(null) }} />
@@ -1025,6 +1048,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               onReadOnlyChange={(file, readOnly) => setReadOnlyFiles((cur) => cur[file] === readOnly ? cur : { ...cur, [file]: readOnly })}
               onLoadError={(file, error) => setViewerErrors((cur) => (cur[file] ?? null) === error ? cur : { ...cur, [file]: error })} />
           ))}
+          {multiBuffers.map((request) => <MultiBufferView key={request.id} projectId={project.project_id} request={request}
+            active={!hidden && tab === `multi:${request.id}`} onClose={() => closeMulti(request)} onDirtyChange={onDirtyChange} />)}
           {previewFile && <MarkdownPreview key={previewFile} projectId={project.project_id} file={previewFile} active={!hidden} loadError={viewerErrors[previewFile]} readOnly={readOnlyFiles[previewFile] !== false} onClose={() => closePreview(previewFile)} onOpenFile={openCode} />}
           {previewSideShown && previewSide && <MarkdownPreview key={`side:${previewSide}`} projectId={project.project_id} file={previewSide} active={!hidden} loadError={viewerErrors[previewSide]} readOnly={readOnlyFiles[previewSide] !== false} side onClose={() => setPreviewSide(null)} onOpenFile={openCode} />}
           {sideShown && !previewSideShown && side && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}

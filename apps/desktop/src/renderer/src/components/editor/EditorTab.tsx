@@ -13,7 +13,8 @@ import { toggleBreakpoint, useDebugState } from '../../state/debugState'
 import { leaveSession, useCollab } from '../../state/collab'
 import { setActiveEditor } from '../../state/activeEditor'
 import { useDiagnostics } from '../../state/diagnostics'
-import { runCommand } from '../../state/commands'
+import { runCommand, useCommand } from '../../state/commands'
+import { listBookmarks, nextBookmark, subscribeBookmarks, toggleBookmark } from '../../state/bookmarks'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -100,6 +101,31 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const problems = Object.values(diagnostics).flat()
   const errorCount = problems.filter((item) => (item.severity ?? 1) === 1).length
   const warningCount = problems.filter((item) => item.severity === 2).length
+
+  const [bookmarkLines, setBookmarkLines] = useState<number[]>([])
+  useEffect(() => {
+    const sync = () => setBookmarkLines(listBookmarks(projectId).filter((item) => item.file === file).map((item) => item.line))
+    sync()
+    return subscribeBookmarks(sync)
+  }, [projectId, file])
+  useEffect(() => { if (ready) editor.current?.setBookmarks?.(bookmarkLines) }, [ready, bookmarkLines])
+
+  const toggleAtCursor = useCallback(() => {
+    if (!active) return
+    const at = editor.current?.getPosition?.()?.line ?? cursor.line
+    toggleBookmark(projectId, file, Math.max(1, at))
+  }, [active, cursor.line, projectId, file])
+  const stepBookmark = useCallback((direction: 1 | -1) => {
+    const at = editor.current?.getPosition?.()?.line ?? cursor.line
+    const target = nextBookmark(listBookmarks(projectId), file, at, direction)
+    if (!target) return
+    if (target.file !== file) openFileRef.current?.(target.file, target.line, 1)
+    else if (editor.current?.revealPosition) editor.current.revealPosition(target.line, 1)
+    else editor.current?.revealLines(target.line, target.line)
+  }, [cursor.line, projectId, file])
+  useCommand('editor.toggle_bookmark', toggleAtCursor, active && ready)
+  useCommand('editor.next_bookmark', () => stepBookmark(1), active && ready)
+  useCommand('editor.previous_bookmark', () => stepBookmark(-1), active && ready)
 
   const setDirty = useCallback((d: boolean) => {
     if (dirty.current === d) return
@@ -428,6 +454,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const saveLabel = saveState === 'saving' ? 'Đang lưu…' : modified ? 'Chưa lưu' : saveState === 'saved' ? 'Đã lưu' : null
   const parts = file.split('/')
   const visiblePath = parts.length > 4 ? ['…', ...parts.slice(-4)] : parts
+  const bookmarkLine = editor.current?.getPosition?.()?.line ?? cursor.line
+  const bookmarked = bookmarkLines.includes(bookmarkLine)
 
   return (
     <div className="code-viewer editor-tab" style={active ? undefined : { display: 'none' }}>
@@ -445,6 +473,11 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           {onViewImage && <button type="button" onClick={onViewImage} title="Xem ảnh SVG">Xem ảnh</button>}
           {onViewTable && <button type="button" disabled={!ready} onClick={onViewTable} title="Xem CSV/TSV dạng bảng">Xem bảng</button>}
           {saveLabel && <span role="status" className="ws-save-state" data-state={saveState}>{saveLabel}</span>}
+          <button type="button" className="ws-icon-button" disabled={!ready} aria-pressed={bookmarked}
+            aria-label={bookmarked ? 'Bỏ đánh dấu dòng' : 'Đánh dấu dòng'}
+            title={bookmarked ? 'Bỏ đánh dấu dòng' : 'Đánh dấu dòng'} onClick={toggleAtCursor}>
+            <Icon name="bookmark" size={15} />
+          </button>
           <button type="button" className="ws-icon-button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
             aria-label="Lưu" title="Lưu (Ctrl/Cmd+S)"><Icon name="save" size={15} /></button>
           {onSplit && <button type="button" className="ws-icon-button" disabled={!ready} aria-label="Chia đôi sang phải" title="Chia đôi sang phải (⌘\)" onClick={onSplit}><Icon name="panelRight" size={15} /></button>}
