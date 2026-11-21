@@ -7,7 +7,7 @@ import { EngineStatusBar } from './components/EngineStatusBar'
 import { WorkbenchBar } from './components/layout/WorkbenchBar'
 import { Icon } from './components/common/icons'
 import { CommandPaletteHost } from './components/layout/CommandPalette'
-import { installKeymap, useCommand } from './state/commands'
+import { CommandsEnabled, installKeymap, useCommand } from './state/commands'
 import { setBlame, setVimMode, useBlame, useVimMode } from './state/editorPrefs'
 import { loadExtensions } from './state/extensions'
 import { LargeProjectScreen } from './screens/LargeProjectScreen'
@@ -133,6 +133,10 @@ export default function App() {
   const indexing = screen.name === 'indexing' ? screen
     : screen.name === 'settings' && screen.back.name === 'indexing' ? screen.back
     : undefined
+  const settingsOpen = screen.name === 'settings'
+  const workspace = screen.name === 'workspace' ? screen
+    : settingsOpen && !hostFolder && screen.back.name === 'workspace' ? screen.back
+    : undefined
 
   const showCompletedGraph = (project: ProjectSummary, name: 'workspace' | 'overview') => {
     const pending = { ...project, last_indexed_at: null, last_index_commit: null }
@@ -150,12 +154,12 @@ export default function App() {
 
   useEffect(() => (window.nexgraph?.host ? undefined : installKeymap()), [])
   useEffect(() => { if (!window.nexgraph?.host) void loadExtensions() }, [])
-  // Màn làm việc tự gắn các lệnh này (có hỏi trước khi bỏ tệp chưa lưu); các màn khác dùng của App.
+  // Khi Không gian làm việc hiện, màn đó tự đăng ký lệnh; Cài đặt vẫn mở được trang phím tắt.
   const appCommands = !(screen.name === 'workspace' || (screen.name === 'indexing' && screen.exploring))
   const openSettings = (page?: string) => setScreen((s) => s.name === 'settings' ? { ...s, page } : { name: 'settings', back: s, page })
   useCommand('settings.open', () => openSettings(), appCommands)
   useCommand('keymap.open', () => openSettings('keymap'), appCommands)
-  useCommand('projects.open', () => setScreen({ name: 'projects' }), appCommands && screen.name !== 'projects')
+  useCommand('projects.open', () => setScreen({ name: 'projects' }), appCommands && screen.name !== 'projects' && !workspace && !indexing?.exploring)
   const vimOn = useVimMode()
   useCommand('editor.toggle_vim', () => setVimMode(!vimOn))
   const blameOn = useBlame()
@@ -191,18 +195,20 @@ export default function App() {
         />
       )}
       {indexing && (
-        <IndexingScreen key={indexing.attempt ?? 0} project={indexing.project} subdir={indexing.subdir} options={indexing.options}
-          rebuild={indexing.rebuild} hidden={screen.name === 'settings'}
-          onRetry={() => setScreen({ ...indexing, exploring: false, attempt: (indexing.attempt ?? 0) + 1 })}
-          onExplore={() => showCompletedGraph(indexing.project, 'workspace')}
-          onBack={(completed) => completed ? showCompletedGraph(indexing.project, 'overview')
-            : setScreen(indexing.rebuild ? { name: 'overview', project: indexing.project } : { name: 'projects' })}
-          onShowExisting={() => setScreen({ ...indexing, exploring: true })}
-          renderExisting={indexing.exploring ? (notice) => (
-            <WorkspaceScreen project={indexing.project} indexNotice={notice} backLabel={vi.indexing.backToProgress}
-              onOpenSettings={(page) => setScreen({ name: 'settings', back: indexing, page })}
-              onBack={() => setScreen({ ...indexing, exploring: false })} />
-          ) : undefined} />
+        <CommandsEnabled value={!settingsOpen}>
+          <IndexingScreen key={indexing.attempt ?? 0} project={indexing.project} subdir={indexing.subdir} options={indexing.options}
+            rebuild={indexing.rebuild} hidden={settingsOpen}
+            onRetry={() => setScreen({ ...indexing, exploring: false, attempt: (indexing.attempt ?? 0) + 1 })}
+            onExplore={() => showCompletedGraph(indexing.project, 'workspace')}
+            onBack={(completed) => completed ? showCompletedGraph(indexing.project, 'overview')
+              : setScreen(indexing.rebuild ? { name: 'overview', project: indexing.project } : { name: 'projects' })}
+            onShowExisting={() => setScreen({ ...indexing, exploring: true })}
+            renderExisting={indexing.exploring && (!settingsOpen || !hostFolder) ? (notice) => (
+              <WorkspaceScreen project={indexing.project} hidden={settingsOpen} indexNotice={notice} backLabel={vi.indexing.backToProgress}
+                onOpenSettings={(page) => setScreen({ name: 'settings', back: indexing, page })}
+                onBack={() => setScreen({ ...indexing, exploring: false })} />
+            ) : undefined} />
+        </CommandsEnabled>
       )}
       {screen.name === 'overview' && (
         <ProjectOverviewScreen
@@ -213,10 +219,12 @@ export default function App() {
           onReindex={(options) => setScreen({ name: 'indexing', project: screen.project, subdir: null, options, rebuild: true })}
         />
       )}
-      {screen.name === 'workspace' && (
-        <WorkspaceScreen key={screen.tab ?? 'arch'} project={screen.project} initialTab={screen.tab} initialCommand={screen.initialCommand}
-          onOpenSettings={(page) => setScreen({ name: 'settings', back: screen, page })}
-          onBack={() => setScreen({ name: 'overview', project: screen.project })} />
+      {workspace && (
+        <CommandsEnabled value={!settingsOpen}>
+          <WorkspaceScreen key={`${workspace.project.project_id}:${workspace.tab ?? 'arch'}`} project={workspace.project} hidden={settingsOpen}
+            initialTab={workspace.tab} initialCommand={workspace.initialCommand} onOpenSettings={openSettings}
+            onBack={() => setScreen({ name: 'overview', project: workspace.project })} />
+        </CommandsEnabled>
       )}
       {screen.name === 'global' && <GlobalViewScreen projectIds={screen.projectIds} onBack={() => setScreen({ name: 'projects' })} />}
       {screen.name === 'settings' && <SettingsScreen key={screen.page ?? ''} initialPage={screen.page} onBack={() => setScreen(screen.back)} />}

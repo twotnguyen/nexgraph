@@ -4,7 +4,7 @@ import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@sh
 import { vi } from '../strings'
 import { Icon, type IconName } from '../components/common/icons'
 import { THEMES, setTheme, useThemeId, useThemesVersion } from '../state/useTheme'
-import { setVimMode, useVimMode } from '../state/editorPrefs'
+import { setEditorPrefs, setVimMode, useEditorPrefs, useVimMode } from '../state/editorPrefs'
 import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
@@ -21,9 +21,9 @@ const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
 
 // Từ khoá cho ô tìm: tiêu đề và vài chữ người dùng hay gõ của mỗi mục.
 const SECTION_WORDS = {
-  theme: 'Giao diện theme màu sáng tối dark light',
+  theme: 'Giao diện theme màu sáng tối dark light bộ icon tệp file icons',
   chat: 'Giao diện khung chat AI trợ lý vị trí trái phải dock',
-  editor: 'Trình soạn thảo editor vim chế độ phím',
+  editor: 'Trình soạn thảo editor vim chế độ phím cỡ chữ font size tab ngắt dòng wrap định dạng lưu format auto save tự lưu terminal',
   keymap: 'Phím tắt keymap keybinding shortcut lệnh bàn phím',
   profiles: 'Hồ sơ trợ lý profile tool công cụ chạy lệnh agent',
   extensions: 'Extension tiện ích mở rộng plugin theme lệnh cài',
@@ -44,6 +44,26 @@ const PAGES: { id: string; label: string; icon: IconName; sections: (keyof typeo
   { id: 'model', label: 'Mô hình', icon: 'spark', sections: ['model'] },
   { id: 'privacy', label: 'Quyền riêng tư', icon: 'shield', sections: ['privacy'] }
 ]
+
+function NumberSetting({ id, value, min, max, onChange }: { id: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+  return <input id={id} type="number" min={min} max={max} step={1} value={draft}
+    onChange={(event) => {
+      const next = event.currentTarget.value
+      setDraft(next)
+      const n = event.currentTarget.valueAsNumber
+      if (Number.isInteger(n) && n >= min && n <= max) onChange(n)
+    }}
+    onBlur={() => {
+      const n = Number(draft)
+      if (draft.trim() && Number.isFinite(n)) {
+        const clamped = Math.min(max, Math.max(min, Math.round(n)))
+        onChange(clamped)
+        setDraft(String(clamped))
+      } else setDraft(String(value))
+    }} />
+}
 
 /** Màn Tài khoản AI: key theo nhà cung cấp → nhà cung cấp tuỳ chỉnh → OAuth gói đăng ký → chọn model → kiểm tra kết nối. */
 export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; initialPage?: string }) {
@@ -68,6 +88,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const themeId = useThemeId()
   useThemesVersion()
   const vimMode = useVimMode()
+  const editorPrefs = useEditorPrefs()
   const [query, setQuery] = useState('')
   const [activePage, setActivePage] = useState('appearance')
   const [chatDock, setChatDock] = useState(() => { try { return localStorage.getItem('nexgraph.chat.dock') === 'right' ? 'right' : 'left' } catch { return 'left' } })
@@ -235,6 +256,12 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
             {THEMES.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-icon-theme">Bộ icon tệp</label><p>Icon dùng trong cây tệp, thẻ editor và tìm tệp.</p></div>
+          <select id="settings-icon-theme" value={editorPrefs.iconTheme} onChange={(e) => setEditorPrefs({ iconTheme: e.target.value === 'mono' ? 'mono' : 'symbols' })}>
+            <option value="symbols">Symbols (có màu)</option><option value="mono">Đơn sắc</option>
+          </select>
+        </div>
       </section>}
       {shows('chat') && <section className="settings-section" aria-labelledby="settings-chat-title">
         <h2 id="settings-chat-title">Khung chat AI</h2>
@@ -252,6 +279,41 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       </section>}
       {shows('editor') && <section className="settings-section" aria-labelledby="settings-editor-title">
         <h2 id="settings-editor-title">Trình soạn thảo</h2>
+        <div className="settings-row">
+          <div><label htmlFor="settings-font-size">Cỡ chữ editor</label><p>Cỡ chữ cho nội dung tệp (8–32). ⌘= / ⌘- thu phóng tạm thời, ⌘0 đặt lại.</p></div>
+          <NumberSetting id="settings-font-size" value={editorPrefs.fontSize} min={8} max={32} onChange={(fontSize) => setEditorPrefs({ fontSize })} />
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-terminal-font-size">Cỡ chữ terminal</label><p>Cỡ chữ trong terminal (8–32).</p></div>
+          <NumberSetting id="settings-terminal-font-size" value={editorPrefs.terminalFontSize} min={8} max={32} onChange={(terminalFontSize) => setEditorPrefs({ terminalFontSize })} />
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-tab-size">Tab size</label><p>Số khoảng trắng mặc định; tệp mới mở có thể tự nhận diện thụt lề.</p></div>
+          <select id="settings-tab-size" value={editorPrefs.tabSize} onChange={(e) => setEditorPrefs({ tabSize: Number(e.target.value) as 2 | 4 | 8 })}>
+            <option value={2}>2</option><option value={4}>4</option><option value={8}>8</option>
+          </select>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-wrap">Ngắt dòng</label><p>Ngắt dòng dài theo chiều rộng editor.</p></div>
+          <select id="settings-wrap" value={editorPrefs.wordWrap} onChange={(e) => setEditorPrefs({ wordWrap: e.target.value === 'on' ? 'on' : 'off' })}>
+            <option value="off">Tắt</option><option value="on">Theo khung</option>
+          </select>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-format-save">Định dạng khi lưu</label><p>Định dạng tệp trước khi lưu nếu có formatter cho ngôn ngữ đó.</p></div>
+          <button id="settings-format-save" type="button" role="switch" aria-checked={editorPrefs.formatOnSave}
+            className={`switch${editorPrefs.formatOnSave ? ' on' : ''}`} onClick={() => setEditorPrefs({ formatOnSave: !editorPrefs.formatOnSave })}><span /></button>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-auto-save">Tự lưu</label><p>Khi nào lưu các thay đổi trong editor.</p></div>
+          <select id="settings-auto-save" value={editorPrefs.autoSave} onChange={(e) => setEditorPrefs({ autoSave: e.target.value === 'afterDelay' || e.target.value === 'onFocusChange' ? e.target.value : 'off' })}>
+            <option value="off">Tắt</option><option value="afterDelay">Sau khi dừng gõ</option><option value="onFocusChange">Khi rời editor</option>
+          </select>
+        </div>
+        {editorPrefs.autoSave === 'afterDelay' && <div className="settings-row">
+          <div><label htmlFor="settings-auto-save-delay">Thời gian chờ (ms)</label><p>Lưu sau khoảng thời gian không gõ.</p></div>
+          <NumberSetting id="settings-auto-save-delay" value={editorPrefs.autoSaveDelay} min={1} max={2147483647} onChange={(autoSaveDelay) => setEditorPrefs({ autoSaveDelay })} />
+        </div>}
         <div className="settings-row">
           <div><label htmlFor="settings-vim">Chế độ Vim</label><p>Phím kiểu Vim trong editor (normal/insert/visual); trạng thái hiện ở thanh dưới. Bật/tắt cũng được từ bảng lệnh.</p></div>
           <button id="settings-vim" type="button" role="switch" aria-checked={vimMode} className={`switch${vimMode ? ' on' : ''}`} onClick={() => setVimMode(!vimMode)}><span /></button>

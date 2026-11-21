@@ -1,4 +1,6 @@
 import { useTheme } from '../../state/useTheme'
+import { useIconTheme } from '../../state/editorPrefs'
+import { Icon, type IconName } from './icons'
 
 // Bộ icon Symbols (MIT, Miguel Solorio) lấy từ Wu; hai bảng tra là phần con của icon_theme.json, xem THIRD_PARTY_LICENSES.md.
 const urls = import.meta.glob<string>('../../assets/file-icons/*.svg', { eager: true, query: '?url', import: 'default' })
@@ -26,6 +28,12 @@ const BY_SUFFIX: Record<string, string> = {
   proto: 'proto', tf: 'terraform', prisma: 'prisma'
 }
 
+const MONO: Record<string, IconName> = {
+  git: 'branch', gear: 'gear', editorconfig: 'gear', tsconfig: 'gear', shell: 'terminal',
+  database: 'graph', compressed: 'export', lock: 'shield', image: 'map', svg: 'map',
+  markdown: 'report', mdx: 'report', text: 'report', pdf: 'report', default: 'report'
+}
+
 /** Tên icon cho một tệp: khớp nguyên tên trước, rồi đuôi dài nhất (`a.d.ts` → `d.ts` trước `ts`). */
 export function fileIconName(path: string): string {
   const base = path.slice(path.lastIndexOf('/') + 1)
@@ -40,7 +48,10 @@ export function fileIconName(path: string): string {
 
 export function FileTypeIcon({ name, size = 16 }: { name: string; size?: number }) {
   const dark = useTheme() === 'dark'
-  const icon = `../../assets/file-icons/${fileIconName(name)}`
+  const theme = useIconTheme()
+  const kind = fileIconName(name)
+  if (theme === 'mono') return <span className="file-type-icon"><Icon name={MONO[kind] ?? 'terminal'} size={size} /></span>
+  const icon = `../../assets/file-icons/${kind}`
   return <img className="file-type-icon" src={(dark && urls[`${icon}.dark.svg`]) || urls[`${icon}.svg`]}
     width={size} height={size} alt="" aria-hidden="true" draggable={false} />
 }

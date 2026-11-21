@@ -85,6 +85,23 @@ describe('App flow after opening a project', () => {
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalledWith('p1'))
   })
 
+  it('giữ thẻ đang chọn và không chạy lệnh workspace khi Cài đặt đang mở', async () => {
+    installNexgraph({ project: { open: vi.fn(async () => project({ last_indexed_at: 1_700_000_000 })) },
+      graph: { report: vi.fn(async () => ({ god_nodes: [], communities: [], surprising: [], questions: [], cycles: { cycles: [], total: 0 }, freshness: { indexed_at: null, index_commit: null, head_commit: null, changed_files: 0, stale: false }, gaps: { isolated: { total: 0, nodes: [] }, ambiguous_edges: { total: 0, edges: [] } }, benchmark: null, truncated: false })) } })
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: 'Mở thư mục…' }))
+    await user.click(await screen.findByRole('tab', { name: 'Báo cáo' }))
+    const modifier = /mac/i.test(navigator.platform) ? 'Meta' : 'Control'
+    await user.keyboard(`{${modifier}>},{/${modifier}}`)
+    const back = await screen.findByRole('button', { name: '← Dự án' })
+    expect(screen.queryByRole('tab', { name: 'Báo cáo' })).not.toBeInTheDocument()
+    await user.keyboard(`{${modifier}>}{Shift>}d{/Shift}{/${modifier}}`)
+    await user.click(back)
+    expect(await screen.findByRole('tab', { name: 'Báo cáo', selected: true })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Gỡ lỗi' })).not.toBeInTheDocument()
+  })
+
   it.each(['cancelled', 'error'] as const)('cho xem đồ thị hiện có và quay lại cùng tác vụ index lại (%s)', async (state) => {
     const indexed = project({ last_indexed_at: 1_700_000_000 })
     const h = installNexgraph({ project: { open: vi.fn(async () => indexed) } })

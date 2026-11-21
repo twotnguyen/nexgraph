@@ -49,7 +49,6 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
     : !running && error ? vi.indexing.titleUnavailable(project.name)
     : vi.indexing.title(project.name)
 
-  if (hidden) return null
   if (rebuild && renderExisting) {
     const notice = completed ? vi.indexing.newGraphReady
       : state === 'cancelled' ? `${vi.indexing.cancelled}. ${vi.indexing.existingGraph}`
@@ -58,6 +57,7 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
       : vi.indexing.existingGraph
     return renderExisting(notice)
   }
+  if (hidden) return null
 
   return (
     <main className="screen task-screen welcome-page indexing-wu">
