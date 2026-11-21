@@ -4,12 +4,18 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 
 from nexgraph_engine.api.errors import ApiError
-from nexgraph_engine.api.routes_graph import model_payload, open_store
+from nexgraph_engine.api.routes_graph import for_model, model_payload, open_store
 from nexgraph_engine.prs import gh
 from nexgraph_engine.prs.listing import MAX_LIST, gh_status, list_prs_json
 from nexgraph_engine.prs.review import pr_detail_json
+from nexgraph_engine.query.model_view import ModelGraph
 
 router = APIRouter(prefix="/v1/projects/{project_id}/prs")
+
+
+def _model(request: Request, store, info) -> ModelGraph | None:
+    # Lọc trước khi dựng chuỗi (nhận xét, danh sách tệp): ModelGraph.filter ở cuối không nhìn vào trong chuỗi.
+    return ModelGraph(store, info.path) if for_model(request) else None
 
 
 @router.get("/status")
@@ -24,7 +30,7 @@ def status(project_id: str, request: Request) -> dict:
 def list_prs(project_id: str, request: Request, limit: int = Query(50, ge=1, le=MAX_LIST)) -> dict:
     with open_store(request, project_id) as (store, info):
         try:
-            return model_payload(request, store, info, list_prs_json(store, info.path, limit))
+            return model_payload(request, store, info, list_prs_json(store, info.path, limit, model=_model(request, store, info)))
         except gh.GhError as exc:
             raise exc.api_error() from exc
 
@@ -37,6 +43,6 @@ def pr_detail(project_id: str, number: str, request: Request) -> dict:
         raise ApiError(400, "bad_param", str(exc)) from exc
     with open_store(request, project_id) as (store, info):
         try:
-            return model_payload(request, store, info, pr_detail_json(store, info.path, n))
+            return model_payload(request, store, info, pr_detail_json(store, info.path, n, model=_model(request, store, info)))
         except gh.GhError as exc:
             raise exc.api_error() from exc

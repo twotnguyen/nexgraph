@@ -111,3 +111,31 @@ def test_bad_number_never_calls_gh(store, monkeypatch):
     with pytest.raises(ValueError):
         pr_detail_json(*store, "9 --repo evil/x")
     assert calls == []
+
+
+def test_call_moved_to_another_file_is_not_unreferenced(store, monkeypatch):
+    moved = ("diff --git a/lib2.py b/lib2.py\nnew file mode 100644\n--- /dev/null\n+++ b/lib2.py\n@@ -0,0 +1,2 @@\n"
+             "+from lib import orphan\n+X = orphan()\n")
+    d, _ = detail(store, monkeypatch, APP_DIFF + moved)
+    assert d["unreferenced"] == []
+
+
+def test_deleted_definition_is_not_unreferenced(store, monkeypatch):
+    gone = ("diff --git a/lib.py b/lib.py\n--- a/lib.py\n+++ b/lib.py\n@@ -5,2 +4,0 @@\n"
+            "-def orphan():\n-    return 0\n")
+    d, _ = detail(store, monkeypatch, APP_DIFF + gone)
+    assert d["unreferenced"] == []
+
+
+def test_deleted_file_symbols_are_not_test_gaps(store, monkeypatch):
+    deleted = ("diff --git a/app.py b/app.py\ndeleted file mode 100644\n--- a/app.py\n+++ /dev/null\n"
+               "@@ -1,7 +0,0 @@\n" + "".join("-" + line + "\n" for line in APP.splitlines()))
+    d, _ = detail(store, monkeypatch, deleted)
+    assert "run" not in [n["label"] for n in d["test_gaps"]]
+
+
+@pytest.mark.parametrize("state", ["MERGED", "CLOSED"])
+def test_closed_or_merged_pr_status(store, monkeypatch, state):
+    calls = gh_fake.install(monkeypatch, {("pr", "view", "9"): VIEW.replace('"OPEN"', f'"{state}"'),
+                                          ("pr", "diff", "9"): HELPER_DIFF})
+    assert pr_detail_json(*store, 9)["pr"]["status"] == state and calls

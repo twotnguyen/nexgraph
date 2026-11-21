@@ -390,3 +390,50 @@ def test_pr_tools_report_missing_gh(indexed, monkeypatch):
     gh_fake.install(monkeypatch, {("repo", "view"): GhError("gh_missing")})
     r = call(build_server(*indexed), "list_prs", {})
     assert r.isError and "gh" in r.content[0].text
+
+
+def _leaky_pr_project(api, tmp_path, monkeypatch):
+    """Dự án có `credentials.py` (bị chặn khỏi AI) và một PR sửa tệp đó."""
+    import gh_fake
+    root = tmp_path / "leakpr"
+    root.mkdir()
+    (root / "credentials.py").write_text("def load_secret_vault_token():\n    return 1\n", encoding="utf-8")
+    (root / "credentials_test.py").write_text(
+        "from credentials import load_secret_vault_token\n\ndef test_token():\n    assert load_secret_vault_token() == 1\n",
+        encoding="utf-8")
+    (root / "m0.py").write_text("from credentials import load_secret_vault_token\n\n"
+                                "def use0():\n    return load_secret_vault_token()\n", encoding="utf-8")
+    p = api.open(root)
+    assert api.index(p["project_id"])["state"] == "done"
+    diff = ("diff --git a/credentials.py b/credentials.py\n--- a/credentials.py\n+++ b/credentials.py\n"
+            "@@ -1 +1 @@\n-def load_secret_vault_token():\n+def load_secret_vault_token(x=1):\n"
+            "diff --git a/m0.py b/m0.py\n--- a/m0.py\n+++ b/m0.py\n@@ -3 +3 @@\n-def use0():\n+def use0(y=0):\n")
+    view = ('{"number": 8, "title": "t", "state": "OPEN", "headRefName": "f", "baseRefName": "main", "author": null,'
+            ' "isDraft": false, "reviewDecision": "", "statusCheckRollup": [], "updatedAt": "2026-11-20T00:00:00Z"}')
+    item = ('{"number": %d, "title": "t%d", "state": "OPEN", "headRefName": "f", "baseRefName": "main", "author": null,'
+            ' "isDraft": false, "reviewDecision": "", "statusCheckRollup": [], "updatedAt": "2026-11-20T00:00:00Z",'
+            ' "files": [{"path": "credentials.py"}, {"path": "credentials_test.py"}]}')
+    gh_fake.install(monkeypatch, {("pr", "view", "8"): view, ("pr", "diff", "8"): diff,
+                                  ("pr", "list"): "[" + item % (8, 8) + "," + item % (9, 9) + "]"})
+    return root, p["project_id"]
+
+
+def test_pr_tools_hide_sources_blocked_from_ai(api, tmp_path, monkeypatch):
+    root, _ = _leaky_pr_project(api, tmp_path, monkeypatch)
+    server = build_server(root, tmp_path / "appdata")
+    for name, args in [("list_prs", {}), ("triage_prs", {}), ("get_pr_impact", {"pr_number": 8}),
+                       ("review_status", {"pr_number": 8})]:
+        text = json.dumps(payload(call(server, name, args)), ensure_ascii=False)
+        assert "load_secret_vault_token" not in text and "credentials" not in text, (name, text)
+    impact = payload(call(server, "get_pr_impact", {"pr_number": 8}))
+    assert "use0" in impact["comment"]  # phần được phép vẫn còn
+
+
+def test_pr_routes_hide_blocked_sources_for_model(api, tmp_path, monkeypatch):
+    _, pid = _leaky_pr_project(api, tmp_path, monkeypatch)
+    model = {"X-NexGraph-Audience": "model"}
+    for path in (f"/v1/projects/{pid}/prs", f"/v1/projects/{pid}/prs/8"):
+        text = api.get(path, headers=model).text
+        assert "load_secret_vault_token" not in text and "credentials" not in text, (path, text)
+    # Giao diện của chính người dùng vẫn thấy đủ.
+    assert "credentials.py" in api.get(f"/v1/projects/{pid}/prs/8").text
