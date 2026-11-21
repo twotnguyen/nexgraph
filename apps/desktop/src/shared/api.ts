@@ -238,7 +238,8 @@ export interface NexGraphApi {
     list(): Promise<GlobalMember[]>
     add(projectId: string): Promise<{ jobId: string }>
     remove(projectId: string): Promise<void>
-    search(q: string, limit?: number): Promise<GlobalSearchHit[]>
+    /** `projectIds` rỗng hoặc vắng: mọi dự án trong graph chung. */
+    search(q: string, limit?: number, projectIds?: string[]): Promise<GlobalSearchHit[]>
     graph(projectIds: string[], limit?: number): Promise<GlobalGraph>
     /** Hộp thoại chọn thư mục ở main rồi ghi graph.json gộp; `null` khi huỷ. */
     export(projectIds: string[]): Promise<GlobalExportResult | null>
@@ -254,9 +255,9 @@ export interface NexGraphApi {
   semantic: {
     getSettings(projectId: string): Promise<ProjectAiSettings>
     setSettings(projectId: string, settings: ProjectAiSettings): Promise<ProjectAiSettings>
-    estimate(projectId: string, target: SemanticTarget): Promise<SemanticEstimate>
+    estimate(projectId: string, target: SemanticTarget, noCache?: boolean): Promise<SemanticEstimate>
     /** Main chọn đường theo cấu hình dự án. Đường A: main tự kéo khối và gọi model đang chọn. Đường B: main gửi key xuống engine. */
-    start(projectId: string, target: SemanticTarget, budget?: number): Promise<{ jobId: string }>
+    start(projectId: string, target: SemanticTarget, budget?: number, noCache?: boolean): Promise<{ jobId: string }>
     cancel(jobId: string): Promise<void>
   }
 }

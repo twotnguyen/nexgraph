@@ -7,9 +7,11 @@ import posixpath
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from graphify.detect import _is_sensitive
 from graphify.llm import _IMAGE_MEDIA_TYPES, _IMAGE_TOKEN_ESTIMATE, _MAX_IMAGE_BYTES, _estimate_prompt_tokens
 
 from nexgraph_engine.docs.text import doc_text
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.semantic import prompt
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -72,12 +74,21 @@ def file_path(src: Sources, rel: str) -> Path:
     return inside
 
 
+def _sendable(store: GraphStore, src: Sources):
+    """Tệp được gửi cho model: không bị graphify coi là nhạy cảm, không bị .gitignore/mẫu loại trừ/tên chặn của AI."""
+    policy = SourcePolicy(src.root, store.last_exclude())
+    return lambda rel: not _is_sensitive(Path(rel)) and policy.allows(rel)
+
+
 def _doc_units(store: GraphStore, src: Sources) -> list[tuple[str, str]]:
     marks = ",".join("?" * len(DOC_TEXT_LANGUAGES))
     rows = store.conn.execute(f"SELECT duong_dan_tuong_doi, ngon_ngu, ma_bam FROM tep WHERE ngon_ngu IN ({marks})"
                               " ORDER BY duong_dan_tuong_doi", DOC_TEXT_LANGUAGES).fetchall()
     units = []
+    sendable = _sendable(store, src)
     for rel, language, sha in rows:
+        if not sendable(rel):
+            continue
         try:
             if language in ("media", "google_workspace"):  # chữ đã chép/xuất lúc index, lưu theo mã băm
                 cached = src.transcript_dir / f"{sha}.txt"
@@ -123,10 +134,11 @@ def _docs(store: GraphStore, src: Sources, *, deep: bool) -> list[Chunk]:
 def _images(store: GraphStore, src: Sources) -> list[Chunk]:
     system = prompt.extraction_system()
     chunks = []
+    sendable = _sendable(store, src)
     for (rel,) in store.conn.execute("SELECT duong_dan_tuong_doi FROM tep WHERE ngon_ngu = 'image'"
                                      " ORDER BY duong_dan_tuong_doi"):
         media_type = _IMAGE_MEDIA_TYPES.get(posixpath.splitext(rel)[1].lower())
-        if media_type is None:  # .svg là XML, không phải ảnh raster
+        if media_type is None or not sendable(rel):  # .svg là XML, không phải ảnh raster
             continue
         try:
             raw = file_path(src, rel).read_bytes()

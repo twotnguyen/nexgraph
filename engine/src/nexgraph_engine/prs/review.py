@@ -3,16 +3,16 @@ còn ai gọi (heuristic) và test nên chạy. Chỉ đọc; nhận xét chỉ 
 from __future__ import annotations
 
 import shlex
+from collections.abc import Callable
 from pathlib import Path, PurePosixPath
-
-from graphify.prs import _parse_pr_dict
 
 from nexgraph_engine.impact.analyze import ImpactReport, analyze
 from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, is_test_path, language_of
 from nexgraph_engine.prs import gh
 from nexgraph_engine.prs.diff import DiffFile, parse_unified_diff, to_changeset
-from nexgraph_engine.prs.listing import FIELDS, _json, pr_json, repo_info
+from nexgraph_engine.prs.listing import FIELDS, _json, parse_pr, pr_json, repo_info
 from nexgraph_engine.query.contracts import node_json
+from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Node
 
@@ -30,14 +30,17 @@ def cross_repo_impact(store: GraphStore, changed: list[Node], data_dir: Path | N
     if data_dir is None or not (data_dir / "global.db").is_file():
         return None
     from nexgraph_engine.global_graph import link
-    return link.cross_repo_impact(data_dir, store.project_id(), [n.id for n in changed])
+    pid = store.project_id()
+    # Luôn lọc theo SourcePolicy hai đầu: nhận xét PR được dán ra ngoài hoặc đưa cho AI.
+    return link.visible_cross_repo(data_dir, pid, link.cross_repo_impact(data_dir, pid, [n.id for n in changed]))
 
 
 def _marks(items: list) -> str:
     return ",".join("?" * len(items))
 
 
-def stale_docs(store: GraphStore, changed: list[Node], diff_paths: set[str]) -> list[dict]:
+def stale_docs(store: GraphStore, changed: list[Node], diff_paths: set[str],
+               allows_node: Callable[[str], bool] = lambda _: True) -> list[dict]:
     """Mục tài liệu có cạnh DOCUMENTS tới symbol đổi, trong khi tệp tài liệu không nằm trong diff."""
     ids = [n.id for n in changed][:900]
     if not ids:
@@ -48,7 +51,8 @@ def stale_docs(store: GraphStore, changed: list[Node], diff_paths: set[str]) -> 
         f" WHERE c.loai_canh = 'DOCUMENTS' AND s.id_nut IN ({_marks(ids)}) ORDER BY c.ma_canh", ids).fetchall()
     by_doc: dict[int, list[str]] = {}
     for r in rows:
-        by_doc.setdefault(r["doc"], []).append(r["label"])
+        if allows_node(r["sym"]):  # tên symbol của tệp bị loại khỏi AI không được lọt qua danh sách chữ
+            by_doc.setdefault(r["doc"], []).append(r["label"])
     docs = store.nodes_by_pk(list(by_doc))
     pk_of = dict(zip(list(by_doc), docs))
     out = [{"node": node_json(d), "symbols": sorted(set(by_doc[pk]))}
@@ -58,16 +62,17 @@ def stale_docs(store: GraphStore, changed: list[Node], diff_paths: set[str]) -> 
 
 def unreferenced(store: GraphStore, files: list[DiffFile]) -> list[dict]:
     """Symbol mà mọi cạnh CALLS/REFERENCES đi vào đều nằm trên dòng bị PR bỏ (hoặc trong tệp bị xoá).
-    Heuristic: dòng bị bỏ mà tên đích vẫn xuất hiện ở dòng thêm của cùng tệp thì coi như lời gọi còn giữ."""
+    Heuristic: tên đích còn xuất hiện ở một dòng thêm bất kỳ của PR thì coi như lời gọi còn (có thể đã chuyển tệp);
+    symbol có dòng định nghĩa bị PR xoá thì chính nó bị xoá, không báo."""
     conn = store.conn
     deleted = {f.path for f in files if f.status == "D"}
     by_path = {(f.old_path or f.path): f for f in files if f.status != "A"}
+    added = "\n".join(line for f in files for line in f.added)
     removed_edges: set[int] = set()
     candidates: set[int] = set()
     for path, f in by_path.items():
         if f.status != "D" and not f.removed:
             continue
-        added = "\n".join(f.added)
         for r in conn.execute(
                 "SELECT c.ma_canh, c.ma_nut_dich, c.dong_bang_chung, d.nhan AS label FROM canh c"
                 " JOIN nut s ON s.ma_nut = c.ma_nut_nguon JOIN tep t ON t.ma_tep = s.ma_tep"
@@ -86,7 +91,8 @@ def unreferenced(store: GraphStore, files: list[DiffFile]) -> list[dict]:
         if r["ma_canh"] not in removed_edges:
             still.add(r["ma_nut_dich"])
     nodes = [n for n in store.nodes_by_pk([pk for pk in pks if pk not in still])
-             if n.kind.value in _SYMBOL_KINDS and not n.is_test and n.file not in deleted]
+             if n.kind.value in _SYMBOL_KINDS and not n.is_test and n.file not in deleted
+             and not (n.file in by_path and n.line_start in by_path[n.file].removed)]
     nodes.sort(key=lambda n: (n.file or "", n.line_start or 0, n.id))
     return [{"node": node_json(n), "heuristic": True} for n in nodes[:MAX_LISTED]]
 
@@ -107,9 +113,11 @@ def _runner_for(root: Path, ext: str) -> str | None:
     return None
 
 
-def select_tests(root: Path, report: ImpactReport, files: list[DiffFile], truncated: bool) -> dict:
-    """Tệp test nên chạy và lệnh gợi ý; `run_all` khi không chắc, kèm lý do."""
-    tests = {t.file for t in report.tests if t.file}
+def select_tests(root: Path, report: ImpactReport, files: list[DiffFile], truncated: bool,
+                 allows: Callable[[str], bool] = lambda _: True) -> dict:
+    """Tệp test nên chạy và lệnh gợi ý; `run_all` khi không chắc, kèm lý do. `allows` bỏ tệp bị loại khỏi AI."""
+    tests = {t.file for t in report.tests if t.file and allows(t.file)}
+    files = [f for f in files if allows(f.path) and (f.old_path is None or allows(f.old_path))]
     tests |= {f.path for f in files if f.status != "D" and is_test_path(f.path)}
     reasons: list[str] = []
     if truncated:
@@ -178,30 +186,37 @@ def comment_markdown(d: dict) -> str:
     return "\n".join(out)
 
 
-def pr_detail_json(store: GraphStore, root: Path, number: object, *, data_dir: Path | None = None) -> dict:
+def pr_detail_json(store: GraphStore, root: Path, number: object, *, model: ModelGraph | None = None,
+                   data_dir: Path | None = None) -> dict:
+    """`model` (đường MCP / header model): lọc mọi thứ theo SourcePolicy trước khi dựng nhận xét từ bản đã lọc."""
     n = gh.pr_number(number)
     base = repo_info(root)["default_branch"]
     view = _json(root, ["pr", "view", str(n), "--json", FIELDS])
-    pr = _parse_pr_dict(view, base)
+    pr = parse_pr(view, base)
     files = parse_unified_diff(gh.run_gh(root, ["pr", "diff", str(n)]))
     cs = to_changeset(files)
     report = analyze(store.conn, cs)
     truncated = cs.truncated or report.truncated
     diff_paths = {f.path for f in files} | {f.old_path for f in files if f.old_path}
+    deleted = {f.path for f in files if f.status == "D"}
+    allows_node = model.allows_node if model is not None else (lambda _: True)
+    allows = model.source.allows if model is not None else (lambda _: True)
     detail = {
-        "pr": pr_json(pr, view.get("url")),
+        "pr": pr_json(pr, view.get("url"), view.get("state")),
         "changed_files": [{"path": f.path, "status": f.status, "old_path": f.old_path} for f in files],
         "changed_nodes": [node_json(x) for x in report.changed_nodes],
         "impacted": [{"node": node_json(i.node), "score": i.score, "hops": i.hops} for i in report.impacted],
         "tests": [node_json(x) for x in report.tests],
-        "test_gaps": [node_json(x) for x in report.test_gaps],
-        "stale_docs": stale_docs(store, report.changed_nodes, diff_paths),
+        "test_gaps": [node_json(x) for x in report.test_gaps if x.file not in deleted],  # symbol bị xoá không cần test
+        "stale_docs": stale_docs(store, report.changed_nodes, diff_paths, allows_node),
         "unreferenced": unreferenced(store, files),
-        "test_selection": select_tests(root, report, files, truncated),
+        "test_selection": select_tests(root, report, files, truncated, allows),
         "cross_repo": cross_repo_impact(store, report.changed_nodes, data_dir),
         "truncated": truncated,
     }
-    detail["comment"] = comment_markdown(detail)
+    if model is not None:
+        detail = model.filter(detail)
+    detail["comment"] = comment_markdown(detail)  # dựng từ bản đã lọc
     return detail
 
 

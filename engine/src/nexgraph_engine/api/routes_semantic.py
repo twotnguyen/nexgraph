@@ -59,6 +59,7 @@ class SemanticBody(BaseModel):
     transport: Transport
     max_tokens_budget: int = Field(default=1_000_000, ge=1, le=1_000_000_000)
     prs: list[PrItem] = Field(default_factory=list, max_length=200)
+    no_cache: bool = False  # chạy lại không dùng kết quả đã lưu
 
 
 class EstimateBody(BaseModel):
@@ -66,6 +67,7 @@ class EstimateBody(BaseModel):
     transport: Transport | None = None
     max_tokens_budget: int = Field(default=1_000_000, ge=1, le=1_000_000_000)
     prs: list[PrItem] = Field(default_factory=list, max_length=200)
+    no_cache: bool = False  # chạy lại không dùng kết quả đã lưu
 
 
 class AnswerBody(BaseModel):
@@ -99,6 +101,41 @@ def put_ai(project_id: str, body: AiSettingsBody, request: Request) -> dict:
                                              model=body.model)
 
 
+def _gh_prs(store: GraphStore, root) -> list[dict]:
+    """Hàng PR mở qua `gh`, lọc theo SourcePolicy vì sẽ gửi cho model."""
+    from nexgraph_engine.prs.listing import list_prs_json, triage_items, triage_json
+    from nexgraph_engine.query.model_view import ModelGraph
+    prs = triage_items(triage_json(list_prs_json(store, root, model=ModelGraph(store, root))))
+    if not prs:
+        raise ValueError("Không có pull request nào để xếp hạng")
+    return prs
+
+
+def _needs_gh(body) -> bool:
+    """`pr_triage` không kèm `prs` (tab PR): engine tự lấy danh sách PR."""
+    return body.targets == "pr_triage" and not body.prs
+
+
+def _prs(body, store: GraphStore, info) -> list[dict]:
+    if not _needs_gh(body):
+        return [p.model_dump() for p in body.prs]
+    from nexgraph_engine.prs import gh
+    try:
+        return _gh_prs(store, info.path)
+    except gh.GhError as exc:
+        raise exc.api_error() from exc
+    except ValueError as exc:
+        raise ApiError(400, "bad_param", str(exc)) from exc
+
+
+def _load_prs(info):
+    """Chạy trong job: mở graph chỉ đọc riêng, không giữ request chờ `gh` (timeout 30 s mỗi lời gọi)."""
+    def load() -> list[dict]:
+        with closing(open_graph_db(info.graph_db, read_only=True)) as conn:
+            return _gh_prs(GraphStore(conn), info.path)
+    return load
+
+
 @router.post("/projects/{project_id}/semantic/estimate")
 def semantic_estimate(project_id: str, body: EstimateBody, request: Request) -> dict:
     services, info = _project(request, project_id)
@@ -106,7 +143,8 @@ def semantic_estimate(project_id: str, body: EstimateBody, request: Request) -> 
         store = GraphStore(conn)
         if not store.has_published_graph():
             raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục")
-        return estimate(plan(body.targets, store, _sources(services, info), [p.model_dump() for p in body.prs]), store)
+        return estimate(plan(body.targets, store, _sources(services, info), _prs(body, store, info)), store,
+                        no_cache=body.no_cache)
 
 
 @router.post("/projects/{project_id}/semantic", status_code=202)
@@ -114,11 +152,11 @@ def semantic_start(project_id: str, body: SemanticBody, request: Request):
     services, info = _project(request, project_id)
     if not services.registry.ai_settings(project_id)["enabled"]:
         raise ApiError(403, "ai_disabled", "Chưa bật phân tích bằng AI cho dự án này")
-    if body.targets == "pr_triage" and not body.prs:
-        raise ApiError(400, "bad_param", "pr_triage cần danh sách prs")
     with closing(open_graph_db(info.graph_db, read_only=True)) as conn:
-        if not GraphStore(conn).has_published_graph():
+        store = GraphStore(conn)
+        if not store.has_published_graph():
             raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục")
+        prs = [] if _needs_gh(body) else _prs(body, store, info)
     if body.transport.kind == "direct":
         try:
             check_base_url(body.transport.base_url)
@@ -128,17 +166,30 @@ def semantic_start(project_id: str, body: SemanticBody, request: Request):
     else:
         transport = LlmQueue()
     work = make_work(graph_db=info.graph_db, src=_sources(services, info),
-                     req=SemanticRequest(body.targets, body.max_tokens_budget, [p.model_dump() for p in body.prs]),
+                     req=SemanticRequest(body.targets, body.max_tokens_budget, prs,
+                                         body.no_cache),
                      transport=transport,
-                     on_written=lambda: services.bus.publish({"type": "graph_updated", "project_id": project_id}))
+                     on_written=lambda: services.bus.publish({"type": "graph_updated", "project_id": project_id}),
+                     load_prs=_load_prs(info) if _needs_gh(body) else None)
+    holder: dict = {}
+
+    def tracked(ctx):
+        try:
+            return work(ctx)
+        finally:  # job kết thúc: bỏ hàng đợi khỏi bảng tra, `next`/`answer` trả 404
+            services.llm_queues.pop(holder.get("job_id"), None)
+
     try:
-        job_id = services.jobs.start_task(project_id, "semantic", work)
+        job_id = services.jobs.start_task(project_id, "semantic", tracked)
     except UnknownProject as exc:
         raise ApiError(404, "unknown_project", f"Không có dự án {project_id}") from exc
     except IndexAlreadyRunning as exc:
         return error_response(409, "index_running", "Dự án đang được lập chỉ mục hoặc cập nhật", job_id=exc.job_id)
     if isinstance(transport, LlmQueue):
+        holder["job_id"] = job_id
         services.llm_queues[job_id] = transport
+        if transport.closed:  # job đã xong trước khi kịp đăng ký
+            services.llm_queues.pop(job_id, None)
     return {"job_id": job_id}
 
 

@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import codecs
 import re
 from dataclasses import dataclass, field
 
@@ -24,13 +25,25 @@ class DiffFile:
     binary: bool = False
 
 
+def _unquote(p: str) -> str:
+    """Tên tệp git đặt trong ngoặc kép, byte ngoài ASCII viết dạng \\ooo (core.quotepath)."""
+    try:
+        return codecs.escape_decode(p[1:-1].encode("utf-8"))[0].decode("utf-8", "replace")
+    except ValueError:
+        return p[1:-1]
+
+
 def _strip(p: str, prefix: str) -> str | None:
     p = p.split("\t", 1)[0].strip()
     if len(p) >= 2 and p[0] == p[-1] == '"':
-        p = p[1:-1]  # shortcut: chỉ bỏ ngoặc, không giải mã \ooo của git; đủ cho diff của GitHub (UTF-8 thô)
+        p = _unquote(p)
     if p == "/dev/null":
         return None
     return p[len(prefix):] if p.startswith(prefix) else p
+
+
+def _maybe_unquote(p: str) -> str:
+    return _unquote(p) if len(p) >= 2 and p[0] == p[-1] == '"' else p
 
 
 def _header_path(rest: str) -> str | None:
@@ -59,7 +72,7 @@ def parse_unified_diff(text: str) -> list[DiffFile]:
             cur.old_path = rename_from or minus
         files.append(cur)
 
-    for line in text.splitlines():
+    for line in text.split("\n"):  # không dùng splitlines: \u2028, \x0c trong dòng mã làm lệch số dòng hunk
         if line.startswith("diff --git "):
             finish()
             cur, old_left, new_left = DiffFile(path=""), 0, 0
@@ -89,9 +102,9 @@ def parse_unified_diff(text: str) -> list[DiffFile]:
         elif line.startswith("deleted file mode"):
             cur.status = "D"
         elif line.startswith("rename from "):
-            cur.status, rename_from = "R", line[len("rename from "):]
+            cur.status, rename_from = "R", _maybe_unquote(line[len("rename from "):])
         elif line.startswith("rename to "):
-            rename_to = line[len("rename to "):]
+            rename_to = _maybe_unquote(line[len("rename to "):])
         elif line.startswith("--- "):
             minus = _strip(line[4:], "a/")
         elif line.startswith("+++ "):

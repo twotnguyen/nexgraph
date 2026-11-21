@@ -578,6 +578,7 @@ export const vi = {
     back: 'Dự án'
   },
   prs: {
+    triageAi: 'Xếp hạng bằng AI',
     tab: 'Pull request',
     loading: 'Đang tải pull request từ GitHub…',
     title: 'Pull request đang mở',
@@ -593,13 +594,16 @@ export const vi = {
     days: (n: number) => (n === 0 ? 'hôm nay' : `${n} ngày trước`),
     status: {
       'WRONG-BASE': 'Sai nhánh gốc', 'CI-FAIL': 'CI hỏng', 'CHANGES-REQ': 'Cần sửa', DRAFT: 'Bản nháp',
-      STALE: 'Cũ (≥ 14 ngày)', PENDING: 'CI đang chạy', APPROVED: 'Đã duyệt', READY: 'Sẵn sàng'
+      STALE: 'Cũ (≥ 14 ngày)', PENDING: 'CI đang chạy', APPROVED: 'Đã duyệt', READY: 'Sẵn sàng',
+      CLOSED: 'Đã đóng', MERGED: 'Đã merge'
     } as Record<string, string>,
     conflictsTitle: 'PR có thể xung đột',
-    conflictsHint: 'Hai PR cùng đổi một tệp hoặc cùng chạm vào một vùng ảnh hưởng trên graph. Nên merge lần lượt và kiểm lại.',
+    conflictsHint: 'Hai PR cùng đổi một tệp hoặc cùng một symbol. Nên merge lần lượt và kiểm lại.',
     conflict: (a: number, b: number) => `#${a} và #${b}`,
     conflictFiles: (files: string) => `cùng tệp: ${files}`,
-    conflictNodes: (n: number) => `${n} nút chung trong vùng ảnh hưởng`,
+    conflictNodes: (n: number) => `${n} symbol cùng bị đổi`,
+    conflictRelated: (n: number) => `${n} nút chung trong vùng ảnh hưởng`,
+    conflictsTruncated: 'Chỉ hiện các cặp xung đột đáng chú ý nhất.',
     select: (n: number) => `Xem review của PR #${n}`,
     detailLoading: (n: number) => `Đang đọc diff của PR #${n}…`,
     review: (n: number) => `Review cục bộ: PR #${n}`,
@@ -625,6 +629,7 @@ export const vi = {
   semantic: {
     title: 'Phân tích ngữ nghĩa bằng AI',
     labelsTitle: 'Đặt tên cụm bằng AI',
+    triageTitle: 'Xếp hạng pull request bằng AI',
     labelsCard: 'Đặt tên cụm bằng AI',
     labelsDesc: 'Gửi tên node của mỗi cụm (không gửi mã) để AI đặt tên dễ hiểu.',
     cardDesc: 'Rút khái niệm từ tài liệu, PDF, bản chép lời và ảnh. Mã nguồn không được gửi.',
@@ -634,6 +639,20 @@ export const vi = {
     transportApp: 'Dùng tài khoản AI của ứng dụng (model đang chọn trong Cài đặt)',
     transportDirect: 'Engine gọi trực tiếp API tương thích OpenAI (Ollama, nhà cung cấp tuỳ chỉnh có API key)',
     consent: 'Tôi đồng ý gửi tài liệu của dự án này tới nhà cung cấp AI đã chọn',
+    consentLabels: 'Tôi đồng ý gửi tên symbol và tên tệp của từng cụm (không gửi mã nguồn) tới nhà cung cấp AI đã chọn',
+    consentTriage: 'Tôi đồng ý gửi tiêu đề, trạng thái và tác giả của các pull request đang mở (không gửi mã nguồn) tới nhà cung cấp AI đã chọn',
+    sends: {
+      docs: 'Sẽ gửi: nội dung tài liệu, PDF, bản chép lời (không gửi mã nguồn).',
+      deep: 'Sẽ gửi: nội dung tài liệu, PDF, bản chép lời (không gửi mã nguồn).',
+      images: 'Sẽ gửi: các tệp ảnh của dự án.',
+      labels: 'Sẽ gửi: tên symbol và tên tệp của từng cụm (không gửi mã nguồn).',
+      dedup: 'Không gửi gì: chạy trên máy.',
+      pr_triage: 'Sẽ gửi: tiêu đề và trạng thái pull request.'
+    } as Record<string, string>,
+    noCache: 'Chạy lại, không dùng kết quả đã lưu',
+    modelChanged: (before: string, now: string) => `Model đang chọn (${now}) khác model bạn đã đồng ý (${before}).`,
+    agreeNewModel: 'Đồng ý dùng model mới',
+    noModel: 'Chưa chọn model AI. Hãy chọn trong Cài đặt AI.',
     enable: 'Bật AI cho dự án',
     disable: 'Tắt AI cho dự án',
     targetLabel: 'Phân tích',
@@ -659,6 +678,8 @@ export const vi = {
     close: 'Đóng',
     done: (nodes: number, edges: number) => `Xong: thêm ${nodes} node, ${edges} quan hệ suy luận bởi AI.`,
     labelsDone: (n: number) => `Xong: đặt tên ${n} cụm.`,
+    triageItem: (n: number, priority: number, action: string) => `#${n} · ưu tiên ${priority}: ${action}`,
+    triageEmpty: 'AI không trả về thứ tự nào.',
     merged: (n: number) => `Xong: gộp ${n} khái niệm trùng.`,
     failedChunks: (n: number) => `${n} khối lỗi (model trả kết quả hỏng hoặc không gọi được).`,
     cost: (input: string, output: string) => `Đã dùng ${input} token đầu vào, ${output} token đầu ra.`,

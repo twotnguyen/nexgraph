@@ -15,7 +15,8 @@ const pr = (number: number, status: PrListItem['status'], over: Partial<PrListIt
 })
 
 const list: PrList = { repo: 'acme/demo', default_branch: 'main', base: 'main', truncated: false,
-  prs: [pr(6, 'APPROVED'), pr(8, 'READY')], conflicts: [{ a: 6, b: 8, files: ['util.py'], nodes: 2 }] }
+  prs: [pr(6, 'APPROVED'), pr(8, 'READY'), pr(9, 'MERGED')], conflicts: [{ a: 6, b: 8, files: ['util.py'], nodes: 2, related: 5 }],
+  conflicts_truncated: true }
 
 const detail: PrDetail = {
   pr: pr(8, 'READY'), changed_files: [{ path: 'util.py', status: 'M', old_path: null }],
@@ -29,6 +30,14 @@ const detail: PrDetail = {
 }
 
 describe('PrsView', () => {
+  it('nút Xếp hạng bằng AI mở hộp thoại đồng ý với target pr_triage', async () => {
+    const { api } = installNexgraph({ prs: { list: vi.fn(async () => list) } })
+    render(<PrsView projectId="p1" onOpenNode={vi.fn()} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Xếp hạng bằng AI' }))
+    expect(await screen.findByRole('dialog', { name: 'Xếp hạng pull request bằng AI' })).toBeInTheDocument()
+    expect(api.semantic.getSettings).toHaveBeenCalledWith('p1')
+  })
+
   it('liệt kê PR với nhãn và xung đột', async () => {
     installNexgraph({ prs: { list: vi.fn(async () => list) } })
     render(<PrsView projectId="p1" onOpenNode={vi.fn()} />)
@@ -36,6 +45,9 @@ describe('PrsView', () => {
     expect(screen.getByText('Sẵn sàng')).toBeInTheDocument()
     expect(screen.getByText('#6 và #8')).toBeInTheDocument()
     expect(screen.getByText('cùng tệp: util.py')).toBeInTheDocument()
+    expect(screen.getByText('5 nút chung trong vùng ảnh hưởng')).toBeInTheDocument()
+    expect(screen.getByText('Chỉ hiện các cặp xung đột đáng chú ý nhất.')).toBeInTheDocument()
+    expect(screen.getByText('Đã merge')).toBeInTheDocument()
   })
 
   it('chọn PR hiện review, mở nút và sao chép nhận xét', async () => {

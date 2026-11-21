@@ -106,7 +106,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
     prs: { status: vi.fn(async () => ({ available: false, reason: 'gh_missing' as const, repo: null, default_branch: null })),
       list: vi.fn(), detail: vi.fn(), ...over.prs },
     semantic: { getSettings: vi.fn(async () => ({ enabled: false, transport: null, model: null })), setSettings: vi.fn(async (_pid: string, s: { enabled: boolean; transport: 'app' | 'direct' | null }) => ({ ...s, model: s.enabled ? 'openai / gpt-test' : null })),
-      estimate: vi.fn(async () => ({ files: ['README.md'], chunks: 1, cached_chunks: 0, input_tokens: 1200, output_tokens: 300 })),
+      estimate: vi.fn(async () => ({ files: ['README.md'], chunks: 1, cached_chunks: 0, input_tokens: 1200, output_tokens: 300, model: 'openai / gpt-test' })),
       start: vi.fn(async () => ({ jobId: 'sem1' })), cancel: vi.fn(async () => {}), ...over.semantic }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api

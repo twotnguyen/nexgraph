@@ -49,6 +49,9 @@ class _Index:
             if not f.endswith(".dart"):
                 by_gid[_gid(f)].append(f)
         self.file_by_gid = {g: fs[0] for g, fs in by_gid.items() if len(fs) == 1}  # trùng id thì không đoán
+        self.files_by_name: dict[str, list[str]] = defaultdict(list)
+        for f in self.files:
+            self.files_by_name[posixpath.basename(f)].append(f)
         self.types: dict[str, dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
         self.funcs: dict[str, dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
         self.members: dict[tuple[str, str], dict[str, list[Node]]] = defaultdict(lambda: defaultdict(list))
@@ -154,7 +157,9 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
             joined = posixpath.normpath(posixpath.join(posixpath.dirname(src.file), uri))
             target_rel = joined if not joined.startswith("..") else None
         if (not target_rel or target_rel not in idx.files) and not src.file.endswith(".dart"):
-            target_rel = idx.file_by_gid.get(uri)
+            # `#include "x/y.h"` qua thư mục -I: tệp duy nhất trong dự án có đường dẫn kết thúc bằng `x/y.h`
+            target_rel = idx.file_by_gid.get(uri) or _only(
+                [f for f in idx.files_by_name.get(posixpath.basename(uri), []) if f == uri or f.endswith("/" + uri)])
         if target_rel and target_rel in idx.files and target_rel != src.file:
             edge(ref, idx.by_id[f"{target_rel}#file"], EdgeType.IMPORTS, 1.0, subtype, exact=True)
             imports[src.file].append((target_rel, subtype))

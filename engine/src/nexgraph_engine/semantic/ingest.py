@@ -66,6 +66,17 @@ def parse_triage(text: str, numbers: list[int]) -> list[dict]:
     return sorted(out, key=lambda x: (x["priority"], x["number"]))
 
 
+def _text(value) -> str:
+    """Model đôi khi trả số/mảng thay cho chuỗi: ép thành chuỗi thay vì đánh hỏng cả khối."""
+    if isinstance(value, list):
+        value = " ".join(str(v) for v in value)
+    return "" if value is None or isinstance(value, dict) else str(value).strip()
+
+
+def _key(value):
+    return value if isinstance(value, str) else None
+
+
 # --- ghi ----------------------------------------------------------------------------------------------
 def _confidence(raw, unverified: bool) -> tuple[Confidence, float]:
     """Kết quả AI chỉ là INFERRED hoặc AMBIGUOUS; model ghi EXTRACTED thì hạ xuống INFERRED."""
@@ -90,24 +101,27 @@ def write_fragment(store: GraphStore, files: list[str], fragment: dict) -> tuple
     if present:
         marks = ",".join("?" * len(present))
         in_files = f"SELECT n.ma_nut FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep WHERE t.duong_dan_tuong_doi IN ({marks})"
-        conn.execute(f"DELETE FROM canh WHERE nguon_goc = 'llm' AND ma_nut_nguon IN ({in_files})", present)
+        # Cạnh AI có ít nhất một đầu thuộc tệp của khối (cả cạnh từ symbol ngoài khối trỏ vào tài liệu).
+        conn.execute(f"DELETE FROM canh WHERE nguon_goc = 'llm' AND (ma_nut_nguon IN ({in_files})"
+                     f" OR ma_nut_dich IN ({in_files}))", present + present)
         conn.execute(f"DELETE FROM nut WHERE nguon_goc = 'llm' AND ma_nut IN ({in_files})", present)
         store._node_pk.clear()  # pk cũ có thể đã bị xoá
     allowed = set(present)
-    ids: dict[str, tuple[str, bool]] = {}  # id của model → (id NexGraph, chưa kiểm chứng)
+    ids: dict[str, tuple[str, bool, bool]] = {}  # id của model → (id NexGraph, chưa kiểm chứng, thuộc khối)
     new_nodes: dict[str, Node] = {}
     edges: list[Edge] = []
     for raw in fragment["nodes"]:
-        rel, label = raw.get("source_file"), str(raw.get("label") or "").strip()[:200]
-        if rel not in allowed or not label:
+        rel, label = raw.get("source_file"), _text(raw.get("label"))[:200]
+        if not isinstance(rel, str) or rel not in allowed or not label or not isinstance(raw.get("id"), str):
             continue
         unverified = False
         if raw.get("file_type") == "code":
-            row = conn.execute(f"SELECT id_nut FROM nut WHERE nhan = ? AND nguon_goc <> 'llm' AND loai_nut IN"
-                               f" ({','.join('?' * len(_SYMBOL_KINDS))}) ORDER BY ma_nut LIMIT 1",
+            row = conn.execute(f"SELECT n.id_nut, t.duong_dan_tuong_doi FROM nut n LEFT JOIN tep t ON t.ma_tep = n.ma_tep"
+                               f" WHERE n.nhan = ? AND n.nguon_goc <> 'llm' AND n.loai_nut IN"
+                               f" ({','.join('?' * len(_SYMBOL_KINDS))}) ORDER BY n.ma_nut LIMIT 1",
                                (label, *_SYMBOL_KINDS)).fetchone()
             if row:
-                ids[raw["id"]] = (row[0], False)
+                ids[raw["id"]] = (row[0], False, row[1] in allowed)
                 continue
             unverified = True
         nid = node_id(rel, label, NodeKind.CONCEPT)
@@ -120,13 +134,14 @@ def write_fragment(store: GraphStore, files: list[str], fragment: dict) -> tuple
                                   origin=Origin.LLM, doc=doc)
             edges.append(Edge(source=file_node_id(rel), target=nid, type=EdgeType.DEFINES,
                               confidence=Confidence.INFERRED, confidence_score=1.0, origin=Origin.LLM))
-        ids[raw["id"]] = (nid, unverified)
+        ids[raw["id"]] = (nid, unverified, True)
     store.add_nodes(new_nodes.values())
     for raw in fragment["edges"]:
-        source, target = ids.get(raw.get("source")), ids.get(raw.get("target"))
-        if source is None or target is None or source[0] == target[0]:
+        source, target = ids.get(_key(raw.get("source"))), ids.get(_key(raw.get("target")))
+        # Cả hai đầu là symbol ngoài khối: không ghi, vì ghi lại khối sau này không biết cạnh đó thuộc khối nào.
+        if source is None or target is None or source[0] == target[0] or not (source[2] or target[2]):
             continue
-        relation = str(raw.get("relation") or "").strip().lower()[:50] or None
+        relation = _text(raw.get("relation")).lower()[:50] or None
         conf, score = _confidence(raw, source[1] or target[1])
         edges.append(Edge(source=source[0], target=target[0],
                           type=EdgeType.DOCUMENTS if relation in DOCUMENTS_RELATIONS else EdgeType.SEMANTIC_RELATED,

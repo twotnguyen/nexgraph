@@ -28,3 +28,13 @@ class Services:
         from nexgraph_engine.global_graph.store import GlobalStore
         if any(pid == project_id for pid, _ in GlobalStore(self.data_dir).members(read_only=True)):
             self.relink_global()
+
+    def leave_global(self, project_id: str) -> None:
+        from nexgraph_engine.errors import ApiError
+        from nexgraph_engine.global_graph.store import GlobalStore
+        store = GlobalStore(self.data_dir)
+        try:
+            if store.path.is_file() and store.remove(project_id):
+                self.relink_global()
+        except ApiError:  # global.db của phiên bản mới hơn: không chặn việc gỡ dự án
+            pass

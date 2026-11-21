@@ -165,7 +165,10 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
         elif rel in ("imports", "imports_from") and line:
             if rel == "imports" and line in from_lines:
                 continue
-            refs.append(UnresolvedRef(source=fid, name=dst, type=EdgeType.IMPORTS, line=line, col=0))
+            # id tệp đích của `#include` mất phần mở rộng (`util.h`, `util.cpp` cùng là `cpp_util`): lấy lại đường dẫn gốc
+            inc = _C_INCLUDE.match(lines[line - 1]) if line <= len(lines) else None
+            name = inc.group(1).strip('"') if inc else dst  # `<...>` giữ ngoặc nhọn để resolver không nối vào tệp dự án
+            refs.append(UnresolvedRef(source=fid, name=name, type=EdgeType.IMPORTS, line=line, col=0))
         elif rel == "calls" and src in ids and line:
             foreign = _foreign_receiver(lines, line, qnames[dst][0].split(".")[-1]) if dst in ids else None
             if foreign:  # extractor chỉ khớp theo tên: `bcrypt.compare()` không phải phương thức `compare` của lớp này
@@ -360,6 +363,7 @@ def _ts_heritage(lines: list[str], line: int) -> list[tuple[EdgeType, str]]:
     return out
 
 
+_C_INCLUDE = re.compile(r'\s*#\s*(?:include|import)\s*("[^"]+"|<[^>]+>)')
 _OWN_RECEIVERS = {"this", "self", "cls", "super"}
 
 

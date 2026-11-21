@@ -236,8 +236,9 @@ def test_app_transport_queue_roundtrip(api, docs_pid):
     job = wait_job(api, job_id)
     assert job["state"] == "done"
     assert job["result"]["chunks"]["done"] == len(seen) - (1 if len(seen) > 1 else 0)
-    assert api.post(f"/v1/jobs/{job_id}/llm/{seen[0]['chunk_id']}", json={"text": "{}"}).status_code == 409
-    assert api.get(f"/v1/jobs/{job_id}/llm/next").status_code == 204
+    # Job đã kết thúc: hàng đợi đã bị bỏ.
+    assert api.post(f"/v1/jobs/{job_id}/llm/{seen[0]['chunk_id']}", json={"text": "{}"}).status_code == 404
+    assert api.get(f"/v1/jobs/{job_id}/llm/next").status_code == 404
 
 
 def test_app_transport_unknown_chunk_and_bad_body(api, docs_pid):
@@ -270,7 +271,7 @@ def test_cancel_mid_way_writes_no_partial_chunk(api, copy_fixture):
     assert api.delete(f"/v1/jobs/{job_id}").json() == {"cancelled": True}
     late = api.post(f"/v1/jobs/{job_id}/llm/{second['chunk_id']}", json={"text": fragment(rel2, "Khối hai")})
     assert wait_job(api, job_id)["state"] == "cancelled"
-    assert late.status_code in (200, 409)
+    assert late.status_code in (200, 404, 409)
     conn = graph(api, pid)
     labels = {r[0] for r in conn.execute("SELECT nhan FROM nut WHERE nguon_goc = 'llm'")}
     conn.close()
@@ -378,5 +379,191 @@ def test_pr_triage_returns_result_without_graph_write(api, docs_pid, llm):
     conn = graph(api, docs_pid)
     assert conn.execute("SELECT count(*) FROM nut").fetchone()[0] == before
     conn.close()
-    r = api.post(f"/v1/projects/{docs_pid}/semantic", json={"targets": "pr_triage", "transport": direct(llm)})
-    assert r.status_code == 400
+
+
+# --- sửa sau kiểm thử độc lập ---------------------------------------------------------------------
+def test_deeply_nested_json_fails_only_its_chunk_path_a(api, copy_fixture):
+    root = copy_fixture("docs_app")
+    (root / "other").mkdir()
+    (root / "other" / "x.md").write_text("# Khác\n", encoding="utf-8")
+    pid = index_docs(api, root)
+    enable(api, pid, "app")
+    job_id = run(api, pid, "docs", {"kind": "app"})
+    wait_job(api, job_id, {"waiting_llm"})
+    chunks = []
+    while (r := api.get(f"/v1/jobs/{job_id}/llm/next")).status_code == 200:
+        chunks.append(r.json())
+    assert len(chunks) >= 2
+    api.post(f"/v1/jobs/{job_id}/llm/{chunks[0]['chunk_id']}", json={"text": "[" * 200_000})
+    for c in chunks[1:]:
+        rel = c["user"].split('<untrusted_source path="')[1].split('"')[0]
+        api.post(f"/v1/jobs/{job_id}/llm/{c['chunk_id']}", json={"text": fragment(rel, "Vẫn ghi")})
+    job = wait_job(api, job_id)
+    assert job["state"] == "done", job
+    assert job["result"]["chunks"]["failed"] == 1 and job["result"]["chunks"]["done"] == len(chunks) - 1
+
+
+def test_deeply_nested_json_fails_only_its_chunk_path_b(api, docs_pid, llm):
+    enable(api, docs_pid)
+    llm.reply = lambda body: '{"nodes": ' + "[" * 200_000
+    job = wait_job(api, run(api, docs_pid, "docs", direct(llm)))
+    assert job["state"] == "done", job
+    assert job["result"]["chunks"]["failed"] == job["result"]["chunks"]["total"] > 0
+
+
+def test_sensitive_and_excluded_files_are_never_sent(api, copy_fixture, llm):
+    root = copy_fixture("docs_app")
+    (root / "aws_credentials.txt").write_text("aws_secret_access_key = abc\n", encoding="utf-8")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "prod.md").write_text("# Prod\nmật khẩu\n", encoding="utf-8")
+    (root / "build").mkdir()
+    (root / "build" / "out.md").write_text("# Build\n", encoding="utf-8")
+    pid = index_docs(api, root)
+    est = api.post(f"/v1/projects/{pid}/semantic/estimate", json={"targets": "docs"}).json()
+    assert "README.md" in est["files"]
+    for bad in ("aws_credentials.txt", "secrets/prod.md", "build/out.md"):
+        assert bad not in est["files"]
+    enable(api, pid)
+    assert wait_job(api, run(api, pid, "docs", direct(llm)))["state"] == "done"
+    sent = "".join(b["messages"][1]["content"] for b in llm.requests)
+    assert "aws_secret_access_key" not in sent and "mật khẩu" not in sent
+
+
+def test_rewrite_removes_llm_edges_touching_chunk_and_skips_outside_pairs(api, docs_pid, llm):
+    enable(api, docs_pid)
+
+    def reply(body):
+        rel = files_of(body)[0]
+        nodes = [{"id": "a", "label": "AuthService", "file_type": "code", "source_file": rel},
+                 {"id": "b", "label": "helper", "file_type": "code", "source_file": rel},
+                 {"id": "c", "label": "Khái niệm", "file_type": "concept", "source_file": rel}]
+        edges = [{"source": "a", "target": "b", "relation": "calls", "confidence": "INFERRED", "source_file": rel},
+                 {"source": "a", "target": "c", "relation": "references", "confidence": "INFERRED", "source_file": rel}]
+        return json.dumps({"nodes": nodes, "edges": edges})
+    llm.reply = reply
+    assert wait_job(api, run(api, docs_pid, "docs", direct(llm)))["state"] == "done"
+    conn = graph(api, docs_pid)
+    # Cạnh AI giữa hai symbol thật ngoài khối không được ghi (không xoá lại được khi khối đổi).
+    assert conn.execute("SELECT count(*) FROM canh c JOIN nut s ON s.ma_nut = c.ma_nut_nguon JOIN nut d ON"
+                        " d.ma_nut = c.ma_nut_dich WHERE c.nguon_goc = 'llm' AND s.nhan = 'AuthService'"
+                        " AND d.nhan = 'helper'").fetchone()[0] == 0
+    # Cạnh từ symbol ngoài khối tới nút AST của tài liệu: bị xoá khi ghi lại khối.
+    heading = conn.execute("SELECT id_nut FROM nut WHERE loai_nut = 'document' LIMIT 1").fetchone()[0]
+    conn.close()
+    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.semantic.ingest import write_fragment
+    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.store.models import Edge
+    from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
+    info = api.app.state.services.registry.get(docs_pid)
+    c = open_graph_db(info.graph_db)
+    store = GraphStore(c)
+    sym = c.execute("SELECT id_nut FROM nut WHERE nhan = 'AuthService' AND nguon_goc = 'ast'").fetchone()[0]
+    rel = c.execute("SELECT t.duong_dan_tuong_doi FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep WHERE n.id_nut = ?",
+                    (heading,)).fetchone()[0]
+    store.insert_edges([Edge(source=sym, target=heading, type=EdgeType.DOCUMENTS, confidence=Confidence.INFERRED,
+                             origin=Origin.LLM)])
+    c.commit()
+    with c:
+        write_fragment(store, [rel], {"nodes": [], "edges": []})
+    assert c.execute("SELECT count(*) FROM canh WHERE nguon_goc = 'llm' AND ma_nut_dich = ?",
+                     (store.pk_of(heading),)).fetchone()[0] == 0
+    c.close()
+
+
+def test_cancel_direct_does_not_wait_for_slow_model(api, docs_pid, llm):
+    enable(api, docs_pid)
+    started = threading.Event()
+
+    def slow(body):
+        started.set()
+        time.sleep(6)
+        return json.dumps({"nodes": [], "edges": []})
+    llm.reply = slow
+    job_id = run(api, docs_pid, "docs", direct(llm))
+    assert started.wait(10)
+    t0 = time.time()
+    api.delete(f"/v1/jobs/{job_id}")
+    assert wait_job(api, job_id, timeout=4)["state"] == "cancelled"
+    assert time.time() - t0 < 3
+
+
+def test_non_string_fields_are_coerced(api, docs_pid, llm):
+    enable(api, docs_pid)
+
+    def reply(body):
+        rel = files_of(body)[0]
+        return json.dumps({"nodes": [{"id": "a", "label": 123, "file_type": "concept", "source_file": rel},
+                                     {"id": "b", "label": ["Danh", "sách"], "file_type": "concept", "source_file": rel},
+                                     {"id": "x", "label": "Lạ", "file_type": "concept", "source_file": [rel]}],
+                           "edges": [{"source": "a", "target": "b", "relation": {"k": 1}, "confidence": "INFERRED",
+                                      "source_file": rel}]})
+    llm.reply = reply
+    job = wait_job(api, run(api, docs_pid, "docs", direct(llm)))
+    assert job["state"] == "done" and job["result"]["chunks"]["failed"] == 0, job
+    conn = graph(api, docs_pid)
+    assert conn.execute("SELECT count(*) FROM nut WHERE nhan = '123'").fetchone()[0] >= 1
+    conn.close()
+
+
+def test_queue_removed_when_job_ends(api, docs_pid):
+    enable(api, docs_pid, "app")
+    job_id = run(api, docs_pid, "docs", {"kind": "app"})
+    wait_job(api, job_id, {"waiting_llm"})
+    api.delete(f"/v1/jobs/{job_id}")
+    wait_job(api, job_id)
+    end = time.time() + 2
+    while time.time() < end and job_id in api.app.state.services.llm_queues:
+        time.sleep(0.02)
+    assert job_id not in api.app.state.services.llm_queues
+    assert api.get(f"/v1/jobs/{job_id}/llm/next").status_code == 404
+
+
+def test_no_cache_calls_model_again(api, docs_pid, llm):
+    enable(api, docs_pid)
+    assert wait_job(api, run(api, docs_pid, "docs", direct(llm)))["state"] == "done"
+    sent = len(llm.requests)
+    est = api.post(f"/v1/projects/{docs_pid}/semantic/estimate", json={"targets": "docs", "no_cache": True}).json()
+    assert est["cached_chunks"] == 0
+    job = wait_job(api, run(api, docs_pid, "docs", direct(llm), no_cache=True))
+    assert job["result"]["chunks"]["cached"] == 0 and len(llm.requests) == 2 * sent
+
+
+def test_pr_triage_without_prs_lists_open_prs_from_gh(api, docs_pid, llm, monkeypatch):
+    """Tab PR (W7) chỉ gửi target: engine tự lấy hàng PR qua `gh`, bỏ PR sai nhánh gốc/cũ như triage theo luật."""
+    import gh_fake
+    from nexgraph_engine.prs import gh
+    enable(api, docs_pid)
+    gh_fake.install(monkeypatch, {})
+    llm.reply = lambda body: json.dumps({"triage": [{"number": 8, "priority": 1, "action": "Review ngay."}]})
+    est = api.post(f"/v1/projects/{docs_pid}/semantic/estimate", json={"targets": "pr_triage"})
+    assert est.status_code == 200 and est.json()["chunks"] == 1, est.text
+    job = wait_job(api, run(api, docs_pid, "pr_triage", direct(llm)))
+    assert job["state"] == "done", job
+    sent = llm.requests[0]["messages"][1]["content"]
+    assert "Sẵn sàng" in sent and "Sai nhánh gốc" not in sent
+    assert job["result"]["triage"] == [{"number": 8, "priority": 1, "action": "Review ngay."}]
+    gh_fake.install(monkeypatch, {("repo", "view"): gh.GhError("gh_missing", "Không tìm thấy gh")})
+    job = wait_job(api, run(api, docs_pid, "pr_triage", direct(llm)))
+    assert job["state"] == "error" and "gh" in job["message"]
+
+
+def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
+    """`gh` chậm không được giữ request: desktop bỏ chờ sau 15 s và job sẽ kẹt giữ khoá dự án (kiểm thử tích hợp I1)."""
+    import threading
+    import gh_fake
+    from nexgraph_engine.prs import gh
+    enable(api, docs_pid)
+    gh_fake.install(monkeypatch, {})
+    fake_run, release = gh.run_gh, threading.Event()
+
+    def slow(root, args, timeout=gh.TIMEOUT):
+        release.wait(10)
+        return fake_run(root, args, timeout)
+
+    monkeypatch.setattr(gh, "run_gh", slow)
+    llm.reply = lambda body: json.dumps({"triage": [{"number": 8, "priority": 1, "action": "Review ngay."}]})
+    job_id = run(api, docs_pid, "pr_triage", direct(llm))  # trả 202 khi gh còn đang chờ
+    assert api.get(f"/v1/jobs/{job_id}").json()["state"] not in ("done", "error")
+    release.set()
+    assert wait_job(api, job_id)["state"] == "done"

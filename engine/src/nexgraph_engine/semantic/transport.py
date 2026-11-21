@@ -76,7 +76,7 @@ class DirectTransport:
         try:
             data = json.loads(raw)
             text = data["choices"][0]["message"]["content"] or ""
-        except (ValueError, KeyError, IndexError, TypeError):
+        except (ValueError, KeyError, IndexError, TypeError, RecursionError, MemoryError):
             raise ChunkError("Phản hồi của model không đúng định dạng OpenAI") from None
         usage = data.get("usage") or {}
         return str(text), int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0)

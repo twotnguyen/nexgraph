@@ -120,9 +120,15 @@ def test_cross_repo_impact_uses_shared_graph_when_present(store, monkeypatch, tm
     def fake(data_dir, project_id, node_ids):
         seen.update(data_dir=data_dir, project_id=project_id, node_ids=node_ids)
         return [{"project_id": "other", "node_id": "app.ts::main#function", "via": node_ids[0],
-                 "type": "CALLS", "subtype": None, "file": "app.ts", "line": 3}]
+                 "type": "CALLS", "subtype": None, "file": "app.ts", "line": 3},
+                {"project_id": "other", "node_id": "secret.ts::hidden#function", "via": node_ids[0],
+                 "type": "CALLS", "subtype": None, "file": "secret.ts", "line": 1}]
+
+    def visible(data_dir, project_id, entries, *, for_model=True):  # giả lập SourcePolicy của dự án kia
+        return [e for e in entries if "hidden" not in e["node_id"]]
 
     monkeypatch.setattr(link, "cross_repo_impact", fake)
+    monkeypatch.setattr(link, "visible_cross_repo", visible)
     gh_fake.install(monkeypatch, {("pr", "view", "9"): VIEW, ("pr", "diff", "9"): HELPER_DIFF})
     data_dir = tmp_path / "appdata"
     data_dir.mkdir()
@@ -132,3 +138,32 @@ def test_cross_repo_impact_uses_shared_graph_when_present(store, monkeypatch, tm
     assert seen["project_id"] == store[0].project_id() and seen["node_ids"] == [n["id"] for n in d["changed_nodes"]]
     assert d["cross_repo"][0]["project_id"] == "other"
     assert "repo khác" in d["comment"]
+    assert [c["node_id"] for c in d["cross_repo"]] == ["app.ts::main#function"] and "hidden" not in d["comment"]
+
+
+def test_call_moved_to_another_file_is_not_unreferenced(store, monkeypatch):
+    moved = ("diff --git a/lib2.py b/lib2.py\nnew file mode 100644\n--- /dev/null\n+++ b/lib2.py\n@@ -0,0 +1,2 @@\n"
+             "+from lib import orphan\n+X = orphan()\n")
+    d, _ = detail(store, monkeypatch, APP_DIFF + moved)
+    assert d["unreferenced"] == []
+
+
+def test_deleted_definition_is_not_unreferenced(store, monkeypatch):
+    gone = ("diff --git a/lib.py b/lib.py\n--- a/lib.py\n+++ b/lib.py\n@@ -5,2 +4,0 @@\n"
+            "-def orphan():\n-    return 0\n")
+    d, _ = detail(store, monkeypatch, APP_DIFF + gone)
+    assert d["unreferenced"] == []
+
+
+def test_deleted_file_symbols_are_not_test_gaps(store, monkeypatch):
+    deleted = ("diff --git a/app.py b/app.py\ndeleted file mode 100644\n--- a/app.py\n+++ /dev/null\n"
+               "@@ -1,7 +0,0 @@\n" + "".join("-" + line + "\n" for line in APP.splitlines()))
+    d, _ = detail(store, monkeypatch, deleted)
+    assert "run" not in [n["label"] for n in d["test_gaps"]]
+
+
+@pytest.mark.parametrize("state", ["MERGED", "CLOSED"])
+def test_closed_or_merged_pr_status(store, monkeypatch, state):
+    calls = gh_fake.install(monkeypatch, {("pr", "view", "9"): VIEW.replace('"OPEN"', f'"{state}"'),
+                                          ("pr", "diff", "9"): HELPER_DIFF})
+    assert pr_detail_json(*store, 9)["pr"]["status"] == state and calls

@@ -12,10 +12,12 @@ from graphify.prs import _PR_JSON_FIELDS, _STATUS_ORDER, PRInfo, _parse_pr_dict
 from nexgraph_engine.changes.model import ChangeSet, FileChange
 from nexgraph_engine.impact.analyze import map_to_nodes, propagate
 from nexgraph_engine.prs import gh
+from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.store.graph_store import GraphStore
 
 FIELDS = _PR_JSON_FIELDS + ",url"
 MAX_LIST = 100
+MAX_CONFLICTS = 50
 _ACTIONS = {
     "CI-FAIL": "Sửa CI trước khi review",
     "CHANGES-REQ": "Chờ tác giả sửa theo nhận xét",
@@ -48,41 +50,67 @@ def gh_status(root: Path) -> dict:
     return {"available": True, "reason": None, **info}
 
 
-def pr_json(pr: PRInfo, url: str | None = None) -> dict:
+def parse_pr(item: dict, base: str) -> PRInfo:
+    """`_parse_pr_dict` của graphify, nhưng `updatedAt` sai định dạng không làm hỏng cả danh sách."""
+    try:
+        return _parse_pr_dict(item, base)
+    except (ValueError, TypeError, AttributeError):
+        return _parse_pr_dict({**item, "updatedAt": None}, base)
+
+
+def pr_json(pr: PRInfo, url: str | None = None, state: str | None = None) -> dict:
+    status = state if state in ("CLOSED", "MERGED") else pr.status  # PR đã đóng/merge không được gán READY
     return {"number": pr.number, "title": pr.title, "branch": pr.branch, "base": pr.base_branch,
             "author": pr.author, "draft": pr.is_draft, "review": pr.review_decision or None, "ci": pr.ci_status,
             "updated_at": pr.updated_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "days_old": pr.days_old, "status": pr.status, "url": url}
+            "days_old": pr.days_old, "status": status, "url": url}
 
 
-def footprint(store: GraphStore, files: list[str]) -> set[str]:
-    """Id nút của cả tệp đổi cộng vùng ảnh hưởng (chỉ dùng để so hai PR, nên lấy cả tệp thay vì từng dòng)."""
+def changed_and_footprint(store: GraphStore, files: list[str]) -> tuple[set[str], set[str]]:
+    """(nút của cả tệp đổi, nút đổi cộng vùng ảnh hưởng). Lấy cả tệp vì `gh pr list` không có khoảng dòng."""
     changed = map_to_nodes(store.conn, ChangeSet("git_head", None, [FileChange(f, "M") for f in files]))
     seeds = [n.id for n in changed] + [f"{f}#file" for f in sorted({n.file for n in changed if n.file})]
     impacted, _ = propagate(store.conn, seeds) if seeds else ([], False)
-    return {n.id for n in changed} | {i.node.id for i in impacted}
+    ids = {n.id for n in changed}
+    return ids, ids | {i.node.id for i in impacted}
 
 
-def list_prs_json(store: GraphStore, root: Path, limit: int = 50) -> dict:
+def footprint(store: GraphStore, files: list[str]) -> set[str]:
+    return changed_and_footprint(store, files)[1]
+
+
+def list_prs_json(store: GraphStore, root: Path, limit: int = 50, *, model: ModelGraph | None = None) -> dict:
+    """`model` (đường MCP / header model): bỏ tệp và nút bị loại khỏi AI trước khi đếm và so xung đột."""
     limit = max(1, min(limit, MAX_LIST))
     info = repo_info(root)
     base = info["default_branch"]
     raw = _json(root, ["pr", "list", "--state", "open", "--limit", str(limit), "--json", FIELDS + ",files"])
     prs, marks = [], {}
     for item in raw if isinstance(raw, list) else []:
-        pr = _parse_pr_dict(item, base)
-        files = sorted({f.get("path") for f in item.get("files") or [] if f.get("path")})
-        nodes = footprint(store, files)
+        if not isinstance(item, dict):
+            continue
+        pr = parse_pr(item, base)
+        files = sorted({f.get("path") for f in item.get("files") or [] if isinstance(f, dict) and f.get("path")})
+        if model is not None:
+            files = [f for f in files if model.source.allows(f)]
+        changed, nodes = changed_and_footprint(store, files)
+        if model is not None:
+            changed = {n for n in changed if model.allows_node(n)}
+            nodes = {n for n in nodes if model.allows_node(n)}
         prs.append({**pr_json(pr, item.get("url")), "files": files, "nodes_affected": len(nodes)})
-        marks[pr.number] = (set(files), nodes)
+        marks[pr.number] = (set(files), changed, nodes)
+    # Xung đột = cùng tệp hoặc cùng nút đổi trực tiếp. Trùng vùng ảnh hưởng chỉ là điểm "liên quan": qua các nút hub,
+    # gần như mọi cặp PR đều trùng, nên không dùng để báo xung đột.
     conflicts = []
     for a, b in combinations([p for p in prs if p["status"] != "WRONG-BASE"], 2):
-        files = marks[a["number"]][0] & marks[b["number"]][0]
-        nodes = marks[a["number"]][1] & marks[b["number"]][1]
-        if files or nodes:
-            conflicts.append({"a": a["number"], "b": b["number"], "files": sorted(files)[:20], "nodes": len(nodes)})
-    conflicts.sort(key=lambda c: (-len(c["files"]), -c["nodes"], c["a"], c["b"]))
-    return {**info, "base": base, "prs": prs, "conflicts": conflicts, "truncated": len(prs) >= limit}
+        (fa, ca, ia), (fb, cb, ib) = marks[a["number"]], marks[b["number"]]
+        files, changed = fa & fb, ca & cb
+        if files or changed:
+            conflicts.append({"a": a["number"], "b": b["number"], "files": sorted(files)[:20], "nodes": len(changed),
+                              "related": len(ia & ib)})
+    conflicts.sort(key=lambda c: (-len(c["files"]), -c["nodes"], -c["related"], c["a"], c["b"]))
+    return {**info, "base": base, "prs": prs, "conflicts": conflicts[:MAX_CONFLICTS],
+            "conflicts_truncated": len(conflicts) > MAX_CONFLICTS, "truncated": len(prs) >= limit}
 
 
 def triage_json(listing: dict) -> dict:
@@ -93,6 +121,13 @@ def triage_json(listing: dict) -> dict:
             "ranked": [{"number": p["number"], "title": p["title"], "status": p["status"], "ci": p["ci"],
                         "review": p["review"], "days_old": p["days_old"], "author": p["author"],
                         "nodes_affected": p["nodes_affected"], "action": _ACTIONS[p["status"]]} for p in ranked]}
+
+
+def triage_items(triage: dict) -> list[dict]:
+    """Hàng PR của `triage_json` theo dạng `prs` của job semantic `pr_triage` (W9): chỉ metadata, không có mã."""
+    return [{"number": p["number"], "title": p["title"][:500], "status": p["status"], "ci": p["ci"] or "",
+             "review": p["review"] or "", "age_days": max(0, p["days_old"]), "author": (p["author"] or "")[:100],
+             "blast_radius": f"{p['nodes_affected']} nodes"} for p in triage["ranked"][:200]]
 
 
 def triage_prompt(triage: dict) -> str:

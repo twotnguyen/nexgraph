@@ -23,9 +23,9 @@ describe('SemanticDialog', () => {
     expect(api.semantic.setSettings).toHaveBeenCalledWith('p1', { enabled: true, transport: 'direct', model: null })
     expect(await screen.findByText('1 tệp · 1 khối (0 khối đã có sẵn kết quả)')).toBeInTheDocument()
     expect(screen.getByText('Model: openai / gpt-test')).toBeInTheDocument()
-    expect(api.semantic.estimate).toHaveBeenCalledWith('p1', 'docs')
+    expect(api.semantic.estimate).toHaveBeenCalledWith('p1', 'docs', false)
     await userEvent.click(screen.getByRole('button', { name: 'Đồng ý và chạy' }))
-    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'docs')
+    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'docs', undefined, false)
     expect(await screen.findByText('Xong: thêm 4 node, 6 quan hệ suy luận bởi AI.')).toBeInTheDocument()
     expect(screen.getByText(/1 khối lỗi/)).toBeInTheDocument()
     expect(screen.getByText(/Đã dùng 1\.500 token đầu vào/)).toBeInTheDocument()
@@ -39,9 +39,22 @@ describe('SemanticDialog', () => {
     })
     render(<SemanticDialog projectId="p1" target="labels" onClose={() => {}} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Đồng ý và chạy' }))
-    expect(api.semantic.estimate).toHaveBeenCalledWith('p1', 'labels')
-    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'labels')
+    expect(api.semantic.estimate).toHaveBeenCalledWith('p1', 'labels', false)
+    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'labels', undefined, false)
     expect(await screen.findByText('Xong: đặt tên 2 cụm.')).toBeInTheDocument()
+  })
+
+  it('xếp hạng pull request: hiện thứ tự và việc cần làm do AI đề xuất', async () => {
+    const triage = { ...done, result: { ...result, target: 'pr_triage', triage: [{ number: 8, priority: 1, action: 'Review ngay.' }] } }
+    const { api } = installNexgraph({
+      index: { status: vi.fn(async () => triage) },
+      semantic: { getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'openai / gpt-test' })) }
+    })
+    render(<SemanticDialog projectId="p1" target="pr_triage" onClose={() => {}} />)
+    expect(await screen.findByRole('dialog', { name: 'Xếp hạng pull request bằng AI' })).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'Đồng ý và chạy' }))
+    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'pr_triage', undefined, false)
+    expect(await screen.findByText('#8 · ưu tiên 1: Review ngay.')).toBeInTheDocument()
   })
 
   it('không có tài liệu thì không cho chạy', async () => {
@@ -51,5 +64,38 @@ describe('SemanticDialog', () => {
     render(<SemanticDialog projectId="p1" onClose={() => {}} />)
     expect(await screen.findByText(/Bật "Gồm tài liệu"/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Đồng ý và chạy' })).toBeDisabled()
+  })
+})
+
+describe('SemanticDialog — sửa sau kiểm thử', () => {
+  it('hiện model sẽ dùng thật và chặn chạy khi model khác lúc đồng ý', async () => {
+    const { api } = installNexgraph({ semantic: {
+      getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'openai / gpt-cu' })),
+      estimate: vi.fn(async () => ({ files: ['README.md'], chunks: 1, cached_chunks: 0, input_tokens: 10, output_tokens: 5, model: 'google / gemini-moi' })) } })
+    render(<SemanticDialog projectId="p1" onClose={() => {}} />)
+    expect(await screen.findByText('Model: google / gemini-moi')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('google / gemini-moi')
+    expect(screen.getByRole('button', { name: 'Đồng ý và chạy' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Đồng ý dùng model mới' }))
+    expect(api.semantic.setSettings).toHaveBeenCalledWith('p1', { enabled: true, transport: 'app', model: null })
+  })
+
+  it('câu đồng ý nêu đúng thứ gửi đi theo target', async () => {
+    installNexgraph()
+    render(<SemanticDialog projectId="p1" target="labels" onClose={() => {}} />)
+    expect(await screen.findByLabelText(/tên symbol và tên tệp của từng cụm/)).toBeInTheDocument()
+  })
+
+  it('ảnh: nêu rõ sẽ gửi ảnh; chạy lại không dùng cache', async () => {
+    const { api } = installNexgraph({ semantic: {
+      getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'openai / gpt-test' })) } })
+    render(<SemanticDialog projectId="p1" onClose={() => {}} />)
+    await userEvent.click(await screen.findByLabelText(/Ảnh \(cần model/))
+    expect(screen.getByText('Sẽ gửi: các tệp ảnh của dự án.')).toBeInTheDocument()
+    await userEvent.click(screen.getByLabelText('Chạy lại, không dùng kết quả đã lưu'))
+    expect(api.semantic.estimate).toHaveBeenLastCalledWith('p1', 'images', true)
+    await screen.findByText('Model: openai / gpt-test')
+    await userEvent.click(screen.getByRole('button', { name: 'Đồng ý và chạy' }))
+    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'images', undefined, true)
   })
 })

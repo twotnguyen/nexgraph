@@ -256,9 +256,10 @@ export class EngineApi {
   async globalRemove(pid: string): Promise<void> {
     await this.request('DELETE', `/v1/global/projects/${encodeURIComponent(pid)}`)
   }
-  globalSearch(q: string, limit?: number): Promise<GlobalSearchHit[]> {
+  globalSearch(q: string, limit?: number, pids?: string[]): Promise<GlobalSearchHit[]> {
     const params = new URLSearchParams({ q })
     if (limit != null) params.set('limit', String(limit))
+    if (pids?.length) params.set('projects', pids.join(','))
     return this.request('GET', `/v1/global/search?${params}`)
   }
   globalGraph(pids: string[], limit?: number): Promise<GlobalGraph> {
@@ -287,11 +288,11 @@ export class EngineApi {
   setAiSettings(pid: string, s: ProjectAiSettings): Promise<ProjectAiSettings> {
     return this.request('PUT', `/v1/projects/${encodeURIComponent(pid)}/ai`, s, AbortSignal.timeout(15_000))
   }
-  semanticEstimate(pid: string, target: SemanticTarget): Promise<SemanticEstimate> {
-    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/semantic/estimate`, { targets: target }, AbortSignal.timeout(60_000))
+  semanticEstimate(pid: string, target: SemanticTarget, noCache = false): Promise<SemanticEstimate> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/semantic/estimate`, { targets: target, no_cache: noCache }, AbortSignal.timeout(60_000))
   }
   /** `transport.api_key` (đường B) chỉ do main đọc từ kho khoá; renderer không bao giờ thấy nó. */
-  startSemantic(pid: string, body: { targets: SemanticTarget; transport: { kind: 'app'; model_label: string } | { kind: 'direct'; base_url: string; api_key: string; model: string }; max_tokens_budget?: number; prs?: unknown[] }): Promise<{ job_id: string }> {
+  startSemantic(pid: string, body: { targets: SemanticTarget; transport: { kind: 'app'; model_label: string } | { kind: 'direct'; base_url: string; api_key: string; model: string }; max_tokens_budget?: number; prs?: unknown[]; no_cache?: boolean }): Promise<{ job_id: string }> {
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/semantic`, body, AbortSignal.timeout(15_000))
   }
   async llmNext(jobId: string): Promise<LlmChunk | null> {
