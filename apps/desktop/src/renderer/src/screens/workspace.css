@@ -301,6 +301,7 @@
   opacity: 0;
 }
 .workspace-shell .ws-tabs .file-tab:is(:hover, :focus-within) .tab-close { opacity: 1; }
+.workspace-shell .ws-tabs .tab-pin { opacity: .8; }
 .workspace-shell .ws-tabs .tab-close:hover { color: var(--color-text); background: var(--track); }
 .workspace-shell .canvas-wrap { background: var(--color-surface); }
 .workspace-shell :is(.activity-bar button, .tab, .tab-name, .tab-close, .tree-row):focus-visible {

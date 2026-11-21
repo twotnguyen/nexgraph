@@ -334,6 +334,73 @@ describe('WorkspaceScreen: editor tabs', () => {
     return { api, code }
   }
 
+  it('chuyển thẻ theo lần dùng gần nhất, ghim và mở lại thẻ đã đóng', async () => {
+    localStorage.removeItem('nexgraph.recentFiles:p1')
+    const entries = ['a.ts', 'b.ts', 'c.ts'].map((name) => ({ path: name, name, kind: 'file' as const }))
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    for (const name of ['a.ts', 'b.ts', 'c.ts']) await userEvent.click(await screen.findByRole('treeitem', { name }))
+    fireEvent.keyDown(document, { key: 'Tab', ctrlKey: true })
+    expect(screen.getByRole('tab', { name: 'b.ts', selected: true })).toBeInTheDocument()
+    fireEvent.keyUp(window, { key: 'Control' })
+    fireEvent.contextMenu(screen.getByRole('tab', { name: 'b.ts' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ghim thẻ' }))
+    fireEvent.contextMenu(screen.getByRole('tab', { name: 'c.ts' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Đóng thẻ khác' }))
+    expect(screen.getByRole('tab', { name: 'b.ts' })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'a.ts' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'T', code: 'KeyT', ctrlKey: true, shiftKey: true })
+    expect(screen.getByRole('tab', { name: 'a.ts', selected: true })).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('nexgraph.recentFiles:p1') ?? '[]')[0]).toBe('a.ts')
+  })
+  it('Ctrl+1 và Ctrl+0 chọn thẻ đầu và thẻ cuối', async () => {
+    const entries = ['a.ts', 'b.ts', 'c.ts'].map((name) => ({ path: name, name, kind: 'file' as const }))
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    for (const name of ['a.ts', 'b.ts', 'c.ts']) await userEvent.click(await screen.findByRole('treeitem', { name }))
+    fireEvent.keyDown(document, { key: '1', code: 'Digit1', ctrlKey: true })
+    expect(screen.getByRole('tab', { name: 'a.ts', selected: true })).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: '0', code: 'Digit0', ctrlKey: true })
+    expect(screen.getByRole('tab', { name: 'c.ts', selected: true })).toBeInTheDocument()
+  })
+  it('cây đổi tên và xoá cập nhật thẻ đang mở', async () => {
+    let entries = [{ path: 'old.ts', name: 'old.ts', kind: 'file' as const }]
+    const list = vi.fn(async () => ({ entries, truncated: false }))
+    const rename = vi.fn(async (_pid: string, _from: string, to: string) => { entries = [{ path: to, name: to, kind: 'file' }] })
+    const trash = vi.fn(async () => { entries = [] })
+    installNexgraph({ fs: { list, createFile: vi.fn(), rename, trash } })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'old.ts' }))
+    const row = screen.getByRole('treeitem', { name: 'old.ts' })
+    fireEvent.contextMenu(row)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Đổi tên' }))
+    const input = screen.getByRole('textbox', { name: 'Đổi tên' })
+    fireEvent.change(input, { target: { value: 'new.ts' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(await screen.findByRole('tab', { name: 'new.ts', selected: true })).toBeInTheDocument()
+    const renamed = await screen.findByRole('treeitem', { name: 'new.ts' })
+    renamed.focus()
+    fireEvent.keyDown(renamed, { key: 'Delete' })
+    await waitFor(() => expect(screen.queryByRole('tab', { name: 'new.ts' })).toBeNull())
+    confirm.mockRestore()
+  })
+
+
+  it('Ctrl+B và Ctrl+J ẩn hiện panel trái và terminal', () => {
+    installNexgraph()
+    render(<WorkspaceScreen project={project()} />)
+    expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
+    fireEvent.keyDown(document, { key: 'b', code: 'KeyB', ctrlKey: true })
+    expect(screen.queryByRole('complementary', { name: 'Duyệt tệp' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'b', code: 'KeyB', ctrlKey: true })
+    expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
+    fireEvent.keyDown(document, { key: 'j', code: 'KeyJ', ctrlKey: true })
+    expect(screen.getByRole('region', { name: 'Terminal' })).toBeVisible()
+    fireEvent.keyDown(document, { key: 'j', code: 'KeyJ', ctrlKey: true })
+    expect(screen.queryByRole('region', { name: 'Terminal' })).toBeNull()
+  })
+
   it('sends the pinned unsaved editor snapshot and flushes dirty metadata before AI inference', async () => {
     const target = { provider: 'openai', baseUrl: 'https://api.openai.com/v1', accountId: 'account-a' }
     const prompt = vi.fn(async () => {})

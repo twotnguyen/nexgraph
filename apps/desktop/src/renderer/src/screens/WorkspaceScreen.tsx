@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Changes, ExportFormat, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
-import type { HostCommand } from '@shared/api'
+import type { HostCommand, TaskDefinition } from '@shared/api'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
-import { EditorTab, type EditorContextGetter } from '../components/editor/EditorTab'
+import type { EditorContextGetter } from '../components/editor/EditorTab'
+import { DiagnosticsPanel, OutlinePanel, useDocumentSymbols } from '../components/editor/EditorPanels'
+import { EditorTools } from '../components/editor/EditorTools'
+import { FileView } from '../components/viewers/FileView'
+import { MarkdownPreview } from '../components/viewers/MarkdownPreview'
 import { SplitEditor } from '../components/editor/SplitEditor'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
+import { TaskPicker, readTaskHistory, rememberTask } from '../components/terminal/TaskPicker'
 import { GitPanel } from '../components/git/GitPanel'
 import { GitDiffView } from '../components/git/GitDiffView'
 import { DebugPanel, debugKindOf } from '../components/debug/DebugPanel'
-import { debugStep, setDebugOpener, startDebugging, stopDebugging, useDebugState } from '../state/debugState'
+import { clearAllBreakpoints, debugStep, pauseDebugging, restartDebugging, setDebugOpener, setDebugProject, startDebugging, stopDebugging, useDebugState } from '../state/debugState'
 import { CollabBar, CollabTab, JoinDialog } from '../components/collab/CollabUi'
 import { leaveSession, shareActiveFile, useCollab } from '../state/collab'
 import type { AgentContextItem, AgentEditorState } from '@shared/agent-types'
@@ -36,24 +41,35 @@ import { Icon, VIEW_TONE } from '../components/common/icons'
 import { openThemePicker } from '../components/layout/ThemePicker'
 import { FileFinder } from '../components/layout/FileFinder'
 import { useCommand } from '../state/commands'
+import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
+import { startDiagnostics } from '../state/diagnostics'
+import { errorText } from '../state/errorText'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi } from '../strings'
 import './workspace.css'
 
-type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `task:${string}` | `diff:${string}`
-/** Thẻ diff của Git panel: `s` đã stage, `u` chưa stage. */
-type DiffTab = { file: string; staged: boolean }
-const diffKey = (d: DiffTab): Tab => `diff:${d.staged ? 's' : 'u'}:${d.file}`
+type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}`
+/** Thẻ diff có thể xem working tree, stage hoặc một commit lịch sử. */
+type DiffTab = { file: string; staged: boolean; rev?: string; from?: string }
+const diffKey = (d: DiffTab): Tab => `diff:${d.rev ?? (d.staged ? 's' : 'u')}:${d.from ?? ''}:${d.file}`
 const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
 const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
   graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }
 /** `seq`: mỗi lần mở một số mới, để mở lại đúng dòng cũ (đã cuộn đi chỗ khác) vẫn cuộn về. */
-interface OpenFile { file: string; line: number; lineEnd?: number; seq: number }
+interface OpenFile { file: string; line: number; lineEnd?: number; column?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
+const containsPath = (parent: string, file: string) => file === parent || file.startsWith(`${parent}/`)
+const readRecentFiles = (projectId: string): string[] => {
+  try {
+    const data: unknown = JSON.parse(localStorage.getItem(`nexgraph.recentFiles:${projectId}`) ?? '[]')
+    return Array.isArray(data) ? [...new Set(data.filter((item): item is string => typeof item === 'string'))].slice(0, 100) : []
+  } catch { return [] }
+}
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
-type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour'
+type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour' | 'outline' | 'diagnostics'
 const PANEL_TITLES: Record<Panel, string> = {
-  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', git: 'Git', debug: 'Gỡ lỗi', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour
+  explorer: 'Duyệt tệp', find: 'Tìm trong tệp', git: 'Git', debug: 'Gỡ lỗi', search: vi.activity.search, changes: vi.activity.changes, tour: vi.activity.tour,
+  outline: 'Ký hiệu', diagnostics: 'Lỗi trong dự án'
 }
 const messageOf = (e: unknown): string =>
   e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
@@ -108,6 +124,7 @@ const FileIcon = (
 const ACTIVITIES = [
   { id: 'explorer', title: PANEL_TITLES.explorer, icon: FilesIcon },
   { id: 'find', title: PANEL_TITLES.find, icon: FindIcon },
+  { id: 'outline', title: PANEL_TITLES.outline, icon: <Icon name="tree" size={20} /> },
   { id: 'git', title: PANEL_TITLES.git, icon: <Icon name="branch" size={20} /> },
   { id: 'debug', title: PANEL_TITLES.debug, icon: <Icon name="bug" size={20} /> },
   { id: 'search', title: PANEL_TITLES.search, icon: SearchIcon },
@@ -126,9 +143,10 @@ interface Props {
   backLabel?: string
   indexNotice?: string
   initialCommand?: HostCommand
+  hidden?: boolean
 }
 
-export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, backLabel = vi.workspace.back, indexNotice, initialCommand }: Props) {
+export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, backLabel = vi.workspace.back, indexNotice, initialCommand, hidden = false }: Props) {
   const hosted = !!window.nexgraph?.host
   const id = useId()
   const tabList = useRef<HTMLDivElement>(null)
@@ -173,6 +191,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }, [flushEditorState])
   const [finder, setFinder] = useState(false)
   const [side, setSide] = useState<string | null>(null) // tệp ở khung phải khi chia đôi
+  const [previewSide, setPreviewSide] = useState<string | null>(null)
   const [findFocus, setFindFocus] = useState(0)
   const [archParent, setArchParent] = useState<string | undefined>(undefined)
   const [archContext, setArchContext] = useState<string | undefined>(undefined)
@@ -188,6 +207,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
   // Cây dùng cùng bảng duyệt tệp ở cả ứng dụng độc lập và Code-OSS.
   const [panel, setPanel] = useState<Panel | null>(!hosted || initialTab === 'tree' ? 'explorer' : null)
+  const activeEditor = useActiveEditor()
+  const documentSymbols = useDocumentSymbols(project.project_id, hidden ? null : activeEditor)
+  useLayoutEffect(() => startDiagnostics(), [])
   // Ở bên trái, mở một bảng công cụ (cây tệp, ảnh hưởng…) thì nhường chỗ: đóng khung chat. Chỉ chạy khi bảng đổi.
   const dockRef = useRef(chatDock)
   dockRef.current = chatDock
@@ -231,13 +253,65 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     return () => { alive = false }
   }, [project.project_id])
   const activeFile = tab.startsWith('file:') ? tab.slice('file:'.length) : undefined
+  const previewFile = tab.startsWith('preview:') ? tab.slice('preview:'.length) : undefined
   const [lastMain, setLastMain] = useState<Tab>(initialTab ?? 'arch')
   useEffect(() => {
-    if (!tab.startsWith('file:') && !tab.startsWith('task:')) setLastMain(tab)
+    if (!tab.startsWith('file:') && !tab.startsWith('preview:') && !tab.startsWith('task:')) setLastMain(tab)
   }, [tab])
   const [focus, setFocus] = useState<string | null>(null)
   const [selected, setSelected] = useState<GraphNode | null>(null)
   const [files, setFiles] = useState<OpenFile[]>([])
+  const [previews, setPreviews] = useState<string[]>([])
+  const [readOnlyFiles, setReadOnlyFiles] = useState<Record<string, boolean>>({})
+  const [viewerErrors, setViewerErrors] = useState<Record<string, string | null>>({})
+  const [pinned, setPinned] = useState<Set<string>>(new Set())
+  const [tabMenu, setTabMenu] = useState<{ file: string; x: number; y: number } | null>(null)
+  const closedFiles = useRef<OpenFile[]>([])
+  const fileMru = useRef<string[]>([])
+  const tabCycle = useRef<{ order: string[]; index: number } | null>(null)
+  const [recentStore, setRecentStore] = useState(() => ({ projectId: project.project_id, paths: readRecentFiles(project.project_id) }))
+  const recentFiles = recentStore.projectId === project.project_id ? recentStore.paths : []
+  const orderedFiles = useMemo(() => [...files.filter((f) => pinned.has(f.file)), ...files.filter((f) => !pinned.has(f.file))], [files, pinned])
+  useEffect(() => {
+    setRecentStore({ projectId: project.project_id, paths: readRecentFiles(project.project_id) })
+    fileMru.current = []
+    closedFiles.current = []
+    tabCycle.current = null
+  }, [project.project_id])
+  useEffect(() => {
+    const file = activeFile ?? previewFile
+    if (!file) return
+    if (!tabCycle.current) fileMru.current = [file, ...fileMru.current.filter((item) => item !== file)]
+    setRecentStore((current) => {
+      const paths = current.projectId === project.project_id ? current.paths : readRecentFiles(project.project_id)
+      return paths[0] === file && current.projectId === project.project_id ? current
+        : { projectId: project.project_id, paths: [file, ...paths.filter((item) => item !== file)].slice(0, 100) }
+    })
+  }, [activeFile, previewFile, project.project_id])
+  useEffect(() => {
+    if (recentStore.projectId !== project.project_id) return
+    try { localStorage.setItem(`nexgraph.recentFiles:${project.project_id}`, JSON.stringify(recentStore.paths)) } catch { /* sở thích tạm thời */ }
+  }, [project.project_id, recentStore])
+  useEffect(() => {
+    const finishCycle = () => {
+      const cycle = tabCycle.current
+      if (!cycle) return
+      const file = cycle.order[cycle.index]
+      if (file) fileMru.current = [file, ...fileMru.current.filter((item) => item !== file)]
+      tabCycle.current = null
+    }
+    if (hidden) { finishCycle(); return }
+    const keyup = (event: KeyboardEvent) => { if (!event.ctrlKey && !event.metaKey) finishCycle() }
+    window.addEventListener('keyup', keyup)
+    window.addEventListener('blur', finishCycle)
+    return () => { window.removeEventListener('keyup', keyup); window.removeEventListener('blur', finishCycle) }
+  }, [hidden])
+  useEffect(() => {
+    if (!tabMenu || hidden) return
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setTabMenu(null) }
+    document.addEventListener('keydown', escape)
+    return () => document.removeEventListener('keydown', escape)
+  }, [tabMenu, hidden])
   const chatFile = files.find(({ file }) => file === activeFile)
   const [exportScope, setExportScope] = useState<ExportScope | null>(null)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('html')
@@ -275,13 +349,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }, [tab])
 
   useEffect(() => {
-    if (!pathFrom) return
+    if (!pathFrom || hidden) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setPathFrom(null)
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [pathFrom])
+  }, [pathFrom, hidden])
 
   const clearOverlay = () => {
     graphRequest.current++
@@ -358,12 +432,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     }
   }
 
-  const openCode = (file: string, line = 1, lineEnd?: number) => {
+  const openCode = (file: string, line = 1, lineEnd?: number, column?: number) => {
     // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.
     if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(messageOf(e)))
     const seq = openSeq + 1
     setOpenSeq(seq)
-    setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd, seq } : f)) : [...cur, { file, line, lineEnd, seq }]))
+    setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd, column, seq } : f)) : [...cur, { file, line, lineEnd, column, seq }]))
     setTab(`file:${file}`)
   }
   const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set()) // tệp có thay đổi chưa lưu
@@ -387,17 +461,82 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Rời màn hình dự án làm mất mọi thẻ đang sửa nên hỏi trước, giống khi đóng một thẻ.
   const guardLeave = (go?: () => void): (() => void) | undefined =>
     go && (() => { if (dirtyFiles.size === 0 || window.confirm(vi.editor.confirmLeave(dirtyFiles.size))) go() })
-  const closeFile = (file: string) => {
-    if (dirtyFiles.has(file) && !window.confirm(vi.editor.confirmClose(baseName(file)))) return
-    const order: Tab[] = [lastMain, ...files.map((f) => `file:${f.file}` as Tab)] // về tab chính dùng gần nhất
-    const at = order.indexOf(`file:${file}`)
-    const next = order[Math.max(0, at - 1)]
-    if (tab === `file:${file}`) {
-      focusTabAfterClose.current = true
-      if (next === 'tree') setPanel('explorer')
+  const openWorkspaceSettings = onOpenSettings && ((page?: string) => {
+    if (hosted) guardLeave(() => onOpenSettings(page))?.()
+    else onOpenSettings(page)
+  })
+  const closeFiles = (paths: string[]) => {
+    const selected = orderedFiles.filter((item) => paths.includes(item.file))
+    if (!selected.length) return
+    for (const item of selected) {
+      if (dirtyFiles.has(item.file) && !window.confirm(vi.editor.confirmClose(baseName(item.file)))) return
     }
-    setFiles((cur) => cur.filter((f) => f.file !== file))
-    setTab((cur) => (cur === `file:${file}` ? next : cur))
+    const closing = new Set(selected.map((item) => item.file))
+    closedFiles.current = [...closedFiles.current, ...selected].slice(-100)
+    fileMru.current = fileMru.current.filter((file) => !closing.has(file))
+    tabCycle.current = null
+    const current = activeFile ?? previewFile
+    const index = orderedFiles.findIndex((item) => item.file === current)
+    const nextFile = orderedFiles.slice(0, Math.max(index, 0)).reverse().find((item) => !closing.has(item.file))
+      ?? orderedFiles.find((item) => !closing.has(item.file))
+    if (current && closing.has(current)) {
+      focusTabAfterClose.current = true
+      const next = nextFile ? `file:${nextFile.file}` as Tab : lastMain
+      if (next === 'tree') setPanel('explorer')
+      setTab(next)
+    }
+    setFiles((cur) => cur.filter((item) => !closing.has(item.file)))
+    setPreviews((cur) => cur.filter((item) => !closing.has(item)))
+    setReadOnlyFiles((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !closing.has(file))))
+    setViewerErrors((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !closing.has(file))))
+    setPinned((cur) => new Set([...cur].filter((item) => !closing.has(item))))
+    setSide((cur) => cur && closing.has(cur) ? null : cur)
+    setPreviewSide((cur) => cur && closing.has(cur) ? null : cur)
+  }
+  const closeFile = (file: string) => closeFiles([file])
+  const togglePinned = (file: string) => setPinned((current) => {
+    const next = new Set(current)
+    if (next.has(file)) next.delete(file)
+    else next.add(file)
+    return next
+  })
+  const renamedPath = (from: string, to: string) => {
+    const remap = (path: string) => containsPath(from, path) ? to + path.slice(from.length) : path
+    setFiles((cur) => cur.map((item) => ({ ...item, file: remap(item.file) })))
+    setPreviews((cur) => cur.map(remap))
+    setReadOnlyFiles((cur) => Object.fromEntries(Object.entries(cur).map(([file, value]) => [remap(file), value])))
+    setViewerErrors((cur) => Object.fromEntries(Object.entries(cur).map(([file, value]) => [remap(file), value])))
+    setPinned((cur) => new Set([...cur].map(remap)))
+    setSide((cur) => cur ? remap(cur) : cur)
+    setPreviewSide((cur) => cur ? remap(cur) : cur)
+    setTab((cur) => {
+      if (cur.startsWith('file:')) return `file:${remap(cur.slice(5))}`
+      if (cur.startsWith('preview:')) return `preview:${remap(cur.slice(8))}`
+      return cur
+    })
+    fileMru.current = fileMru.current.map(remap)
+    closedFiles.current = closedFiles.current.map((item) => ({ ...item, file: remap(item.file) }))
+    setRecentStore((cur) => ({ ...cur, paths: [...new Set(cur.paths.map(remap))] }))
+    tabCycle.current = null
+  }
+  const trashedPath = (path: string) => {
+    const closing = new Set(files.filter((item) => containsPath(path, item.file)).map((item) => item.file))
+    setFiles((cur) => cur.filter((item) => !closing.has(item.file)))
+    setPreviews((cur) => cur.filter((item) => !containsPath(path, item)))
+    setReadOnlyFiles((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !containsPath(path, file))))
+    setViewerErrors((cur) => Object.fromEntries(Object.entries(cur).filter(([file]) => !containsPath(path, file))))
+    setPinned((cur) => new Set([...cur].filter((item) => !containsPath(path, item))))
+    setSide((cur) => cur && containsPath(path, cur) ? null : cur)
+    setPreviewSide((cur) => cur && containsPath(path, cur) ? null : cur)
+    if ((activeFile && containsPath(path, activeFile)) || (previewFile && containsPath(path, previewFile))) setTab(lastMain)
+    fileMru.current = fileMru.current.filter((file) => !containsPath(path, file))
+    closedFiles.current = closedFiles.current.filter((item) => !containsPath(path, item.file))
+    setRecentStore((cur) => ({ ...cur, paths: cur.paths.filter((file) => !containsPath(path, file)) }))
+    tabCycle.current = null
+  }
+  const closePreview = (file: string) => {
+    setPreviews((cur) => cur.filter((item) => item !== file))
+    if (tab === `preview:${file}`) setTab(`file:${file}`)
   }
   const selectView = (view: (typeof MAIN_TABS)[number]) => {
     if (view === 'tree') {
@@ -491,7 +630,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const agentPanel = !hosted && <AgentPanel id={chatId} hidden={!chatOpen} projectId={project.project_id} projectName={project.name}
     activeFile={chatFile} onClose={() => setChatOpen(false)} onConnectOpenCode={() => setConnectOpenCode(true)}
     getEditorContext={() => activeFile ? editorContexts.current.get(activeFile)?.() ?? null : null} graphContext={graphContext} beforePrompt={flushEditorState} onInspect={inspect}
-    onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} dock={chatDock} onToggleDock={toggleDock} />
+    onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={openWorkspaceSettings ?? (() => {})} dock={chatDock} onToggleDock={toggleDock} />
 
   // Lệnh cho bảng lệnh và phím tắt (state/commands.ts); rời màn hình thì hỏi trước nếu còn tệp chưa lưu.
   useCommand('agent.toggle', () => setChatOpen((v) => !v), !hosted)
@@ -503,6 +642,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Gỡ lỗi: tệp đích là tệp .js/.py mở gần nhất; phiên sống ngoài bảng (state/debugState) nên phím F5… dùng được khi bảng đóng.
   const debugState = useDebugState()
   const [debugTarget, setDebugTarget] = useState<string | undefined>(undefined)
+  useEffect(() => { setDebugProject(project.project_id) }, [project.project_id])
   useEffect(() => { if (debugKindOf(activeFile) && debugState.status === 'idle') setDebugTarget(activeFile) }, [activeFile, debugState.status])
   useEffect(() => { setDebugOpener((file, line) => openCode(file, line)); return () => setDebugOpener(null) })
   useCommand('debug.toggle', () => togglePanel('debug'))
@@ -516,6 +656,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('debug.step_into', () => debugStep('stepIn'))
   useCommand('debug.step_out', () => debugStep('stepOut'))
   useCommand('debug.stop', stopDebugging)
+  useCommand('debug.pause', pauseDebugging, debugState.status === 'running')
+  useCommand('debug.restart', restartDebugging, debugState.status !== 'idle' && debugState.status !== 'starting')
+  useCommand('debug.clear_breakpoints', clearAllBreakpoints)
   // Cộng tác LAN: chia sẻ tệp đang mở hoặc tham gia phiên của máy khác (thẻ "collab").
   const collab = useCollab()
   const [joining, setJoining] = useState(false)
@@ -524,9 +667,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('collab.leave', leaveSession, !!collab.role)
   useEffect(() => { if (collab.role !== 'guest' && tab === 'collab') setTab(lastMain) }, [collab.role]) // eslint-disable-line react-hooks/exhaustive-deps
   const [diffs, setDiffs] = useState<DiffTab[]>([])
-  const openDiff = (file: string, staged: boolean) => {
-    setDiffs((cur) => (cur.some((d) => d.file === file && d.staged === staged) ? cur : [...cur, { file, staged }]))
-    setTab(diffKey({ file, staged }))
+  const openDiff = (file: string, staged: boolean, rev?: string, from?: string) => {
+    const item = { file, staged, rev, from }
+    setDiffs((cur) => cur.some((d) => diffKey(d) === diffKey(item)) ? cur : [...cur, item])
+    setTab(diffKey(item))
   }
   const closeDiff = (d: DiffTab) => {
     setDiffs((cur) => cur.filter((item) => diffKey(item) !== diffKey(d)))
@@ -541,31 +685,145 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('view.report', () => selectView('report'))
   useCommand('graph.export', () => exportCurrent())
   useCommand('project.overview', () => guardLeave(onBack)?.(), !!onBack)
-  useCommand('settings.open', () => guardLeave(onOpenSettings && (() => onOpenSettings()))?.(), !!onOpenSettings)
-  useCommand('keymap.open', () => guardLeave(onOpenSettings && (() => onOpenSettings('keymap')))?.(), !!onOpenSettings)
+  useCommand('settings.open', () => openWorkspaceSettings?.(), !!openWorkspaceSettings)
+  useCommand('keymap.open', () => openWorkspaceSettings?.('keymap'), !!openWorkspaceSettings)
   useCommand('tab.close', () => {
-    if (activeFile) closeFile(activeFile)
+    if (previewFile) return closePreview(previewFile)
+    if (activeFile && pinned.has(activeFile)) {
+      const next = orderedFiles.find((item) => !pinned.has(item.file))
+      if (next) setTab(`file:${next.file}`)
+    } else if (activeFile) closeFile(activeFile)
     else if (tab.startsWith('task:')) {
       setInspections((current) => current.filter((item) => `task:${item.id}` !== tab))
       setTab(lastMain)
     }
   })
-  useCommand('editor.split_right', () => { if (side) setSide(null); else if (activeFile) setSide(activeFile) })
+  const cycleFiles = (step: number) => {
+    const available = orderedFiles.map((item) => item.file)
+    if (!available.length) return
+    let cycle = tabCycle.current
+    if (!cycle) {
+      const current = activeFile ?? previewFile
+      const recent = fileMru.current.filter((file) => available.includes(file) && file !== current)
+      const order = [...(current ? [current] : []), ...recent, ...available.filter((file) => file !== current && !recent.includes(file))]
+      cycle = { order, index: current ? 0 : step > 0 ? -1 : 0 }
+      tabCycle.current = cycle
+    }
+    cycle.index = (cycle.index + step + cycle.order.length) % cycle.order.length
+    setTab(`file:${cycle.order[cycle.index]}`)
+  }
+  useCommand('tab.next_mru', () => cycleFiles(1), !hosted)
+  useCommand('tab.previous_mru', () => cycleFiles(-1), !hosted)
+  useCommand('tab.reopen', () => {
+    let item = closedFiles.current.pop()
+    while (item && files.some((file) => file.file === item?.file)) item = closedFiles.current.pop()
+    if (item) openCode(item.file, item.line, item.lineEnd, item.column)
+  }, !hosted)
+  useCommand('tab.pin', () => { if (activeFile) togglePinned(activeFile) }, !hosted && !!activeFile)
+  const activateFile = (index: number) => {
+    tabCycle.current = null
+    const item = index === 0 ? orderedFiles.at(-1) : orderedFiles[index - 1]
+    if (item) setTab(`file:${item.file}`)
+  }
+  useCommand('tab.activate_0', () => activateFile(0), !hosted)
+  useCommand('tab.activate_1', () => activateFile(1), !hosted)
+  useCommand('tab.activate_2', () => activateFile(2), !hosted)
+  useCommand('tab.activate_3', () => activateFile(3), !hosted)
+  useCommand('tab.activate_4', () => activateFile(4), !hosted)
+  useCommand('tab.activate_5', () => activateFile(5), !hosted)
+  useCommand('tab.activate_6', () => activateFile(6), !hosted)
+  useCommand('tab.activate_7', () => activateFile(7), !hosted)
+  useCommand('tab.activate_8', () => activateFile(8), !hosted)
+  useCommand('tab.activate_9', () => activateFile(9), !hosted)
+  const previousPanel = useRef<Panel>('explorer')
+  useEffect(() => { if (panel) previousPanel.current = panel }, [panel])
+  useCommand('dock.left', () => {
+    if (leftChat) setChatOpen(false)
+    else setPanel((current) => current ? null : previousPanel.current)
+  }, !hosted)
+  useEffect(() => {
+    if (!hidden) return
+    tabCycle.current = null
+    setTabMenu(null)
+  }, [hidden])
+  useCommand('editor.split_right', () => {
+    if (previewSide) setPreviewSide(null)
+    else if (side) setSide(null)
+    else if (activeFile) setSide(activeFile)
+  })
+  useCommand('markdown.preview', () => {
+    if (previewFile) return closePreview(previewFile)
+    if (!activeFile) return
+    setPreviews((cur) => cur.includes(activeFile) ? cur : [...cur, activeFile])
+    setTab(`preview:${activeFile}`)
+  }, !hidden && (!!previewFile || !!activeFile && /\.(?:md|markdown|mdown|mkd)$/i.test(activeFile)))
+  useCommand('markdown.preview_side', () => {
+    if (!activeFile) return
+    setSide(null)
+    setPreviewSide(activeFile)
+  }, !hidden && !!activeFile && /\.(?:md|markdown|mdown|mkd)$/i.test(activeFile))
   // Terminal: 'closed' chưa mở (không có phiên), 'hidden' ẩn nhưng phiên vẫn chạy như Wu.
   const [terminal, setTerminal] = useState<'closed' | 'open' | 'hidden'>('closed')
   const [terminalNew, setTerminalNew] = useState(0)
+  const [taskPicker, setTaskPicker] = useState(false)
+  const [taskHistory, setTaskHistory] = useState(() => readTaskHistory(project.project_id))
+  const [taskRequest, setTaskRequest] = useState<{ seq: number; task: TaskDefinition } | null>(null)
+  const taskSequence = useRef(0)
+  const lastTask = useRef<TaskDefinition | null>(null)
+  const taskProject = useRef(project.project_id)
+  taskProject.current = project.project_id
+  useEffect(() => {
+    lastTask.current = null
+    setTaskRequest(null)
+    setTaskHistory(readTaskHistory(project.project_id))
+  }, [project.project_id])
+  const queueTask = (task: TaskDefinition) => {
+    lastTask.current = task
+    setTaskRequest({ seq: ++taskSequence.current, task })
+    setTerminal('open')
+  }
+  const runTask = async (task: TaskDefinition, oneshot: boolean) => {
+    const api = window.nexgraph.tasks
+    if (!api) return
+    const pid = project.project_id
+    const editor = getActiveEditor()
+    const file = activeFile
+    const line = editor && editor.file === file ? editor.handle.getPosition?.()?.line : undefined
+    try {
+      const resolved = await api.resolve(pid, task, { file, line })
+      if (taskProject.current !== pid) return
+      setTaskHistory(rememberTask(pid, task, oneshot))
+      queueTask(resolved)
+    } catch (e) {
+      if (taskProject.current === pid) setFeedback(errorText(e))
+    }
+  }
+  const rerunTask = async () => {
+    if (lastTask.current) return queueTask(lastTask.current)
+    const recent = taskHistory[0]
+    if (!recent) return setTaskPicker(true)
+    try {
+      const task = recent.oneshot ? { label: recent.label, command: recent.command, type: 'shell' as const }
+        : (await window.nexgraph.tasks?.list(project.project_id))?.find((item) => item.label === recent.label && item.command === recent.command)
+      if (task) await runTask(task, recent.oneshot)
+      else setTaskPicker(true)
+    } catch (e) { setFeedback(errorText(e)) }
+  }
+  useCommand('task.spawn', () => setTaskPicker(true), !hosted && !!window.nexgraph.tasks)
+  useCommand('task.rerun', () => void rerunTask(), !hosted && !!window.nexgraph.tasks)
   useCommand('terminal.toggle', () => setTerminal((cur) => (cur === 'open' ? 'hidden' : 'open')), !hosted)
+  useCommand('dock.bottom', () => setTerminal((cur) => cur === 'open' ? 'hidden' : 'open'), !hosted && !hidden)
   useCommand('terminal.new', () => { if (terminal === 'open') setTerminalNew((n) => n + 1); else setTerminal('open') }, !hosted)
   useCommand('project_search.toggle', () => {
     if (leftChat) setChatOpen(false)
     setPanel('find')
     setFindFocus((n) => n + 1)
   })
-  const recentFiles = useMemo(() => files.map((f) => f.file).reverse(), [files])
-  const sideShown = side !== null && activeFile !== undefined && files.some((f) => f.file === side)
+  const previewSideShown = !!activeFile && previewSide === activeFile
+  const sideShown = previewSideShown || (side !== null && activeFile !== undefined && files.some((f) => f.file === side))
 
   return (
-    <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px` } as CSSProperties}>
+    <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px`, display: hidden ? 'none' : undefined } as CSSProperties}>
       {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
       {!hosted && (
         <ActivityBar
@@ -574,7 +832,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           panelId={leftChat ? chatId : toolsId}
           onToggle={togglePanel}
           manage={[
-            ...(onOpenSettings ? [{ label: 'Cài đặt', icon: 'sliders' as const, onSelect: () => guardLeave(onOpenSettings)?.() }] : []),
+            ...(openWorkspaceSettings ? [{ label: 'Cài đặt', icon: 'sliders' as const, onSelect: () => openWorkspaceSettings() }] : []),
             { label: 'Chọn theme…', icon: 'palette', onSelect: openThemePicker }
           ]}
         />
@@ -594,13 +852,16 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
           <div className="ws-tools-body">
             {panel === 'explorer' && (
-              <TreeView projectId={project.project_id} activeFile={activeFile} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} compact />
+              <TreeView projectId={project.project_id} projectPath={project.path} activeFile={activeFile} revision={revision} dirtyFiles={dirtyFiles}
+                onRename={renamedPath} onTrash={trashedPath} onOpenNode={openNodeId} onOpenCode={openCode} compact />
             )}
+            {panel === 'outline' && <OutlinePanel editor={activeEditor} symbols={documentSymbols.symbols} error={documentSymbols.error} />}
+            {panel === 'diagnostics' && <DiagnosticsPanel projectId={project.project_id} onOpen={(file, line, column) => openCode(file, line, undefined, column)} />}
             {panel === 'search' && (
               <SearchPanel projectId={project.project_id} revision={revision} onOpen={openNode}
                 onShowSubgraph={(g) => highlightFromChat(g.nodes, g.edges, null)} onOpenFlow={openFlow} />
             )}
-            {panel === 'git' && <GitPanel projectId={project.project_id} onOpenDiff={openDiff} />}
+            {panel === 'git' && <GitPanel projectId={project.project_id} onOpenDiff={openDiff} onOpenFile={(file) => openCode(file)} />}
             {panel === 'debug' && <DebugPanel projectId={project.project_id} target={debugTarget} onOpenFile={(file, line) => openCode(file, line)} />}
             {panel === 'find' && (
               <ProjectSearch projectId={project.project_id} onOpen={(file, line) => openCode(file, line)} dirtyFiles={dirtyFiles} focusRequest={findFocus} />
@@ -659,17 +920,29 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               <Icon name="pr" size={16} /><span>{vi.prs.tab}</span>
             </button>
           )}
-          {files.map((f) => (
-            <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`}>
+          {orderedFiles.map((f) => (
+            <span key={f.file} className={`tab file-tab${tab === `file:${f.file}` ? ' active' : ''}`}
+              onContextMenu={(event) => { event.preventDefault(); setTabMenu({ file: f.file, x: event.clientX, y: event.clientY }) }}>
               <button id={tabId(`file:${f.file}`)} type="button" role="tab" aria-selected={tab === `file:${f.file}`} aria-controls={viewId}
                 aria-label={baseName(f.file)} tabIndex={tab === `file:${f.file}` ? 0 : -1}
-                title={f.file} className="tab-name" onClick={() => setTab(`file:${f.file}`)}>
+                title={f.file} className="tab-name" onClick={() => { tabCycle.current = null; setTab(`file:${f.file}`) }}>
                 <FileTypeIcon name={f.file} /><span>{baseName(f.file)}</span>
                 {dirtyFiles.has(f.file) && <span className="dirty-dot" aria-hidden="true"> ●</span>}
               </button>
-              <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}><Icon name="close" size={12} /></button>
+              {pinned.has(f.file)
+                ? <button type="button" className="tab-close tab-pin" aria-label={`Bỏ ghim ${baseName(f.file)}`} title="Bỏ ghim" onClick={() => togglePinned(f.file)}>
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m9 3 6 6-1 3 3 3-1 1-5-1-5 5 2-6-3-3 1-1 3 1z" /></svg>
+                  </button>
+                : <button type="button" className="tab-close" aria-label={`Đóng ${baseName(f.file)}`} onClick={() => closeFile(f.file)}><Icon name="close" size={12} /></button>}
             </span>
           ))}
+          {previews.map((file) => <span key={`preview:${file}`} className={`tab file-tab${tab === `preview:${file}` ? ' active' : ''}`}>
+            <button id={tabId(`preview:${file}`)} type="button" role="tab" aria-selected={tab === `preview:${file}`} aria-controls={viewId}
+              tabIndex={tab === `preview:${file}` ? 0 : -1} title={file} className="tab-name" onClick={() => setTab(`preview:${file}`)}>
+              <FileTypeIcon name={file} /><span>Xem trước {baseName(file)}</span>
+            </button>
+            <button type="button" className="tab-close" aria-label={`Đóng xem trước ${baseName(file)}`} onClick={() => closePreview(file)}><Icon name="close" size={12} /></button>
+          </span>)}
           {inspections.map((inspection) => <span key={inspection.id} className={`tab file-tab${tab === `task:${inspection.id}` ? ' active' : ''}`}>
             <button id={tabId(`task:${inspection.id}`)} type="button" role="tab" aria-selected={tab === `task:${inspection.id}`} aria-controls={viewId} tabIndex={tab === `task:${inspection.id}` ? 0 : -1} className="tab-name" onClick={() => setTab(`task:${inspection.id}`)}><Icon name="spark" size={14} /><span>{inspection.title}</span></button>
             <button type="button" className="tab-close" aria-label={`Đóng ${inspection.title}`} onClick={() => { setInspections((current) => current.filter((item) => item.id !== inspection.id)); if (tab === `task:${inspection.id}`) setTab(lastMain) }}><Icon name="close" size={12} /></button>
@@ -685,6 +958,19 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             <button type="button" className="tab-close" aria-label={`Đóng diff ${baseName(d.file)}`} onClick={() => closeDiff(d)}><Icon name="close" size={12} /></button>
           </span>)}
         </div>
+        {tabMenu && <>
+          <div className="menu-backdrop" onClick={() => setTabMenu(null)} onContextMenu={(event) => { event.preventDefault(); setTabMenu(null) }} />
+          <div role="menu" aria-label={`Thẻ ${baseName(tabMenu.file)}`} className="context-menu ws-tab-menu"
+            style={{ left: Math.max(4, Math.min(tabMenu.x, window.innerWidth - 220)), top: Math.max(4, Math.min(tabMenu.y, window.innerHeight - 200)) }}>
+            {[
+              { label: 'Đóng', action: () => closeFile(tabMenu.file) },
+              { label: 'Đóng thẻ khác', action: () => closeFiles(orderedFiles.filter((item) => item.file !== tabMenu.file && !pinned.has(item.file)).map((item) => item.file)) },
+              { label: 'Đóng thẻ bên phải', action: () => closeFiles(orderedFiles.slice(orderedFiles.findIndex((item) => item.file === tabMenu.file) + 1).filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
+              { label: 'Đóng tất cả', action: () => closeFiles(orderedFiles.filter((item) => !pinned.has(item.file)).map((item) => item.file)) },
+              { label: pinned.has(tabMenu.file) ? 'Bỏ ghim thẻ' : 'Ghim thẻ', action: () => togglePinned(tabMenu.file) }
+            ].map((item) => <button key={item.label} type="button" role="menuitem" onClick={() => { setTabMenu(null); item.action() }}>{item.label}</button>)}
+          </div>
+        </>}
         <div className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
           {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
@@ -731,13 +1017,18 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
           )}
           {files.map((f) => (
-            <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} revealRequest={f.seq} active={tab === `file:${f.file}`}
-              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => setSide(f.file)} onOpenFile={openCode} />
+            <FileView key={f.file} projectId={project.project_id} file={f.file} line={f.line} column={f.column} lineEnd={f.lineEnd} revealRequest={f.seq} active={!hidden && tab === `file:${f.file}`}
+              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => { setPreviewSide(null); setSide(f.file) }}
+              onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
+              onReadOnlyChange={(file, readOnly) => setReadOnlyFiles((cur) => cur[file] === readOnly ? cur : { ...cur, [file]: readOnly })}
+              onLoadError={(file, error) => setViewerErrors((cur) => (cur[file] ?? null) === error ? cur : { ...cur, [file]: error })} />
           ))}
-          {sideShown && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}
+          {previewFile && <MarkdownPreview key={previewFile} projectId={project.project_id} file={previewFile} active={!hidden} loadError={viewerErrors[previewFile]} readOnly={readOnlyFiles[previewFile] !== false} onClose={() => closePreview(previewFile)} onOpenFile={openCode} />}
+          {previewSideShown && previewSide && <MarkdownPreview key={`side:${previewSide}`} projectId={project.project_id} file={previewSide} active={!hidden} loadError={viewerErrors[previewSide]} readOnly={readOnlyFiles[previewSide] !== false} side onClose={() => setPreviewSide(null)} onOpenFile={openCode} />}
+          {sideShown && !previewSideShown && side && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
           {tab === 'collab' && collab.role === 'guest' && collab.file && <CollabTab key={collab.file} file={collab.file} />}
-          {diffs.filter((d) => tab === diffKey(d)).map((d) => <GitDiffView key={diffKey(d)} projectId={project.project_id} file={d.file} staged={d.staged}
+          {diffs.filter((d) => tab === diffKey(d)).map((d) => <GitDiffView key={diffKey(d)} projectId={project.project_id} file={d.file} staged={d.staged} rev={d.rev} from={d.from}
             onClose={() => closeDiff(d)} onOpenFile={() => openCode(d.file)} />)}
           {feedback && (
             <div className="ws-feedback">
@@ -746,12 +1037,16 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             </div>
           )}
         </div>
-        {terminal !== 'closed' && <TerminalPanel projectId={project.project_id} newRequest={terminalNew} hidden={terminal === 'hidden'}
-          onHide={() => setTerminal('hidden')} onCloseAll={() => setTerminal('closed')} />}
+        {terminal !== 'closed' && <TerminalPanel projectId={project.project_id} projectPath={project.path} newRequest={terminalNew} taskRequest={taskRequest} hidden={hidden || terminal === 'hidden'}
+          onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
+          onHide={() => setTerminal('hidden')} onCloseAll={() => { setTerminal('closed'); setTaskRequest(null) }} />}
       </section>
       {chatDock === 'right' && <>{resizeHandle}{agentPanel}</>}
+      {!hidden && <EditorTools projectId={project.project_id} editor={activeEditor} symbols={documentSymbols.symbols} symbolsError={documentSymbols.error}
+        onOpen={(file, line, column) => openCode(file, line, undefined, column)} onDiagnostics={() => togglePanel('diagnostics')} onError={setFeedback} />}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
-      {finder && <FileFinder projectId={project.project_id} recent={recentFiles} onOpen={(path) => openCode(path)} onClose={() => setFinder(false)} />}
+      {finder && <FileFinder projectId={project.project_id} projectName={project.name} recent={recentFiles} onOpen={(path) => openCode(path)} onClose={() => setFinder(false)} />}
+      {taskPicker && <TaskPicker projectId={project.project_id} history={taskHistory} onPick={(task, oneshot) => void runTask(task, oneshot)} onClose={() => setTaskPicker(false)} />}
       {joining && <JoinDialog onClose={() => setJoining(false)} onJoined={() => setTab('collab')} />}
     </div>
   )
