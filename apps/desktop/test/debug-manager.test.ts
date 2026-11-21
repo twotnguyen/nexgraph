@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { DebugEvent } from '../src/shared/api'
 import { DapClient } from '../src/main/debug/dap-client'
 import { adapterInstalled, installAdapter, type DebugKind } from '../src/main/debug/adapters'
-import { DebugManager } from '../src/main/debug/manager'
+import { DebugManager, toDapBreakpoints } from '../src/main/debug/manager'
 
 const frame = (message: object) => { const body = JSON.stringify(message); return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}` }
 
@@ -34,6 +34,14 @@ it('DapClient: ghép phản hồi theo request_seq, chuyển sự kiện và tr�
   await expect(failed).rejects.toThrow('không có luồng')
 })
 
+it('chỉ gửi điểm dừng đang bật và các thuộc tính DAP có giá trị', () => {
+  expect(toDapBreakpoints([
+    { line: 4, enabled: true, condition: 'n == 2', hitCondition: '3', logMessage: 'n={n}' },
+    { line: 5, enabled: false, condition: 'false' },
+    { line: 8, enabled: true, condition: '' }
+  ])).toEqual([{ line: 4, condition: 'n == 2', hitCondition: '3', logMessage: 'n={n}' }, { line: 8 }])
+})
+
 // Chạy adapter thật (tải js-debug và debugpy về thư mục tạm): NEXGRAPH_DEBUG_IT=1 pnpm exec vitest run test/debug-manager.test.ts
 describe.skipIf(!process.env.NEXGRAPH_DEBUG_IT)('gỡ lỗi thật với js-debug và debugpy', () => {
   const base = mkdtempSync(join(tmpdir(), 'ng-dbg-adapters-'))
@@ -42,6 +50,8 @@ describe.skipIf(!process.env.NEXGRAPH_DEBUG_IT)('gỡ lỗi thật với js-debu
     for (const kind of ['node', 'python'] as DebugKind[]) if (!adapterInstalled(base, kind)) await installAdapter(base, kind)
     writeFileSync(join(root, 'app.js'), 'const items = [1, 2, 3]\nlet total = 0\nfor (const n of items) {\n  total += n\n}\nconsole.log("total", total)\n')
     writeFileSync(join(root, 'app.py'), 'items = [1, 2, 3]\ntotal = 0\nfor n in items:\n    total += n\nprint("total", total)\n')
+    writeFileSync(join(root, 'wait.js'), 'setInterval(() => {}, 1000)\n')
+    writeFileSync(join(root, 'wait.py'), 'import time\nwhile True:\n    time.sleep(0.05)\n')
   }, 120_000)
   afterAll(() => { rmSync(base, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true }) })
 
@@ -49,7 +59,7 @@ describe.skipIf(!process.env.NEXGRAPH_DEBUG_IT)('gỡ lỗi thật với js-debu
     it(`${kind}: dừng ở điểm dừng, xem biến, bước qua rồi chạy hết`, async () => {
       const events: DebugEvent[] = []
       const manager = new DebugManager(base, (e) => events.push(e))
-      await manager.start(kind, root, file, { [file]: [line] })
+      await manager.start(kind, root, file, { [file]: [{ line, enabled: true }] })
       await vi.waitFor(() => expect(events.some((e) => e.type === 'state' && e.state === 'stopped')).toBe(true), { timeout: 30_000 })
       const stop = events.find((e) => e.type === 'state' && e.state === 'stopped') as { threadId: number }
       const frames = await manager.stackTrace(stop.threadId)
@@ -60,10 +70,63 @@ describe.skipIf(!process.env.NEXGRAPH_DEBUG_IT)('gỡ lỗi thật với js-debu
       const stops = events.length
       await manager.step('next', stop.threadId)
       await vi.waitFor(() => expect(events.slice(stops).some((e) => e.type === 'state' && e.state === 'stopped')).toBe(true), { timeout: 15_000 })
-      await manager.setBreakpoints(file, [])
+      await manager.setBreakpoints(file, [{ line, enabled: false }])
       await manager.step('continue', stop.threadId)
       await vi.waitFor(() => expect(events.some((e) => e.type === 'state' && e.state === 'terminated')).toBe(true), { timeout: 30_000 })
       expect(events.filter((e) => e.type === 'output').map((e) => (e as { text: string }).text).join('')).toContain('total 6')
+    }, 90_000)
+
+    it(`${kind}: điều kiện, evaluate watch/repl và chạy lại`, async () => {
+      const events: DebugEvent[] = []
+      const manager = new DebugManager(base, (event) => events.push(event))
+      try {
+        await manager.start(kind, root, file, { [file]: [{ line, enabled: true, condition: 'n == 2' }] })
+        await vi.waitFor(() => expect(events.some((e) => e.type === 'state' && e.state === 'stopped')).toBe(true), { timeout: 30_000 })
+        const first = events.find((e) => e.type === 'state' && e.state === 'stopped') as { threadId: number }
+        const [frame] = await manager.stackTrace(first.threadId)
+        expect((await manager.evaluate('n', frame.id, 'watch')).result).toBe('2')
+        expect((await manager.evaluate('total * 10', frame.id, 'watch')).result).toBe('10')
+        expect((await manager.evaluate('items', frame.id, 'repl')).result).toContain('1')
+        const before = events.length
+        await manager.restart()
+        await vi.waitFor(() => expect(events.slice(before).some((e) => e.type === 'state' && e.state === 'stopped')).toBe(true), { timeout: 30_000 })
+        const second = events.slice(before).find((e) => e.type === 'state' && e.state === 'stopped') as { threadId: number }
+        const [restarted] = await manager.stackTrace(second.threadId)
+        expect((await manager.evaluate('n', restarted.id, 'watch')).result).toBe('2')
+      } finally { await manager.stop() }
+    }, 120_000)
+
+    it(`${kind}: điều kiện số lần chạm dừng ở lần thứ hai`, async () => {
+      const events: DebugEvent[] = []
+      const manager = new DebugManager(base, (event) => events.push(event))
+      try {
+        await manager.start(kind, root, file, { [file]: [{ line, enabled: true, hitCondition: '2' }] })
+        await vi.waitFor(() => expect(events.some((e) => e.type === 'state' && e.state === 'stopped')).toBe(true), { timeout: 30_000 })
+        const stop = events.find((e) => e.type === 'state' && e.state === 'stopped') as { threadId: number }
+        const [frame] = await manager.stackTrace(stop.threadId)
+        expect((await manager.evaluate('n', frame.id, 'watch')).result).toBe('2')
+      } finally { await manager.stop() }
+    }, 90_000)
+
+    it(`${kind}: log point ghi ra mà không dừng`, async () => {
+      const events: DebugEvent[] = []
+      const manager = new DebugManager(base, (event) => events.push(event))
+      try {
+        await manager.start(kind, root, file, { [file]: [{ line, enabled: true, logMessage: 'n={n}' }] })
+        await vi.waitFor(() => expect(events.some((e) => e.type === 'state' && e.state === 'terminated')).toBe(true), { timeout: 30_000 })
+        expect(events.some((e) => e.type === 'state' && e.state === 'stopped')).toBe(false)
+        expect(events.filter((e) => e.type === 'output').map((e) => (e as { text: string }).text).join('')).toContain('n=2')
+      } finally { await manager.stop() }
+    }, 90_000)
+
+    it(`${kind}: tạm dừng chương trình đang chạy`, async () => {
+      const events: DebugEvent[] = []
+      const manager = new DebugManager(base, (event) => events.push(event))
+      try {
+        await manager.start(kind, root, kind === 'node' ? 'wait.js' : 'wait.py', {})
+        await manager.pause()
+        await vi.waitFor(() => expect(events.some((e) => e.type === 'state' && e.state === 'stopped')).toBe(true), { timeout: 30_000 })
+      } finally { await manager.stop() }
     }, 90_000)
   }
 })

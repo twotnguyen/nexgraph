@@ -25,7 +25,11 @@
 /* Inline blame: chữ mờ nghiêng cuối dòng có con trỏ. */
 .editor-line-note { color: var(--color-muted); font-style: italic; opacity: .75; }
 /* Gỡ lỗi: chấm đỏ điểm dừng ở lề, dòng đang dừng nền vàng nhạt với mũi tên. */
-.editor-breakpoint { margin-left: 4px; }
+.editor-breakpoint { position: relative; margin-left: 4px; }
 .editor-breakpoint::before { content: ''; display: block; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: var(--red, #e5484d); }
+.editor-breakpoint-disabled::before { box-sizing: border-box; border: 1px solid var(--color-muted); background: transparent; }
+.editor-breakpoint-log::before { border-radius: 1px; transform: rotate(45deg) scale(.8); }
+.editor-breakpoint-condition::after { content: '='; position: absolute; top: -2px; left: 2px; color: white; font: bold 9px monospace; }
+.editor-breakpoint-disabled.editor-breakpoint-condition::after { color: var(--color-muted); }
 .editor-exec-line { background: color-mix(in srgb, var(--amber, #e5c07b) 22%, transparent); }
 .editor-exec-arrow::before { content: '▶'; display: block; margin-left: 3px; color: var(--amber, #e5c07b); font-size: 11px; }

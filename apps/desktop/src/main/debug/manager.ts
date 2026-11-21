@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import type { DebugBreakpoints, DebugEvent, DebugFrame, DebugScope, DebugVariable } from '../../shared/api'
+import type { DebugBreakpoint, DebugBreakpoints, DebugEvaluation, DebugEvent, DebugFrame, DebugScope, DebugVariable } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
 import { ADAPTERS, adapterDir, findPython, type DebugKind } from './adapters'
 import { DapClient } from './dap-client'
@@ -10,15 +10,26 @@ import { UserError } from '../user-error'
 
 const fail = (code: string, message: string) => new UserError(code, message)
 
+export const toDapBreakpoints = (breakpoints: DebugBreakpoint[]) => breakpoints.filter((bp) => bp.enabled).map((bp) => ({
+  line: bp.line,
+  ...(bp.condition ? { condition: bp.condition } : {}),
+  ...(bp.hitCondition ? { hitCondition: bp.hitCondition } : {}),
+  ...(bp.logMessage ? { logMessage: bp.logMessage } : {})
+}))
+
 type Session = {
   kind: DebugKind
   root: string
+  file: string
+  supportsRestart: boolean
+  state: 'starting' | 'running' | 'stopped'
   adapter: ChildProcess
   /** Phiên điều khiển (js-debug: phiên con do startDebugging tạo; debugpy: chính phiên gốc). */
   control: DapClient
   clients: DapClient[]
   sockets: Socket[]
   breakpoints: DebugBreakpoints
+  threadWaiters: Set<(id: number | null) => void>
 }
 
 /**
@@ -46,6 +57,10 @@ export class DebugManager {
     try {
       const session = kind === 'python' ? await this.startPython(root, program, breakpoints) : await this.startNode(root, program, breakpoints)
       session.adapter.once('exit', () => this.finish(session))
+      if (this.session === session && session.state === 'starting') {
+        session.state = 'running'
+        this.emit({ type: 'state', state: 'running' })
+      }
     } catch (error) {
       if (this.session) this.finish(this.session)
       else this.emit({ type: 'state', state: 'terminated' })
@@ -60,15 +75,23 @@ export class DebugManager {
       // Kết thúc khi phiên gốc kết thúc: phiên con của js-debug báo terminated trước khi đầu ra cuối kịp về.
       if (event === 'terminated' && client === session.clients[0]) return this.finish(session)
       if (client !== session.control) return
-      if (event === 'stopped') this.emit({ type: 'state', state: 'stopped', reason: String(body.reason ?? ''), threadId: Number(body.threadId ?? 0) })
-      else if (event === 'continued') this.emit({ type: 'state', state: 'running' })
+      if (event === 'thread' && body.reason === 'started' && typeof body.threadId === 'number') {
+        for (const waiter of session.threadWaiters) waiter(body.threadId)
+      }
+      if (event === 'stopped') {
+        session.state = 'stopped'
+        this.emit({ type: 'state', state: 'stopped', reason: String(body.reason ?? ''), threadId: Number(body.threadId ?? 0) })
+      } else if (event === 'continued' && session.state !== 'running') {
+        session.state = 'running'
+        this.emit({ type: 'state', state: 'running' })
+      }
     }
   }
 
   /** Sau sự kiện initialized: gửi điểm dừng của mọi tệp rồi configurationDone (thứ tự bắt buộc của DAP). */
   private async configure(client: DapClient, root: string, breakpoints: DebugBreakpoints) {
-    for (const [file, lines] of Object.entries(breakpoints)) {
-      await client.request('setBreakpoints', { source: { path: this.abs(root, file) }, breakpoints: lines.map((line) => ({ line })) }).catch(() => {})
+    for (const [file, points] of Object.entries(breakpoints)) {
+      await client.request('setBreakpoints', { source: { path: this.abs(root, file) }, breakpoints: toDapBreakpoints(points) })
     }
     await client.request('configurationDone')
   }
@@ -90,10 +113,11 @@ export class DebugManager {
     })
     const client = new DapClient(adapter.stdout!, adapter.stdin!)
     adapter.stdin!.on('error', () => {})
-    const session: Session = { kind: 'python', root, adapter, control: client, clients: [client], sockets: [], breakpoints }
+    const session: Session = { kind: 'python', root, file: relative(root, program), supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets: [], breakpoints, threadWaiters: new Set() }
     this.session = session
     this.wire(session, client)
-    await client.request('initialize', { clientID: 'nexgraph', adapterID: 'debugpy', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path' })
+    const capabilities = await client.request<{ supportsRestartRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'debugpy', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path' })
+    session.supportsRestart = capabilities.supportsRestartRequest === true
     const initialized = this.waitInitialized(client)
     // debugpy chỉ trả lời launch sau configurationDone: không chờ launch trước.
     const launched = client.request('launch', { type: 'python', request: 'launch', program, cwd: root, console: 'internalConsole', justMyCode: true, python: [python] }, 60_000)
@@ -126,7 +150,7 @@ export class DebugManager {
     }
     const rootSocket = await open()
     const client = new DapClient(rootSocket, rootSocket)
-    const session: Session = { kind: 'node', root, adapter, control: client, clients: [client], sockets: [rootSocket], breakpoints }
+    const session: Session = { kind: 'node', root, file: relative(root, program), supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets: [rootSocket], breakpoints, threadWaiters: new Set() }
     this.session = session
     this.wire(session, client)
     // js-debug chạy chương trình trong phiên con: yêu cầu startDebugging → mở kết nối mới tới cùng server.
@@ -147,7 +171,8 @@ export class DebugManager {
       await this.configure(child, root, session.breakpoints)
       return {}
     }
-    await client.request('initialize', { clientID: 'nexgraph', adapterID: 'pwa-node', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path', supportsStartDebuggingRequest: true })
+    const capabilities = await client.request<{ supportsRestartRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'pwa-node', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path', supportsStartDebuggingRequest: true })
+    session.supportsRestart = capabilities.supportsRestartRequest === true
     const initialized = this.waitInitialized(client)
     const launched = client.request('launch', { type: 'pwa-node', request: 'launch', program, cwd: root, console: 'internalConsole', outputCapture: 'std' }, 60_000)
     launched.catch(() => {})
@@ -162,17 +187,70 @@ export class DebugManager {
     return this.session
   }
 
-  async setBreakpoints(file: string, lines: number[]): Promise<void> {
+  async setBreakpoints(file: string, points: DebugBreakpoint[]): Promise<void> {
     const session = this.session
     if (!session) return
-    session.breakpoints = { ...session.breakpoints, [file]: lines }
-    await session.control.request('setBreakpoints', { source: { path: this.abs(session.root, file) }, breakpoints: lines.map((line) => ({ line })) })
+    const path = this.abs(session.root, file)
+    session.breakpoints = { ...session.breakpoints, [file]: points }
+    await session.control.request('setBreakpoints', { source: { path }, breakpoints: toDapBreakpoints(points) })
   }
 
   async step(action: 'continue' | 'next' | 'stepIn' | 'stepOut', threadId: number): Promise<void> {
     const session = this.active()
-    await session.control.request(action, { threadId })
+    session.state = 'running'
     this.emit({ type: 'state', state: 'running' })
+    try { await session.control.request(action, { threadId }) }
+    catch (error) {
+      if (this.session === session && session.state === 'running') {
+        session.state = 'stopped'
+        this.emit({ type: 'state', state: 'stopped', threadId })
+      }
+      throw error
+    }
+  }
+
+  async pause(): Promise<void> {
+    const session = this.active()
+    let notify: (id: number | null) => void = () => {}
+    const started = new Promise<number | null>((resolveThread) => { notify = resolveThread })
+    session.threadWaiters.add(notify)
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const body = await session.control.request<{ threads?: { id: number }[] }>('threads')
+      const threadId = body.threads?.[0]?.id ?? await Promise.race([
+        started,
+        new Promise<null>((resolveTimeout) => { timer = setTimeout(() => resolveTimeout(null), 30_000) })
+      ])
+      if (threadId === null || this.session !== session) throw fail('no_thread', 'Không tìm thấy luồng đang chạy')
+      await session.control.request('pause', { threadId })
+    } finally {
+      session.threadWaiters.delete(notify)
+      if (timer) clearTimeout(timer)
+    }
+  }
+
+  async restart(): Promise<void> {
+    const session = this.active()
+    if (session.supportsRestart) {
+      session.state = 'starting'
+      this.emit({ type: 'state', state: 'starting' })
+      try {
+        await session.clients[0].request('restart', {})
+        if (this.session === session && session.state === 'starting') {
+          session.state = 'running'
+          this.emit({ type: 'state', state: 'running' })
+        }
+        return
+      } catch {
+        // Adapter có thể báo hỗ trợ nhưng từ chối restart; chạy lại từ cấu hình cũ.
+      }
+    }
+    await this.start(session.kind, session.root, session.file, session.breakpoints)
+  }
+
+  async evaluate(expression: string, frameId: number, context: 'watch' | 'repl'): Promise<DebugEvaluation> {
+    const body = await this.active().control.request<{ result: string; variablesReference?: number }>('evaluate', { expression, frameId, context })
+    return { result: body.result, variablesReference: body.variablesReference ?? 0 }
   }
 
   async stackTrace(threadId: number): Promise<DebugFrame[]> {
@@ -194,6 +272,8 @@ export class DebugManager {
   private finish(session: Session) {
     if (this.session !== session) return
     this.session = null
+    for (const waiter of session.threadWaiters) waiter(null)
+    session.threadWaiters.clear()
     for (const client of session.clients) client.close('Phiên gỡ lỗi đã kết thúc')
     for (const socket of session.sockets) socket.destroy()
     session.adapter.kill()

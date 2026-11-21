@@ -24,9 +24,18 @@
 .dbg-var-name::after { content: ':'; color: var(--color-muted); }
 .dbg-var-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dbg-scope { margin: 2px 0 0; padding: 0 10px; font-size: 11px; }
-.dbg-bp { display: flex; align-items: center; }
+.dbg-bp, .dbg-watch { display: flex; align-items: center; }
+.dbg-bp > input { flex: none; margin: 0 0 0 8px; }
+.dbg-bp .dbg-frame { min-width: 0; padding-left: 6px; }
+.dbg-bp-info { margin: 0; padding: 0 10px 3px 32px; font-size: 11px; overflow-wrap: anywhere; }
+.dbg-section-head { display: flex; align-items: center; justify-content: space-between; padding-right: 6px; }
+.dbg-watch-value { flex: 1; min-width: 0; overflow: hidden; padding: 2px 10px; font: 12px var(--font-mono, monospace); text-overflow: ellipsis; white-space: nowrap; }
+.dbg-input { display: flex; gap: 4px; margin: 4px 8px; }
+.dbg-input input { flex: 1; width: 0; min-width: 0; height: 25px; padding: 2px 6px; font-size: 12px; }
+.dbg-input button { flex: none; min-height: 25px; padding: 0 7px; }
 .dbg-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--red, #e5484d); }
+.dbg-dot-log { border-radius: 1px; transform: rotate(45deg) scale(.8); }
 .dbg-remove { display: grid; flex: none; place-items: center; width: 22px; height: 22px; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--color-muted); opacity: 0; }
-.dbg-bp:hover .dbg-remove { opacity: 1; }
+.dbg-bp:hover .dbg-remove, .dbg-watch:hover .dbg-remove, .dbg-remove:focus-visible { opacity: 1; }
 .dbg-empty { margin: 0; padding: 0 10px; font-size: 12px; }
-.dbg-output { max-height: 160px; margin: 0 8px; padding: 6px 8px; overflow: auto; border-radius: 6px; background: color-mix(in srgb, var(--color-text) 5%, transparent); font-size: 11px; white-space: pre-wrap; }
+.dbg-output { min-height: 60px; max-height: 160px; margin: 0 8px; padding: 6px 8px; overflow: auto; border-radius: 6px; background: color-mix(in srgb, var(--color-text) 5%, transparent); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
