@@ -9,6 +9,8 @@ import { McpCard } from '../components/overview/McpCard'
 import { SourcesPanel } from '../components/overview/SourcesPanel'
 import { SemanticDialog } from '../components/overview/SemanticDialog'
 import { vi } from '../strings'
+import './welcome.css'
+import './overview.css'
 
 export type WorkspaceTab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report'
 
@@ -94,12 +96,13 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
   const nodeCount = stats ? sum(stats.nodes_by_kind) : 0
   const noGraph = stats?.files === 0 && nodeCount === 0
   return (
-    <main className="screen overview">
-      <button type="button" className="link page-back" onClick={onBack}>{vi.overview.back}</button>
-      <div className="page-title">
-        <span className="page-icon"><Icon name="folder" size={23} /></span>
-        <div><h1>{project.name}</h1><p className="muted mono" title={project.path}>{project.path}</p></div>
-      </div>
+    <main className="screen overview welcome-page">
+      <div className="welcome welcome-wide">
+      <button type="button" className="welcome-back" onClick={onBack}>{vi.overview.back}</button>
+      <header className="welcome-head">
+        <span className="welcome-icon"><Icon name="folder" size={22} /></span>
+        <div><h1>{project.name}</h1><p className="mono" title={project.path}>{project.path}</p></div>
+      </header>
       <section className="workbench-panel overview-metrics" aria-label={vi.overview.statusLabel} aria-busy={!stats && !statsError}>
         <header className="panel-title">
           <h2>Tình trạng đồ thị</h2>
@@ -167,6 +170,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       {semantic && <SemanticDialog projectId={pid} target={semantic === 'labels' ? 'labels' : undefined} onSettings={setAi} onClose={() => setSemantic(null)} />}
       {integrating && <IntegrationsDialog project={project} onClose={() => setIntegrating(false)} />}
       {exporting && <ExportDialog projectId={pid} projectName={project.name} scope={{ kind: 'all' }} onClose={() => setExporting(false)} />}
+      </div>
     </main>
   )
 }

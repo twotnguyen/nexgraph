@@ -1,69 +1,4 @@
-/* Màn Dự án kiểu trang Welcome của Wu: một cột rộng tối đa 512px giữa màn, đệm 32px, các mục cách nhau 24px.
-   Đầu trang là logo 45px + lời chào; mỗi mục có tiêu đề chữ nhỏ viết hoa màu mờ kèm đường kẻ;
-   mỗi hàng là nút ma rộng hết cột cao 28px, icon mờ 14px. */
-.screen.projects-page.projects-wu {
-  display: flex;
-  justify-content: center;
-  max-width: none;
-  margin: 0;
-  padding: 0;
-  background: var(--color-surface);
-}
-
-.welcome {
-  display: flex;
-  flex-direction: column;
-  justify-content: safe center;
-  gap: 24px;
-  width: 100%;
-  max-width: 512px;
-  min-height: 100%;
-  padding: 32px;
-}
-
-.welcome-head { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; }
-.welcome-head .logo { flex: none; }
-.welcome-head h1 { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; }
-.welcome-head p { margin: 2px 0 0; color: var(--color-muted); font-size: 12px; font-style: italic; }
-
-.welcome-section { display: flex; flex-direction: column; min-width: 0; }
-.welcome-section-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 8px;
-  padding: 0 4px;
-  color: var(--color-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-.welcome-section-title::after { content: ''; flex: 1; height: 1px; background: var(--color-border); }
-
-.projects-wu .welcome-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 28px;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-text);
-  font-size: 13px;
-  text-align: left;
-  box-shadow: none;
-  transform: none;
-}
-.projects-wu .welcome-row > svg { flex: none; color: var(--color-muted); }
-.projects-wu .welcome-row:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 7%, transparent); box-shadow: none; transform: none; }
-.projects-wu .welcome-row:disabled { opacity: .5; }
-
-/* Dự án gần đây: tên, đường dẫn mờ cắt bớt, ngày lập chỉ mục bên phải; nút phụ hiện khi rê chuột. */
+/* Màn Dự án: khung chung ở welcome.css. Dự án gần đây hiện tên, đường dẫn mờ cắt bớt, ngày lập chỉ mục; nút phụ hiện khi rê chuột. */
 .projects-wu .recent { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
 .projects-wu .recent > li { position: relative; display: flex; align-items: center; min-width: 0; }
 .projects-wu .recent-identity { display: flex; flex: 1; align-items: baseline; gap: 8px; min-width: 0; overflow: hidden; }
@@ -89,8 +24,6 @@
 .projects-wu .recent-remove:hover:not(:disabled) { background: color-mix(in srgb, var(--color-text) 10%, var(--color-surface)); color: var(--color-text); }
 .projects-wu .recent-remove svg { width: 13px; height: 13px; }
 .projects-wu .recent-open:focus-visible, .projects-wu .recent-remove:focus-visible { outline-offset: -2px; }
-
-.projects-wu .panel-empty { margin: 0; padding: 4px 6px; font-size: 12px; }
 
 /* Graph chung */
 .welcome-global-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; padding: 0 6px; }

@@ -4,6 +4,7 @@ import { Icon, Logo } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
 import { waitJob } from '../state/waitJob'
 import { vi } from '../strings'
+import './welcome.css'
 import './projects.css'
 
 interface Props {
@@ -156,7 +157,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
   }
 
   return (
-    <main className="screen projects-page projects-wu">
+    <main className="screen projects-page projects-wu welcome-page">
       <div className="welcome">
       <header className="welcome-head">
         <Logo size={45} />
