@@ -2,10 +2,10 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { join, posix } from 'node:path'
 // Chỉ import kiểu: pi là ESM, main là CJS nên giá trị phải nạp bằng loadPi() (docs/spikes/2026-11-pi-monaco-electron.md mục a).
-import type { AgentSession, AgentSessionEvent, ExtensionAPI, ModelRuntime, SessionManager } from '@earendil-works/pi-coding-agent'
+import type { AgentSession, AgentSessionEvent, ContextUsage, ExtensionAPI, ModelRuntime, SessionManager } from '@earendil-works/pi-coding-agent'
 import {
   normalizeConsentTarget, sameConsentTarget, type AgentEvent, type AgentMode, type AiConsentTarget,
-  type AgentExecutionSettings, type AgentExecutionPolicy, type AgentRunLimits, type AgentUsage, type AgentToolRun,
+  type AgentExecutionSettings, type AgentExecutionPolicy, type AgentRunLimits, type AgentUsage, type AgentToolRun, type AgentContextUsage,
   type AgentTask, type AgentSessionInfo, type AgentSessionSnapshot, type AgentPromptOptions,
   type AgentCheckpointInfo, type AgentRollbackResult, type PiConsentTarget
 } from '../../shared/agent-types'
@@ -40,7 +40,8 @@ export class AgentError extends Error {
 }
 
 type Model = Parameters<AgentSession['setModel']>[0]
-export type PiSession = Pick<AgentSession, 'subscribe' | 'prompt' | 'abort' | 'dispose' | 'setActiveToolsByName' | 'getActiveToolNames' | 'setModel' | 'model' | 'messages'>
+// getContextUsage tùy chọn: phiên giả trong test không có; phiên Pi thật luôn có.
+export type PiSession = Pick<AgentSession, 'subscribe' | 'prompt' | 'abort' | 'dispose' | 'setActiveToolsByName' | 'getActiveToolNames' | 'setModel' | 'model' | 'messages'> & Partial<Pick<AgentSession, 'getContextUsage'>>
 export type SessionSpec = {
   cwd: string
   agentDir: string
@@ -62,6 +63,8 @@ export type AgentAccounts = {
   getConsentTarget?(): Promise<AiConsentTarget | null>
   sessionIdentity?(): string
   selectedModelPricing?(): 'known' | 'unknown' | 'free' | 'subscription' | 'local' | undefined
+  /** false khi cửa sổ ngữ cảnh của model chỉ là giá trị mặc định (model tuỳ chỉnh chưa khai báo): khi đó không hiện vòng context. */
+  selectedModelWindowKnown?(): boolean
 }
 
 export type AgentDeps = {
@@ -134,6 +137,7 @@ type Recipient = {
   isCurrent(): boolean
   account: string
   pricing: 'known' | 'unknown' | 'free' | 'subscription' | 'local'
+  windowKnown: boolean
 }
 
 // stopped: đang dừng/đã đóng, yêu cầu duyệt mới bị từ chối ngay; lượt mới bỏ cờ.
@@ -154,6 +158,11 @@ type Entry = {
   tools: Map<string, AgentToolRun>
   limitError?: string
   pricing: Recipient['pricing']
+  windowKnown: boolean
+  /** Số context đã báo cuối cùng, để chỉ phát sự kiện khi đổi. */
+  context: AgentContextUsage | null
+  /** Phiên Pi đã tạo xong (entry.session còn đang chờ thì chưa có). */
+  live?: PiSession
   failed?: boolean
 }
 
@@ -216,6 +225,16 @@ const PROVIDER_CHANGED = { type: 'error', code: 'ai_provider_changed', message: 
 const providerChanged = () => new AgentError(PROVIDER_CHANGED.code, PROVIDER_CHANGED.message)
 
 export const DEFAULT_RUN_LIMITS: AgentRunLimits = { maxTurns: 30, maxDurationMs: 600_000, maxTokens: 120_000 }
+
+/** Số context của phiên theo Pi; null khi chưa đáng tin: chưa có số nào (phiên trống, vừa tóm tắt) hoặc cửa sổ model chỉ là giá trị mặc định. `model` (đang chọn) thắng model của phiên Pi, vì phiên chỉ đổi model ở lượt gửi kế tiếp. */
+function contextOf(entry: Pick<Entry, 'windowKnown' | 'live'>, model?: Pick<Model, 'contextWindow'>): AgentContextUsage | null {
+  let usage: ContextUsage | undefined
+  try { usage = entry.windowKnown ? entry.live?.getContextUsage?.() : undefined } catch { return null }
+  const tokens = usage?.tokens
+  const size = model?.contextWindow ?? usage?.contextWindow
+  if (typeof tokens !== 'number' || typeof size !== 'number' || !(tokens > 0) || !(size > 0) || !Number.isFinite(tokens) || !Number.isFinite(size)) return null
+  return { tokens: Math.round(tokens), window: Math.round(size) }
+}
 
 /** A project has one live run, with durable Pi sessions isolated by account and destination. */
 export class AgentService {
@@ -307,7 +326,7 @@ export class AgentService {
       return !!selected && selected.provider === model.provider && selected.baseUrl === originalEndpoint &&
         (accounts.sessionIdentity?.() ?? 'legacy-local-account') === identity
     }
-    return { target, model, modelRuntime: accounts.modelRuntime, isCurrent, account, pricing: accounts.selectedModelPricing?.() ?? 'unknown' }
+    return { target, model, modelRuntime: accounts.modelRuntime, isCurrent, account, pricing: accounts.selectedModelPricing?.() ?? 'unknown', windowKnown: accounts.selectedModelWindowKnown?.() ?? true }
   }
 
   private scope(projectId: string, root: string, recipient: Recipient): SessionScope {
@@ -333,9 +352,11 @@ export class AgentService {
     const entry = await this.ensureEntry(projectId, recipient, () => this.active(projectId, generation))
     if (!entry || !recipient.isCurrent()) throw providerChanged()
     const { file: _file, task: _task, ...info } = entry.stored.record
+    entry.windowKnown = recipient.windowKnown
+    const context = contextOf(entry, recipient.model)
     return {
       ...defaults, session: info, messages: transcript(entry.stored, cleanAgentText), task: entry.task ?? entry.stored.record.task ?? null,
-      usage: transcriptUsage(entry.stored)
+      usage: transcriptUsage(entry.stored), ...(context ? { context } : {})
     }
   }
 
@@ -509,6 +530,7 @@ export class AgentService {
       entry.tools.clear()
       entry.taskUsage = emptyUsage()
       entry.pricing = recipient.pricing
+      entry.windowKnown = recipient.windowKnown
       entry.controller = new AbortController()
       const task: AgentTask = {
         id: randomUUID(), sessionId: entry.stored.record.id, status: 'running', startedAt: Date.now(),
@@ -706,7 +728,7 @@ export class AgentService {
     const emit = (event: AgentEvent) => this.deps.emit(projectId, event)
     const entry = {
       target: recipient.target, isCurrent: recipient.isCurrent, busy: false, text: '', stopped: false,
-      dispatchBlocked: false, stored, taskUsage: emptyUsage(), tools: new Map(), pricing: recipient.pricing
+      dispatchBlocked: false, stored, taskUsage: emptyUsage(), tools: new Map(), pricing: recipient.pricing, windowKnown: recipient.windowKnown, context: null
     } as Entry
     const consentBase = new URL(entry.target.baseUrl)
     entry.gate = createApprovalGate({
@@ -770,6 +792,8 @@ export class AgentService {
     }).then((session) => {
       session.setActiveToolsByName(toolsFor(this.getMode(projectId), projectId))
       session.subscribe((event) => this.onEvent(projectId, entry, event))
+      entry.live = session
+      this.publishContext(projectId, entry)
       return session
     })
     entry.session.catch(() => { entry.failed = true })
@@ -804,12 +828,25 @@ export class AgentService {
       emit({ type: 'tool_detail', tool: { ...tool } })
     } else if (event.type === 'message_end' && event.message.role === 'assistant') {
       this.recordUsage(projectId, entry, event.message)
+    } else if (event.type === 'turn_end') {
+      this.publishContext(projectId, entry)
     } else if (event.type === 'auto_retry_start') {
       emit({ type: 'retry', attempt: event.attempt, maxAttempts: event.maxAttempts, delayMs: event.delayMs, message: scrub(event.errorMessage) })
     } else if (event.type === 'compaction_start' || event.type === 'compaction_end') {
       emit({ type: 'compaction', active: event.type === 'compaction_start' })
-      if (event.type === 'compaction_end' && event.result?.usage) this.recordUsage(projectId, entry, { usage: event.result.usage })
+      if (event.type === 'compaction_end') {
+        if (event.result?.usage) this.recordUsage(projectId, entry, { usage: event.result.usage })
+        this.publishContext(projectId, entry)
+      }
     }
+  }
+
+  /** Phát số context khi nó đổi. Chạy ở turn_end vì lúc message_end Pi chưa ghi tin nhắn vừa xong vào phiên nên số còn cũ một nhịp. */
+  private publishContext(projectId: string, entry: Entry): void {
+    const next = contextOf(entry)
+    if (next?.tokens === entry.context?.tokens && next?.window === entry.context?.window) return
+    entry.context = next
+    if (this.entries.get(projectId) === entry && !entry.stopped) this.deps.emit(projectId, { type: 'context', context: next })
   }
 
   private recordUsage(projectId: string, entry: Entry, message: { usage?: unknown }): void {

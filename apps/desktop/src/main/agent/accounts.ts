@@ -386,6 +386,13 @@ export class AccountService {
     return !cost ? 'unknown' : cost.input === 0 && cost.output === 0 ? 'free' : 'known'
   }
 
+  /** Cùng quy tắc với listProviders: model tuỳ chỉnh chưa khai báo contextWindow thì Pi chỉ có giá trị mặc định 4096, không phải số thật. */
+  selectedModelWindowKnown(): boolean {
+    const selected = this.getSelectedModel()
+    const custom = selected && this.customs().find((p) => p.id === selected.provider)
+    return !custom || !!custom.contextWindow
+  }
+
   /** shortcut: SDK OpenAI trong pi không gửi được request thiếu Authorization; khi chưa có key,
    *  endpoint nhận giá trị sentinel 'unused' của chính pi (server không cần key sẽ bỏ qua). */
   private registerCustom(p: CustomProvider): void {

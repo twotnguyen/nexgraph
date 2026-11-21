@@ -17,6 +17,9 @@ import { WorkbenchHistory, WorkbenchSettings, WorkbenchStatus, workbenchUsage } 
 import { AnswerRating } from './AnswerRating'
 import './agent-panel.css'
 import { matchProfile, useAgentProfiles, type AgentProfile } from '../../state/agentProfiles'
+import { ContextRing } from './ContextRing'
+import { SavedPrompts } from './SavedPrompts'
+import { announceAgent } from '../../state/agentNotify'
 
 interface Props {
   id?: string
@@ -57,7 +60,8 @@ const slashCommands = [
   { name: 'settings', detail: 'Mở cài đặt' },
   { name: 'files', detail: 'Mở cây tệp' },
   { name: 'terminal', detail: 'Mở terminal' },
-  { name: 'diff', detail: 'Mở thay đổi' }
+  { name: 'diff', detail: 'Mở thay đổi' },
+  { name: 'saved', detail: 'Tin nhắn đã lưu' }
 ]
 
 /** Câu hỏi của lượt mà câu trả lời thứ `i` thuộc về. */
@@ -136,6 +140,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const [fileListError, setFileListError] = useState('')
   const [queueWake, setQueueWake] = useState(0)
   const [connect, setConnect] = useState(false)
+  const [savedOpen, setSavedOpen] = useState(false)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [tool, setTool] = useState<string | null>(null)
@@ -172,6 +177,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const projectGeneration = useRef(0)
   const visible = useRef(!hidden)
   visible.current = !hidden
+  const alertTitle = useRef(projectName) // tên hội thoại cho thông báo hệ thống, cập nhật mỗi lần render
   const scope = useRef<AiConsentTarget | null>(null)
   const operation = useRef<number | null>(null)
   const operationSeq = useRef(0)
@@ -300,6 +306,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         const { request } = e
         if (t?.mode !== 'edit' || modeRef.current !== 'edit' || modePending.current || !isApproval(request)) return
         setApprovals((cur) => (cur.some((a) => a.id === request.id) ? cur : [...cur, request]))
+        announceAgent('approval', alertTitle.current)
         return
       }
       if (e.type === 'approval_closed') {
@@ -329,7 +336,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         t.completed = true
         setMsgs((cur) => [...cur, { id: t.id, role: 'assistant', content: e.text, citations: e.citations, tools: t.tools }])
         end()
-      } else if (e.type === 'error') fail(t.q, vi.chat.errors[e.code] || e.message)
+        announceAgent('done', alertTitle.current)
+      } else if (e.type === 'error') {
+        if (e.code !== 'ai_cancelled') announceAgent('error', alertTitle.current)
+        fail(t.q, vi.chat.errors[e.code] || e.message)
+      }
     })
     return () => {
       alive = false
@@ -674,7 +685,17 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     else if (name === 'files') runCommand('explorer.toggle')
     else if (name === 'terminal') runCommand('terminal.toggle')
     else if (name === 'diff') runCommand('changes.toggle')
+    else if (name === 'saved') setSavedOpen(true)
     return true
+  }
+
+  /** Chèn tin đã lưu vào chỗ con trỏ của ô soạn (cuối chữ nếu chưa đặt con trỏ). */
+  const insertSaved = (saved: string) => {
+    const at = Math.min(cursor, text.length)
+    setText(text.slice(0, at) + saved + text.slice(at))
+    setCursor(at + saved.length)
+    setDismissedCompletion('')
+    requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(at + saved.length, at + saved.length) })
   }
 
   const token = focused ? completionToken(text, cursor) : null
@@ -752,6 +773,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
 
   const workLocked = busy || checking || work.pending || work.loading
   const sessionTitle = work.sessions.find((session) => session.id === work.sessionId)?.title
+  alertTitle.current = sessionTitle ?? projectName
   const usage = workbenchUsage(work)
   const modeHint = mode === 'edit' ? work.execution.policy === 'auto' ? 'Tự động sửa mã trong phạm vi đã cấp quyền.' : vi.agent.editHint : mode === 'plan' ? 'Phân tích đồ thị và lập kế hoạch triển khai, chỉ đọc.' : vi.agent.askHint
   const menu: MenuItem[] = [
@@ -886,6 +908,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
               <button type="button" className="agent-round" aria-label="Đính kèm ảnh" title="Đính kèm ảnh" disabled={composerLocked || stagingImages} onClick={() => imageInput.current?.click()}><Icon name="plus" size={17} /></button>
               <button type="button" className="agent-round" aria-label={vi.chat.attachFile} disabled={composerLocked || !activeFile || (!getEditorContext && fileReference(activeFile) === (fileContext && fileReference(fileContext)))}
                 title={activeFile ? `${vi.chat.attachFile}: ${fileReference(activeFile)}` : vi.chat.noActiveFile} onClick={attachEditor}><Icon name="folder" size={15} /></button>
+              <SavedPrompts open={savedOpen} onOpenChange={setSavedOpen} composerText={text} onInsert={insertSaved} />
               {graphContext && <button type="button" className="agent-chip" disabled={composerLocked || attachments.some((item) => item.kind === graphContext.kind && contextLabel(item) === contextLabel(graphContext))} title={`Đính kèm ${contextLabel(graphContext)}`} aria-label="Đính kèm đồ thị" onClick={() => setAttachments((current) => [...current, { ...graphContext }])}><Icon name="graph" size={14} />Đồ thị</button>}
               {availableModels.length > 0 && configured ? <select ref={modelSelect} className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
                 {!availableModels.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model === 'auto' ? 'Tự động' : cfg?.model}</option>}
@@ -909,6 +932,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
             </span>
             {configured && <span className="agent-connection-label" data-runtime={cfg?.runtime} title={connectionLabel(cfg)}><Icon name="plug" size={11} />{connectionLabel(cfg)}</span>}
             {usage && <span className="agent-usage" title="Token tích lũy của phiên; chi phí ước tính khi nhà cung cấp có bảng giá">{usage}</span>}
+            <ContextRing context={work.context} />
           </div>
           {mode && <p className="mode-description">{modeHint}</p>}
         </div>

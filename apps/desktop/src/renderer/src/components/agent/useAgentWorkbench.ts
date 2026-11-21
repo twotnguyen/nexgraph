@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot, AgentTask, AgentToolRun, AgentUsage } from '@shared/agent-types'
+import type { AgentContextUsage, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot, AgentTask, AgentToolRun, AgentUsage } from '@shared/agent-types'
 
 export type AgentInspection = { id: string; title: string; text?: string; before?: string; after?: string; file?: string }
 const defaults: AgentRunLimits = { maxTurns: 30, maxDurationMs: 600_000, maxTokens: 120_000 }
@@ -36,6 +36,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
   const [task, setTask] = useState<AgentTask | null>(null)
   const [tools, setTools] = useState<AgentToolRun[]>([])
   const [usage, setUsage] = useState<AgentUsage>(emptyUsage)
+  const [context, setContext] = useState<AgentContextUsage | null>(null)
   const [execution, setExecution] = useState<AgentExecutionSettings>({ policy: 'review', allowCommands: false })
   const [limits, setLimits] = useState(defaults)
   const [notice, setNotice] = useState('')
@@ -48,6 +49,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     setTask(snapshot.task)
     setTools(snapshot.messages.flatMap((m) => m.tools))
     setUsage(snapshot.usage)
+    setContext(snapshot.context ?? null)
     setExecution(snapshot.execution)
     setLimits(snapshot.limits)
     receive.current(snapshot)
@@ -59,7 +61,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       const snapshot = await window.nexgraph.agent.snapshot(projectId)
       if (!current()) return
       if (restore) apply(snapshot)
-      else { setSessionId(snapshot.session?.id ?? null); setTask(snapshot.task); setUsage(snapshot.usage) }
+      else { setSessionId(snapshot.session?.id ?? null); setTask(snapshot.task); setUsage(snapshot.usage); setContext(snapshot.context ?? null) }
       const list = await window.nexgraph.agent.listSessions(projectId)
       if (current()) setSessions(list)
     } catch (e) { if (current()) throw e }
@@ -68,7 +70,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     const load = ++loadingSeq.current
     loadingRef.current = true
     setLoading(true)
-    setSessions([]); setSessionId(null); setTask(null); setTools([]); setUsage(emptyUsage)
+    setSessions([]); setSessionId(null); setTask(null); setTools([]); setUsage(emptyUsage); setContext(null)
     try { await refresh(true) }
     finally {
       if (alive.current && load === loadingSeq.current) { loadingRef.current = false; setLoading(false) }
@@ -89,6 +91,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       if (event.type === 'tool_detail') setTools((current) => current.some((t) => t.id === event.tool.id)
         ? current.map((t) => t.id === event.tool.id ? event.tool : t) : [...current, event.tool])
       if (event.type === 'usage') setUsage(event.usage)
+      if (event.type === 'context') setContext(event.context)
       if (event.type === 'retry') setNotice(`Đang thử lại ${event.attempt}/${event.maxAttempts} sau ${Math.ceil(event.delayMs / 1000)} giây. ${event.message}`)
       if (event.type === 'compaction') setNotice(event.active ? 'Đang tóm tắt ngữ cảnh để tiếp tục…' : 'Đã tóm tắt ngữ cảnh.')
       if (event.type === 'command_output') setTools((current) => current.map((t) => t.id === event.id ? { ...t, output: (t.output + event.delta).slice(-65_536) } : t))
@@ -118,7 +121,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       }
     }
   }
-  return { sessions, pinnedIds, sessionId, task, tools, usage, execution, limits, notice, error, pending, loading,
+  return { sessions, pinnedIds, sessionId, task, tools, usage, context, execution, limits, notice, error, pending, loading,
     invalidate: () => { readSeq.current++ },
     restore,
     refresh,

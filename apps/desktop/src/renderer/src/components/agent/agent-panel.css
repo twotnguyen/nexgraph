@@ -344,6 +344,14 @@
 .agent-panel .agent-composer-foot .mode button[aria-pressed='true'] { background: var(--agent-selected); color: var(--color-text); font-weight: 600; }
 .agent-connection-label { display: inline-flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-usage { margin-inline-start: auto; white-space: nowrap; }
+/* Vòng context: màu theo mức dùng (vàng từ 75%, đỏ từ 90%); đứng sau .agent-usage thì đi theo nó về bên phải. */
+.agent-context { display: inline-flex; flex: none; align-items: center; gap: 4px; margin-inline-start: auto; color: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.agent-usage ~ .agent-context { margin-inline-start: 0; }
+.agent-context-track, .agent-context-arc { fill: none; stroke-width: 1.8; }
+.agent-context-track { stroke: color-mix(in srgb, currentColor 25%, transparent); }
+.agent-context-arc { stroke: currentColor; stroke-linecap: round; }
+.agent-context[data-level='warning'] { color: var(--amber); }
+.agent-context[data-level='danger'] { color: var(--color-error-red); }
 
 /* Quyền & giới hạn, trạng thái tác vụ */
 .agent-subpanel { display: grid; gap: 10px; padding: 8px 12px 12px; background: transparent; }
@@ -389,6 +397,24 @@
 .agent-image img { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; }
 .agent-image .agent-icon-button { position: absolute; top: 1px; right: 1px; width: 20px; height: 20px; background: var(--color-surface); }
 .agent-image-loading { align-self: center; color: var(--color-muted); font-size: 11px; }
+
+/* Tin nhắn đã lưu: hộp bật lên neo theo .agent-composer như danh sách gợi ý. */
+.agent-saved-wrap { display: contents; }
+.agent-saved { position: absolute; z-index: 10; bottom: calc(100% + 6px); left: 0; right: 0; display: grid; gap: 4px; max-height: 310px; overflow-y: auto; padding: 6px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); box-shadow: 0 6px 18px rgb(0 0 0 / 16%); }
+.agent-saved-form { display: flex; gap: 6px; }
+.agent-saved-form input { flex: 1; min-width: 0; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 7px; background: transparent; color: var(--color-text); font-size: 12px; }
+.agent-saved-form button { flex: none; padding: 4px 10px; border: 0; border-radius: 7px; background: var(--agent-selected); color: var(--color-text); font-size: 12px; }
+.agent-saved-form button:hover { background: var(--agent-hover); }
+.agent-saved-hint, .agent-saved-error { margin: 0; padding: 2px 4px; font-size: 12px; }
+.agent-saved-hint { color: var(--color-muted); }
+.agent-saved-error { color: var(--color-error-red); }
+.agent-saved-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.agent-saved-row { display: flex; align-items: center; gap: 2px; border-radius: 7px; }
+.agent-saved-row:hover { background: var(--agent-hover); }
+.agent-saved-pick { display: flex; flex: 1; align-items: baseline; gap: 8px; min-width: 0; padding: 6px 8px; border: 0; background: transparent; color: var(--color-text); text-align: left; font-size: 13px; }
+.agent-saved-pick b { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.agent-saved-pick span { flex: 1; min-width: 0; overflow: hidden; color: var(--color-muted); text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.agent-saved-row .agent-icon-button { flex: none; }
 
 @keyframes agent-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .agent-panel .ai, .agent-spinner { animation: none; } }

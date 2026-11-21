@@ -173,8 +173,11 @@ export class GeminiAgentService {
     // to invalidate older reads, including the snapshot currently being loaded.
     const entry = await this.entry(pid, undefined, false, { announce: false })
     if (entry && !this.current(pid, entry)) throw failed('ai_provider_changed', 'Kết nối đã thay đổi trong khi mở lịch sử hội thoại')
+    const stored = object(entry?.stored.context)
+    // Số đọc từ ổ đĩa không tin tuyệt đối: chỉ nhận cặp số dương hữu hạn.
+    const context = finite(stored.tokens) > 0 && finite(stored.window) > 0 ? { context: { tokens: finite(stored.tokens), window: finite(stored.window) } } : {}
     return { runtime: 'antigravity-cli', session: entry?.stored.info ?? null, messages: entry?.stored.messages ?? [], task: entry?.task ?? entry?.stored.task ?? null,
-      mode: this.getMode(pid), policy: this.getExecution(pid).policy, execution: this.getExecution(pid), limits: this.getLimits(pid), usage: entry?.stored.usage ?? emptyUsage() }
+      mode: this.getMode(pid), policy: this.getExecution(pid).policy, execution: this.getExecution(pid), limits: this.getLimits(pid), usage: entry?.stored.usage ?? emptyUsage(), ...context }
   }
   async listSessions(pid: string): Promise<AgentSessionInfo[]> { const selected = await this.scope(pid); return selected ? this.store.list(selected.scope) : [] }
   async newSession(pid: string): Promise<AgentSessionSnapshot> { this.idle(pid); await this.release(pid); await this.entry(pid, undefined, true); return this.snapshot(pid) }
@@ -372,6 +375,11 @@ export class GeminiAgentService {
       entry.text += delta
       if (delta) this.deps.emit(pid, { type: 'text', delta })
     } else if (update.sessionUpdate === 'agent_thought_chunk' && content.type === 'text' && typeof content.text === 'string') this.deps.emit(pid, { type: 'thinking', delta: safe(content.text, 8000) })
+    else if (update.sessionUpdate === 'usage_update' && finite(update.used) > 0 && finite(update.size) > 0) {
+      // ACP: used = token đang nằm trong ngữ cảnh, size = cỡ cửa sổ model. Không phải hạn mức ngày hay chi phí.
+      entry.stored.context = { tokens: finite(update.used), window: finite(update.size) }
+      this.deps.emit(pid, { type: 'context', context: entry.stored.context })
+    }
   }
   async abort(pid: string): Promise<void> {
     this.generations.set(pid, (this.generations.get(pid) ?? 0) + 1)

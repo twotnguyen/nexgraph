@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -211,6 +211,36 @@ describe('Gemini controlled runtime', () => {
     expect(restored.session?.id).toBe(sid)
     expect(restored.messages.map((message) => message.text)).toEqual(['restore this conversation', 'Gemini trả lời'])
     expect(f.events.some((event) => event.type === 'session')).toBe(false)
+  })
+  it('lưu mức dùng ngữ cảnh do CLI báo (usage_update) để vòng context còn sau khi mở lại, và bỏ số không đáng tin', async () => {
+    const f = setup()
+    f.script(async (client) => {
+      const update = (value: Record<string, unknown>, sessionId = client.sid) => client.handlers.onNotification?.('session/update', { sessionId, update: { sessionUpdate: 'usage_update', ...value } })
+      update({ used: 0, size: 1_048_576 }) // chưa có gì trong ngữ cảnh
+      update({ used: 5_000, size: 0 }) // cửa sổ không hợp lệ
+      update({ used: 'nhiều', size: 1_048_576 }) // không phải số
+      update({ used: 9_999, size: 1_048_576 }, 'phiên-khác') // của phiên khác
+      update({ used: 12_345, size: 1_048_576 })
+      client.delta('Gemini trả lời')
+      return { stopReason: 'end_turn' }
+    })
+    await f.service.prompt('p', 'hello', TARGET)
+    expect(f.events.filter((event) => event.type === 'context')).toEqual([{ type: 'context', context: { tokens: 12_345, window: 1_048_576 } }])
+    f.service.closeAll(); f.events.length = 0
+    expect((await f.service.snapshot('p')).context).toEqual({ tokens: 12_345, window: 1_048_576 })
+  })
+  it('không có usage_update thì snapshot không có context; số hỏng trên đĩa bị bỏ chứ không làm hỏng việc mở lại', async () => {
+    const f = setup(); await f.service.prompt('p', 'hello', TARGET)
+    const first = await f.service.snapshot('p')
+    expect(first.context).toBeUndefined()
+    const store = new GeminiSessions(join(f.root, 'data'))
+    const scope = { projectId: 'p', root: realpathSync.native(f.root), connectionId: TARGET.connectionId }
+    const file = join(store.directory(scope), `${first.session!.id}.json`)
+    writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), context: { tokens: -5, window: 'lớn' } }))
+    f.service.closeAll()
+    const reopened = await f.service.snapshot('p')
+    expect(reopened.messages.map((message) => message.text)).toEqual(['hello', 'Gemini trả lời'])
+    expect(reopened.context).toBeUndefined()
   })
   it('denies all ACP native filesystem, terminal and permission fallbacks', async () => {
     const f = setup()

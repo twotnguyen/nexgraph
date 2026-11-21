@@ -98,6 +98,8 @@ export type AgentRunLimits = { maxTurns: number; maxDurationMs: number; maxToken
 export type AgentUsage = {
   inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; costUsd: number | null
 }
+/** Ngữ cảnh phiên đang dùng: token đang nằm trong ngữ cảnh / cỡ cửa sổ của model. Backend chưa báo số tin cậy thì không có giá trị (không đoán). */
+export type AgentContextUsage = { tokens: number; window: number }
 export type AgentToolRun = {
   id: string; name: string; input: string; output: string
   status: 'running' | 'completed' | 'failed'
@@ -121,6 +123,7 @@ export type AgentSessionSnapshot = {
   runtime?: 'pi' | 'antigravity-cli'
   session: AgentSessionInfo | null; messages: AgentTranscriptMessage[]; task: AgentTask | null
   mode: AgentMode; policy: AgentExecutionPolicy; execution: AgentExecutionSettings; limits: AgentRunLimits; usage: AgentUsage
+  context?: AgentContextUsage
 }
 export type AgentCommandSuggestion = { id: string; label: string; executable: string; args: string[]; cwd: string; timeoutMs: number }
 export type ProjectCommands = { commands: AgentCommandSuggestion[]; packageManager?: string; warnings: string[] }
@@ -155,6 +158,7 @@ export type AgentEvent =
   | { type: 'task'; task: AgentTask }
   | { type: 'tool_detail'; tool: AgentToolRun }
   | { type: 'usage'; usage: AgentUsage }
+  | { type: 'context'; context: AgentContextUsage | null }
   | { type: 'thinking'; delta: string }
   | { type: 'retry'; attempt: number; maxAttempts: number; delayMs: number; message: string }
   | { type: 'compaction'; active: boolean }

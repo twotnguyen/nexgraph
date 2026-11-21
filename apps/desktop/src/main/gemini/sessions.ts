@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentSessionInfo, AgentTask, AgentTranscriptMessage, AgentUsage } from '../../shared/agent-types'
+import type { AgentContextUsage, AgentSessionInfo, AgentTask, AgentTranscriptMessage, AgentUsage } from '../../shared/agent-types'
 import { writeJson } from '../ai/settings'
 
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
@@ -19,6 +19,8 @@ export type GeminiStoredSession = {
   forkMessageCount?: number
   task: AgentTask | null
   usage: AgentUsage
+  /** Số context cuối cùng CLI báo qua usage_update; giữ lại để vòng context còn khi mở lại hội thoại. */
+  context?: AgentContextUsage
 }
 type Index = { version: 1; scope: string; activeId: string | null; sessions: AgentSessionInfo[] }
 const emptyUsage = (): AgentUsage => ({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: null })

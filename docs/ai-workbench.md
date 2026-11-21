@@ -68,6 +68,8 @@ Mỗi lượt nhận tối đa 12 mục ngữ cảnh, trong tổng giới hạn 
 
 Tệp có bản nháp Monaco chưa lưu được bảo vệ trước thao tác ghi hoặc hoàn tác của AI. Lưu bản nháp hoặc đóng nó trước khi yêu cầu trợ lý thay đổi tệp đó. Khi tệp trên đĩa đổi trong lúc chờ duyệt, NexGraph giữ phiên bản mới và báo xung đột để đọc/duyệt lại.
 
+**Tin nhắn đã lưu**: nút đánh dấu ở ô soạn (hoặc lệnh `/saved`) lưu nội dung ô soạn thành một mục có tên, tối đa 50 mục, ghi trên máy theo khóa `nexgraph.agent.savedPrompts` nên còn sau khi khởi động lại và dùng chung mọi dự án. Chọn một mục để chèn vào chỗ con trỏ của ô soạn; thùng rác xóa mục. Lưu cùng tên thì thay nội dung mục cũ.
+
 ## 4. Lịch sử và tiếp tục tác vụ
 
 **+ Phiên mới** tạo một hội thoại riêng. **Lịch sử** cho mở lại, đổi tên hoặc xóa hội thoại của kết nối đang chọn. Đóng rồi mở ứng dụng khôi phục phiên đang chọn; không tự chạy lại tác vụ dở dang. Tác vụ bị gián đoạn được đánh dấu đã dừng. Gemini dùng `session/load` với mã phiên native do CLI cấp; NexGraph chỉ liệt kê các phiên do ứng dụng tạo. Đổi tên và xóa là thao tác trên chỉ mục/lịch sử cục bộ NexGraph, không phải xóa dữ liệu phía Google hoặc toàn bộ phiên lưu bởi CLI.
@@ -103,6 +105,10 @@ Token được cộng từ usage nhà cung cấp báo sau mỗi phản hồi. Kh
 Chi phí chỉ là ước tính khi có bảng giá model. Model tùy chỉnh không có giá, tài khoản subscription và Ollama local hiển thị **Chi phí: chưa xác định**, không giả thành `$0`. Model có giá miễn phí được khai báo rõ mới hiển thị 0; hạn mức tài khoản vẫn có thể áp dụng.
 
 Với Antigravity CLI, NexGraph thực thi giới hạn thời gian và nút Dừng. Không áp dụng giả giới hạn số lượt/token của Pi cho CLI khi giao thức không hỗ trợ. Khi ACP không báo số lượt hoặc token thực tế, giao diện không suy ra chúng từ số lần gọi công cụ. `usage_update.used/size` là mức dùng cửa sổ ngữ cảnh, không phải quota ngày. Chi phí và quota Google không được tự ước lượng; usage CLI báo không phải trần thanh toán cứng của tài khoản.
+
+**Vòng context** ở dòng chân khung chat hiện % ngữ cảnh của phiên đang mở (vàng từ 75%, đỏ từ 90%); rê chuột để xem `x / y token (z%)`. Với Pi, số lấy từ `getContextUsage()` của SDK (usage của phản hồi gần nhất cộng ước tính phần tin mới) chia cho cửa sổ của model đang chọn; model tùy chỉnh chưa khai báo cửa sổ thì ẩn vòng thay vì dùng giá trị mặc định 4096. Với Antigravity CLI, số lấy từ `usage_update` mà CLI gửi trong lượt chạy và được lưu cùng hội thoại. Không có số tin cậy (phiên trống, vừa tóm tắt, backend không báo) thì không có vòng, không hiện 0% giả.
+
+**Thông báo khi xong**: khi một lượt trả lời xong, gặp lỗi hoặc chờ duyệt thay đổi mà cửa sổ NexGraph không được chọn, ứng dụng hiện thông báo hệ thống mang tên hội thoại (bấm vào để đưa cửa sổ lên) và, nếu bật, phát một tiếng chuông ngắn riêng cho từng loại. Dừng bằng nút **Dừng** không báo. Hai công tắc nằm ở **Cài đặt → Trợ lý AI → Khi trợ lý xong**; mặc định bật thông báo, tắt âm thanh.
 
 ## 8. Lỗi và cách kiểm chứng
 

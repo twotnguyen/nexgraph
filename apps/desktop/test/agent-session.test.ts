@@ -28,6 +28,9 @@ class FakeSession {
   script: (s: FakeSession, text: string) => Promise<void> = async (s) => s.finish()
   promptOptions?: Parameters<PiSession['prompt']>[1]
   decisions: ({ block: true; reason: string } | undefined)[] = []
+  /** Số context mà `getContextUsage()` của Pi trả về (đặt trong kịch bản của từng test). */
+  contextUsage: { tokens: number | null; contextWindow: number; percent: number | null } | undefined
+  contextFails = false
   constructor(public spec: SessionSpec) {
     this.active = [...spec.tools]
     this.messages = [...(spec.sessionManager?.buildSessionContext().messages ?? [])] as typeof this.messages
@@ -71,6 +74,7 @@ class FakeSession {
   dispose() { this.disposed = true; this.aborted = true }
   setActiveToolsByName(names: string[]) { this.active = names }
   getActiveToolNames() { return this.active }
+  getContextUsage() { if (this.contextFails) throw new Error('Pi không tính được context'); return this.contextUsage }
   async setModel(m: { provider: string; id: string }) { this.model = m }
 }
 
@@ -605,6 +609,84 @@ describe('AgentService durable conversations and task limits', () => {
     expect(of('p1', 'error').at(-1)).toMatchObject({ code: 'agent_limit' })
     expect((await svc.snapshot('p1')).usage).toMatchObject({ inputTokens: 8, outputTokens: 4, costUsd: null })
     expect(of('p1', 'compaction')).toEqual([{ type: 'compaction', active: true }, { type: 'compaction', active: false }])
+    svc.closeAll()
+  })
+
+  it('phát số context của Pi sau mỗi lượt gọi model, chỉ khi số đổi, và đưa vào snapshot', async () => {
+    const { svc, sessions, of } = setup()
+    await svc.prompt('p1', 'initialize', TARGET)
+    expect((await svc.snapshot('p1')).context).toBeUndefined() // phiên trống: Pi chưa có số nào
+    const report = (tokens: number | null) => { sessions[0].contextUsage = { tokens, contextWindow: 200_000, percent: tokens === null ? null : tokens / 2000 } }
+    sessions[0].script = async (session) => {
+      report(5_000); session.emit({ type: 'turn_end' })
+      session.emit({ type: 'turn_end' }) // số không đổi thì không phát lại
+      report(12_000); session.emit({ type: 'turn_end' })
+      session.delta('xong'); session.finish()
+    }
+    await svc.prompt('p1', 'làm việc', TARGET)
+    expect(of('p1', 'context')).toEqual([
+      { type: 'context', context: { tokens: 5_000, window: 200_000 } },
+      { type: 'context', context: { tokens: 12_000, window: 200_000 } }
+    ])
+    expect((await svc.snapshot('p1')).context).toEqual({ tokens: 12_000, window: 200_000 })
+    // Sau khi tóm tắt Pi chưa có số mới (tokens null): phải ẩn chứ không giữ số cũ.
+    sessions[0].script = async (session) => {
+      report(null)
+      session.emit({ type: 'compaction_end', reason: 'threshold', aborted: false, willRetry: false })
+      session.finish()
+    }
+    await svc.prompt('p1', 'tóm tắt', TARGET)
+    expect(of('p1', 'context').at(-1)).toEqual({ type: 'context', context: null })
+    expect((await svc.snapshot('p1')).context).toBeUndefined()
+    svc.closeAll()
+  })
+
+  it.each([[0, 200_000], [-5, 200_000], [Number.NaN, 200_000], [1_000, 0], [1_000, Number.POSITIVE_INFINITY]])('không phát số context vô nghĩa (%s / %s)', async (tokens, contextWindow) => {
+    const { svc, sessions, of } = setup()
+    await svc.prompt('p1', 'initialize', TARGET)
+    sessions[0].contextUsage = { tokens, contextWindow, percent: null }
+    sessions[0].script = async (session) => { session.emit({ type: 'turn_end' }); session.finish() }
+    await svc.prompt('p1', 'x', TARGET)
+    expect(of('p1', 'context')).toEqual([])
+    expect((await svc.snapshot('p1')).context).toBeUndefined()
+    svc.closeAll()
+  })
+
+  it('Pi ném lỗi khi tính context thì lượt vẫn xong bình thường, chỉ không có vòng', async () => {
+    const { svc, sessions, of } = setup()
+    await svc.prompt('p1', 'initialize', TARGET)
+    sessions[0].contextFails = true
+    sessions[0].script = async (session) => { session.emit({ type: 'turn_end' }); session.delta('vẫn xong'); session.finish() }
+    await svc.prompt('p1', 'x', TARGET)
+    expect(of('p1', 'done').at(-1)).toMatchObject({ text: 'vẫn xong' })
+    expect(of('p1', 'context')).toEqual([])
+    expect((await svc.snapshot('p1')).context).toBeUndefined()
+    svc.closeAll()
+  })
+
+  it('ẩn vòng context khi cửa sổ của model tuỳ chỉnh chỉ là giá trị mặc định chứ không phải số người dùng khai', async () => {
+    const model = { ...TARGET, id: 'm1' }
+    const { svc, sessions, of } = setup({ accounts: async () => ({
+      modelRuntime: { getModel: () => model } as never, getSelectedModel: () => model,
+      hasConsent: async () => true, selectedModelWindowKnown: () => false
+    }) })
+    await svc.prompt('p1', 'initialize', TARGET)
+    sessions[0].contextUsage = { tokens: 3_000, contextWindow: 4096, percent: 73 }
+    sessions[0].script = async (session) => { session.emit({ type: 'turn_end' }); session.finish() }
+    await svc.prompt('p1', 'x', TARGET)
+    expect(of('p1', 'context')).toEqual([])
+    expect((await svc.snapshot('p1')).context).toBeUndefined()
+    svc.closeAll()
+  })
+
+  it('snapshot dùng cửa sổ của model đang chọn vì phiên Pi chỉ đổi model ở lượt gửi kế tiếp', async () => {
+    const model = { ...TARGET, id: 'm2', contextWindow: 1_000_000 }
+    const { svc, sessions } = setup({ accounts: async () => ({
+      modelRuntime: { getModel: () => model } as never, getSelectedModel: () => model, hasConsent: async () => true
+    }) })
+    await svc.prompt('p1', 'initialize', TARGET)
+    sessions[0].contextUsage = { tokens: 40_000, contextWindow: 128_000, percent: 31 } // model cũ của phiên
+    expect((await svc.snapshot('p1')).context).toEqual({ tokens: 40_000, window: 1_000_000 })
     svc.closeAll()
   })
 })
