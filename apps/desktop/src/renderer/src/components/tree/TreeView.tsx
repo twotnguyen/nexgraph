@@ -2,6 +2,9 @@ import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } fr
 import type { GraphNode, NodeKind } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
 import { errorText } from '../../state/errorText'
+import { runCommand } from '../../state/commands'
+import { useChanges } from '../../state/useChanges'
+import { useDiagnostics } from '../../state/diagnostics'
 import { kindStyle } from '../graph/kindStyle'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -18,6 +21,9 @@ interface Props {
   dirtyFiles?: ReadonlySet<string>
   onRename?: (from: string, to: string) => void
   onTrash?: (path: string) => void
+  onPreviewFile?: (file: string, line?: number) => void
+  onPinFile?: (file: string, line?: number) => void
+  onCloseFile?: (file: string) => void
 }
 
 const ROOT = '.#repository'
@@ -42,7 +48,7 @@ type Editing = { kind: 'file' | 'directory' | 'rename'; parent: string; node?: T
 type TreeMenu = { node: TreeNode | null; x: number; y: number }
 
 
-export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compact = false, activeFile, revision, dirtyFiles, onRename, onTrash }: Props) {
+export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compact = false, activeFile, revision, dirtyFiles, onRename, onTrash, onPreviewFile, onPinFile, onCloseFile }: Props) {
   const fs = window.nexgraph.fs
   const list = compact && !window.nexgraph.host ? fs.list : undefined
   const canEdit = Boolean(list && fs.createFile)
@@ -62,6 +68,31 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const refreshedExpanded = useRef<string[] | null>(null)
   const reload = useRef(() => {})
   const lastRevision = useRef(revision)
+  const [preview, setPreview] = useState<Set<string>>(new Set())
+  const [tooltip, setTooltip] = useState<{ path: string; x: number; y: number } | null>(null)
+  const tooltipTimer = useRef<number | undefined>(undefined)
+  const { changes } = useChanges(projectId)
+  const diagnostics = useDiagnostics(projectId)
+  const gitStatus = useMemo(() => new Map((changes?.changed_files ?? []).map((f) => [f.path, f.status])), [changes])
+  const statusOf = (path: string | null) => {
+    if (!path) return null
+    const direct = gitStatus.get(path)
+    if (direct) return direct
+    for (const [file, status] of gitStatus) if (insidePath(file, path)) return status
+    return null
+  }
+  const issuesOf = (path: string | null) => path
+    ? Object.entries(diagnostics).reduce((n, [file, list]) => n + (insidePath(file, path) ? list.length : 0), 0)
+    : 0
+  const hideTooltip = () => {
+    clearTimeout(tooltipTimer.current)
+    tooltipTimer.current = undefined
+    setTooltip(null)
+  }
+  const showTooltip = (path: string, x: number, y: number) => {
+    hideTooltip()
+    tooltipTimer.current = window.setTimeout(() => setTooltip({ path, x, y }), 1500)
+  }
 
   const load = (id: string, refresh = false) => {
     const pending = requests.current
@@ -129,6 +160,19 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
     lastRevision.current = revision
     reload.current()
   }, [revision])
+  useEffect(() => {
+    if (!activeFile) return
+    const parts = activeFile.split('/').slice(0, -1)
+    const ids = parts.map((_, i) => `${parts.slice(0, i + 1).join('/')}#directory`)
+    setExpanded((current) => new Set([...current, ...ids]))
+    for (const id of ids) load(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFile])
+  useEffect(() => {
+    if (!activeFile) return
+    refs.current.get(`${activeFile}#file`)?.scrollIntoView?.({ block: 'nearest' })
+  }, [activeFile, loaded])
+  useEffect(() => () => clearTimeout(tooltipTimer.current), [])
 
   const rows = useMemo(() => {
     const out: (Row | { more: string; level: number })[] = []
@@ -175,6 +219,27 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
     if (compact && node.kind === 'file' && node.file) onOpenCode(node.file, node.line_start ?? 1)
     else if (compact && (node.kind === 'directory' || node.kind === 'package')) toggle(node.id)
     else onOpenNode(node.id)
+  }
+  const openPreview = (node: TreeNode) => {
+    const file = entryPath(node)
+    if (!compact || node.kind !== 'file' || !file) { open(node); return }
+    setPreview((current) => new Set(current).add(file))
+    if (onPreviewFile) onPreviewFile(file, node.line_start ?? 1)
+    else onOpenCode(file, node.line_start ?? 1)
+  }
+  const pin = (node: TreeNode) => {
+    const file = entryPath(node)
+    if (!compact || node.kind !== 'file' || !file) { open(node); return }
+    setPreview((current) => { const next = new Set(current); next.delete(file); return next })
+    if (onPinFile) onPinFile(file, node.line_start ?? 1)
+    else onOpenCode(file, node.line_start ?? 1)
+  }
+  const close = (node: TreeNode) => {
+    const file = entryPath(node)
+    if (!file) return
+    setPreview((current) => { const next = new Set(current); next.delete(file); return next })
+    if (onCloseFile) onCloseFile(file)
+    else if (file === activeFile) runCommand('tab.close')
   }
 
   useEffect(() => {
@@ -417,6 +482,12 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
               <rect x="3" y="7" width="14" height="14" rx="2" /><path d="M7 3h12a2 2 0 0 1 2 2v12M7 14h6" />
             </svg>
           </button>
+          <button type="button" className="ws-icon-button" aria-label={tr('Mở rộng cây tệp')} title={tr('Mở rộng cây tệp')}
+            disabled={loaded.size <= 1} onClick={() => setExpanded(new Set([...loaded.keys()]))}>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
+              <path d="m5 8 5 5-5 5M13 8l5 5-5 5" />
+            </svg>
+          </button>
         </div>
       )}
       {renderError(ROOT)}
@@ -441,6 +512,9 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
           const indent = Math.min(r.level - 1, compact ? 8 : 24) * (compact ? 20 : 16)
           const branch = loaded.get(n.id)
           const empty = list && isOpen && !errors.has(n.id) && branch && branch.kids.length === 0 && !branch.truncated
+          const path = entryPath(n)
+          const status = statusOf(path)
+          const issues = issuesOf(path)
           return (
             <Fragment key={n.id}>
               <div
@@ -451,10 +525,14 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
                 aria-expanded={canOpen ? isOpen : undefined}
                 aria-selected={compact && file ? Boolean(activeFile && n.file === activeFile) : undefined}
                 tabIndex={n.id === tabStop ? 0 : -1}
-                className="tree-row"
+                className={`tree-row${compact && file && path && preview.has(path) ? ' tree-preview' : ''}`}
                 style={{ paddingInlineStart: indent }}
                 onFocus={() => setFocused(n.id)}
-                onClick={compact ? (e) => { e.currentTarget.focus(); open(n) } : undefined}
+                onMouseEnter={(e) => { if (path) showTooltip(path, e.clientX, e.clientY) }}
+                onMouseLeave={hideTooltip}
+                onClick={compact ? (e) => { e.currentTarget.focus(); hideTooltip(); if (e.detail > 1) return; openPreview(n) } : () => open(n)}
+                onDoubleClick={compact ? () => { hideTooltip(); pin(n) } : undefined}
+                onAuxClick={compact ? (e) => { if (e.button !== 1) return; e.preventDefault(); hideTooltip(); close(n) } : undefined}
                 onKeyDown={(e) => { if (e.currentTarget === e.target) onKey(e, r) }}
                 onContextMenu={canEdit && entryPath(n) ? (event) => {
                   event.preventDefault()
@@ -466,17 +544,17 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
                 {compact && indent > 0 && <span aria-hidden="true" className="tree-indent" style={{ width: indent }} />}
                 {canOpen ? (
                   <button type="button" tabIndex={-1} className="twisty" aria-label={`${isOpen ? vi.tree.collapse : vi.tree.expand} ${n.label}`}
-                    onClick={(e) => { e.stopPropagation(); e.currentTarget.parentElement?.focus(); toggle(n.id) }}>
-                    {compact ? <Icon name="chevron" size={12} /> : isOpen ? '▾' : '▸'}
+                    onClick={(e) => { e.stopPropagation(); hideTooltip(); e.currentTarget.parentElement?.focus(); toggle(n.id) }}>
+                    <Icon name="chevron" size={compact ? 12 : 14} />
                   </button>
-                ) : <span className="twisty" />}
-                {compact && (
-                  <span className={`tree-icon tree-icon-${folder ? 'folder' : file ? 'file' : 'symbol'}`} aria-hidden="true">
-                    {folder ? <Icon name="folder" size={15} /> : file ? <FileTypeIcon name={n.label} /> : '•'}
-                  </span>
-                )}
+                ) : <span className="twisty twisty-leaf" aria-hidden="true"><Icon name="chevron" size={compact ? 12 : 14} /></span>}
+                <span className={`tree-icon tree-icon-${folder ? 'folder' : file ? 'file' : 'symbol'}`} aria-hidden="true">
+                  {folder ? <Icon name="folder" size={compact ? 15 : 14} /> : file ? <FileTypeIcon name={n.label} /> : '•'}
+                </span>
                 {edit?.kind === 'rename' && edit.node?.id === n.id ? editor
-                  : <span className="tree-label" title={n.file ?? n.label} onClick={compact ? undefined : () => open(n)}>{n.label}</span>}
+                  : <span className="tree-label">{n.label}</span>}
+                {status && <span className="tree-git" aria-label={tr('Thay đổi git: {status}', { status })}>{status}</span>}
+                {issues > 0 && <span className="tree-diag" aria-label={tr('{count} vấn đề', { count: issues })}>{issues}</span>}
                 <span className="kind" style={{ color: kindStyle(n.kind).color }}>{n.kind}</span>
                 {n.file && n.kind !== 'directory' && !(compact && (folder || file)) && (
                   <button type="button" tabIndex={-1} className="link" aria-label={`${vi.tree.openCode} ${n.label}`}
@@ -492,6 +570,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
           )
         })}
       </div>
+      {tooltip && <div role="tooltip" className="tree-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>{tooltip.path}</div>}
       {menu && <>
         <div className="menu-backdrop" onClick={() => setMenu(null)} onContextMenu={(event) => { event.preventDefault(); setMenu(null) }} />
         <div role="menu" aria-label={menuNode?.label ?? tr('Dự án')} className="context-menu tree-context"

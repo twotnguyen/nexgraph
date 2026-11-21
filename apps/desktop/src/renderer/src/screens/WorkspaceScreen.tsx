@@ -67,6 +67,7 @@ const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows
 /** `seq`: mỗi lần mở một số mới, để mở lại đúng dòng cũ (đã cuộn đi chỗ khác) vẫn cuộn về. */
 interface OpenFile { file: string; line: number; lineEnd?: number; column?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
+const isMarkdownFile = (file: string) => /\.(?:md|markdown|mdown|mkd)$/i.test(file)
 const containsPath = (parent: string, file: string) => file === parent || file.startsWith(`${parent}/`)
 const readRecentFiles = (projectId: string): string[] => {
   try {
@@ -465,6 +466,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd, column, seq } : f)) : [...cur, { file, line, lineEnd, column, seq }]))
     setTab(`file:${file}`)
   }
+  const previewCode = (file: string, line = 1) => {
+    openCode(file, line)
+    setPreviews((cur) => cur.includes(file) ? cur : [...cur, file])
+    setTab(`preview:${file}`)
+  }
   const [dirtyFiles, setDirtyFiles] = useState<Set<string>>(new Set()) // tệp có thay đổi chưa lưu
   const onDirtyChange = useCallback((file: string, dirty: boolean) => {
     setDirtyFiles((cur) => {
@@ -571,7 +577,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const selectView = (view: (typeof MAIN_TABS)[number]) => {
     if (view === 'tree') {
       setPanel('explorer')
-      if (activeFile) {
+      if (activeFile ?? previewFile) {
         setLastMain('tree')
         return
       }
@@ -819,12 +825,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     if (!activeFile) return
     setPreviews((cur) => cur.includes(activeFile) ? cur : [...cur, activeFile])
     setTab(`preview:${activeFile}`)
-  }, !hidden && (!!previewFile || !!activeFile && /\.(?:md|markdown|mdown|mkd)$/i.test(activeFile)))
+  }, !hidden && (!!previewFile || !!activeFile && isMarkdownFile(activeFile)))
   useCommand('markdown.preview_side', () => {
     if (!activeFile) return
     setSide(null)
     setPreviewSide(activeFile)
-  }, !hidden && !!activeFile && /\.(?:md|markdown|mdown|mkd)$/i.test(activeFile))
+  }, !hidden && !!activeFile && isMarkdownFile(activeFile))
   // Terminal: 'closed' chưa mở (không có phiên), 'hidden' ẩn nhưng phiên vẫn chạy như Wu.
   const [terminal, setTerminal] = useState<'closed' | 'open' | 'hidden'>('closed')
   const [terminalNew, setTerminalNew] = useState(0)
@@ -952,8 +958,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
           <div className="ws-tools-body">
             {panel === 'explorer' && (
-              <TreeView projectId={project.project_id} projectPath={project.path} activeFile={activeFile} revision={revision} dirtyFiles={dirtyFiles}
-                onRename={renamedPath} onTrash={trashedPath} onOpenNode={openNodeId} onOpenCode={openCode} compact />
+              <TreeView projectId={project.project_id} projectPath={project.path} activeFile={activeFile ?? previewFile} revision={revision} dirtyFiles={dirtyFiles}
+                onRename={renamedPath} onTrash={trashedPath} onOpenNode={openNodeId} onOpenCode={openCode} compact
+                onPreviewFile={previewCode} onPinFile={(file, line) => { setPreviews((cur) => cur.filter((item) => item !== file)); openCode(file, line ?? 1) }} onCloseFile={closeFile} />
             )}
             {panel === 'outline' && <OutlinePanel editor={activeEditor} symbols={documentSymbols.symbols} error={documentSymbols.error} />}
             {panel === 'diagnostics' && <DiagnosticsPanel projectId={project.project_id} onOpen={(file, line, column) => openCode(file, line, undefined, column)} />}
@@ -1125,7 +1132,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
           )}
           {files.map((f) => (
-            <FileView key={f.file} projectId={project.project_id} file={f.file} line={f.line} column={f.column} lineEnd={f.lineEnd} revealRequest={f.seq} active={!hidden && tab === `file:${f.file}`}
+            <FileView key={f.file} projectId={project.project_id} file={f.file} line={f.line} column={f.column} lineEnd={f.lineEnd} revealRequest={f.seq} active={!hidden && (tab === `file:${f.file}` || tab === `preview:${f.file}` && !isMarkdownFile(f.file))}
               onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => { setPreviewSide(null); setSide(f.file) }}
               onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
               onReadOnlyChange={(file, readOnly) => setReadOnlyFiles((cur) => cur[file] === readOnly ? cur : { ...cur, [file]: readOnly })}
@@ -1134,8 +1141,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           {multiBuffers.map((request) => <MultiBufferView key={request.id} projectId={project.project_id} request={request}
             active={!hidden && tab === `multi:${request.id}`} onClose={() => closeMulti(request)} onDirtyChange={onDirtyChange}
             onOpenFile={(file, line) => openCode(file, line)} />)}
-          {previewFile && <MarkdownPreview key={previewFile} projectId={project.project_id} file={previewFile} active={!hidden} loadError={viewerErrors[previewFile]} readOnly={readOnlyFiles[previewFile] !== false} onClose={() => closePreview(previewFile)} onOpenFile={openCode} />}
-          {previewSideShown && previewSide && <MarkdownPreview key={`side:${previewSide}`} projectId={project.project_id} file={previewSide} active={!hidden} loadError={viewerErrors[previewSide]} readOnly={readOnlyFiles[previewSide] !== false} side onClose={() => setPreviewSide(null)} onOpenFile={openCode} />}
+          {previewFile && isMarkdownFile(previewFile) && <MarkdownPreview key={previewFile} projectId={project.project_id} file={previewFile} active={!hidden} loadError={viewerErrors[previewFile]} readOnly={readOnlyFiles[previewFile] !== false} onClose={() => closePreview(previewFile)} onOpenFile={openCode} />}
+          {previewSideShown && previewSide && isMarkdownFile(previewSide) && <MarkdownPreview key={`side:${previewSide}`} projectId={project.project_id} file={previewSide} active={!hidden} loadError={viewerErrors[previewSide]} readOnly={readOnlyFiles[previewSide] !== false} side onClose={() => setPreviewSide(null)} onOpenFile={openCode} />}
           {sideShown && !previewSideShown && side && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
           {tab === 'collab' && collab.role === 'guest' && collab.file && <CollabTab key={collab.file} file={collab.file} />}

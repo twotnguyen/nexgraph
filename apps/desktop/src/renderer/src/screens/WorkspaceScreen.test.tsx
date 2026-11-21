@@ -72,6 +72,9 @@ function setup() {
   return { neighbors, search }
 }
 
+const activeViewers = () => Array.from(document.querySelectorAll<HTMLElement>('.code-viewer'))
+  .filter((el) => el.style.display !== 'none')
+
 describe('WorkspaceScreen', () => {
   it('Ctrl+L ẩn panel trợ lý nhưng giữ bản nháp và lượt đang chạy', async () => {
     installNexgraph({ ai: {
@@ -207,24 +210,50 @@ describe('WorkspaceScreen', () => {
     expect(within(pane).queryByRole('tree')).not.toBeInTheDocument()
     await userEvent.click(await within(sidebar).findByText('lib'))
     await userEvent.click(await within(sidebar).findByText('a.dart'))
-    const editor = await within(screen.getByRole('tabpanel', { name: 'a.dart' })).findByLabelText('editor')
+    const editor = await within(screen.getByRole('tabpanel', { name: 'Xem trước a.dart' })).findByLabelText('editor')
     expect(within(sidebar).getByRole('treeitem', { name: 'a.dart', selected: true })).toBeVisible()
     await userEvent.type(editor, 'nháp')
     await userEvent.click(screen.getByRole('tab', { name: 'Cây' }))
     expect(editor).toBeVisible()
-    expect(screen.getByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Xem trước a.dart', selected: true })).toBeInTheDocument()
     expect(within(sidebar).getByRole('treeitem', { name: 'lib', expanded: true })).toBeVisible()
     expect(editor).toHaveValue('nháp')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }))
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    try {
-      await userEvent.click(screen.getByRole('button', { name: 'Đóng a.dart' }))
-      expect(screen.getByRole('tabpanel', { name: 'Cây' })).toHaveTextContent('Chưa mở tệp')
-      expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
-    } finally {
-      confirm.mockRestore()
-    }
+    await userEvent.click(screen.getByRole('button', { name: 'Đóng xem trước a.dart' }))
+    expect(screen.getByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    expect(screen.getByRole('tabpanel', { name: 'a.dart' })).toContainHTML('textarea')
+    expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
+  })
+
+  it('xem trước markdown chỉ active một code-viewer', async () => {
+    const entries = [{ path: 'README.md', name: 'README.md', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'README.md' }))
+    expect(await screen.findByRole('tab', { name: 'Xem trước README.md', selected: true })).toBeInTheDocument()
+    expect(activeViewers()).toHaveLength(1)
+    expect(activeViewers()[0]).toHaveClass('markdown-preview')
+  })
+
+  it('xem trước tệp mã vẫn chỉ active một code-viewer', async () => {
+    const entries = [{ path: 'a.dart', name: 'a.dart', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.dart' }))
+    expect(await screen.findByRole('tab', { name: 'Xem trước a.dart', selected: true })).toBeInTheDocument()
+    const viewers = activeViewers()
+    expect(viewers).toHaveLength(1)
+    expect(viewers[0]).not.toHaveClass('markdown-preview')
+    expect(within(viewers[0]).getByLabelText('editor')).toBeInTheDocument()
+  })
+
+  it('double-click file trong cây bỏ thẻ xem trước zombie', async () => {
+    const entries = [{ path: 'a.dart', name: 'a.dart', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.dblClick(await screen.findByRole('treeitem', { name: 'a.dart' }))
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Xem trước a.dart' })).not.toBeInTheDocument()
   })
 
   it('lệnh view:tree của Code-OSS mở cây bên trái và giao việc mở tệp cho editor của nền', async () => {
@@ -398,11 +427,11 @@ describe('WorkspaceScreen: editor tabs', () => {
     const input = screen.getByRole('textbox', { name: 'Đổi tên' })
     fireEvent.change(input, { target: { value: 'new.ts' } })
     fireEvent.keyDown(input, { key: 'Enter' })
-    expect(await screen.findByRole('tab', { name: 'new.ts', selected: true })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: 'Xem trước new.ts', selected: true })).toBeInTheDocument()
     const renamed = await screen.findByRole('treeitem', { name: 'new.ts' })
     renamed.focus()
     fireEvent.keyDown(renamed, { key: 'Delete' })
-    await waitFor(() => expect(screen.queryByRole('tab', { name: 'new.ts' })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('tab', { name: 'Xem trước new.ts' })).toBeNull())
     confirm.mockRestore()
   })
 

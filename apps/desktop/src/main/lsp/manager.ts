@@ -126,8 +126,9 @@ export class LspManager {
           completion: { completionItem: { snippetSupport: false, documentationFormat: ['markdown', 'plaintext'] } },
           hover: { contentFormat: ['markdown', 'plaintext'] },
           definition: { linkSupport: false },
+          declaration: { linkSupport: false },
+          typeDefinition: { linkSupport: false },
           implementation: { linkSupport: false },
-          references: {},
           callHierarchy: {},
           rename: { prepareSupport: false },
           formatting: {},
@@ -199,6 +200,14 @@ export class LspManager {
 
   async definition(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
     return this.locations('textDocument/definition', root, file, text, line, character)
+  }
+
+  async declaration(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
+    return this.locations('textDocument/declaration', root, file, text, line, character)
+  }
+
+  async typeDefinition(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
+    return this.locations('textDocument/typeDefinition', root, file, text, line, character)
   }
 
   async references(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {

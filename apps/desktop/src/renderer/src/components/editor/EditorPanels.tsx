@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { LspDocumentSymbol } from '@shared/api'
+import type { LspDiagnostic, LspDocumentSymbol } from '@shared/api'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { useDiagnostics } from '../../state/diagnostics'
 import { errorText } from '../../state/errorText'
@@ -149,19 +149,52 @@ export function OutlinePanel({ editor, symbols, error }: { editor: ActiveEditor 
   </div>
 }
 
+const ackKey = (projectId: string) => `nexgraph.diagnostics.ack:${projectId}`
+const readAcked = (projectId: string): Set<string> => {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(ackKey(projectId)) ?? '[]')
+    return new Set(Array.isArray(saved) ? saved.filter((key): key is string => typeof key === 'string') : [])
+  } catch { return new Set() }
+}
+
 export function DiagnosticsPanel({ projectId, onOpen }: { projectId: string; onOpen: OpenEditorLocation }) {
   const diagnostics = useDiagnostics(projectId)
+  const [acked, setAcked] = useState(() => readAcked(projectId))
+  const loaded = useRef(projectId)
+  useEffect(() => {
+    if (loaded.current === projectId) return
+    loaded.current = projectId
+    setAcked(readAcked(projectId))
+  }, [projectId])
+
   const files = Object.entries(diagnostics).filter(([, items]) => items.length > 0).sort(([a], [b]) => a.localeCompare(b))
+  const acknowledge = (file: string, line: number) => {
+    const next = new Set(acked).add(`${file}:${line}`)
+    setAcked(next)
+    try { localStorage.setItem(ackKey(projectId), JSON.stringify([...next])) } catch { /* chỉ là tuỳ chọn */ }
+  }
+  const row = (file: string, item: LspDiagnostic, seen: boolean, index: number) => {
+    const { line, character } = item.range.start
+    const severity = item.severity === 2 ? tr('Cảnh báo') : item.severity === 3 ? tr('Thông tin') : item.severity === 4 ? tr('Gợi ý') : tr('Lỗi')
+    return <li key={`${line}:${character}:${index}`} className={seen ? 'diagnostic-seen' : undefined} style={seen ? { opacity: 0.6 } : undefined}>
+      <button type="button" onClick={() => onOpen(file, line + 1, character + 1)}>
+        <span>{severity}: {item.message}</span><small>{line + 1}:{character + 1}{item.source ? ` · ${item.source}` : ''}</small>
+      </button>
+      {!seen && <button type="button" onClick={() => acknowledge(file, line)}>{tr('Đã xem')}</button>}
+    </li>
+  }
   return <div className="editor-diagnostics">
-    {files.length === 0 ? <p className="muted">{tr('Không có lỗi trong dự án')}</p> : files.map(([file, items]) => <section key={file}>
-      <h3 title={file}>{file} <small>({items.length})</small></h3>
-      <ul>{items.map((item, index) => {
-        const { line, character } = item.range.start
-        const severity = item.severity === 2 ? tr('Cảnh báo') : item.severity === 3 ? tr('Thông tin') : item.severity === 4 ? tr('Gợi ý') : tr('Lỗi')
-        return <li key={`${line}:${character}:${index}`}><button type="button" onClick={() => onOpen(file, line + 1, character + 1)}>
-          <span>{severity}: {item.message}</span><small>{line + 1}:{character + 1}{item.source ? ` · ${item.source}` : ''}</small>
-        </button></li>
-      })}</ul>
-    </section>)}
+    {files.length === 0 ? <p className="muted">{tr('Không có lỗi trong dự án')}</p> : files.map(([file, items]) => {
+      const unseen = items.filter((item) => !acked.has(`${file}:${item.range.start.line}`))
+      const seen = items.filter((item) => acked.has(`${file}:${item.range.start.line}`))
+      return <section key={file}>
+        <h3 title={file}>{file} <small>({unseen.length})</small></h3>
+        <ul aria-label={tr('Chưa xem')}>{unseen.map((item, index) => row(file, item, false, index))}</ul>
+        {seen.length > 0 && <>
+          <h4>{tr('Đã xem')} ({seen.length})</h4>
+          <ul aria-label={tr('Đã xem')}>{seen.map((item, index) => row(file, item, true, index))}</ul>
+        </>}
+      </section>
+    })}
   </div>
 }

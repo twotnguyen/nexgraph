@@ -271,6 +271,10 @@ export function registerIpc(
     async (pid: string, ...args: A): Promise<R> => method(await lspFor(pid), ...args)
   on('lsp:definition', lspRequest((root, file: string, text: string, line: number, column: number) =>
     lsp.definition(root, file, text, ...lspPos(text, line, column))))
+  on('lsp:declaration', lspRequest((root, file: string, text: string, line: number, column: number) =>
+    lsp.declaration(root, file, text, ...lspPos(text, line, column))))
+  on('lsp:type-definition', lspRequest((root, file: string, text: string, line: number, column: number) =>
+    lsp.typeDefinition(root, file, text, ...lspPos(text, line, column))))
   on('lsp:completion', lspRequest((root, file: string, text: string, line: number, column: number) =>
     lsp.completion(root, file, text, ...lspPos(text, line, column))))
   on('lsp:hover', lspRequest((root, file: string, text: string, line: number, column: number) =>

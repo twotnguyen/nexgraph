@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LspDocumentSymbol, LspRange } from '@shared/api'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LspDiagnosticsEvent, LspDocumentSymbol, LspRange } from '@shared/api'
 import type { ActiveEditor } from '../../state/activeEditor'
+import { startDiagnostics } from '../../state/diagnostics'
 import { setLocale } from '../../state/locale'
-import { OutlinePanel } from './EditorPanels'
+import { DiagnosticsPanel, OutlinePanel } from './EditorPanels'
 
 const range = (startLine: number, endLine: number): LspRange => ({
   start: { line: startLine, character: 0 }, end: { line: endLine, character: 0 }
@@ -109,5 +110,41 @@ describe('OutlinePanel', () => {
     render(<OutlinePanel editor={editor} symbols={symbols} error={null} />)
     fireEvent.click(screen.getByRole('button', { name: 'childFn' }))
     expect(editor.handle.revealPosition).toHaveBeenCalledWith(2, 1)
+  })
+})
+
+describe('DiagnosticsPanel', () => {
+  let emit: (event: LspDiagnosticsEvent) => void = () => {}
+  let stop: () => void = () => {}
+
+  beforeEach(() => {
+    localStorage.clear()
+    Object.assign(window, { nexgraph: {
+      lsp: { onDiagnostics: (cb: (event: LspDiagnosticsEvent) => void) => { emit = cb; return () => {} } }
+    } })
+    stop = startDiagnostics()
+  })
+  afterEach(() => stop())
+
+  it('acknowledges a diagnostic and keeps it acknowledged after reload', () => {
+    act(() => emit({ projectId: 'p1', file: 'ack.ts', diagnostics: [
+      { range: range(4, 4), severity: 1, message: 'Lỗi đầu' },
+      { range: range(8, 8), severity: 2, message: 'Cảnh báo sau' }
+    ] }))
+    const view = render(<DiagnosticsPanel projectId="p1" onOpen={vi.fn()} />)
+    expect(within(screen.getByRole('list', { name: 'Chưa xem' })).getByText('Lỗi: Lỗi đầu')).toBeTruthy()
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Đã xem' })[0])
+    const unseen = screen.getByRole('list', { name: 'Chưa xem' })
+    expect(within(unseen).queryByText('Lỗi: Lỗi đầu')).toBeNull()
+    expect(within(unseen).getByText('Cảnh báo: Cảnh báo sau')).toBeTruthy()
+    expect(within(screen.getByRole('list', { name: 'Đã xem' })).getByText('Lỗi: Lỗi đầu')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /ack\.ts/ }).textContent).toContain('(1)')
+    expect(JSON.parse(localStorage.getItem('nexgraph.diagnostics.ack:p1') ?? '[]')).toEqual(['ack.ts:4'])
+
+    view.unmount()
+    render(<DiagnosticsPanel projectId="p1" onOpen={vi.fn()} />)
+    expect(within(screen.getByRole('list', { name: 'Chưa xem' })).queryByText('Lỗi: Lỗi đầu')).toBeNull()
+    expect(within(screen.getByRole('list', { name: 'Đã xem' })).getByText('Lỗi: Lỗi đầu')).toBeTruthy()
   })
 })

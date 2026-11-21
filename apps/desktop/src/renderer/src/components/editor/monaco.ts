@@ -292,6 +292,22 @@ for (const language of ['typescript', 'javascript', 'python']) {
       return found.map((loc) => ({ uri: modelUri(loc.file, lsp.projectId), range: new monaco.Range(loc.line, loc.column, loc.line, loc.column) }))
     }
   }))
+  registrations.push(monaco.languages.registerDeclarationProvider(language, {
+    provideDeclaration: async (model, position) => {
+      const lsp = lspOf(model)
+      if (!lsp) return null
+      const found = await lsp.api.declaration(lsp.projectId, lsp.file, lsp.text, position.lineNumber, position.column).catch(() => [])
+      return found.map((loc) => ({ uri: modelUri(loc.file, lsp.projectId), range: new monaco.Range(loc.line, loc.column, loc.line, loc.column) }))
+    }
+  }))
+  registrations.push(monaco.languages.registerTypeDefinitionProvider(language, {
+    provideTypeDefinition: async (model, position) => {
+      const lsp = lspOf(model)
+      if (!lsp) return null
+      const found = await lsp.api.typeDefinition(lsp.projectId, lsp.file, lsp.text, position.lineNumber, position.column).catch(() => [])
+      return found.map((loc) => ({ uri: modelUri(loc.file, lsp.projectId), range: new monaco.Range(loc.line, loc.column, loc.line, loc.column) }))
+    }
+  }))
   registrations.push(monaco.languages.registerHoverProvider(language, {
     provideHover: async (model, position) => {
       const lsp = lspOf(model)

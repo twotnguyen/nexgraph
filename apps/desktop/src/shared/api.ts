@@ -204,6 +204,8 @@ export interface NexGraphApi {
   /** Language server (TypeScript/JavaScript, Python) cho editor; mỗi yêu cầu gửi kèm nội dung hiện tại của tệp. */
   lsp?: {
     definition(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>
+    declaration(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>
+    typeDefinition(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>
     completion(projectId: string, file: string, text: string, line: number, column: number): Promise<LspCompletionItem[]>
     hover(projectId: string, file: string, text: string, line: number, column: number): Promise<string | null>
     references(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>

@@ -226,4 +226,6 @@ export const uiEnEditor: Record<string, string> = {
   'Quay lại': 'Back',
   'Hiện lời gọi': 'Show Calls',
   'Đổi hướng': 'Switch Direction',
+  'Đã xem': 'Acknowledged',
+  'Chưa xem': 'Unseen',
 }

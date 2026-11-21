@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood, NodeKind } from '@shared/graph-types'
-import type { ProjectDirectory } from '@shared/api'
-import { installNexgraph } from '../../test-utils'
+import type { LspDiagnosticsEvent, ProjectDirectory } from '@shared/api'
+import { emptyChanges, installNexgraph } from '../../test-utils'
+import { startDiagnostics } from '../../state/diagnostics'
 import { TreeView } from './TreeView'
 
 const gnode = (id: string, kind: NodeKind, label: string, line: number | null = null): GraphNode => ({ id, kind, label, qualified_name: label,
@@ -177,6 +178,59 @@ describe('TreeView', () => {
     expect(trash).not.toHaveBeenCalled()
     expect(confirm).not.toHaveBeenCalled()
     confirm.mockRestore()
+  })
+
+  it('ghép đôi khi double-click và đóng khi middle-click trong cây compact', async () => {
+    const list = vi.fn(async (): Promise<ProjectDirectory> => ({ entries: [{ path: 'app.py', name: 'app.py', kind: 'file' }], truncated: false }))
+    installNexgraph({ fs: { list } })
+    const onPreviewFile = vi.fn()
+    const onPinFile = vi.fn()
+    const onCloseFile = vi.fn()
+    render(<TreeView projectId="p1" compact onOpenNode={() => {}} onOpenCode={() => {}}
+      onPreviewFile={onPreviewFile} onPinFile={onPinFile} onCloseFile={onCloseFile} />)
+    const row = await screen.findByRole('treeitem', { name: 'app.py' })
+
+    fireEvent.click(row)
+    expect(onPreviewFile).toHaveBeenCalledWith('app.py', 1)
+    fireEvent.doubleClick(row)
+    expect(onPinFile).toHaveBeenCalledWith('app.py', 1)
+    fireEvent(row, new MouseEvent('auxclick', { bubbles: true, button: 1 }))
+    expect(onCloseFile).toHaveBeenCalledWith('app.py')
+  })
+
+  it('tự mở rộng thư mục chứa tệp đang hoạt động', async () => {
+    const list = vi.fn(async (_pid: string, path: string): Promise<ProjectDirectory> => ({
+      entries: path === '.' ? [{ path: 'src', name: 'src', kind: 'directory' }]
+        : [{ path: 'src/nest-cli.json', name: 'nest-cli.json', kind: 'file' }],
+      truncated: false
+    }))
+    installNexgraph({ fs: { list } })
+    render(<TreeView projectId="p1" compact onOpenNode={() => {}} onOpenCode={() => {}} activeFile="src/nest-cli.json" />)
+
+    expect(await screen.findByRole('treeitem', { name: 'nest-cli.json', selected: true })).toBeVisible()
+    expect(screen.getByRole('treeitem', { name: 'src', expanded: true })).toBeVisible()
+  })
+
+  it('hiện huy hiệu thay đổi git và số vấn đề trên dòng tệp', async () => {
+    const list = vi.fn(async (): Promise<ProjectDirectory> => ({ entries: [{ path: 'app.py', name: 'app.py', kind: 'file' }], truncated: false }))
+    installNexgraph({ fs: { list }, graph: {
+      changes: vi.fn(async () => emptyChanges({ changed_files: [{ path: 'app.py', status: 'M', old_path: null }] }))
+    } })
+    let emit: (event: LspDiagnosticsEvent) => void = () => {}
+    Object.assign(window.nexgraph, { lsp: {
+      onDiagnostics: (cb: (event: LspDiagnosticsEvent) => void) => { emit = cb; return () => {} }
+    } })
+    const stop = startDiagnostics()
+    const at = { start: { line: 1, character: 0 }, end: { line: 1, character: 0 } }
+    act(() => emit({ projectId: 'p-badge', file: 'app.py', diagnostics: [
+      { range: at, severity: 1, message: 'lỗi' }, { range: at, severity: 2, message: 'cảnh báo' }
+    ] }))
+    render(<TreeView projectId="p-badge" compact onOpenNode={() => {}} onOpenCode={() => {}} />)
+
+    const row = await screen.findByRole('treeitem', { name: 'app.py' })
+    expect(within(row).getByLabelText('Thay đổi git: M')).toHaveTextContent('M')
+    expect(within(row).getByLabelText('2 vấn đề')).toHaveTextContent('2')
+    stop()
   })
 
 })

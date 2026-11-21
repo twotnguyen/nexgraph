@@ -95,6 +95,8 @@ const api: NexGraphApi = {
   },
   lsp: {
     definition: (pid, file, text, line, column) => call('lsp:definition', pid, file, text, line, column),
+    declaration: (pid, file, text, line, column) => call('lsp:declaration', pid, file, text, line, column),
+    typeDefinition: (pid, file, text, line, column) => call('lsp:type-definition', pid, file, text, line, column),
     completion: (pid, file, text, line, column) => call('lsp:completion', pid, file, text, line, column),
     hover: (pid, file, text, line, column) => call('lsp:hover', pid, file, text, line, column),
     references: (pid, file, text, line, column) => call('lsp:references', pid, file, text, line, column),

@@ -47,3 +47,22 @@
 .tree-compact .tree-edit { flex: 1; min-width: 0; height: 23px; padding: 0 4px; border: 1px solid var(--blue); border-radius: 3px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
 .tree-context { max-height: calc(100vh - 8px); overflow-y: auto; }
 .tree-context button:disabled { opacity: .45; }
+
+.tree-preview .tree-label { font-style: italic; }
+.tree-git { flex: none; color: var(--color-muted); font-size: 10px; font-weight: 600; }
+.tree-diag { flex: none; color: var(--color-error-red); font-size: 10px; font-weight: 600; }
+.tree-tooltip {
+  position: fixed;
+  z-index: 42;
+  max-width: 320px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  pointer-events: none;
+  overflow-wrap: anywhere;
+}

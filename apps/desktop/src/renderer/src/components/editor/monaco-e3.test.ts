@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
 type FakeModel = {
   uri: { toString(): string }
@@ -33,10 +33,12 @@ type FakeEditor = {
 }
 type FakeKey = { keyCode: number; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; preventDefault: Mock; stopPropagation: Mock }
 type EditorOptions = { model?: FakeModel; value?: string }
+type FakeProvider = Record<string, (model: FakeModel, position: { lineNumber: number; column: number }) => Promise<unknown>>
 const fake = vi.hoisted(() => {
   const models = new Map<string, FakeModel>()
   const collections: FakeCollection[] = []
   const editors: FakeEditor[] = []
+  const providers: { name: string; language: string; provider: FakeProvider }[] = []
   const disposable = { dispose() {} }
   const createModel = vi.fn((value: string, language: string, uri: { toString(): string }): FakeModel => {
     let text = value
@@ -87,7 +89,7 @@ const fake = vi.hoisted(() => {
     editors.push(editor)
     return editor
   })
-  return { models, collections, editors, createModel, createEditorMock, disposable, installFontKeys: vi.fn() }
+  return { models, collections, editors, providers, createModel, createEditorMock, disposable, installFontKeys: vi.fn() }
 })
 
 const sideEffectModules = [
@@ -145,6 +147,10 @@ vi.doMock('monaco-editor/editor/editor.api.js', () => {
   const languages = new Proxy(languageMethods, {
     get: (target, key) => {
       const name = String(key)
+      if (name.startsWith('register') && name.endsWith('Provider')) return (language: string, provider: FakeProvider) => {
+        fake.providers.push({ name, language, provider })
+        return fake.disposable
+      }
       return name in target ? target[name] : () => fake.disposable
     }
   })
@@ -191,6 +197,7 @@ beforeEach(() => {
   fake.createEditorMock.mockClear()
   fake.installFontKeys.mockClear()
 })
+afterEach(() => vi.unstubAllGlobals())
 
 describe('E3 editor handles', () => {
   it('draws bookmarks in a separate glyph margin collection and replaces them on the next call', () => {
@@ -326,5 +333,34 @@ describe('Enter continuations', () => {
       text: '', forceMoveMarkers: true
     }])
     expect(editor.setPosition).toHaveBeenCalledWith({ lineNumber: 1, column: 1 })
+  })
+})
+
+describe('LSP navigation providers', () => {
+  const location = { file: 'src/target.ts', line: 12, column: 3 }
+  const api = {
+    definition: vi.fn(async () => [location]),
+    declaration: vi.fn(async () => [location]),
+    typeDefinition: vi.fn(async () => [location])
+  }
+
+  it('maps definition, declaration and type-definition responses to Monaco locations', async () => {
+    vi.stubGlobal('nexgraph', { lsp: api })
+    createEditor(el(), opts('src/a.ts'))
+    const model = fake.editors.at(-1)!.getModel()!
+    const position = { lineNumber: 4, column: 5 }
+    const expected = [{
+      uri: expect.objectContaining({ scheme: 'nexgraph', authority: 'p1', path: '/src/target.ts' }),
+      range: expect.objectContaining({ startLineNumber: 12, startColumn: 3, endLineNumber: 12, endColumn: 3 })
+    }]
+    for (const [register, method, apiMethod] of [
+      ['registerDefinitionProvider', 'provideDefinition', 'definition'],
+      ['registerDeclarationProvider', 'provideDeclaration', 'declaration'],
+      ['registerTypeDefinitionProvider', 'provideTypeDefinition', 'typeDefinition']
+    ] as const) {
+      const provider = fake.providers.find((item) => item.name === register && item.language === 'typescript')!.provider
+      expect(await provider[method](model, position)).toEqual(expected)
+      expect(api[apiMethod]).toHaveBeenCalledWith('p1', 'src/a.ts', 'disk', 4, 5)
+    }
   })
 })
