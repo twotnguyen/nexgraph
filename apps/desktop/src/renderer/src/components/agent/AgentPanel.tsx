@@ -2,13 +2,13 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
-import { Icon } from '../common/icons'
+import { Icon, type IconName } from '../common/icons'
 import { ApprovalCard } from './ApprovalCard'
 import { CitationText } from '../chat/CitationText'
 import { ConsentDialog } from '../chat/ConsentDialog'
 import { ConnectionDialog } from './ConnectionDialog'
 import { useAgentWorkbench, type AgentInspection } from './useAgentWorkbench'
-import { WorkbenchControls } from './WorkbenchControls'
+import { WorkbenchHistory, WorkbenchSettings, WorkbenchStatus, workbenchUsage } from './WorkbenchControls'
 import { AnswerRating } from './AnswerRating'
 import './agent-panel.css'
 
@@ -27,6 +27,9 @@ interface Props {
   onOpenCode: (file: string, line: number, lineEnd?: number) => void
   onHighlight: (nodes: GraphNode[], edges: GraphEdge[], notice: string | null) => void
   onOpenSettings: () => void
+  /** Khung đang nằm bên nào; có thì menu ⋯ hiện mục chuyển sang bên kia. */
+  dock?: 'left' | 'right'
+  onToggleDock?: () => void
 }
 
 type FileContext = { file: string; line: number; lineEnd?: number }
@@ -85,11 +88,39 @@ const contextLabel = (item: AgentContextItem): string => item.kind === 'file'
   ? `${item.file}${item.start ? `:${item.start}${item.end && item.end !== item.start ? `-${item.end}` : ''}` : ''}${item.dirty ? ' · bản nháp' : ''}`
   : item.label ?? (item.kind === 'node' ? item.nodeId : item.kind === 'flow' ? `Luồng ${item.flowId}` : item.blockId)
 
+type MenuItem = { label: string; icon: IconName; onSelect: () => void; disabled?: boolean }
+
+/** Menu ⋯ ở đầu khung: popover bo 12px, hàng bo 7px như popover của Wu. */
+function MoreMenu({ items }: { items: MenuItem[] }) {
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false) }
+    const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', outside)
+    document.addEventListener('keydown', escape)
+    return () => {
+      document.removeEventListener('pointerdown', outside)
+      document.removeEventListener('keydown', escape)
+    }
+  }, [open])
+  return <div className="agent-menu-wrap" ref={root}>
+    <button type="button" className="agent-icon-button" aria-label="Thêm thao tác" title="Thêm thao tác" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}><Icon name="more" size={16} /></button>
+    {open && <div role="menu" className="agent-menu">
+      {items.map((item) => <button key={item.label} type="button" role="menuitem" disabled={item.disabled} onClick={() => { setOpen(false); item.onSelect() }}>
+        <Icon name={item.icon} size={14} /><span>{item.label}</span>
+      </button>)}
+    </div>}
+  </div>
+}
+
 export function AgentPanel(props: Props) {
   return <ProjectAgentPanel key={props.projectId} {...props} />
 }
 
-function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, activeFile, getEditorContext, graphContext, beforePrompt, onInspect, onClose, onConnectOpenCode, onOpenCode, onHighlight, onOpenSettings }: Props) {
+function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, activeFile, getEditorContext, graphContext, beforePrompt, onInspect, onClose, onConnectOpenCode, onOpenCode, onHighlight, onOpenSettings, dock, onToggleDock }: Props) {
+  const [view, setView] = useState<'chat' | 'history' | 'settings'>('chat')
   const [cfg, setCfg] = useState<AiSettings | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [text, setText] = useState('')
@@ -445,108 +476,128 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     })
   }
 
+  const workLocked = busy || checking || work.pending || work.loading
+  const sessionTitle = work.sessions.find((session) => session.id === work.sessionId)?.title
+  const usage = workbenchUsage(work)
+  const modeHint = mode === 'edit' ? work.execution.policy === 'auto' ? 'Tự động sửa mã trong phạm vi đã cấp quyền.' : vi.agent.editHint : mode === 'plan' ? 'Phân tích đồ thị và lập kế hoạch triển khai, chỉ đọc.' : vi.agent.askHint
+  const menu: MenuItem[] = [
+    { label: 'Kết nối AI', icon: 'plug', disabled: busy || checking, onSelect: () => setConnect(true) },
+    ...(onConnectOpenCode ? [{ label: vi.chat.connectOpenCode, icon: 'plug' as const, onSelect: onConnectOpenCode }] : []),
+    { label: 'Quyền & giới hạn', icon: 'shield', onSelect: () => setView('settings') },
+    // Chuyển bên làm khung dựng lại từ đầu, nên khoá khi đang có lượt chạy để không huỷ lượt đó.
+    ...(onToggleDock ? [{ label: dock === 'left' ? 'Chuyển khung chat sang phải' : 'Chuyển khung chat sang trái', icon: dock === 'left' ? 'panelRight' as const : 'panelLeft' as const, disabled: busy || checking, onSelect: onToggleDock }] : []),
+    { label: vi.chat.settings, icon: 'sliders', onSelect: onOpenSettings }
+  ]
+
   return (
-    <aside id={id} className="chat agent-panel" aria-label={vi.chat.title} hidden={hidden}>
-      <header>
-        <h2><Icon name="spark" size={17} />{vi.chat.title}</h2>
+    <aside id={id} className="chat agent-panel" data-dock={dock} aria-label={vi.chat.title} hidden={hidden}>
+      <header className="agent-head">
+        {view !== 'chat' && <button type="button" className="agent-icon-button" aria-label="Về cuộc trò chuyện" title="Về cuộc trò chuyện" onClick={() => setView('chat')}><Icon name="back" size={16} /></button>}
+        <h2 title={view === 'chat' ? sessionTitle : undefined}>{view === 'history' ? 'Trò chuyện' : view === 'settings' ? 'Quyền & giới hạn' : sessionTitle ?? vi.chat.title}</h2>
         <div className="agent-actions">
-          <button type="button" className="agent-connect" disabled={busy || checking} onClick={() => setConnect(true)} title="Kết nối và đổi tài khoản AI">Kết nối</button>
-          {onConnectOpenCode && <button type="button" className="agent-connect" onClick={onConnectOpenCode} title={vi.chat.connectOpenCode} aria-label={vi.chat.connectOpenCode}><Icon name="plug" size={14} />OpenCode</button>}
-          <button type="button" className="agent-icon-button" onClick={onOpenSettings} title={vi.chat.settings} aria-label={vi.chat.settings}><Icon name="sliders" size={16} /></button>
-          {onClose && <button type="button" className="agent-icon-button" onClick={onClose} aria-label={vi.chat.close} title={vi.chat.close}><Icon name="close" size={16} /></button>}
+          <button type="button" className="agent-icon-button" aria-label="Lịch sử" title="Lịch sử trò chuyện" aria-pressed={view === 'history'} disabled={workLocked}
+            onClick={() => { setView(view === 'history' ? 'chat' : 'history'); void work.refresh().catch(() => {}) }}><Icon name="history" size={16} /></button>
+          <button type="button" className="agent-icon-button" aria-label="Phiên mới" title="Phiên mới" disabled={workLocked} onClick={() => { void work.create(); setView('chat') }}><Icon name="plus" size={16} /></button>
+          <MoreMenu items={menu} />
+          {onClose && <button type="button" className="agent-icon-button" onClick={onClose} aria-label={vi.chat.close} title={vi.chat.close}><Icon name="close" size={15} /></button>}
         </div>
       </header>
-      <div className="agent-toolbar">
-        {availableModels.length > 0 && configured ? <select className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
-          {!availableModels.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model === 'auto' ? 'Tự động' : cfg?.model}</option>}
-          {availableModels.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.id === 'auto' ? 'Tự động' : model.label}</option>)}
-        </select> : <span className="agent-model" title={configured ? `${connectionLabel(cfg)} · ${cfg?.model}` : undefined}>{configured ? cfg?.model === 'auto' ? 'Tự động' : cfg?.model : 'Chưa chọn model'}</span>}
-        <span className="mode" role="group" aria-label={vi.agent.modeTitle}>
-          <button type="button" disabled={modeLocked} aria-pressed={mode === 'ask'} onClick={() => void pickMode('ask')}>{vi.agent.ask}</button>
-          <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan'} onClick={() => void pickMode('plan')}>Kế hoạch</button>
-          <button type="button" disabled={modeLocked || busy || toolsUnavailable} aria-pressed={mode === 'edit'} onClick={() => void pickMode('edit')}>{vi.agent.edit}</button>
-        </span>
-      </div>
-      {configured && <div className="agent-connection-label" data-runtime={cfg?.runtime}><Icon name="plug" size={11} /><span>{connectionLabel(cfg)}</span></div>}
-      {mode && <p className="mode-description muted small">{mode === 'edit' ? work.execution.policy === 'auto' ? 'Tự động sửa mã trong phạm vi đã cấp quyền.' : vi.agent.editHint : mode === 'plan' ? 'Phân tích đồ thị và lập kế hoạch triển khai, chỉ đọc.' : vi.agent.askHint}</p>}
-      {toolsUnavailable && <p className="agent-notice">Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.</p>}
-      <div className="agent-workbench-controls"><WorkbenchControls projectId={projectId} work={work} busy={busy || checking} mode={mode} runtime={cfg?.runtime} onInspect={onInspect} onSuggest={(suggestion) => { setText(suggestion); input.current?.focus() }} /></div>
-      {error && <p role="alert" className="error">{error}</p>}
-      <div className="msgs" ref={messages} onScroll={(event) => {
-        const el = event.currentTarget
-        followMessages.current = el.scrollHeight - el.clientHeight - el.scrollTop < 36
-      }}>
-        {cfg && msgs.length === 0 && !busy && (
-          <div className="agent-welcome">
-            <span className="agent-welcome-icon"><Icon name="spark" size={22} /></span>
-            <h3>{configured ? vi.chat.startTitle : vi.chat.setupTitle}</h3>
-            {configured ? (
-              <div className="agent-starters">
-                {vi.chat.starters.map((suggestion) => <button key={suggestion} type="button" disabled={modeLocked} onClick={() => {
-                  setText(suggestion)
-                  input.current?.focus()
-                }}>{suggestion}<Icon name="chevron" size={14} /></button>)}
-              </div>
-            ) : (
-              <>
+      {view === 'history' && <WorkbenchHistory work={work} busy={busy || checking} onPicked={() => setView('chat')} />}
+      {view === 'settings' && <div className="agent-settings-view"><WorkbenchSettings projectId={projectId} work={work} busy={busy || checking} mode={mode} runtime={cfg?.runtime} onSuggest={(suggestion) => { setText(suggestion); setView('chat'); input.current?.focus() }} /></div>}
+      <div className="agent-thread" hidden={view !== 'chat'}>
+        {toolsUnavailable && <p className="agent-notice">Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.</p>}
+        {error && <p role="alert" className="error">{error}</p>}
+        <div className="msgs" ref={messages} onScroll={(event) => {
+          const el = event.currentTarget
+          followMessages.current = el.scrollHeight - el.clientHeight - el.scrollTop < 36
+        }}>
+          {cfg && msgs.length === 0 && !busy && (
+            <div className="agent-welcome">
+              {configured ? <>
+                <span className="agent-folder-chip" title={projectName}><Icon name="folder" size={13} />{projectName}</span>
+                <h3>{vi.chat.startTitle}</h3>
+                <div className="agent-starters">
+                  {vi.chat.starters.map((suggestion) => <button key={suggestion} type="button" disabled={modeLocked} onClick={() => {
+                    setText(suggestion)
+                    input.current?.focus()
+                  }}><Icon name="spark" size={14} />{suggestion}</button>)}
+                </div>
+              </> : <>
+                <span className="agent-welcome-icon"><Icon name="spark" size={22} /></span>
+                <h3>{vi.chat.setupTitle}</h3>
                 <p className="muted">{vi.chat.setupDescription}</p>
                 <button type="button" className="primary" onClick={() => setConnect(true)}>Kết nối AI</button>
-              </>
-            )}
+              </>}
+            </div>
+          )}
+          {msgs.map((m, i) => m.role === 'user' ? (
+            <div key={`user-${m.id}`} className="me">
+              {m.content}
+              {m.context && <span className="agent-sent-file mono" title={fileReference(m.context)}>{fileReference(m.context)}</span>}
+            </div>
+          ) : (
+            <div key={`assistant-${m.id}`} className="ai">
+              <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />
+              <div className="foot muted">
+                {m.citations.length === 0 ? <span>{vi.chat.noCitations}</span>
+                  : <span>{vi.chat.verified(m.citations.filter((c) => c.valid).length, m.citations.length)}</span>}
+                {m.citations.some((c) => c.valid) && (
+                  <button type="button" className="link" onClick={() => void highlight(m.citations)}>{vi.chat.highlight}</button>
+                )}
+                {m.tools.length > 0 && (
+                  <button type="button" className="link" onClick={() => setOpenTools(openTools === m.id ? null : m.id)}>{vi.chat.tools(m.tools.length)}</button>
+                )}
+                {questionBefore(msgs, i) && <AnswerRating projectId={projectId} question={questionBefore(msgs, i)} answer={m.content} citations={m.citations} />}
+              </div>
+              {openTools === m.id && (
+                <ul className="tool-list mono">
+                  {m.tools.map((t, k) => <li key={`${m.id}-${k}`}>{t}</li>)}
+                </ul>
+              )}
+            </div>
+          ))}
+          {busy && draft && <div className="ai"><CitationText text={draft} citations={[]} onOpen={onOpenCode} /></div>}
+          {busy && <div className="ai agent-thinking muted" role="status"><span className="agent-spinner" aria-hidden="true" />{tool ? vi.chat.usingTool(tool) : vi.chat.thinking}</div>}
+        </div>
+        <div className="agent-workbench-status"><WorkbenchStatus projectId={projectId} work={work} busy={busy || checking} onInspect={onInspect} /></div>
+        {approvals.length > 0 && (
+          <div className="approvals">
+            {approvals.map((a) => <ApprovalCard key={a.id} request={a} disabled={changingMode} onDecide={(allow) => decide(a.id, allow)} onInspect={(request) => onInspect?.({ id: request.id, title: `Đề xuất · ${request.path}`, file: request.path, before: request.before, after: request.after })} />)}
           </div>
         )}
-        {msgs.map((m, i) => m.role === 'user' ? (
-          <div key={`user-${m.id}`} className="me">
-            {m.content}
-            {m.context && <span className="agent-sent-file mono" title={fileReference(m.context)}>{fileReference(m.context)}</span>}
-          </div>
-        ) : (
-          <div key={`assistant-${m.id}`} className="ai">
-            <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />
-            <div className="foot muted">
-              {m.citations.length === 0 ? <span>{vi.chat.noCitations}</span>
-                : <span>{vi.chat.verified(m.citations.filter((c) => c.valid).length, m.citations.length)}</span>}
-              {m.citations.some((c) => c.valid) && (
-                <button type="button" className="link" onClick={() => void highlight(m.citations)}>{vi.chat.highlight}</button>
-              )}
-              {m.tools.length > 0 && (
-                <button type="button" className="link" onClick={() => setOpenTools(openTools === m.id ? null : m.id)}>{vi.chat.tools(m.tools.length)}</button>
-              )}
-              {questionBefore(msgs, i) && <AnswerRating projectId={projectId} question={questionBefore(msgs, i)} answer={m.content} citations={m.citations} />}
+        <div className="compose">
+          <div className="agent-composer">
+            {(attachments.length > 0 || fileContext) && <div className="agent-attachments">
+              {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={busy || checking} aria-label={`Gỡ ${contextLabel(item)}`} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={11} /></button></div>)}
+              {fileContext && <div className="agent-attachment">
+                <span className="mono" title={fileReference(fileContext)}>{fileReference(fileContext)}</span>
+                <button type="button" className="agent-icon-button" disabled={composerLocked} aria-label={vi.chat.removeFile} onClick={() => setFileContext(undefined)}><Icon name="close" size={11} /></button>
+              </div>}
+            </div>}
+            <textarea ref={input} value={text} aria-label={vi.chat.message} placeholder={vi.chat.placeholder} rows={3} disabled={busy || modeLocked} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
+            <div className="agent-composer-actions">
+              <button type="button" className="agent-round" aria-label={vi.chat.attachFile} disabled={composerLocked || !activeFile || (!getEditorContext && fileReference(activeFile) === (fileContext && fileReference(fileContext)))}
+                title={activeFile ? `${vi.chat.attachFile}: ${fileReference(activeFile)}` : vi.chat.noActiveFile} onClick={attachEditor}><Icon name="plus" size={17} /></button>
+              {graphContext && <button type="button" className="agent-chip" disabled={composerLocked || attachments.some((item) => item.kind === graphContext.kind && contextLabel(item) === contextLabel(graphContext))} title={`Đính kèm ${contextLabel(graphContext)}`} aria-label="Đính kèm đồ thị" onClick={() => setAttachments((current) => [...current, { ...graphContext }])}><Icon name="graph" size={14} />Đồ thị</button>}
+              {availableModels.length > 0 && configured ? <select className="agent-model-select" aria-label="Mô hình AI" value={`${cfg?.provider}\n${cfg?.model}`} disabled={busy || modeLocked} onChange={(event) => void changeModel(event.target.value)}>
+                {!availableModels.some((model) => model.provider === cfg?.provider && model.id === cfg?.model) && <option value={`${cfg?.provider}\n${cfg?.model}`}>{cfg?.model === 'auto' ? 'Tự động' : cfg?.model}</option>}
+                {availableModels.map((model) => <option key={`${model.provider}/${model.id}`} value={`${model.provider}\n${model.id}`}>{model.id === 'auto' ? 'Tự động' : model.label}</option>)}
+              </select> : <span className="agent-model" title={configured ? `${connectionLabel(cfg)} · ${cfg?.model}` : undefined}>{configured ? cfg?.model === 'auto' ? 'Tự động' : cfg?.model : 'Chưa chọn model'}</span>}
+              {busy
+                ? <button type="button" className="agent-send" aria-label={vi.chat.stop} title={vi.chat.stop} onClick={stop}><span className="agent-stop-square" /></button>
+                : <button type="button" className="agent-send" aria-label={vi.chat.send} title={vi.chat.send} disabled={(text.trim() !== '/login' && composerLocked) || !text.trim()} onClick={() => void submit()}><Icon name="send" size={15} /></button>}
             </div>
-            {openTools === m.id && (
-              <ul className="tool-list mono">
-                {m.tools.map((t, k) => <li key={`${m.id}-${k}`}>{t}</li>)}
-              </ul>
-            )}
           </div>
-        ))}
-        {busy && draft && <div className="ai"><CitationText text={draft} citations={[]} onOpen={onOpenCode} /></div>}
-        {busy && <div className="ai muted" role="status">{tool ? vi.chat.usingTool(tool) : vi.chat.thinking}</div>}
-      </div>
-      {approvals.length > 0 && (
-        <div className="approvals">
-          {approvals.map((a) => <ApprovalCard key={a.id} request={a} disabled={changingMode} onDecide={(allow) => decide(a.id, allow)} onInspect={(request) => onInspect?.({ id: request.id, title: `Đề xuất · ${request.path}`, file: request.path, before: request.before, after: request.after })} />)}
-        </div>
-      )}
-      <div className="compose">
-        <div className="agent-compose-input">
-          {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={busy || checking} aria-label={`Gỡ ${contextLabel(item)}`} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}>×</button></div>)}
-          {fileContext && <div className="agent-attachment">
-            <span className="mono" title={fileReference(fileContext)}>{fileReference(fileContext)}</span>
-            <button type="button" className="agent-icon-button" disabled={composerLocked} aria-label={vi.chat.removeFile} onClick={() => setFileContext(undefined)}><Icon name="close" size={14} /></button>
-          </div>}
-          <textarea ref={input} value={text} aria-label={vi.chat.message} placeholder={vi.chat.placeholder} rows={3} disabled={busy || modeLocked} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} />
-        </div>
-        <div className="row">
-          <button type="button" className="agent-attach" disabled={composerLocked || !activeFile || (!getEditorContext && fileReference(activeFile) === (fileContext && fileReference(fileContext)))}
-            title={activeFile ? fileReference(activeFile) : vi.chat.noActiveFile} onClick={attachEditor}>
-            <span aria-hidden="true">+</span>{vi.chat.attachFile}
-          </button>
-          {graphContext && <button type="button" className="agent-attach" disabled={composerLocked || attachments.some((item) => item.kind === graphContext.kind && contextLabel(item) === contextLabel(graphContext))} title={contextLabel(graphContext)} onClick={() => setAttachments((current) => [...current, { ...graphContext }])}>+ Đồ thị</button>}
-          {busy
-            ? <button type="button" onClick={stop}>{vi.chat.stop}</button>
-            : <button type="button" className="primary" disabled={(text.trim() !== '/login' && composerLocked) || !text.trim()} onClick={() => void submit()}>{vi.chat.send}</button>}
+          <div className="agent-composer-foot">
+            <span className="mode" role="group" aria-label={vi.agent.modeTitle} title={mode ? modeHint : undefined}>
+              <button type="button" disabled={modeLocked} aria-pressed={mode === 'ask'} onClick={() => void pickMode('ask')}>{vi.agent.ask}</button>
+              <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan'} onClick={() => void pickMode('plan')}>Kế hoạch</button>
+              <button type="button" disabled={modeLocked || busy || toolsUnavailable} aria-pressed={mode === 'edit'} onClick={() => void pickMode('edit')}>{vi.agent.edit}</button>
+            </span>
+            {configured && <span className="agent-connection-label" data-runtime={cfg?.runtime} title={connectionLabel(cfg)}><Icon name="plug" size={11} />{connectionLabel(cfg)}</span>}
+            {usage && <span className="agent-usage" title="Token tích lũy của phiên; chi phí ước tính khi nhà cung cấp có bảng giá">{usage}</span>}
+          </div>
+          {mode && <p className="mode-description">{modeHint}</p>}
         </div>
       </div>
       {attachedFile?.kind === 'file' && attachedFile.dirty && <span className="sr-only">Ngữ cảnh gồm bản nháp chưa lưu.</span>}

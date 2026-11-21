@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSnapshot, ProjectCommands } from '@shared/agent-types'
 import { emptyAgentSnapshot, installNexgraph } from '../../test-utils'
 import { useAgentWorkbench } from './useAgentWorkbench'
-import { WorkbenchControls } from './WorkbenchControls'
+import { WorkbenchHistory, WorkbenchSettings, WorkbenchStatus, ago } from './WorkbenchControls'
 
 const pending = <T,>() => {
   let resolve!: (value: T) => void
@@ -15,12 +15,14 @@ const pending = <T,>() => {
 const info = { id: 's1', title: 'Hội thoại một', createdAt: 1, updatedAt: 2, provider: 'openai', baseUrl: 'https://api.openai.com/v1', model: 'm', messageCount: 1 }
 function Controls({ projectId = 'p1', runtime }: { projectId?: string; runtime?: 'pi' | 'antigravity-cli' }) {
   const work = useAgentWorkbench(projectId, () => {})
-  return <WorkbenchControls projectId={projectId} work={work} busy={false} mode="edit" runtime={runtime} />
+  return <>
+    <WorkbenchStatus projectId={projectId} work={work} busy={false} />
+    <WorkbenchSettings projectId={projectId} work={work} busy={false} mode="edit" runtime={runtime} />
+    <WorkbenchHistory work={work} busy={false} />
+  </>
 }
 const openSettings = async () => {
-  const settings = screen.getByRole('button', { name: 'Quyền & giới hạn' })
-  await waitFor(() => expect(settings).toBeEnabled())
-  await userEvent.click(settings)
+  await waitFor(() => expect(screen.getByLabelText('Phút / tác vụ')).toBeEnabled())
 }
 afterEach(() => vi.restoreAllMocks())
 
@@ -54,25 +56,35 @@ describe('WorkbenchControls', () => {
     const initial = pending<AgentSessionSnapshot>()
     const { api } = installNexgraph({ agent: { snapshot: vi.fn(() => initial.promise) } })
     render(<Controls />)
-    expect(screen.getByRole('button', { name: '+ Phiên mới' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Lịch sử' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Phiên mới' })).toBeDisabled()
     await act(async () => initial.resolve(emptyAgentSnapshot()))
-    await waitFor(() => expect(screen.getByRole('button', { name: '+ Phiên mới' })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Phiên mới' })).toBeEnabled())
     expect(api.agent.listSessions).toHaveBeenCalledWith('p1')
   })
 
   it('đổi tên bằng ô nhập trong ứng dụng và gọi rename đúng phiên', async () => {
     const { api } = installNexgraph({ agent: { listSessions: vi.fn(async () => [info]) } })
     render(<Controls />)
-    const history = screen.getByRole('button', { name: 'Lịch sử' })
-    await waitFor(() => expect(history).toBeEnabled())
-    await userEvent.click(history)
-    await userEvent.click(await screen.findByRole('button', { name: 'Đổi tên Hội thoại một' }))
+    const rename = await screen.findByRole('button', { name: 'Đổi tên Hội thoại một' })
+    await waitFor(() => expect(rename).toBeEnabled())
+    await userEvent.click(rename)
     const name = screen.getByRole('textbox', { name: 'Tên cuộc trò chuyện' })
     await userEvent.clear(name)
     await userEvent.type(name, 'Tên mới')
     await userEvent.click(screen.getByRole('button', { name: 'Lưu tên' }))
     expect(api.agent.renameSession).toHaveBeenCalledWith('p1', 's1', 'Tên mới')
+  })
+
+  it('lọc danh sách theo ô tìm và ghi thời gian rút gọn', async () => {
+    installNexgraph({ agent: { listSessions: vi.fn(async () => [info, { ...info, id: 's2', title: 'Sửa lỗi đăng nhập' }]) } })
+    render(<Controls />)
+    await screen.findByRole('button', { name: /^Sửa lỗi đăng nhập/ })
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Tìm cuộc trò chuyện' }), 'đăng')
+    expect(screen.queryByRole('button', { name: /^Hội thoại một/ })).not.toBeInTheDocument()
+    expect(ago(0, 30_000)).toBe('vừa xong')
+    expect(ago(0, 17 * 60_000)).toBe('17 phút')
+    expect(ago(0, 3 * 86_400_000)).toBe('3 ngày')
+    expect(ago(0, 15 * 86_400_000)).toBe('2 tuần')
   })
 
   it('xác nhận bật tự động và từ chối bật chạy lệnh không thay đổi quyền lệnh', async () => {

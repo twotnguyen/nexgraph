@@ -342,19 +342,20 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
     expected.style.backgroundColor = style.getPropertyValue('--color-bg').trim()
     return expected.style.backgroundColor !== '' && style.backgroundColor === expected.style.backgroundColor
   }
-  const themePicker = await waitFor(() => {
-    const picker = document.querySelector<HTMLSelectElement>('.theme-toggle select')
+  const themeButton = await waitFor(() => {
+    const button = document.querySelector<HTMLButtonElement>('.theme-toggle')
     const theme = document.documentElement.dataset.theme
-    return picker && theme && picker.value === theme && themePainted() ? picker : null
-  }, 'ô chọn giao diện đồng bộ với màu nền ban đầu')
+    return button && theme && button.dataset.themeId === theme && themePainted() ? button : null
+  }, 'nút chọn giao diện đồng bộ với màu nền ban đầu')
   const nextTheme = document.documentElement.dataset.appearance === 'dark' ? 'wu-light' : 'wu-dark'
   const initialBackground = getComputedStyle(document.body).backgroundColor
-  themePicker.value = nextTheme
-  themePicker.dispatchEvent(new Event('change', { bubbles: true }))
+  themeButton.click()
+  const themeOption = await waitFor(() => document.querySelector<HTMLElement>(`.theme-picker [data-theme-id="${nextTheme}"]`), 'hộp chọn theme mở ra')
+  themeOption.click()
   const themeState = () => ({
     theme: document.documentElement.dataset.theme,
     saved: localStorage.getItem('nexgraph.theme'),
-    picked: document.querySelector<HTMLSelectElement>('.theme-toggle select')?.value,
+    picked: document.querySelector<HTMLButtonElement>('.theme-toggle')?.dataset.themeId,
     background: getComputedStyle(document.body).backgroundColor,
     painted: themePainted()
   })

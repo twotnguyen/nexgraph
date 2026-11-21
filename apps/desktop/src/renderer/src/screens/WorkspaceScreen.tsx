@@ -24,6 +24,7 @@ import { MapView } from '../components/map/MapView'
 import { PrsView } from '../components/prs/PrsView'
 import { useChanges } from '../state/useChanges'
 import { Icon, VIEW_TONE } from '../components/common/icons'
+import { openThemePicker } from '../components/layout/ThemePicker'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi } from '../strings'
 import './workspace.css'
@@ -90,6 +91,8 @@ const ACTIVITIES = [
   { id: 'changes', title: PANEL_TITLES.changes, icon: ChangesIcon },
   { id: 'tour', title: PANEL_TITLES.tour, icon: TourIcon }
 ] satisfies { id: Panel; title: string; icon: typeof SearchIcon }[]
+const AGENT_ACTIVITY = { id: 'agent', title: vi.chat.title, icon: <Icon name="spark" size={20} /> }
+type ChatDock = 'left' | 'right'
 
 interface Props {
   project: ProjectSummary
@@ -113,7 +116,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const hostInitialHandled = useRef(false)
   const [revision, setRevision] = useState(0)
   const [feedback, setFeedback] = useState<string | null>(null)
-  const [chatOpen, setChatOpen] = useState(() => !hosted && (window.matchMedia?.('(min-width: 980px)').matches ?? true))
+  const [chatDock, setChatDock] = useState<ChatDock>(() => { try { return localStorage.getItem('nexgraph.chat.dock') === 'right' ? 'right' : 'left' } catch { return 'left' } })
+  // Kiểu Wu (trái): khung chat dùng chung chỗ với bảng công cụ nên mặc định đóng để cây tệp hiện trước.
+  const [chatOpen, setChatOpen] = useState(() => !hosted && chatDock === 'right' && (window.matchMedia?.('(min-width: 980px)').matches ?? true))
   const [connectOpenCode, setConnectOpenCode] = useState(false)
   const editorContexts = useRef(new Map<string, EditorContextGetter>())
   const [inspections, setInspections] = useState<AgentInspection[]>([])
@@ -124,6 +129,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setChatWidth(next)
     try { localStorage.setItem('nexgraph.chat.width', String(next)) } catch { /* preference only */ }
   }
+  const toggleDock = () => {
+    const next: ChatDock = chatDock === 'left' ? 'right' : 'left'
+    setChatDock(next)
+    try { localStorage.setItem('nexgraph.chat.dock', next) } catch { /* preference only */ }
+  }
+  const leftChat = !hosted && chatOpen && chatDock === 'left'
   const flushEditorState = useCallback(async () => {
     const states: AgentEditorState[] = []
     for (const [file, get] of editorContexts.current) {
@@ -162,6 +173,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
   // Cây dùng cùng bảng duyệt tệp ở cả ứng dụng độc lập và Code-OSS.
   const [panel, setPanel] = useState<Panel | null>(!hosted || initialTab === 'tree' ? 'explorer' : null)
+  // Ở bên trái, mở một bảng công cụ (cây tệp, ảnh hưởng…) thì nhường chỗ: đóng khung chat. Chỉ chạy khi bảng đổi.
+  const dockRef = useRef(chatDock)
+  dockRef.current = chatDock
+  useEffect(() => { if (panel && dockRef.current === 'left') setChatOpen(false) }, [panel])
   const live = useChanges(project.project_id)
   const [nodeImpact, setNodeImpact] = useState<NodeImpact | null>(null)
   const [impactPending, setImpactPending] = useState(false)
@@ -444,21 +459,39 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const toolsId = `${id}-tools`
   const chatId = `${id}-chat`
   const togglePanel = (key: string) => {
-    if (Object.hasOwn(PANEL_TITLES, key)) setPanel((cur) => cur === key ? null : key as Panel)
+    if (key === AGENT_ACTIVITY.id) return setChatOpen((v) => !v)
+    if (!Object.hasOwn(PANEL_TITLES, key)) return
+    if (leftChat) {
+      setChatOpen(false)
+      setPanel(key as Panel)
+    } else setPanel((cur) => cur === key ? null : key as Panel)
   }
+  // Kéo thanh chia: khung trái rộng ra khi kéo sang phải, khung phải rộng ra khi kéo sang trái.
+  const grow = chatDock === 'left' ? 1 : -1
+  const resizeHandle = !hosted && chatOpen && <div className="agent-resize-handle" role="separator" aria-label="Độ rộng trợ lý AI" aria-orientation="vertical" tabIndex={0} aria-valuemin={300} aria-valuemax={640} aria-valuenow={chatWidth}
+    onPointerDown={(event) => { resize.current = { x: event.clientX, width: chatWidth }; event.currentTarget.setPointerCapture(event.pointerId) }}
+    onPointerMove={(event) => { if (resize.current) saveChatWidth(resize.current.width + grow * (event.clientX - resize.current.x)) }}
+    onPointerUp={() => { resize.current = null }} onPointerCancel={() => { resize.current = null }}
+    onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); saveChatWidth(chatWidth + grow * (event.key === 'ArrowRight' ? 20 : -20)) } }} />
+  const agentPanel = !hosted && <AgentPanel id={chatId} hidden={!chatOpen} projectId={project.project_id} projectName={project.name}
+    activeFile={chatFile} onClose={() => setChatOpen(false)} onConnectOpenCode={() => setConnectOpenCode(true)}
+    getEditorContext={() => activeFile ? editorContexts.current.get(activeFile)?.() ?? null : null} graphContext={graphContext} beforePrompt={flushEditorState} onInspect={inspect}
+    onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} dock={chatDock} onToggleDock={toggleDock} />
 
   return (
-    <div className="workspace workspace-shell" data-hosted={hosted || undefined} style={{ '--ws-chat': `${chatWidth}px` } as CSSProperties}>
+    <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px` } as CSSProperties}>
       {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
       {!hosted && (
         <ActivityBar
-          items={ACTIVITIES}
-          active={panel}
-          panelId={toolsId}
+          items={chatDock === 'left' ? [AGENT_ACTIVITY, ...ACTIVITIES] : ACTIVITIES}
+          active={leftChat ? AGENT_ACTIVITY.id : panel}
+          panelId={leftChat ? chatId : toolsId}
           onToggle={togglePanel}
+          footer={<button type="button" title="Chọn theme · ⌘K ⌘T" aria-label="Chọn theme" onClick={openThemePicker}><Icon name="palette" size={19} /></button>}
         />
       )}
-      {panel && (
+      {chatDock === 'left' && <>{agentPanel}{resizeHandle}</>}
+      {panel && !leftChat && (
         <aside id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={PANEL_TITLES[panel]}>
           <div className="ws-tools-head">
             <h2>{PANEL_TITLES[panel]}</h2>
@@ -605,15 +638,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
         </div>
       </section>
-      {!hosted && chatOpen && <div className="agent-resize-handle" role="separator" aria-label="Độ rộng trợ lý AI" aria-orientation="vertical" tabIndex={0} aria-valuemin={300} aria-valuemax={640} aria-valuenow={chatWidth}
-        onPointerDown={(event) => { resize.current = { x: event.clientX, width: chatWidth }; event.currentTarget.setPointerCapture(event.pointerId) }}
-        onPointerMove={(event) => { if (resize.current) saveChatWidth(resize.current.width + resize.current.x - event.clientX) }}
-        onPointerUp={() => { resize.current = null }} onPointerCancel={() => { resize.current = null }}
-        onKeyDown={(event) => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); saveChatWidth(chatWidth + (event.key === 'ArrowLeft' ? 20 : -20)) } }} />}
-      {!hosted && <AgentPanel id={chatId} hidden={!chatOpen} projectId={project.project_id} projectName={project.name}
-        activeFile={chatFile} onClose={() => setChatOpen(false)} onConnectOpenCode={() => setConnectOpenCode(true)}
-        getEditorContext={() => activeFile ? editorContexts.current.get(activeFile)?.() ?? null : null} graphContext={graphContext} beforePrompt={flushEditorState} onInspect={inspect}
-        onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={guardLeave(onOpenSettings) ?? (() => {})} />}
+      {chatDock === 'right' && <>{resizeHandle}{agentPanel}</>}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
     </div>
   )

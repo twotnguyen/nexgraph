@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
 import userEvent from '@testing-library/user-event'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
 
@@ -40,6 +40,8 @@ beforeAll(() => {
   vi.stubGlobal('ResizeObserver', RO)
   vi.stubGlobal('DOMMatrixReadOnly', class { m22 = 1; constructor() {} })
 })
+// Các test cũ mô tả kiểu 2 (khung chat bên phải, mở sẵn); test kiểu Wu tự xoá khoá này.
+beforeEach(() => localStorage.setItem('nexgraph.chat.dock', 'right'))
 
 const gnode = (id: string, label = id): GraphNode => ({
   id, kind: 'method', label, qualified_name: id, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,
@@ -121,12 +123,22 @@ describe('WorkspaceScreen', () => {
     expect(screen.queryByRole('tab', { name: 'Pull request' })).not.toBeInTheDocument()
   })
 
-  it('mở Kiến trúc ở giữa, cây tệp bên trái và trợ lý bên phải', () => {
+  it('mở Kiến trúc ở giữa, cây tệp bên trái; trợ lý kiểu Wu thay chỗ cây tệp và chuyển được sang phải', async () => {
+    localStorage.removeItem('nexgraph.chat.dock')
     setup()
     expect(screen.getByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Graph', selected: false })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
+    expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Trợ lý AI', pressed: false }))
     expect(screen.getByRole('complementary', { name: 'Trợ lý AI' })).toBeVisible()
+    expect(screen.queryByRole('complementary', { name: 'Duyệt tệp' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Thêm thao tác' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Chuyển khung chat sang phải' }))
+    expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
+    expect(screen.getByRole('complementary', { name: 'Trợ lý AI' })).toBeVisible()
+    expect(localStorage.getItem('nexgraph.chat.dock')).toBe('right')
+    localStorage.removeItem('nexgraph.chat.dock')
   })
 
   it('mở cấu hình MCP của OpenCode từ panel trợ lý', async () => {
@@ -134,7 +146,8 @@ describe('WorkspaceScreen', () => {
       status: 'new' as const, after: '{}', snippet: '{}' }])
     installNexgraph({ mcp: { plan } })
     render(<WorkspaceScreen project={project()} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Kết nối OpenCode' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Thêm thao tác' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Kết nối OpenCode' }))
     expect(plan).toHaveBeenCalledWith('opencode', 'p1', undefined)
     expect(within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Trợ lý' })).toHaveValue('opencode')
   })

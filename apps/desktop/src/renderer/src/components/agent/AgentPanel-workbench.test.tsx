@@ -42,7 +42,7 @@ describe('AgentPanel workbench', () => {
     } })
     render(<AgentPanel {...props()} />)
     expect(await screen.findByText('Hội thoại đã lưu')).toBeInTheDocument()
-    const create = screen.getByRole('button', { name: '+ Phiên mới' })
+    const create = screen.getByRole('button', { name: 'Phiên mới' })
     await waitFor(() => expect(create).toBeEnabled())
     await userEvent.click(create)
     await waitFor(() => expect(screen.queryByText('Hội thoại đã lưu')).not.toBeInTheDocument())

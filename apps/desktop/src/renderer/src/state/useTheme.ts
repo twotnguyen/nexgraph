@@ -29,7 +29,8 @@ export function currentThemeId(): string {
   return document.documentElement.dataset.theme ?? currentTheme()
 }
 
-function applyTheme(id: string): void {
+/** Đổi theme trong phiên mà không lưu: dùng để xem trước khi rê qua danh sách. */
+export function previewTheme(id: string): void {
   const theme = THEMES.find((t) => t.id === id) ?? THEMES[0]
   document.documentElement.dataset.appearance = theme.appearance
   document.documentElement.dataset.theme = theme.id
@@ -43,12 +44,12 @@ export function initializeTheme(): void {
   } catch {
     // App vẫn dùng được khi môi trường không cho lưu cài đặt.
   }
-  applyTheme(THEMES.some((t) => t.id === saved) ? saved!
+  previewTheme(THEMES.some((t) => t.id === saved) ? saved!
     : window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
 }
 
 export function setTheme(id: string): void {
-  applyTheme(id)
+  previewTheme(id)
   try {
     localStorage.setItem(storageKey, id)
   } catch {

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Icon, Logo } from '../common/icons'
-import { THEMES, setTheme, useTheme, useThemeId } from '../../state/useTheme'
+import { THEMES, useTheme, useThemeId } from '../../state/useTheme'
+import { ThemePickerHost, openThemePicker } from './ThemePicker'
 
 export function WorkbenchBar({ project }: { project?: { project_id: string; name: string } | null }) {
   const dark = useTheme() === 'dark'
   const themeId = useThemeId()
+  const themeName = THEMES.find((t) => t.id === themeId)?.name ?? themeId
   const [branch, setBranch] = useState<string | null>(null)
   const projectId = project?.project_id
 
@@ -29,13 +31,11 @@ export function WorkbenchBar({ project }: { project?: { project_id: string; name
         {project ? <span className="workbench-project" title={project.name}>{project.name}</span> : <span>NexGraph</span>}
         {branch && <span className="workbench-branch" title={`Nhánh ${branch}`}><Icon name="branch" size={13} />{branch}</span>}
       </div>
-      <label className="theme-toggle" title="Giao diện">
+      <button type="button" className="theme-toggle" data-theme-id={themeId} aria-label={`Giao diện: ${themeName}`} title="Chọn theme · ⌘K ⌘T" aria-haspopup="dialog" onClick={openThemePicker}>
         <Icon name={dark ? 'moon' : 'sun'} size={14} />
-        <select aria-label="Giao diện" value={themeId} onChange={(e) => setTheme(e.target.value)}>
-          <optgroup label="Sáng">{THEMES.filter((t) => t.appearance === 'light').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>
-          <optgroup label="Tối">{THEMES.filter((t) => t.appearance === 'dark').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>
-        </select>
-      </label>
+        <span>{themeName}</span>
+      </button>
+      <ThemePickerHost />
     </header>
   )
 }

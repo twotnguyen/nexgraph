@@ -2594,9 +2594,8 @@ body { font-size: 13px; }
 .workbench-project { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .workbench-branch { display: inline-flex; align-items: center; gap: 4px; color: var(--color-muted); font-weight: 400; white-space: nowrap; }
 .workbench-branch::before { content: '/'; margin-inline-end: 4px; color: var(--color-border); }
-.theme-toggle { padding: 0 0 0 8px; color: var(--color-muted); border: 1px solid transparent; border-radius: 5px; }
-.theme-toggle:hover { border-color: var(--color-border); }
-.theme-toggle select { padding: 3px 6px; border: 0; color: inherit; background: transparent; font-size: 12px; cursor: pointer; }
+.theme-toggle { gap: 6px; height: 24px; padding: 0 8px; color: var(--color-muted); border: 0; border-radius: 6px; background: transparent; font-size: 12px; }
+.theme-toggle:hover { color: var(--color-text); background: color-mix(in srgb, var(--color-text) 7%, transparent); }
 .icon-button { min-width: 30px; padding: 5px; }
 
 button {
