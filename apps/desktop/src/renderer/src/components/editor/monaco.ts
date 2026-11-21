@@ -5,6 +5,7 @@ import * as monaco from 'monaco-editor/editor/editor.api.js'
 import { MonacoBinding } from 'y-monaco'
 import type { Text as YText } from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'
+import type { DebugBreakpoint, LspDocumentSymbol, LspRange, LspWorkspaceEdit } from '@shared/api'
 import 'monaco-editor/editor/contrib/find/browser/findController.js'
 import 'monaco-editor/editor/contrib/comment/browser/comment.js'
 import 'monaco-editor/editor/contrib/folding/browser/folding.js'
@@ -18,6 +19,11 @@ import 'monaco-editor/editor/contrib/gotoSymbol/browser/goToCommands.js'
 import 'monaco-editor/editor/contrib/gotoSymbol/browser/link/goToDefinitionAtPosition.js'
 import 'monaco-editor/editor/contrib/suggest/browser/suggestController.js'
 import 'monaco-editor/editor/contrib/hover/browser/hoverContribution.js'
+import 'monaco-editor/editor/contrib/codeAction/browser/codeActionContributions.js'
+import { FormattingConflicts } from 'monaco-editor/editor/contrib/format/browser/format.js'
+import 'monaco-editor/editor/contrib/gotoError/browser/gotoError.js'
+import 'monaco-editor/editor/contrib/parameterHints/browser/parameterHints.js'
+import { attachConflictWidgets } from '../git/conflict-widgets'
 // Chỉ đăng ký Monarch cho các ngôn ngữ cần dùng; mỗi register là chunk nhỏ nạp riêng.
 import 'monaco-editor/languages/definitions/typescript/register.js'
 import 'monaco-editor/languages/definitions/javascript/register.js'
@@ -31,7 +37,14 @@ import 'monaco-editor/languages/definitions/yaml/register.js'
 import { createTokenizationSupport } from 'monaco-editor/languages/features/json/tokenization.js'
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import { currentTheme, observeTheme } from '../../state/useTheme'
+import { installFontKeys, monacoOptions } from './monacoPrefs'
+import { applyProjectEdits, diagnosticMarker } from './lspEdits'
+import { getDiagnostics, subscribeDiagnostics } from '../../state/diagnostics'
 
+
+// Bản tối thiểu không có UI chọn formatter: luôn dùng provider đầu tiên (LSP).
+const formatterSelector = FormattingConflicts.setFormatterSelector((providers) => providers[0])
+import.meta.hot?.dispose(() => formatterSelector.dispose())
 ;(self as unknown as { MonacoEnvironment: monaco.Environment }).MonacoEnvironment = { getWorker: () => new EditorWorker() }
 
 // Đăng ký trực tiếp bộ tô cú pháp JSON. JSON mode của Monaco nạp thêm các dịch vụ IDE sau khi editor độc lập đã khởi tạo.
@@ -90,6 +103,17 @@ export interface EditorHandle {
   getSelection?(): { text: string; start: number; end: number } | null
   setValue(v: string): void
   onChange(cb: () => void): void
+  watchChanges?(cb: () => void): () => void
+  getPosition?(): { line: number; column: number }
+  getLineCount?(): number
+  getWordAtCursor?(): string
+  getScrollPosition?(): { top: number; left: number }
+  setScrollPosition?(position: { top: number; left: number }): void
+  previewPosition?(line: number): void
+  clearPreview?(): void
+  revealPosition?(line: number, column: number): void
+  runAction?(id: string): Promise<void>
+  formatDocument?(): Promise<void>
   onCursor?(cb: (line: number, column: number) => void): void
   revealLines(start: number, end?: number): void
   setReadOnly(v: boolean): void
@@ -98,10 +122,12 @@ export interface EditorHandle {
   /** Chú thích mờ cuối một dòng (inline blame); null để xoá. */
   setLineNote?(line: number, text: string | null): void
   /** Điểm dừng (chấm đỏ ở lề) và dòng đang dừng khi gỡ lỗi. */
-  setBreakpoints?(lines: number[]): void
+  setBreakpoints?(points: DebugBreakpoint[]): void
   setExecLine?(line: number | null): void
   /** Bấm lề trái (cột chấm hoặc số dòng) ở một dòng. */
   onGutterClick?(cb: (line: number) => void): void
+  onGutterContext?(cb: (line: number, x: number, y: number) => void): () => void
+  addInlineZone?(line: number, node: HTMLElement): () => void
   /** Gắn model với Y.Text (cộng tác LAN); trả về hàm gỡ. Con trỏ người khác vẽ theo awareness. */
   bindCollab?(text: YText, awareness: Awareness): () => void
   /** Chèn văn bản tại con trỏ (thay vùng chọn), một bước undo. */
@@ -112,8 +138,40 @@ export interface EditorHandle {
 const modelUri = (path: string, projectId = '') => monaco.Uri.from({ scheme: 'nexgraph', authority: encodeURIComponent(projectId), path: `/${path}` })
 const fromUri = (uri: monaco.Uri) => ({ projectId: decodeURIComponent(uri.authority), file: uri.path.slice(1) })
 
+const toRange = ({ start, end }: LspRange) => new monaco.Range(start.line + 1, start.character + 1, end.line + 1, end.character + 1)
+const readOnlyModels = new WeakSet<monaco.editor.ITextModel>()
+
+/** Đưa mọi buffer đang mở lên server trước một thao tác đổi tên liên tệp. */
+export async function syncProjectModels(projectId: string): Promise<void> {
+  const api = window.nexgraph.lsp
+  if (!api) return
+  await Promise.all(monaco.editor.getModels().flatMap((model) => {
+    if (model.uri.scheme !== 'nexgraph') return []
+    const target = fromUri(model.uri)
+    return target.projectId === projectId ? [api.open(projectId, target.file, model.getValue(monaco.editor.EndOfLinePreference.LF))] : []
+  }))
+}
+
+/** Áp dụng lên buffer đang mở; tệp khác ghi qua cùng đường an toàn và kiểm phiên bản như editor. */
+export async function applyWorkspaceEdit(projectId: string, edits: LspWorkspaceEdit): Promise<void> {
+  await applyProjectEdits(edits, {
+    findModel: (file) => monaco.editor.getModel(modelUri(file, projectId)),
+    isReadOnly: (model) => readOnlyModels.has(model),
+    text: (model) => model.getValue(monaco.editor.EndOfLinePreference.LF),
+    version: (model) => model.getVersionId(),
+    disposed: (model) => model.isDisposed(),
+    apply: (model, changes) => {
+      model.pushStackElement()
+      model.pushEditOperations(null, changes.map((change) => ({ range: toRange(change.range), text: change.newText })), () => null)
+      model.pushStackElement()
+    },
+    read: (file) => window.nexgraph.fs.read(projectId, file),
+    write: (file, text, opts) => window.nexgraph.fs.write(projectId, file, text, opts)
+  })
+}
+
 // Mở tệp khác khi F12 / ⌘-click trỏ sang tệp đó: mỗi editor giao cho chỗ đã tạo nó (thẻ tệp mở thẻ mới đúng dòng).
-const openers = new WeakMap<monaco.editor.ICodeEditor, (file: string, line: number) => void>()
+const openers = new WeakMap<monaco.editor.ICodeEditor, (file: string, line: number, column?: number) => void>()
 // Gỡ khi HMR nạp lại module, nếu không mỗi lần sửa mã nguồn lại thêm một bộ provider (gợi ý trùng).
 const registrations: monaco.IDisposable[] = []
 import.meta.hot?.dispose(() => registrations.forEach((item) => item.dispose()))
@@ -122,10 +180,22 @@ registrations.push(monaco.editor.registerEditorOpener({
     const open = openers.get(source)
     if (resource.scheme !== 'nexgraph' || !open) return false
     const line = selection && 'startLineNumber' in selection ? selection.startLineNumber : selection?.lineNumber ?? 1
-    open(fromUri(resource).file, line)
+    const column = selection && 'startColumn' in selection ? selection.startColumn : selection?.column
+    open(fromUri(resource).file, line, column)
     return true
   }
 }))
+registrations.push(monaco.editor.registerCommand('nexgraph.lsp.applyCodeAction', async (_accessor, projectId: string, edit: LspWorkspaceEdit) => {
+  await applyWorkspaceEdit(projectId, edit)
+}))
+
+function symbolForMonaco(symbol: LspDocumentSymbol): monaco.languages.DocumentSymbol {
+  return {
+    name: symbol.name, detail: '', tags: [], kind: Math.max(0, Math.min(25, symbol.kind - 1)),
+    range: toRange(symbol.range), selectionRange: toRange(symbol.selectionRange),
+    children: symbol.children?.map(symbolForMonaco)
+  }
+}
 
 // CompletionItemKind của LSP (1–25) → của Monaco, theo tên.
 const K = monaco.languages.CompletionItemKind
@@ -136,6 +206,57 @@ const lspOf = (model: monaco.editor.ITextModel) => {
   if (!api || model.uri.scheme !== 'nexgraph' || !model.uri.authority) return null
   const { projectId, file } = fromUri(model.uri)
   return { api, projectId, file, text: model.getValue(monaco.editor.EndOfLinePreference.LF) }
+}
+for (const language of ['typescript', 'javascript', 'python']) {
+  registrations.push(monaco.languages.registerDocumentSymbolProvider(language, {
+    provideDocumentSymbols: async (model) => {
+      const lsp = lspOf(model)
+      if (!lsp) return []
+      return (await lsp.api.documentSymbols(lsp.projectId, lsp.file, lsp.text)).map(symbolForMonaco)
+    }
+  }))
+  registrations.push(monaco.languages.registerDocumentFormattingEditProvider(language, {
+    provideDocumentFormattingEdits: async (model, options) => {
+      const lsp = lspOf(model)
+      if (!lsp) return []
+      const edits = await lsp.api.format(lsp.projectId, lsp.file, lsp.text, { tabSize: options.tabSize, insertSpaces: options.insertSpaces })
+      return edits.map((edit) => ({ range: toRange(edit.range), text: edit.newText }))
+    }
+  }))
+  registrations.push(monaco.languages.registerSignatureHelpProvider(language, {
+    signatureHelpTriggerCharacters: ['(', ','],
+    signatureHelpRetriggerCharacters: [','],
+    provideSignatureHelp: async (model, position) => {
+      const lsp = lspOf(model)
+      if (!lsp) return null
+      const help = await lsp.api.signatureHelp(lsp.projectId, lsp.file, lsp.text, position.lineNumber, position.column)
+      if (!help) return null
+      return {
+        value: {
+          activeSignature: help.activeSignature ?? 0, activeParameter: help.activeParameter ?? 0,
+          signatures: help.signatures.map((signature) => ({
+            ...signature, parameters: signature.parameters ?? []
+          }))
+        },
+        dispose() {}
+      }
+    }
+  }))
+  registrations.push(monaco.languages.registerCodeActionProvider(language, {
+    provideCodeActions: async (model, range) => {
+      const lsp = lspOf(model)
+      if (!lsp) return { actions: [], dispose() {} }
+      const lspRange = { start: { line: range.startLineNumber - 1, character: range.startColumn - 1 }, end: { line: range.endLineNumber - 1, character: range.endColumn - 1 } }
+      const actions = await lsp.api.codeActions(lsp.projectId, lsp.file, lsp.text, lspRange)
+      return {
+        actions: actions.map((action) => ({
+          title: action.title, kind: action.kind ?? 'quickfix',
+          command: { id: 'nexgraph.lsp.applyCodeAction', title: action.title, arguments: [lsp.projectId, action.edit] }
+        })),
+        dispose() {}
+      }
+    }
+  }))
 }
 for (const language of ['typescript', 'javascript', 'python']) {
   registrations.push(monaco.languages.registerDefinitionProvider(language, {
@@ -191,15 +312,27 @@ export function languageFor(file: string): string {
 }
 
 /** `path`: model gắn với đường dẫn tệp để khung chia đôi (createMirror) dùng chung bộ đệm; có `projectId` thì F12/gợi ý/hover hỏi language server. */
-export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean; path?: string; projectId?: string; onOpenFile?: (file: string, line: number) => void }): EditorHandle {
+export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean; path?: string; projectId?: string; onOpenFile?: (file: string, line: number, column?: number) => void }): EditorHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   if (opts.path) monaco.editor.getModel(modelUri(opts.path, opts.projectId))?.dispose()
   const model = opts.path ? monaco.editor.createModel(opts.value, opts.language, modelUri(opts.path, opts.projectId)) : undefined
+  if (model && opts.readOnly) readOnlyModels.add(model)
+  const setMarkers = () => {
+    if (model && opts.projectId && opts.path && !model.isDisposed()) {
+      monaco.editor.setModelMarkers(model, 'lsp', getDiagnostics(opts.projectId, opts.path).map(diagnosticMarker))
+    }
+  }
+  const stopDiagnostics = subscribeDiagnostics((event) => {
+    if (event.projectId === opts.projectId && event.file === opts.path) setMarkers()
+  })
+  setMarkers()
   const editor = monaco.editor.create(el, {
     ...(model ? { model } : { value: opts.value, language: opts.language }), readOnly: opts.readOnly, theme: editorTheme(),
-    automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12, glyphMargin: true,
+    automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, glyphMargin: true, ...monacoOptions(),
     ...(font ? { fontFamily: font } : {})
   })
+  installFontKeys(editor)
+  const detachConflicts = attachConflictWidgets(editor)
   const hit = editor.createDecorationsCollection()
   const setVim = vimAttacher(editor)
   if (opts.onOpenFile) openers.set(editor, opts.onOpenFile)
@@ -221,27 +354,71 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     },
     setValue: (v) => editor.setValue(v),
     onChange: (cb) => void editor.onDidChangeModelContent(() => cb()),
+    watchChanges: (cb) => { const disposable = editor.onDidChangeModelContent(cb); return () => disposable.dispose() },
+    getPosition: () => { const p = editor.getPosition(); return { line: p?.lineNumber ?? 1, column: p?.column ?? 1 } },
+    getLineCount: () => editor.getModel()?.getLineCount() ?? 1,
+    getWordAtCursor: () => { const p = editor.getPosition(); return p ? editor.getModel()?.getWordAtPosition(p)?.word ?? '' : '' },
+    getScrollPosition: () => ({ top: editor.getScrollTop(), left: editor.getScrollLeft() }),
+    setScrollPosition: ({ top, left }) => editor.setScrollPosition({ scrollTop: top, scrollLeft: left }),
+    previewPosition: (line) => {
+      hit.set([{ range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: 'editor-hit' } }])
+      editor.revealLineInCenter(line)
+    },
+    clearPreview: () => hit.clear(),
+    revealPosition: (line, column) => {
+      hit.clear()
+      editor.setPosition({ lineNumber: line, column })
+      editor.revealPositionInCenter({ lineNumber: line, column })
+      editor.focus()
+    },
+    runAction: async (id) => { editor.focus(); await editor.getAction(id)?.run() },
+    formatDocument: async () => { await editor.getAction('editor.action.formatDocument')?.run() },
     onCursor: (cb) => void editor.onDidChangeCursorPosition((e) => cb(e.position.lineNumber, e.position.column)),
     revealLines: (start, end = start) => {
       hit.set([{ range: new monaco.Range(start, 1, end, 1), options: { isWholeLine: true, className: 'editor-hit' } }])
       editor.revealLinesInCenter(start, end)
     },
-    setReadOnly: (v) => editor.updateOptions({ readOnly: v }),
+    setReadOnly: (v) => {
+      const current = editor.getModel()
+      if (current) { if (v) readOnlyModels.add(current); else readOnlyModels.delete(current) }
+      editor.updateOptions({ readOnly: v })
+    },
     setVim,
     setLineNote: (line, text) => {
       const end = editor.getModel()?.getLineMaxColumn(line) ?? 1
       // Khoảng rỗng ở cuối dòng: phải có showIfCollapsed thì Monaco mới vẽ chữ chèn.
       note.set(text ? [{ range: new monaco.Range(line, end, line, end), options: { showIfCollapsed: true, after: { content: `      ${text}`, inlineClassName: 'editor-line-note' } } }] : [])
     },
-    setBreakpoints: (lines) => breakpoints.set(lines.map((line) => ({ range: new monaco.Range(line, 1, line, 1), options: { glyphMarginClassName: 'editor-breakpoint', glyphMarginHoverMessage: { value: 'Điểm dừng' } } }))),
+    setBreakpoints: (points) => breakpoints.set(points.map((point) => ({
+      range: new monaco.Range(point.line, 1, point.line, 1),
+      options: { glyphMarginClassName: `editor-breakpoint${point.enabled ? '' : ' editor-breakpoint-disabled'}${point.logMessage ? ' editor-breakpoint-log' : point.condition || point.hitCondition ? ' editor-breakpoint-condition' : ''}`,
+        glyphMarginHoverMessage: { value: point.logMessage ? 'Log point' : point.condition || point.hitCondition ? 'Điểm dừng có điều kiện' : 'Điểm dừng' } }
+    }))),
     setExecLine: (line) => {
       exec.set(line ? [{ range: new monaco.Range(line, 1, line, 1), options: { isWholeLine: true, className: 'editor-exec-line', glyphMarginClassName: 'editor-exec-arrow' } }] : [])
       if (line) editor.revealLineInCenterIfOutsideViewport(line)
     },
     onGutterClick: (cb) => void editor.onMouseDown((e) => {
       // Chỉ cột chấm (glyph margin): bấm số dòng vẫn để chọn cả dòng như thường.
-      if (e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) cb(e.target.position.lineNumber)
+      if (e.event.leftButton && e.target.type === monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && e.target.position) cb(e.target.position.lineNumber)
     }),
+    onGutterContext: (cb) => {
+      const handle = (event: MouseEvent) => {
+        const target = editor.getTargetAtClientPoint(event.clientX, event.clientY)
+        if (!target?.position || (target.type !== monaco.editor.MouseTargetType.GUTTER_GLYPH_MARGIN && target.type !== monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS)) return
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        cb(target.position.lineNumber, event.clientX, event.clientY)
+      }
+      el.addEventListener('contextmenu', handle, true)
+      return () => el.removeEventListener('contextmenu', handle, true)
+    },
+    addInlineZone: (line, node) => {
+      let id = ''
+      editor.changeViewZones((accessor) => { id = accessor.addZone({ afterLineNumber: line, heightInPx: 132, domNode: node, suppressMouseDown: false }) })
+      editor.revealLineInCenterIfOutsideViewport(line)
+      return () => editor.changeViewZones((accessor) => accessor.removeZone(id))
+    },
     bindCollab: (text, awareness) => {
       const binding = new MonacoBinding(text, editor.getModel()!, new Set([editor]), awareness)
       return () => binding.destroy()
@@ -254,6 +431,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     },
     dispose: () => {
       setVim(null)
+      detachConflicts()
       const model = editor.getModel()
       editor.dispose()
       model?.dispose()
@@ -273,9 +451,10 @@ export function createMirror(el: HTMLElement, path: string, projectId?: string):
   if (!model) return null
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const editor = monaco.editor.create(el, {
-    model, theme: editorTheme(), automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
+    model, theme: editorTheme(), automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
     ...(font ? { fontFamily: font } : {})
   })
+  installFontKeys(editor)
   const setVim = vimAttacher(editor)
   return {
     setVim,
@@ -293,7 +472,7 @@ export function createDiffEditor(el: HTMLElement, opts: { before: string; after:
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const diff = monaco.editor.createDiffEditor(el, {
     readOnly: true, theme: editorTheme(), automaticLayout: true, renderSideBySide: false,
-    minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
+    minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
     ...(font ? { fontFamily: font } : {})
   })
   const original = monaco.editor.createModel(opts.before, opts.language)

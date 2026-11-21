@@ -50,13 +50,39 @@ export type TextReplaceResult = { files: number; replacements: number; skipped: 
 export type LspLocation = { file: string; line: number; column: number }
 /** `kind`: CompletionItemKind của LSP (1–25). */
 export type LspCompletionItem = { label: string; kind: number; detail?: string; insertText: string; sortText?: string; filterText?: string }
+/** Phạm vi LSP tính từ 0; vị trí truyền vào các phương thức editor vẫn tính từ 1. */
+export type LspPosition = { line: number; character: number }
+export type LspRange = { start: LspPosition; end: LspPosition }
+export type LspDiagnostic = { range: LspRange; severity?: number; message: string; source?: string; code?: string | number; tags?: number[] }
+export type LspTextEdit = { range: LspRange; newText: string }
+export type LspWorkspaceEdit = Record<string, LspTextEdit[]>
+export type LspDocumentSymbol = { name: string; kind: number; range: LspRange; selectionRange: LspRange; children?: LspDocumentSymbol[] }
+export type LspWorkspaceSymbol = { name: string; kind: number; file: string; range: LspRange; containerName?: string }
+export type LspMarkup = string | { kind: 'plaintext' | 'markdown'; value: string }
+export type LspSignatureHelp = {
+  signatures: { label: string; documentation?: LspMarkup; parameters?: { label: string | [number, number]; documentation?: LspMarkup }[]; activeParameter?: number }[]
+  activeSignature?: number
+  activeParameter?: number
+}
+export type LspCodeAction = { title: string; kind?: string; edit: LspWorkspaceEdit }
+export type LspDiagnosticsEvent = { projectId: string; file: string; diagnostics: LspDiagnostic[] }
 export type TerminalEvent = { id: number; type: 'data'; data: string } | { id: number; type: 'exit'; code: number }
+export type TaskDefinition = { label: string; command: string; args?: string[]; type?: 'shell' | 'process'; cwd?: string; env?: Record<string, string> }
 /** `status`: chữ trạng thái của `git status --porcelain` (M, A, D, R, C, U, ? cho tệp mới chưa theo dõi). */
-export type GitFileChange = { path: string; status: string; from?: string }
-export type GitStatus = { repo: boolean; branch: string | null; staged: GitFileChange[]; unstaged: GitFileChange[] }
+export type GitFileChange = { path: string; status: string; from?: string; added?: number | null; deleted?: number | null }
+export type GitStatus = {
+  repo: boolean; branch: string | null; staged: GitFileChange[]; unstaged: GitFileChange[]; conflicts: GitFileChange[]
+  upstream: string | null; ahead: number; behind: number; remote: string | null
+  lastCommit: { sha: string; subject: string; message: string; hasParent: boolean; pushed: boolean } | null
+}
+export type GitCommit = { sha: string; parents: string[]; subject: string; author: string; time: number; refs: string }
+export type GitHunk = { id: string; header: string; oldStart: number; newStart: number }
+export type GitStash = { ref: string; message: string }
 export type GitBlameLine = { line: number; sha: string; author: string; time: number; summary: string; uncommitted: boolean }
 /** Điểm dừng theo tệp (đường dẫn tương đối dự án → các dòng, tính từ 1). */
-export type DebugBreakpoints = Record<string, number[]>
+export type DebugBreakpoint = { line: number; enabled: boolean; condition?: string; hitCondition?: string; logMessage?: string }
+export type DebugBreakpoints = Record<string, DebugBreakpoint[]>
+export type DebugEvaluation = { result: string; variablesReference: number }
 export type DebugEvent =
   | { type: 'state'; state: 'starting' | 'running' | 'stopped' | 'terminated'; reason?: string; threadId?: number }
   | { type: 'output'; category: string; text: string }
@@ -150,10 +176,19 @@ export interface NexGraphApi {
     list?(projectId: string, directory: string): Promise<ProjectDirectory>
     /** Đọc tệp trong gốc dự án; lỗi có `code` là `outside_project` | `file_not_found`. */
     read(projectId: string, relPath: string): Promise<FileContent>
+    /** Đọc byte gốc tối đa 50 MiB, mã hoá base64; `size` là số byte trước mã hoá. */
+    readBinary?(projectId: string, relPath: string): Promise<{ data: string; size: number }>
     /** Mọi tệp của dự án (đường dẫn tương đối, theo .gitignore) cho ô tìm tệp; `truncated` khi vượt giới hạn duyệt. */
     files?(projectId: string): Promise<{ files: string[]; truncated: boolean }>
     /** Ghi nguyên tử trong gốc dự án. Nếu tệp lệch phiên bản yêu cầu thì báo `conflict`. */
     write(projectId: string, relPath: string, text: string, opts: WriteOpts & { expectedVersion: string | null }): Promise<FileRevision>
+    /** Thao tác với đường dẫn tương đối bên trong dự án, không ghi đè mục có sẵn. */
+    createFile?(projectId: string, path: string): Promise<void>
+    createDir?(projectId: string, path: string): Promise<void>
+    rename?(projectId: string, from: string, to: string): Promise<void>
+    copy?(projectId: string, from: string, directory: string): Promise<string>
+    trash?(projectId: string, path: string): Promise<void>
+    reveal?(projectId: string, path: string): Promise<void>
     /** Tìm văn bản trong mọi tệp của dự án (theo .gitignore). */
     searchText?(projectId: string, query: TextSearchQuery): Promise<TextSearchResult>
     /** Thay mọi chỗ khớp trong các tệp `files`; tệp đổi giữa chừng nằm trong `skipped`. */
@@ -164,33 +199,64 @@ export interface NexGraphApi {
     definition(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>
     completion(projectId: string, file: string, text: string, line: number, column: number): Promise<LspCompletionItem[]>
     hover(projectId: string, file: string, text: string, line: number, column: number): Promise<string | null>
+    references(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>
+    implementation(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>
+    rename(projectId: string, file: string, text: string, line: number, column: number, newName: string): Promise<LspWorkspaceEdit>
+    format(projectId: string, file: string, text: string, options: { tabSize: number; insertSpaces: boolean }): Promise<LspTextEdit[]>
+    documentSymbols(projectId: string, file: string, text: string): Promise<LspDocumentSymbol[]>
+    workspaceSymbols(projectId: string, query: string): Promise<LspWorkspaceSymbol[]>
+    signatureHelp(projectId: string, file: string, text: string, line: number, column: number): Promise<LspSignatureHelp | null>
+    codeActions(projectId: string, file: string, text: string, range: LspRange): Promise<LspCodeAction[]>
+    onDiagnostics(cb: (event: LspDiagnosticsEvent) => void): () => void
     close(projectId: string, file: string): Promise<void>
     open(projectId: string, file: string, text: string): Promise<void>
   }
   /** Terminal tích hợp (node-pty): shell của người dùng trong gốc dự án. */
   terminal?: {
-    create(projectId: string, cols: number, rows: number): Promise<{ id: number; shell: string }>
+    create(projectId: string, cols: number, rows: number, task?: TaskDefinition): Promise<{ id: number; shell: string; cwd: string }>
     write(id: number, data: string): Promise<void>
     resize(id: number, cols: number, rows: number): Promise<void>
     kill(id: number): Promise<void>
+    resolvePath(projectId: string, path: string): Promise<string | null>
     onEvent(cb: (event: TerminalEvent) => void): () => void
+  }
+  /** Task khai báo trong dự án và thay biến theo ngữ cảnh editor. */
+  tasks?: {
+    list(projectId: string): Promise<TaskDefinition[]>
+    resolve(projectId: string, task: TaskDefinition, context: { file?: string; line?: number }): Promise<TaskDefinition>
   }
   /** Git panel: trạng thái, stage/unstage từng tệp, commit, diff và blame trong gốc dự án. */
   git?: {
     status(projectId: string): Promise<GitStatus>
     stage(projectId: string, files: string[]): Promise<void>
     unstage(projectId: string, files: string[]): Promise<void>
-    commit(projectId: string, message: string): Promise<string>
+    commit(projectId: string, message: string, amend?: boolean): Promise<string>
     diff(projectId: string, file: string, staged: boolean): Promise<{ before: string; after: string }>
     blame(projectId: string, file: string): Promise<GitBlameLine[]>
+    restore(projectId: string, file: string): Promise<void>
+    branches(projectId: string): Promise<string[]>
+    switchBranch(projectId: string, name: string, create: boolean): Promise<void>
+    remote(projectId: string, op: 'fetch' | 'pull' | 'push'): Promise<string>
+    history(projectId: string, all: boolean): Promise<GitCommit[]>
+    commitFiles(projectId: string, sha: string): Promise<GitFileChange[]>
+    commitDiff(projectId: string, sha: string, file: string, from?: string): Promise<{ before: string; after: string }>
+    hunks(projectId: string, file: string, staged: boolean): Promise<GitHunk[]>
+    applyHunk(projectId: string, file: string, staged: boolean, id: string): Promise<void>
+    stashes(projectId: string): Promise<GitStash[]>
+    stashSave(projectId: string, message: string): Promise<void>
+    stashAction(projectId: string, ref: string, action: 'apply' | 'pop' | 'drop'): Promise<void>
+    suggestMessage(projectId: string): Promise<string>
   }
   /** Gỡ lỗi (DAP): js-debug cho Node, debugpy cho Python; adapter tải về khi người dùng đồng ý. */
   debug?: {
     adapterStatus(): Promise<{ node: boolean; python: boolean }>
     installAdapter(kind: 'node' | 'python'): Promise<void>
     start(projectId: string, kind: 'node' | 'python', file: string, breakpoints: DebugBreakpoints): Promise<void>
-    setBreakpoints(file: string, lines: number[]): Promise<void>
+    setBreakpoints(file: string, breakpoints: DebugBreakpoint[]): Promise<void>
     step(action: 'continue' | 'next' | 'stepIn' | 'stepOut', threadId: number): Promise<void>
+    pause(): Promise<void>
+    restart(): Promise<void>
+    evaluate(expression: string, frameId: number, context: 'watch' | 'repl'): Promise<DebugEvaluation>
     stackTrace(threadId: number): Promise<DebugFrame[]>
     scopes(frameId: number): Promise<DebugScope[]>
     variables(variablesReference: number): Promise<DebugVariable[]>
@@ -279,6 +345,7 @@ export interface NexGraphApi {
     snapshot(projectId: string): Promise<AgentSessionSnapshot>
     listSessions(projectId: string): Promise<AgentSessionInfo[]>
     newSession(projectId: string): Promise<AgentSessionSnapshot>
+    forkSession(projectId: string, sessionId: string): Promise<AgentSessionSnapshot>
     switchSession(projectId: string, sessionId: string): Promise<AgentSessionSnapshot>
     renameSession(projectId: string, sessionId: string, title: string): Promise<void>
     deleteSession(projectId: string, sessionId: string): Promise<void>

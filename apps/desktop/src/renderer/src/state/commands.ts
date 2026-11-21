@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react'
 
 /**
  * Lệnh của ứng dụng: danh sách tĩnh (để bảng lệnh và trang Phím tắt biết mọi lệnh) cộng handler do màn đang mở gắn vào.
@@ -32,15 +32,46 @@ export const COMMANDS: CommandDef[] = [
   { id: 'debug.step_into', category: 'Gỡ lỗi', title: 'Bước vào', key: 'f11' },
   { id: 'debug.step_out', category: 'Gỡ lỗi', title: 'Bước ra', key: 'shift+f11' },
   { id: 'debug.stop', category: 'Gỡ lỗi', title: 'Dừng gỡ lỗi', key: 'shift+f5' },
+  { id: 'debug.pause', category: 'Gỡ lỗi', title: 'Tạm dừng', key: 'f6' },
+  { id: 'debug.restart', category: 'Gỡ lỗi', title: 'Chạy lại phiên', key: 'mod+shift+f5' },
+  { id: 'debug.toggle_breakpoint', category: 'Gỡ lỗi', title: 'Bật/tắt điểm dừng', key: 'f9' },
+  { id: 'debug.edit_breakpoint', category: 'Gỡ lỗi', title: 'Sửa điểm dừng', key: 'shift+f9' },
+  { id: 'debug.clear_breakpoints', category: 'Gỡ lỗi', title: 'Xoá tất cả điểm dừng' },
   { id: 'collab.share', category: 'Cộng tác', title: 'Chia sẻ tệp đang mở trong mạng LAN' },
   { id: 'collab.join', category: 'Cộng tác', title: 'Tham gia phiên của máy khác' },
   { id: 'collab.leave', category: 'Cộng tác', title: 'Rời / dừng phiên cộng tác' },
   { id: 'tour.toggle', category: 'Bảng công cụ', title: 'Hiện tour dự án' },
   { id: 'tab.close', category: 'Thẻ', title: 'Đóng thẻ đang mở', key: 'mod+w' },
+  { id: 'tab.reopen', category: 'Thẻ', title: 'Mở lại thẻ vừa đóng', key: 'mod+shift+t' },
+  { id: 'tab.next_mru', category: 'Thẻ', title: 'Chuyển sang thẻ dùng gần đây', key: 'ctrl+tab' },
+  { id: 'tab.previous_mru', category: 'Thẻ', title: 'Chuyển ngược thẻ dùng gần đây', key: 'ctrl+shift+tab' },
+  ...Array.from({ length: 10 }, (_, n) => ({ id: `tab.activate_${n}`, category: 'Thẻ', title: n ? `Mở thẻ ${n}` : 'Mở thẻ cuối', key: `ctrl+${n}` })),
+  { id: 'tab.pin', category: 'Thẻ', title: 'Ghim / bỏ ghim thẻ', key: 'mod+k shift+enter' },
+  { id: 'dock.left', category: 'Bảng công cụ', title: 'Ẩn / hiện bảng bên trái', key: 'mod+b' },
+  { id: 'dock.bottom', category: 'Terminal', title: 'Ẩn / hiện terminal', key: 'mod+j' },
   { id: 'editor.split_right', category: 'Editor', title: 'Chia đôi sang phải / bỏ chia đôi', key: 'mod+\\' },
   { id: 'editor.toggle_vim', category: 'Editor', title: 'Bật/tắt chế độ Vim' },
+  { id: 'editor.goto_line', category: 'Editor', title: 'Đi đến dòng', key: 'ctrl+g' },
+  { id: 'editor.document_symbols', category: 'Editor', title: 'Tìm ký hiệu trong tệp', key: 'mod+shift+o' },
+  { id: 'editor.workspace_symbols', category: 'Editor', title: 'Tìm ký hiệu trong dự án', key: 'mod+t' },
+  { id: 'editor.diagnostics', category: 'Editor', title: 'Hiện lỗi trong dự án', key: 'mod+shift+m' },
+  { id: 'editor.rename', category: 'Editor', title: 'Đổi tên ký hiệu', key: 'f2' },
+  { id: 'editor.implementation', category: 'Editor', title: 'Đi đến phần triển khai', key: 'shift+f12' },
+  { id: 'editor.references', category: 'Editor', title: 'Tìm tham chiếu', key: 'alt+shift+f12' },
+  { id: 'editor.next_diagnostic', category: 'Editor', title: 'Lỗi tiếp theo', key: 'f8' },
+  { id: 'editor.previous_diagnostic', category: 'Editor', title: 'Lỗi trước đó', key: 'shift+f8' },
+  { id: 'editor.format', category: 'Editor', title: 'Định dạng tệp', key: 'alt+shift+f' },
+  { id: 'editor.code_actions', category: 'Editor', title: 'Thao tác mã', key: 'mod+.' },
+  { id: 'markdown.preview', category: 'Markdown', title: 'Mở / đóng xem trước Markdown', key: 'mod+shift+v' },
+  { id: 'markdown.preview_side', category: 'Markdown', title: 'Xem trước Markdown bên cạnh', key: 'mod+k v' },
+  { id: 'image.zoom_in', category: 'Ảnh', title: 'Phóng to ảnh', key: 'mod+=' },
+  { id: 'image.zoom_out', category: 'Ảnh', title: 'Thu nhỏ ảnh', key: 'mod+-' },
+  { id: 'image.reset_zoom', category: 'Ảnh', title: 'Đặt lại độ phóng ảnh', key: 'mod+0' },
+  { id: 'image.fit_to_view', category: 'Ảnh', title: 'Vừa khung xem', key: 'mod+shift+0' },
   { id: 'terminal.toggle', category: 'Terminal', title: 'Bật/tắt terminal', key: 'ctrl+`' },
   { id: 'terminal.new', category: 'Terminal', title: 'Terminal mới', key: 'ctrl+shift+`' },
+  { id: 'task.spawn', category: 'Task', title: 'Chạy task', key: 'mod+shift+r' },
+  { id: 'task.rerun', category: 'Task', title: 'Chạy lại task gần nhất', key: 'mod+alt+r' },
   { id: 'view.arch', category: 'Xem', title: 'Kiến trúc' },
   { id: 'view.map', category: 'Xem', title: 'Bản đồ' },
   { id: 'view.flows', category: 'Xem', title: 'Luồng' },
@@ -52,6 +83,9 @@ export const COMMANDS: CommandDef[] = [
 ]
 
 const handlers = new Map<string, (() => void)[]>()
+
+/** Cài đặt ẩn Không gian làm việc nhưng giữ buffer; không để lệnh của màn đã ẩn chạy. */
+export const CommandsEnabled = createContext(true)
 
 /** Gắn handler cho một lệnh; trả về hàm gỡ. Handler gắn sau cùng thắng. */
 export function registerHandler(id: string, fn: () => void): () => void {
@@ -67,7 +101,8 @@ export function registerHandler(id: string, fn: () => void): () => void {
 export function useCommand(id: string, run: () => void, enabled = true): void {
   const latest = useRef(run)
   latest.current = run
-  useEffect(() => (enabled ? registerHandler(id, () => latest.current()) : undefined), [id, enabled])
+  const scoped = useContext(CommandsEnabled)
+  useEffect(() => (enabled && scoped ? registerHandler(id, () => latest.current()) : undefined), [id, enabled, scoped])
 }
 
 /** Thêm lệnh của extension (bỏ id trùng); trang Phím tắt và bảng lệnh thấy ngay. */
@@ -177,9 +212,19 @@ export function installKeymap(target: Window = window): () => void {
     if (event.defaultPrevented || (event.target instanceof Element && event.target.closest('[data-keymap-recorder]'))) return
     const stroke = eventToStroke(event)
     if (!stroke) return
+    if (event.target instanceof Element && event.target.closest('.terminal-panel') &&
+      (stroke === 'shift+escape' || (event.target.closest('.terminal-view, .terminal-search') && ['mod+d', 'mod+f', 'mod+k'].includes(stroke)))) {
+      pending = null
+      return
+    }
     const sequence = pending && Date.now() - pending.at < 1500 ? `${pending.stroke} ${stroke}` : stroke
     pending = null
-    const live = COMMANDS.filter((command) => handlers.has(command.id))
+    const element = event.target instanceof Element ? event.target : null
+    const inDialog = !!element?.closest('[role=dialog]')
+    const inInput = !!element?.closest('input, textarea, select, [contenteditable=true]') && !element?.closest('.monaco-editor')
+    const live = COMMANDS.filter((command) => handlers.has(command.id)
+      && !(command.id.startsWith('editor.') && (inDialog || inInput))
+      && !(command.id === 'editor.rename' && element?.closest('[role=tree]')))
     const exact = live.find((command) => bindingFor(command.id) === sequence)
     if (exact) {
       event.preventDefault()

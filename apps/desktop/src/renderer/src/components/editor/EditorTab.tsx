@@ -3,13 +3,17 @@ import type { FileContent, GitBlameLine } from '@shared/api'
 import type { AgentContextItem } from '@shared/agent-types'
 import { vi } from '../../strings'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
+import { createAutoSave } from './autoSave'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { StatusBarItems } from '../EngineStatusBar'
-import { useBlame, useVimMode } from '../../state/editorPrefs'
+import { EditorDebug } from '../debug/EditorDebug'
+import { getEditorPrefs, observeEditorPrefs, useBlame, useVimMode } from '../../state/editorPrefs'
 import { toggleBreakpoint, useDebugState } from '../../state/debugState'
 import { leaveSession, useCollab } from '../../state/collab'
 import { setActiveEditor } from '../../state/activeEditor'
+import { useDiagnostics } from '../../state/diagnostics'
+import { runCommand } from '../../state/commands'
 import './editor-tab.css'
 
 export type EditorContextGetter = () => Extract<AgentContextItem, { kind: 'file' }> | null
@@ -18,6 +22,7 @@ interface Props {
   projectId: string
   file: string
   line: number
+  column?: number
   lineEnd?: number
   /** Đổi mỗi lần mở tệp từ nơi khác: mở lại cùng dòng sau khi đã cuộn đi vẫn cuộn về. */
   revealRequest?: number
@@ -29,7 +34,11 @@ interface Props {
   /** Mở tệp này ở khung phải (chia đôi, cùng bộ đệm). */
   onSplit?: () => void
   /** F12 / ⌘-click sang tệp khác trong dự án. */
-  onOpenFile?: (file: string, line: number) => void
+  onOpenFile?: (file: string, line: number, column?: number) => void
+  /** Chuyển SVG từ mã nguồn sang xem ảnh. */
+  onViewImage?: () => void
+  onReadOnlyChange?: (file: string, readOnly: boolean) => void
+  onLoadError?: (file: string, error: string | null) => void
 }
 
 type OpenFile = { editor: EditorHandle; base: FileContent }
@@ -57,15 +66,19 @@ export function blameText(line: GitBlameLine, now = Date.now()): string {
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile }: Props) {
+export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onReadOnlyChange, onLoadError }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
-  const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void } | null>(null)
+  const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void; blur: () => void } | null>(null)
   const dirty = useRef(false)
   const contextCallback = useRef(onContextReady)
   contextCallback.current = onContextReady
   const openFileRef = useRef(onOpenFile)
   openFileRef.current = onOpenFile
+  const readOnlyCallback = useRef(onReadOnlyChange)
+  readOnlyCallback.current = onReadOnlyChange
+  const loadErrorCallback = useRef(onLoadError)
+  loadErrorCallback.current = onLoadError
   const [readOnly, setReadOnly] = useState<FileContent['reason'] | boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<Conflict | null>(null)
@@ -80,6 +93,10 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   const [vimNode, setVimNode] = useState<HTMLElement | null>(null)
   const blameOn = useBlame()
   const [blame, setBlameLines] = useState<Map<number, GitBlameLine> | null>(null)
+  const diagnostics = useDiagnostics(projectId)
+  const problems = Object.values(diagnostics).flat()
+  const errorCount = problems.filter((item) => (item.severity ?? 1) === 1).length
+  const warningCount = problems.filter((item) => item.severity === 2).length
 
   const setDirty = useCallback((d: boolean) => {
     if (dirty.current === d) return
@@ -91,6 +108,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   useEffect(() => {
     const fs = window.nexgraph.fs
     let alive = true
+    let lspTimer: ReturnType<typeof setTimeout> | undefined
     let open: OpenFile | null = null
     let diskConflict: Conflict | null = null
     let writing: string | undefined
@@ -99,6 +117,8 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
     let pendingCheck = false
     let busy = false
     let isReloading = false
+    let formatting: Promise<void> | null = null
+    let saveGeneration = 0
     const language = languageFor(file)
     const updateFormat = ({ eol, bom, reason }: FileContent) => {
       setFormat(reason ? null : { language: LANGUAGE_NAMES[language] ?? language, eol, bom })
@@ -109,6 +129,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
     setFormat(null)
     setSaveState('idle')
     setError(null)
+    loadErrorCallback.current?.(file, null)
     setReadOnly(false)
     setConflict(null)
     setReloading(false)
@@ -132,6 +153,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
       current.base = disk
       current.editor.setValue(disk.text)
       current.editor.setReadOnly(disk.readOnly)
+      readOnlyCallback.current?.(file, disk.readOnly)
       setReadOnly(disk.readOnly ? (disk.reason ?? true) : false)
       updateFormat(disk)
       setError(null)
@@ -217,14 +239,28 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
 
     actions.current = {
       save: () => {
-        if (!open || open.base.readOnly || diskConflict) return
-        const text = open.editor.getValue()
-        pendingSave = text === open.base.text && writing === undefined ? undefined : text
-        updateDirty()
-        if (pendingSave !== undefined) void flush()
+        const current = open
+        if (!current || current.base.readOnly || diskConflict || isReloading) return
+        const generation = ++saveGeneration
+        const queueSave = () => {
+          if (!alive || generation !== saveGeneration || open !== current || current.base.readOnly || diskConflict || isReloading) return
+          const text = current.editor.getValue()
+          pendingSave = text === current.base.text && writing === undefined ? undefined : text
+          updateDirty()
+          if (pendingSave !== undefined) void flush()
+        }
+        if (!formatting && getEditorPrefs().formatOnSave && current.editor.formatDocument) {
+          pendingSave = undefined
+          formatting = Promise.resolve().then(async () => {
+            try { await current.editor.formatDocument?.() } catch { /* không có formatter vẫn lưu */ }
+          }).finally(() => { formatting = null })
+        }
+        if (formatting) void formatting.then(queueSave)
+        else queueSave()
       },
       reload: () => {
         if (!open || !diskConflict || isReloading) return
+        saveGeneration++
         pendingReload = open.editor.getValue()
         isReloading = true
         setReloading(true)
@@ -238,8 +274,27 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
         updateFormat(disk)
         setError(null)
         updateConflict(null)
-      }
+      },
+      blur: () => autoSave.blur()
     }
+    const autoSave = createAutoSave(() => actions.current?.save(),
+      () => !!(alive && open && dirty.current && !open.base.readOnly && !diskConflict && !isReloading), getEditorPrefs)
+    let { autoSave: autoSaveMode, autoSaveDelay } = getEditorPrefs()
+    const offPrefs = observeEditorPrefs(() => {
+      const next = getEditorPrefs()
+      if (next.autoSave === autoSaveMode && next.autoSaveDelay === autoSaveDelay) return
+      autoSaveMode = next.autoSave
+      autoSaveDelay = next.autoSaveDelay
+      autoSave.change()
+    })
+    const onFocusOut = (event: FocusEvent) => {
+      const from = event.target
+      if (!(from instanceof Element)) return
+      const mirror = from.closest('[data-mirror-file]')
+      const pane = host.current?.contains(from) ? host.current : mirror?.getAttribute('data-mirror-file') === file ? mirror : null
+      if (pane && !(event.relatedTarget instanceof Node && pane.contains(event.relatedTarget))) autoSave.blur()
+    }
+    document.addEventListener('focusout', onFocusOut)
 
     const off = window.nexgraph.index.onEvent((event) => {
       if (event.type === 'changes_updated' && event.project_id === projectId) {
@@ -249,14 +304,21 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
     })
     fs.read(projectId, file).then((c) => {
       if (!alive || !host.current) return
-      const ed = createEditor(host.current, { value: c.text, language, readOnly: c.readOnly, path: file, projectId, onOpenFile: (target, at) => openFileRef.current?.(target, at) })
+      const ed = createEditor(host.current, { value: c.text, language, readOnly: c.readOnly, path: file, projectId, onOpenFile: (target, at, col) => openFileRef.current?.(target, at, col) })
+      readOnlyCallback.current?.(file, c.readOnly)
       void window.nexgraph.lsp?.open(projectId, file, c.text).catch(() => {})
       open = { editor: ed, base: c }
       editor.current = ed
-      ed.onChange(updateDirty)
+      ed.onChange(() => {
+        updateDirty()
+        autoSave.change()
+        clearTimeout(lspTimer)
+        lspTimer = setTimeout(() => { if (alive) void window.nexgraph.lsp?.open(projectId, file, ed.getValue()).catch(() => {}) }, 180)
+      })
       ed.onCursor?.((line, column) => setCursor({ line, column }))
       ed.onGutterClick?.((at) => toggleBreakpoint(file, at))
-      ed.revealLines(line, lineEnd)
+      if (column !== undefined && ed.revealPosition) ed.revealPosition(line, column)
+      else ed.revealLines(line, lineEnd)
       setReadOnly(c.readOnly ? (c.reason ?? true) : false)
       updateFormat(c)
       setReady(true)
@@ -269,10 +331,14 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
           version: open.base.version, dirty: dirty.current }
       })
       void flush()
-    }).catch((e) => alive && setError(explain(e)))
+    }).catch((e) => { if (alive) { const message = explain(e); setError(message); loadErrorCallback.current?.(file, message) } })
     return () => {
       alive = false
+      clearTimeout(lspTimer)
       off()
+      autoSave.dispose()
+      offPrefs()
+      document.removeEventListener('focusout', onFocusOut)
       actions.current = null
       contextCallback.current?.(file, null)
       editor.current?.dispose()
@@ -285,8 +351,11 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   }, [projectId, file, loadAttempt])
 
   useEffect(() => {
-    if (ready) editor.current?.revealLines(line, lineEnd)
-  }, [ready, line, lineEnd, revealRequest])
+    if (ready) {
+      if (column !== undefined && editor.current?.revealPosition) editor.current.revealPosition(line, column)
+      else editor.current?.revealLines(line, lineEnd)
+    }
+  }, [ready, line, column, lineEnd, revealRequest])
 
   useEffect(() => {
     editor.current?.setVim?.(ready && vim ? vimNode : null)
@@ -329,6 +398,11 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
   // Nghe cả tài liệu để Ctrl+S hoạt động khi tiêu điểm vừa rời khỏi Monaco. Tiêu điểm trong khung chia đôi thì lưu tệp của khung đó; không thì thẻ đang hiện.
   const activeRef = useRef(active)
   activeRef.current = active
+  const wasActive = useRef(active)
+  useEffect(() => {
+    if (wasActive.current && !active) actions.current?.blur()
+    wasActive.current = active
+  }, [active])
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return
@@ -360,6 +434,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
           ))}
         </ol>
         <span className="ws-editor-actions">
+          {onViewImage && <button type="button" onClick={onViewImage} title="Xem ảnh SVG">Xem ảnh</button>}
           {saveLabel && <span role="status" className="ws-save-state" data-state={saveState}>{saveLabel}</span>}
           <button type="button" className="ws-icon-button" disabled={!ready || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
             aria-label="Lưu" title="Lưu (Ctrl/Cmd+S)"><Icon name="save" size={15} /></button>
@@ -384,8 +459,10 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
         </p>
       )}
       <div ref={host} className="editor-host" />
+      <EditorDebug file={file} editor={ready ? editor.current : null} active={active} cursor={cursor.line} />
       {format && active && (
         <StatusBarItems>
+          <button type="button" className="status-item" title={`${errorCount} lỗi, ${warningCount} cảnh báo`} onClick={() => runCommand('editor.diagnostics')}>Lỗi {errorCount} · Cảnh báo {warningCount}</button>
           <span className="status-item" title={`Dòng ${cursor.line}, cột ${cursor.column}`}>{cursor.line}:{cursor.column}</span>
           <span className="status-item" title="Ngôn ngữ">{format.language}</span>
           <span className="status-item" title="Kiểu xuống dòng">{format.eol === '\r\n' ? 'CRLF' : 'LF'}</span>
