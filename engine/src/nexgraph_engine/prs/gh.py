@@ -4,6 +4,9 @@ Test thay `run_gh` bằng hàm giả (monkeypatch `nexgraph_engine.prs.gh.run_gh
 """
 from __future__ import annotations
 
+import os
+import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -11,6 +14,14 @@ from nexgraph_engine.errors import ApiError
 from nexgraph_engine.subprocesses import run_captured
 
 TIMEOUT = 30.0
+# App đóng gói trên macOS chạy với PATH tối giản (/usr/bin:/bin) nên không thấy gh của Homebrew/bộ cài.
+EXTRA_DIRS: tuple[str, ...] = (
+    ("/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin") if os.name != "nt"
+    else (os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "GitHub CLI"),))
+_SECRETS = [
+    (re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,})"), "***"),
+    (re.compile(r"(://)[^/\s@]+@"), r"\1***@"),
+]
 MAX_PR_NUMBER = 1_000_000_000
 
 _HTTP = {"gh_missing": 409, "gh_auth": 409, "not_github": 409, "gh_timeout": 504, "gh_failed": 502, "pr_not_found": 404}
@@ -24,9 +35,20 @@ _MESSAGES = {
 }
 
 
+def redact(text: str) -> str:
+    """Che token GitHub và user:pass trong URL trước khi đưa stderr của gh lên UI/MCP."""
+    for pattern, repl in _SECRETS:
+        text = pattern.sub(repl, text)
+    return text
+
+
+def find_gh() -> str | None:
+    return shutil.which("gh", path=os.pathsep.join([os.environ.get("PATH", ""), *EXTRA_DIRS]))
+
+
 class GhError(Exception):
     def __init__(self, code: str, detail: str = "") -> None:
-        super().__init__(_MESSAGES[code] + (f": {detail}" if detail else ""))
+        super().__init__(_MESSAGES[code] + (f": {redact(detail)}" if detail else ""))
         self.code = code
 
     def api_error(self) -> ApiError:
@@ -46,8 +68,11 @@ def _classify_failure(stderr: str) -> str:
 
 def run_gh(root: Path, args: list[str], timeout: float = TIMEOUT) -> str:
     """Chạy `gh <args>` trong thư mục dự án; trả stdout, ném GhError có mã rõ ràng."""
+    exe = find_gh()
+    if exe is None:
+        raise GhError("gh_missing")
     try:
-        out = run_captured(["gh", *args], cwd=Path(root), timeout=timeout)
+        out = run_captured([exe, *args], cwd=Path(root), timeout=timeout)
     except FileNotFoundError:
         raise GhError("gh_missing") from None
     except subprocess.TimeoutExpired:

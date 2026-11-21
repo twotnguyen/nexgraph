@@ -106,7 +106,7 @@ describe('WorkspaceScreen', () => {
 
   it('tab Pull request chỉ hiện khi gh dùng được', async () => {
     const status = vi.fn(async () => ({ available: true, reason: null, repo: 'acme/demo', default_branch: 'main' }))
-    const list = vi.fn(async () => ({ repo: 'acme/demo', default_branch: 'main', base: 'main', prs: [], conflicts: [], truncated: false }))
+    const list = vi.fn(async () => ({ repo: 'acme/demo', default_branch: 'main', base: 'main', prs: [], conflicts: [], conflicts_truncated: false, truncated: false }))
     installNexgraph({ prs: { status, list } })
     render(<WorkspaceScreen project={project()} />)
     await userEvent.click(await screen.findByRole('tab', { name: 'Pull request' }))
