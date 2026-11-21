@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor/editor/editor.api.js'
 import { editorFontSize, getEditorPrefs, observeEditorPrefs, zoomEditorFont } from '../../state/editorPrefs'
 
 type EditorOptions = monaco.editor.IEditorOptions & { tabSize?: number; 'semanticHighlighting.enabled'?: boolean }
+const CURSOR_STYLE = { bar: 'line', block: 'block', underline: 'underline' } as const
 
 export function monacoOptions(): EditorOptions {
   const prefs = getEditorPrefs()
@@ -14,7 +15,14 @@ export function monacoOptions(): EditorOptions {
     inlayHints: { enabled: prefs.inlayHints ? 'on' : 'off' },
     'semanticHighlighting.enabled': prefs.semanticHighlighting,
     codeLens: prefs.codeLens,
-    bracketPairColorization: { enabled: prefs.colorizeBrackets }
+    bracketPairColorization: { enabled: prefs.colorizeBrackets },
+    parameterHints: { enabled: prefs.autoSignatureHelp },
+    renderValidationDecorations: prefs.inlineDiagnostics ? 'on' : 'off',
+    hover: { enabled: prefs.hoverEnabled ? 'on' : 'off' },
+    cursorBlinking: prefs.cursorBlink ? 'blink' : 'solid',
+    cursorStyle: CURSOR_STYLE[prefs.cursorShape],
+    renderLineHighlight: prefs.currentLineHighlight,
+    selectionHighlight: prefs.selectionHighlight
   }
 }
 

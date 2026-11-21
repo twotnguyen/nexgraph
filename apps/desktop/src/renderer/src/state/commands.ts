@@ -97,6 +97,14 @@ export const COMMANDS: CommandDef[] = [
   { id: 'editor.toggle_semantic_highlights', category: 'Editor', title: 'Bật/tắt tô sáng ngữ nghĩa', key: 'mod+alt+shift+s' },
   { id: 'editor.toggle_code_lens', category: 'Editor', title: 'Bật/tắt Code Lens', key: 'mod+alt+shift+l' }, // mod+alt+l thuộc Reformat Code của base JetBrains
   { id: 'editor.toggle_colorize_brackets', category: 'Editor', title: 'Bật/tắt tô màu ngoặc', key: 'mod+alt+shift+b' },
+  { id: 'editor.toggle_fold_all', category: 'Editor', title: 'Bật/tắt thu gọn tất cả', key: 'mod+k mod+l' }, // mod+shift+enter thuộc view.zoom_pane
+  { id: 'editor.toggle_auto_signature_help', category: 'Editor', title: 'Bật/tắt gợi ý chữ ký tự động', key: 'mod+alt+shift+g' },
+  { id: 'editor.toggle_inline_diagnostics', category: 'Editor', title: 'Bật/tắt chẩn đoán trong dòng', key: 'mod+alt+shift+d' },
+  { id: 'editor.toggle_hover', category: 'Editor', title: 'Bật/tắt thông tin khi di chuột', key: 'mod+alt+shift+e' }, // mod+alt+shift+h thuộc search.toggle_replace
+  { id: 'editor.toggle_cursor_blink', category: 'Editor', title: 'Bật/tắt chớp con trỏ' },
+  { id: 'editor.set_cursor_shape', category: 'Editor', title: 'Chọn kiểu con trỏ' },
+  { id: 'editor.toggle_current_line_highlight', category: 'Editor', title: 'Bật/tắt tô sáng dòng hiện tại' },
+  { id: 'editor.toggle_selection_highlight', category: 'Editor', title: 'Bật/tắt tô sáng vùng chọn' },
   { id: 'editor.select_next_occurrence', category: 'Editor', title: 'Chọn lần xuất hiện tiếp theo', key: 'mod+d' },
   { id: 'editor.select_all_occurrences', category: 'Editor', title: 'Chọn tất cả lần xuất hiện', key: 'mod+alt+shift+a' }, // mod+shift+l thuộc Chat của base JetBrains
   { id: 'editor.add_cursor_above', category: 'Editor', title: 'Thêm con trỏ phía trên', key: 'mod+alt+shift+arrowup' }, // mod+alt+arrowup là Syntax Node trước đó ngoài macOS

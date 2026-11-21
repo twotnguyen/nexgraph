@@ -50,6 +50,13 @@ export type EditorPrefs = {
   semanticHighlighting: boolean
   codeLens: boolean
   colorizeBrackets: boolean
+  autoSignatureHelp: boolean
+  inlineDiagnostics: boolean
+  hoverEnabled: boolean
+  cursorBlink: boolean
+  cursorShape: 'bar' | 'block' | 'underline'
+  currentLineHighlight: 'none' | 'gutter' | 'line' | 'all'
+  selectionHighlight: boolean
 }
 
 const STORE = 'nexgraph.editor.preferences'
@@ -58,10 +65,14 @@ const DEFAULTS: EditorPrefs = {
   autoSave: 'off', autoSaveDelay: 1000, iconTheme: 'symbols', blameDelay: 0, blameSummary: true,
   lineNumbers: true, minimap: false, renderWhitespace: 'selection', stickyScroll: false,
   breadcrumbs: true, inlayHints: false, semanticHighlighting: false,
-  codeLens: false, colorizeBrackets: false
+  codeLens: false, colorizeBrackets: false,
+  autoSignatureHelp: false, inlineDiagnostics: true, hoverEnabled: true, cursorBlink: true,
+  cursorShape: 'bar', currentLineHighlight: 'all', selectionHighlight: true
 }
 const boolIn = (value: unknown, fallback: boolean): boolean => typeof value === 'boolean' ? value : fallback
 const WHITESPACE = ['none', 'boundary', 'selection', 'trailing', 'all'] as const
+const CURSOR_SHAPES = ['bar', 'block', 'underline'] as const
+const LINE_HIGHLIGHTS = ['none', 'gutter', 'line', 'all'] as const
 const numberIn = (value: unknown, fallback: number, min: number, max: number): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback
 
@@ -90,7 +101,14 @@ export function parseEditorPrefs(raw: string | null): EditorPrefs {
     inlayHints: boolIn(value.inlayHints, DEFAULTS.inlayHints),
     semanticHighlighting: boolIn(value.semanticHighlighting, DEFAULTS.semanticHighlighting),
     codeLens: boolIn(value.codeLens, DEFAULTS.codeLens),
-    colorizeBrackets: boolIn(value.colorizeBrackets, DEFAULTS.colorizeBrackets)
+    colorizeBrackets: boolIn(value.colorizeBrackets, DEFAULTS.colorizeBrackets),
+    autoSignatureHelp: boolIn(value.autoSignatureHelp, DEFAULTS.autoSignatureHelp),
+    inlineDiagnostics: boolIn(value.inlineDiagnostics, DEFAULTS.inlineDiagnostics),
+    hoverEnabled: boolIn(value.hoverEnabled, DEFAULTS.hoverEnabled),
+    cursorBlink: boolIn(value.cursorBlink, DEFAULTS.cursorBlink),
+    cursorShape: CURSOR_SHAPES.find((shape) => shape === value.cursorShape) ?? DEFAULTS.cursorShape,
+    currentLineHighlight: LINE_HIGHLIGHTS.find((mode) => mode === value.currentLineHighlight) ?? DEFAULTS.currentLineHighlight,
+    selectionHighlight: boolIn(value.selectionHighlight, DEFAULTS.selectionHighlight)
   }
 }
 

@@ -20,6 +20,7 @@ type Mode =
   | { kind: 'locations'; title: string; locations: LspLocation[] }
   | HierarchyMode
 type SymbolRow = { id: string; symbol: LspDocumentSymbol }
+const foldedByHandle = new WeakMap<object, boolean>()
 
 function flattenSymbols(symbols: LspDocumentSymbol[], prefix = ''): SymbolRow[] {
   return symbols.flatMap((symbol, index) => {
@@ -336,6 +337,27 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   useCommand('editor.toggle_semantic_highlights', () => setEditorPrefs({ semanticHighlighting: !getEditorPrefs().semanticHighlighting }))
   useCommand('editor.toggle_code_lens', () => setEditorPrefs({ codeLens: !getEditorPrefs().codeLens }))
   useCommand('editor.toggle_colorize_brackets', () => setEditorPrefs({ colorizeBrackets: !getEditorPrefs().colorizeBrackets }))
+  useCommand('editor.toggle_fold_all', () => {
+    if (!editor) return
+    const folded = !foldedByHandle.get(editor.handle)
+    foldedByHandle.set(editor.handle, folded)
+    action(folded ? 'editor.foldAll' : 'editor.unfoldAll')
+  }, !!editor)
+  useCommand('editor.toggle_auto_signature_help', () => setEditorPrefs({ autoSignatureHelp: !getEditorPrefs().autoSignatureHelp }))
+  useCommand('editor.toggle_inline_diagnostics', () => setEditorPrefs({ inlineDiagnostics: !getEditorPrefs().inlineDiagnostics }))
+  useCommand('editor.toggle_hover', () => setEditorPrefs({ hoverEnabled: !getEditorPrefs().hoverEnabled }))
+  useCommand('editor.toggle_cursor_blink', () => setEditorPrefs({ cursorBlink: !getEditorPrefs().cursorBlink }))
+  useCommand('editor.set_cursor_shape', () => {
+    const shapes = ['bar', 'block', 'underline'] as const
+    const current = getEditorPrefs().cursorShape
+    setEditorPrefs({ cursorShape: shapes[(shapes.indexOf(current) + 1) % shapes.length] })
+  })
+  useCommand('editor.toggle_current_line_highlight', () => {
+    const modes = ['none', 'gutter', 'line', 'all'] as const
+    const current = getEditorPrefs().currentLineHighlight
+    setEditorPrefs({ currentLineHighlight: modes[(modes.indexOf(current) + 1) % modes.length] })
+  })
+  useCommand('editor.toggle_selection_highlight', () => setEditorPrefs({ selectionHighlight: !getEditorPrefs().selectionHighlight }))
   useCommand('editor.select_next_occurrence', () => action('editor.action.addSelectionToNextFindMatch'), !!editor)
   useCommand('editor.select_all_occurrences', () => action('editor.action.selectHighlights'), !!editor)
   useCommand('editor.add_cursor_above', () => action('editor.action.insertCursorAbove'), !!editor)

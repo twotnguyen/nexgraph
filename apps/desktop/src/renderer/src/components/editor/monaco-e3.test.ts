@@ -11,6 +11,9 @@ type FakeModel = {
   getLineCount(): number
   getLineMaxColumn(): number
   getVersionId(): number
+  getLineContent(line: number): string
+  getLanguageId(): string
+  setLanguageId(id: string): void
 }
 type FakeCollection = { set: Mock; clear: Mock }
 type FakeEditor = {
@@ -21,15 +24,23 @@ type FakeEditor = {
   revealRangeInCenter: Mock
   dispose: Mock
   createDecorationsCollection(): FakeCollection
+  onKeyDown(cb: (event: FakeKey) => void): { dispose(): void }
+  getPosition(): { lineNumber: number; column: number }
+  fireKey(keyCode: number): void
+  setPosition: Mock
+  executeEdits: Mock
+  focus: Mock
 }
+type FakeKey = { keyCode: number; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; preventDefault: Mock; stopPropagation: Mock }
 type EditorOptions = { model?: FakeModel; value?: string }
 const fake = vi.hoisted(() => {
   const models = new Map<string, FakeModel>()
   const collections: FakeCollection[] = []
   const editors: FakeEditor[] = []
   const disposable = { dispose() {} }
-  const createModel = vi.fn((value: string, _language: string, uri: { toString(): string }): FakeModel => {
+  const createModel = vi.fn((value: string, language: string, uri: { toString(): string }): FakeModel => {
     let text = value
+    let lang = language
     let disposed = false
     const model = {
       uri,
@@ -40,13 +51,19 @@ const fake = vi.hoisted(() => {
       onWillDispose: () => disposable,
       getLineCount: () => text.split('\n').length,
       getLineMaxColumn: () => 1,
-      getVersionId: () => 1
+      getVersionId: () => 1,
+      getLineContent: (line: number) => text.split('\n')[line - 1] ?? '',
+      getEOL: () => '\n',
+      getLanguageId: () => lang,
+      setLanguageId: (id: string) => { lang = id }
     }
     models.set(uri.toString(), model)
     return model
   })
   const createEditorMock = vi.fn((options: EditorOptions): FakeEditor => {
     const model = options.model ?? null
+    let keyHandler: ((event: FakeKey) => void) | undefined
+    let cursor = { lineNumber: 1, column: 1 }
     const editor = {
       getModel: () => model,
       getValue: () => model?.getValue() ?? options.value ?? '',
@@ -58,12 +75,19 @@ const fake = vi.hoisted(() => {
         const collection = { set: vi.fn(), clear: vi.fn() }
         collections.push(collection)
         return collection
-      }
+      },
+      onKeyDown: (cb: (event: FakeKey) => void) => { keyHandler = cb; return disposable },
+      fireKey: (keyCode: number) => keyHandler?.({ keyCode, ctrlKey: false, metaKey: false, altKey: false,
+        shiftKey: false, preventDefault: vi.fn(), stopPropagation: vi.fn() }),
+      getPosition: () => cursor,
+      setPosition: vi.fn((position: { lineNumber: number; column: number }) => { cursor = position }),
+      executeEdits: vi.fn(),
+      focus: vi.fn()
     }
     editors.push(editor)
     return editor
   })
-  return { models, collections, editors, createModel, createEditorMock, disposable }
+  return { models, collections, editors, createModel, createEditorMock, disposable, installFontKeys: vi.fn() }
 })
 
 const sideEffectModules = [
@@ -100,7 +124,7 @@ vi.doMock('monaco-editor/editor/editor.worker.js?worker', () => ({ default: clas
 vi.doMock('y-monaco', () => ({ MonacoBinding: class { destroy() {} } }))
 vi.doMock('../git/conflict-widgets', () => ({ attachConflictWidgets: () => () => {} }))
 vi.doMock('../../state/useTheme', () => ({ currentTheme: () => 'dark', observeTheme: () => () => {} }))
-vi.doMock('./monacoPrefs', () => ({ installFontKeys: () => {}, monacoOptions: () => ({}) }))
+vi.doMock('./monacoPrefs', () => ({ installFontKeys: fake.installFontKeys, monacoOptions: () => ({}) }))
 vi.doMock('./lspEdits', () => ({ applyProjectEdits: async () => {}, diagnosticMarker: () => ({}) }))
 vi.doMock('../../state/diagnostics', () => ({ getDiagnostics: () => [], subscribeDiagnostics: () => () => {} }))
 vi.doMock('monaco-editor/editor/editor.api.js', () => {
@@ -132,6 +156,8 @@ vi.doMock('monaco-editor/editor/editor.api.js', () => {
     defineTheme: () => {},
     setTheme: () => {},
     setModelMarkers: () => {},
+    getEditors: () => fake.editors,
+    setModelLanguage: (model: FakeModel, language: string) => model.setLanguageId(language),
     registerEditorOpener: () => fake.disposable,
     registerCommand: () => fake.disposable,
     EndOfLinePreference: { LF: 1 },
@@ -146,15 +172,16 @@ vi.doMock('monaco-editor/editor/editor.api.js', () => {
       })
     },
     editor,
+    KeyCode: { Enter: 3 },
     languages
   }
 })
 
 // Phải đăng ký các vi.doMock ở trên trước khi nạp monaco.ts (mô-đun có nhiều import phụ).
-const { createEditor, createMirror } = await import('./monaco')
+const { createEditor, createMirror, continuationFor } = await import('./monaco')
 
 const el = () => document.createElement('div')
-const opts = (path?: string) => ({ value: 'disk', language: 'typescript', readOnly: false, path, projectId: 'p1' })
+const opts = (path?: string, language = 'typescript') => ({ value: 'disk', language, readOnly: false, path, projectId: 'p1' })
 
 beforeEach(() => {
   fake.models.clear()
@@ -162,6 +189,7 @@ beforeEach(() => {
   fake.editors.length = 0
   fake.createModel.mockClear()
   fake.createEditorMock.mockClear()
+  fake.installFontKeys.mockClear()
 })
 
 describe('E3 editor handles', () => {
@@ -185,6 +213,11 @@ describe('E3 editor handles', () => {
 
     handle.dispose()
     expect(bookmarks.clear).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers font zoom keys in the main editor', () => {
+    createEditor(el(), opts('a.ts'))
+    expect(fake.installFontKeys).toHaveBeenCalledWith(fake.editors.at(-1))
   })
 
   it('selects and reveals a 1-based range without shifting coordinates', () => {
@@ -221,5 +254,77 @@ describe('E3 editor handles', () => {
     expect(model.dispose).not.toHaveBeenCalled()
     mirror?.dispose()
     expect(model.dispose).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Enter continuations', () => {
+  it('keeps comment and Markdown list prefixes on the next line', () => {
+    expect(continuationFor('// hello', '\n', 'typescript')).toEqual({ text: '\n// ', replaceLine: false })
+    expect(continuationFor('  # hello', '\n', 'python')).toEqual({ text: '\n  # ', replaceLine: false })
+    expect(continuationFor('- item', '\n', 'markdown')).toEqual({ text: '\n- ', replaceLine: false })
+    expect(continuationFor('* item', '\n', 'markdown')).toEqual({ text: '\n* ', replaceLine: false })
+    expect(continuationFor('3. item', '\n', 'markdown')).toEqual({ text: '\n4. ', replaceLine: false })
+    expect(continuationFor('const x = 1', '\n', 'typescript')).toBeNull()
+  })
+
+  it('removes a marker-only line instead of creating an empty marker', () => {
+    expect(continuationFor('  - ', '\n', 'markdown')).toEqual({ text: '', replaceLine: true })
+    expect(continuationFor('#', '\n', 'python')).toEqual({ text: '', replaceLine: true })
+  })
+
+  it('only continues markers that fit the language', () => {
+    expect(continuationFor('#header {', '\n', 'css')).toBeNull()
+    expect(continuationFor('#x = 1', '\n', 'typescript')).toBeNull()
+    expect(continuationFor('  - ', '\n', 'typescript')).toBeNull()
+    expect(continuationFor('// x', '\n', 'typescript')).toEqual({ text: '\n// ', replaceLine: false })
+    expect(continuationFor('- item', '\n', 'markdown')).toEqual({ text: '\n- ', replaceLine: false })
+    expect(continuationFor('// x', '\n', 'plaintext')).toBeNull()
+  })
+
+  it('uses the model language at Enter time, after a status-bar switch', () => {
+    const handle = createEditor(el(), opts('a.ts'))
+    const editor = fake.editors.at(-1)!
+    handle.setValue('- item')
+    editor.setPosition({ lineNumber: 1, column: 7 })
+    handle.setLanguage?.('markdown')
+    editor.fireKey(3)
+    expect(editor.executeEdits).toHaveBeenCalledWith('nexgraph.continuation', [{
+      range: expect.objectContaining({ startLineNumber: 1, startColumn: 7, endLineNumber: 1, endColumn: 7 }),
+      text: '\n- ', forceMoveMarkers: true
+    }])
+
+    const other = createEditor(el(), opts('b.md', 'markdown'))
+    const otherEditor = fake.editors.at(-1)!
+    other.setValue('- item')
+    otherEditor.setPosition({ lineNumber: 1, column: 7 })
+    other.setLanguage?.('typescript')
+    otherEditor.fireKey(3)
+    expect(otherEditor.executeEdits).not.toHaveBeenCalled()
+  })
+
+  it('edits the real model with executeEdits when Enter is pressed on a comment', () => {
+    const handle = createEditor(el(), opts('a.ts'))
+    const editor = fake.editors.at(-1)!
+    handle.setValue('// hello')
+    editor.setPosition({ lineNumber: 1, column: 9 })
+    editor.fireKey(3)
+    expect(editor.executeEdits).toHaveBeenCalledWith('nexgraph.continuation', [{
+      range: expect.objectContaining({ startLineNumber: 1, startColumn: 9, endLineNumber: 1, endColumn: 9 }),
+      text: '\n// ', forceMoveMarkers: true
+    }])
+    expect(editor.setPosition).toHaveBeenCalledWith({ lineNumber: 2, column: 4 })
+  })
+
+  it('deletes the whole marker range when Enter is pressed on an empty list item', () => {
+    const handle = createEditor(el(), opts('a.md', 'markdown'))
+    const editor = fake.editors.at(-1)!
+    handle.setValue('  - ')
+    editor.setPosition({ lineNumber: 1, column: 5 })
+    editor.fireKey(3)
+    expect(editor.executeEdits).toHaveBeenCalledWith('nexgraph.continuation', [{
+      range: expect.objectContaining({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 5 }),
+      text: '', forceMoveMarkers: true
+    }])
+    expect(editor.setPosition).toHaveBeenCalledWith({ lineNumber: 1, column: 1 })
   })
 })

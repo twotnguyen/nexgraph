@@ -10,13 +10,18 @@ vi.mock('monaco-editor/editor/editor.api.js', () => ({
   KeyCode: { Equal: 1, Minus: 2, Digit0: 3 }
 }))
 import { installFontKeys, monacoOptions } from './monacoPrefs'
+const BASE_OPTIONS = { parameterHints: { enabled: false }, renderValidationDecorations: 'on',
+  hover: { enabled: 'on' }, cursorBlinking: 'blink', cursorStyle: 'line',
+  renderLineHighlight: 'all', selectionHighlight: true }
 
 afterEach(() => {
   fake.editors.length = 0
   zoomEditorFont('reset')
   setEditorPrefs({ fontSize: 13, tabSize: 4, wordWrap: 'off', iconTheme: 'symbols',
     lineNumbers: true, minimap: false, renderWhitespace: 'selection', stickyScroll: false, breadcrumbs: true,
-    inlayHints: false, semanticHighlighting: false, codeLens: false, colorizeBrackets: false })
+    inlayHints: false, semanticHighlighting: false, codeLens: false, colorizeBrackets: false,
+    autoSignatureHelp: false, inlineDiagnostics: true, hoverEnabled: true, cursorBlink: true,
+    cursorShape: 'bar', currentLineHighlight: 'all', selectionHighlight: true })
 })
 
 it('updates every open editor and model when the settings change', () => {
@@ -29,7 +34,7 @@ it('updates every open editor and model when the settings change', () => {
   const expected = { fontSize: 18, tabSize: 2, wordWrap: 'on', lineNumbers: 'on', minimap: { enabled: false },
     renderWhitespace: 'selection', stickyScroll: { enabled: false }, inlayHints: { enabled: 'off' },
     'semanticHighlighting.enabled': false, codeLens: false,
-    bracketPairColorization: { enabled: false } }
+    bracketPairColorization: { enabled: false }, ...BASE_OPTIONS }
   expect(first.updateOptions).toHaveBeenCalledWith({ tabSize: 2 })
   expect(first.updateOptions).toHaveBeenCalledWith(expected)
   expect(second.updateOptions).toHaveBeenCalledWith(expected)
@@ -50,7 +55,7 @@ it('applies every view toggle to all open editors', () => {
   const expected = { fontSize: 13, tabSize: 4, wordWrap: 'off', lineNumbers: 'off', minimap: { enabled: true },
     renderWhitespace: 'all', stickyScroll: { enabled: true }, inlayHints: { enabled: 'on' },
     'semanticHighlighting.enabled': true, codeLens: true,
-    bracketPairColorization: { enabled: true } }
+    bracketPairColorization: { enabled: true }, ...BASE_OPTIONS }
   expect(first.updateOptions).toHaveBeenLastCalledWith(expected)
   expect(second.updateOptions).toHaveBeenLastCalledWith(expected)
   expect(monacoOptions()).toEqual(expected)
@@ -67,4 +72,18 @@ it('registers editor zoom keys that reset to the configured size', () => {
   expect(editorFontSize()).toBe(12)
   keys.get(1027)?.()
   expect(editorFontSize()).toBe(13)
+})
+
+it('maps cursor, hover, signature and diagnostics settings to real Monaco options', () => {
+  const editor = { updateOptions: vi.fn(), getModel: () => ({ updateOptions: vi.fn() }) }
+  fake.editors.push(editor)
+  setEditorPrefs({ autoSignatureHelp: true, inlineDiagnostics: false, hoverEnabled: false, cursorBlink: false,
+    cursorShape: 'underline', currentLineHighlight: 'none', selectionHighlight: false })
+  expect(monacoOptions()).toMatchObject({
+    parameterHints: { enabled: true }, renderValidationDecorations: 'off', hover: { enabled: 'off' },
+    cursorBlinking: 'solid', cursorStyle: 'underline', renderLineHighlight: 'none', selectionHighlight: false
+  })
+  expect(editor.updateOptions).toHaveBeenLastCalledWith(monacoOptions())
+  setEditorPrefs({ cursorShape: 'block' })
+  expect(monacoOptions().cursorStyle).toBe('block')
 })

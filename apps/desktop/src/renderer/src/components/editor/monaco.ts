@@ -336,7 +336,48 @@ export function languageFor(file: string): string {
   return hit?.id ?? 'plaintext'
 }
 
+const SLASH_LANGS: Record<string, true> = { typescript: true, javascript: true, typescriptreact: true, javascriptreact: true, java: true, c: true, cpp: true, csharp: true, go: true, rust: true, jsonc: true, json5: true, dart: true, php: true, swift: true, kotlin: true, scala: true }
+const HASH_LANGS: Record<string, true> = { python: true, yaml: true, shell: true, bash: true, zsh: true, ruby: true, perl: true }
+const LIST_LANGS: Record<string, true> = { markdown: true }
 /** `path`: model gắn với đường dẫn tệp để khung chia đôi (createMirror) dùng chung bộ đệm; có `projectId` thì F12/gợi ý/hover hỏi language server. */
+/** Enter trên dòng comment/list: nội dung dòng mới (`replaceLine`: xoá marker thay vì xuống dòng). */
+export function continuationFor(before: string, eol = '\n', language?: string): { text: string; replaceLine: boolean } | null {
+  const match = /^([ \t]*)((?:\/\/+|#+)[ \t]*|[-*][ \t]+|\d+\.[ \t]+)(.*)$/.exec(before)
+  if (!match) return null
+  const [, indent, marker, rest] = match
+  if (language) {
+    const group = marker.startsWith('/') ? SLASH_LANGS : marker.startsWith('#') ? HASH_LANGS : LIST_LANGS
+    if (!group[language]) return null
+  }
+  if (!rest.trim()) return { text: indent.replace(/(?:  |\t)$/, ''), replaceLine: true }
+  const numbered = /^(\d+)\.[ \t]+$/.exec(marker)
+  const next = numbered ? `${Number(numbered[1]) + 1}. ` : marker
+  return { text: eol + indent + next, replaceLine: false }
+}
+
+function installContinuations(editor: monaco.editor.IStandaloneCodeEditor): void {
+  editor.onKeyDown((event) => {
+    if (event.keyCode !== monaco.KeyCode.Enter || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return
+    const model = editor.getModel()
+    const position = editor.getPosition()
+    if (!model || !position) return
+    const line = model.getLineContent(position.lineNumber)
+    if (line.slice(position.column - 1).trim()) return
+    const edit = continuationFor(line.slice(0, position.column - 1), model.getEOL(), model.getLanguageId())
+    if (!edit) return
+    event.preventDefault()
+    event.stopPropagation()
+    const end = line.length + 1
+    const range = edit.replaceLine
+      ? new monaco.Range(position.lineNumber, 1, position.lineNumber, end)
+      : new monaco.Range(position.lineNumber, end, position.lineNumber, end)
+    editor.executeEdits('nexgraph.continuation', [{ range, text: edit.text, forceMoveMarkers: true }])
+    const lineNumber = edit.replaceLine ? position.lineNumber : position.lineNumber + 1
+    const column = edit.replaceLine ? edit.text.length + 1 : edit.text.length - model.getEOL().length + 1
+    editor.setPosition({ lineNumber, column })
+    editor.focus()
+  })
+}
 export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean; path?: string; projectId?: string; onOpenFile?: (file: string, line: number, column?: number) => void }): EditorHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const uri = opts.path ? modelUri(opts.path, opts.projectId) : null
@@ -358,6 +399,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     ...(font ? { fontFamily: font } : {})
   })
   installFontKeys(editor)
+  if (!opts.readOnly) installContinuations(editor)
   const detachConflicts = attachConflictWidgets(editor)
   const hit = editor.createDecorationsCollection()
   const setVim = vimAttacher(editor)

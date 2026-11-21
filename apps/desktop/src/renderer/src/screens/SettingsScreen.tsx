@@ -321,6 +321,43 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
           </select>
         </div>
         <div className="settings-row">
+          <div><label htmlFor="settings-cursor-blink">{tr('Chớp con trỏ')}</label><p>{tr('Cho con trỏ nhấp nháy trong editor.')}</p></div>
+          <button id="settings-cursor-blink" type="button" role="switch" aria-checked={editorPrefs.cursorBlink}
+            className={`switch${editorPrefs.cursorBlink ? ' on' : ''}`} onClick={() => setEditorPrefs({ cursorBlink: !editorPrefs.cursorBlink })}><span /></button>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-cursor-shape">{tr('Kiểu con trỏ')}</label><p>{tr('Hình dạng của con trỏ khi soạn thảo.')}</p></div>
+          <select id="settings-cursor-shape" value={editorPrefs.cursorShape} onChange={(e) => setEditorPrefs({ cursorShape: e.target.value === 'block' || e.target.value === 'underline' ? e.target.value : 'bar' })}>
+            <option value="bar">{tr('Thanh')}</option><option value="block">{tr('Khối')}</option><option value="underline">{tr('Gạch dưới')}</option>
+          </select>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-current-line-highlight">{tr('Kiểu dòng hiện tại')}</label><p>{tr('Cách làm nổi bật dòng đang có con trỏ.')}</p></div>
+          <select id="settings-current-line-highlight" value={editorPrefs.currentLineHighlight} onChange={(e) => setEditorPrefs({ currentLineHighlight: e.target.value === 'none' || e.target.value === 'gutter' || e.target.value === 'line' ? e.target.value : 'all' })}>
+            <option value="none">{tr('Tắt')}</option><option value="gutter">{tr('Ở lề')}</option><option value="line">{tr('Cả dòng')}</option><option value="all">{tr('Tất cả')}</option>
+          </select>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-selection-highlight">{tr('Tô sáng vùng chọn')}</label><p>{tr('Làm nổi bật các đoạn trùng với vùng đang chọn.')}</p></div>
+          <button id="settings-selection-highlight" type="button" role="switch" aria-checked={editorPrefs.selectionHighlight}
+            className={`switch${editorPrefs.selectionHighlight ? ' on' : ''}`} onClick={() => setEditorPrefs({ selectionHighlight: !editorPrefs.selectionHighlight })}><span /></button>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-auto-signature-help">{tr('Gợi ý chữ ký tự động')}</label><p>{tr('Hiện gợi ý tham số khi gõ lời gọi hàm.')}</p></div>
+          <button id="settings-auto-signature-help" type="button" role="switch" aria-checked={editorPrefs.autoSignatureHelp}
+            className={`switch${editorPrefs.autoSignatureHelp ? ' on' : ''}`} onClick={() => setEditorPrefs({ autoSignatureHelp: !editorPrefs.autoSignatureHelp })}><span /></button>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-hover">{tr('Hiện thông tin khi di chuột')}</label><p>{tr('Hiện thông tin định nghĩa và tài liệu khi rê chuột vào mã.')}</p></div>
+          <button id="settings-hover" type="button" role="switch" aria-checked={editorPrefs.hoverEnabled}
+            className={`switch${editorPrefs.hoverEnabled ? ' on' : ''}`} onClick={() => setEditorPrefs({ hoverEnabled: !editorPrefs.hoverEnabled })}><span /></button>
+        </div>
+        <div className="settings-row">
+          <div><label htmlFor="settings-inline-diagnostics">{tr('Chẩn đoán ngay trong dòng')}</label><p>{tr('Hiện lỗi và cảnh báo ngay dưới dòng mã.')}</p></div>
+          <button id="settings-inline-diagnostics" type="button" role="switch" aria-checked={editorPrefs.inlineDiagnostics}
+            className={`switch${editorPrefs.inlineDiagnostics ? ' on' : ''}`} onClick={() => setEditorPrefs({ inlineDiagnostics: !editorPrefs.inlineDiagnostics })}><span /></button>
+        </div>
+        <div className="settings-row">
           <div><label htmlFor="settings-format-save">{tr('Định dạng khi lưu')}</label><p>{tr('Định dạng tệp trước khi lưu nếu có formatter cho ngôn ngữ đó.')}</p></div>
           <button id="settings-format-save" type="button" role="switch" aria-checked={editorPrefs.formatOnSave}
             className={`switch${editorPrefs.formatOnSave ? ' on' : ''}`} onClick={() => setEditorPrefs({ formatOnSave: !editorPrefs.formatOnSave })}><span /></button>

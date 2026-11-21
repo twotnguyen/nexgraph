@@ -9,7 +9,7 @@ import { SettingsScreen } from './SettingsScreen'
 beforeEach(() => {
   localStorage.clear()
   setBlame(false)
-  setEditorPrefs({ blameDelay: 0, blameSummary: true })
+  setEditorPrefs({ blameDelay: 0, blameSummary: true, cursorBlink: true, cursorShape: 'bar', currentLineHighlight: 'all', selectionHighlight: true, autoSignatureHelp: false, hoverEnabled: true, inlineDiagnostics: true })
 })
 afterEach(cleanup)
 
@@ -33,6 +33,24 @@ it('trang Version Control: bật blame, độ trễ và tóm tắt ghi vào tu�
   fireEvent.click(screen.getByRole('switch', { name: 'Hiện blame' }))
   expect(localStorage.getItem('nexgraph.editor.blame')).toBe('0')
   expect(screen.queryByLabelText('Độ trễ (ms)')).not.toBeInTheDocument()
+})
+
+it('trang Giao diện: tuỳ chọn con trỏ và hỗ trợ mã ghi vào kho editor', async () => {
+  await open()
+  fireEvent.click(screen.getByRole('switch', { name: 'Chớp con trỏ' }))
+  fireEvent.change(screen.getByLabelText('Kiểu con trỏ'), { target: { value: 'block' } })
+  fireEvent.change(screen.getByLabelText('Kiểu dòng hiện tại'), { target: { value: 'gutter' } })
+  fireEvent.click(screen.getByRole('switch', { name: 'Tô sáng vùng chọn' }))
+  fireEvent.click(screen.getByRole('switch', { name: 'Gợi ý chữ ký tự động' }))
+  fireEvent.click(screen.getByRole('switch', { name: 'Hiện thông tin khi di chuột' }))
+  fireEvent.click(screen.getByRole('switch', { name: 'Chẩn đoán ngay trong dòng' }))
+  expect(getEditorPrefs()).toMatchObject({
+    cursorBlink: false, cursorShape: 'block', currentLineHighlight: 'gutter',
+    selectionHighlight: false, autoSignatureHelp: true, hoverEnabled: false, inlineDiagnostics: false
+  })
+  expect(JSON.parse(localStorage.getItem('nexgraph.editor.preferences') || '{}')).toMatchObject({ cursorShape: 'block', hoverEnabled: false })
+  expect(screen.getByRole('switch', { name: 'Chớp con trỏ' })).toHaveAttribute('aria-checked', 'false')
+  expect(screen.getByLabelText('Kiểu dòng hiện tại')).toHaveValue('gutter')
 })
 
 it('trang Panels: khung chat, terminal, cây tệp mở sẵn và thanh trạng thái ghi vào kho bố cục', async () => {

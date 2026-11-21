@@ -26,7 +26,9 @@ const props = (active: ActiveEditor) => ({ projectId: 'p1', editor: active, symb
 beforeEach(() => {
   localStorage.clear()
   setEditorPrefs({ lineNumbers: true, minimap: false, renderWhitespace: 'selection', stickyScroll: false, breadcrumbs: true,
-    inlayHints: false, semanticHighlighting: false, codeLens: false, colorizeBrackets: false })
+    inlayHints: false, semanticHighlighting: false, codeLens: false, colorizeBrackets: false,
+    autoSignatureHelp: false, inlineDiagnostics: true, hoverEnabled: true, cursorBlink: true,
+    cursorShape: 'bar', currentLineHighlight: 'all', selectionHighlight: true })
 })
 
 describe('EditorTools', () => {
@@ -321,6 +323,45 @@ describe('EditorTools view commands', () => {
     render(<EditorTools {...p} />)
     act(() => { runCommand('editor.copy_and_trim') })
     await waitFor(() => expect(p.onError).toHaveBeenCalledWith('Không có clipboard'))
+  })
+  it('applies the new editor view commands and folds through real Monaco actions', () => {
+    const h = { ...handle(), runAction: vi.fn(async () => {}) }
+    const p = props({ file: 'a.ts', handle: h, text: () => 'one\ntwo\nthree' })
+    render(<EditorTools {...p} />)
+    act(() => runCommand('editor.toggle_auto_signature_help'))
+    expect(getEditorPrefs().autoSignatureHelp).toBe(true)
+    act(() => runCommand('editor.toggle_inline_diagnostics'))
+    expect(getEditorPrefs().inlineDiagnostics).toBe(false)
+    act(() => runCommand('editor.toggle_hover'))
+    expect(getEditorPrefs().hoverEnabled).toBe(false)
+    act(() => runCommand('editor.toggle_cursor_blink'))
+    expect(getEditorPrefs().cursorBlink).toBe(false)
+    act(() => runCommand('editor.toggle_selection_highlight'))
+    expect(getEditorPrefs().selectionHighlight).toBe(false)
+    act(() => runCommand('editor.set_cursor_shape'))
+    expect(getEditorPrefs().cursorShape).toBe('block')
+    act(() => runCommand('editor.toggle_current_line_highlight'))
+    expect(getEditorPrefs().currentLineHighlight).toBe('none')
+    act(() => runCommand('editor.toggle_fold_all'))
+    expect(h.runAction).toHaveBeenLastCalledWith('editor.foldAll')
+    act(() => runCommand('editor.toggle_fold_all'))
+    expect(h.runAction).toHaveBeenLastCalledWith('editor.unfoldAll')
+  })
+  it('keeps fold state per editor handle across unmount and new handles', () => {
+    const hA = { ...handle(), runAction: vi.fn(async () => {}) }
+    const a = props({ file: 'a.ts', handle: hA, text: () => 'one\ntwo\nthree' })
+    const mountedA = render(<EditorTools {...a} />)
+    act(() => { runCommand('editor.toggle_fold_all') })
+    expect(hA.runAction).toHaveBeenLastCalledWith('editor.foldAll')
+    mountedA.unmount()
+    const remountedA = render(<EditorTools {...a} />)
+    act(() => { runCommand('editor.toggle_fold_all') })
+    expect(hA.runAction).toHaveBeenLastCalledWith('editor.unfoldAll')
+    remountedA.unmount()
+    const hB = { ...handle(), runAction: vi.fn(async () => {}) }
+    render(<EditorTools {...props({ file: 'b.ts', handle: hB, text: () => 'one\ntwo\nthree' })} />)
+    act(() => { runCommand('editor.toggle_fold_all') })
+    expect(hB.runAction).toHaveBeenLastCalledWith('editor.foldAll')
   })
 })
 })
