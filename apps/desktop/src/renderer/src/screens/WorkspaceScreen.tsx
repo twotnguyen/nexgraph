@@ -483,11 +483,14 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
       {!hosted && (
         <ActivityBar
-          items={chatDock === 'left' ? [AGENT_ACTIVITY, ...ACTIVITIES] : ACTIVITIES}
+          items={[...(chatDock === 'left' ? [AGENT_ACTIVITY] : []), ...ACTIVITIES.map((a) => a.id === 'changes' ? { ...a, badge: live.changes?.changed_files.length } : a)]}
           active={leftChat ? AGENT_ACTIVITY.id : panel}
           panelId={leftChat ? chatId : toolsId}
           onToggle={togglePanel}
-          footer={<button type="button" title="Chọn theme · ⌘K ⌘T" aria-label="Chọn theme" onClick={openThemePicker}><Icon name="palette" size={19} /></button>}
+          manage={[
+            ...(onOpenSettings ? [{ label: 'Cài đặt', icon: 'sliders' as const, onSelect: () => guardLeave(onOpenSettings)?.() }] : []),
+            { label: 'Chọn theme…', icon: 'palette', onSelect: openThemePicker }
+          ]}
         />
       )}
       {chatDock === 'left' && <>{agentPanel}{resizeHandle}</>}

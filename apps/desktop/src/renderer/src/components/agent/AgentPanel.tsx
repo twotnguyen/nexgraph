@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
-import { Icon, type IconName } from '../common/icons'
+import { Icon } from '../common/icons'
+import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
 import { ApprovalCard } from './ApprovalCard'
 import { CitationText } from '../chat/CitationText'
 import { ConsentDialog } from '../chat/ConsentDialog'
@@ -87,33 +88,6 @@ function isApproval(value: unknown): value is ApprovalRequest {
 const contextLabel = (item: AgentContextItem): string => item.kind === 'file'
   ? `${item.file}${item.start ? `:${item.start}${item.end && item.end !== item.start ? `-${item.end}` : ''}` : ''}${item.dirty ? ' · bản nháp' : ''}`
   : item.label ?? (item.kind === 'node' ? item.nodeId : item.kind === 'flow' ? `Luồng ${item.flowId}` : item.blockId)
-
-type MenuItem = { label: string; icon: IconName; onSelect: () => void; disabled?: boolean }
-
-/** Menu ⋯ ở đầu khung: popover bo 12px, hàng bo 7px như popover của Wu. */
-function MoreMenu({ items }: { items: MenuItem[] }) {
-  const [open, setOpen] = useState(false)
-  const root = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const outside = (event: PointerEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false) }
-    const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
-    document.addEventListener('pointerdown', outside)
-    document.addEventListener('keydown', escape)
-    return () => {
-      document.removeEventListener('pointerdown', outside)
-      document.removeEventListener('keydown', escape)
-    }
-  }, [open])
-  return <div className="agent-menu-wrap" ref={root}>
-    <button type="button" className="agent-icon-button" aria-label="Thêm thao tác" title="Thêm thao tác" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}><Icon name="more" size={16} /></button>
-    {open && <div role="menu" className="agent-menu">
-      {items.map((item) => <button key={item.label} type="button" role="menuitem" disabled={item.disabled} onClick={() => { setOpen(false); item.onSelect() }}>
-        <Icon name={item.icon} size={14} /><span>{item.label}</span>
-      </button>)}
-    </div>}
-  </div>
-}
 
 export function AgentPanel(props: Props) {
   return <ProjectAgentPanel key={props.projectId} {...props} />
@@ -498,7 +472,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
           <button type="button" className="agent-icon-button" aria-label="Lịch sử" title="Lịch sử trò chuyện" aria-pressed={view === 'history'} disabled={workLocked}
             onClick={() => { setView(view === 'history' ? 'chat' : 'history'); void work.refresh().catch(() => {}) }}><Icon name="history" size={16} /></button>
           <button type="button" className="agent-icon-button" aria-label="Phiên mới" title="Phiên mới" disabled={workLocked} onClick={() => { void work.create(); setView('chat') }}><Icon name="plus" size={16} /></button>
-          <MoreMenu items={menu} />
+          <PopoverMenu label="Thêm thao tác" buttonClass="agent-icon-button" trigger={<Icon name="more" size={16} />} items={menu} />
           {onClose && <button type="button" className="agent-icon-button" onClick={onClose} aria-label={vi.chat.close} title={vi.chat.close}><Icon name="close" size={15} /></button>}
         </div>
       </header>

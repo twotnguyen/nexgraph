@@ -1,5 +1,5 @@
 .workspace-shell {
-  --ws-rail: 46px;
+  --ws-rail: 44px;
   --ws-tools: clamp(194px, 18vw, 266px);
   --ws-chat: clamp(286px, 25vw, 384px);
   --ws-header: 34px;
@@ -11,41 +11,63 @@
   overflow: hidden;
 }
 
+/* Thanh icon kiểu Wu: rộng 44px (icon 20 + 24), nút 36px bo 6, cách nhau 8px; mục đang bật chỉ sáng nền, không có vạch màu. */
 .workspace-shell > .activity-bar {
   width: var(--ws-rail);
   flex: 0 0 var(--ws-rail);
-  gap: 0;
-  padding: 5px 0 0;
+  gap: 8px;
+  padding: 4px 0;
   border-right: 1px solid var(--color-border);
   background: var(--color-surface);
   z-index: 4;
 }
 
-.workspace-shell > .activity-bar button {
+.workspace-shell > .activity-bar > button,
+.workspace-shell > .activity-bar .activity-bar-manage > button {
   position: relative;
-  width: 100%;
-  height: 44px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 0;
-  border-radius: 0;
-  color: var(--color-muted);
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--color-muted) 85%, transparent);
   background: transparent;
 }
 
-.workspace-shell > .activity-bar button:hover,
-.workspace-shell > .activity-bar button[aria-pressed='true'] {
+.workspace-shell > .activity-bar > button:hover,
+.workspace-shell > .activity-bar .activity-bar-manage > button:is(:hover, [aria-expanded='true']) {
   color: var(--color-text);
-  background: var(--track);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 
-.workspace-shell > .activity-bar button[aria-pressed='true']::before {
-  content: '';
+.workspace-shell > .activity-bar > button[aria-pressed='true'] {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 11%, transparent);
+}
+
+.workspace-shell > .activity-bar svg { width: 20px; height: 20px; stroke-width: 1.6; }
+.workspace-shell > .activity-bar .activity-bar-manage { margin-top: auto; }
+/* styles.css tô mọi .activity-bar button thành ô icon; trả hàng menu về dạng hàng chữ. */
+.workspace-shell .activity-bar .popover-menu button { display: flex; width: 100%; height: auto; padding: 6px 8px; border-radius: 7px; background: transparent; color: var(--color-text); }
+.workspace-shell .activity-bar .popover-menu button:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--color-text) 11%, transparent); color: var(--color-text); }
+.workspace-shell .activity-bar .popover-menu svg { width: 14px; height: 14px; }
+.activity-badge {
   position: absolute;
-  inset: 0 auto 0 0;
-  width: 2px;
+  top: 2px;
+  right: 1px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
   background: var(--blue);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
 }
-
-.workspace-shell > .activity-bar .activity-bar-footer { width: 100%; margin-top: auto; padding-bottom: 4px; }
 
 .workspace-shell > .ws-tools {
   width: var(--ws-tools);

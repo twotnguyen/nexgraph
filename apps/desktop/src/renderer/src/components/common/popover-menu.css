@@ -1,0 +1,36 @@
+/* Popover kiểu Wu: bo 12, viền, nền nổi, đổ bóng; hàng bo 7, rộng ít nhất 228px. Mặc định mở xuống, canh phải nút. */
+.popover-menu-wrap { position: relative; }
+.popover-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  gap: 2px;
+  min-width: 228px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--panel-raised, var(--color-surface));
+  box-shadow: var(--shadow);
+}
+/* Mở lên trên, canh trái nút: dùng cho nút ở đáy thanh icon. */
+.popover-menu-wrap.popover-up-right .popover-menu { top: auto; right: auto; bottom: 0; left: calc(100% + 6px); }
+.popover-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: auto;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+}
+.popover-menu button svg { flex: none; color: var(--color-muted); }
+.popover-menu button:is(:hover, :focus-visible):not(:disabled) { background: color-mix(in srgb, var(--color-text) 11%, transparent); outline: 0; }
+.popover-menu button:disabled { opacity: .45; }
