@@ -141,3 +141,17 @@
   .settings-row { flex-wrap: wrap; }
   .settings-row > div:first-child { max-width: none; }
 }
+
+/* Trang Phím tắt kiểu keymap editor của Wu: ô tìm, bảng hàng 28px, phím chữ mờ, nút ma hiện khi rê. */
+.keymap { display: grid; gap: 8px; }
+.keymap > input { height: 28px; padding: 0 8px; border-radius: 6px; font-size: 13px; }
+.keymap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.keymap th { padding: 4px 6px; color: var(--color-muted); font-size: 11px; font-weight: 500; text-align: left; border-bottom: 1px solid var(--color-border); }
+.keymap td { height: 28px; padding: 0 6px; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent); }
+.keymap tr:hover td { background: color-mix(in srgb, var(--color-text) 5%, transparent); }
+.keymap mark { background: none; color: var(--blue); }
+.keymap-actions { width: 1%; white-space: nowrap; text-align: right; }
+.keymap-actions button { height: 22px; min-height: 0; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; color: var(--color-muted); font-size: 12px; opacity: 0; }
+.keymap tr:hover .keymap-actions button, .keymap-actions button:focus-visible { opacity: 1; }
+.keymap-actions button:hover { background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text); }
+.keymap-recorder { display: inline-block; padding: 1px 6px; border: 1px solid var(--blue); border-radius: 4px; outline: 0; color: var(--color-text); font-size: 12px; }

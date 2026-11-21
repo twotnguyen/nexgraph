@@ -1,0 +1,66 @@
+/* Picker kiểu Wu (chọn theme, bảng lệnh, tìm tệp): neo cách đỉnh 80px, rộng 544px, không phủ tối nền. */
+.picker-layer {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 80px;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  width: min(544px, 95vw);
+  max-height: calc((100vh - 160px) * .95);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--panel-raised, var(--color-surface));
+  box-shadow: 0 2px 3px rgb(0 0 0 / 8%), 0 12px 32px rgb(0 0 0 / 22%);
+  color: var(--color-text);
+  animation: picker-in .12s ease-out;
+}
+
+.picker-layer .picker > input {
+  flex: none;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 14px;
+}
+.picker > input::placeholder { color: var(--color-muted); }
+
+.picker ul { max-height: 384px; margin: 0; padding: 4px; overflow-y: auto; list-style: none; }
+
+.picker li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.picker li[aria-selected='true'] { background: color-mix(in srgb, var(--color-text) 10%, transparent); }
+.picker li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker li small { color: var(--color-muted); font-size: 11px; }
+.picker li svg { flex: none; color: var(--color-muted); }
+.picker mark { background: none; color: var(--blue); }
+.picker-empty { margin: 0; padding: 10px 12px; color: var(--color-muted); font-size: 13px; }
+
+/* Phím tắt bên phải mục: chữ mờ 12px như Wu. */
+.picker kbd, .keymap kbd { flex: none; color: var(--color-muted); font: 12px var(--font-ui, inherit); letter-spacing: .02em; }
+/* Tìm tệp: icon, tên, thư mục mờ cắt bớt. */
+.picker li > b { flex: none; max-width: 60%; overflow: hidden; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.picker li .picker-dir { flex: 1 1 0; color: var(--color-muted); font-size: 12px; }
+
+@keyframes picker-in { from { opacity: 0; translate: 0 -4px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .picker { animation: none; } }
