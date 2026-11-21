@@ -42,3 +42,8 @@
 
 .tree-error button { padding: 2px 6px; font-size: inherit; }
 .tree-branch-empty { margin: 2px 0 4px; font-size: 11px; }
+.tree-compact { min-height: 100%; }
+.tree-compact [role='tree'] { min-height: calc(100% - 29px); }
+.tree-compact .tree-edit { flex: 1; min-width: 0; height: 23px; padding: 0 4px; border: 1px solid var(--blue); border-radius: 3px; background: var(--color-surface); color: var(--color-text); font-size: 12px; }
+.tree-context { max-height: calc(100vh - 8px); overflow-y: auto; }
+.tree-context button:disabled { opacity: .45; }

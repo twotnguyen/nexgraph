@@ -106,4 +106,77 @@ describe('TreeView', () => {
     expect(screen.getByRole('treeitem', { name: 'src', expanded: true })).toBeVisible()
     expect(screen.getByRole('treeitem', { name: 'app.py', expanded: true })).toBeVisible()
   })
+  it('tạo, đổi tên, nhân bản và chuyển tệp vào thùng rác từ cây', async () => {
+    let entries: ProjectDirectory['entries'] = [{ path: 'old.txt', name: 'old.txt', kind: 'file' }]
+    const list = vi.fn(async (): Promise<ProjectDirectory> => ({ entries, truncated: false }))
+    const createFile = vi.fn(async (_pid: string, path: string) => {
+      entries = [...entries, { path, name: path, kind: 'file' }]
+    })
+    const rename = vi.fn(async (_pid: string, from: string, to: string) => {
+      entries = entries.map((entry) => entry.path === from ? { ...entry, path: to, name: to } : entry)
+    })
+    const copy = vi.fn(async () => {
+      entries = [...entries, { path: 'new copy.txt', name: 'new copy.txt', kind: 'file' }]
+      return 'new copy.txt'
+    })
+    const trash = vi.fn(async (_pid: string, path: string) => { entries = entries.filter((entry) => entry.path !== path) })
+    installNexgraph({ fs: { list, createFile, rename, copy, trash } })
+    const onOpenCode = vi.fn()
+    const onRename = vi.fn()
+    const onTrash = vi.fn()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TreeView projectId="p1" compact onOpenNode={() => {}} onOpenCode={onOpenCode} onRename={onRename} onTrash={onTrash} />)
+
+    const old = await screen.findByRole('treeitem', { name: 'old.txt' })
+    fireEvent.contextMenu(old, { clientX: 20, clientY: 20 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Đổi tên' }))
+    const edit = screen.getByRole('textbox', { name: 'Đổi tên' })
+    fireEvent.change(edit, { target: { value: 'new.txt' } })
+    fireEvent.keyDown(edit, { key: 'Enter' })
+    await screen.findByRole('treeitem', { name: 'new.txt' })
+    expect(rename).toHaveBeenCalledWith('p1', 'old.txt', 'new.txt')
+    expect(onRename).toHaveBeenCalledWith('old.txt', 'new.txt')
+
+    fireEvent.contextMenu(screen.getByRole('treeitem', { name: 'new.txt' }), { clientX: 20, clientY: 20 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Nhân bản' }))
+    await screen.findByRole('treeitem', { name: 'new copy.txt' })
+    expect(copy).toHaveBeenCalledWith('p1', 'new.txt', '.')
+
+    fireEvent.contextMenu(screen.getByRole('tree', { name: 'Cây dự án' }), { clientX: 20, clientY: 20 })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Tệp mới' }))
+    const input = screen.getByRole('textbox', { name: 'Tệp mới' })
+    fireEvent.change(input, { target: { value: 'created.txt' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    await screen.findByRole('treeitem', { name: 'created.txt' })
+    expect(onOpenCode).toHaveBeenCalledWith('created.txt')
+
+    const created = screen.getByRole('treeitem', { name: 'created.txt' })
+    created.focus()
+    fireEvent.keyDown(created, { key: 'Delete' })
+    await waitFor(() => expect(trash).toHaveBeenCalledWith('p1', 'created.txt'))
+    expect(onTrash).toHaveBeenCalledWith('created.txt')
+    confirm.mockRestore()
+  })
+
+  it('không đổi tên hoặc xoá tệp chứa bản nháp chưa lưu', async () => {
+    const list = vi.fn(async (): Promise<ProjectDirectory> => ({
+      entries: [{ path: 'a.txt', name: 'a.txt', kind: 'file' }], truncated: false
+    }))
+    const rename = vi.fn()
+    const trash = vi.fn()
+    installNexgraph({ fs: { list, createFile: vi.fn(), rename, trash } })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<TreeView projectId="p1" compact onOpenNode={() => {}} onOpenCode={() => {}} dirtyFiles={new Set(['a.txt'])} />)
+    const item = await screen.findByRole('treeitem', { name: 'a.txt' })
+    item.focus()
+    fireEvent.keyDown(item, { key: 'F2' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Hãy lưu')
+    fireEvent.keyDown(item, { key: 'Delete' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Hãy lưu')
+    expect(rename).not.toHaveBeenCalled()
+    expect(trash).not.toHaveBeenCalled()
+    expect(confirm).not.toHaveBeenCalled()
+    confirm.mockRestore()
+  })
+
 })

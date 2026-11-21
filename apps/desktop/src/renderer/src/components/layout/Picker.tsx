@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import { fuzzyFilter } from '../../state/fuzzy'
 import './picker.css'
 
@@ -19,8 +19,13 @@ interface PickerProps<T> {
   renderItem: (item: T, positions: number[]) => ReactNode
   onPick: (item: T) => void
   onCancel: () => void
+  onSecondary?: (item: T) => void
+  footer?: (item: T, pick: () => void) => ReactNode
+  inputRef?: Ref<HTMLInputElement>
+  error?: string | null
   /** Gọi khi mục đang chọn đổi (rê chuột hoặc mũi tên): dùng để xem trước. */
   onActive?: (item: T) => void
+  onQueryChange?: (query: string) => void
   initialKey?: string
   empty: string
   className?: string
@@ -30,7 +35,7 @@ interface PickerProps<T> {
 }
 
 /** Picker kiểu Wu: neo cách đỉnh 80px, ô tìm trên cùng, danh sách mục, mũi tên/Enter/Esc, bấm ra ngoài là huỷ. */
-export function Picker<T>({ label, placeholder, items, itemKey, itemText, renderItem, onPick, onCancel, onActive, initialKey, empty, className, itemData, filter }: PickerProps<T>) {
+export function Picker<T>({ label, placeholder, items, itemKey, itemText, renderItem, onPick, onCancel, onActive, onQueryChange, onSecondary, footer, inputRef, error, initialKey, empty, className, itemData, filter }: PickerProps<T>) {
   const listId = useId()
   const [query, setQuery] = useState('')
   const shown = useMemo(() => (filter ? filter(items, query) : fuzzyFilter(items, query, itemText)), [items, query, filter, itemText])
@@ -45,10 +50,12 @@ export function Picker<T>({ label, placeholder, items, itemKey, itemText, render
     rows.current?.querySelector('[aria-selected=true]')?.scrollIntoView?.({ block: 'nearest' })
   }, [active])
 
-  const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
+  const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const inInput = event.target instanceof HTMLInputElement
     if (event.key === 'Escape') onCancel()
-    else if (event.key === 'Enter' && active) onPick(active.item)
-    else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && shown.length) {
+    else if (event.key === 'Enter' && active && onSecondary && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) onSecondary(active.item)
+    else if (inInput && event.key === 'Enter' && active && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) onPick(active.item)
+    else if (inInput && (event.key === 'ArrowDown' || event.key === 'ArrowUp') && shown.length) {
       const step = event.key === 'ArrowDown' ? 1 : -1
       setIndex((Math.min(index, shown.length - 1) + step + shown.length) % shown.length)
     } else return
@@ -58,19 +65,21 @@ export function Picker<T>({ label, placeholder, items, itemKey, itemText, render
   const optionId = (item: T) => `${listId}-${encodeURIComponent(itemKey(item))}`
   return (
     <div className="picker-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) onCancel() }}>
-      <div className={`picker${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={label}>
-        <input autoFocus role="combobox" aria-expanded="true" aria-controls={listId} aria-label={label} aria-activedescendant={active ? optionId(active.item) : undefined}
-          placeholder={placeholder} value={query} onKeyDown={onKey} onChange={(event) => { setQuery(event.target.value); setIndex(0) }} />
+      <div className={`picker${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey}>
+        <input ref={inputRef} autoFocus role="combobox" aria-expanded="true" aria-controls={listId} aria-label={label} aria-activedescendant={active ? optionId(active.item) : undefined}
+          aria-describedby={error ? `${listId}-error` : undefined} placeholder={placeholder} value={query} onChange={(event) => { setQuery(event.target.value); setIndex(0); onQueryChange?.(event.target.value) }} />
         {shown.length === 0 ? <p className="picker-empty">{empty}</p> : (
           <ul id={listId} role="listbox" aria-label={label} ref={rows}>
             {shown.map(({ item, positions }, i) => (
-              <li key={itemKey(item)} id={optionId(item)} role="option" aria-selected={item === active?.item} {...itemData?.(item)}
-                onMouseMove={() => { if (item !== active?.item) setIndex(i) }} onClick={() => onPick(item)}>
+              <li key={itemKey(item)} id={optionId(item)} role="option" aria-selected={i === Math.min(index, shown.length - 1)} {...itemData?.(item)}
+                onMouseMove={() => { if (i !== Math.min(index, shown.length - 1)) setIndex(i) }} onClick={() => onPick(item)}>
                 {renderItem(item, positions)}
               </li>
             ))}
           </ul>
         )}
+        {error && <p id={`${listId}-error`} className="picker-error" role="alert">{error}</p>}
+        {footer && active && <div className="picker-footer">{footer(active.item, () => onPick(active.item))}</div>}
       </div>
     </div>
   )

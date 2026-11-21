@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { availableCommands, bindingFor, formatKey, runCommand, useCommand, type CommandDef } from '../../state/commands'
+import { useRef, useState, type KeyboardEvent } from 'react'
+import { availableCommands, bindingFor, eventToStroke, formatKey, runCommand, setBinding, useCommand, useKeybindings, type CommandDef } from '../../state/commands'
 import { Highlight, Picker } from './Picker'
 
 const HITS = 'nexgraph.command.hits'
@@ -14,20 +14,58 @@ const readHits = (): Record<string, number> => {
 const label = (command: CommandDef) => `${command.category}: ${command.title}`
 const commandKey = (command: CommandDef) => command.id
 
+function Recorder({ onDone }: { onDone: (key: string | undefined, restoreFocus?: boolean) => void }) {
+  const [strokes, setStrokes] = useState<string[]>([])
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+    if (plain && event.key === 'Escape') return onDone(undefined)
+    if (plain && event.key === 'Enter') return onDone(strokes.join(' '))
+    if (plain && event.key === 'Backspace') return setStrokes([])
+    const stroke = eventToStroke(event.nativeEvent)
+    if (stroke) setStrokes((current) => [...current, stroke].slice(-2))
+  }
+  return <span className="picker-recorder" data-keymap-recorder tabIndex={0} role="textbox" aria-label="Nhấn tổ hợp phím mới"
+    ref={(element) => element?.focus()} onKeyDown={onKeyDown} onBlur={() => onDone(undefined, false)}>
+    {strokes.length ? formatKey(strokes.join(' ')) : 'Nhấn phím… (Enter lưu, Esc huỷ)'}
+  </span>
+}
+
 /** Gắn một lần ở gốc app: ⌘⇧P mở bảng lệnh kiểu Wu; lệnh dùng nhiều đứng trước khi chưa gõ. */
 export function CommandPaletteHost() {
   const [items, setItems] = useState<CommandDef[] | null>(null)
-  useCommand('command_palette.toggle', () => setItems((open) => {
-    if (open) return null
-    const hits = readHits()
-    return availableCommands().filter((command) => command.id !== 'command_palette.toggle')
-      .sort((a, b) => (hits[b.id] ?? 0) - (hits[a.id] ?? 0))
-  }))
+  const [recording, setRecording] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useKeybindings()
+  useCommand('command_palette.toggle', () => {
+    setRecording(null)
+    setItems((open) => {
+      if (open) return null
+      const hits = readHits()
+      return availableCommands().filter((command) => command.id !== 'command_palette.toggle')
+        .sort((a, b) => (hits[b.id] ?? 0) - (hits[a.id] ?? 0))
+    })
+  })
   if (!items) return null
-  const close = () => setItems(null)
+  const close = () => { setRecording(null); setItems(null) }
   return (
     <Picker label="Bảng lệnh" placeholder="Chạy lệnh…" className="command-palette" items={items} itemKey={commandKey} itemText={label}
-      empty="Không có lệnh khớp" onCancel={close}
+      empty="Không có lệnh khớp" onCancel={close} inputRef={inputRef}
+      onActive={(command) => setRecording((current) => current && current !== command.id ? null : current)}
+      onSecondary={(command) => setRecording(command.id)}
+      footer={(command, pick) => recording === command.id
+        ? <Recorder onDone={(key, restoreFocus = true) => {
+          setRecording(null)
+          if (key !== undefined) setBinding(command.id, key)
+          if (restoreFocus) inputRef.current?.focus()
+        }} />
+        : <>
+          <button type="button" onClick={() => setRecording(command.id)}>
+            {bindingFor(command.id) ? 'Đổi phím tắt…' : 'Thêm phím tắt…'} <kbd>⌘↵</kbd>
+          </button>
+          <button type="button" onClick={pick}>Chạy <kbd>↵</kbd></button>
+        </>}
       onPick={(command) => {
         close()
         const hits = readHits()

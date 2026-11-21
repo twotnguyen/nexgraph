@@ -1,7 +1,7 @@
 /* Tìm trong tệp kiểu project search của Wu: ô nhập 28px bo 6 có nút bật/tắt bên trong, kết quả hàng 24px nhóm theo tệp. */
 .project-search { display: flex; flex-direction: column; gap: 6px; min-height: 0; padding: 6px 8px; }
 .ps-row { display: flex; align-items: center; gap: 4px; }
-.ps-indent { padding-left: 24px; }
+.ps-indent { padding-left: 26px; }
 .ps-field { display: flex; flex: 1; min-width: 0; align-items: center; gap: 2px; height: 28px; padding: 0 4px 0 8px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); }
 .ps-field:focus-within { border-color: var(--blue); }
 .project-search .ps-field input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--color-text); font-size: 13px; }
@@ -10,7 +10,6 @@
 .ps-toggle[aria-pressed='true'] { background: color-mix(in srgb, var(--blue) 18%, transparent); color: var(--color-text); }
 .ps-expand svg { transition: transform .1s; }
 .ps-expand[aria-expanded='true'] svg { transform: rotate(90deg); }
-.ps-action { flex: none; height: 28px; min-height: 0; padding: 0 10px; border-radius: 6px; font-size: 12px; }
 .ps-filters { display: grid; gap: 4px; }
 .project-search .ps-filters input { height: 28px; padding: 0 8px; border-radius: 6px; font-size: 12px; }
 .ps-summary { margin: 2px 0 0; font-size: 12px; }
@@ -25,5 +24,7 @@
 .ps-count { flex: none; min-width: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--color-text) 10%, transparent); color: var(--color-muted); font-size: 11px; text-align: center; }
 .ps-match { padding-left: 34px; font: 12px var(--font-mono, monospace); }
 .ps-line { flex: none; min-width: 3ch; text-align: right; }
-.ps-preview { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
-.ps-preview mark { border-radius: 2px; background: color-mix(in srgb, var(--amber, #e5c07b) 35%, transparent); color: inherit; }
+.ps-preview { display: flex; flex: 1; min-width: 0; align-items: baseline; white-space: pre; }
+.ps-context-before { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; direction: rtl; text-align: left; text-overflow: ellipsis; unicode-bidi: plaintext; }
+.ps-context-after { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ps-preview mark { flex: none; max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; border-radius: 2px; background: color-mix(in srgb, var(--amber, #e5c07b) 35%, transparent); color: inherit; }

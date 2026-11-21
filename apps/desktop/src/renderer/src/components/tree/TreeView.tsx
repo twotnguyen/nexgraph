@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { GraphNode, NodeKind } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { errorText } from '../../state/errorText'
 import { kindStyle } from '../graph/kindStyle'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -13,6 +14,10 @@ interface Props {
   compact?: boolean
   activeFile?: string
   revision?: number
+  projectPath?: string
+  dirtyFiles?: ReadonlySet<string>
+  onRename?: (from: string, to: string) => void
+  onTrash?: (path: string) => void
 }
 
 const ROOT = '.#repository'
@@ -27,17 +32,34 @@ const sortKids = (kids: TreeNode[]) =>
 
 interface Loaded { kids: TreeNode[]; truncated: boolean }
 interface Row { node: TreeNode; level: number; parent: string | null }
+type Clipboard = { path: string; kind: 'file' | 'directory'; cut: boolean }
+const clipboards = new Map<string, Clipboard>()
+const parentOf = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '.'
+const childPath = (directory: string, name: string) => directory === '.' ? name : `${directory}/${name}`
+const insidePath = (path: string, parent: string) => path === parent || path.startsWith(`${parent}/`)
+const entryPath = (node?: TreeNode | null) => node?.file && (node.kind === 'file' || node.kind === 'directory') ? node.file : null
+type Editing = { kind: 'file' | 'directory' | 'rename'; parent: string; node?: TreeNode; value: string }
+type TreeMenu = { node: TreeNode | null; x: number; y: number }
 
-export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, activeFile, revision }: Props) {
-  const list = compact && !window.nexgraph.host ? window.nexgraph.fs.list : undefined
+
+export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compact = false, activeFile, revision, dirtyFiles, onRename, onTrash }: Props) {
+  const fs = window.nexgraph.fs
+  const list = compact && !window.nexgraph.host ? fs.list : undefined
+  const canEdit = Boolean(list && fs.createFile)
   const [loaded, setLoaded] = useState<Map<string, Loaded>>(new Map())
   const [expanded, setExpanded] = useState<Set<string>>(new Set([ROOT]))
   const [focused, setFocused] = useState<string | null>(null)
   const [errors, setErrors] = useState<Map<string, string>>(new Map())
+  const [edit, setEdit] = useState<Editing | null>(null)
+  const [operationError, setOperationError] = useState<string | null>(null)
+  const [working, setWorking] = useState(false)
+  const [menu, setMenu] = useState<TreeMenu | null>(null)
+  const [clipboard, setClipboard] = useState<Clipboard | undefined>(() => clipboards.get(projectId))
   const refs = useRef(new Map<string, HTMLDivElement>())
   const tree = useRef<HTMLDivElement>(null)
   const requests = useRef(new Set<string>())
   const visibleExpanded = useRef([ROOT])
+  const refreshedExpanded = useRef<string[] | null>(null)
   const reload = useRef(() => {})
   const lastRevision = useRef(revision)
 
@@ -127,10 +149,16 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
   }, [loaded, expanded])
   const items = rows.filter((r): r is Row => 'node' in r)
   visibleExpanded.current = [ROOT, ...items.filter(({ node }) => expanded.has(node.id)).map(({ node }) => node.id)]
+  useEffect(() => {
+    if (!refreshedExpanded.current) return
+    visibleExpanded.current = refreshedExpanded.current
+    refreshedExpanded.current = null
+    reload.current()
+  }, [expanded])
 
   useEffect(() => {
-    if (focused && tree.current?.contains(document.activeElement)) refs.current.get(focused)?.focus()
-  }, [focused, rows])
+    if (!edit && focused && tree.current?.contains(document.activeElement)) refs.current.get(focused)?.focus()
+  }, [focused, rows, edit])
 
   const toggle = (id: string, open?: boolean) => {
     setExpanded((s) => {
@@ -149,31 +177,234 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
     else onOpenNode(node.id)
   }
 
+  useEffect(() => {
+    setClipboard(clipboards.get(projectId))
+    setEdit(null)
+    setOperationError(null)
+  }, [projectId])
+
+  useEffect(() => {
+    if (!menu) return
+    const escape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') setMenu(null) }
+    document.addEventListener('keydown', escape)
+    return () => document.removeEventListener('keydown', escape)
+  }, [menu])
+
+  const updateClipboard = (next?: Clipboard) => {
+    if (next) clipboards.set(projectId, next)
+    else clipboards.delete(projectId)
+    setClipboard(next)
+  }
+  const refreshAfter = (oldPath?: string, newPath?: string, targetDirectory?: string) => {
+    let next = visibleExpanded.current
+    if (oldPath) {
+      next = next.flatMap((id) => {
+        const hash = id.lastIndexOf('#')
+        const path = id.slice(0, hash)
+        if (!insidePath(path, oldPath)) return [id]
+        return newPath ? [`${newPath}${path.slice(oldPath.length)}${id.slice(hash)}`] : []
+      })
+    }
+    if (targetDirectory && targetDirectory !== '.') next = [...new Set([...next, `${targetDirectory}#directory`])]
+    if (oldPath || targetDirectory && targetDirectory !== '.') {
+      refreshedExpanded.current = next
+      setExpanded(new Set(next))
+    } else reload.current()
+  }
+  const hasDirty = (path: string) => [...(dirtyFiles ?? [])].some((file) => insidePath(file, path))
+  const allowRename = (path: string) => {
+    if (!hasDirty(path)) return true
+    setOperationError('Hãy lưu các tệp đang sửa trước khi đổi tên hoặc di chuyển.')
+    return false
+  }
+  const run = async (action: () => Promise<void>) => {
+    setOperationError(null)
+    setWorking(true)
+    try {
+      await action()
+      return true
+    } catch (error) {
+      setOperationError(errorText(error))
+      return false
+    } finally {
+      setWorking(false)
+    }
+  }
+  const directoryFor = (node: TreeNode | null) => {
+    const path = entryPath(node)
+    return path ? node?.kind === 'directory' ? path : parentOf(path) : '.'
+  }
+  const beginCreate = (kind: 'file' | 'directory', node: TreeNode | null) => {
+    const parent = directoryFor(node)
+    if (node?.kind === 'directory' && !expanded.has(node.id)) toggle(node.id, true)
+    setOperationError(null)
+    setEdit({ kind, parent, value: '' })
+  }
+  const beginRename = (node: TreeNode) => {
+    const path = entryPath(node)
+    if (!path || !allowRename(path)) return
+    setOperationError(null)
+    setEdit({ kind: 'rename', parent: parentOf(path), node, value: node.label })
+  }
+  const submitEdit = async () => {
+    if (!edit || working) return
+    const name = edit.value.trim()
+    if (!name) { setOperationError('Tên tệp hoặc thư mục không được để trống.'); return }
+    const target = childPath(edit.parent, name)
+    const old = entryPath(edit.node)
+    if (edit.kind === 'rename' && old === target) { setEdit(null); return }
+    if (edit.kind === 'rename' && old && !allowRename(old)) return
+    const ok = await run(async () => {
+      if (edit.kind === 'rename' && old && fs.rename) {
+        await fs.rename(projectId, old, target)
+        onRename?.(old, target)
+        refreshAfter(old, target)
+      } else if (edit.kind === 'file' && fs.createFile) {
+        await fs.createFile(projectId, target)
+        refreshAfter()
+        onOpenCode(target)
+      } else if (edit.kind === 'directory' && fs.createDir) {
+        await fs.createDir(projectId, target)
+        refreshAfter()
+      } else throw new Error('Thao tác không được hỗ trợ ở chế độ này.')
+    })
+    if (ok) setEdit(null)
+  }
+  const duplicate = (node: TreeNode) => {
+    const path = entryPath(node)
+    if (!path || !fs.copy) return
+    void run(async () => {
+      const copied = await fs.copy!(projectId, path, parentOf(path))
+      refreshAfter()
+      if (node.kind === 'file') onOpenCode(copied)
+    })
+  }
+  const paste = (node: TreeNode | null) => {
+    if (!clipboard) return
+    let directory = directoryFor(node)
+    if (directory === clipboard.path) directory = parentOf(directory)
+    if (clipboard.cut) {
+      if (parentOf(clipboard.path) === directory || !fs.rename || !allowRename(clipboard.path)) return
+      const from = clipboard.path
+      const target = childPath(directory, from.slice(from.lastIndexOf('/') + 1))
+      void run(async () => {
+        await fs.rename!(projectId, from, target)
+        onRename?.(from, target)
+        updateClipboard({ ...clipboard, path: target, cut: false })
+        refreshAfter(from, target, directory)
+      })
+    } else if (fs.copy) {
+      void run(async () => {
+        const copied = await fs.copy!(projectId, clipboard.path, directory)
+        refreshAfter(undefined, undefined, directory)
+        if (clipboard.kind === 'file') onOpenCode(copied)
+      })
+    }
+  }
+  const trash = (node: TreeNode) => {
+    const path = entryPath(node)
+    if (!path || !fs.trash) return
+    if (hasDirty(path)) { setOperationError('Hãy lưu các tệp đang sửa trước khi chuyển vào Thùng rác.'); return }
+    if (!window.confirm(`Chuyển “${node.label}” vào Thùng rác?`)) return
+    void run(async () => {
+      await fs.trash!(projectId, path)
+      onTrash?.(path)
+      if (clipboard && insidePath(clipboard.path, path)) updateClipboard()
+      refreshAfter(path)
+    })
+  }
+  const reveal = (node: TreeNode | null) => {
+    const path = entryPath(node) ?? '.'
+    if (fs.reveal) void run(() => fs.reveal!(projectId, path))
+  }
+  const copyPath = (node: TreeNode | null, relative: boolean) => {
+    const path = entryPath(node) ?? '.'
+    const separator = projectPath?.includes('\\') ? '\\' : '/'
+    const value = relative ? path : `${projectPath?.replace(/[/\\]+$/, '') ?? ''}${path === '.' ? '' : separator + path.replace(/\//g, separator)}`
+    void run(async () => {
+      if (!navigator.clipboard) throw new Error('Không thể truy cập clipboard.')
+      await navigator.clipboard.writeText(value)
+    })
+  }
+
   const onKey = (e: KeyboardEvent, row: Row) => {
     const i = items.findIndex((r) => r.node.id === row.node.id)
-    const canOpen = CONTAINERS.includes(row.node.kind)
-    const isOpen = expanded.has(row.node.id)
+    const node = row.node
+    const path = entryPath(node)
+    const canOpen = CONTAINERS.includes(node.kind)
+    const isOpen = expanded.has(node.id)
+    const mod = e.metaKey || e.ctrlKey
+    const key = e.key.toLowerCase()
     let handled = true
-    if (e.key === 'ArrowDown' && i < items.length - 1) setFocused(items[i + 1].node.id)
+    if (canEdit && path && mod && e.altKey && key === 'r') reveal(node)
+    else if (canEdit && path && mod && e.altKey && key === 'c') copyPath(node, e.shiftKey)
+    else if (canEdit && path && mod && key === 'd') duplicate(node)
+    else if (canEdit && path && mod && (key === 'c' || key === 'x')) updateClipboard({ path, kind: node.kind as Clipboard['kind'], cut: key === 'x' })
+    else if (canEdit && mod && key === 'v') paste(node)
+    else if (canEdit && path && (e.key === 'F2' || e.key === 'Enter')) beginRename(node)
+    else if (canEdit && path && (e.key === 'Backspace' || e.key === 'Delete')) trash(node)
+    else if (canEdit && e.shiftKey && e.key === 'F10') {
+      const rect = e.currentTarget.getBoundingClientRect()
+      setMenu({ node: path ? node : null, x: rect.left, y: rect.bottom })
+    }
+    else if (e.key === 'ArrowDown' && i < items.length - 1) setFocused(items[i + 1].node.id)
     else if (e.key === 'ArrowUp' && i > 0) setFocused(items[i - 1].node.id)
-    else if (e.key === 'ArrowRight' && canOpen && !isOpen) toggle(row.node.id, true)
-    else if (e.key === 'ArrowRight' && isOpen && items[i + 1]?.parent === row.node.id) setFocused(items[i + 1].node.id)
-    else if (e.key === 'ArrowLeft' && isOpen) toggle(row.node.id, false)
+    else if (e.key === 'ArrowRight' && canOpen && !isOpen) toggle(node.id, true)
+    else if (e.key === 'ArrowRight' && isOpen && items[i + 1]?.parent === node.id) setFocused(items[i + 1].node.id)
+    else if (e.key === 'ArrowLeft' && isOpen) toggle(node.id, false)
     else if (e.key === 'ArrowLeft' && row.parent) setFocused(row.parent)
     else if (e.key === 'Home') setFocused(items[0]?.node.id ?? null)
     else if (e.key === 'End') setFocused(items.at(-1)?.node.id ?? null)
-    else if (e.key === 'Enter') open(row.node)
+    else if (e.key === 'Enter' || e.key === ' ') open(node)
     else handled = false
-    if (handled) e.preventDefault()
+    if (handled) { e.preventDefault(); e.stopPropagation() }
   }
 
   const tabStop = items.some(({ node }) => node.id === focused) ? focused : items[0]?.node.id
   const renderError = (id: string) => errors.has(id) ? (
     <div role="alert" className="tree-error">{errors.get(id)} <button type="button" onClick={() => load(id, true)}>Thử lại</button></div>
   ) : null
+  const editor = edit && <input className="tree-edit" autoFocus disabled={working}
+    aria-label={edit.kind === 'rename' ? 'Đổi tên' : edit.kind === 'file' ? 'Tệp mới' : 'Thư mục mới'}
+    value={edit.value} onClick={(event) => event.stopPropagation()}
+    onFocus={(event) => {
+      if (edit.kind !== 'rename') return
+      const dot = edit.node?.kind === 'file' ? edit.value.lastIndexOf('.') : -1
+      event.currentTarget.setSelectionRange(0, dot > 0 ? dot : edit.value.length)
+    }}
+    onChange={(event) => setEdit({ ...edit, value: event.target.value })}
+    onKeyDown={(event) => {
+      event.stopPropagation()
+      if (event.key === 'Enter') { event.preventDefault(); void submitEdit() }
+      else if (event.key === 'Escape') { event.preventDefault(); setEdit(null); setOperationError(null) }
+    }} />
+  const menuNode = menu?.node ?? null
+  const menuPath = entryPath(menuNode)
+  const menuItems = [
+    { label: 'Tệp mới', action: () => beginCreate('file', menuNode), disabled: !fs.createFile },
+    { label: 'Thư mục mới', action: () => beginCreate('directory', menuNode), disabled: !fs.createDir },
+    ...(menuPath && menuNode ? [
+      { label: 'Đổi tên', action: () => beginRename(menuNode), disabled: !fs.rename },
+      { label: 'Nhân bản', action: () => duplicate(menuNode), disabled: !fs.copy },
+      { label: 'Sao chép', action: () => updateClipboard({ path: menuPath, kind: menuNode.kind as Clipboard['kind'], cut: false }) },
+      { label: 'Cắt', action: () => updateClipboard({ path: menuPath, kind: menuNode.kind as Clipboard['kind'], cut: true }) }
+    ] : []),
+    { label: 'Dán', action: () => paste(menuNode), disabled: !clipboard },
+    ...(menuPath && menuNode ? [{ label: 'Xoá', action: () => trash(menuNode), disabled: !fs.trash }] : []),
+    { label: 'Hiện trong Finder', action: () => reveal(menuNode), disabled: !fs.reveal },
+    { label: 'Sao chép đường dẫn', action: () => copyPath(menuNode, false), disabled: !projectPath },
+    { label: 'Sao chép đường dẫn tương đối', action: () => copyPath(menuNode, true) }
+  ]
+  const newEditor = (parent: string, indent: number) => edit && edit.kind !== 'rename' && edit.parent === parent && (
+    <div className="tree-row tree-new" style={{ paddingInlineStart: indent }}>
+      <span className="twisty" /><span className="tree-icon"><Icon name={edit.kind === 'directory' ? 'folder' : 'plus'} size={15} /></span>{editor}
+    </div>
+  )
+
 
   return (
-    <div className={`tree-view${compact ? ' tree-compact' : ''}`}>
+    <div className={`tree-view${compact ? ' tree-compact' : ''}`}
+      onContextMenu={(event) => { if (canEdit) { event.preventDefault(); setMenu({ node: null, x: event.clientX, y: event.clientY }) } }}>
       {compact && (
         <div className="tree-tools">
           <span>{list ? 'Tệp' : 'Tệp đã lập chỉ mục'}</span>
@@ -189,9 +420,15 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
         </div>
       )}
       {renderError(ROOT)}
+      {operationError && <div className="tree-error" role="alert">{operationError}</div>}
       {!errors.has(ROOT) && !loaded.has(ROOT) && <p role="status" className="muted">{list ? 'Đang đọc thư mục…' : vi.tree.loading}</p>}
-      {loaded.has(ROOT) && rows.length === 0 && <p className="muted">{list ? 'Thư mục trống.' : 'Chưa có tệp trong phạm vi chỉ mục.'}</p>}
-      <div ref={tree} role="tree" aria-label={vi.tree.label}>
+      {loaded.has(ROOT) && rows.length === 0 && !edit && <p className="muted">{list ? 'Thư mục trống.' : 'Chưa có tệp trong phạm vi chỉ mục.'}</p>}
+      <div ref={tree} role="tree" aria-label={vi.tree.label} tabIndex={items.length ? undefined : 0}
+        onKeyDown={(event) => {
+          if (!canEdit || event.target !== event.currentTarget) return
+          if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'v') { event.preventDefault(); paste(null) }
+        }}>
+        {newEditor('.', 0)}
         {rows.map((r) => {
           if (!('node' in r)) return <p key={`more:${r.more}`} className="muted small tree-more" style={{ paddingInlineStart: r.level * 16 }}>
             {list && (r.more === ROOT || r.more.endsWith('#directory')) ? 'Thư mục có nhiều mục. Cây hiển thị tối đa 500 mục.' : vi.tree.more}
@@ -219,6 +456,12 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
                 onFocus={() => setFocused(n.id)}
                 onClick={compact ? (e) => { e.currentTarget.focus(); open(n) } : undefined}
                 onKeyDown={(e) => { if (e.currentTarget === e.target) onKey(e, r) }}
+                onContextMenu={canEdit && entryPath(n) ? (event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  setFocused(n.id)
+                  setMenu({ node: n, x: event.clientX, y: event.clientY })
+                } : undefined}
               >
                 {compact && indent > 0 && <span aria-hidden="true" className="tree-indent" style={{ width: indent }} />}
                 {canOpen ? (
@@ -232,13 +475,15 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
                     {folder ? <Icon name="folder" size={15} /> : file ? <FileTypeIcon name={n.label} /> : '•'}
                   </span>
                 )}
-                <span className="tree-label" title={n.file ?? n.label} onClick={compact ? undefined : () => open(n)}>{n.label}</span>
+                {edit?.kind === 'rename' && edit.node?.id === n.id ? editor
+                  : <span className="tree-label" title={n.file ?? n.label} onClick={compact ? undefined : () => open(n)}>{n.label}</span>}
                 <span className="kind" style={{ color: kindStyle(n.kind).color }}>{n.kind}</span>
                 {n.file && n.kind !== 'directory' && !(compact && (folder || file)) && (
                   <button type="button" tabIndex={-1} className="link" aria-label={`${vi.tree.openCode} ${n.label}`}
                     onClick={(e) => { e.stopPropagation(); onOpenCode(n.file as string, n.line_start ?? undefined) }}>{'</>'}</button>
                 )}
               </div>
+              {folder && isOpen && n.file && newEditor(n.file, indent + 20)}
               {isOpen && renderError(n.id)}
               {empty && <p className="tree-branch-empty muted" style={{ paddingInlineStart: indent + 22 }}>
                 {file ? 'Chưa có ký hiệu trong chỉ mục.' : 'Thư mục trống.'}
@@ -247,6 +492,14 @@ export function TreeView({ projectId, onOpenNode, onOpenCode, compact = false, a
           )
         })}
       </div>
+      {menu && <>
+        <div className="menu-backdrop" onClick={() => setMenu(null)} onContextMenu={(event) => { event.preventDefault(); setMenu(null) }} />
+        <div role="menu" aria-label={menuNode?.label ?? 'Dự án'} className="context-menu tree-context"
+          style={{ left: Math.max(4, Math.min(menu.x, window.innerWidth - 220)), top: Math.max(4, Math.min(menu.y, window.innerHeight - 380)) }}>
+          {menuItems.map((item) => <button key={item.label} type="button" role="menuitem" disabled={working || item.disabled}
+            onClick={() => { setMenu(null); item.action() }}>{item.label}</button>)}
+        </div>
+      </>}
     </div>
   )
 }

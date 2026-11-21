@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { errorText } from '../../state/errorText'
 import { fuzzyMatch } from '../../state/fuzzy'
 import { FileTypeIcon } from '../common/FileTypeIcon'
+import { Icon } from '../common/icons'
 import { Highlight, Picker } from './Picker'
 
-const fileKey = (path: string) => path
+type FileItem = { path: string; kind: 'file' | 'recent' | 'create' }
+const fileKey = (item: FileItem) => `${item.kind}:${item.path}`
+const fileText = (item: FileItem) => item.path
 const LIMIT = 200
 
 /** Khớp tên tệp trước (điểm cộng lớn), không được thì khớp cả đường dẫn; như tìm tệp của Wu. */
@@ -24,34 +28,76 @@ export function rankFiles(files: readonly string[], query: string): { item: stri
   return out.sort((a, b) => b.score - a.score).slice(0, LIMIT)
 }
 
-/** ⌘P: tệp mở gần đây đứng đầu khi chưa gõ; Enter mở tệp trong editor. */
-export function FileFinder({ projectId, recent, onOpen, onClose }: { projectId: string; recent: readonly string[]; onOpen: (path: string) => void; onClose: () => void }) {
-  const [files, setFiles] = useState<string[] | null>(null)
+/** ⌘P: hiện lịch sử khi chưa gõ; tìm hoặc tạo tệp khi nhập đường dẫn. */
+export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: { projectId: string; projectName: string; recent: readonly string[]; onOpen: (path: string) => void; onClose: () => void }) {
+  const [listing, setListing] = useState<{ projectId: string; files: string[] } | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const creating = useRef(false)
+  const mounted = useRef(true)
+  const currentProject = useRef(projectId)
+  currentProject.current = projectId
+  const files = listing?.projectId === projectId ? listing.files : null
+  const items = useMemo<FileItem[]>(() => (files ?? []).map((path) => ({ path, kind: 'file' })), [files])
+
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   useEffect(() => {
     let live = true
+    setError(null)
     const load = window.nexgraph.fs.files
     if (!load) { setError('Không liệt kê được tệp ở chế độ này'); return }
     load(projectId).then(({ files: all }) => {
-      if (!live) return
-      const head = recent.filter((path) => all.includes(path))
-      setFiles([...head, ...all.filter((path) => !head.includes(path))])
-    }).catch((e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)) })
+      if (live) setListing({ projectId, files: all })
+    }).catch((e: unknown) => { if (live) setError(errorText(e)) })
     return () => { live = false }
-  }, [projectId, recent])
+  }, [projectId])
+
+  const filter = (indexed: readonly FileItem[], query: string): { item: FileItem; positions: number[] }[] => {
+    const path = query.trim()
+    if (!path) return [...new Set(recent)].map((item) => ({ item: { path: item, kind: 'recent' }, positions: [] }))
+    const matches: { item: FileItem; positions: number[] }[] = rankFiles([...new Set([...recent, ...indexed.map((item) => item.path)])], query)
+      .map(({ item, positions }) => ({ item: { path: item, kind: 'file' }, positions }))
+    if (files && !files.includes(path) && !recent.includes(path) && !/^(?:\/|[A-Za-z]:)/.test(path) && !/[\\\x00-\x1f]/.test(path)
+      && path.split('/').every((part) => part && part !== '.' && part !== '..')) {
+      matches.push({ item: { path, kind: 'create' }, positions: [] })
+    }
+    return matches
+  }
+
+  const pick = async (item: FileItem) => {
+    if (creating.current) return
+    setError(null)
+    if (item.kind !== 'create') { onClose(); onOpen(item.path); return }
+    const createFile = window.nexgraph.fs.createFile
+    if (!createFile) { setError('Không tạo được tệp ở chế độ này'); return }
+    creating.current = true
+    try {
+      await createFile(projectId, item.path)
+      if (mounted.current && currentProject.current === projectId) { onClose(); onOpen(item.path) }
+    } catch (e: unknown) {
+      if (mounted.current && currentProject.current === projectId) setError(errorText(e))
+    } finally {
+      creating.current = false
+    }
+  }
 
   return (
-    <Picker label="Tìm tệp" placeholder="Tìm tệp…" className="file-finder" items={files ?? []} itemKey={fileKey} itemText={fileKey} filter={rankFiles}
-      empty={error ?? (files ? 'Không có tệp khớp' : 'Đang liệt kê tệp…')} onCancel={onClose}
-      onPick={(path) => { onClose(); onOpen(path) }}
-      itemData={(path) => ({ 'data-path': path })}
-      renderItem={(path, positions) => {
+    <Picker label="Tìm tệp" placeholder="Tìm tệp…" className="file-finder" items={items} itemKey={fileKey} itemText={fileText} filter={filter}
+      empty={files ? 'Không có tệp khớp' : error ? 'Không có tệp để tìm' : 'Đang liệt kê tệp…'} error={error} onCancel={onClose}
+      onPick={(item) => { void pick(item) }}
+      itemData={(item) => ({ 'data-path': item.path })}
+      renderItem={(item, positions) => {
+        const { path } = item
+        if (item.kind === 'create') return <><Icon name="plus" size={16} /><span>Tạo tệp {path}?</span></>
         const cut = path.lastIndexOf('/') + 1
         const offset = Array.from(path.slice(0, cut)).length
         return <>
           <FileTypeIcon name={path.slice(cut)} />
           <b><Highlight text={path.slice(cut)} positions={positions.filter((p) => p >= offset)} offset={offset} /></b>
-          <span className="picker-dir"><Highlight text={path.slice(0, cut)} positions={positions.filter((p) => p < offset)} /></span>
+          <span className="picker-dir">{projectName}/<Highlight text={path.slice(0, cut)} positions={positions.filter((p) => p < offset)} /></span>
+          {item.kind === 'recent' && <span className="picker-history" role="img" aria-label="Mở gần đây" title="Mở gần đây"><Icon name="history" size={14} /></span>}
         </>
       }} />
   )

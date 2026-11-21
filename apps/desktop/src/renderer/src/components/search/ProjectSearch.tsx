@@ -69,7 +69,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
   return (
     <div className="project-search">
       <div className="ps-row">
-        <button type="button" className="ps-toggle ps-expand" aria-label="Hiện ô thay" aria-expanded={showReplace} onClick={() => setShowReplace((v) => !v)}>
+        <button type="button" className="ps-toggle ps-expand" aria-label={showReplace ? 'Ẩn ô thay' : 'Hiện ô thay'} aria-expanded={showReplace} onClick={() => setShowReplace((v) => !v)}>
           <Icon name="chevron" size={12} />
         </button>
         <div className="ps-field">
@@ -77,15 +77,19 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
           {toggle('caseSensitive', 'Phân biệt hoa thường', 'Aa')}
           {toggle('wholeWord', 'Khớp nguyên từ', 'ab')}
           {toggle('regex', 'Biểu thức chính quy', '.*')}
+          <button type="button" className="ps-toggle" aria-label="Lọc tệp" aria-pressed={showFilters} title="Lọc tệp" onClick={() => setShowFilters((v) => !v)}>…</button>
         </div>
-        <button type="button" className="ps-toggle" aria-label="Lọc tệp" aria-pressed={showFilters} title="Lọc tệp" onClick={() => setShowFilters((v) => !v)}>…</button>
       </div>
       {showReplace && (
         <div className="ps-row ps-indent">
           <div className="ps-field">
             <input aria-label="Thay bằng" placeholder="Thay bằng…" value={replacement} onChange={(e) => setReplacement(e.target.value)} />
+            <button type="button" className="ps-toggle" aria-label="Thay tất cả" title="Thay tất cả" disabled={!total || busy} onClick={() => void replaceAll()}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 7h12m-3-3 3 3-3 3M20 17H8m3-3-3 3 3 3" />
+              </svg>
+            </button>
           </div>
-          <button type="button" className="ps-action" disabled={!total || busy} onClick={() => void replaceAll()}>Thay tất cả</button>
         </div>
       )}
       {showFilters && (
@@ -117,11 +121,25 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
                     {matches.map((m) => {
                       const at = m.column - 1 - m.previewStart
                       const text = m.preview
+                      const before = text.slice(0, at)
+                      const after = text.slice(at + m.length)
+                      const contextStart = Math.max(0, before.length - 24)
+                      const start = contextStart > 0 && /[\uDC00-\uDFFF]/.test(before[contextStart]) && /[\uD800-\uDBFF]/.test(before[contextStart - 1])
+                        ? contextStart - 1 : contextStart
+                      const contextEnd = Math.min(after.length, 160)
+                      const end = contextEnd > 0 && contextEnd < after.length && /[\uD800-\uDBFF]/.test(after[contextEnd - 1]) && /[\uDC00-\uDFFF]/.test(after[contextEnd])
+                        ? contextEnd + 1 : contextEnd
+                      // shortcut: a preview ending at the API's 200-unit limit may not be cropped; upgrade when the API exposes the line end.
+                      const croppedEnd = text.length - at === 200 || at + m.length > text.length
                       return (
                         <li key={`${m.line}:${m.column}`}>
                           <button type="button" className="ps-match" onClick={() => onOpen(file, m.line)} title={`Dòng ${m.line}`}>
                             <span className="ps-line muted">{m.line}</span>
-                            <span className="ps-preview">{text.slice(0, at).trimStart()}<mark>{text.slice(at, at + m.length)}</mark>{text.slice(at + m.length)}</span>
+                            <span className="ps-preview">
+                              <span className="ps-context-before">{m.previewStart > 0 || start > 0 ? '…' : ''}{before.slice(start)}</span>
+                              <mark>{text.slice(at, at + m.length)}</mark>
+                              <span className="ps-context-after">{after.slice(0, end)}{croppedEnd || end < after.length ? '…' : ''}</span>
+                            </span>
                           </button>
                         </li>
                       )
