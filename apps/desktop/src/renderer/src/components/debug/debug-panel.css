@@ -39,3 +39,7 @@
 .dbg-bp:hover .dbg-remove, .dbg-watch:hover .dbg-remove, .dbg-remove:focus-visible { opacity: 1; }
 .dbg-empty { margin: 0; padding: 0 10px; font-size: 12px; }
 .dbg-output { min-height: 60px; max-height: 160px; margin: 0 8px; padding: 6px 8px; overflow: auto; border-radius: 6px; background: color-mix(in srgb, var(--color-text) 5%, transparent); font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.dbg-select { box-sizing: border-box; width: calc(100% - 16px); height: 26px; margin: 0 8px; padding: 0 6px; font-size: 12px; }
+.dbg-attach select { flex: none; height: 25px; padding: 0 4px; font-size: 12px; }
+.dbg-attach .dbg-port { flex: none; width: 56px; }
+.dbg-actions { display: flex; gap: 2px; }

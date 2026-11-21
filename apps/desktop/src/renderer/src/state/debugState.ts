@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from 'react'
-import type { DebugBreakpoint, DebugBreakpoints, DebugFrame, DebugScope, DebugVariable } from '@shared/api'
+import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugFrame, DebugScope, DebugVariable, NexGraphApi } from '@shared/api'
 import { errorText } from './errorText'
 
 export type DebugKind = 'node' | 'python'
 export type DebugStatus = 'idle' | 'starting' | 'running' | 'stopped'
 export type ScopeView = DebugScope & { vars: DebugVariable[] }
 export type WatchView = { expression: string; value: string | null; variablesReference: number }
+/** Cấu hình trong .vscode/launch.json hoặc .zed/debug.json, theo (tệp, tên). */
+export type ConfigRef = Pick<DebugConfigInfo, 'source' | 'name'>
 
 type State = {
   breakpoints: DebugBreakpoints
@@ -18,8 +20,10 @@ type State = {
   watches: WatchView[]
   output: string[]
   error: string | null
+  /** Cấu hình đang chọn; null = chạy tệp đang mở như trước. */
+  config: ConfigRef | null
 }
-let state: State = { breakpoints: {}, at: null, status: 'idle', threadId: 0, frames: [], frameId: null, scopes: [], watches: [], output: [], error: null }
+let state: State = { breakpoints: {}, at: null, status: 'idle', threadId: 0, frames: [], frameId: null, scopes: [], watches: [], output: [], error: null, config: null }
 const listeners = new Set<() => void>()
 const patch = (next: Partial<State>) => { state = { ...state, ...next }; for (const l of listeners) l() }
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
@@ -52,7 +56,7 @@ export function setDebugProject(id: string): void {
   const current = ++generation
   ++frameRequest
   const mustStop = state.status !== 'idle' || !!starting || !!switching
-  patch({ breakpoints: loadBreakpoints(id), watches: [], output: [], error: null, frames: [], scopes: [], frameId: null, at: null,
+  patch({ breakpoints: loadBreakpoints(id), watches: [], output: [], error: null, frames: [], scopes: [], frameId: null, at: null, config: null,
     status: mustStop ? 'starting' : 'idle' })
   if (mustStop) {
     const stop = switching ?? Promise.resolve(starting).catch(() => {}).then(() => api()?.stop())
@@ -160,7 +164,9 @@ function listen() {
   })
 }
 
-export async function startDebugging(projectId: string, kind: DebugKind, file: string): Promise<void> {
+type Launch = (debug: NonNullable<NexGraphApi['debug']>, breakpoints: DebugBreakpoints) => Promise<void>
+
+async function begin(projectId: string, launch: Launch): Promise<void> {
   if (project !== projectId) setDebugProject(projectId)
   const debug = api()
   if (!debug || state.status !== 'idle' || switching) return
@@ -168,7 +174,7 @@ export async function startDebugging(projectId: string, kind: DebugKind, file: s
   const current = generation
   patch({ error: null, output: [], status: 'starting' })
   const initial = state.breakpoints
-  const task = debug.start(projectId, kind, file, initial)
+  const task = launch(debug, initial)
   starting = task
   try {
     await task
@@ -184,6 +190,20 @@ export async function startDebugging(projectId: string, kind: DebugKind, file: s
   } catch (e) { if (generation === current) patch({ error: errorText(e), status: 'idle' }) }
   finally { if (starting === task) starting = null }
 }
+
+export const selectDebugConfig = (config: ConfigRef | null): void => patch({ config })
+
+/** F5 và nút ▶: cấu hình đã chọn nếu có, không thì tệp đang mở (cần `kind` và `file`). */
+export function startDebugging(projectId: string, kind: DebugKind | null, file: string | null): Promise<void> {
+  if (project !== projectId) setDebugProject(projectId)
+  const config = state.config
+  if (config) return begin(projectId, (debug, breakpoints) => debug.startConfig(projectId, config, file, breakpoints))
+  if (kind && file) return begin(projectId, (debug, breakpoints) => debug.start(projectId, kind, file, breakpoints))
+  return Promise.resolve()
+}
+
+export const attachDebugging = (projectId: string, kind: DebugKind, host: string, port: number): Promise<void> =>
+  begin(projectId, (debug, breakpoints) => debug.attach(projectId, kind, host, port, breakpoints))
 
 export function debugStep(action: 'continue' | 'next' | 'stepIn' | 'stepOut'): void {
   if (state.status !== 'stopped') return

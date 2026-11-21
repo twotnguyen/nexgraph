@@ -6,6 +6,7 @@ import type { DebugBreakpoint, DebugBreakpoints, DebugEvaluation, DebugEvent, De
 import { resolveInside } from '../fs/project-fs'
 import { ADAPTERS, adapterDir, findPython, type DebugKind } from './adapters'
 import { DapClient } from './dap-client'
+import { launchSpec, type DebugSpec } from './launch-config'
 import { UserError } from '../user-error'
 
 const fail = (code: string, message: string) => new UserError(code, message)
@@ -18,12 +19,12 @@ export const toDapBreakpoints = (breakpoints: DebugBreakpoint[]) => breakpoints.
 }))
 
 type Session = {
-  kind: DebugKind
+  spec: DebugSpec
   root: string
-  file: string
   supportsRestart: boolean
   state: 'starting' | 'running' | 'stopped'
-  adapter: ChildProcess
+  /** Tiến trình adapter do app chạy; null khi nối TCP thẳng vào adapter của tiến trình đích (attach Python). */
+  adapter: ChildProcess | null
   /** Phiên điều khiển (js-debug: phiên con do startDebugging tạo; debugpy: chính phiên gốc). */
   control: DapClient
   clients: DapClient[]
@@ -33,8 +34,8 @@ type Session = {
 }
 
 /**
- * Một phiên gỡ lỗi tại một thời điểm, như bảng Debug của Wu: chạy tệp đang mở bằng js-debug (Node) hoặc debugpy (Python),
- * điểm dừng theo dòng, chạy tiếp/bước qua/bước vào/bước ra, xem ngăn xếp và biến.
+ * Một phiên gỡ lỗi tại một thời điểm, như bảng Debug của Wu: chạy tệp đang mở, một cấu hình trong dự án hoặc attach vào tiến trình đang chạy
+ * bằng js-debug (Node) hoặc debugpy (Python), điểm dừng theo dòng, chạy tiếp/bước qua/bước vào/bước ra, xem ngăn xếp và biến.
  */
 export class DebugManager {
   private session: Session | null = null
@@ -48,15 +49,22 @@ export class DebugManager {
     return r.startsWith('..') || isAbsolute(r) ? null : r.split(sep).join('/')
   }
 
+  /** F5 mặc định: chạy tệp đang mở bằng adapter của `kind`. */
   async start(kind: DebugKind, projectRoot: string, file: string, breakpoints: DebugBreakpoints): Promise<void> {
     await this.stop()
     // Đường dẫn thật (macOS: /var → /private/var) để khớp đường dẫn adapter trả về và đường dẫn điểm dừng.
     const root = realpathSync.native(projectRoot)
-    const program = this.abs(root, file)
+    return this.run(root, launchSpec(kind, { program: this.abs(root, file), cwd: root }), breakpoints)
+  }
+
+  /** Chạy launch hoặc attach theo tham số adapter đã dựng (cấu hình trong dự án, form Attach); phiên đang có bị dừng trước. */
+  async run(projectRoot: string, spec: DebugSpec, breakpoints: DebugBreakpoints): Promise<void> {
+    await this.stop()
+    const root = realpathSync.native(projectRoot)
     this.emit({ type: 'state', state: 'starting' })
     try {
-      const session = kind === 'python' ? await this.startPython(root, program, breakpoints) : await this.startNode(root, program, breakpoints)
-      session.adapter.once('exit', () => this.finish(session))
+      const session = spec.kind === 'python' ? await this.startPython(root, spec, breakpoints) : await this.startNode(root, spec, breakpoints)
+      session.adapter?.once('exit', () => this.finish(session))
       if (this.session === session && session.state === 'starting') {
         session.state = 'running'
         this.emit({ type: 'state', state: 'running' })
@@ -106,29 +114,57 @@ export class DebugManager {
     })
   }
 
-  private async startPython(root: string, program: string, breakpoints: DebugBreakpoints): Promise<Session> {
-    const python = await findPython()
-    const adapter = spawn(python, ['-m', 'debugpy.adapter'], {
-      cwd: root, env: { ...process.env, PYTHONPATH: adapterDir(this.adaptersBase, 'python') }, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true
+  /** Chờ initialized; launch/attach bị adapter từ chối ngay (không có initialized) thì ném lỗi thay vì treo. */
+  private ready(initialized: Promise<void>, started: Promise<unknown>): Promise<void> {
+    return Promise.race([initialized, started.then(() => initialized)])
+  }
+
+  private async dial(host: string, port: number): Promise<Socket> {
+    const socket = connect(port, host)
+    await new Promise<void>((ok, err) => {
+      socket.once('connect', ok)
+      socket.once('error', () => err(fail('connect_failed', `Không kết nối được tới ${host}:${port}`)))
     })
-    const client = new DapClient(adapter.stdout!, adapter.stdin!)
-    adapter.stdin!.on('error', () => {})
-    const session: Session = { kind: 'python', root, file: relative(root, program), supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets: [], breakpoints, threadWaiters: new Set() }
+    // Lỗi sau khi đã nối (tiến trình đích thoát đột ngột) kết thúc phiên qua sự kiện close; không được thành ngoại lệ của main.
+    socket.on('error', () => {})
+    return socket
+  }
+
+  private async startPython(root: string, spec: DebugSpec, breakpoints: DebugBreakpoints): Promise<Session> {
+    let adapter: ChildProcess | null = null
+    let python = ''
+    let client: DapClient
+    const sockets: Socket[] = []
+    if (spec.request === 'attach') {
+      // `debugpy.listen` của tiến trình đích đã tự chạy một adapter nghe DAP trên cổng đó: nối TCP thẳng thay vì chạy adapter riêng.
+      const socket = await this.dial(spec.host, spec.port)
+      sockets.push(socket)
+      client = new DapClient(socket, socket)
+    } else {
+      python = await findPython()
+      adapter = spawn(python, ['-m', 'debugpy.adapter'], {
+        cwd: root, env: { ...process.env, PYTHONPATH: adapterDir(this.adaptersBase, 'python') }, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true
+      })
+      client = new DapClient(adapter.stdout!, adapter.stdin!)
+      adapter.stdin!.on('error', () => {})
+    }
+    const session: Session = { spec, root, supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets, breakpoints, threadWaiters: new Set() }
     this.session = session
+    if (!adapter) sockets[0].once('close', () => this.finish(session))
     this.wire(session, client)
     const capabilities = await client.request<{ supportsRestartRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'debugpy', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path' })
     session.supportsRestart = capabilities.supportsRestartRequest === true
     const initialized = this.waitInitialized(client)
-    // debugpy chỉ trả lời launch sau configurationDone: không chờ launch trước.
-    const launched = client.request('launch', { type: 'python', request: 'launch', program, cwd: root, console: 'internalConsole', justMyCode: true, python: [python] }, 60_000)
-    launched.catch(() => {})
-    await initialized
+    // debugpy chỉ trả lời launch/attach sau configurationDone: không chờ trả lời trước.
+    const started = client.request(spec.request, spec.request === 'launch' ? { ...spec.args, python: [python] } : spec.args, 60_000)
+    started.catch(() => {})
+    await this.ready(initialized, started)
     await this.configure(client, root, breakpoints)
-    await launched
+    await started
     return session
   }
 
-  private async startNode(root: string, program: string, breakpoints: DebugBreakpoints): Promise<Session> {
+  private async startNode(root: string, spec: DebugSpec, breakpoints: DebugBreakpoints): Promise<Session> {
     const server = join(adapterDir(this.adaptersBase, 'node'), ...ADAPTERS.node.entry)
     const adapter = spawn(process.execPath, [server, '0', '127.0.0.1'], {
       cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true
@@ -143,14 +179,10 @@ export class DebugManager {
       })
       adapter.once('exit', () => { clearTimeout(timer); reject(fail('adapter_exit', 'js-debug đã dừng')) })
     })
-    const open = async () => {
-      const socket = connect(port, '127.0.0.1')
-      await new Promise<void>((ok, err) => { socket.once('connect', ok); socket.once('error', err) })
-      return socket
-    }
+    const open = () => this.dial('127.0.0.1', port)
     const rootSocket = await open()
     const client = new DapClient(rootSocket, rootSocket)
-    const session: Session = { kind: 'node', root, file: relative(root, program), supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets: [rootSocket], breakpoints, threadWaiters: new Set() }
+    const session: Session = { spec, root, supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets: [rootSocket], breakpoints, threadWaiters: new Set() }
     this.session = session
     this.wire(session, client)
     // js-debug chạy chương trình trong phiên con: yêu cầu startDebugging → mở kết nối mới tới cùng server.
@@ -167,16 +199,17 @@ export class DebugManager {
       const configuration = (args.configuration ?? {}) as Record<string, unknown>
       const started = child.request(args.request === 'attach' ? 'attach' : 'launch', configuration, 60_000)
       started.catch(() => {})
-      await initialized
+      await this.ready(initialized, started)
       await this.configure(child, root, session.breakpoints)
       return {}
     }
     const capabilities = await client.request<{ supportsRestartRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'pwa-node', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path', supportsStartDebuggingRequest: true })
     session.supportsRestart = capabilities.supportsRestartRequest === true
     const initialized = this.waitInitialized(client)
-    const launched = client.request('launch', { type: 'pwa-node', request: 'launch', program, cwd: root, console: 'internalConsole', outputCapture: 'std' }, 60_000)
+    // Như Wu: js-debug luôn nhận cwd (mặc định gốc dự án), kể cả attach.
+    const launched = client.request(spec.request, { cwd: root, ...spec.args }, 60_000)
     launched.catch(() => {})
-    await initialized
+    await this.ready(initialized, launched)
     await client.request('configurationDone')
     await launched
     return session
@@ -231,7 +264,8 @@ export class DebugManager {
 
   async restart(): Promise<void> {
     const session = this.active()
-    if (session.supportsRestart) {
+    // Attach không có tiến trình do app chạy để khởi động lại: nối lại từ cấu hình cũ.
+    if (session.supportsRestart && session.spec.request === 'launch') {
       session.state = 'starting'
       this.emit({ type: 'state', state: 'starting' })
       try {
@@ -245,7 +279,7 @@ export class DebugManager {
         // Adapter có thể báo hỗ trợ nhưng từ chối restart; chạy lại từ cấu hình cũ.
       }
     }
-    await this.start(session.kind, session.root, session.file, session.breakpoints)
+    await this.run(session.root, session.spec, session.breakpoints)
   }
 
   async evaluate(expression: string, frameId: number, context: 'watch' | 'repl'): Promise<DebugEvaluation> {
@@ -276,14 +310,15 @@ export class DebugManager {
     session.threadWaiters.clear()
     for (const client of session.clients) client.close('Phiên gỡ lỗi đã kết thúc')
     for (const socket of session.sockets) socket.destroy()
-    session.adapter.kill()
+    session.adapter?.kill()
     this.emit({ type: 'state', state: 'terminated' })
   }
 
   async stop(): Promise<void> {
     const session = this.session
     if (!session) return
-    await Promise.race([session.control.request('disconnect', { terminateDebuggee: true }, 3_000).catch(() => {}), new Promise((r) => setTimeout(r, 3_000))])
+    // Attach chỉ ngắt kết nối: tiến trình đích không do app chạy nên không được tắt.
+    await Promise.race([session.control.request('disconnect', { terminateDebuggee: session.spec.request === 'launch' }, 3_000).catch(() => {}), new Promise((r) => setTimeout(r, 3_000))])
     this.finish(session)
   }
 }

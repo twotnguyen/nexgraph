@@ -1,13 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import type { DebugVariable } from '@shared/api'
+import type { DebugConfigInfo, DebugVariable } from '@shared/api'
 import { Icon } from '../common/icons'
-import { addWatch, clearAllBreakpoints, debugStep, evaluateConsole, pauseDebugging, removeWatch, restartDebugging, selectFrame, setBreakpoint, setDebugError, startDebugging, stopDebugging, toggleBreakpoint, useDebugState, type DebugKind } from '../../state/debugState'
+import { addWatch, attachDebugging, clearAllBreakpoints, debugStep, evaluateConsole, pauseDebugging, removeWatch, restartDebugging, selectDebugConfig, selectFrame, setBreakpoint, setDebugError, startDebugging, stopDebugging, toggleBreakpoint, useDebugState, type ConfigRef, type DebugKind } from '../../state/debugState'
 import './debug-panel.css'
 import { errorText } from '../../state/errorText'
 import { BreakpointForm } from './BreakpointForm'
 
 export const debugKindOf = (file: string | undefined): DebugKind | null => (!file ? null : /\.(m|c)?js$/.test(file) ? 'node' : /\.py$/.test(file) ? 'python' : null)
 const ADAPTER_LABEL: Record<DebugKind, string> = { node: 'js-debug (Node.js)', python: 'debugpy (Python)' }
+/** Mặc định khi để trống ô Attach: Node `--inspect` ở localhost:9229, `debugpy.listen` ở 127.0.0.1:5678 (như Wu và các adapter). */
+const ATTACH_DEFAULT: Record<DebugKind, { host: string; port: number }> = { node: { host: 'localhost', port: 9229 }, python: { host: '127.0.0.1', port: 5678 } }
+const configKey = (config: ConfigRef) => `${config.source}\n${config.name}`
 
 /** Một biến; có con thì bấm để mở (đọc biến con theo variablesReference khi mở). */
 function VariableRow({ variable, depth }: { variable: DebugVariable; depth: number }) {
@@ -43,20 +46,37 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(0)
   const [draft, setDraft] = useState('')
+  const [configs, setConfigs] = useState<DebugConfigInfo[] | null>(null)
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [attachKind, setAttachKind] = useState<DebugKind>('node')
+  const [attachHost, setAttachHost] = useState('')
+  const [attachPort, setAttachPort] = useState('')
+  const loadConfigs = () => api?.configs(projectId).then((list) => { setConfigs(list); setConfigError(null) }, (e: unknown) => setConfigError(errorText(e)))
   const output = useRef<HTMLPreElement>(null)
   const kind = debugKindOf(target)
   useEffect(() => { void api?.adapterStatus().then(setInstalled).catch(() => {}) }, [api])
   useEffect(() => { if (output.current) output.current.scrollTop = output.current.scrollHeight }, [debug.output])
+  useEffect(() => { void loadConfigs() }, [api, projectId]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Cấu hình đã chọn không còn trong tệp (đổi tên, xoá): bỏ chọn để F5 không chạy cấu hình không tồn tại.
+  useEffect(() => {
+    const chosen = debug.config
+    if (configs && chosen && !configs.some((item) => configKey(item) === configKey(chosen))) selectDebugConfig(null)
+  }, [configs]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!api) return <p className="dbg-empty muted">Gỡ lỗi không dùng được ở chế độ này.</p>
   const { status } = debug
-  const needsAdapter = kind && installed && !installed[kind]
-  const install = async () => {
-    if (!kind) return
+  const chosen = debug.config
+  const list = configs ?? []
+  const selected = chosen ? list.find((item) => configKey(item) === configKey(chosen)) : undefined
+  const runKind = selected ? selected.kind : kind
+  // Python attach nối thẳng vào adapter của tiến trình đích (debugpy.listen) nên không cần tải debugpy.
+  const needsAdapter = runKind && installed && !installed[runKind] && !(runKind === 'python' && selected?.request === 'attach') ? runKind : null
+  const nodeAttachBlocked = attachKind === 'node' && !!installed && !installed.node
+  const install = async (adapter: DebugKind) => {
     setInstalling(true)
     setDebugError(null)
     try {
-      await api.installAdapter(kind)
+      await api.installAdapter(adapter)
       setInstalled(await api.adapterStatus())
     } catch (e) {
       setDebugError(errorText(e))
@@ -64,13 +84,27 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
       setInstalling(false)
     }
   }
+  const banner = (adapter: DebugKind) => (
+    <div className="dbg-install">
+      <span>Cần tải {ADAPTER_LABEL[adapter]} (mã nguồn mở, MIT) về thư mục dữ liệu của app.</span>
+      <button type="button" className="primary" disabled={installing} onClick={() => void install(adapter)}>{installing ? 'Đang tải…' : 'Tải về'}</button>
+    </div>
+  )
+  // Mở tệp cấu hình (tạo .vscode/launch.json mẫu nếu dự án chưa có) rồi đọc lại danh sách.
+  const openConfigFile = async () => {
+    try {
+      onOpenFile(await api.configFile(projectId), 1)
+      void loadConfigs()
+    } catch (e) { setConfigError(errorText(e)) }
+  }
+  const attach = () => void attachDebugging(projectId, attachKind, attachHost.trim() || ATTACH_DEFAULT[attachKind].host, Number(attachPort.trim() || ATTACH_DEFAULT[attachKind].port))
   const breakpoints = Object.entries(debug.breakpoints).sort(([a], [b]) => a.localeCompare(b)).flatMap(([file, points]) => points.map((point) => ({ file, ...point })))
 
   return (
     <div className="debug-panel">
       <div className="dbg-toolbar" role="toolbar" aria-label="Điều khiển gỡ lỗi">
         {status === 'idle' || status === 'starting'
-          ? <button type="button" className="dbg-btn dbg-run" disabled={!kind || !target || status === 'starting' || !!needsAdapter} title="Bắt đầu gỡ lỗi (F5)" aria-label="Bắt đầu gỡ lỗi" onClick={() => kind && target && void startDebugging(projectId, kind, target)}>▶</button>
+          ? <button type="button" className="dbg-btn dbg-run" disabled={(!chosen && (!kind || !target)) || status === 'starting' || !!needsAdapter} title="Bắt đầu gỡ lỗi (F5)" aria-label="Bắt đầu gỡ lỗi" onClick={() => void startDebugging(projectId, kind, target ?? null)}>▶</button>
           : status === 'running'
             ? <button type="button" className="dbg-btn" title="Tạm dừng (F6)" aria-label="Tạm dừng" onClick={pauseDebugging}>Ⅱ</button>
             : <button type="button" className="dbg-btn" title="Chạy tiếp (F5)" aria-label="Chạy tiếp" onClick={() => debugStep('continue')}>▶</button>}
@@ -81,14 +115,40 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
         <button type="button" className="dbg-btn dbg-stop" disabled={status === 'idle'} title="Dừng (⇧F5)" aria-label="Dừng gỡ lỗi" onClick={stopDebugging}>■</button>
         <span className="dbg-status muted" role="status">{status === 'idle' ? '' : status === 'starting' ? 'Đang khởi động…' : status === 'running' ? 'Đang chạy' : 'Đang dừng'}</span>
       </div>
-      <p className="dbg-target">{target ? <><b>{target}</b> <span className="muted">· {kind ? ADAPTER_LABEL[kind] : 'chỉ gỡ lỗi được tệp .js, .mjs, .cjs, .py'}</span></> : <span className="muted">Mở một tệp .js hoặc .py rồi bấm chạy.</span>}</p>
-      {needsAdapter && (
-        <div className="dbg-install">
-          <span>Cần tải {ADAPTER_LABEL[kind]} (mã nguồn mở, MIT) về thư mục dữ liệu của app.</span>
-          <button type="button" className="primary" disabled={installing} onClick={() => void install()}>{installing ? 'Đang tải…' : 'Tải về'}</button>
-        </div>
-      )}
+      <p className="dbg-target">{selected
+        ? <><b>{selected.name}</b> <span className="muted">· {selected.request} · {ADAPTER_LABEL[selected.kind]}</span></>
+        : target ? <><b>{target}</b> <span className="muted">· {kind ? ADAPTER_LABEL[kind] : 'chỉ gỡ lỗi được tệp .js, .mjs, .cjs, .py'}</span></> : <span className="muted">Mở một tệp .js hoặc .py rồi bấm chạy.</span>}</p>
+      {needsAdapter && banner(needsAdapter)}
       {debug.error && <p role="alert" className="dbg-error">{debug.error}</p>}
+      <section aria-label="Cấu hình gỡ lỗi"><div className="dbg-section-head"><h3>Cấu hình</h3>
+        <div className="dbg-actions">
+          <button type="button" className="dbg-btn" title="Tải lại danh sách cấu hình" aria-label="Tải lại cấu hình" onClick={() => void loadConfigs()}><Icon name="refresh" size={13} /></button>
+          <button type="button" className="dbg-btn" title="Mở tệp cấu hình (.vscode/launch.json; tạo mẫu nếu chưa có)" aria-label="Mở tệp cấu hình gỡ lỗi" onClick={() => void openConfigFile()}><Icon name="pencil" size={13} /></button>
+        </div></div>
+        <select className="dbg-select" aria-label="Cấu hình khởi chạy" disabled={status !== 'idle'} value={selected ? configKey(selected) : ''}
+          onChange={(event) => {
+            const next = list.find((item) => configKey(item) === event.target.value)
+            selectDebugConfig(next ? { source: next.source, name: next.name } : null)
+          }}>
+          <option value="">Chạy tệp đang mở</option>
+          {list.map((item) => <option key={configKey(item)} value={configKey(item)} title={item.source}>{item.name} · {item.request}</option>)}
+        </select>
+        {configError && <p role="alert" className="dbg-error">{configError}</p>}
+      </section>
+      {status === 'idle' && (
+        <section aria-label="Attach vào tiến trình"><h3>Attach</h3>
+          <form className="dbg-input dbg-attach" onSubmit={(event) => { event.preventDefault(); attach() }}>
+            <select aria-label="Loại tiến trình" value={attachKind} onChange={(event) => setAttachKind(event.target.value as DebugKind)}>
+              <option value="node">Node.js</option><option value="python">Python</option>
+            </select>
+            <input aria-label="Địa chỉ" placeholder={ATTACH_DEFAULT[attachKind].host} value={attachHost} onChange={(event) => setAttachHost(event.target.value)} />
+            <input aria-label="Cổng" className="dbg-port" inputMode="numeric" placeholder={String(ATTACH_DEFAULT[attachKind].port)} value={attachPort} onChange={(event) => setAttachPort(event.target.value)} />
+            <button type="submit" disabled={nodeAttachBlocked}>Attach</button>
+          </form>
+          <p className="dbg-empty muted">{attachKind === 'node' ? 'Chạy tiến trình bằng node --inspect (cổng mặc định 9229).' : 'Mã Python cần gọi debugpy.listen(5678) (cổng mặc định 5678).'}</p>
+          {nodeAttachBlocked && needsAdapter !== 'node' && banner('node')}
+        </section>
+      )}
       <section aria-label="Ngăn xếp gọi"><h3>Ngăn xếp gọi</h3>
         <ul className="dbg-list">{debug.frames.map((f) => (
           <li key={f.id}><button type="button" className="dbg-frame" aria-current={f.id === debug.frameId || undefined} onClick={() => void selectFrame(f)}>

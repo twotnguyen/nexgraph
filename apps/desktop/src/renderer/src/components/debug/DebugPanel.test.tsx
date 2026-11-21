@@ -12,6 +12,7 @@ it('bật tắt điểm dừng, tính watch và console theo frame đang dừng'
   const evaluate = vi.fn(async (expression: string) => ({ result: expression === 'items' ? '[1, 2, 3]' : '10', variablesReference: 0 }))
   const api = {
     adapterStatus: async () => ({ node: true, python: true }),
+    configs: async () => [],
     onEvent: (handler: (event: DebugEvent) => void) => { emit = handler; return () => {} },
     start: async () => {},
     setBreakpoints: vi.fn(async () => {}),

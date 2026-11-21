@@ -56,7 +56,7 @@ function readTasksFile(root: string, source: TaskSource): string | null {
   }
 }
 
-function parseJsonc(input: string): unknown {
+export function parseJsonc(input: string): unknown {
   let withoutComments = ''
   let quoted = false
   for (let i = 0; i < input.length; i++) {
