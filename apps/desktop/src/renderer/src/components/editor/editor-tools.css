@@ -1,0 +1,24 @@
+.editor-tool-dialog { padding: 12px; gap: 8px; }
+.editor-tool-dialog label { color: var(--color-text); font-size: 13px; font-weight: 600; }
+.editor-tool-dialog input, .editor-outline input {
+  width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid var(--color-border);
+  border-radius: 4px; background: var(--color-surface); color: var(--color-text); font: inherit;
+}
+.editor-tool-dialog input:focus-visible, .editor-outline input:focus-visible,
+.editor-outline button:focus-visible, .editor-diagnostics button:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.editor-tool-dialog p { margin: 0; color: var(--color-muted); font-size: 12px; }
+.editor-tool-dialog .editor-tool-error { color: var(--color-error-red); }
+.editor-tool-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.editor-tool-actions button { padding: 5px 10px; }
+.editor-outline, .editor-diagnostics { font-size: 12px; }
+.editor-outline > p, .editor-diagnostics > p { margin: 10px 0; }
+.editor-outline ul, .editor-diagnostics ul { margin: 4px 0 0; padding: 0; list-style: none; }
+.editor-outline ul ul { margin: 0 0 0 12px; padding-left: 5px; border-left: 1px solid var(--color-border); }
+.editor-outline button, .editor-diagnostics button {
+  width: 100%; border: 0; border-radius: 4px; background: transparent; color: var(--color-text); text-align: left; cursor: pointer;
+}
+.editor-outline button { overflow: hidden; padding: 5px 6px; text-overflow: ellipsis; white-space: nowrap; }
+.editor-outline button:hover, .editor-diagnostics button:hover { background: var(--track); }
+.editor-diagnostics h3 { overflow: hidden; margin: 12px 0 4px; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.editor-diagnostics h3 small, .editor-diagnostics button small { color: var(--color-muted); font-size: 11px; }
+.editor-diagnostics button { display: flex; flex-direction: column; gap: 3px; padding: 6px; overflow-wrap: anywhere; }

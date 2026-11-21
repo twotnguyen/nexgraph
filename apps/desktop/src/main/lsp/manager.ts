@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, extname, join, relative, sep } from 'node:path'
-import { pathToFileURL, fileURLToPath } from 'node:url'
-import type { LspCompletionItem, LspLocation } from '../../shared/api'
-import { resolveInside } from '../fs/project-fs'
+import { dirname, extname, join, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import type { LspCodeAction, LspCompletionItem, LspDiagnostic, LspDocumentSymbol, LspLocation, LspRange, LspSignatureHelp, LspTextEdit, LspWorkspaceEdit, LspWorkspaceSymbol } from '../../shared/api'
+import { FsError, resolveInside } from '../fs/project-fs'
 import { LspConnection } from './connection'
+import { isLspRange, normalizeDiagnostics, normalizeSignatureHelp, normalizeWorkspaceEdit, projectFile } from './protocol'
 
 type ServerKind = 'ts' | 'py'
 const LANGUAGE: Record<string, { id: string; server: ServerKind }> = {
@@ -34,8 +35,14 @@ function launch(kind: ServerKind): ChildProcess {
   })
 }
 
-type Server = { process: ChildProcess; rpc: LspConnection; ready: Promise<void>; versions: Map<string, { version: number; text: string }> }
-type LspRange = { start: { line: number; character: number }; end: { line: number; character: number } }
+type Server = {
+  process: ChildProcess
+  rpc: LspConnection
+  ready: Promise<void>
+  versions: Map<string, { version: number; text: string }>
+  diagnostics: Map<string, LspDiagnostic[]>
+  resolveCodeActions: boolean
+}
 
 /** Một phần nội dung hover của LSP (chuỗi, MarkedString hoặc MarkupContent) → Markdown. */
 function hoverText(part: unknown): string {
@@ -47,6 +54,10 @@ function hoverText(part: unknown): string {
 /** Một language server cho mỗi (gốc dự án, loại server); khởi động khi mở tệp đầu tiên, tắt khi đóng dự án/thoát app. */
 export class LspManager {
   private readonly servers = new Map<string, Server>()
+  private readonly epochs = new Map<string, number>()
+  private readonly versions = new Map<string, number>()
+  private readonly closed = new Set<string>()
+  onDiagnostics: (root: string, file: string, diagnostics: LspDiagnostic[]) => void = () => {}
 
   private server(root: string, kind: ServerKind): Server {
     const key = `${root}\0${kind}`
@@ -56,12 +67,30 @@ export class LspManager {
     const rpc = new LspConnection(child.stdout!, child.stdin!)
     child.stdin!.on('error', () => {})
     rpc.onRequest = (method, params) => {
+      if (method === 'workspace/applyEdit') return { applied: false, failureReason: 'Thay đổi phải được áp dụng từ editor' }
       if (method !== 'workspace/configuration') return null
       const items = params && typeof params === 'object' && 'items' in params && Array.isArray(params.items) ? params.items : []
       return items.map(() => null)
     }
-    const server: Server = { process: child, rpc, versions: new Map(), ready: Promise.resolve() }
-    child.once('exit', () => { rpc.close('Language server đã dừng'); if (this.servers.get(key) === server) this.servers.delete(key) })
+    const server: Server = { process: child, rpc, versions: new Map(), diagnostics: new Map(), resolveCodeActions: false, ready: Promise.resolve() }
+    rpc.onNotification = (method, params) => {
+      if (method !== 'textDocument/publishDiagnostics' || this.servers.get(key) !== server) return
+      const event = normalizeDiagnostics(root, params)
+      if (!event) return
+      const uri = pathToFileURL(resolveInside(root, event.file)).href
+      const known = server.versions.get(uri)
+      if (this.closed.has(`${root}\0${uri}`) || (event.version !== undefined && known && event.version !== known.version)) return
+      if (event.diagnostics.length) server.diagnostics.set(event.file, event.diagnostics)
+      else server.diagnostics.delete(event.file)
+      this.onDiagnostics(root, event.file, event.diagnostics)
+    }
+    child.once('exit', () => {
+      rpc.close('Language server đã dừng')
+      if (this.servers.get(key) !== server) return
+      this.servers.delete(key)
+      for (const file of server.diagnostics.keys()) this.onDiagnostics(root, file, [])
+      server.diagnostics.clear()
+    })
     // Cùng dạng đường dẫn thật với uri tài liệu (resolveInside realpath hoá), nếu không tsserver coi tệp nằm ngoài dự án.
     const rootUri = pathToFileURL(realpathSync.native(root)).href
     server.ready = rpc.request('initialize', {
@@ -73,29 +102,48 @@ export class LspManager {
           synchronization: { didSave: false, dynamicRegistration: false },
           completion: { completionItem: { snippetSupport: false, documentationFormat: ['markdown', 'plaintext'] } },
           hover: { contentFormat: ['markdown', 'plaintext'] },
-          definition: { linkSupport: false }
+          definition: { linkSupport: false },
+          implementation: { linkSupport: false },
+          references: {},
+          rename: { prepareSupport: false },
+          formatting: {},
+          documentSymbol: { hierarchicalDocumentSymbolSupport: true },
+          signatureHelp: { signatureInformation: { documentationFormat: ['markdown', 'plaintext'], parameterInformation: { labelOffsetSupport: true }, activeParameterSupport: true } },
+          codeAction: { codeActionLiteralSupport: { codeActionKind: { valueSet: ['', 'quickfix', 'refactor', 'source'] } }, resolveSupport: { properties: ['edit'] } },
+          publishDiagnostics: { versionSupport: true, tagSupport: { valueSet: [1, 2] } }
         },
-        workspace: { workspaceFolders: true }
+        workspace: { workspaceFolders: true, workspaceEdit: { documentChanges: true }, symbol: {} }
       },
       initializationOptions: kind === 'ts' ? { tsserver: { path: join(pkgDir('typescript'), 'lib', 'tsserver.js') } } : {}
-    }, 60_000).then(() => rpc.notify('initialized', {}))
+    }, 60_000).then((result) => {
+      const provider = (result as { capabilities?: { codeActionProvider?: { resolveProvider?: boolean } | boolean } } | null)?.capabilities?.codeActionProvider
+      server.resolveCodeActions = typeof provider === 'object' && provider !== null && provider.resolveProvider === true
+      rpc.notify('initialized', {})
+    })
     this.servers.set(key, server)
     return server
   }
 
   private async withDoc(root: string, file: string, text: string): Promise<{ server: Server; uri: string } | null> {
+    if (typeof file !== 'string') throw new FsError('bad_param', 'Đường dẫn language server không hợp lệ')
+    const uri = pathToFileURL(resolveInside(root, file)).href
     const lang = lspLanguageOf(file)
     if (!lang) return null
-    const uri = pathToFileURL(resolveInside(root, file)).href
+    const key = `${root}\0${uri}`
+    const epoch = this.epochs.get(key) ?? 0
     const server = this.server(root, lang.server)
     await server.ready
+    if ((this.epochs.get(key) ?? 0) !== epoch) return null
+    this.closed.delete(key)
     const known = server.versions.get(uri)
     if (!known) {
-      server.versions.set(uri, { version: 1, text })
-      server.rpc.notify('textDocument/didOpen', { textDocument: { uri, languageId: lang.id, version: 1, text } })
+      const version = (this.versions.get(key) ?? 0) + 1
+      this.versions.set(key, version)
+      server.versions.set(uri, { version, text })
+      server.rpc.notify('textDocument/didOpen', { textDocument: { uri, languageId: lang.id, version, text } })
     } else if (known.text !== text) {
-      // Gửi lại khi nội dung đổi: mỗi lần đổi buộc server kiểm lại dự án.
       const next = { version: known.version + 1, text }
+      this.versions.set(key, next.version)
       server.versions.set(uri, next)
       server.rpc.notify('textDocument/didChange', { textDocument: { uri, version: next.version }, contentChanges: [{ text }] })
     }
@@ -103,23 +151,36 @@ export class LspManager {
   }
 
   /** Vị trí 0-based theo LSP; trả về đường dẫn tương đối, bỏ đích ngoài dự án (thư viện chuẩn, node_modules ngoài gốc). */
-  async definition(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
+  private async locations(method: string, root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
     const doc = await this.withDoc(root, file, text)
     if (!doc) return []
-    const raw = await doc.server.rpc.request<unknown>('textDocument/definition', { textDocument: { uri: doc.uri }, position: { line, character } })
-    const list = (Array.isArray(raw) ? raw : raw ? [raw] : []) as ({ uri?: string; range?: LspRange; targetUri?: string; targetSelectionRange?: LspRange })[]
+    const raw = await doc.server.rpc.request<unknown>(method, {
+      textDocument: { uri: doc.uri }, position: { line, character },
+      ...(method === 'textDocument/references' ? { context: { includeDeclaration: true } } : {})
+    })
+    const list: unknown[] = Array.isArray(raw) ? raw : raw ? [raw] : []
     const out: LspLocation[] = []
     for (const item of list) {
-      const uri = item.uri ?? item.targetUri
-      const range = item.range ?? item.targetSelectionRange
-      if (!uri?.startsWith('file:') || !range) continue
-      // Server có thể trả đường dẫn thật (macOS: /var → /private/var): so với cả gốc lẫn gốc đã realpath.
-      const target = fileURLToPath(uri)
-      const rel = [root, realpathSync.native(root)].map((base) => relative(base, target)).find((r) => !r.startsWith('..') && !r.includes(`${sep}..`))
-      if (rel === undefined) continue
-      out.push({ file: rel.split(sep).join('/'), line: range.start.line + 1, column: range.start.character + 1 })
+      if (!item || typeof item !== 'object') continue
+      const location = item as { uri?: unknown; range?: unknown; targetUri?: unknown; targetSelectionRange?: unknown }
+      const path = projectFile(root, location.uri ?? location.targetUri)
+      const range = location.range ?? location.targetSelectionRange
+      if (!path || !isLspRange(range)) continue
+      out.push({ file: path, line: range.start.line + 1, column: range.start.character + 1 })
     }
     return out
+  }
+
+  async definition(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
+    return this.locations('textDocument/definition', root, file, text, line, character)
+  }
+
+  async references(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
+    return this.locations('textDocument/references', root, file, text, line, character)
+  }
+
+  async implementation(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
+    return this.locations('textDocument/implementation', root, file, text, line, character)
   }
 
   async completion(root: string, file: string, text: string, line: number, character: number): Promise<LspCompletionItem[]> {
@@ -143,22 +204,139 @@ export class LspManager {
     return parts.map(hoverText).filter(Boolean).join('\n\n') || null
   }
 
+  async rename(root: string, file: string, text: string, line: number, character: number, newName: string): Promise<LspWorkspaceEdit> {
+    const doc = await this.withDoc(root, file, text)
+    if (!doc) return {}
+    const raw = await doc.server.rpc.request<unknown>('textDocument/rename', { textDocument: { uri: doc.uri }, position: { line, character }, newName })
+    if (raw === null) return {}
+    return normalizeWorkspaceEdit(root, raw, (uri) => {
+      const target = projectFile(root, uri)
+      return target ? doc.server.versions.get(pathToFileURL(resolveInside(root, target)).href)?.version : undefined
+    })
+  }
+
+  async format(root: string, file: string, text: string, options: { tabSize: number; insertSpaces: boolean }): Promise<LspTextEdit[]> {
+    const doc = await this.withDoc(root, file, text)
+    if (!doc) return []
+    const raw = await doc.server.rpc.request<unknown>('textDocument/formatting', { textDocument: { uri: doc.uri }, options })
+    if (raw === null) return []
+    const normalized = normalizeWorkspaceEdit(root, { changes: { [doc.uri]: raw } })
+    return normalized[projectFile(root, doc.uri)!] ?? []
+  }
+
+  async signatureHelp(root: string, file: string, text: string, line: number, character: number): Promise<LspSignatureHelp | null> {
+    const doc = await this.withDoc(root, file, text)
+    if (!doc) return null
+    const raw = await doc.server.rpc.request<unknown>('textDocument/signatureHelp', { textDocument: { uri: doc.uri }, position: { line, character } })
+    return normalizeSignatureHelp(raw)
+  }
+
+  async documentSymbols(root: string, file: string, text: string): Promise<LspDocumentSymbol[]> {
+    const doc = await this.withDoc(root, file, text)
+    if (!doc) return []
+    const raw = await doc.server.rpc.request<unknown>('textDocument/documentSymbol', { textDocument: { uri: doc.uri } })
+    if (!Array.isArray(raw)) return []
+    const convert = (value: unknown): LspDocumentSymbol | null => {
+      if (!value || typeof value !== 'object') return null
+      const item = value as { name?: unknown; kind?: unknown; range?: unknown; selectionRange?: unknown; children?: unknown; location?: { uri?: unknown; range?: unknown } }
+      const range = item.range ?? item.location?.range
+      const selectionRange = item.selectionRange ?? range
+      if (typeof item.name !== 'string' || typeof item.kind !== 'number' || !isLspRange(range) || !isLspRange(selectionRange) ||
+        (item.location && projectFile(root, item.location.uri) !== projectFile(root, doc.uri))) return null
+      const children = Array.isArray(item.children) ? item.children.map(convert).filter((child): child is LspDocumentSymbol => child !== null) : undefined
+      return { name: item.name, kind: item.kind, range, selectionRange, ...(children ? { children } : {}) }
+    }
+    return raw.map(convert).filter((item): item is LspDocumentSymbol => item !== null)
+  }
+
+  async workspaceSymbols(root: string, query: string): Promise<LspWorkspaceSymbol[]> {
+    const servers = [...this.servers.entries()].filter(([key, server]) => key.startsWith(`${root}\0`) && server.process.exitCode === null)
+    const replies = await Promise.allSettled(servers.map(([, server]) =>
+      server.ready.then(() => server.rpc.request<unknown>('workspace/symbol', { query }))))
+    const result: LspWorkspaceSymbol[] = []
+    for (const reply of replies) {
+      if (reply.status !== 'fulfilled' || !Array.isArray(reply.value)) continue
+      for (const value of reply.value as unknown[]) {
+        if (!value || typeof value !== 'object') continue
+        const item = value as { name?: unknown; kind?: unknown; location?: { uri?: unknown; range?: unknown }; containerName?: unknown }
+        const file = projectFile(root, item.location?.uri)
+        if (!file || !isLspRange(item.location?.range) || typeof item.name !== 'string' || typeof item.kind !== 'number') continue
+        result.push({ name: item.name, kind: item.kind, file, range: item.location.range,
+          ...(typeof item.containerName === 'string' ? { containerName: item.containerName } : {}) })
+        if (result.length === 100) return result
+      }
+    }
+    return result
+  }
+
+  async codeActions(root: string, file: string, text: string, range: LspRange): Promise<LspCodeAction[]> {
+    const doc = await this.withDoc(root, file, text)
+    if (!doc) return []
+    const safeFile = projectFile(root, doc.uri)!
+    const raw = await doc.server.rpc.request<unknown>('textDocument/codeAction', {
+      textDocument: { uri: doc.uri }, range, context: { diagnostics: doc.server.diagnostics.get(safeFile) ?? [] }
+    })
+    if (!Array.isArray(raw)) return []
+    const result: LspCodeAction[] = []
+    for (const value of raw as unknown[]) {
+      if (!value || typeof value !== 'object') continue
+      let action = value as { title?: unknown; kind?: unknown; edit?: unknown; command?: unknown; disabled?: unknown; data?: unknown }
+      if (typeof action.title !== 'string' || action.disabled || action.command) continue
+      if (action.edit === undefined && action.data !== undefined && doc.server.resolveCodeActions) {
+        const resolved = await doc.server.rpc.request<unknown>('codeAction/resolve', action)
+        if (!resolved || typeof resolved !== 'object') continue
+        action = resolved as typeof action
+      }
+      if (typeof action.title !== 'string' || action.disabled || action.command || action.edit === undefined) continue
+      const edit = normalizeWorkspaceEdit(root, action.edit, (uri) => {
+        const target = projectFile(root, uri)
+        return target ? doc.server.versions.get(pathToFileURL(resolveInside(root, target)).href)?.version : undefined
+      })
+      if (!Object.values(edit).some((edits) => edits.length)) continue
+      result.push({ title: action.title, ...(typeof action.kind === 'string' ? { kind: action.kind } : {}), edit })
+    }
+    return result
+  }
+
   /** Mở tài liệu ngay khi editor nạp tệp để server kịp dựng dự án trước lần F12/gợi ý đầu tiên (như Wu mở buffer). */
   async open(root: string, file: string, text: string): Promise<void> {
     await this.withDoc(root, file, text)
   }
 
   close(root: string, file: string): void {
+    if (typeof file !== 'string') throw new FsError('bad_param', 'Đường dẫn language server không hợp lệ')
+    const uri = pathToFileURL(resolveInside(root, file)).href
     const lang = lspLanguageOf(file)
     if (!lang) return
+    const key = `${root}\0${uri}`
+    this.epochs.set(key, (this.epochs.get(key) ?? 0) + 1)
+    this.closed.add(key)
     const server = this.servers.get(`${root}\0${lang.server}`)
-    const uri = pathToFileURL(resolveInside(root, file)).href
     if (!server?.versions.delete(uri)) return
+    const safeFile = projectFile(root, uri)
+    if (safeFile) {
+      server.diagnostics.delete(safeFile)
+      this.onDiagnostics(root, safeFile, [])
+    }
     server.rpc.notify('textDocument/didClose', { textDocument: { uri } })
   }
 
+  stop(root: string): void {
+    for (const [key, server] of this.servers) {
+      if (!key.startsWith(`${root}\0`)) continue
+      this.servers.delete(key)
+      server.rpc.close('Language server đã dừng')
+      for (const file of server.diagnostics.keys()) this.onDiagnostics(root, file, [])
+      server.diagnostics.clear()
+      server.process.kill()
+    }
+    for (const key of this.epochs.keys()) if (key.startsWith(`${root}\0`)) this.epochs.delete(key)
+    for (const key of this.versions.keys()) if (key.startsWith(`${root}\0`)) this.versions.delete(key)
+    for (const key of this.closed) if (key.startsWith(`${root}\0`)) this.closed.delete(key)
+  }
+
   stopAll(): void {
-    for (const server of this.servers.values()) server.process.kill()
-    this.servers.clear()
+    const roots = new Set([...this.servers.keys()].map((key) => key.slice(0, key.indexOf('\0'))))
+    for (const root of roots) this.stop(root)
   }
 }
