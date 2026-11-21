@@ -100,7 +100,7 @@ describe('git hook', () => {
     installHook(root, cmd, dataDir)
     expect(readFileSync(join(root, '.githooks', 'post-rewrite'), 'utf8')).toContain(BEGIN)
     expect(existsSync(hook)).toBe(false)
-    expect(hookPreview(root, cmd, dataDir)).toContain(join(root, '.githooks', 'post-merge'))
+    expect(hookPreview(root, cmd, dataDir)).toContain(join(realpathSync.native(root), '.githooks', 'post-merge')) // Windows: tên dài thay 8.3
   })
 
   it('Husky 9 (.husky/_): ghi vào .husky/ để Husky không ghi đè', () => {
