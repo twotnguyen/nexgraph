@@ -186,8 +186,9 @@ function skillPart(dir: string): Part {
 }
 
 // ---- Hook nhắc dùng graph ---------------------------------------------------------------------------------
-// shortcut: bọc "..." khi có khoảng trắng/ký tự shell, chưa xử lý đường dẫn chứa dấu " — đổi sang quoting theo shell nếu gặp.
-const sh = (s: string): string => (/[\s"'$`\\&|;<>()*?]/.test(s) ? `"${s}"` : s)
+// Bọc "..." (sh, Git Bash, cmd đều hiểu). POSIX: escape $ ` " \ để đường dẫn không bị shell diễn giải; Windows giữ \ của đường dẫn.
+const sh = (s: string): string => !/[\s"'$`\\&|;<>()*?]/.test(s) ? s
+  : `"${process.platform === 'win32' ? s : s.replace(/[$`"\\]/g, '\\$&')}"`
 const guardCommand = (c: Ctx, kind: string, strict: boolean): string =>
   [c.cmd.command, ...c.cmd.args, 'hook-guard', kind, '--project', c.root, '--data-dir', c.dataDir].map(sh).join(' ') + (strict ? ' --strict' : '')
 /** Lệnh của NexGraph: hook-guard có --project (lệnh của công cụ khác không có). */

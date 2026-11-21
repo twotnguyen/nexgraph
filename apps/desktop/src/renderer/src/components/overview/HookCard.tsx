@@ -41,7 +41,7 @@ export function HookCard({ project }: { project: ProjectSummary }) {
         <span className="muted">{vi.hook.cardDesc}</span>
         <small className="card-status">{label}</small>
       </button>
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && preview == null && <p role="alert" className="error">{error}</p>}
       {preview != null && (
         <div className="modal-backdrop">
           <div role="dialog" aria-label={vi.hook.title} className="modal">
@@ -49,6 +49,7 @@ export function HookCard({ project }: { project: ProjectSummary }) {
             <p className="muted">{vi.hook.preview}</p>
             <pre className="mono">{preview}</pre>
             {status === 'outdated' && <p className="muted">{vi.hook.outdated}</p>}
+            {error && <p role="alert" className="error">{error}</p>}
             <div className="row">
               {status !== 'on' && <button type="button" className="primary" onClick={() => void apply(true)}>{vi.hook.install}</button>}
               {(status === 'on' || status === 'outdated') && <button type="button" onClick={() => void apply(false)}>{vi.hook.uninstall}</button>}

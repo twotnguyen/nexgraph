@@ -70,7 +70,8 @@ def source_filter(source: SourcePolicy) -> Callable[[str], bool]:
     def allows(node_id: str) -> bool:
         if node_id.endswith("#directory"):
             return source.allows(node_id.removesuffix("#directory"), directory=True)
-        return source.allows(node_id.split("::", 1)[0].rsplit("#", 1)[0])
+        path, sep, _ = node_id.partition("::")  # đường dẫn có thể chứa '#' (docs/C#.md::Intro#document)
+        return source.allows(path if sep else node_id.rsplit("#", 1)[0])
     return allows
 
 

@@ -61,7 +61,8 @@ class ProjectRegistry:
         is_git = (root / ".git").exists()
         conn = open_graph_db(graph_db)
         try:
-            GraphStore(conn).init_project(root.name, is_git, project_id)
+            # Lần mở đồng thời có thể đã ghi id khác vào graph.db: dùng id thật trong CSDL.
+            project_id = GraphStore(conn).init_project(root.name, is_git, project_id)
         finally:
             conn.close()
         return self._remember(project_id, root, storage, graph_db, is_git)
@@ -150,6 +151,8 @@ class ProjectRegistry:
             return None
         try:
             row = conn.execute("SELECT ma_du_an FROM du_an").fetchone()
+        except sqlite3.Error:  # tệp có nhưng chưa có schema (engine bị kill giữa lúc tạo)
+            return None
         finally:
             conn.close()
         return row["ma_du_an"] if row else None

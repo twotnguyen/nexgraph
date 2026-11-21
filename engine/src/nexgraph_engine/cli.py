@@ -208,10 +208,12 @@ def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
             if not store.has_published_graph():
                 print(f"Dự án chưa được lập chỉ mục trong NexGraph: {project}", file=sys.stderr)
                 return 3, {"status": "not_indexed"}
-            if conn.execute("SELECT 1 FROM lan_lap_chi_muc WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai') LIMIT 1").fetchone():
-                return 0, skipped
-            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, store.project_id()),
-                                keep_sources=data_dir is None)
+            # Đang giữ graph_writer mà còn lần chạy dở trên CSDL thật (index đầy đủ chạy trên bản staging) thì đó là
+            # lần refresh bị kill: đánh dấu lỗi để không chặn mọi lần refresh sau.
+            store.abort_stale_runs()
+            pid = store.project_id()
+            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, pid), keep_sources=data_dir is None,
+                                transcript_dir=data_dir / "transcripts" / pid if data_dir and pid else None)
     except (GraphWriteBusy, sqlite3.OperationalError):
         return 0, skipped
     out = {"status": "ok", "added": r.added, "changed": r.changed, "removed": r.removed,

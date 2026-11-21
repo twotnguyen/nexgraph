@@ -38,6 +38,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
     if (!settings?.enabled) return
     let live = true
     setEstimate(null)
+    setError(null)
     window.nexgraph.semantic.estimate(projectId, target, noCache).then((e) => live && setEstimate(e), (e) => live && setError(errMessage(e)))
     return () => { live = false }
   }, [projectId, target, settings?.enabled, settings?.model, noCache])

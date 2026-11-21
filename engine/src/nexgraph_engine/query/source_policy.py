@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from pathspec import GitIgnoreSpec
 
-from graphify.detect import _is_sensitive
+from graphify.detect import _AMBIGUOUS_SENSITIVE_DIRS, _CREDENTIAL_STORE_DIRS, _is_sensitive
 
 from nexgraph_engine.errors import ApiError
 
@@ -61,6 +61,7 @@ class SourcePolicy:
             raise protected_source() from exc
         self._gitignore: dict[tuple[str, ...], GitIgnoreSpec | None] = {}
         self._known: dict[tuple[str, bool], bool] = {}
+        self._root_sensitive = any(p.lower() in _CREDENTIAL_STORE_DIRS | _AMBIGUOUS_SENSITIVE_DIRS for p in self.root.parts)
 
     def _rules(self, parent: tuple[str, ...]) -> GitIgnoreSpec | None:
         if parent not in self._gitignore:
@@ -86,9 +87,10 @@ class SourcePolicy:
     def _excluded(self, parts: tuple[str, ...], *, directory: bool) -> bool:
         if _blocked_name(parts):
             return True
-        # Tiêu chí tệp bí mật của công cụ tham chiếu (W9 dùng khi chọn tệp gửi model). Đường dẫn tuyệt đối trong dự án
-        # vì hàm này có thể đọc shebang của tệp không có đuôi.
-        if parts and not directory and _is_sensitive(self.root.joinpath(*parts)):
+        # Tiêu chí tệp bí mật của công cụ tham chiếu (W9 dùng khi chọn tệp gửi model). Đường dẫn tuyệt đối để đọc được
+        # shebang của tệp không có đuôi; nhưng nếu chính thư mục chứa dự án mang tên như `secrets/`, `.aws/` thì xét
+        # đường dẫn tương đối, kẻo mọi tệp bị chặn (tệp không đuôi khi đó mất bước đọc shebang, nghiêng về chặn).
+        if parts and not directory and _is_sensitive(Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)):
             return True
         # Git không đi vào thư mục đã ẩn, kể cả khi tệp con có mẫu phủ định.
         for end in range(1, len(parts) + 1):

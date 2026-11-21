@@ -54,8 +54,10 @@ export function SettingsScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => { void load() }, [load])
 
   useEffect(() => {
-    const offEvent = window.nexgraph.auth.onEvent((e) => setLoginEvent(e.type === 'progress' ? null : e))
+    // Sự kiện đăng nhập gửi cho cả cửa sổ: bỏ qua lượt do hộp Kết nối nhanh khởi động.
+    const offEvent = window.nexgraph.auth.onEvent((e) => loginPending.current && setLoginEvent(e.type === 'progress' ? null : e))
     const offPrompt = window.nexgraph.auth.onPrompt((p) => {
+      if (!loginPending.current) return
       setLoginPrompt(p)
       setPromptInput('')
     })

@@ -69,6 +69,41 @@ def test_model_and_mcp_filter_stale_source_and_keep_the_local_graph(api, copy_fi
     assert payload(call(mcp, "read_code", {"file": "app.py"}))["text"]
 
 
+def test_mcp_refuses_questions_about_a_hidden_node(api, copy_fixture, tmp_path):
+    root = copy_fixture("flow_app")
+    assert api.index(api.open(root)["project_id"])["state"] == "done"
+    (root / ".gitignore").write_text("service.py\n", encoding="utf-8")
+    mcp = build_server(root, tmp_path / "appdata")
+    hidden = "service.py::login_user#function"
+    for tool, args in [("get_node", {"node_id": hidden}), ("get_neighbors", {"node_id": hidden}),
+                       ("get_callers", {"node_id": hidden}), ("tests_for", {"node_id": "service.py::hash_password#function"}),
+                       ("shortest_path", {"source": "app.py#file", "target": hidden})]:
+        result = call(mcp, tool, args)
+        assert result.isError and "test_login" not in result.content[0].text, tool
+
+
+@pytest.mark.parametrize("parent", ["secrets", ".aws"])
+def test_sensitive_folder_above_the_project_does_not_block_everything(tmp_path, parent):
+    root = tmp_path / parent / "proj"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "README.md").write_text("# x\n", encoding="utf-8")
+    (root / "app.py").write_text("x = 1\n", encoding="utf-8")
+    (root / ".aws").mkdir()
+    (root / ".aws" / "config").write_text("k\n", encoding="utf-8")
+    policy = SourcePolicy(root)
+    assert policy.allows("docs/README.md") and policy.allows("app.py")
+    assert not policy.allows(".aws/config")
+
+
+def test_memory_filter_reads_file_paths_containing_hash(tmp_path):
+    from nexgraph_engine.memory import source_filter
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "C#.md").write_text("# Intro\n", encoding="utf-8")
+    allows = source_filter(SourcePolicy(tmp_path, ["*.md"]))
+    assert not allows("docs/C#.md::Intro#document")
+    assert not allows("docs/C#.md#file")
+
+
 def test_model_code_checks_target_of_indexed_file_after_symlink_swap(api, tmp_path):
     root = tmp_path / "project"
     root.mkdir()

@@ -86,6 +86,7 @@ class RefreshService:
                 store = GraphStore(conn)
                 if not store.has_published_graph():
                     return self._skipped("not_indexed")
+                store.abort_stale_runs()  # lần refresh trước bị kill giữa chừng (xem cli._refresh)
                 result = refresh_project(store, info.path,
                                          transcript_dir=self._registry.app_data_dir / "transcripts" / project_id,
                                          sources_dir=sources_root(self._registry.app_data_dir, project_id))

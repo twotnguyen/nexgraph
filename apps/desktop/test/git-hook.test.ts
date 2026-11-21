@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
@@ -155,7 +155,31 @@ describe('git hook', () => {
     expect(readFileSync(hook, 'utf8')).toContain(`'${wt}'`)
     expect(hookStatus(wt, cmd, dataDir)).toBe('on')
     mkdirSync(join(root, 'sub'))
-    expect(hookStatus(join(root, 'sub'), cmd, dataDir)).toBe('outdated')
+    expect(hookStatus(join(root, 'sub'), cmd, dataDir)).toBe('off')
+  })
+
+  it('hai dự án chung thư mục hook: mỗi dự án có khối riêng, cài/gỡ không đè nhau', () => {
+    const sub = join(root, 'sub')
+    mkdirSync(sub)
+    installHook(root, cmd, dataDir)
+    installHook(sub, cmd, dataDir)
+    expect(readFileSync(hook, 'utf8').split(BEGIN).length - 1).toBe(2)
+    expect(hookStatus(root, cmd, dataDir)).toBe('on')
+    expect(hookStatus(sub, cmd, dataDir)).toBe('on')
+    installHook(root, cmd, dataDir)
+    expect(readFileSync(hook, 'utf8').split(BEGIN).length - 1).toBe(2)
+    uninstallHook(sub)
+    expect(hookStatus(sub, cmd, dataDir)).toBe('off')
+    expect(hookStatus(root, cmd, dataDir)).toBe('on')
+  })
+
+  it.skipIf(process.platform === 'win32')('tệp hook là symlink: từ chối, không ghi xuyên qua', () => {
+    const target = join(realpathSync(mkdtempSync(join(tmpdir(), 'ng-out-'))), 'rc')
+    writeFileSync(target, '#!/bin/sh\n')
+    mkdirSync(join(root, '.git', 'hooks'), { recursive: true })
+    symlinkSync(target, hook)
+    expect(() => installHook(root, cmd, dataDir)).toThrow(expect.objectContaining({ code: 'unsupported_hook' }))
+    expect(readFileSync(target, 'utf8')).toBe('#!/bin/sh\n')
   })
 
   it.skipIf(process.platform === 'win32')('git thật gọi khối hook ở nền với tên hook và đối số của git', async () => {

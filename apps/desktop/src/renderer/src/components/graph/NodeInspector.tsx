@@ -90,7 +90,7 @@ export function NodeInspector({ node, onOpenCode, projectId, onOpenNode }: {
       {node.file && onOpenCode && (
         <button type="button" onClick={() => onOpenCode(node.file as string, node.line_start ?? 1, node.line_end ?? undefined)}>{vi.code.open}</button>
       )}
-      {projectId && node.kind === 'document' && <ReadSection projectId={projectId} node={node} />}
+      {projectId && node.kind === 'document' && <ReadSection key={node.id} projectId={projectId} node={node} />}
       {projectId && <Explain projectId={projectId} node={node} onOpenNode={onOpenNode} />}
       {projectId && <NodeMemory projectId={projectId} nodeId={node.id} />}
     </aside>

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
-  closeSync, constants, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync,
-  openSync, readSync, realpathSync, renameSync, unlinkSync, writeFile
+  closeSync, constants, copyFileSync, fchmodSync, fstatSync, linkSync, lstatSync, mkdirSync,
+  openSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFile
 } from 'node:fs'
 import type { BigIntStats, Stats } from 'node:fs'
 import { opendir } from 'node:fs/promises'
@@ -296,8 +296,17 @@ async function publishProjectFile(
       try {
         linkSync(tmp, abs)
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw conflict(relPath)
-        throw error
+        const code = (error as NodeJS.ErrnoException).code
+        if (code === 'EEXIST') throw conflict(relPath)
+        // FAT32/exFAT, một số ổ mạng không có hard link: chép độc quyền, vẫn thất bại nếu đích đã có.
+        if (code !== 'EPERM' && code !== 'ENOTSUP' && code !== 'EXDEV' && code !== 'EINVAL' && code !== 'ENOSYS') throw error
+        try {
+          copyFileSync(tmp, abs, constants.COPYFILE_EXCL)
+        } catch (copyError) {
+          if ((copyError as NodeJS.ErrnoException).code === 'EEXIST') throw conflict(relPath)
+          throw copyError
+        }
+        return revision(statSync(abs, { bigint: true }), body)
       }
     }
     // Bản ghi dùng handle vừa công bố; trên NTFS, ctime có thể đổi khi handle đóng sau unlink.

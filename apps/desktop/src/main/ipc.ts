@@ -30,6 +30,7 @@ import { directTransport, piComplete, selectedModelLabel } from './ai/semantic-m
 import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
+import { externalWebUrl } from './external-links'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -118,7 +119,7 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promi
     dataDir,
     prefsFile: prefsFile(),
     secrets: new SecretStore(join(app.getPath('userData'), 'ai-key.json'), secretBox),
-    openExternal: (url) => void shell.openExternal(url).catch(() => {}),
+    openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
     notify: (event: AuthEventView) => getWindow()?.webContents.send('auth:login-event', event),
     ask: (view: AuthPromptView) => new Promise<string | null>((resolve) => {
       pendingPrompts.set(view.id, resolve)

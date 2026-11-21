@@ -33,6 +33,8 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, FileRec, Node, RunState, UnresolvedRef
 from nexgraph_engine.subprocesses import run_captured
 
+RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm lại (hai lần sửa trong cùng một giây)
+
 COMMIT_EVERY = 100
 EXTRACTION_BATCH_SIZE = 16
 WORKER_PROGRESS_TIMEOUT_SECONDS = 20
@@ -117,7 +119,8 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
         read_error = None
     except OSError as exc:
         sha, source, read_error = "0" * 64, None, f"Không đọc được tệp: {exc}"
-    rec = FileRec(f.rel_path, f.language, f.size, f.mtime, sha, f.is_test)
+    # Băm ngay sau lần ghi (cùng giây) thì chưa chắc là bản cuối: ghi mtime 0 để lần sau băm lại (như git).
+    rec = FileRec(f.rel_path, f.language, f.size, f.mtime if time.time() - f.mtime >= RACY_SECONDS else 0, sha, f.is_test)
     file_node = Node(id=file_node_id(f.rel_path), kind=NodeKind.FILE, label=f.rel_path.rsplit("/", 1)[-1],
                      qualified_name=f.rel_path, file=f.rel_path, is_test=f.is_test)
     if f.oversized:

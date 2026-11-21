@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
@@ -64,6 +65,16 @@ describe('21 nền tảng', () => {
     expect(merged.hooks.BeforeTool[0].hooks[0].command).toContain('hook-guard gemini')
     applyPlatform('gemini', root, cmd, dataDir)
     expect(JSON.parse(readFileSync(join(root, '.gemini', 'settings.json'), 'utf8'))).toEqual(merged)
+  })
+
+  it.skipIf(process.platform === 'win32')('đường dẫn có $, `, " không bị shell diễn giải trong lệnh hook', () => {
+    const evil = join(root, 'x$(touch p)`id`"q')
+    mkdirSync(evil)
+    const hook = planPlatform('claude', evil, cmd, dataDir).find((p) => p.part === 'hook')!
+    const command: string = JSON.parse(hook.after).hooks.PreToolUse[0].hooks[0].command
+    const argv = execFileSync('sh', ['-c', `printf '%s\\n' ${command.replace('/Apps/NexGraph/engine ', '')}`], { encoding: 'utf8' }).split('\n')
+    expect(argv).toContain(evil)
+    expect(argv).toContain(dataDir)
   })
 
   it('Claude: giữ hook của người dùng và của công cụ khác; strict thêm --strict; gỡ chỉ bỏ mục NexGraph', () => {

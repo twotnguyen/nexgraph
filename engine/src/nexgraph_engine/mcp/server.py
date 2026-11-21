@@ -56,7 +56,7 @@ from nexgraph_engine.prs.review import pr_detail_json, review_status_json
 from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.query.paths import find_paths
 from nexgraph_engine.query.section import section_json
-from nexgraph_engine.query.source_policy import SourcePolicy
+from nexgraph_engine.query.source_policy import SourcePolicy, protected_source
 from nexgraph_engine.report.build import audit_json, report_json, report_markdown
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.schema.db import open_graph_db
@@ -121,7 +121,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     def src(s: GraphStore) -> Path | None:  # gốc phụ `sources/` (nguồn tải từ URL, W6)
         return sources_root(data_dir, s.project_id())
 
-    async def run(tool_name: str, body: Callable[[GraphStore], Any]) -> Any:
+    async def run(tool_name: str, body: Callable[[GraphStore], Any], guard: tuple[str, ...] = ()) -> Any:
         def work() -> Any:
             try:
                 conn = open_graph_db(graph_db, read_only=True)
@@ -131,7 +131,11 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
                 store = GraphStore(conn)
                 if not store.has_published_graph():
                     raise ToolError("Dự án chưa được lập chỉ mục xong")
-                return ModelGraph(store, root).filter(body(store))
+                model = ModelGraph(store, root)
+                # Như HTTP: hỏi thẳng về nút bị loại khỏi ngữ cảnh AI thì từ chối, kể cả khi láng giềng của nó hiển thị được.
+                if not all(model.allows_node(node_id) for node_id in guard):
+                    raise protected_source()
+                return model.filter(body(store))
             except ApiError as exc:  # lỗi nghiệp vụ dùng chung với HTTP -> lỗi tool đọc được
                 raise ToolError(exc.message) from exc
             finally:
@@ -146,7 +150,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     @mcp.tool(annotations=READ_ONLY)
     async def get_node(node_id: str) -> dict:
         """Lấy một nút theo id (ví dụ `lib/main.dart#file`, `lib/a.dart::A.run#method`)."""
-        return await run("get_node", lambda s: get_node_json(s, node_id))
+        return await run("get_node", lambda s: get_node_json(s, node_id), (node_id,))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_neighbors(node_id: str, types: list[str] | None = None,
@@ -156,7 +160,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         direction=in: ai trỏ tới nút này; out: nút này trỏ tới đâu. depth 1–3."""
         wanted = parse_edge_types(types) if types else None
         return await run("get_neighbors", lambda s: neighbors_json(
-            s, node_id, wanted, direction, max(1, min(depth, 3)), max(1, min(limit, 2000))))
+            s, node_id, wanted, direction, max(1, min(depth, 3)), max(1, min(limit, 2000))), (node_id,))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_architecture(parent: str | None = None) -> dict:
@@ -202,7 +206,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
                 return find_paths(s, [source, target], max(1, min(max_hops, 6)), directed)
             except KeyError as exc:
                 raise ToolError(f"Không có nút {exc.args[0]}") from exc
-        return await run("shortest_path", body)
+        return await run("shortest_path", body, (source, target))
 
     @mcp.tool(annotations=READ_ONLY)
     async def god_nodes(top: int = 10) -> list[dict]:
@@ -258,7 +262,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     async def get_callers(node_id: str, depth: int = 1, limit: int = 200) -> dict:
         """Ai gọi nút này (cạnh CALLS chiều vào), depth 1–3."""
         return await run("get_callers", lambda s: neighbors_json(
-            s, node_id, {EdgeType.CALLS}, "in", max(1, min(depth, 3)), max(1, min(limit, 2000))))
+            s, node_id, {EdgeType.CALLS}, "in", max(1, min(depth, 3)), max(1, min(limit, 2000))), (node_id,))
 
     @mcp.tool(annotations=READ_ONLY)
     async def tests_for(node_id: str) -> list[dict]:
@@ -267,7 +271,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             if s.get_node(node_id) is None:
                 raise ToolError(f"Không có nút {node_id}")
             return [node_json(n) for n in tests_for_node(s.conn, node_id)]
-        return await run("tests_for", body)
+        return await run("tests_for", body, (node_id,))
 
     @mcp.tool(annotations=READ_ONLY)
     async def find(query: str, kind: str | None = None, limit: int = 20) -> list[dict]:

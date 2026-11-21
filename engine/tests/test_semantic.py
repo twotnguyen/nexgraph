@@ -316,6 +316,18 @@ def test_labels_name_communities_and_survive_recluster(api, copy_fixture, llm):
     conn.close()
 
 
+def test_labels_never_send_names_from_sources_blocked_for_ai(api, copy_fixture, llm):
+    root = copy_fixture("bookstore_app")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    (root / ".gitignore").write_text("lib/services/auth_service.dart\n", encoding="utf-8")
+    enable(api, pid)
+    llm.reply = lambda body: "{}"
+    assert wait_job(api, run(api, pid, "labels", direct(llm)))["state"] == "done"
+    sent = "\n".join(r["messages"][1]["content"] for r in llm.requests)
+    assert sent and "auth_service.dart" not in sent and "AuthService" not in sent
+
+
 # --- deep / images / dedup / pr_triage --------------------------------------------------------------
 def test_deep_uses_deep_prompt_and_separate_cache(api, docs_pid, llm):
     enable(api, docs_pid)

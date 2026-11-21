@@ -138,14 +138,25 @@ describe('SettingsScreen', () => {
   })
 
   it('câu hỏi đăng nhập OAuth cho phép trả lời và huỷ bằng null', async () => {
+    const { api } = installNexgraph({
+      auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true })]), login: vi.fn(() => new Promise<void>(() => {})) }
+    })
+    const { emitPrompt } = installAuthSinks(api)
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Đăng nhập' }))
+    act(() => emitPrompt({ id: 'openai-codex#1', kind: 'text', message: 'Dán mã' }))
+    await userEvent.type(await screen.findByLabelText('Dán mã'), 'abc')
+    await userEvent.click(screen.getByRole('button', { name: 'Gửi' }))
+    expect(api.auth.promptReply).toHaveBeenCalledWith('openai-codex#1', 'abc')
+  })
+
+  it('câu hỏi đăng nhập do hộp Kết nối nhanh khởi động không hiện ở Cài đặt', async () => {
     const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai-codex', { oauth: true })]) } })
     const { emitPrompt } = installAuthSinks(api)
     render(<SettingsScreen onBack={() => {}} />)
     await screen.findByRole('button', { name: 'Đăng nhập' })
     act(() => emitPrompt({ id: 'openai-codex#1', kind: 'text', message: 'Dán mã' }))
-    await userEvent.type(await screen.findByLabelText('Dán mã'), 'abc')
-    await userEvent.click(screen.getByRole('button', { name: 'Gửi' }))
-    expect(api.auth.promptReply).toHaveBeenCalledWith('openai-codex#1', 'abc')
+    expect(screen.queryByLabelText('Dán mã')).toBeNull()
   })
 
   it('rời màn khi OAuth còn chờ → huỷ đăng nhập, không treo prompt ở main', async () => {

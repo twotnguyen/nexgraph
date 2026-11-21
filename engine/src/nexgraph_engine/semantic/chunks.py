@@ -156,16 +156,21 @@ def membership_signature(files: list[str]) -> str:
     return hashlib.sha256("\n".join(sorted(files)).encode("utf-8")).hexdigest()
 
 
-def _labels(store: GraphStore) -> list[Chunk]:
+def _labels(store: GraphStore, src: Sources) -> list[Chunk]:
     lines: list[tuple[str, int, str]] = []
+    sendable = _sendable(store, src)
     for community in store.communities():
         # Chỉ nhãn node (tên symbol/tệp), không có thân hàm hay chú thích: nút có nhiều quan hệ nhất trước.
+        # Tên trong tệp bị chặn với AI (bí mật, .gitignore, mẫu loại trừ) cũng không được gửi.
         rows = store.conn.execute(
-            "SELECT n.nhan FROM nut n WHERE n.ma_khoi = ? AND n.loai_nut NOT IN ('repository', 'directory')"
+            "SELECT n.nhan, t.duong_dan_tuong_doi FROM nut n LEFT JOIN tep t ON t.ma_tep = n.ma_tep"
+            " WHERE n.ma_khoi = ? AND n.loai_nut NOT IN ('repository', 'directory')"
             " ORDER BY (SELECT count(*) FROM canh c WHERE c.ma_nut_nguon = n.ma_nut OR c.ma_nut_dich = n.ma_nut) DESC,"
             " n.ma_nut LIMIT 200", (community["id"],)).fetchall()
         names: list[str] = []
-        for (label,) in rows:
+        for label, rel in rows:
+            if rel is not None and not sendable(rel):
+                continue
             label = label.strip().strip("()")[:LABEL_MAXLEN]
             if label and label.lower() not in {n.lower() for n in names}:
                 names.append(label)
@@ -190,7 +195,7 @@ def plan(target: str, store: GraphStore, src: Sources, prs: list[dict] | None = 
     if target == "images":
         return _images(store, src)
     if target == "labels":
-        return _labels(store)
+        return _labels(store, src)
     if target == "pr_triage":
         if not prs:
             return []

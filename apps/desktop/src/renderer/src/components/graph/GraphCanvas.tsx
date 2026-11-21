@@ -64,6 +64,8 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
   useEffect(() => {
     if (focusNodeId) setCenter(focusNodeId)
   }, [focusNodeId])
+  // Có overlay thì không dùng tâm: bước Luồng đổi focus không được dựng lại đồ thị (mất zoom, chạy lại ELK).
+  const hoodCenter = overlay ? null : center
 
   useEffect(() => {
     let alive = true
@@ -71,7 +73,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
     setError(null)
     setHover(null)
     ;(async () => {
-      const hood = overlay ?? (await window.nexgraph.graph.neighbors(projectId, { node: center, depth: 1, limit: LIMIT }))
+      const hood = overlay ?? (await window.nexgraph.graph.neighbors(projectId, { node: hoodCenter!, depth: 1, limit: LIMIT }))
       const size = sizes(hood.nodes, hood.edges)
       const boxes = overlay != null
       let pos: Record<string, { x: number; y: number }>
@@ -86,7 +88,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
       } else {
         // Mạng láng giềng: nút tâm ở giữa, láng giềng cách đều trên vòng tròn; cùng loại đứng cạnh nhau.
         const order = [...hood.nodes].sort((a, b) => a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label)).map((n) => n.id)
-        const at = radialLayout(order, hood.nodes.some((n) => n.id === center) ? center : order[0])
+        const at = radialLayout(order, hood.nodes.some((n) => n.id === hoodCenter) ? hoodCenter! : order[0])
         pos = Object.fromEntries(order.map((id) => [id, { x: at[id].x - size[id] / 2, y: at[id].y - size[id] / 2 }]))
       }
       if (!alive) return
@@ -103,7 +105,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
     return () => {
       alive = false
     }
-  }, [projectId, center, overlay, revision, retry])
+  }, [projectId, hoodCenter, overlay, revision, retry])
 
   const onNodeClick = useCallback(
     (_: unknown, n: Node) => {

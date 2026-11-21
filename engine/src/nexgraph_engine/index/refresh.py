@@ -19,13 +19,12 @@ from nexgraph_engine.flows.build import flows_before, rebuild_flows, update_flow
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
 from nexgraph_engine.index.discovery import SOURCES_PREFIX, is_batch_language
 from nexgraph_engine.index.extra_sources import is_source_path
-from nexgraph_engine.index.indexer import ExtractedFile, _git_head, add_batch_calls, extract_file
+from nexgraph_engine.index.indexer import RACY_SECONDS, ExtractedFile, _git_head, add_batch_calls, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, FileRec, Node
 
-RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm lại (hai lần sửa trong cùng một giây)
 _RESOLVABLE_KINDS = [k.value for k in (*TYPE_KINDS, NodeKind.FUNCTION)]
 
 
@@ -90,7 +89,9 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
     modified.sort()
 
     for f in touched:
-        store.touch_file(known[f.rel_path].__class__(f.rel_path, f.language, f.size, f.mtime,
+        # Băm ngay sau lần ghi (cùng giây) thì chưa chắc là bản cuối: ghi mtime 0 để lần sau băm lại (như git).
+        mtime = f.mtime if now - f.mtime >= RACY_SECONDS else 0
+        store.touch_file(known[f.rel_path].__class__(f.rel_path, f.language, f.size, mtime,
                                                      known[f.rel_path].sha256, f.is_test))
     if not (added or removed or modified):
         store.set_last_run_commit(_git_head(root))
@@ -102,6 +103,11 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
     try:
         store.set_run_state(run_id, "cau_truc")
         known_labels = {r[0] for r in store.conn.execute("SELECT DISTINCT nhan FROM nut")}
+        # Ký hiệu bị xoá/đổi tên có thể làm một tên từng mơ hồ trở nên duy nhất: phân giải lại cả các tên này.
+        gone = [*removed, *modified]
+        old_labels = {r[0] for chunk in (gone[i:i + 400] for i in range(0, len(gone), 400)) for r in store.conn.execute(
+            "SELECT DISTINCT n.nhan FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
+            f" WHERE t.duong_dan_tuong_doi IN ({','.join('?' * len(chunk))})", chunk)}
         sig_before = store.file_graph_signature()
         extracted: dict[str, ExtractedFile] = {p: extract_file(root, disk[p], transcript_dir=transcript_dir) for p in (*added, *modified)}
         dependents = _dependents(store, added, removed, modified, extracted, disk)
@@ -127,8 +133,9 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         _prune_directories(store, removed)
 
         store.set_run_state(run_id, "phan_giai")
-        new_labels = {n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels
-        store.requeue_failed_refs(tails=new_labels, imports=bool(added))
+        tails = ({n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels) | old_labels
+        # Tham chiếu Dart `mixin:X`/`on:X` (dart/extractor.py) không có dấu chấm nên phải khớp nguyên tiền tố.
+        store.requeue_failed_refs(tails={*tails, *(f"{p}{t}" for t in tails for p in ("mixin:", "on:"))}, imports=bool(added))
         pubspec = root / "pubspec.yaml"
         resolved_edges: list[Edge] = []
         # Chỉ chạy lô khi có tệp mức chung đổi; lô gồm cả tệp không đổi vì cạnh từ chúng tới tệp vừa sửa đã mất

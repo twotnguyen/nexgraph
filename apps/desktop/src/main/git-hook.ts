@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, relative, resolve, isAbsolute } from 'node:path'
 import type { EngineCommand } from './engine/launcher'
 
@@ -7,7 +7,7 @@ export const BEGIN = '# >>> nexgraph >>>'
 export const END = '# <<< nexgraph <<<'
 export const HOOKS = ['post-commit', 'post-checkout', 'post-merge', 'post-rewrite'] as const
 export type HookName = (typeof HOOKS)[number]
-const BLOCK_RE = new RegExp(`${BEGIN}\\n[\\s\\S]*?${END}\\n?`)
+const BLOCKS_RE = new RegExp(`${BEGIN}\\n[\\s\\S]*?${END}\\n?`, 'g')
 export type HookStatus = 'no_git' | 'off' | 'on' | 'outdated' | 'outside_repo'
 
 const fail = (code: string, message: string): Error => Object.assign(new Error(message), { code })
@@ -95,6 +95,11 @@ export function hookPreview(projectPath: string, cmd: EngineCommand, dataDir: st
 }
 
 const readHook = (file: string): string | null => (existsSync(file) ? readFileSync(file, 'utf8') : null)
+/** Khối của đúng dự án này (thư mục hook có thể dùng chung giữa worktree, thư mục con); khối cũ không ghi --project coi là của mình. */
+const ownBlock = (text: string | null, projectPath: string): string | undefined => {
+  const blocks = text?.match(BLOCKS_RE) ?? []
+  return blocks.find((b) => b.includes(`'--project' ${quote(projectPath)} `)) ?? blocks.find((b) => !b.includes(`'--project' `))
+}
 
 export function hookStatus(projectPath: string, cmd: EngineCommand, dataDir: string): HookStatus {
   let found0: HooksDir | null
@@ -106,7 +111,7 @@ export function hookStatus(projectPath: string, cmd: EngineCommand, dataDir: str
   }
   if (!found0) return 'no_git'
   const { dir } = found0
-  const found = HOOKS.map((h) => readHook(join(dir, h))?.match(BLOCK_RE)?.[0])
+  const found = HOOKS.map((h) => ownBlock(readHook(join(dir, h)), projectPath))
   if (found.every((b) => b === undefined)) return 'off'
   return found.every((b, i) => b === hookBlock(cmd, projectPath, dataDir, HOOKS[i])) ? 'on' : 'outdated'
 }
@@ -114,7 +119,10 @@ export function hookStatus(projectPath: string, cmd: EngineCommand, dataDir: str
 export function installHook(projectPath: string, cmd: EngineCommand, dataDir: string): void {
   const { dir, husky } = needDir(projectPath)
   const texts = HOOKS.map((h) => {
-    const text = readHook(join(dir, h))
+    const file = join(dir, h)
+    // Tệp hook là symlink (commit sẵn trong repo) có thể trỏ ra ngoài kho: không ghi xuyên qua.
+    if (existsSync(file) && lstatSync(file).isSymbolicLink()) throw fail('unsupported_hook', `Hook ${h} là liên kết tượng trưng`)
+    const text = readHook(file)
     // Husky chạy tệp người dùng bằng `sh -e`, nên tệp không có shebang vẫn là shell.
     if (text !== null && !isShellHook(text) && !(husky && !text.startsWith('#!'))) throw fail('unsupported_hook', `Hook ${h} hiện có không dùng shell tương thích`)
     return text ?? '#!/bin/sh\n'
@@ -123,7 +131,8 @@ export function installHook(projectPath: string, cmd: EngineCommand, dataDir: st
   HOOKS.forEach((h, i) => {
     const block = hookBlock(cmd, projectPath, dataDir, h)
     let text = texts[i]
-    if (BLOCK_RE.test(text)) text = text.replace(BLOCK_RE, () => block)
+    const own = ownBlock(text, projectPath)
+    if (own) text = text.replace(own, () => block)
     else text = `${text.endsWith('\n') ? text : `${text}\n`}${block}`
     const file = join(dir, h)
     writeFileSync(file, text)
@@ -134,13 +143,13 @@ export function installHook(projectPath: string, cmd: EngineCommand, dataDir: st
 export function uninstallHook(projectPath: string): void {
   const found = hooksDir(projectPath)
   if (!found) return
-  const mine = `'--project' ${quote(projectPath)} `
   for (const h of HOOKS) {
     const file = join(found.dir, h)
     const text = readHook(file)
     // Thư mục hook dùng chung giữa các worktree: chỉ gỡ khối của chính dự án này.
-    if (text === null || !text.match(BLOCK_RE)?.[0].includes(mine)) continue
-    const rest = text.replace(BLOCK_RE, '')
+    const own = ownBlock(text, projectPath)
+    if (text === null || !own) continue
+    const rest = text.replace(own, '')
     if (rest.trim() === '' || rest.trim() === '#!/bin/sh') unlinkSync(file)
     else writeFileSync(file, rest)
   }
