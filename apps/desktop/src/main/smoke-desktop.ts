@@ -336,43 +336,34 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
     return button
   }
 
-  const themeLabel = (theme: string) => theme === 'dark' ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'
   const themePainted = () => {
     const style = getComputedStyle(document.body)
     const expected = document.createElement('span')
     expected.style.backgroundColor = style.getPropertyValue('--color-bg').trim()
     return expected.style.backgroundColor !== '' && style.backgroundColor === expected.style.backgroundColor
   }
-  const themeButton = await waitFor(() => {
-    const button = document.querySelector<HTMLButtonElement>('.theme-toggle')
+  const themePicker = await waitFor(() => {
+    const picker = document.querySelector<HTMLSelectElement>('.theme-toggle select')
     const theme = document.documentElement.dataset.theme
-    return button && (theme === 'light' || theme === 'dark') &&
-      button.getAttribute('aria-label') === themeLabel(theme) && themePainted() ? button : null
-  }, 'nút giao diện đồng bộ với màu nền ban đầu')
-  const initialTheme = document.documentElement.dataset.theme
-  if (initialTheme !== 'light' && initialTheme !== 'dark') throw new Error('Workbench did not initialize its theme')
-  const nextTheme = initialTheme === 'light' ? 'dark' : 'light'
+    return picker && theme && picker.value === theme && themePainted() ? picker : null
+  }, 'ô chọn giao diện đồng bộ với màu nền ban đầu')
+  const nextTheme = document.documentElement.dataset.appearance === 'dark' ? 'wu-light' : 'wu-dark'
   const initialBackground = getComputedStyle(document.body).backgroundColor
-  hit(themeButton, 'Chuyển giao diện').click()
-  // Tìm lại nút mỗi lần: thanh công cụ có thể mount lại sau khi đổi giao diện, phần tử cũ giữ nhãn cũ.
-  const themeState = () => {
-    const button = document.querySelector<HTMLButtonElement>('.theme-toggle')
-    return {
-      button,
-      theme: document.documentElement.dataset.theme,
-      saved: localStorage.getItem('nexgraph.theme'),
-      label: button?.getAttribute('aria-label'),
-      background: getComputedStyle(document.body).backgroundColor,
-      painted: themePainted()
-    }
-  }
+  themePicker.value = nextTheme
+  themePicker.dispatchEvent(new Event('change', { bubbles: true }))
+  const themeState = () => ({
+    theme: document.documentElement.dataset.theme,
+    saved: localStorage.getItem('nexgraph.theme'),
+    picked: document.querySelector<HTMLSelectElement>('.theme-toggle select')?.value,
+    background: getComputedStyle(document.body).backgroundColor,
+    painted: themePainted()
+  })
   await waitFor(() => {
     const s = themeState()
-    return s.theme === nextTheme && s.saved === nextTheme && s.label === themeLabel(nextTheme) &&
-      s.background !== initialBackground && s.painted ? s.button : null
+    return s.theme === nextTheme && s.saved === nextTheme && s.picked === nextTheme &&
+      s.background !== initialBackground && s.painted ? document.body : null
   }, 'giao diện mới được lưu và vẽ đúng màu nền').catch((error: Error) => {
-    const { button: _button, ...s } = themeState()
-    throw new Error(`${error.message} (cần ${nextTheme}, từ nền ${initialBackground}; hiện ${JSON.stringify(s)}; nút cũ còn gắn: ${themeButton.isConnected})`)
+    throw new Error(`${error.message} (cần ${nextTheme}, từ nền ${initialBackground}; hiện ${JSON.stringify(themeState())})`)
   })
 
   const recent = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('ul.recent button')).find((item) =>

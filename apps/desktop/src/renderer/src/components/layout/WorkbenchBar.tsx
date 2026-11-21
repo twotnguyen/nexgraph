@@ -1,17 +1,19 @@
 import { Icon, Logo } from '../common/icons'
-import { setTheme, useTheme } from '../../state/useTheme'
+import { THEMES, setTheme, useTheme, useThemeId } from '../../state/useTheme'
 
 export function WorkbenchBar() {
-  const theme = useTheme()
-  const dark = theme === 'dark'
-  const target = dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'
+  const dark = useTheme() === 'dark'
+  const themeId = useThemeId()
   return (
     <header className="workbench-bar">
       <div className="workbench-brand"><Logo size={19} /> <span>NexGraph</span></div>
-      <button type="button" className="theme-toggle" title={target} aria-label={target} onClick={() => setTheme(dark ? 'light' : 'dark')}>
+      <label className="theme-toggle" title="Giao diện">
         <Icon name={dark ? 'moon' : 'sun'} size={16} />
-        <span>{dark ? 'Tối' : 'Sáng'}</span>
-      </button>
+        <select aria-label="Giao diện" value={themeId} onChange={(e) => setTheme(e.target.value)}>
+          <optgroup label="Sáng">{THEMES.filter((t) => t.appearance === 'light').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>
+          <optgroup label="Tối">{THEMES.filter((t) => t.appearance === 'dark').map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</optgroup>
+        </select>
+      </label>
     </header>
   )
 }

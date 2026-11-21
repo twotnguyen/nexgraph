@@ -48,7 +48,33 @@ monaco.languages.onLanguage('json', () => {
   })
 })
 
-const editorTheme = () => currentTheme() === 'dark' ? 'vs-dark' : 'vs'
+// Monaco không đọc được biến CSS: dựng lại theme từ token của app mỗi khi đổi giao diện để editor cùng màu với khung.
+const syntaxTokens: Record<string, string[]> = {
+  keyword: ['keyword'], string: ['string', 'attribute.value'], comment: ['comment'], number: ['number'],
+  type: ['type', 'type.identifier'], function: ['function'], variable: ['variable', 'variable.predefined'],
+  constant: ['constant'], tag: ['tag'], attribute: ['attribute.name'], property: ['property'],
+  punctuation: ['delimiter', 'operator'], emphasis: ['emphasis'], 'emphasis-strong': ['strong']
+}
+function editorTheme(): string {
+  const css = getComputedStyle(document.body)
+  const v = (name: string) => css.getPropertyValue(`--${name}`).trim()
+  const rules = Object.entries(syntaxTokens).flatMap(([key, tokens]) => {
+    const color = v(`syntax-${key}`).replace('#', '')
+    return color ? tokens.map((token) => ({ token, foreground: color })) : []
+  })
+  monaco.editor.defineTheme('nexgraph', {
+    base: currentTheme() === 'dark' ? 'vs-dark' : 'vs', inherit: true, rules,
+    colors: {
+      'editor.background': v('color-surface'), 'editor.foreground': v('color-text'),
+      'editorLineNumber.foreground': v('color-muted') + '99', 'editorLineNumber.activeForeground': v('color-text'),
+      'editor.lineHighlightBackground': v('track') + '80', 'editor.lineHighlightBorder': '#00000000',
+      'editor.selectionBackground': v('blue') + '40', 'editorCursor.foreground': v('blue'),
+      'editorWidget.background': v('panel-raised'), 'editorWidget.border': v('color-border'),
+      'scrollbarSlider.background': v('color-muted') + '33', 'scrollbarSlider.hoverBackground': v('color-muted') + '55'
+    }
+  })
+  return 'nexgraph'
+}
 const stopObservingTheme = observeTheme(() => monaco.editor.setTheme(editorTheme()))
 import.meta.hot?.dispose(stopObservingTheme)
 

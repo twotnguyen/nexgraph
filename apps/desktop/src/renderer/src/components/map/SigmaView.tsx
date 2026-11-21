@@ -3,7 +3,7 @@ import Graph from 'graphology'
 import forceAtlas2 from 'graphology-layout-forceatlas2'
 import type Sigma from 'sigma'
 import type { MapEdge, MapNode } from '@shared/graph-types'
-import { useTheme } from '../../state/useTheme'
+import { useThemeId } from '../../state/useTheme'
 import { communityColor, edgeSize, nodeSize, PALETTE } from './mapStyle'
 
 export const FA2_ITERATIONS = 100
@@ -37,7 +37,7 @@ interface Props {
 
 /** Toàn bộ mã sigma/graphology của thẻ Bản đồ nằm ở đây (jsdom không có WebGL nên các test khác mock component này). */
 export function SigmaView({ nodes, edges, visibleEdges = edges, dimmed, onNodeClick, onEdgeClick, onStageClick, onUnsupported }: Props) {
-  const theme = useTheme()
+  const theme = useThemeId()
   const box = useRef<HTMLDivElement>(null)
   const cb = useRef({ onNodeClick, onEdgeClick, onStageClick, onUnsupported })
   cb.current = { onNodeClick, onEdgeClick, onStageClick, onUnsupported }
