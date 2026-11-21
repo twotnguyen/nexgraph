@@ -171,3 +171,12 @@
 .profile-tools legend { padding: 0 4px; color: var(--color-muted); font-size: 12px; }
 .profile-tools label { display: flex; align-items: center; gap: 6px; min-height: 24px; }
 .profile-tools code { font-size: 11px; }
+
+/* Extension: hàng tên + phiên bản, mô tả mờ, nút Gỡ bên phải. */
+.extension-list { display: grid; gap: 8px; }
+.extension-list .row { display: flex; align-items: center; gap: 8px; }
+.extension-list button { height: 28px; min-height: 0; padding: 0 12px; border-radius: 6px; font-size: 12px; }
+.extension-list ul { margin: 0; padding: 0; list-style: none; }
+.extension-list li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid color-mix(in srgb, var(--color-border) 50%, transparent); font-size: 13px; }
+.extension-list li > div { flex: 1; min-width: 0; }
+.extension-list li p { margin: 2px 0 0; font-size: 12px; }
