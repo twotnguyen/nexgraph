@@ -655,8 +655,8 @@ describe('WorkspaceScreen: multibuffer', () => {
     ]) }))
     expect(await screen.findByRole('tab', { name: 'Hai đoạn', selected: true })).toBeInTheDocument()
     const pane = screen.getByRole('tabpanel', { name: 'Hai đoạn' })
-    expect(within(pane).getByText('lib/a.dart:1-4')).toBeInTheDocument()
-    expect(within(pane).getByText('lib/b.dart:3-7')).toBeInTheDocument()
+    expect(within(pane).getByLabelText('lib/a.dart:1-4')).toBeInTheDocument()
+    expect(within(pane).getByLabelText('lib/b.dart:3-7')).toBeInTheDocument()
     const multi = pane.querySelector<HTMLElement>('.multi-buffer')!
     expect(await within(multi).findAllByLabelText('editor')).toHaveLength(2)
 
@@ -688,8 +688,8 @@ describe('WorkspaceScreen: multibuffer', () => {
     // Thẻ hai đang chọn: chỉ nó hiện và nhận được nhấp chuột; thẻ một và tệp gốc ẩn.
     expect(first).toHaveStyle({ display: 'none' })
     expect(second).toHaveStyle({ display: 'flex' })
-    expect(within(first).getByText('lib/b.dart:3-7')).not.toBeVisible()
-    expect(within(second).getByText('lib/d.dart:1-4')).toBeVisible()
+    expect(within(first).getByLabelText('lib/b.dart:3-7')).not.toBeVisible()
+    expect(within(second).getByLabelText('lib/d.dart:1-4')).toBeVisible()
     expect(fileEditor).not.toBeVisible()
     const [picked] = await within(second).findAllByLabelText('editor')
     expect(picked).toBeVisible()
@@ -700,15 +700,15 @@ describe('WorkspaceScreen: multibuffer', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Thẻ một' }))
     expect(first).toHaveStyle({ display: 'flex' })
     expect(second).toHaveStyle({ display: 'none' })
-    expect(within(first).getByText('lib/b.dart:3-7')).toBeVisible()
-    expect(within(second).getByText('lib/d.dart:1-4')).not.toBeVisible()
+    expect(within(first).getByLabelText('lib/b.dart:3-7')).toBeVisible()
+    expect(within(second).getByLabelText('lib/d.dart:1-4')).not.toBeVisible()
 
     // Về thẻ tệp: cả hai thẻ nhiều đoạn ẩn hẳn (tiêu đề đoạn cũng biến mất), editor của tệp hiện và nhận được nhấp chuột.
     await userEvent.click(screen.getByRole('tab', { name: 'a.dart' }))
     expect(first).toHaveStyle({ display: 'none' })
     expect(second).toHaveStyle({ display: 'none' })
-    expect(within(first).getByText('lib/b.dart:3-7')).not.toBeVisible()
-    expect(within(second).getByText('lib/d.dart:1-4')).not.toBeVisible()
+    expect(within(first).getByLabelText('lib/b.dart:3-7')).not.toBeVisible()
+    expect(within(second).getByLabelText('lib/d.dart:1-4')).not.toBeVisible()
     expect(fileEditor).toBeVisible()
     await userEvent.click(fileEditor)
     expect(fileEditor).toHaveFocus()
@@ -730,7 +730,7 @@ describe('WorkspaceScreen: multibuffer', () => {
 
     run('editor.open_multibuffer')
     expect(await screen.findByRole('tab', { name: 'Nhiều đoạn mã', selected: true })).toBeInTheDocument()
-    expect(within(screen.getByRole('tabpanel', { name: 'Nhiều đoạn mã' })).getByText('lib/a.dart:1-3')).toBeInTheDocument()
+    expect(within(screen.getByRole('tabpanel', { name: 'Nhiều đoạn mã' })).getByLabelText('lib/a.dart:1-3')).toBeInTheDocument()
 
     run('editor.view_bookmarks')
     expect(await screen.findByText('Không có dấu trang nào trong dự án này.')).toBeInTheDocument()
@@ -739,8 +739,8 @@ describe('WorkspaceScreen: multibuffer', () => {
     run('editor.view_bookmarks')
     expect(await screen.findByRole('tab', { name: 'Dấu trang', selected: true })).toBeInTheDocument()
     const pane = screen.getByRole('tabpanel', { name: 'Dấu trang' })
-    const marks = within(pane).getByText('lib/a.dart:1-4').closest<HTMLElement>('.multi-buffer')!
-    expect(within(marks).getByText('lib/b.dart:3-7')).toBeInTheDocument()
+    const marks = within(pane).getByLabelText('lib/a.dart:1-4').closest<HTMLElement>('.multi-buffer')!
+    expect(within(marks).getByLabelText('lib/b.dart:3-7')).toBeInTheDocument()
     expect(await within(marks).findAllByLabelText('editor')).toHaveLength(2)
   })
 })

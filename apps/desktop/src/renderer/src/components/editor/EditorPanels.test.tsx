@@ -1,0 +1,113 @@
+// @vitest-environment jsdom
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { LspDocumentSymbol, LspRange } from '@shared/api'
+import type { ActiveEditor } from '../../state/activeEditor'
+import { setLocale } from '../../state/locale'
+import { OutlinePanel } from './EditorPanels'
+
+const range = (startLine: number, endLine: number): LspRange => ({
+  start: { line: startLine, character: 0 }, end: { line: endLine, character: 0 }
+})
+const symbol = (name: string, startLine: number, endLine: number, children: LspDocumentSymbol[] = []): LspDocumentSymbol => ({
+  name, kind: 5, range: range(startLine, endLine), selectionRange: range(startLine, endLine), children
+})
+function editorAt(file: string, line: number): { editor: ActiveEditor; cursor: (line: number, column: number) => void; off: () => void } {
+  let cursor: (line: number, column: number) => void = () => {}
+  const off = vi.fn()
+  const editor: ActiveEditor = {
+    file, text: () => '', handle: {
+      getValue: () => '', setValue: vi.fn(), onChange: vi.fn(), setReadOnly: vi.fn(), dispose: vi.fn(),
+      revealLines: vi.fn(), revealPosition: vi.fn(),
+      getPosition: () => ({ line, column: 1 }),
+      onCursor: (cb) => { cursor = cb; return off }
+    }
+  }
+  return { editor, cursor: (nextLine, column) => cursor(nextLine, column), off }
+}
+
+const symbols = [symbol('outer', 0, 4, [symbol('childFn', 1, 3)]), symbol('zzz', 10, 12)]
+
+beforeEach(() => setLocale('vi'))
+
+describe('OutlinePanel', () => {
+  it('filters symbols and clears the filter', () => {
+    const { editor } = editorAt('a.ts', 30)
+    render(<OutlinePanel editor={editor} symbols={symbols} error={null} />)
+    fireEvent.change(screen.getByLabelText('Tìm ký hiệu'), { target: { value: 'childFn' } })
+    expect(screen.queryByRole('button', { name: 'zzz' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'childFn' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Xóa bộ lọc' }))
+    expect(screen.getByRole('button', { name: 'zzz' })).toBeTruthy()
+  })
+
+  it('pins the active editor and unpins back to the live one', () => {
+    const first = editorAt('a.ts', 30)
+    const second = editorAt('b.ts', 30)
+    const secondSymbols = [symbol('secondFn', 0, 4)]
+    const view = render(<OutlinePanel editor={first.editor} symbols={symbols} error={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Ghim editor' }))
+    expect(screen.getByRole('button', { name: 'Bỏ ghim' }).getAttribute('aria-pressed')).toBe('true')
+    view.rerender(<OutlinePanel editor={second.editor} symbols={secondSymbols} error={null} />)
+    expect(screen.getByRole('button', { name: 'outer' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'secondFn' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Bỏ ghim' }))
+    expect(screen.getByRole('button', { name: 'secondFn' })).toBeTruthy()
+  })
+
+  it('collapses and expands every symbol', () => {
+    const { editor } = editorAt('a.ts', 30)
+    render(<OutlinePanel editor={editor} symbols={symbols} error={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn tất cả' }))
+    expect(screen.queryByRole('button', { name: 'childFn' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Mở rộng tất cả' }))
+    expect(screen.getByRole('button', { name: 'childFn' })).toBeTruthy()
+  })
+
+  it('reveals the symbol under the cursor and reopens its ancestors', () => {
+    const { editor, cursor } = editorAt('a.ts', 30)
+    render(<OutlinePanel editor={editor} symbols={symbols} error={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn tất cả' }))
+    act(() => cursor(2, 1))
+    const active = screen.getByRole('button', { name: 'childFn' })
+    expect(active.className).toContain('outline-active')
+    expect(active.getAttribute('data-symbol-key')).toContain('childFn')
+  })
+
+  it('disposes the cursor subscription when the editor changes or unmounts', () => {
+    const first = editorAt('a.ts', 30)
+    const second = editorAt('b.ts', 30)
+    const view = render(<OutlinePanel editor={first.editor} symbols={symbols} error={null} />)
+    view.rerender(<OutlinePanel editor={second.editor} symbols={symbols} error={null} />)
+    expect(first.off).toHaveBeenCalledTimes(1)
+    view.unmount()
+    expect(second.off).toHaveBeenCalledTimes(1)
+  })
+
+  it('scrolls to the active symbol after reopening its collapsed group', () => {
+    const scrollIntoView = vi.fn()
+    Element.prototype.scrollIntoView = scrollIntoView
+    const { editor, cursor } = editorAt('a.ts', 30)
+    render(<OutlinePanel editor={editor} symbols={symbols} error={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn tất cả' }))
+    act(() => cursor(2, 1))
+    expect(screen.getByRole('button', { name: 'childFn' }).className).toContain('outline-active')
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+  })
+
+  it('keeps a branch collapsed when the cursor stays in the same symbol', () => {
+    const { editor, cursor } = editorAt('a.ts', 30)
+    render(<OutlinePanel editor={editor} symbols={symbols} error={null} />)
+    act(() => cursor(2, 1))
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn outer' }))
+    expect(screen.queryByRole('button', { name: 'childFn' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Mở rộng outer' }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('reveals the picked symbol in the editor', () => {
+    const { editor } = editorAt('a.ts', 30)
+    render(<OutlinePanel editor={editor} symbols={symbols} error={null} />)
+    fireEvent.click(screen.getByRole('button', { name: 'childFn' }))
+    expect(editor.handle.revealPosition).toHaveBeenCalledWith(2, 1)
+  })
+})

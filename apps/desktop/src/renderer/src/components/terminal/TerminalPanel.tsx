@@ -17,12 +17,14 @@ type Tab = {
   key: number
   shell: string
   customTitle?: string
+  cwd: string
   task?: TaskDefinition
   taskState?: { type: 'running' } | { type: 'exited'; code: number } | { type: 'error' }
 }
-type PanelState = { tabs: Tab[]; visible: number[]; active: number | null }
+export type TerminalSplitDirection = 'right' | 'left' | 'up' | 'down'
+type PanelState = { tabs: Tab[]; visible: number[]; active: number | null; axis: 'horizontal' | 'vertical' }
 type Action =
-  | { type: 'add'; tab: Tab; split: boolean }
+  | { type: 'add'; tab: Tab; split: boolean; direction?: TerminalSplitDirection }
   | { type: 'select'; key: number }
   | { type: 'close'; key: number }
   | { type: 'ready'; key: number; shell: string }
@@ -30,13 +32,30 @@ type Action =
   | { type: 'error'; key: number }
   | { type: 'rename'; key: number; title: string }
 
+// shortcut: API terminal hiện tại không lưu cwd/tiêu đề; giữ trong module, mất khi reload ứng dụng.
+const savedTabs = new Map<string, { cwd: string; customTitle?: string }[]>()
+
+function TaskIcon({ state }: { state?: Tab['taskState'] }) {
+  const kind = !state ? 'idle' : state.type === 'exited' ? (state.code === 0 ? 'success' : 'failed') : state.type
+  if (kind === 'idle') return <Icon name="terminal" size={13} />
+  return <svg className="terminal-task-icon" data-status={kind} viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    {kind === 'running' ? <path d="m8 5 11 7-11 7z" fill="currentColor" stroke="none" />
+      : kind === 'success' ? <path d="m5 12 4 4L19 6" />
+        : kind === 'error' ? <><path d="M12 3 2 20h20z" /><path d="M12 9v5M12 17h.01" /></>
+          : <path d="m6 6 12 12M18 6 6 18" />}
+  </svg>
+}
+
 function reducer(state: PanelState, action: Action): PanelState {
   switch (action.type) {
     case 'add': {
-      const visible = action.split && state.visible.length < 2
-        ? [...state.visible, action.tab.key]
+      const split = action.split && state.visible.length < 2
+      const before = action.direction === 'left' || action.direction === 'up'
+      const visible = split
+        ? before ? [action.tab.key, ...state.visible] : [...state.visible, action.tab.key]
         : state.visible.map((key) => key === state.active ? action.tab.key : key)
-      return { tabs: [...state.tabs, action.tab], visible: visible.length ? visible : [action.tab.key], active: action.tab.key }
+      const axis = split ? (action.direction === 'up' || action.direction === 'down' ? 'vertical' : 'horizontal') : state.axis
+      return { tabs: [...state.tabs, action.tab], visible: visible.length ? visible : [action.tab.key], active: action.tab.key, axis }
     }
     case 'select': {
       if (!state.tabs.some((tab) => tab.key === action.key)) return state
@@ -51,7 +70,7 @@ function reducer(state: PanelState, action: Action): PanelState {
       let visible = state.visible.filter((key) => key !== action.key)
       if (!visible.length && tabs.length) visible = [tabs[tabs.length - 1].key]
       const active = state.active === action.key ? visible[visible.length - 1] ?? null : state.active
-      return { tabs, visible, active }
+      return { ...state, tabs, visible, active, axis: visible.length < 2 ? 'horizontal' : state.axis }
     }
     case 'ready':
       return { ...state, tabs: state.tabs.map((tab) => tab.key === action.key ? { ...tab, shell: action.shell } : tab) }
@@ -296,7 +315,8 @@ function TerminalView({ projectId, tab, title, visible, focused, hidden, pane, s
   )
 }
 
-export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest, hidden, onHide, onCloseAll, onOpenFile }: {
+export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest, hidden, onHide, onCloseAll, onOpenFile,
+  onNewTerminal, onSplitTerminal, onZoomChange, onRenameTerminal, onRerunTask, onCloseTerminal, onTabCountChange }: {
   projectId: string
   projectPath: string
   newRequest: number
@@ -305,10 +325,21 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   onHide: () => void
   onCloseAll: () => void
   onOpenFile: (file: string, line: number, column: number) => void
+  onNewTerminal?: () => void
+  onSplitTerminal?: (direction: TerminalSplitDirection) => void
+  onZoomChange?: (maximized: boolean) => void
+  onRenameTerminal?: (title: string) => void
+  onRerunTask?: (task: TaskDefinition) => void
+  onCloseTerminal?: (running: boolean) => void
+  onTabCountChange?: (count: number) => void
 }) {
   const next = useRef(2)
-  const initialTab: Tab = { key: 1, shell: 'Terminal', task: taskRequest?.task, taskState: taskRequest ? { type: 'running' } : undefined }
-  const [state, dispatch] = useReducer(reducer, { tabs: [initialTab], visible: [1], active: 1 })
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    const saved = savedTabs.get(projectId)?.[0]
+    const tab: Tab = { key: 1, shell: 'Terminal', cwd: saved?.cwd ?? projectPath, customTitle: saved?.customTitle,
+      task: taskRequest?.task, taskState: taskRequest ? { type: 'running' } : undefined }
+    return { tabs: [tab], visible: [1], active: 1, axis: 'horizontal' as const }
+  })
   const controls = useRef(new Map<number, Controls>())
   const panel = useRef<HTMLElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
@@ -317,14 +348,36 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   const [renaming, setRenaming] = useState<number | null>(null)
   const cancelRename = useRef(false)
   const [rename, setRename] = useState('')
-  const [tabMenu, setTabMenu] = useState<{ key: number; x: number; y: number } | null>(null)
+  const [tabMenu, setTabMenu] = useState<{ kind: 'tab' | 'split'; key?: number; x: number; y: number } | null>(null)
   const [maximized, setMaximized] = useState(false)
   const height = useTerminalHeight()
   const drag = useRef<{ y: number; height: number } | null>(null)
   const folder = projectPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || projectPath || tr('Dự án')
   const titleOf = (tab: Tab) => tab.customTitle || (tab.task ? tab.task.label : `${folder} — ${tab.shell}`)
-  const add = (task?: TaskDefinition, split = false) => {
-    dispatch({ type: 'add', split, tab: { key: next.current++, shell: 'Terminal', task, taskState: task ? { type: 'running' } : undefined } })
+  const add = (task?: TaskDefinition, split = false, direction: TerminalSplitDirection = 'right') => {
+    dispatch({ type: 'add', split, direction, tab: { key: next.current++, shell: 'Terminal', cwd: projectPath, task, taskState: task ? { type: 'running' } : undefined } })
+  }
+  const newTerminal = () => { add(); onNewTerminal?.() }
+  const splitTerminal = (direction: TerminalSplitDirection) => {
+    if (state.visible.length >= 2) return
+    add(undefined, true, direction)
+    onSplitTerminal?.(direction)
+  }
+  const rerunTask = (tab: Tab) => { if (tab.task) { add(tab.task); onRerunTask?.(tab.task) } }
+  const closeTab = (tab: Tab) => {
+    const running = tab.taskState?.type === 'running'
+    if (running && !window.confirm(tr('Terminal “{title}” đang chạy. Đóng terminal này?', { title: titleOf(tab) }))) return
+    dispatch({ type: 'close', key: tab.key })
+    onCloseTerminal?.(!!running)
+  }
+  const commitRename = (key: number, title: string) => {
+    dispatch({ type: 'rename', key, title })
+    onRenameTerminal?.(title)
+  }
+  const toggleMaximize = () => {
+    const maximizedNext = !maximized
+    setMaximized(maximizedNext)
+    onZoomChange?.(maximizedNext)
   }
   const seenNew = useRef(newRequest)
   useEffect(() => {
@@ -339,6 +392,8 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
     add(taskRequest.task)
   }, [taskRequest]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!state.tabs.length) onCloseAll() }, [state.tabs.length, onCloseAll])
+  useEffect(() => { savedTabs.set(projectId, state.tabs.map(({ cwd, customTitle }) => ({ cwd, customTitle }))) }, [projectId, state.tabs])
+  useEffect(() => { onTabCountChange?.(state.tabs.length) }, [state.tabs.length, onTabCountChange])
   useEffect(() => {
     if (!tabMenu) return
     const close = () => setTabMenu(null)
@@ -375,7 +430,7 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
       if (hidden || !(event.target instanceof Node) || !panel.current?.contains(event.target)) return
       if (event.key === 'Escape' && event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey) {
         event.preventDefault(); event.stopPropagation()
-        setMaximized((value) => !value)
+        toggleMaximize()
         return
       }
       const target = event.target instanceof Element ? event.target : null
@@ -384,7 +439,7 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
         case 'd':
           if (!target.closest('.terminal-view')) return
           event.preventDefault(); event.stopPropagation()
-          if (state.visible.length < 2) add(undefined, true)
+          splitTerminal('right')
           break
         case 'f':
           event.preventDefault(); event.stopPropagation()
@@ -398,12 +453,13 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [hidden, state.active, state.visible.length])
+  }, [hidden, state.active, state.visible.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Kho tuỳ chọn tự áp giới hạn dưới và làm tròn; ở đây chỉ chặn để panel không ăn hết cửa sổ.
   const resize = (value: number) => setTerminalHeight(Math.min(window.innerHeight - 200, value))
-  const beginRename = (tab: Tab) => { setRename(titleOf(tab)); setRenaming(tab.key) }
+  const toggleRename = (tab: Tab) => { setRename(titleOf(tab)); setRenaming(tab.key) }
   const activeTab = state.tabs.find((tab) => tab.key === state.active)
+  const menuTab = tabMenu?.key === undefined ? undefined : state.tabs.find((tab) => tab.key === tabMenu.key)
   return (
     <section ref={panel} className="terminal-panel" aria-label="Terminal" hidden={hidden} data-maximized={maximized || undefined}
       style={{ '--terminal-height': `${height}px` } as CSSProperties}>
@@ -424,7 +480,7 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
               {renaming === tab.key ? <input className="terminal-rename" aria-label={tr('Tên terminal')} value={rename} autoFocus
                 onFocus={(event) => event.currentTarget.select()} onChange={(event) => setRename(event.target.value)}
                 onBlur={() => {
-                  if (!cancelRename.current) dispatch({ type: 'rename', key: tab.key, title: rename.trim() })
+                  if (!cancelRename.current) commitRename(tab.key, rename.trim())
                   cancelRename.current = false
                   setRenaming(null)
                 }}
@@ -432,35 +488,44 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
                   if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); controls.current.get(tab.key)?.focus() }
                   else if (event.key === 'Escape') { event.preventDefault(); cancelRename.current = true; event.currentTarget.blur(); controls.current.get(tab.key)?.focus() }
                 }} /> : <button type="button" role="tab" aria-selected={tab.key === state.active} title={status ? `${title} — ${status}` : title}
-                  onClick={() => dispatch({ type: 'select', key: tab.key })} onDoubleClick={() => beginRename(tab)}
-                  onContextMenu={(event) => { event.preventDefault(); dispatch({ type: 'select', key: tab.key }); setTabMenu({ key: tab.key, x: event.clientX, y: event.clientY }) }}>
-                  <Icon name="terminal" size={13} /><span className="terminal-tab-title">{title}</span>
+                  onClick={() => dispatch({ type: 'select', key: tab.key })} onDoubleClick={() => toggleRename(tab)}
+                  onContextMenu={(event) => { event.preventDefault(); dispatch({ type: 'select', key: tab.key }); setTabMenu({ kind: 'tab', key: tab.key, x: event.clientX, y: event.clientY }) }}>
+                  <TaskIcon state={tab.taskState} /><span className="terminal-tab-title">{title}</span>
                   {status && <span className="terminal-task-status" data-status={tab.taskState?.type === 'exited' ? (tab.taskState.code === 0 ? 'success' : 'failed') : tab.taskState?.type}>{status}</span>}
                 </button>}
-              <button type="button" className="terminal-tab-close" aria-label={tr('Đóng {title}', { title })} onClick={() => dispatch({ type: 'close', key: tab.key })}><Icon name="close" size={11} /></button>
+              <button type="button" className="terminal-tab-close" aria-label={tr('Đóng {title}', { title })} onClick={() => closeTab(tab)}><Icon name="close" size={11} /></button>
             </span>
           })}
         </div>
-        <button type="button" className="terminal-icon" aria-label={tr('Terminal mới')} title={tr('Terminal mới (⌃⇧`)')} onClick={() => add()}><Icon name="plus" size={14} /></button>
-        <button type="button" className="terminal-icon" aria-label={tr('Chia terminal sang phải')} title={tr('Chia terminal sang phải (⌘D)')} disabled={state.visible.length >= 2} onClick={() => add(undefined, true)}><Icon name="panelRight" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Terminal mới')} title={tr('Terminal mới (⌃⇧`)')} onClick={newTerminal}><Icon name="plus" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Chia terminal')} title={tr('Chia terminal (⌘D)')} disabled={state.visible.length >= 2}
+          onClick={(event) => { const box = event.currentTarget.getBoundingClientRect(); setTabMenu({ kind: 'split', x: box.left, y: box.bottom }) }}><Icon name="panelRight" size={14} /></button>
+        <span className="terminal-count" aria-label={tr('Số terminal')} title={tr('Số terminal')}>{state.tabs.length}</span>
         <span className="terminal-spacer" />
-        <button type="button" className="terminal-icon" aria-label={tr('Đổi tên terminal')} title={tr('Đổi tên terminal')} disabled={!activeTab} onClick={() => { if (activeTab) beginRename(activeTab) }}><Icon name="pencil" size={14} /></button>
+        <button type="button" className="terminal-icon" aria-label={tr('Đổi tên terminal')} title={tr('Đổi tên terminal')} disabled={!activeTab} onClick={() => { if (activeTab) toggleRename(activeTab) }}><Icon name="pencil" size={14} /></button>
         <button type="button" className="terminal-icon" aria-label={tr('Tìm trong terminal')} title={tr('Tìm trong terminal (⌘F)')} onClick={() => openSearch(true)}><Icon name="search" size={14} /></button>
         <button type="button" className="terminal-icon" aria-label={maximized ? tr('Khôi phục terminal') : tr('Phóng to terminal')} title={`${maximized ? tr('Khôi phục') : tr('Phóng to')} terminal (⇧Esc)`} aria-pressed={maximized}
-          onClick={() => setMaximized((value) => !value)}><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          onClick={toggleMaximize}><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             {maximized ? <path d="M4 9h5V4m11 5h-5V4M4 15h5v5m11-5h-5v5" /> : <path d="M4 9V4h5m6 0h5v5M4 15v5h5m6 0h5v-5" />}
           </svg></button>
         <button type="button" className="terminal-icon" aria-label={tr('Ẩn terminal')} title={tr('Ẩn terminal (⌃`)')} onClick={onHide}><Icon name="close" size={14} /></button>
       </div>
-        {tabMenu && <div role="menu" className="terminal-tab-menu" style={{ left: tabMenu.x, top: tabMenu.y }}
-          onPointerDown={(event) => event.stopPropagation()}>
-          <button type="button" role="menuitem" onClick={() => { const tab = state.tabs.find((item) => item.key === tabMenu.key); setTabMenu(null); if (tab) beginRename(tab) }}>{tr('Đổi tên')}</button>
-        </div>}
-      <div className="terminal-body">
+      {tabMenu && <div role="menu" className="terminal-tab-menu" style={{ left: tabMenu.x, top: tabMenu.y }}
+        onPointerDown={(event) => event.stopPropagation()}>
+        {tabMenu.kind === 'split' ? (['right', 'left', 'up', 'down'] as const).map((direction) =>
+          <button key={direction} type="button" role="menuitem" onClick={() => { setTabMenu(null); splitTerminal(direction) }}>
+            {tr('Chia sang {direction}', { direction: { right: tr('phải'), left: tr('trái'), up: tr('trên'), down: tr('dưới') }[direction] })}
+          </button>) : <>
+          <button type="button" role="menuitem" onClick={() => { setTabMenu(null); if (menuTab) toggleRename(menuTab) }}>{tr('Đổi tên')}</button>
+          {menuTab?.task && <button type="button" role="menuitem" onClick={() => { setTabMenu(null); rerunTask(menuTab) }}>{tr('Chạy lại')}</button>}
+          <button type="button" role="menuitem" onClick={() => { setTabMenu(null); if (menuTab) closeTab(menuTab) }}>{tr('Đóng')}</button>
+        </>}
+      </div>}
+      <div className="terminal-body" data-axis={state.axis}>
         {state.tabs.map((tab) => <TerminalView key={tab.key} projectId={projectId} tab={tab} title={titleOf(tab)}
           visible={state.visible.includes(tab.key)} focused={tab.key === state.active} hidden={hidden}
           pane={state.visible.indexOf(tab.key)} split={state.visible.length > 1} controls={controls.current}
-          onSelect={() => dispatch({ type: 'select', key: tab.key })} onClose={() => dispatch({ type: 'close', key: tab.key })}
+          onSelect={() => dispatch({ type: 'select', key: tab.key })} onClose={() => closeTab(tab)}
           onReady={(shell) => dispatch({ type: 'ready', key: tab.key, shell })}
           onExit={(code) => dispatch({ type: 'exit', key: tab.key, code })}
           onError={() => dispatch({ type: 'error', key: tab.key })} onOpenFile={onOpenFile} />)}

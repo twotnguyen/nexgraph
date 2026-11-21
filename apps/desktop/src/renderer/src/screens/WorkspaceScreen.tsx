@@ -1132,7 +1132,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               onLoadError={(file, error) => setViewerErrors((cur) => (cur[file] ?? null) === error ? cur : { ...cur, [file]: error })} />
           ))}
           {multiBuffers.map((request) => <MultiBufferView key={request.id} projectId={project.project_id} request={request}
-            active={!hidden && tab === `multi:${request.id}`} onClose={() => closeMulti(request)} onDirtyChange={onDirtyChange} />)}
+            active={!hidden && tab === `multi:${request.id}`} onClose={() => closeMulti(request)} onDirtyChange={onDirtyChange}
+            onOpenFile={(file, line) => openCode(file, line)} />)}
           {previewFile && <MarkdownPreview key={previewFile} projectId={project.project_id} file={previewFile} active={!hidden} loadError={viewerErrors[previewFile]} readOnly={readOnlyFiles[previewFile] !== false} onClose={() => closePreview(previewFile)} onOpenFile={openCode} />}
           {previewSideShown && previewSide && <MarkdownPreview key={`side:${previewSide}`} projectId={project.project_id} file={previewSide} active={!hidden} loadError={viewerErrors[previewSide]} readOnly={readOnlyFiles[previewSide] !== false} side onClose={() => setPreviewSide(null)} onOpenFile={openCode} />}
           {sideShown && !previewSideShown && side && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}

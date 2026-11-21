@@ -40,6 +40,8 @@
 .git-added { color: var(--green); }
 .git-deleted { color: var(--color-error-red); }
 .git-row input[type='checkbox'] { flex: none; width: 14px; height: 14px; margin: 0; accent-color: var(--blue); }
+.git-toolbar .git-view-diff { flex: none; height: 23px; min-height: 0; padding: 0 7px; border: 1px solid var(--color-border); border-radius: 4px; font-size: 11px; }
+.git-group { padding: 2px 8px; color: var(--color-muted); font-size: 11px; }
 .git-split { display: flex; align-items: stretch; margin-left: auto; }
 .git-split > button, .git-split .git-chevron { min-height: 0; height: 23px; padding: 0 6px; border: 1px solid var(--color-border); border-radius: 4px 0 0 4px; font-size: 11px; }
 .git-split .git-chevron { display: grid; place-items: center; width: 21px; padding: 0; border-left: 0; border-radius: 0 4px 4px 0; }
@@ -54,6 +56,8 @@
 .git-commit-row .git-split button { margin-left: 0; height: 24px; padding: 0 7px; }
 .git-commit-row .git-split .git-chevron { padding: 0; }
 .git-last-commit { display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-top: 1px solid var(--color-border); }
+.git-expand { align-self: flex-start; }
+.git-commit textarea[data-expanded='true'] { min-height: 150px; }
 .git-last-commit > button:first-child { flex: 1; min-width: 0; overflow: hidden; padding: 0; border: 0; background: transparent; font-size: 11px; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .git-toast { position: fixed; z-index: 110; right: 18px; bottom: 43px; display: flex; align-items: flex-start; gap: 8px; max-width: min(410px, calc(100vw - 36px)); padding: 8px 10px; border: 1px solid var(--color-border); border-left: 3px solid var(--green); border-radius: 6px; background: var(--panel-raised); box-shadow: var(--shadow); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .git-toast-error { border-left-color: var(--color-error-red); }

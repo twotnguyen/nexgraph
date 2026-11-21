@@ -101,6 +101,7 @@ export const uiEnEditor: Record<string, string> = {
   'Xem bảng': 'View table',
   'Bỏ đánh dấu dòng': 'Remove line bookmark',
   'Đánh dấu dòng': 'Bookmark line',
+  'dòng {from}–{to}': 'lines {from}–{to}',
   'Lưu': 'Save',
   'Lưu (Ctrl/Cmd+S)': 'Save (Ctrl/Cmd+S)',
   'Chia đôi sang phải': 'Split right',
