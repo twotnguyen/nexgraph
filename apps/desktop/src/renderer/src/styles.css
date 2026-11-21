@@ -2634,7 +2634,8 @@ input, select, textarea { max-width: 100%; }
 ::placeholder { color: var(--color-muted); }
 :where(input[type='checkbox'], input[type='radio'], input[type='range']) { accent-color: var(--button-primary); }
 
-.app > .screen { animation: screen-enter 150ms ease-out both; }
+/* backwards, không both: animation transform giữ sau khi chạy làm .screen thành khung chứa của position:fixed (hộp thoại bị cuộn theo trang). */
+.app > .screen { animation: screen-enter 150ms ease-out backwards; }
 .screen { max-width: 1240px; padding: clamp(16px, 3vw, 38px); }
 .screen.projects-page, .screen.task-screen, .screen.settings { max-width: 1080px; }
 .page-back { margin-bottom: 12px; }
@@ -2812,6 +2813,8 @@ dialog.modal::backdrop { background: var(--overlay); }
 dialog.modal { padding: 12px; }
 dialog.modal::backdrop { background: rgb(0 0 0 / 28%); }
 .modal-backdrop > .modal.connection-dialog { width: min(600px, calc(100vw - 32px)); }
+.modal-backdrop > .modal { grid-template-columns: minmax(0, 1fr); }
+.modal-backdrop > .modal pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .modal-backdrop > .modal > header {
   position: sticky;
   z-index: 1;
@@ -2822,7 +2825,10 @@ dialog.modal::backdrop { background: rgb(0 0 0 / 28%); }
   background: var(--panel-raised, var(--color-surface));
 }
 .modal-backdrop > .modal > header :is(b, h2),
-dialog.modal h2 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.modal-backdrop > .modal > h2:first-child,
+dialog.modal h2 { margin: 0; color: var(--color-text); font-size: 15px; font-weight: 600; line-height: 1.4; }
+.modal-backdrop > .modal :is(h3, h4) { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
+.modal-backdrop > .modal > h2:first-child { padding-top: 12px; }
 .modal-backdrop > .modal > header p { margin: 2px 0 0; font-size: 12px; }
 .modal-backdrop > .modal > header > button:last-child {
   display: grid;
