@@ -220,6 +220,11 @@ export interface NexGraphApi {
     /** Đổi chế độ; yêu cầu duyệt đang chờ bị từ chối. */
     setMode(projectId: string, mode: AgentMode): Promise<void>
     getMode(projectId: string): Promise<AgentMode>
+    /** Hồ sơ trợ lý: tắt bớt tool cho dự án (rỗng = bật hết theo chế độ). */
+    setDisabledTools?(projectId: string, tools: string[]): Promise<void>
+    getDisabledTools?(projectId: string): Promise<string[]>
+    /** Mọi tool NexGraph cho trợ lý. */
+    toolNames?(): Promise<string[]>
     approve(projectId: string, id: string, allow: boolean): Promise<void>
     /** Rời dự án: từ chối yêu cầu đang chờ, huỷ phiên. */
     close(projectId: string): Promise<void>

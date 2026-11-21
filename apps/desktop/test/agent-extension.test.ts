@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import { createNexgraphExtension, previewWrite } from '../src/main/agent/extension'
+import { createNexgraphExtension, previewWrite, setDisabledTools, toolsFor } from '../src/main/agent/extension'
 import { NEXGRAPH_RULES, NEXGRAPH_SKILL_NAME, skillMarkdown } from '../src/main/agent/skill'
 import { TOOL_DEFS } from '../src/main/ai/tools'
 import type { EngineApi } from '../src/main/engine/api'
@@ -72,6 +72,22 @@ describe('extension NexGraph', () => {
       expect(await handler({ toolName, input: { path: 'a.txt' } })).toBeUndefined()
     }
     expect(gate.check).not.toHaveBeenCalled()
+  })
+
+  it('hồ sơ trợ lý: tool bị tắt không được bật cho phiên và bị chặn nếu mô hình vẫn gọi', async () => {
+    const { handler } = setup()
+    expect(() => setDisabledTools('p1', ['rm_rf'])).toThrow()
+    setDisabledTools('p1', ['run_process', 'grep'])
+    try {
+      expect(toolsFor('edit', 'p1')).not.toContain('run_process')
+      expect(toolsFor('edit', 'p1')).toContain('edit')
+      expect(toolsFor('edit', 'p2')).toContain('run_process')
+      expect(await handler({ toolName: 'grep', input: { pattern: 'x' } })).toMatchObject({ block: true, reason: expect.stringContaining('Hồ sơ') })
+      expect(await handler({ toolName: 'read', input: { path: 'a.txt' } })).toBeUndefined()
+    } finally {
+      setDisabledTools('p1', [])
+    }
+    expect(await handler({ toolName: 'grep', input: { pattern: 'x' } })).toBeUndefined()
   })
 })
 

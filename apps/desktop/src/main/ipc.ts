@@ -36,6 +36,7 @@ import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager } from './terminal/manager'
 import { gitBlame, gitCommit, gitDiffSides, gitStage, gitStatus, gitUnstage } from './git/repo'
+import { allToolNames, getDisabledTools, setDisabledTools } from './agent/extension'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -492,6 +493,14 @@ export function registerIpc(
     return agent.setMode(pid, mode)
   })
   on('agent:get-mode', async (pid: string) => agent.getMode(pid))
+  on('agent:set-disabled-tools', async (pid: string, tools: string[]) => {
+    await rootOf(pid)
+    setDisabledTools(pid, tools)
+    // Áp lại tool đang bật của phiên (cùng đường với đổi chế độ).
+    await agent.setMode(pid, await agent.getMode(pid))
+  })
+  on('agent:get-disabled-tools', async (pid: string) => getDisabledTools(pid))
+  on('agent:tool-names', async () => allToolNames())
   on('agent:approve', async (pid: string, id: string, allow: boolean) => {
     if (allow === true) await editorStates.wait(pid)
     return agent.approve(pid, id, allow === true)

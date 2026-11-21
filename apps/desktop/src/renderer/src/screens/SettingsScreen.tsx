@@ -10,6 +10,7 @@ import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
 import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
 import { KeymapEditor } from '../components/settings/KeymapEditor'
+import { ProfileEditor } from '../components/settings/ProfileEditor'
 import './settings.css'
 
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
@@ -23,6 +24,7 @@ const SECTION_WORDS = {
   chat: 'Giao diện khung chat AI trợ lý vị trí trái phải dock',
   editor: 'Trình soạn thảo editor vim chế độ phím',
   keymap: 'Phím tắt keymap keybinding shortcut lệnh bàn phím',
+  profiles: 'Hồ sơ trợ lý profile tool công cụ chạy lệnh agent',
   quick: 'Kết nối nhanh ollama local tài khoản AI',
   gemini: 'Gemini Google Antigravity tài khoản AI',
   apikey: 'API key nhà cung cấp OpenAI Anthropic Claude khoá',
@@ -34,6 +36,7 @@ const SECTION_WORDS = {
 const PAGES: { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] = [
   { id: 'appearance', label: 'Giao diện', icon: 'palette', sections: ['theme', 'chat', 'editor'] },
   { id: 'keymap', label: 'Phím tắt', icon: 'keyboard', sections: ['keymap'] },
+  { id: 'agent', label: 'Trợ lý AI', icon: 'spark', sections: ['profiles'] },
   { id: 'ai', label: 'Tài khoản AI', icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
   { id: 'model', label: 'Mô hình', icon: 'spark', sections: ['model'] },
   { id: 'privacy', label: 'Quyền riêng tư', icon: 'shield', sections: ['privacy'] }
@@ -255,6 +258,13 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       {shows('keymap') && <section className="settings-section" aria-label="Phím tắt">
         <p className="muted">Bấm Đổi hoặc bấm đúp một dòng rồi nhấn tổ hợp mới; hợp âm hai bước như ⌘K ⌘T cũng được. Một phím chỉ thuộc một lệnh.</p>
         <KeymapEditor />
+      </section>}
+
+      {pages.some((p) => p.id === 'agent') && <h1 id="settings-agent" data-settings-page="agent" className="settings-page-title">Trợ lý AI</h1>}
+      {shows('profiles') && <section className="settings-section" aria-labelledby="settings-profiles-title">
+        <h2 id="settings-profiles-title">Hồ sơ trợ lý</h2>
+        <p className="muted">Ba hồ sơ dựng sẵn là Hỏi, Kế hoạch và Sửa. Hồ sơ tự tạo chọn một chế độ nền rồi tắt bớt tool (ví dụ Sửa nhưng không chạy lệnh); hồ sơ hiện cạnh ba chế độ ở chân khung chat. Mọi thao tác ghi vẫn phải được duyệt.</p>
+        <ProfileEditor />
       </section>}
 
       {pages.some((p) => p.id === 'ai') && <h1 id="settings-ai" data-settings-page="ai" className="settings-page-title">{vi.accounts.title}</h1>}

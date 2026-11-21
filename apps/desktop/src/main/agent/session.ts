@@ -273,7 +273,7 @@ export class AgentService {
     const entry = this.entries.get(projectId)
     entry?.gate.denyAll('Đã đổi chế độ')
     this.modes.set(projectId, mode)
-    void entry?.session.then((session) => session.setActiveToolsByName(toolsFor(this.getMode(projectId)))).catch(() => {})
+    void entry?.session.then((session) => session.setActiveToolsByName(toolsFor(this.getMode(projectId), projectId))).catch(() => {})
     if (mode !== 'edit' && entry?.busy && entry.execution?.allowCommands) void this.abort(projectId)
   }
 
@@ -725,7 +725,7 @@ export class AgentService {
         if (!inConsentBase(consentBase, url)) { entry.dispatchBlocked = true; throw providerChanged() }
       }
     }).then((session) => {
-      session.setActiveToolsByName(toolsFor(this.getMode(projectId)))
+      session.setActiveToolsByName(toolsFor(this.getMode(projectId), projectId))
       session.subscribe((event) => this.onEvent(projectId, entry, event))
       return session
     })

@@ -52,7 +52,7 @@ export function nexgraphBrokerTools(deps: NexgraphToolDeps & {
       deps.assertCurrent()
       const activeSignal = deps.getSignal()
       activeSignal?.throwIfAborted(); signal?.throwIfAborted()
-      if (!toolsFor(deps.getMode?.() ?? 'ask').includes(definition.name)) throw new Error('Chế độ hiện tại chỉ cho phép đọc')
+      if (!toolsFor(deps.getMode?.() ?? 'ask', deps.projectId).includes(definition.name)) throw new Error('Chế độ hoặc hồ sơ trợ lý hiện tại không cho dùng công cụ này')
       if (!Check(definition.parameters, input)) throw new Error('Tham số công cụ không hợp lệ')
       const run: AgentToolRun = { id, name: definition.name, input: clean(JSON.stringify(input), 8000), output: '', status: 'running', startedAt: Date.now() }
       deps.onTool?.({ ...run })

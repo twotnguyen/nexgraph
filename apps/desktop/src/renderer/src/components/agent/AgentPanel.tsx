@@ -12,6 +12,7 @@ import { useAgentWorkbench, type AgentInspection } from './useAgentWorkbench'
 import { WorkbenchHistory, WorkbenchSettings, WorkbenchStatus, workbenchUsage } from './WorkbenchControls'
 import { AnswerRating } from './AnswerRating'
 import './agent-panel.css'
+import { matchProfile, useAgentProfiles, type AgentProfile } from '../../state/agentProfiles'
 
 interface Props {
   id?: string
@@ -112,6 +113,14 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([])
   const [mode, setMode] = useState<AgentMode | null>(null)
   const [changingMode, setChangingMode] = useState(true)
+  // Hồ sơ trợ lý: tool đang bị tắt cho dự án (main giữ), để biết hồ sơ tự tạo nào đang dùng.
+  const profiles = useAgentProfiles()
+  const [disabledTools, setDisabledToolsState] = useState<string[]>([])
+  useEffect(() => {
+    let live = true
+    window.nexgraph.agent.getDisabledTools?.(projectId).then((tools) => { if (live) setDisabledToolsState(tools) }).catch(() => {})
+    return () => { live = false }
+  }, [projectId])
   const modeRef = useRef<AgentMode | null>(null)
   const modePending = useRef(true)
   const turn = useRef<{ id: number; q: string; context?: FileContext; attachments?: AgentContextItem[]; tools: string[]; mode: AgentMode; cancelled?: boolean } | null>(null)
@@ -304,6 +313,23 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       modePending.current = false
       if (mounted.current) setChangingMode(false)
     }
+  }
+
+  const activeProfile = matchProfile(profiles, mode, disabledTools)
+  const applyTools = async (tools: string[]) => {
+    if (!window.nexgraph.agent.setDisabledTools || (tools.length === 0 && disabledTools.length === 0)) return
+    await window.nexgraph.agent.setDisabledTools(projectId, tools)
+    if (mounted.current) setDisabledToolsState(tools)
+  }
+  /** Ba chế độ là ba hồ sơ dựng sẵn (bật đủ tool của chế độ); hồ sơ tự tạo đổi chế độ và tắt bớt tool. */
+  const pickProfile = async (profile: AgentProfile | null, m: AgentMode) => {
+    try {
+      await applyTools(profile?.disabledTools ?? [])
+    } catch {
+      setError(vi.agent.modeFailed)
+      return
+    }
+    await pickMode(m)
   }
 
   const run = async (question: string, target: AiConsentTarget, context?: FileContext, attached: AgentContextItem[] = attachments) => {
@@ -564,9 +590,14 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
           </div>
           <div className="agent-composer-foot">
             <span className="mode" role="group" aria-label={vi.agent.modeTitle} title={mode ? modeHint : undefined}>
-              <button type="button" disabled={modeLocked} aria-pressed={mode === 'ask'} onClick={() => void pickMode('ask')}>{vi.agent.ask}</button>
-              <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan'} onClick={() => void pickMode('plan')}>Kế hoạch</button>
-              <button type="button" disabled={modeLocked || busy || toolsUnavailable} aria-pressed={mode === 'edit'} onClick={() => void pickMode('edit')}>{vi.agent.edit}</button>
+              <button type="button" disabled={modeLocked || (busy && disabledTools.length > 0)} aria-pressed={mode === 'ask' && !activeProfile} onClick={() => void pickProfile(null, 'ask')}>{vi.agent.ask}</button>
+              <button type="button" disabled={modeLocked || busy} aria-pressed={mode === 'plan' && !activeProfile} onClick={() => void pickProfile(null, 'plan')}>Kế hoạch</button>
+              <button type="button" disabled={modeLocked || busy || toolsUnavailable} aria-pressed={mode === 'edit' && !activeProfile} onClick={() => void pickProfile(null, 'edit')}>{vi.agent.edit}</button>
+              {profiles.map((profile) => (
+                <button key={profile.id} type="button" disabled={modeLocked || busy || (profile.mode === 'edit' && toolsUnavailable)} aria-pressed={activeProfile?.id === profile.id}
+                  title={`Hồ sơ tự tạo: ${profile.mode === 'edit' ? vi.agent.edit : profile.mode === 'plan' ? 'Kế hoạch' : vi.agent.ask}, tắt ${profile.disabledTools.length} tool`}
+                  onClick={() => void pickProfile(profile, profile.mode)}>{profile.name}</button>
+              ))}
             </span>
             {configured && <span className="agent-connection-label" data-runtime={cfg?.runtime} title={connectionLabel(cfg)}><Icon name="plug" size={11} />{connectionLabel(cfg)}</span>}
             {usage && <span className="agent-usage" title="Token tích lũy của phiên; chi phí ước tính khi nhà cung cấp có bảng giá">{usage}</span>}

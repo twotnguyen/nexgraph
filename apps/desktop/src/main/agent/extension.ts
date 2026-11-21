@@ -13,8 +13,24 @@ import type { TaskExecution, ProcessInput } from './process-tools'
 const GRAPH_TOOLS = TOOL_DEFS.map((t) => t.function.name)
 export const ASK_TOOLS = ['read', 'grep', 'find', 'ls']
 export const EDIT_TOOLS = [...ASK_TOOLS, 'edit', 'write', 'run_process']
-export const toolsFor = (mode: AgentMode): string[] => [...(mode === 'edit' ? EDIT_TOOLS : ASK_TOOLS), ...GRAPH_TOOLS]
-const ALLOWED = new Set(toolsFor('edit'))
+const ALL_TOOLS = [...EDIT_TOOLS, ...GRAPH_TOOLS]
+const ALLOWED = new Set(ALL_TOOLS)
+
+// Hồ sơ trợ lý kiểu Wu: mỗi dự án có thể tắt bớt tool (ví dụ không cho chạy lệnh), áp dụng cho cả Pi và Gemini.
+const disabledTools = new Map<string, ReadonlySet<string>>()
+/** Tên mọi tool NexGraph cho trợ lý (để màn Hồ sơ liệt kê). */
+export const allToolNames = (): string[] => [...ALL_TOOLS]
+export function setDisabledTools(projectId: string, tools: unknown): void {
+  if (!Array.isArray(tools) || tools.some((t) => typeof t !== 'string' || !ALLOWED.has(t))) throw Object.assign(new Error('Danh sách tool không hợp lệ'), { code: 'bad_param' })
+  if (tools.length) disabledTools.set(projectId, new Set(tools as string[]))
+  else disabledTools.delete(projectId)
+}
+export const getDisabledTools = (projectId: string): string[] => [...(disabledTools.get(projectId) ?? [])]
+/** Tool được bật theo chế độ và hồ sơ của dự án. */
+export const toolsFor = (mode: AgentMode, projectId?: string): string[] => {
+  const off = projectId ? disabledTools.get(projectId) : undefined
+  return [...(mode === 'edit' ? EDIT_TOOLS : ASK_TOOLS), ...GRAPH_TOOLS].filter((name) => !off?.has(name))
+}
 
 export type NexgraphToolCall = { toolName: string; toolCallId: string; input: unknown }
 export type NexgraphToolGateResult = { block: true; reason: string } | undefined
@@ -113,6 +129,7 @@ export function registerNexgraphTools(pi: NexgraphToolPort, deps: NexgraphToolDe
     // Dùng đúng allowlist cho cả tool do mô hình gọi trực tiếp.
     pi.on('tool_call', async (event) => {
       if (!ALLOWED.has(event.toolName)) return { block: true, reason: `Tool "${event.toolName}" không được phép dùng trong NexGraph` }
+      if (disabledTools.get(deps.projectId)?.has(event.toolName)) return { block: true, reason: `Hồ sơ trợ lý đang dùng đã tắt tool "${event.toolName}"` }
       const writing = event.toolName === 'write' || event.toolName === 'edit'
       const duplicate = { block: true as const, reason: 'Mã thao tác ghi bị trùng' }
       if (writing && approvedWrites.has(event.toolCallId)) return duplicate

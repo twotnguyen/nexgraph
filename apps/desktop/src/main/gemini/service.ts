@@ -204,10 +204,10 @@ export class GeminiAgentService {
         onCheckpoint: () => this.save(pid, entry), onWriteConflict: (message) => { if (this.current(pid, entry)) this.deps.emit(pid, { type: 'write_conflict', message }) },
         onTool: (tool) => { if (!belongs()) return; entry.tools.set(tool.id, tool); this.deps.emit(pid, { type: 'tool', name: tool.name, status: tool.status === 'running' ? 'start' : 'end', error: tool.status === 'failed' }); this.deps.emit(pid, { type: 'tool_detail', tool }) }
       })
-      const broker = new GeminiMcpBroker({ tools: () => tools.filter((tool) => this.getMode(pid) === 'edit' || !['edit', 'write', 'run_process'].includes(tool.name)), assertCurrent })
+      const broker = new GeminiMcpBroker({ tools: () => tools.filter((tool) => toolsFor(this.getMode(pid), pid).includes(tool.name)), assertCurrent })
       entry.broker = broker
       const mcp = await broker.start()
-      const client = await this.deps.connection.createClient(entry.scope.root, {}, { maxTurns: this.getLimits(pid).maxTurns, mcpTools: toolsFor(this.getMode(pid)), signal: entry.controller?.signal })
+      const client = await this.deps.connection.createClient(entry.scope.root, {}, { maxTurns: this.getLimits(pid).maxTurns, mcpTools: toolsFor(this.getMode(pid), pid), signal: entry.controller?.signal })
       try { this.assertTask(pid, entry) } catch (error) { await client.close(); throw error }
       entry.client = client
       entry.clientMaxTurns = this.getLimits(pid).maxTurns
@@ -217,7 +217,7 @@ export class GeminiAgentService {
         onRequest: async (method, params) => {
           // The profile permits only the NexGraph MCP tools. An unexpected direct
           // file, terminal or permission request never becomes a second write path.
-          if (method === 'session/request_permission') { this.assertTask(pid, entry); return brokerPermission(params, entry.stored.nativeId, toolsFor(this.getMode(pid))) }
+          if (method === 'session/request_permission') { this.assertTask(pid, entry); return brokerPermission(params, entry.stored.nativeId, toolsFor(this.getMode(pid), pid)) }
           throw failed('protected_path', 'NexGraph chỉ cho phép công cụ qua cổng MCP được kiểm soát')
         },
         onClose: (error) => { if (entry.busy && !entry.stopped && this.current(pid, entry)) { entry.error = safe(error.message, 2000); entry.errorCode = 'ai_error'; entry.controller?.abort(); entry.gate.denyAll('Tiến trình Gemini đã dừng') } }
