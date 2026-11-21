@@ -107,3 +107,16 @@ def test_model_source_never_returns_bytes_from_a_different_open_handle(tmp_path,
     monkeypatch.setattr(os, "open", substituted)
     with pytest.raises(ApiError, match="Nguồn bị loại"):
         policy.read("allowed.py", selected)
+
+
+@pytest.mark.parametrize("name", ["aws_credentials.txt", "secrets/x.md", ".aws/config", "prod.secret.json",
+                                  "service-account.json", "keys/server.p12"])
+def test_sensitive_names_of_the_reference_detector_are_blocked(tmp_path, name):
+    """Cùng tiêu chí với `graphify.detect._is_sensitive` mà W9 dùng: không đưa vào AI dù không có trong .gitignore."""
+    path = tmp_path / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("AKIA" + "X" * 16, encoding="utf-8")
+    (tmp_path / "src.py").write_text("x = 1\n", encoding="utf-8")
+    policy = SourcePolicy(tmp_path)
+    assert policy.allows("src.py")
+    assert not policy.allows(name)

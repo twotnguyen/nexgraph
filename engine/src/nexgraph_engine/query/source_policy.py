@@ -7,6 +7,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from pathspec import GitIgnoreSpec
 
+from graphify.detect import _is_sensitive
+
 from nexgraph_engine.errors import ApiError
 
 MAX_MODEL_SOURCE_BYTES = 5 * 1024 * 1024
@@ -83,6 +85,10 @@ class SourcePolicy:
 
     def _excluded(self, parts: tuple[str, ...], *, directory: bool) -> bool:
         if _blocked_name(parts):
+            return True
+        # Tiêu chí tệp bí mật của công cụ tham chiếu (W9 dùng khi chọn tệp gửi model). Đường dẫn tuyệt đối trong dự án
+        # vì hàm này có thể đọc shebang của tệp không có đuôi.
+        if parts and not directory and _is_sensitive(self.root.joinpath(*parts)):
             return True
         # Git không đi vào thư mục đã ẩn, kể cả khi tệp con có mẫu phủ định.
         for end in range(1, len(parts) + 1):
