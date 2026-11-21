@@ -574,14 +574,23 @@ export function registerIpc(
     const model = transport ? selectedModelLabel(await acc()) : null
     return api().setAiSettings(pid, { enabled: settings?.enabled === true, transport, model })
   })
-  on('semantic:estimate', (pid: string, target: SemanticTarget) => api().semanticEstimate(pid, target))
-  on('semantic:start', async (pid: string, target: SemanticTarget, budget?: number) => {
+  on('semantic:estimate', async (pid: string, target: SemanticTarget, noCache?: boolean) => {
+    const estimate = await api().semanticEstimate(pid, target, noCache === true)
+    let model: string | null = null
+    try { model = selectedModelLabel(await acc()) } catch { /* chưa chọn model: hộp thoại báo */ }
+    return { ...estimate, model }
+  })
+  on('semantic:start', async (pid: string, target: SemanticTarget, budget?: number, noCache?: boolean) => {
     const settings = await api().aiSettings(pid)
     if (!settings.enabled) throw new AgentError('ai_disabled', 'Chưa bật phân tích bằng AI cho dự án này.')
     const a = await acc()
+    // Người dùng đồng ý với một model cụ thể lúc bật AI: model đang chọn đã đổi thì phải đồng ý lại.
+    const current = selectedModelLabel(a)
+    if (settings.model !== current)
+      throw new AgentError('ai_provider_changed', `Model AI đã đổi (${settings.model ?? 'chưa có'} → ${current}). Hãy đồng ý lại trước khi gửi.`)
     const max = Number.isFinite(budget) && budget! > 0 ? Math.floor(budget!) : 1_000_000
     const transport = settings.transport === 'direct' ? await directTransport(a) : { kind: 'app' as const, model_label: selectedModelLabel(a) }
-    const jobId = (await api().startSemantic(pid, { targets: target, transport, max_tokens_budget: max })).job_id
+    const jobId = (await api().startSemantic(pid, { targets: target, transport, max_tokens_budget: max, no_cache: noCache === true })).job_id
     if (transport.kind === 'app') {
       const ac = new AbortController()
       semanticRuns.set(jobId, ac)

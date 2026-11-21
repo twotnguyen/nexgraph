@@ -26,6 +26,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   const [result, setResult] = useState<SemanticResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [noCache, setNoCache] = useState(false)
 
   const apply = (s: ProjectAiSettings) => { setSettings(s); onSettings?.(s) }
   useEffect(() => {
@@ -35,9 +36,9 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
     if (!settings?.enabled) return
     let live = true
     setEstimate(null)
-    window.nexgraph.semantic.estimate(projectId, target).then((e) => live && setEstimate(e), (e) => live && setError(errMessage(e)))
+    window.nexgraph.semantic.estimate(projectId, target, noCache).then((e) => live && setEstimate(e), (e) => live && setError(errMessage(e)))
     return () => { live = false }
-  }, [projectId, target, settings?.enabled])
+  }, [projectId, target, settings?.enabled, settings?.model, noCache])
 
   const act = async (fn: () => Promise<void>) => {
     if (busy) return
@@ -46,10 +47,12 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
     try { await fn() } catch (e) { setError(vi.semantic.failed(errMessage(e))) } finally { setBusy(false) }
   }
   const enable = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId, { enabled: true, transport, model: null })))
+  const agreeNewModel = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId,
+    { enabled: true, transport: settings?.transport ?? 'app', model: null })))
   const disable = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId, { enabled: false, transport: null, model: null })))
   const run = () => act(async () => {
     setResult(null)
-    const { jobId } = await window.nexgraph.semantic.start(projectId, target)
+    const { jobId } = await window.nexgraph.semantic.start(projectId, target, undefined, noCache)
     try {
       const done = await waitJob(jobId, setJob, 500)
       setResult(done.result as unknown as SemanticResult)
@@ -61,6 +64,9 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
 
   const local = target === 'dedup'
   const empty = estimate !== null && estimate.chunks === 0 && !local
+  // Hiện và đối chiếu model sẽ dùng thật (main điền lúc ước tính), không phải model đã lưu lúc bật AI.
+  const model = estimate?.model ?? null
+  const changed = !local && estimate !== null && model !== null && settings?.model !== model
   return (
     <div className="modal-backdrop">
       <div role="dialog" aria-modal="true" aria-label={fixed === 'labels' ? vi.semantic.labelsTitle : vi.semantic.title} className="modal">
@@ -70,12 +76,14 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
             <p>{vi.semantic.enableIntro}</p>
             <label><input type="radio" name="transport" checked={transport === 'app'} onChange={() => setTransport('app')} /> {vi.semantic.transportApp}</label>
             <label><input type="radio" name="transport" checked={transport === 'direct'} onChange={() => setTransport('direct')} /> {vi.semantic.transportDirect}</label>
-            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {vi.semantic.consent}</label>
+            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {fixed === 'labels' ? vi.semantic.consentLabels : vi.semantic.consent}</label>
           </>
         )}
         {settings?.enabled && (
           <>
-            {settings.model && <p className="muted">{vi.semantic.provider(settings.model)}</p>}
+            {estimate && !local && (model ? <p className="muted">{vi.semantic.provider(model)}</p> : <p className="inline-message warning">{vi.semantic.noModel}</p>)}
+            {changed && <p role="alert" className="inline-message warning">{vi.semantic.modelChanged(settings.model ?? '—', model)}
+              {' '}<button type="button" disabled={busy} onClick={() => void agreeNewModel()}>{vi.semantic.agreeNewModel}</button></p>}
             {!fixed && (
               <fieldset>
                 <legend>{vi.semantic.targetLabel}</legend>
@@ -84,6 +92,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
                 ))}
               </fieldset>
             )}
+            <p className="muted">{vi.semantic.sends[target]}</p>
+            {!local && <label><input type="checkbox" checked={noCache} disabled={busy} onChange={(e) => setNoCache(e.target.checked)} /> {vi.semantic.noCache}</label>}
             {!estimate && !error && <p className="muted">{vi.semantic.estimating}</p>}
             {estimate && !local && (
               <div role="status">
@@ -117,7 +127,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
           {job ? <button type="button" onClick={cancel}>{vi.semantic.cancel}</button>
             : <button type="button" onClick={onClose}>{vi.semantic.close}</button>}
           {settings && !settings.enabled && <button type="button" className="primary" disabled={!consent || busy} onClick={() => void enable()}>{vi.semantic.enable}</button>}
-          {settings?.enabled && !job && <button type="button" className="primary" disabled={busy || !estimate || empty} onClick={() => void run()}>{vi.semantic.run}</button>}
+          {settings?.enabled && !job && <button type="button" className="primary" disabled={busy || !estimate || empty || changed || (!local && !model)} onClick={() => void run()}>{vi.semantic.run}</button>}
         </footer>
       </div>
     </div>

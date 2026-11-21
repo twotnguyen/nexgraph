@@ -485,7 +485,11 @@ export interface PrDetail {
 export type SemanticTarget = 'docs' | 'images' | 'deep' | 'labels' | 'dedup' | 'pr_triage'
 /** Cấu hình AI theo dự án (engine `ai_theo_du_an`): mặc định tắt. `app` = đường A, `direct` = đường B. */
 export interface ProjectAiSettings { enabled: boolean; transport: 'direct' | 'app' | null; model: string | null }
-export interface SemanticEstimate { files: string[]; chunks: number; cached_chunks: number; input_tokens: number; output_tokens: number }
+export interface SemanticEstimate {
+  files: string[]; chunks: number; cached_chunks: number; input_tokens: number; output_tokens: number
+  /** Model sẽ dùng thật nếu chạy bây giờ (`provider / model`), do main điền; `null` khi chưa chọn model. */
+  model?: string | null
+}
 export interface SemanticResult {
   target: SemanticTarget
   nodes_added: number
