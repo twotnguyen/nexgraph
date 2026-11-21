@@ -161,3 +161,15 @@ def test_open_project_with_outdated_schema(tmp_path, registry):
     conn = sqlite3.connect(db_file)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
     conn.close()
+
+
+def test_open_recovers_from_graph_db_without_schema(tmp_path, registry):
+    root = make_project(tmp_path)
+    (root / ".nexgraph").mkdir(exist_ok=True)
+    sqlite3.connect(root / ".nexgraph" / "graph.db").close()  # engine bị kill sau khi tạo tệp, trước khi có schema
+    info = registry.open_project(root)
+    conn = sqlite3.connect(info.graph_db)
+    try:
+        assert conn.execute("SELECT ma_du_an FROM du_an").fetchone()[0] == info.project_id
+    finally:
+        conn.close()

@@ -203,3 +203,26 @@ def test_hook_refresh_waits_for_busy_writer_instead_of_skipping(api, copy_fixtur
 def test_invalid_refresh_timeout_falls_back_to_default(api, copy_fixture, tmp_path):
     root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
     assert _refresh_json(root, appdata, env={"NEXGRAPH_REFRESH_TIMEOUT": "10s"})["status"] == "ok"
+
+
+def test_killed_refresh_does_not_block_later_refreshes(api, copy_fixture, tmp_path):
+    from contextlib import closing
+
+    from nexgraph_engine.mcp.server import resolve_graph_db
+    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.store.graph_store import GraphStore
+
+    root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
+    with closing(open_graph_db(resolve_graph_db(root, appdata))) as conn:
+        GraphStore(conn).begin_run(files_total=1, kind="tang_dan")  # lần refresh bị kill giữa chừng (os._exit)
+        conn.commit()
+    (root / "extra.py").write_text("def extra():\n    return 1\n", encoding="utf-8")
+    out = _refresh_json(root, appdata)
+    assert out["status"] == "ok" and out["added"] == 1
+    pid = api.open(root)["project_id"]
+    (root / "extra2.py").write_text("def extra2():\n    return 2\n", encoding="utf-8")
+    with closing(open_graph_db(resolve_graph_db(root, appdata))) as conn:
+        GraphStore(conn).begin_run(files_total=1, kind="tang_dan")
+        conn.commit()
+    r = api.post(f"/v1/projects/{pid}/refresh")
+    assert r.status_code == 200 and r.json()["added"] == 1

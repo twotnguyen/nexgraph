@@ -363,3 +363,38 @@ def test_capped_flows_unstored_candidate_rising_through_a_changed_callee(tmp_pat
     monkeypatch.undo()
     monkeypatch.setattr(build, "MAX_FLOWS", 2)
     assert_same_as_full_index(store, tmp_path, index_project)
+
+
+def test_removing_a_duplicate_symbol_resolves_the_now_unique_name(tmp_path, index_project):
+    write(tmp_path, "a.py", "def helper():\n    return 1\n")
+    write(tmp_path, "b.py", "def helper():\n    return 2\n")
+    write(tmp_path, "c.py", "def main():\n    return helper()\n")
+    store, result, _ = index_project(tmp_path)
+    assert result.state == "hoan_tat"
+    (tmp_path / "b.py").unlink()
+    refresh_project(store, tmp_path)
+    assert_same_as_full_index(store, tmp_path, index_project, "xoá ký hiệu trùng")
+
+
+def test_adding_a_dart_mixin_links_the_existing_with_clause(tmp_path, index_project):
+    write(tmp_path, "pubspec.yaml", "name: m\n")
+    write(tmp_path, "lib/a.dart", "class A with Walker {}\n")
+    store, result, _ = index_project(tmp_path)
+    assert result.state == "hoan_tat"
+    write(tmp_path, "lib/walker.dart", "mixin Walker {}\n")
+    refresh_project(store, tmp_path)
+    assert_same_as_full_index(store, tmp_path, index_project, "thêm mixin")
+
+
+def test_same_second_rewrite_after_indexing_is_detected_later(tmp_path, index_project, monkeypatch):
+    import types
+    src = tmp_path / "a.py"
+    src.write_text("def old():\n    return 1\n", encoding="utf-8")
+    store, result, _ = index_project(tmp_path)  # băm ngay sau khi ghi
+    assert result.state == "hoan_tat"
+    st = src.stat()
+    src.write_text("def new():\n    return 1\n", encoding="utf-8")  # cùng cỡ, cùng giây (formatter, checkout + hook)
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns))
+    real = time.time
+    monkeypatch.setattr(refresh_mod, "time", types.SimpleNamespace(time=lambda: real() + 100))  # refresh chạy lâu sau đó
+    assert refresh_project(store, tmp_path).changed == 1
