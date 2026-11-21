@@ -41,19 +41,23 @@ export function Icon({ name, size = 20 }: { name: IconName; size?: number }) {
   )
 }
 
-/** Dấu hiệu NexGraph: đồ thị tri thức tạo hình chữ N (Nexus + Graph). */
+/** Dấu hiệu NexGraph: bốn nút đồ thị nối thành chữ N, nút Nexus ở giữa (cùng hình với biểu tượng app, design/logo). */
 export function Logo({ size = 22 }: { size?: number }) {
   return (
     <svg className="logo" viewBox="0 0 24 24" width={size} height={size} aria-hidden="true">
-      <path d="M6 18V6l12 12V6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity=".4" />
-      <path d="M6 6l6-3 6 3M6 18l6 3 6-3" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" opacity=".25" />
-      <circle cx="6" cy="18" r="2.2" fill="var(--teal)" />
-      <circle cx="6" cy="6" r="2.4" fill="var(--blue)" />
-      <circle cx="18" cy="18" r="2.4" fill="var(--magenta)" />
-      <circle cx="18" cy="6" r="2.2" fill="var(--amber)" />
-      <circle cx="12" cy="12" r="2.6" fill="var(--violet)" />
-      <circle cx="12" cy="3" r="1.3" fill="var(--violet)" />
-      <circle cx="12" cy="21" r="1.3" fill="var(--green)" />
+      <rect width="24" height="24" rx="6" fill="#1b2260" />
+      <g fill="none" strokeWidth="2.4">
+        <path d="M8 14.5v-5" stroke="#30a8db" />
+        <path d="M9.33 9l5.34 6" stroke="#8b5cf6" />
+        <path d="M16 14.5v-5" stroke="#e44fc9" />
+      </g>
+      <g fill="none" strokeWidth="1.3">
+        <circle cx="8" cy="16.5" r="2" stroke="#1fc7b6" />
+        <circle cx="8" cy="7.5" r="2" stroke="#4a6cff" />
+        <circle cx="16" cy="16.5" r="2" stroke="#c04df2" />
+        <circle cx="16" cy="7.5" r="2" stroke="#ff4fa3" />
+      </g>
+      <circle cx="12" cy="12" r="1.15" fill="#fff" />
     </svg>
   )
 }
