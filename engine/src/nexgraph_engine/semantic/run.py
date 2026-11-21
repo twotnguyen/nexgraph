@@ -5,9 +5,12 @@ transaction cùng dòng cache, sau khi đã xem cờ huỷ: huỷ giữa chừng
 """
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field
+
+from graphify.llm import _LLM_JSON_MAX_BYTES
 
 from nexgraph_engine.index.jobs import TaskCancelled, TaskContext
 from nexgraph_engine.schema.db import open_graph_db
@@ -23,10 +26,11 @@ class Request:
     target: str
     budget: int
     prs: list[dict] = field(default_factory=list)
+    no_cache: bool = False  # chạy lại: vẫn ghi cache mới nhưng không đọc cache cũ
 
 
-def estimate(chunks: list[Chunk], store: GraphStore) -> dict:
-    todo = [c for c in chunks if cache.get(store.conn, c.key) is None]
+def estimate(chunks: list[Chunk], store: GraphStore, *, no_cache: bool = False) -> dict:
+    todo = [c for c in chunks if no_cache or cache.get(store.conn, c.key) is None]
     return {"files": sorted({f for c in chunks for f in c.files}), "chunks": len(chunks),
             "cached_chunks": len(chunks) - len(todo), "input_tokens": sum(c.input_tokens for c in todo),
             "output_tokens": sum(c.output_tokens for c in todo)}
@@ -45,11 +49,40 @@ def _apply(store: GraphStore, req: Request, chunk: Chunk, value, result: dict) -
 
 
 def _parse(req: Request, chunk: Chunk, text: str):
-    if req.target == "labels":
-        return ingest.parse_labels(text, list(chunk.meta))
-    if req.target == "pr_triage":
-        return ingest.parse_triage(text, chunk.meta["numbers"])
-    return ingest.parse_fragment(text)
+    """Mọi lỗi khi đọc kết quả (kể cả JSON lồng quá sâu → RecursionError, MemoryError) chỉ làm hỏng khối này."""
+    if len(text) > _LLM_JSON_MAX_BYTES:
+        raise ChunkError("Kết quả của model quá lớn")
+    try:
+        if req.target == "labels":
+            return ingest.parse_labels(text, list(chunk.meta))
+        if req.target == "pr_triage":
+            return ingest.parse_triage(text, chunk.meta["numbers"])
+        return ingest.parse_fragment(text)
+    except ChunkError:
+        raise
+    except (Exception, RecursionError, MemoryError) as exc:  # noqa: BLE001 — đầu ra của model là dữ liệu không tin cậy
+        raise ChunkError(f"Không đọc được kết quả của model ({type(exc).__name__})") from None
+
+
+def _complete(transport: DirectTransport, chunk: Chunk, cancel: threading.Event) -> tuple[str, int, int]:
+    """Gọi model trong luồng riêng, xem cờ huỷ mỗi 0,5 s: huỷ thì bỏ kết quả, không chờ hết timeout HTTP."""
+    box: dict = {}
+
+    def call() -> None:
+        try:
+            box["ok"] = transport.complete(chunk)
+        except BaseException as exc:  # noqa: BLE001 — chuyển lỗi về luồng job
+            box["err"] = exc
+
+    thread = threading.Thread(target=call, daemon=True, name=f"semantic-{chunk.id}")
+    thread.start()
+    while thread.is_alive():
+        thread.join(0.5)
+        if cancel.is_set():
+            raise TaskCancelled
+    if "err" in box:
+        raise box["err"]
+    return box["ok"]
 
 
 def make_work(*, graph_db, src: Sources, req: Request, transport: DirectTransport | LlmQueue,
@@ -75,7 +108,7 @@ def make_work(*, graph_db, src: Sources, req: Request, transport: DirectTranspor
                 for chunk in chunks:
                     if ctx.cancel.is_set():
                         raise TaskCancelled
-                    hit = cache.get(conn, chunk.key)
+                    hit = None if req.no_cache else cache.get(conn, chunk.key)
                     if hit is not None:
                         with conn:
                             _apply(store, req, chunk, hit, result)
@@ -125,7 +158,7 @@ def make_work(*, graph_db, src: Sources, req: Request, transport: DirectTranspor
                             raise TaskCancelled
                         stats["sent"] += 1
                         try:
-                            text, used_in, used_out = transport.complete(chunk)
+                            text, used_in, used_out = _complete(transport, chunk, ctx.cancel)
                         except ChunkError as exc:
                             handle(chunk, None, str(exc))
                             continue
