@@ -10,6 +10,7 @@ import { toIpcResult } from './ipc-result'
 import { FsError, fsHandlers, isProtectedRel, isWithin, projectRoot } from './fs/project-fs'
 import { AgentFileScope } from './agent/file-scope'
 import { GENERATED_DIRS, replaceText, searchText } from './search/text-search'
+import { LspManager } from './lsp/manager'
 import { AgentError, AgentService } from './agent/session'
 import { AccountService } from './agent/accounts'
 import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentExecutionSettings, AgentRunLimits, AgentPromptOptions, AgentEditorState } from '../shared/agent-types'
@@ -52,6 +53,9 @@ export const closeAllAgents = (): void => {
 }
 
 export const stopAllMcpHttp = (): Promise<void> => mcpHttp?.stopAll() ?? Promise.resolve()
+/** Language server cho editor; khởi động khi mở tệp TS/JS/Python đầu tiên. */
+const lsp = new LspManager()
+export const stopAllLanguageServers = (): void => lsp.stopAll()
 
 function readJson(file: string): Record<string, string> {
   try {
@@ -197,6 +201,16 @@ export function registerIpc(
   on('fs:search-text', async (pid: string, query: TextSearchQuery) => searchText(await rootOf(pid), query))
   on('fs:replace-text', async (pid: string, query: TextSearchQuery, replacement: string, files: string[]) =>
     replaceText(await rootOf(pid), query, String(replacement ?? ''), Array.isArray(files) ? files.filter((f) => typeof f === 'string') : []))
+  // Language server cho editor: tệp phải nằm trong dự án (resolveInside), dòng/cột từ Monaco (tính từ 1) đổi sang LSP (từ 0).
+  const lspArgs = (text: unknown, line: unknown, column: unknown): [string, number, number] => {
+    if (typeof text !== 'string' || !Number.isInteger(line) || !Number.isInteger(column)) throw new FsError('bad_param', 'Tham số language server không hợp lệ')
+    return [text, Number(line) - 1, Number(column) - 1]
+  }
+  on('lsp:definition', async (pid: string, file: string, text: string, line: number, column: number) => lsp.definition(await rootOf(pid), file, ...lspArgs(text, line, column)))
+  on('lsp:completion', async (pid: string, file: string, text: string, line: number, column: number) => lsp.completion(await rootOf(pid), file, ...lspArgs(text, line, column)))
+  on('lsp:hover', async (pid: string, file: string, text: string, line: number, column: number) => lsp.hover(await rootOf(pid), file, ...lspArgs(text, line, column)))
+  on('lsp:close', async (pid: string, file: string) => lsp.close(await rootOf(pid), file))
+  on('lsp:open', async (pid: string, file: string, text: string) => lsp.open(await rootOf(pid), file, lspArgs(text, 1, 1)[0]))
   on('fs:write', async (pid: string, relPath: string, text: string, opts: WriteOpts) => {
     const version = opts?.expectedVersion
     if (version !== null && (typeof version !== 'string' || !version)) {

@@ -669,9 +669,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           )}
           {files.map((f) => (
             <EditorTab key={f.file} projectId={project.project_id} file={f.file} line={f.line} lineEnd={f.lineEnd} revealRequest={f.seq} active={tab === `file:${f.file}`}
-              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => setSide(f.file)} />
+              onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => setSide(f.file)} onOpenFile={openCode} />
           ))}
-          {sideShown && <SplitEditor key={side} file={side} onClose={() => setSide(null)} />}
+          {sideShown && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
           {feedback && (
             <div className="ws-feedback">

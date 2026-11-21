@@ -8,7 +8,7 @@ import { useVimMode } from '../../state/editorPrefs'
  * Khung phải khi chia đôi (⌘\): thêm một view trên cùng model của tệp đã mở, như split pane của Wu.
  * Sửa ở đây là sửa cùng bộ đệm với thẻ tệp; lưu bằng ⌘S khi tiêu điểm ở khung này (EditorTab nhận qua data-mirror-file).
  */
-export function SplitEditor({ file, onClose }: { file: string; onClose: () => void }) {
+export function SplitEditor({ projectId, file, onClose }: { projectId: string; file: string; onClose: () => void }) {
   const host = useRef<HTMLDivElement>(null)
   const [missing, setMissing] = useState(false)
   const vim = useVimMode()
@@ -23,7 +23,7 @@ export function SplitEditor({ file, onClose }: { file: string; onClose: () => vo
     // Thẻ tệp có thể chưa nạp xong model: thử lại vài lần.
     const attach = () => {
       if (!host.current) return
-      mirror.current = createMirror(host.current, file)
+      mirror.current = createMirror(host.current, file, projectId)
       if (mirror.current) {
         setMissing(false)
         mirror.current.onDisposeModel(() => closeRef.current())
@@ -36,7 +36,7 @@ export function SplitEditor({ file, onClose }: { file: string; onClose: () => vo
       mirror.current?.dispose()
       mirror.current = null
     }
-  }, [file])
+  }, [file, projectId])
 
   useEffect(() => { mirror.current?.setVim(vim ? vimNode : null) }, [vim, vimNode, missing])
 

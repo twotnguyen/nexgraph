@@ -13,6 +13,9 @@ import { GeminiSessions } from '../../../../main/gemini/sessions'
 import { emptyGeminiStatus, installNexgraph } from '../../test-utils'
 import { AgentPanel } from './AgentPanel'
 
+// jsdom không chạy được Monaco (thiếu matchMedia khi nạp phần gợi ý/hover).
+vi.mock('../editor/monaco', () => ({ languageFor: () => 'plaintext', createEditor: vi.fn(), createDiffEditor: vi.fn(() => ({ dispose() {} })) }))
+
 const directories: string[] = []
 const services: GeminiAgentService[] = []
 afterEach(() => {

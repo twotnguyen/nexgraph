@@ -46,6 +46,10 @@ export type TextSearchQuery = { query: string; regex?: boolean; caseSensitive?: 
 export type TextSearchMatch = { line: number; column: number; length: number; preview: string; previewStart: number }
 export type TextSearchResult = { files: { file: string; matches: TextSearchMatch[] }[]; truncated: boolean }
 export type TextReplaceResult = { files: number; replacements: number; skipped: string[] }
+/** Kết quả language server: dòng/cột tính từ 1 như Monaco. */
+export type LspLocation = { file: string; line: number; column: number }
+/** `kind`: CompletionItemKind của LSP (1–25). */
+export type LspCompletionItem = { label: string; kind: number; detail?: string; insertText: string; sortText?: string; filterText?: string }
 
 export type HostCommand = { name: string; arg?: unknown }
 
@@ -129,6 +133,14 @@ export interface NexGraphApi {
     searchText?(projectId: string, query: TextSearchQuery): Promise<TextSearchResult>
     /** Thay mọi chỗ khớp trong các tệp `files`; tệp đổi giữa chừng nằm trong `skipped`. */
     replaceText?(projectId: string, query: TextSearchQuery, replacement: string, files: string[]): Promise<TextReplaceResult>
+  }
+  /** Language server (TypeScript/JavaScript, Python) cho editor; mỗi yêu cầu gửi kèm nội dung hiện tại của tệp. */
+  lsp?: {
+    definition(projectId: string, file: string, text: string, line: number, column: number): Promise<LspLocation[]>
+    completion(projectId: string, file: string, text: string, line: number, column: number): Promise<LspCompletionItem[]>
+    hover(projectId: string, file: string, text: string, line: number, column: number): Promise<string | null>
+    close(projectId: string, file: string): Promise<void>
+    open(projectId: string, file: string, text: string): Promise<void>
   }
   exporter: {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */

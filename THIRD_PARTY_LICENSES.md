@@ -139,6 +139,27 @@ SOFTWARE.
 - Giấy phép: MIT, Copyright (c) 2017-2026 Haydn Paterson.
 - Dùng ở: `apps/desktop/src/main/agent/extension.ts` — bọc JSON Schema của tool đồ thị thành tham số tool của pi.
 
+## monaco-vim
+
+- Nguồn: https://github.com/brijeshb42/monaco-vim
+- Phiên bản: `0.4.4` (gói npm, dùng qua API công khai `initVimMode`, không chép mã)
+- Giấy phép: MIT, Copyright (c) 2018 Brijesh Bittu; phần keymap Vim lấy từ CodeMirror (MIT). Bản đầy đủ trong gói (`LICENSE`, `LICENSE.codemirror.txt`).
+- Dùng ở: `apps/desktop/src/renderer/src/components/editor/monaco.ts` — chế độ Vim của editor.
+
+## typescript-language-server và TypeScript
+
+- Nguồn: https://github.com/typescript-language-server/typescript-language-server, https://github.com/microsoft/TypeScript
+- Phiên bản: `6.1.0` và `5.9.3` (chạy thành tiến trình con, không sửa mã)
+- Giấy phép: Apache-2.0 (typescript-language-server: Copyright (c) TypeFox và các tác giả; TypeScript: Copyright (c) Microsoft Corporation).
+- Dùng ở: `apps/desktop/src/main/lsp/manager.ts` — định nghĩa, gợi ý, hover cho tệp TS/JS trong editor.
+
+## Pyright
+
+- Nguồn: https://github.com/microsoft/pyright
+- Phiên bản: `1.1.414` (chạy `pyright-langserver` thành tiến trình con, không sửa mã)
+- Giấy phép: MIT, Copyright (c) Microsoft Corporation.
+- Dùng ở: `apps/desktop/src/main/lsp/manager.ts` — định nghĩa, gợi ý, hover cho tệp Python trong editor.
+
 
 ## react-markdown
 

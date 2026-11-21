@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
   dialog: { showMessageBoxSync: vi.fn() }, ipcMain: { handle: vi.fn() }, shell: { openExternal: h.externalOpen }
 }))
 vi.mock('../src/main/ipc', () => ({
-  registerIpc: vi.fn(), closeAllAgents: h.closeAgents, stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp
+  registerIpc: vi.fn(), closeAllAgents: h.closeAgents, stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopAllLanguageServers: vi.fn()
 }))
 vi.mock('../src/main/engine/supervisor', () => ({ EngineSupervisor: class {
   startEngine = vi.fn(async () => {})

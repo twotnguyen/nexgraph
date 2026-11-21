@@ -5,6 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../../test-utils'
 import { AgentPanel } from './AgentPanel'
 
+// jsdom không chạy được Monaco (thiếu matchMedia khi nạp phần gợi ý/hover).
+vi.mock('../editor/monaco', () => ({ languageFor: () => 'plaintext', createEditor: vi.fn(), createDiffEditor: vi.fn(() => ({ dispose() {} })) }))
+
 const settings = { runtime: 'antigravity-cli' as const, provider: 'google-antigravity', baseUrl: '', model: 'auto', connectionId: 'google-account-a', hasKey: false }
 const target = { runtime: 'antigravity-cli' as const, provider: 'google-antigravity', connectionId: 'google-account-a' }
 const props = { projectId: 'p1', projectName: 'Cửa hàng', onOpenCode: vi.fn(), onHighlight: vi.fn(), onOpenSettings: vi.fn() }

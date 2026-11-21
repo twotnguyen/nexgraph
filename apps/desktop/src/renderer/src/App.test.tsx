@@ -6,6 +6,9 @@ import type { ScanInfo } from '@shared/graph-types'
 import { installNexgraph, progress, project } from './test-utils'
 import App from './App'
 
+// jsdom không chạy được Monaco (thiếu matchMedia khi nạp phần gợi ý/hover); test này không mở editor.
+vi.mock('./components/editor/monaco', () => ({ languageFor: () => 'plaintext', createEditor: vi.fn(), createDiffEditor: vi.fn(), createMirror: () => null }))
+
 const small: ScanInfo = { files: 120, by_language: { dart: 120 }, large: false, threshold: 5000, top_dirs: [] }
 const large: ScanInfo = {
   files: 9000, by_language: { dart: 9000 }, large: true, threshold: 5000,

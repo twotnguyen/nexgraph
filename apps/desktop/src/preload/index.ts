@@ -86,6 +86,13 @@ const api: NexGraphApi = {
     searchText: (pid, query) => call('fs:search-text', pid, query),
     replaceText: (pid, query, replacement, files) => call('fs:replace-text', pid, query, replacement, files)
   },
+  lsp: {
+    definition: (pid, file, text, line, column) => call('lsp:definition', pid, file, text, line, column),
+    completion: (pid, file, text, line, column) => call('lsp:completion', pid, file, text, line, column),
+    hover: (pid, file, text, line, column) => call('lsp:hover', pid, file, text, line, column),
+    close: (pid, file) => call('lsp:close', pid, file),
+    open: (pid, file, text) => call('lsp:open', pid, file, text)
+  },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),
     run: (pid, format, scope) => call('export:run', pid, format, scope),

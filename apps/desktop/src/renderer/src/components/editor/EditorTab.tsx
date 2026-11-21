@@ -25,6 +25,8 @@ interface Props {
   active?: boolean
   /** Mở tệp này ở khung phải (chia đôi, cùng bộ đệm). */
   onSplit?: () => void
+  /** F12 / ⌘-click sang tệp khác trong dự án. */
+  onOpenFile?: (file: string, line: number) => void
 }
 
 type OpenFile = { editor: EditorHandle; base: FileContent }
@@ -44,13 +46,15 @@ function explain(e: { code?: string; message?: string }): string {
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit }: Props) {
+export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
   const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void } | null>(null)
   const dirty = useRef(false)
   const contextCallback = useRef(onContextReady)
   contextCallback.current = onContextReady
+  const openFileRef = useRef(onOpenFile)
+  openFileRef.current = onOpenFile
   const [readOnly, setReadOnly] = useState<FileContent['reason'] | boolean>(false)
   const [error, setError] = useState<string | null>(null)
   const [conflict, setConflict] = useState<Conflict | null>(null)
@@ -232,7 +236,8 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
     })
     fs.read(projectId, file).then((c) => {
       if (!alive || !host.current) return
-      const ed = createEditor(host.current, { value: c.text, language, readOnly: c.readOnly, path: file })
+      const ed = createEditor(host.current, { value: c.text, language, readOnly: c.readOnly, path: file, projectId, onOpenFile: (target, at) => openFileRef.current?.(target, at) })
+      void window.nexgraph.lsp?.open(projectId, file, c.text).catch(() => {})
       open = { editor: ed, base: c }
       editor.current = ed
       ed.onChange(updateDirty)
@@ -257,6 +262,7 @@ export function EditorTab({ projectId, file, line, lineEnd, revealRequest, onClo
       actions.current = null
       contextCallback.current?.(file, null)
       editor.current?.dispose()
+      void window.nexgraph.lsp?.close(projectId, file).catch(() => {})
       editor.current = null
       setDirty(false)
     }

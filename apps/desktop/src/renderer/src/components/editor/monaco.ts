@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 /// <reference path="./monaco-json.d.ts" />
-// Gói tối thiểu: lõi soạn thảo + vài tính năng soạn thảo + tô cú pháp Monarch (không worker ngôn ngữ, không LSP).
+// Gói tối thiểu: lõi soạn thảo + vài tính năng soạn thảo + tô cú pháp Monarch; định nghĩa/gợi ý/hover lấy từ language server ở main (lsp:*).
 import * as monaco from 'monaco-editor/editor/editor.api.js'
 import 'monaco-editor/editor/contrib/find/browser/findController.js'
 import 'monaco-editor/editor/contrib/comment/browser/comment.js'
@@ -11,6 +11,10 @@ import 'monaco-editor/editor/contrib/bracketMatching/browser/bracketMatching.js'
 import 'monaco-editor/editor/contrib/wordOperations/browser/wordOperations.js'
 import 'monaco-editor/editor/contrib/clipboard/browser/clipboard.js'
 import 'monaco-editor/editor/contrib/contextmenu/browser/contextmenu.js'
+import 'monaco-editor/editor/contrib/gotoSymbol/browser/goToCommands.js'
+import 'monaco-editor/editor/contrib/gotoSymbol/browser/link/goToDefinitionAtPosition.js'
+import 'monaco-editor/editor/contrib/suggest/browser/suggestController.js'
+import 'monaco-editor/editor/contrib/hover/browser/hoverContribution.js'
 // Chỉ đăng ký Monarch cho các ngôn ngữ cần dùng; mỗi register là chunk nhỏ nạp riêng.
 import 'monaco-editor/languages/definitions/typescript/register.js'
 import 'monaco-editor/languages/definitions/javascript/register.js'
@@ -91,7 +95,62 @@ export interface EditorHandle {
   dispose(): void
 }
 
-const modelUri = (path: string) => monaco.Uri.from({ scheme: 'nexgraph', path: `/${path}` })
+const modelUri = (path: string, projectId = '') => monaco.Uri.from({ scheme: 'nexgraph', authority: encodeURIComponent(projectId), path: `/${path}` })
+const fromUri = (uri: monaco.Uri) => ({ projectId: decodeURIComponent(uri.authority), file: uri.path.slice(1) })
+
+// Mở tệp khác khi F12 / ⌘-click trỏ sang tệp đó: mỗi editor giao cho chỗ đã tạo nó (thẻ tệp mở thẻ mới đúng dòng).
+const openers = new WeakMap<monaco.editor.ICodeEditor, (file: string, line: number) => void>()
+// Gỡ khi HMR nạp lại module, nếu không mỗi lần sửa mã nguồn lại thêm một bộ provider (gợi ý trùng).
+const registrations: monaco.IDisposable[] = []
+import.meta.hot?.dispose(() => registrations.forEach((item) => item.dispose()))
+registrations.push(monaco.editor.registerEditorOpener({
+  openCodeEditor: (source, resource, selection) => {
+    const open = openers.get(source)
+    if (resource.scheme !== 'nexgraph' || !open) return false
+    const line = selection && 'startLineNumber' in selection ? selection.startLineNumber : selection?.lineNumber ?? 1
+    open(fromUri(resource).file, line)
+    return true
+  }
+}))
+
+// CompletionItemKind của LSP (1–25) → của Monaco, theo tên.
+const K = monaco.languages.CompletionItemKind
+const LSP_KIND = [K.Text, K.Text, K.Method, K.Function, K.Constructor, K.Field, K.Variable, K.Class, K.Interface, K.Module, K.Property, K.Unit,
+  K.Value, K.Enum, K.Keyword, K.Snippet, K.Color, K.File, K.Reference, K.Folder, K.EnumMember, K.Constant, K.Struct, K.Event, K.Operator, K.TypeParameter]
+const lspOf = (model: monaco.editor.ITextModel) => {
+  const api = window.nexgraph?.lsp
+  if (!api || model.uri.scheme !== 'nexgraph' || !model.uri.authority) return null
+  const { projectId, file } = fromUri(model.uri)
+  return { api, projectId, file, text: model.getValue(monaco.editor.EndOfLinePreference.LF) }
+}
+for (const language of ['typescript', 'javascript', 'python']) {
+  registrations.push(monaco.languages.registerDefinitionProvider(language, {
+    provideDefinition: async (model, position) => {
+      const lsp = lspOf(model)
+      if (!lsp) return null
+      const found = await lsp.api.definition(lsp.projectId, lsp.file, lsp.text, position.lineNumber, position.column).catch(() => [])
+      return found.map((loc) => ({ uri: modelUri(loc.file, lsp.projectId), range: new monaco.Range(loc.line, loc.column, loc.line, loc.column) }))
+    }
+  }))
+  registrations.push(monaco.languages.registerHoverProvider(language, {
+    provideHover: async (model, position) => {
+      const lsp = lspOf(model)
+      const text = lsp && await lsp.api.hover(lsp.projectId, lsp.file, lsp.text, position.lineNumber, position.column).catch(() => null)
+      return text ? { contents: [{ value: text }] } : null
+    }
+  }))
+  registrations.push(monaco.languages.registerCompletionItemProvider(language, {
+    triggerCharacters: ['.', '"', "'", '/', '@', '<'],
+    provideCompletionItems: async (model, position) => {
+      const lsp = lspOf(model)
+      if (!lsp) return { suggestions: [] }
+      const items = await lsp.api.completion(lsp.projectId, lsp.file, lsp.text, position.lineNumber, position.column).catch(() => [])
+      const word = model.getWordUntilPosition(position)
+      const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn)
+      return { suggestions: items.map((item) => ({ label: item.label, kind: LSP_KIND[item.kind] ?? K.Text, detail: item.detail, insertText: item.insertText, sortText: item.sortText, filterText: item.filterText, range })) }
+    }
+  }))
+}
 
 /** Nạp monaco-vim khi cần; trả về hàm bật/tắt. */
 function vimAttacher(editor: monaco.editor.IStandaloneCodeEditor): (status: HTMLElement | null) => void {
@@ -117,11 +176,11 @@ export function languageFor(file: string): string {
   return hit?.id ?? 'plaintext'
 }
 
-/** `path`: model gắn với đường dẫn tệp để khung chia đôi (createMirror) dùng chung cùng bộ đệm và undo. */
-export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean; path?: string }): EditorHandle {
+/** `path`: model gắn với đường dẫn tệp để khung chia đôi (createMirror) dùng chung bộ đệm; có `projectId` thì F12/gợi ý/hover hỏi language server. */
+export function createEditor(el: HTMLElement, opts: { value: string; language: string; readOnly: boolean; path?: string; projectId?: string; onOpenFile?: (file: string, line: number) => void }): EditorHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
-  if (opts.path) monaco.editor.getModel(modelUri(opts.path))?.dispose()
-  const model = opts.path ? monaco.editor.createModel(opts.value, opts.language, modelUri(opts.path)) : undefined
+  if (opts.path) monaco.editor.getModel(modelUri(opts.path, opts.projectId))?.dispose()
+  const model = opts.path ? monaco.editor.createModel(opts.value, opts.language, modelUri(opts.path, opts.projectId)) : undefined
   const editor = monaco.editor.create(el, {
     ...(model ? { model } : { value: opts.value, language: opts.language }), readOnly: opts.readOnly, theme: editorTheme(),
     automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, fontSize: 12,
@@ -129,6 +188,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
   })
   const hit = editor.createDecorationsCollection()
   const setVim = vimAttacher(editor)
+  if (opts.onOpenFile) openers.set(editor, opts.onOpenFile)
   return {
     getValue: () => editor.getValue({ lineEnding: '\n', preserveBOM: false }),
     getSelection: () => {
@@ -167,8 +227,8 @@ export interface MirrorHandle {
 }
 
 /** Khung thứ hai trên cùng model của một tệp đang mở (chia đôi kiểu Wu); null nếu tệp chưa nạp xong. */
-export function createMirror(el: HTMLElement, path: string): MirrorHandle | null {
-  const model = monaco.editor.getModel(modelUri(path))
+export function createMirror(el: HTMLElement, path: string, projectId?: string): MirrorHandle | null {
+  const model = monaco.editor.getModel(modelUri(path, projectId))
   if (!model) return null
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const editor = monaco.editor.create(el, {
