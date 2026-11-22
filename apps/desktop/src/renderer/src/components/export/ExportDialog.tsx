@@ -79,7 +79,7 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
         await nextFrame()
         const r = document.querySelector('.canvas-wrap')?.getBoundingClientRect()
         const rect = r ? { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) } : undefined
-        const path = await window.nexgraph.exporter.png(rect)
+        const path = await window.nexgraph.exporter.png(projectId, rect)
         return path ? { kind: 'files', files: [path], truncated: false } : null
       } finally {
         setCapturing(false)

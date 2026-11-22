@@ -78,7 +78,7 @@ function open(role: 'host' | 'guest'): Live {
       send(frame(UPDATE, Y.encodeStateAsUpdate(doc)))
       send(frame(AWARENESS, encodeAwarenessUpdate(awareness, [...awareness.getStates().keys()])))
     } else if (event.type === 'peers') patch({ peers: event.count })
-    else if (event.type === 'closed') { close(); patch({ error: tr('Máy chia sẻ đã dừng phiên') }) }
+    else if (event.type === 'closed') { const tooMany = event.reason === 'too_many_failures'; close(); patch({ error: tooMany ? tr('Phiên chia sẻ đã dừng vì có quá nhiều lần nhập sai mã') : tr('Máy chia sẻ đã dừng phiên') }) }
   }) ?? (() => {})
   live = { doc, awareness, off, unbind: null, style }
   return live
