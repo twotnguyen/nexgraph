@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,38 @@ def safe_name(name: str) -> str:
     return cleaned or "nexgraph"
 
 
+def _reserve(candidate: Path, directory: bool) -> bool:
+    """Giữ chỗ nguyên tử để hai lần xuất song song không chọn trùng tên."""
+    try:
+        if directory:
+            candidate.mkdir()
+        else:
+            os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        return True
+    except FileExistsError:
+        return False
+
+
+def unique_target(target: Path, *, directory: bool = False) -> Path:
+    """Tên đích chưa tồn tại: thêm `-2`, `-3`… thay vì ghi đè tệp người dùng đã có (GFY-09)."""
+    stem, suffix = (target.name, "") if directory else (target.stem, target.suffix)
+    for index in range(1, 1001):
+        candidate = target if index == 1 else target.with_name(f"{stem}-{index}{suffix}")
+        if _reserve(candidate, directory):
+            return candidate
+    raise OSError(f"Không tìm được tên trống cho {target.name}")
+
+
+def _discard(target: Path, directory: bool) -> None:
+    try:
+        if directory:
+            shutil.rmtree(target, ignore_errors=True)
+        else:
+            target.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def validate_push_uri(uri: str) -> str:
     """Trả scheme hợp lệ của URI đẩy; ném ValueError cho mọi scheme khác (kể cả thiếu scheme)."""
     scheme = urlsplit(uri).scheme.lower()
@@ -46,7 +79,17 @@ def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Pa
     from graphify import export as gx
     if fmt not in FORMATS:
         raise ValueError(f"Định dạng không hỗ trợ: {fmt}")
-    target = Path(out_dir) / _TARGETS[fmt].format(p=safe_name(project_name))
+    directory = fmt in ("obsidian", "wiki")
+    # Tệp/thư mục đã tồn tại thì chọn tên mới, không ghi đè lặng lẽ (GFY-09).
+    target = unique_target(Path(out_dir) / _TARGETS[fmt].format(p=safe_name(project_name)), directory=directory)
+    try:
+        return _write(store, fmt, scope, target, project_name, gx)
+    except BaseException:
+        _discard(target, directory)  # không để lại tệp giữ chỗ rỗng khi lần xuất hỏng
+        raise
+
+
+def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, project_name: str, gx) -> ExportResult:
     bg = build_nx(store, scope)
     if fmt == "markdown":
         from nexgraph_engine.report.build import render_report_markdown
@@ -64,7 +107,6 @@ def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Pa
             write_graph_json(bg, graph)
             write_callflow_html(None, graph=graph, output=target, lang="en")
     elif fmt == "obsidian":
-        target.mkdir(exist_ok=True)
         gx.to_obsidian(bg.G, bg.communities, str(target), community_labels=bg.labels, cohesion=bg.cohesion)
         gx.to_canvas(bg.G, bg.communities, str(target / "graph.canvas"), community_labels=bg.labels)
     elif fmt == "wiki":

@@ -90,6 +90,8 @@ def export_global(members: list[Member], cross: list[dict], out_dir: Path) -> di
     from graphify.paths import write_json_atomic
     from networkx.readwrite import json_graph
 
+    from nexgraph_engine.export.run import unique_target
+
     tags = _tags(members)
     merged, offset, truncated = nx.Graph(), 0, False
     for m in members:
@@ -113,7 +115,12 @@ def export_global(members: list[Member], cross: list[dict], out_dir: Path) -> di
     for link in data["links"]:
         link["source"], link["target"] = link.pop("_src", link["source"]), link.pop("_tgt", link["target"])
     data["hyperedges"] = []
-    target = Path(out_dir) / GLOBAL_EXPORT_NAME
-    write_json_atomic(target, data, compact=True)
+    # Tệp cũ của người dùng không bị ghi đè: chọn tên mới khi đã tồn tại (GFY-09).
+    target = unique_target(Path(out_dir) / GLOBAL_EXPORT_NAME)
+    try:
+        write_json_atomic(target, data, compact=True)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
     return {"files": [str(target)], "nodes": merged.number_of_nodes(), "edges": merged.number_of_edges(),
             "truncated": truncated}

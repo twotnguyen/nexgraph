@@ -1,6 +1,7 @@
 import json
 import shutil
 import time
+from pathlib import Path
 
 from nexgraph_engine.global_graph.store import GlobalStore
 
@@ -160,3 +161,15 @@ def test_removing_project_from_app_leaves_the_group(api, copy_fixture):
     assert api.delete(f"/v1/projects/{lib}").status_code == 200
     assert [m["project_id"] for m in api.get("/v1/global/projects").json()] == [app]
     assert GlobalStore(api.app.state.services.data_dir).edges() == []
+
+
+def test_global_export_twice_does_not_overwrite(api, copy_fixture, tmp_path):
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    out = tmp_path / "out"
+    out.mkdir()
+    first = api.post("/v1/global/export", json={"out_dir": str(out)}).json()["files"][0]
+    Path(first).write_text("nguoi dung da sua", encoding="utf-8")
+    second = api.post("/v1/global/export", json={"out_dir": str(out)}).json()["files"][0]
+    assert second != first and Path(second).is_file()
+    assert Path(first).read_text(encoding="utf-8") == "nguoi dung da sua"

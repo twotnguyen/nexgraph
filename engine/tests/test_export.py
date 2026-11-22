@@ -155,3 +155,20 @@ def test_export_route_unexpected_error_is_json(api, copy_fixture, tmp_path, monk
     monkeypatch.setattr(routes, "export_graph", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     r = api.post(f"/v1/projects/{pid}/export", json={"format": "svg", "scope": {"kind": "all"}, "out_dir": str(tmp_path)})
     assert r.status_code == 500 and r.json()["error"]["code"] == "export_failed" and "boom" in r.json()["error"]["message"]
+
+
+def test_export_twice_does_not_overwrite_the_first_file(index_project, copy_fixture, tmp_path):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    first = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    first.write_bytes(b"nguoi dung da sua")
+    second = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    assert second != first and second.is_file() and second.stat().st_size > 0
+    assert first.read_bytes() == b"nguoi dung da sua"  # không ghi đè im lặng
+
+
+def test_directory_export_twice_keeps_both_dirs(index_project, copy_fixture, tmp_path):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    first = Path(export_graph(store, "wiki", Scope(), tmp_path, "app").files[0])
+    second = Path(export_graph(store, "wiki", Scope(), tmp_path, "app").files[0])
+    assert first != second and first.is_dir() and second.is_dir()
+    assert any(first.iterdir()) and any(second.iterdir())
