@@ -24,7 +24,7 @@ Ký hiệu: ☐ chưa thử · ☑ đạt · ☒ không đạt (ghi lý do).
 | # | graphify | Nơi bấm trên NexGraph | Cách thử, kết quả mong đợi | macOS | Windows | Ghi chú |
 |---|---|---|---|---|---|---|
 | 1.1 | `update` | Trang tổng quan dự án → **Index lại** | Sửa một tệp rồi bấm. Thẻ **Trạng thái graph** cập nhật số tệp · node · cạnh, không báo lỗi. | ☐ | ☐ | |
-| 1.2 | `watch` | Không có công tắc: app tự theo dõi khi workspace của dự án đang mở | Mở workspace (bất kỳ tab nào), thêm một hàm mới vào một tệp rồi lưu. Vài giây sau tìm thấy hàm đó ở **Tìm kiếm**. Đóng workspace thì app ngừng theo dõi. | ☐ | ☐ | |
+| 1.2 | `watch` | Không có công tắc: app tự theo dõi khi workspace của dự án đang mở | Mở workspace (bất kỳ tab nào), thêm một hàm mới vào một tệp rồi lưu. Vài giây sau tìm thấy hàm đó ở **Tìm trong đồ thị**. Đóng workspace thì app ngừng theo dõi. | ☐ | ☐ | |
 | 1.3 | `extract --code-only/--force/--exclude/--max-workers` | **Tuỳ chọn index** | Nhập một dòng vào **Mẫu bỏ qua**, điền **Số tiến trình**, tick **Index lại từ đầu (bỏ bộ nhớ đệm phân tích cú pháp)**, rồi bấm **Index lại với tuỳ chọn này**. Thư mục bị bỏ qua không còn trong tab **Cây**. | ☐ | ☐ | |
 | 1.4 | `.graphifyrc language.*` | Tệp `.graphifyrc` ở gốc dự án | Thêm `language.inc = php` (theo gợi ý trong Tuỳ chọn index) rồi index lại. Tệp `.inc` hiện ngôn ngữ PHP. | ☐ | ☐ | Không có bảng sửa trong app |
 | 1.5 | `extract --mode deep` (đường A) | Thẻ **Phân tích ngữ nghĩa bằng AI** → **Bật AI cho dự án** | Trên `docs_app` (đã bật **Gồm tài liệu**): chọn **Dùng tài khoản AI của ứng dụng (model đang chọn trong Cài đặt)**, tick **Tôi đồng ý gửi tài liệu của dự án này tới nhà cung cấp AI đã chọn**. Chọn **Phân tích sâu tài liệu (thêm quan hệ suy luận)**. Màn ước tính hiện **Tệp sẽ gửi** và số token. Bấm **Đồng ý và chạy**: xong có node/cạnh mang nhãn "Suy luận bởi AI". | ☐ | ☐ | |
@@ -57,13 +57,13 @@ Ký hiệu: ☐ chưa thử · ☑ đạt · ☒ không đạt (ghi lý do).
 | 3.1 | `graph.html` | Tab **Graph** | Mở được. Dự án lớn (trên 2.000 node) được gộp, app không treo. | ☐ | ☐ | |
 | 3.2 | `tree` | Tab **Cây** | Thư mục → tệp → lớp → hàm, **Mở**/**Thu gọn** được. **Mở mã** mở đúng dòng. | ☐ | ☐ | |
 | 3.3 | `GRAPH_REPORT.md` | Tab **Báo cáo** | Có node trung tâm, cộng đồng, kết nối bất ngờ, câu hỏi gợi ý, vòng import, **Độ mới của graph**, **Lỗ hổng tri thức**, **Mức giảm token**. Bấm một câu hỏi gợi ý thì chạy Hỏi graph. | ☐ | ☐ | |
-| 3.4 | `query` | **Tìm kiếm** → chế độ **Hỏi graph** | Hỏi "main calls helper" trên `polyglot`: có **Điểm bắt đầu** và **Xem trên graph**. Hỏi "helper": hiện **Câu hỏi trùng với … node cùng tên ở các tệp khác nhau. Chọn một node:**, không chọn bừa. | ☐ | ☐ | |
+| 3.4 | `query` | **Tìm trong đồ thị** → chế độ **Hỏi graph** | Hỏi "main calls helper" trên `polyglot`: có **Điểm bắt đầu** và **Xem trên graph**. Hỏi "helper": hiện **Câu hỏi trùng với … node cùng tên ở các tệp khác nhau. Chọn một node:**, không chọn bừa. | ☐ | ☐ | |
 | 3.5 | `explain` | Inspector → **Giải thích** | Hiện số liên kết, cụm và láng giềng nhóm theo loại cạnh; phần vượt gom theo tệp. | ☐ | ☐ | |
 | 3.6 | `path` | Chuột phải node → **Tìm đường tới…** | `main` → `helper` cùng ngôn ngữ: **Đường đi 1 bước · tin cậy: …**, đường được tô. Chiều ngược: **Không tìm thấy liên kết trực tiếp trong graph**. | ☐ | ☐ | |
 | 3.7 | `affected` | Chuột phải node → **Vùng ảnh hưởng nếu sửa** | Khung **Ảnh hưởng nếu sửa …** liệt kê và tô các node phụ thuộc, kèm **Test liên quan** nếu có. | ☐ | ☐ | |
 | 3.8 | `god-nodes`, `benchmark` | Tab Báo cáo | Node trung tâm không chứa test. Dòng **Mức giảm token** có số lần giảm. | ☐ | ☐ | |
 | 3.9 | `section` / `get_section` | Inspector node tài liệu → **Đọc mục** | Mục có dòng `api_key = "sk-…"` hiện bản đã che. | ☐ | ☐ | |
-| 3.10 | Tìm kiếm | **Tìm kiếm** → **Tìm symbol** | Gõ tên hàm: kết quả mở đúng `tệp:dòng` trong trình soạn thảo. | ☐ | ☐ | |
+| 3.10 | Tìm kiếm | **Tìm trong đồ thị** → **Tìm symbol** | Gõ tên hàm: kết quả mở đúng `tệp:dòng` trong trình soạn thảo. | ☐ | ☐ | |
 
 *Bảng 3. Checklist §3.3 Xem và truy vấn*
 
