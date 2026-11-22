@@ -1,6 +1,6 @@
 # Cài đặt và chạy NexGraph
 
-Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.1.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản bàn giao](release/README.md). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng.
+Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.2.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản phát hành](release/README.md). Cách chạy test và các nhóm test opt-in ở [hướng dẫn kiểm thử](testing.md). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng.
 
 ## Chạy Electron từ checkout sạch
 
