@@ -5,6 +5,7 @@ import { dirname, extname, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { LspCallHierarchyCall, LspCallHierarchyItem, LspCodeAction, LspCompletionItem, LspDiagnostic, LspDocumentSymbol, LspLocation, LspRange, LspSignatureHelp, LspTextEdit, LspWorkspaceEdit, LspWorkspaceSymbol } from '../../shared/api'
 import { FsError, resolveInside } from '../fs/project-fs'
+import { safeProcessEnv } from '../process-env'
 import { LspConnection } from './connection'
 import { isLspRange, normalizeDiagnostics, normalizeSignatureHelp, normalizeWorkspaceEdit, projectFile } from './protocol'
 
@@ -23,13 +24,17 @@ const localRequire = createRequire(__filename)
 const unpacked = (path: string) => path.replace(`app.asar${sep}`, `app.asar.unpacked${sep}`)
 const pkgDir = (name: string) => unpacked(dirname(localRequire.resolve(`${name}/package.json`)))
 
+/** Language server là tiến trình tin cậy nhưng không cần credential của app. */
+export const lspEnv = (source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv =>
+  safeProcessEnv(source, { ELECTRON_RUN_AS_NODE: '1' })
+
 function launch(kind: ServerKind): ChildProcess {
   const script = kind === 'ts'
     ? join(pkgDir('typescript-language-server'), 'lib', 'cli.mjs')
     : join(pkgDir('pyright'), 'langserver.index.js')
   // Chạy bằng chính Node của Electron, không cần Node cài trên máy.
   return spawn(process.execPath, [script, '--stdio'], {
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: lspEnv(),
     stdio: ['pipe', 'pipe', 'ignore'],
     windowsHide: true
   })

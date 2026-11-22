@@ -3,9 +3,17 @@ import { readFile } from 'node:fs/promises'
 import { relative } from 'node:path'
 import type { GitBlameLine, GitFileChange, GitStatus } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
+import { safeProcessEnv } from '../process-env'
 import { UserError } from '../user-error'
 
 export const fail = (code: string, message: string): Error => new UserError(code, message)
+
+/** Git không cần credential của app; chỉ LC_ALL/GIT_* đặt tường minh, không kế thừa process.env. */
+export const gitEnv = (source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv => safeProcessEnv(source, {
+  LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'false', SSH_ASKPASS: 'false',
+  SSH_ASKPASS_REQUIRE: 'never', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0'
+})
+
 
 /** Trả về đường dẫn tệp tương đối gốc dự án, không bị thoát khỏi dự án bởi ../ hoặc symlink. */
 const relativePath = (root: string, file: string) => relative(resolveInside(root, '.'), resolveInside(root, file)).split('\\').join('/')
@@ -14,8 +22,7 @@ export async function git(root: string, args: string[], options?: { okCodes?: nu
   let failed!: (error: Error) => void
   const output = new Promise<string>((resolve, reject) => { done = resolve; failed = reject })
   const child = execFile('git', ['-c', 'core.quotepath=off', '-c', 'color.ui=false', ...args], {
-    cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true,
-    env: { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'false', SSH_ASKPASS: 'false', SSH_ASKPASS_REQUIRE: 'never', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }
+    cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, env: gitEnv()
   }, (error, stdout, stderr) => {
     if (!error || (typeof error.code === 'number' && options?.okCodes?.includes(error.code))) {
       done(options?.includeStderr && stderr ? [stdout, stderr].filter(Boolean).join('\n') : stdout)
@@ -202,7 +209,7 @@ export async function gitBlame(root: string, file: unknown): Promise<GitBlameLin
   let failed!: (error: Error) => void
   const outPromise = new Promise<string>((resolve, reject) => { done = resolve; failed = reject })
   const child = execFile('git', ['-c', 'core.quotepath=off', 'blame', '--porcelain', '--contents', '-', '--', path],
-    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
+    { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, env: gitEnv() }, (error, stdout, stderr) => {
       if (error) failed(fail('git_failed', (stderr || String(error)).trim().split('\n').slice(-2).join('\n')))
       else done(stdout)
     })

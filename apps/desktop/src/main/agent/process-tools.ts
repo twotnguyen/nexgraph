@@ -6,6 +6,7 @@ import { StringDecoder } from 'node:string_decoder'
 import type { ApprovalGate, CommandPreview } from './approval'
 import type { FileContent } from '../../shared/api'
 import { readProjectFile, readProjectFileBytes, resolveInside } from '../fs/project-fs'
+import { safeProcessEnv } from '../process-env'
 import { CheckpointStore } from './checkpoints'
 import { AgentFileScope } from './file-scope'
 
@@ -33,9 +34,6 @@ const MAX_TIMEOUT = 5 * 60_000
 const SNAPSHOT_LIMIT = 32 * 1024 * 1024
 const GENERATED_PATHS = ['.venv/', 'venv/', 'dist/', '.next/', '.cache/', '.turbo/', '__pycache__/',
   '**/*.g.dart', '**/*.freezed.dart', '**/*.mocks.dart']
-const ENV_KEYS = new Set(['path', 'pathext', 'systemroot', 'windir', 'comspec', 'temp', 'tmp', 'home', 'userprofile',
-  'appdata', 'localappdata', 'lang', 'lc_all', 'term', 'number_of_processors', 'processor_architecture', 'programfiles',
-  'programfiles(x86)', 'programdata'])
 const NETWORK_EXECUTABLES = new Set(['curl', 'wget', 'ssh', 'scp', 'sftp', 'ftp', 'npx', 'pip', 'pip3'])
 const PACKAGE_EXECUTABLES = new Set(['npm', 'pnpm', 'yarn', 'bun'])
 const LOCAL_PACKAGE_ACTIONS = new Set(['run', 'test', 'build', 'lint', 'check', 'typecheck', 'exec'])
@@ -109,11 +107,7 @@ function normalizedCommand(root: string, input: ProcessInput): CommandPreview {
 
 /** Môi trường tiến trình chỉ chứa biến hệ thống cần thiết, không kế thừa credential/provider của NexGraph. */
 function processEnvironment(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (ENV_KEYS.has(key.toLowerCase()) && value !== undefined) env[key] = value
-  }
-  return { ...env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', PYTHONUTF8: '1', ELECTRON_RUN_AS_NODE: '1' }
+  return safeProcessEnv(process.env, { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', PYTHONUTF8: '1', ELECTRON_RUN_AS_NODE: '1' })
 }
 
 /** Windows .cmd được chạy bằng JS entry của package manager, không đi qua cmd.exe. */

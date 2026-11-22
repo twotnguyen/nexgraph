@@ -3,6 +3,7 @@ import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { IPty } from 'node-pty'
 import type { TaskDefinition } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
+import { userShellEnv } from '../process-env'
 import { UserError } from '../user-error'
 
 type PtyModule = typeof import('node-pty')
@@ -81,7 +82,8 @@ export class TerminalManager {
         cols: Math.max(2, Math.floor(cols) || 80),
         rows: Math.max(1, Math.floor(rows) || 24),
         cwd,
-        env: { ...process.env, ...task?.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'NexGraph' } as Record<string, string>
+        // Shell của người dùng: giữ env người dùng (CLI aws/gh/npm của họ cần), chỉ bỏ NEXGRAPH_TOKEN.
+        env: userShellEnv(process.env, { ...task?.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', TERM_PROGRAM: 'NexGraph' }) as Record<string, string>
       })
     } catch (error) {
       throw new UserError('terminal_spawn', `Không mở được ${program}: ${error instanceof Error ? error.message : String(error)}`)
