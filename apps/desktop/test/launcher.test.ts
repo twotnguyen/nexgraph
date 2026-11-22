@@ -60,6 +60,24 @@ describe('startEngine', () => {
     await h.stop()
   })
 
+  it('không chuyển PYTHONPATH/PYTHONHOME của tiến trình cha sang engine', async () => {
+    // DSK-01: máy dev có PYTHONPATH của công cụ khác thì engine chết ngay ở import (pydantic_core).
+    const h = await run('ok', {
+      env: { ...process.env, FAKE_MODE: 'ok', PYTHONPATH: '/x/site-packages', PYTHONHOME: '/x/venv' }
+    })
+    try {
+      const env = (vi.mocked(spawn).mock.calls.at(-1)![2] as { env: NodeJS.ProcessEnv }).env
+      expect(env.PYTHONPATH).toBeUndefined()
+      expect(env.PYTHONHOME).toBeUndefined()
+      expect(env.PYTHONNOUSERSITE).toBe('1')
+      expect(env.NEXGRAPH_TOKEN).toMatch(/^[0-9a-f]{64}$/)
+      expect(env.FAKE_MODE).toBe('ok')
+      expect(env.PATH ?? env.Path).toBe(process.env.PATH ?? process.env.Path)
+    } finally {
+      await h.stop()
+    }
+  })
+
   it('passes unicode data dir intact', async () => {
     const dir = join(tmp(), 'Đồ án ứng dụng', 'dữ liệu')
     const h = await run('ok', { dataDir: dir })

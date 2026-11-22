@@ -20,6 +20,22 @@ export interface EngineHandle {
 const STDERR_TAIL = 4000
 const KILL_GRACE_MS = 3000
 
+/** Biến của tiến trình cha đổi cách Python tìm gói; engine phải chạy bằng môi trường của chính nó. */
+const PYTHON_ISOLATION = ['PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP']
+
+/**
+ * Env cho engine: giữ env của người dùng (PATH, HOME…) nhưng bỏ PYTHONPATH/PYTHONHOME/PYTHONSTARTUP.
+ * App mở từ shell có PYTHONPATH của công cụ khác (Hermes, pipx…) làm `serve` chết ở import
+ * (`ImportError: cannot import name 'ArgsKwargs' from 'pydantic_core._pydantic_core'`).
+ */
+export function engineEnv(source: NodeJS.ProcessEnv = process.env, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...source, ...extra }
+  for (const key of Object.keys(env)) {
+    if (PYTHON_ISOLATION.includes(key.toUpperCase())) delete env[key]
+  }
+  return { ...env, PYTHONNOUSERSITE: '1', PYTHONUTF8: '1' }
+}
+
 export class EngineStartError extends Error {
   constructor(
     message: string,
@@ -65,7 +81,7 @@ export function startEngine(
   const child = spawn(cmd.command, [...cmd.args, 'serve', '--data-dir', opts.dataDir, '--port', '0', '--exit-on-stdin-close'], {
     cwd: cmd.cwd,
     // Token chỉ đi qua biến môi trường, không bao giờ qua argv.
-    env: { ...(opts.env ?? process.env), NEXGRAPH_TOKEN: token, PYTHONUTF8: '1' },
+    env: engineEnv(opts.env ?? process.env, { NEXGRAPH_TOKEN: token }),
     windowsHide: true,
     // Nơi khác Windows: tạo nhóm tiến trình riêng để diệt được cả cây (ví dụ `uv run` -> python).
     detached: !isWin,
