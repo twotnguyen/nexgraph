@@ -261,6 +261,22 @@ describe('EditorTools E3', () => {
       expect(await screen.findByText('callee')).toBeTruthy()
     })
 
+    it('giữ chân picker và nút Quay lại khi drill-down rỗng', async () => {
+      const { incoming, root, caller } = setup()
+      incoming.mockImplementation(async (_p, _f, _t, _l, _c, requested) =>
+        requested === root ? [{ from: caller, fromRanges: [lspRange(4, 2, 4, 8)] }] : [])
+      act(() => { runCommand('editor.call_hierarchy_incoming') })
+      fireEvent.click(await screen.findByText('callee'))
+      expect(await screen.findByText('caller')).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Hiện lời gọi' }))
+      expect(await screen.findByText('Không có lời gọi vào.')).toBeTruthy()
+      expect(screen.queryAllByRole('option')).toHaveLength(0)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }))
+      await waitFor(() => expect(incoming).toHaveBeenLastCalledWith('p1', 'src/b.ts', 'root text', 3, 1, root))
+      expect(await screen.findByText('caller')).toBeTruthy()
+    })
+
     it('đổi hướng bằng phím tắt khi picker phân cấp đang mở', async () => {
       const { outgoing, root } = setup()
       act(() => { runCommand('editor.call_hierarchy_incoming') })

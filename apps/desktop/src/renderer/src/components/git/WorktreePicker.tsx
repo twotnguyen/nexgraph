@@ -103,6 +103,7 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
     empty={busy ?? (data ? tr('Không có worktree.') : loadError ? tr('Không thể tải worktree.') : tr('Đang tải worktree…'))}
     error={actionError ?? loadError} onCancel={() => { if (!busyRef.current) onClose() }} onPick={pick}
     footer={(item, go) => {
+      if (!item) return null
       if (item.kind === 'create') return <button type="button" onClick={go}>{tr('Tạo và mở')} <kbd>↵</kbd></button>
       const { worktree } = item
       const why = worktree.main ? tr('Không xóa được worktree chính') : worktree.current ? tr('Đang mở') : worktree.locked ? tr('Worktree đang bị khóa') : undefined

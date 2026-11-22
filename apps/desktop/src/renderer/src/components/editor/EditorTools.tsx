@@ -388,8 +388,8 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
       }}
       footer={(row) => <>
         <button type="button" disabled={!shown.stack.length} onClick={() => hierarchyBack()}>{tr('Quay lại')}</button>
-        <button type="button" onClick={() => hierarchyShowCalls(shown, row)}>{tr('Hiện lời gọi')}</button>
-        <button type="button" onClick={() => hierarchySwitch(shown, row)}>{tr('Đổi hướng')}</button>
+        <button type="button" disabled={!row} onClick={() => row && hierarchyShowCalls(shown, row)}>{tr('Hiện lời gọi')}</button>
+        <button type="button" disabled={!row} onClick={() => row && hierarchySwitch(shown, row)}>{tr('Đổi hướng')}</button>
       </>} />
   }
   const rows = flattenSymbols(symbols)
