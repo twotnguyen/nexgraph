@@ -34,9 +34,16 @@ const MAX_TIMEOUT = 5 * 60_000
 const SNAPSHOT_LIMIT = 32 * 1024 * 1024
 const GENERATED_PATHS = ['.venv/', 'venv/', 'dist/', '.next/', '.cache/', '.turbo/', '__pycache__/',
   '**/*.g.dart', '**/*.freezed.dart', '**/*.mocks.dart']
-const NETWORK_EXECUTABLES = new Set(['curl', 'wget', 'ssh', 'scp', 'sftp', 'ftp', 'npx', 'pip', 'pip3'])
+/**
+ * Tên lệnh bị chặn vì tự tải/gửi dữ liệu ra ngoài. Danh sách chỉ nhìn tên đầu, nên nó là
+ * "đường đi quen thuộc bị đóng", không phải sandbox: `python -c`, `node -e`, hay script
+ * trong dự án vẫn chạy được mã tuỳ ý. Rào chắn thật là cổng duyệt từng lệnh (ADR 0016).
+ */
+const NETWORK_EXECUTABLES = new Set(['curl', 'wget', 'ssh', 'scp', 'sftp', 'ftp', 'npx', 'pip', 'pip3',
+  'uvx', 'pipx', 'bunx', 'corepack', 'deno'])
 const PACKAGE_EXECUTABLES = new Set(['npm', 'pnpm', 'yarn', 'bun'])
 const LOCAL_PACKAGE_ACTIONS = new Set(['run', 'test', 'build', 'lint', 'check', 'typecheck', 'exec'])
+const PIP_MODULES = new Set(['pip', 'pip3', 'ensurepip'])
 
 function readJson(root: string, path: string): Record<string, unknown> | null {
   try {
@@ -89,6 +96,10 @@ function normalizedCommand(root: string, input: ProcessInput): CommandPreview {
   const executable = input.executable.trim()
   const name = basename(executable).replace(/\.(exe|cmd|bat)$/i, '').toLowerCase()
   if (NETWORK_EXECUTABLES.has(name)) throw new Error('Lệnh tải hoặc gửi dữ liệu ra ngoài chưa được cấp quyền')
+  // `python -m pip install` là đường cài gói khác của pip, phải chặn cùng lý do.
+  if (/^python(3(\.\d+)?)?$/.test(name) && input.args[0] === '-m' && PIP_MODULES.has((input.args[1] ?? '').toLowerCase())) {
+    throw new Error('Cài gói qua pip cần thao tác riêng, agent chỉ chạy script đã có trong dự án')
+  }
   if (name === 'git' && !['status', 'diff', 'log', 'show', 'ls-files', 'rev-parse', 'check-ignore'].includes(input.args[0] ?? '')) {
     throw new Error('Tác vụ chỉ được dùng Git để đọc, không push hoặc thay đổi lịch sử')
   }

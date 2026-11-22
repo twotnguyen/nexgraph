@@ -65,6 +65,24 @@ describe('TaskExecution', () => {
     await expect(f.task.run({ executable: 'node', args: [] })).rejects.toThrow('read only')
   })
 
+  it('chặn công cụ tải gói qua mọi tên gọi đã biết', async () => {
+    const f = fixture()
+    for (const [executable, args] of [
+      ['uvx', ['ruff', 'check']], ['pipx', ['run', 'black']], ['bunx', ['cowsay']],
+      ['corepack', ['pnpm', 'dlx', 'x']], ['deno', ['run', 'https://example.invalid/x.ts']],
+      ['python3', ['-m', 'pip', 'install', 'requests']], ['python', ['-m', 'ensurepip']]
+    ] as [string, string[]][]) {
+      await expect(f.task.run({ executable, args }), `${executable} ${args.join(' ')}`).rejects.toThrow(/cấp quyền|cài gói|thao tác riêng/i)
+    }
+  })
+
+  it('python -c / node -e vẫn chạy được vì mọi lệnh đều phải qua cổng duyệt (giới hạn ghi ở ADR 0016)', async () => {
+    const f = fixture()
+    const result = await f.task.run({ executable: 'node', args: ['-e', 'console.log("qua cổng duyệt")'] })
+    expect(result.output).toContain('qua cổng duyệt')
+    expect(f.ask).toHaveBeenCalled()
+  })
+
   it('preserves UTF-8 output characters split across process chunks', async () => {
     const f = fixture()
     const result = await f.task.run({ executable: 'node', args: ['-e',
