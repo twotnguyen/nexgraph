@@ -21,7 +21,9 @@ export interface ParsedCitation {
 const BARE_PATH = '[A-Za-z0-9_./\\\\~#%@+&=-]'
 
 const BRACKETED = String.raw`\[\[\s*([^\[\]\n]+?)\s*[:：]\s*(\d{1,7})(?:\s*[-–—]\s*(\d{1,7}))?\s*\]\]`
-const BARE = String.raw`(?<![\w./\\:\]-])(` + BARE_PATH + String.raw`+?)[:：](\d{1,7})(?:[-–—](\d{1,7}))?(?![\d\w])`
+// Dấu cách được phép trong đường dẫn không ngoặc (thư mục/tệp có dấu cách); verifyCitations
+// bỏ dần từ đầu khi engine báo không có tệp, nên chữ của câu đứng trước không bị coi là đường dẫn.
+const BARE = String.raw`(?<![\w./\\:\]-])(` + BARE_PATH + String.raw`+(?: ` + BARE_PATH + String.raw`+)*)[:：](\d{1,7})(?:[-–—](\d{1,7}))?(?![\d\w])`
 
 /** Nguồn regex chung; renderer dùng để tách text node thành chip. */
 export const CITATION_SOURCE = `(?:${BRACKETED}|${BARE})`
@@ -51,7 +53,8 @@ function accept(file: string, bare: boolean): boolean {
 function scan(re: RegExp, text: string, bare: boolean): (ParsedCitation & { index: number })[] {
   const out: (ParsedCitation & { index: number })[] = []
   for (const m of text.matchAll(re)) {
-    const file = m[1].trim()
+    // Bỏ ký tự không thể bắt đầu đường dẫn mà regex nuốt vào (gạch đầu dòng "- ", "## ").
+    const file = (bare ? m[1].replace(/^[^A-Za-z0-9_.\\/]+/, '') : m[1]).trim()
     if (!accept(file, bare)) continue
     const start = Number(m[2])
     out.push({ raw: m[0], file, start, end: m[3] ? Number(m[3]) : start, index: m.index ?? 0 })

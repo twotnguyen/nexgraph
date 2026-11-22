@@ -39,10 +39,15 @@ function splitCitations(value: string, byRaw: Map<string, number>, citations: Ci
     const index = byRaw.get(m[0])
     if (index === undefined || m.index === undefined) continue
     if (m.index > last) out.push({ type: 'text', value: value.slice(last, m.index) })
+    const citation = citations[index]
+    // Dạng không ngoặc có thể dính chữ của câu trước ("Theo flow app/x.py") mà main đã bỏ khi xác minh:
+    // giữ chữ đó làm text, chip chỉ bọc phần đường dẫn.
+    const keep = m[0].startsWith('[[') ? 0 : m[0].indexOf(citation.file)
+    if (keep > 0) out.push({ type: 'text', value: m[0].slice(0, keep) })
     out.push({
       type: 'link', url: '#nexgraph-citation',
       data: { hProperties: { dataNexgraphCitation: String(index) } },
-      children: [{ type: 'text', value: label(citations[index]) }]
+      children: [{ type: 'text', value: label(citation) }]
     })
     last = m.index + m[0].length
   }
