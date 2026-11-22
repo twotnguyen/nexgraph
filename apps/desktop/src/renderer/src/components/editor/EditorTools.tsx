@@ -266,16 +266,22 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     if (!editor.handle.runAction) return
     void editor.handle.runAction(id).catch((error: unknown) => onError(errorText(error)))
   }
-  const locations = async (kind: 'references' | 'implementation') => {
+  const locationLabel = (kind: 'references' | 'implementation' | 'declaration' | 'typeDefinition') =>
+    kind === 'references' ? { title: tr('Tham chiếu'), empty: tr('Không tìm thấy tham chiếu.') }
+      : kind === 'implementation' ? { title: tr('Phần triển khai'), empty: tr('Không tìm thấy phần triển khai.') }
+        : kind === 'declaration' ? { title: tr('Khai báo'), empty: tr('Không tìm thấy khai báo.') }
+          : { title: tr('Định nghĩa kiểu'), empty: tr('Không tìm thấy định nghĩa kiểu.') }
+  const locations = async (kind: 'references' | 'implementation' | 'declaration' | 'typeDefinition') => {
     if (!editor) return
     const position = editor.handle.getPosition?.()
     const api = window.nexgraph?.lsp?.[kind]
+    const label = locationLabel(kind)
     if (!position || !api) { onError(tr('Không hỗ trợ điều hướng ký hiệu trong tệp này.')); return }
     try {
       const found = await api(projectId, editor.file, editor.text(), position.line, position.column)
-      if (!found.length) { onError(kind === 'references' ? tr('Không tìm thấy tham chiếu.') : tr('Không tìm thấy phần triển khai.')); return }
+      if (!found.length) { onError(label.empty); return }
       if (found.length === 1) onOpen(found[0].file, found[0].line, found[0].column)
-      else open({ kind: 'locations', title: kind === 'references' ? tr('Tham chiếu') : tr('Phần triển khai'), locations: found })
+      else open({ kind: 'locations', title: label.title, locations: found })
     } catch (error) { onError(errorText(error)) }
   }
   // Permalink kiểu Wu: vùng chọn (không có thì dòng con trỏ) tại commit HEAD trên remote; main quy số dòng về HEAD.
@@ -309,6 +315,8 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   useCommand('editor.diagnostics', onDiagnostics)
   useCommand('editor.rename', () => { if (editor) open({ kind: 'rename', editor }) }, !!editor)
   useCommand('editor.implementation', () => void locations('implementation'), !!editor)
+  useCommand('editor.declaration', () => void locations('declaration'), !!editor)
+  useCommand('editor.type_definition', () => void locations('typeDefinition'), !!editor)
   useCommand('editor.references', () => void locations('references'), !!editor)
   useCommand('editor.next_diagnostic', () => action('editor.action.marker.next'), !!editor)
   useCommand('editor.previous_diagnostic', () => action('editor.action.marker.prev'), !!editor)

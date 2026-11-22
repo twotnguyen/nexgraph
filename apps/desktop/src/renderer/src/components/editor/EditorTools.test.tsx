@@ -5,7 +5,9 @@ import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, Lsp
 import type { EditorHandle } from './monaco'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { setLocale } from '../../state/locale'
-import { installKeymap, runCommand } from '../../state/commands'
+import { COMMANDS, bindingFor, installKeymap, runCommand } from '../../state/commands'
+import { localizeCommand } from '../../state/commandLabels'
+import { tr } from '../../strings'
 import { getEditorPrefs, setEditorPrefs } from '../../state/editorPrefs'
 import { installNexgraph } from '../../test-utils'
 import { EditorTools } from './EditorTools'
@@ -397,6 +399,66 @@ describe('EditorTools view commands', () => {
     render(<EditorTools {...props({ file: 'b.ts', handle: hB, text: () => 'one\ntwo\nthree' })} />)
     act(() => { runCommand('editor.toggle_fold_all') })
     expect(hB.runAction).toHaveBeenLastCalledWith('editor.foldAll')
+  })
+})
+
+describe('EditorTools đi đến khai báo và định nghĩa kiểu', () => {
+  afterEach(() => setLocale('vi'))
+  const setup = () => {
+    installNexgraph()
+    const active = { file: 'a.ts', handle: handle(), text: () => 'one\ntwo\nthree' }
+    const p = props(active)
+    render(<EditorTools {...p} />)
+    const api = window.nexgraph as NexGraphApi
+    const declaration = vi.fn(async () => [{ file: 'src/types.ts', line: 3, column: 14 }])
+    const typeDefinition = vi.fn(async () => [
+      { file: 'src/types.ts', line: 3, column: 14 },
+      { file: 'src/model.ts', line: 9, column: 1 }
+    ])
+    api.lsp = { declaration, typeDefinition } as unknown as NexGraphApi['lsp']
+    return { ...p, declaration, typeDefinition }
+  }
+
+  it('editor.declaration mở thẳng vị trí khai báo tại con trỏ', async () => {
+    const { declaration, onOpen } = setup()
+    act(() => { expect(runCommand('editor.declaration')).toBe(true) })
+    await waitFor(() => expect(declaration).toHaveBeenCalledWith('p1', 'a.ts', 'one\ntwo\nthree', 2, 3))
+    await waitFor(() => expect(onOpen).toHaveBeenCalledWith('src/types.ts', 3, 14))
+  })
+
+  it('editor.type_definition liệt kê các định nghĩa kiểu khi có nhiều hơn một', async () => {
+    const { typeDefinition, onOpen } = setup()
+    act(() => { expect(runCommand('editor.type_definition')).toBe(true) })
+    expect(await screen.findByRole('dialog', { name: 'Định nghĩa kiểu' })).toBeTruthy()
+    expect(typeDefinition).toHaveBeenCalledWith('p1', 'a.ts', 'one\ntwo\nthree', 2, 3)
+    expect(screen.getAllByRole('option')).toHaveLength(2)
+    fireEvent.click(screen.getByText('src/model.ts:9:1'))
+    expect(onOpen).toHaveBeenCalledWith('src/model.ts', 9, 1)
+  })
+
+  it('báo khi không có khai báo hoặc định nghĩa kiểu', async () => {
+    const { declaration, typeDefinition, onError } = setup()
+    declaration.mockResolvedValue([])
+    typeDefinition.mockResolvedValue([])
+    act(() => { runCommand('editor.declaration') })
+    await waitFor(() => expect(onError).toHaveBeenCalledWith('Không tìm thấy khai báo.'))
+    act(() => { runCommand('editor.type_definition') })
+    await waitFor(() => expect(onError).toHaveBeenCalledWith('Không tìm thấy định nghĩa kiểu.'))
+  })
+
+  it('có phím mặc định theo quy ước Wu và bản Anh cho lệnh, picker, thông báo', () => {
+    setup()
+    // jsdom không phải macOS nên ⌃ thành mod; phím khai báo gốc vẫn là ⌃⌥F12 như Wu.
+    expect(COMMANDS.find((command) => command.id === 'editor.declaration')?.key).toBe('ctrl+alt+f12')
+    expect(bindingFor('editor.declaration')).toBe('mod+alt+f12')
+    expect(bindingFor('editor.type_definition')).toBe('mod+f12')
+    setLocale('en')
+    expect(localizeCommand(COMMANDS.find((command) => command.id === 'editor.declaration')!)).toEqual({ title: 'Go to Declaration', category: 'Editor' })
+    expect(localizeCommand(COMMANDS.find((command) => command.id === 'editor.type_definition')!)).toEqual({ title: 'Go to Type Definition', category: 'Editor' })
+    expect(tr('Khai báo')).toBe('Declarations')
+    expect(tr('Định nghĩa kiểu')).toBe('Type definitions')
+    expect(tr('Không tìm thấy khai báo.')).toBe('No declaration found.')
+    expect(tr('Không tìm thấy định nghĩa kiểu.')).toBe('No type definition found.')
   })
 })
 })
