@@ -106,7 +106,7 @@ export type CollabEvent =
   | { type: 'message'; data: Uint8Array }
   | { type: 'peers'; count: number }
   | { type: 'joined' }
-  | { type: 'closed' }
+  | { type: 'closed'; reason?: 'too_many_failures' }
 /** Extension nạp từ thư mục: theme (biến màu) và lệnh khai báo (không chạy mã của extension). */
 export type ExtensionTheme = { id: string; name: string; appearance: 'light' | 'dark'; colors: Record<string, string> }
 export type ExtensionCommand = { id: string; title: string; action: { type: 'insertText'; text: string } | { type: 'runCommands'; commands: string[] } }
