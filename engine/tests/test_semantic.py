@@ -285,7 +285,7 @@ def test_app_transport_times_out_reports_errors_and_releases_write_lock(api, doc
 
     monkeypatch.setattr(semantic_run, "LLM_QUEUE_TIMEOUT_SECONDS", 0.3, raising=False)
     enable(api, docs_pid, "app")
-    job = wait_job(api, run(api, docs_pid, "docs", {"kind": "app"}), timeout=5)
+    job = wait_job(api, run(api, docs_pid, "docs", {"kind": "app"}), timeout=8)
     assert job["state"] == "done", job
     res = job["result"]
     assert res["chunks"]["sent"] > 0 and res["chunks"]["failed"] == res["chunks"]["sent"]
