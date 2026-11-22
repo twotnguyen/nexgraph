@@ -17,6 +17,12 @@ export function PaneStack<Id extends string = string>({ sections, state, onToggl
   onResize: (id: Id, height: number) => void
 }) {
   const drag = useRef<{ id: Id; y: number; height: number } | null>(null)
+  const bodies = useRef<Partial<Record<Id, HTMLElement | null>>>({})
+  // Chưa resize thì body cao tự động: đọc chiều cao thật khi bắt đầu tương tác, không áp fallback 160px.
+  const shownHeight = (id: Id, fallback: number) => {
+    const measured = bodies.current[id]?.getBoundingClientRect().height ?? 0
+    return measured > 0 ? measured : fallback
+  }
   return (
     <div className="pane-stack">
       {sections.map(({ id, title, actions, children }) => {
@@ -34,17 +40,17 @@ export function PaneStack<Id extends string = string>({ sections, state, onToggl
               <div className="pane-actions">{actions}</div>
             </div>
             {!collapsed && <>
-              <div className="pane-body">{children}</div>
+              <div className="pane-body" ref={(el) => { bodies.current[id] = el }}>{children}</div>
               <div className="pane-resize" role="separator" aria-orientation="horizontal" aria-label={tr('Chiều cao {section}', { section: tr(title) })}
-                aria-valuenow={height} aria-valuemin={MIN_HEIGHT} tabIndex={0}
-                onPointerDown={(event) => { drag.current = { id, y: event.clientY, height }; event.currentTarget.setPointerCapture?.(event.pointerId); event.currentTarget.focus() }}
+                aria-valuenow={state.heights[id]} aria-valuemin={MIN_HEIGHT} tabIndex={0}
+                onPointerDown={(event) => { drag.current = { id, y: event.clientY, height: shownHeight(id, height) }; event.currentTarget.setPointerCapture?.(event.pointerId); event.currentTarget.focus() }}
                 onPointerMove={(event) => { if (drag.current?.id === id) onResize(id, Math.max(MIN_HEIGHT, drag.current.height + drag.current.y - event.clientY)) }}
                 onPointerUp={() => { drag.current = null }}
                 onPointerCancel={() => { drag.current = null }}
                 onKeyDown={(event) => {
                   if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
                   event.preventDefault()
-                  onResize(id, Math.max(MIN_HEIGHT, height + (event.key === 'ArrowUp' ? PANE_RESIZE_STEP : -PANE_RESIZE_STEP)))
+                  onResize(id, Math.max(MIN_HEIGHT, shownHeight(id, height) + (event.key === 'ArrowUp' ? PANE_RESIZE_STEP : -PANE_RESIZE_STEP)))
                 }} />
             </>}
           </section>

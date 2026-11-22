@@ -58,3 +58,15 @@ it('xếp separator trong grid, không overlay chặn nội dung', () => {
   expect(separator.style.position).not.toMatch(/absolute|fixed/)
   expect(screen.getByTestId('pane-body')).toBeVisible()
 })
+
+it('không báo 160px khi chưa resize và resize lần đầu từ chiều cao đã vẽ', () => {
+  const onResize = vi.fn()
+  const { container } = render(<PaneStack sections={sections} state={{ collapsed: {}, heights: {} }} onToggle={() => {}} onResize={onResize} />)
+  const separator = screen.getByRole('separator', { name: 'Chiều cao Debug console' })
+  expect(separator).not.toHaveAttribute('aria-valuenow')
+  const body = container.querySelector('.pane-body') as HTMLElement
+  const rect = vi.spyOn(body, 'getBoundingClientRect').mockReturnValue({ height: 100 } as unknown as DOMRect)
+  fireEvent.keyDown(separator, { key: 'ArrowUp' })
+  expect(onResize).toHaveBeenCalledWith('console', 100 + PANE_RESIZE_STEP)
+  rect.mockRestore()
+})

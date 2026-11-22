@@ -129,6 +129,8 @@ export interface EditorHandle {
   runAction?(id: string): Promise<void>
   formatDocument?(): Promise<void>
   onCursor?(cb: (line: number, column: number) => void): void | (() => void)
+  /** Vùng chọn đổi (kể cả chọn lại từ chương trình) mà con trỏ có thể đứng yên. */
+  onSelection?(cb: () => void): void | (() => void)
   revealLines(start: number, end?: number): void
   setReadOnly(v: boolean): void
   /** Bật chế độ Vim (monaco-vim) và ghi trạng thái vào `status`; null để tắt. */
@@ -473,6 +475,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     },
     formatDocument: async () => { await editor.getAction('editor.action.formatDocument')?.run() },
     onCursor: (cb) => { const sub = editor.onDidChangeCursorPosition((e) => cb(e.position.lineNumber, e.position.column)); return () => sub.dispose() },
+    onSelection: (cb) => { const sub = editor.onDidChangeCursorSelection(() => cb()); return () => sub.dispose() },
     revealLines: (start, end = start) => {
       hit.set([{ range: new monaco.Range(start, 1, end, 1), options: { isWholeLine: true, className: 'editor-hit' } }])
       editor.revealLinesInCenter(start, end)

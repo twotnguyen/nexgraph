@@ -159,17 +159,20 @@ export const COMMANDS: CommandDef[] = [
 ]
 
 const handlers = new Map<string, (() => void)[]>()
+const CHANGED = 'nexgraph:keybindings'
 
 /** Cài đặt ẩn Không gian làm việc nhưng giữ buffer; không để lệnh của màn đã ẩn chạy. */
 export const CommandsEnabled = createContext(true)
 
 /** Gắn handler cho một lệnh; trả về hàm gỡ. Handler gắn sau cùng thắng. */
 export function registerHandler(id: string, fn: () => void): () => void {
+  const added = !handlers.has(id)
   handlers.set(id, [...(handlers.get(id) ?? []), fn])
+  if (added) window.dispatchEvent(new Event(CHANGED))
   return () => {
     const rest = (handlers.get(id) ?? []).filter((item) => item !== fn)
     if (rest.length) handlers.set(id, rest)
-    else handlers.delete(id)
+    else { handlers.delete(id); window.dispatchEvent(new Event(CHANGED)) }
   }
 }
 
@@ -204,7 +207,7 @@ export const availableCommands = (): CommandDef[] => COMMANDS.filter((command) =
 // --- Phím tắt: ba lớp mặc định < base keymap < người dùng. Lớp người dùng chỉ lưu phần khác lớp dưới ("" = bỏ phím). ---
 const STORE = 'nexgraph.keybindings'
 const BASE_STORE = 'nexgraph.keymap.base'
-const CHANGED = 'nexgraph:keybindings'
+
 let overrides: Record<string, string> = (() => {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(STORE) ?? '{}')
@@ -287,6 +290,10 @@ const subscribe = (notify: () => void) => {
 /** Re-render khi phím tắt, base keymap hoặc danh sách lệnh đổi; trả về bảng ghi đè hiện tại (đổi tham chiếu mỗi lần đổi). */
 export const useKeybindings = (): Record<string, string> => useSyncExternalStore(subscribe, () => overrides)
 export const useBaseKeymap = (): BaseKeymapId => useSyncExternalStore(subscribe, () => baseId)
+/** Lệnh có handler ở màn hiện tại: mục global của thanh trạng thái biến mất khi rời màn. */
+export function useCommandAvailable(id: string): boolean {
+  return useSyncExternalStore(subscribe, () => handlers.has(id))
+}
 // Danh sách lệnh hoặc base keymap đổi: bỏ bản gộp đã nhớ và đổi tham chiếu bảng ghi đè để useKeybindings vẽ lại.
 function notifyKeymap() {
   resolved = null

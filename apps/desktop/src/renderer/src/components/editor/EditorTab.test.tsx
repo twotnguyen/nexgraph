@@ -14,6 +14,7 @@ const setEOL = vi.hoisted(() => vi.fn())
 const setLanguage = vi.hoisted(() => vi.fn())
 const created = vi.hoisted(() => vi.fn())
 const cursorPosition = vi.hoisted(() => ({ line: 1, column: 1 }))
+const selectionChanged = vi.hoisted(() => ({ fire: () => {} }))
 // jsdom không chạy Monaco: thay bằng một <textarea> có cùng giao diện EditorHandle.
 vi.mock('./monaco', () => ({
   languageFor: (f: string) => (f.endsWith('.dart') ? 'dart' : 'plaintext'),
@@ -33,6 +34,7 @@ vi.mock('./monaco', () => ({
       } : null,
       setValue: (v: string) => { ta.value = v },
       onChange: (cb: () => void) => ta.addEventListener('input', cb),
+      onSelection: (cb: () => void) => { selectionChanged.fire = cb },
       getPosition: () => cursorPosition,
       setBookmarks,
       revealPosition,
@@ -93,6 +95,7 @@ beforeEach(() => {
   document.body.innerHTML = '<div id="status-bar-right"></div>'
   cursorPosition.line = 1
   cursorPosition.column = 1
+  selectionChanged.fire = () => {}
 })
 
 describe('EditorTab', () => {
@@ -116,6 +119,17 @@ describe('EditorTab', () => {
     view.unmount()
     expect(onContextReady).toHaveBeenLastCalledWith('lib/a.dart', null)
     expect(getter()).toBeNull()
+  })
+
+  it('cập nhật số ký tự đã chọn dù con trỏ không đổi', async () => {
+    setup()
+    const ta = await box()
+    ta.setSelectionRange(0, 4)
+    act(() => { selectionChanged.fire() })
+    expect(screen.getByText('Đã chọn 4')).toBeInTheDocument()
+    ta.setSelectionRange(0, 0)
+    act(() => { selectionChanged.fire() })
+    expect(screen.queryByText('Đã chọn 4')).not.toBeInTheDocument()
   })
 
   it('nạp tệp và cuộn tới dòng', async () => {

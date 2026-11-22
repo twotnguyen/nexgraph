@@ -6,6 +6,7 @@ import { emptyGeminiStatus, installNexgraph } from '../test-utils'
 import type { NexGraphApi } from '@shared/api'
 import { SettingsScreen } from './SettingsScreen'
 import { isStatusItemHidden, setStatusItemHidden } from '../state/layoutPrefs'
+import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
 
 const provider = (id: string, over: Record<string, unknown> = {}) =>
   ({ id, label: id, hasKey: false, oauth: false, loggedIn: false, custom: false, ...over })
@@ -13,14 +14,17 @@ const provider = (id: string, over: Record<string, unknown> = {}) =>
 describe('SettingsScreen', () => {
   it('switch bật lại các mục thanh trạng thái đã ẩn bằng chuột phải', async () => {
     installNexgraph()
-    const ids = ['diagnostics', 'cursor', 'language', 'eol', 'encoding', 'vim']
+    const ids = ['diagnostics', 'diagnosticsDetail', 'git', 'cursor', 'selection', 'language', 'eol', 'encoding', 'indentation', 'notifications', 'vim']
     act(() => { ids.forEach((id) => setStatusItemHidden(id, true)) })
     render(<SettingsScreen onBack={() => {}} />)
     expect(screen.getByRole('heading', { name: 'Mục thanh trạng thái' })).toBeInTheDocument()
     const switches = ids.map((id) => document.getElementById(`settings-status-${id}`)!)
+    expect(switches).toHaveLength(STATUS_BAR_ITEMS.length - 1)
+    expect(document.getElementById('settings-status-engine')).toBeNull()
     for (const sw of switches) expect(sw).toHaveAttribute('aria-checked', 'false')
-    await userEvent.click(switches[1])
-    expect(switches[1]).toHaveAttribute('aria-checked', 'true')
+    const cursorSwitch = document.getElementById('settings-status-cursor')!
+    await userEvent.click(cursorSwitch)
+    expect(cursorSwitch).toHaveAttribute('aria-checked', 'true')
     expect(isStatusItemHidden('cursor')).toBe(false)
     act(() => { ids.forEach((id) => setStatusItemHidden(id, false)) })
   })

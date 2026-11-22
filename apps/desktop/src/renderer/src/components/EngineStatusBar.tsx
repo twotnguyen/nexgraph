@@ -2,7 +2,7 @@ import { Children, cloneElement, isValidElement, useEffect, useRef, useState, ty
 import { createPortal } from 'react-dom'
 import type { EngineStatus } from '@shared/engine-status'
 import { isStatusItemHidden, setStatusItemHidden, useHiddenStatusItems, useStatusBar } from '../state/layoutPrefs'
-import { runCommand } from '../state/commands'
+import { runCommand, useCommandAvailable } from '../state/commands'
 import { getStatusBarItem } from '../state/statusBarRegistry'
 import { tr } from '../strings'
 
@@ -16,6 +16,8 @@ interface Props {
 /** Thanh trạng thái kiểu Wu: trái là trạng thái engine, phải là mục của thẻ đang mở (vị trí con trỏ, ngôn ngữ…). */
 export function EngineStatusBar({ status, onRestart }: Props) {
   const shown = useStatusBar()
+  const gitAvailable = useCommandAvailable('git_panel.toggle')
+  const notificationsAvailable = useCommandAvailable('notifications.toggle')
   // Ẩn bằng thuộc tính hidden (vẫn dựng sẵn để StatusBarItems tìm được chỗ gắn); engine lỗi thì luôn hiện để còn nút Khởi động lại.
   return (
     <footer className="status-bar" aria-label={tr('Thanh trạng thái')} data-state={status.state} hidden={!shown && status.state !== 'error'}>
@@ -28,8 +30,8 @@ export function EngineStatusBar({ status, onRestart }: Props) {
         </span>
       </button>
       <StatusBarItems>
-        <button type="button" data-status-id="git" className="status-item">{tr(getStatusBarItem('git')!.labelKey)}</button>
-        <button type="button" data-status-id="notifications" className="status-item">{tr(getStatusBarItem('notifications')!.labelKey)}</button>
+        {gitAvailable && <button type="button" data-status-id="git" className="status-item">{tr(getStatusBarItem('git')!.labelKey)}</button>}
+        {notificationsAvailable && <button type="button" data-status-id="notifications" className="status-item">{tr(getStatusBarItem('notifications')!.labelKey)}</button>}
       </StatusBarItems>
       <div id={RIGHT_SLOT} className="status-right" />
     </footer>

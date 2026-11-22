@@ -7,6 +7,7 @@ import { Icon, type IconName } from '../components/common/icons'
 import { THEMES, setTheme, useThemeId, useThemesVersion } from '../state/useTheme'
 import { setBlame, setEditorPrefs, setVimMode, useBlame, useEditorPrefs, useVimMode } from '../state/editorPrefs'
 import { CHAT_WIDTH, TERMINAL_HEIGHT, setChatDock, setChatWidth, setExplorerOpen, setStatusBar, setStatusItemHidden, setTerminalHeight, useChatDock, useChatWidth, useExplorerOpen, useHiddenStatusItems, useStatusBar, useTerminalHeight } from '../state/layoutPrefs'
+import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
 import { Toast } from '../components/common/Toast'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
@@ -21,14 +22,7 @@ const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' 
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
-const STATUS_ITEMS = [
-  { id: 'diagnostics', label: 'Chẩn đoán' },
-  { id: 'cursor', label: 'Đi đến dòng' },
-  { id: 'language', label: 'Ngôn ngữ' },
-  { id: 'eol', label: 'Kiểu xuống dòng' },
-  { id: 'encoding', label: 'Bảng mã' },
-  { id: 'vim', label: 'Chế độ Vim' }
-] as const
+const STATUS_ITEMS = STATUS_BAR_ITEMS.filter(({ id }) => id !== 'engine').map(({ id, labelKey }) => ({ id, label: labelKey }))
 
 // Từ khoá cho ô tìm: tiêu đề và vài chữ người dùng hay gõ của mỗi mục.
 const SECTION_WORDS = {

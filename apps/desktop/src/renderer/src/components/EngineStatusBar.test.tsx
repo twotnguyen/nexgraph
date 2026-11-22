@@ -9,6 +9,11 @@ import { STATUS_BAR_ITEMS, getStatusBarItem } from '../state/statusBarRegistry'
 
 afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false); setStatusItemHidden('git', false) }) })
 
+const withGlobalHandlers = () => [
+  registerHandler('git_panel.toggle', () => {}),
+  registerHandler('notifications.toggle', () => {})
+]
+
 describe('EngineStatusBar', () => {
   it('shows starting', () => {
     render(<EngineStatusBar status={{ state: 'starting' }} onRestart={() => {}} />)
@@ -100,6 +105,7 @@ describe('status bar registry', () => {
   it('shows a context item only while its provider supplies it and runs the registry command', () => {
     const run = vi.fn()
     const unregister = registerHandler('editor.indentation_selector', run)
+    const off = withGlobalHandlers()
     try {
       render(<><StatusBarItems><span data-status-id="indentation">4 spaces</span></StatusBarItems>
         <EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={() => {}} /></>)
@@ -114,10 +120,12 @@ describe('status bar registry', () => {
       expect(right).toHaveTextContent('Git')
     } finally {
       unregister()
+      off.forEach((fn) => fn())
     }
   })
 
   it('renders global git and notification items and hides them by their own key', () => {
+    const off = withGlobalHandlers()
     render(<EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={() => {}} />)
     const right = () => screen.getByLabelText('Thanh trạng thái').querySelector('.status-right')!
     expect(right()).toHaveTextContent('Git')
@@ -128,5 +136,22 @@ describe('status bar registry', () => {
     expect(localStorage.getItem('nexgraph.statusbar.hidden:git')).toBe('1')
     expect(right()).toHaveTextContent('Thông báo')
     act(() => setStatusItemHidden('git', false))
+    off.forEach((fn) => fn())
+  })
+
+  it('hiện mục global chỉ khi lệnh có handler ở màn hiện tại', () => {
+    render(<EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={() => {}} />)
+    const right = () => screen.getByLabelText('Thanh trạng thái').querySelector('.status-right')!
+    expect(right()).not.toHaveTextContent('Git')
+    expect(right()).not.toHaveTextContent('Thông báo')
+    let offGit = () => {}
+    let offNotifications = () => {}
+    act(() => { offGit = registerHandler('git_panel.toggle', () => {}) })
+    expect(right()).toHaveTextContent('Git')
+    act(() => { offNotifications = registerHandler('notifications.toggle', () => {}) })
+    expect(right()).toHaveTextContent('Thông báo')
+    act(() => { offNotifications(); offGit() })
+    expect(right()).not.toHaveTextContent('Git')
+    expect(right()).not.toHaveTextContent('Thông báo')
   })
 })
