@@ -103,6 +103,24 @@ describe('approval gate', () => {
     expect(vi.getTimerCount()).toBe(0)
     gate.resolve(asked().id, true) // no-op
   })
+  it('chế độ auto vẫn hỏi tệp có thể biến lần ghi thành chạy mã', async () => {
+    // REV-15: auto duyệt mọi tệp trong dự án, kể cả .vscode/tasks.json và .husky/* —
+    // ghi được hai chỗ đó là chạy được mã ngoài phạm vi checkpoint.
+    gate = createApprovalGate({ root, getMode: () => mode, getPolicy: () => 'auto', ask, preview } as never)
+    for (const path of ['.vscode/tasks.json', '.husky/pre-commit', '.github/workflows/ci.yml']) {
+      ask.mockClear()
+      const p = gate.check('write', { path })
+      await flush()
+      expect(ask, path).toHaveBeenCalledTimes(1)
+      gate.resolve(asked().id, true)
+      expect(await p).toMatchObject({ allow: true })
+    }
+  })
+  it('chế độ auto vẫn tự duyệt tệp nguồn thường', async () => {
+    gate = createApprovalGate({ root, getMode: () => mode, getPolicy: () => 'auto', ask, preview } as never)
+    expect(await gate.check('write', { path: 'src/a.ts' })).toMatchObject({ allow: true })
+    expect(ask).not.toHaveBeenCalled()
+  })
   it('denyAll từ chối mọi yêu cầu đang treo', async () => {
     const a = gate.check('write', { path: 'a.ts' })
     const b = gate.check('edit', { path: 'b.ts' })
