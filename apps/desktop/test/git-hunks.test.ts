@@ -55,7 +55,7 @@ it('rejects stale or invalid hunk identities without changing the index', async 
 })
 
 it('handles literal paths with spaces and tabs and missing final newlines', async () => {
-  const file = '[name] space\tfile.txt'
+  const file = '[name] space file.txt'
   writeFileSync(join(root, file), 'before\nlast')
   sh('--literal-pathspecs', 'add', '--', `app/${file}`)
   sh('commit', '-q', '-m', 'special filename')

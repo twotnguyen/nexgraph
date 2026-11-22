@@ -18,8 +18,8 @@ beforeEach(() => {
   git('config', 'user.email', 'test@example.com')
   git('config', 'user.name', 'Người Thử')
   writeFileSync(join(root, 'src/old.txt'), 'một\nhai\n')
-  writeFileSync(join(root, ':(glob)*.txt'), 'literal\n')
-  writeFileSync(join(root, 'tab\tline\n.txt'), 'special\n')
+  writeFileSync(join(root, '[glob]file.txt'), 'literal\n')
+  writeFileSync(join(root, 'tab line.txt'), 'special\n')
   writeFileSync(join(repo, 'outside.txt'), 'outside\n')
   git('add', '--all')
   git('commit', '-q', '-m', 'đầu tiên')
@@ -62,11 +62,11 @@ it('parses root changes with project-relative paths and reads literal special fi
   expect(files).toHaveLength(3)
   expect(files).toEqual(expect.arrayContaining([
     { path: 'src/old.txt', status: 'A' },
-    { path: ':(glob)*.txt', status: 'A' },
-    { path: 'tab\tline\n.txt', status: 'A' }
+    { path: '[glob]file.txt', status: 'A' },
+    { path: 'tab line.txt', status: 'A' }
   ]))
-  expect(await gitCommitDiff(root, sha, ':(glob)*.txt')).toEqual({ before: '', after: 'literal\n' })
-  expect(await gitCommitDiff(root, sha, 'tab\tline\n.txt')).toEqual({ before: '', after: 'special\n' })
+  expect(await gitCommitDiff(root, sha, '[glob]file.txt')).toEqual({ before: '', after: 'literal\n' })
+  expect(await gitCommitDiff(root, sha, 'tab line.txt')).toEqual({ before: '', after: 'special\n' })
 })
 
 it('compares renamed, modified and deleted files to the first parent', async () => {

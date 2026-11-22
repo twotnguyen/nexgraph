@@ -1,10 +1,11 @@
 import { realpathSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import type { GitWorktree } from '../../shared/api'
 import { fail, git } from './repo'
 
-const real = (path: string): string => {
-  try { return realpathSync.native(path) } catch { return path }
+/** Porcelain trả `C:/...` hoặc tên ngắn; `resolve` cũng đổi separator về dạng native khi thư mục đã mất. */
+export const canonicalPath = (path: string): string => {
+  try { return realpathSync.native(path) } catch { return resolve(path) }
 }
 
 /** Mỗi worktree là một khối dòng `từ-khoá giá trị` cách nhau dòng trống; khối đầu là worktree chính. Bỏ kho bare (không có thư mục làm việc). */
@@ -29,8 +30,11 @@ export function parseWorktrees(raw: string): Omit<GitWorktree, 'current'>[] {
 /** `current`: worktree chứa thư mục dự án (dự án có thể là thư mục con của worktree). */
 export async function gitWorktrees(root: string): Promise<GitWorktree[]> {
   const [raw, top] = await Promise.all([git(root, ['worktree', 'list', '--porcelain']), git(root, ['rev-parse', '--show-toplevel'])])
-  const here = real(top.replace(/\r?\n$/, ''))
-  return parseWorktrees(raw).map((worktree) => ({ ...worktree, current: real(worktree.path) === here }))
+  const here = canonicalPath(top.replace(/\r?\n$/, ''))
+  return parseWorktrees(raw).map((worktree) => {
+    const path = canonicalPath(worktree.path)
+    return { ...worktree, path, current: path === here }
+  })
 }
 
 const BAD_BRANCH = 'Tên nhánh không hợp lệ'

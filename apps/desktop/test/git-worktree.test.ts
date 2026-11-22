@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { gitWorktreeAdd, gitWorktreeRemove, gitWorktrees, parseWorktrees } from '../src/main/git/worktree'
+import { canonicalPath, gitWorktreeAdd, gitWorktreeRemove, gitWorktrees, parseWorktrees } from '../src/main/git/worktree'
 
 const sha = (letter: string) => letter.repeat(40)
 
@@ -33,12 +33,25 @@ describe('parseWorktrees', () => {
   })
 })
 
+describe('canonicalPath', () => {
+  it('dùng realpath native cho thư mục có thật và path native cho thư mục đã mất', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ng-path-'))
+    try {
+      expect(canonicalPath(join(dir, '.').split(sep).join('/'))).toBe(realpathSync.native(dir))
+      const missing = join(dir, 'gone', 'sub').split(sep).join('/')
+      expect(canonicalPath(missing)).toBe(join(dir, 'gone', 'sub'))
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
 let base: string
 let repo: string
 const sh = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
 
 beforeEach(() => {
-  base = realpathSync(mkdtempSync(join(tmpdir(), 'ng-worktree-')))
+  base = realpathSync.native(mkdtempSync(join(tmpdir(), 'ng-worktree-')))
   repo = join(base, 'app')
   mkdirSync(join(repo, 'sub'), { recursive: true })
   sh(repo, 'init', '-q', '-b', 'main')

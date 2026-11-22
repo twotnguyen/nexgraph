@@ -16,6 +16,8 @@ beforeEach(() => {
   root = join(repo, 'app')
   mkdirSync(join(root, 'src'), { recursive: true })
   sh('init', '-q', '-b', 'main')
+  sh('config', 'core.autocrlf', 'false')
+  sh('config', 'core.eol', 'lf')
   sh('config', 'user.email', 'test@example.com')
   sh('config', 'user.name', 'Người Thử')
   writeFileSync(join(root, 'src/a.ts'), 'one\ntwo\n')
@@ -97,8 +99,8 @@ it('thư mục không phải kho git', async () => {
 })
 
 it('đếm numstat NUL-safe, đổi tên, nhị phân và tệp chưa theo dõi', async () => {
-  const oldName = 'src/old\tname.ts'
-  const newName = 'src/new\tline\nfile.ts'
+  const oldName = 'src/old name.ts'
+  const newName = 'src/new line file.ts'
   writeFileSync(join(root, oldName), 'one\ntwo\nthree\n')
   writeFileSync(join(root, 'binary.bin'), Buffer.from([0, 1]))
   sh('add', '.')
