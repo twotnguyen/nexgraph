@@ -185,7 +185,7 @@ function inConsentBase(base: URL, request: URL): boolean {
 }
 
 const STATUS = /\b([45]\d\d)\b/
-const NETWORK = /fetch failed|connection error|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timed? ?out|network|socket|terminated/i
+const NETWORK = /fetch failed|connection error|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timed? ?out|network|socket|terminated|stream ended|premature close|other side closed|EPIPE|UND_ERR_SOCKET|hang up|reset by peer/i
 
 /** Khoá đang active (do AccountService đăng ký) để che cả giá trị không theo mẫu `sk-*`. */
 const activeSecrets = new Set<string>()

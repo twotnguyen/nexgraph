@@ -239,7 +239,11 @@ describe('AgentService (phiên giả)', () => {
   it.each([
     ['401 Unauthorized', 'ai_unauthorized', 'API key bị từ chối'],
     ['429 Too Many Requests', 'ai_rate_limited', 'Đã chạm hạn mức hoặc giới hạn tốc độ của nhà cung cấp. Kiểm tra hạn mức rồi thử lại.'],
-    ['fetch failed: ECONNREFUSED', 'ai_unreachable', 'Không kết nối được tới nhà cung cấp AI']
+    ['fetch failed: ECONNREFUSED', 'ai_unreachable', 'Không kết nối được tới nhà cung cấp AI'],
+    // AI-05: stream đứt giữa câu trả lời cũng là mất kết nối, không phải "Trợ lý AI gặp lỗi" chung.
+    ['stream ended without a finish reason', 'ai_unreachable', 'Không kết nối được tới nhà cung cấp AI'],
+    ['Premature close', 'ai_unreachable', 'Không kết nối được tới nhà cung cấp AI'],
+    ['socket hang up', 'ai_unreachable', 'Không kết nối được tới nhà cung cấp AI']
   ])('nhà cung cấp lỗi "%s" → sự kiện error tiếng Việt, prompt() không ném, lượt sau vẫn chạy', async (raw, code, message) => {
     const { svc, sessions, of } = setup()
     await svc.prompt('p1', 'a', TARGET)
