@@ -173,3 +173,21 @@ def test_global_export_twice_does_not_overwrite(api, copy_fixture, tmp_path):
     second = api.post("/v1/global/export", json={"out_dir": str(out)}).json()["files"][0]
     assert second != first and Path(second).is_file()
     assert Path(first).read_text(encoding="utf-8") == "nguoi dung da sua"
+
+
+def test_incremental_refresh_relinks_cross_repo_edges(api, copy_fixture):
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    has_call = lambda rows: any((r["id_nut_nguon"], r["id_nut_dich"]) == APP_CALL for r in rows)
+    _wait_edges(api, has_call)
+    root = api.app.state.services.registry.get(app).path
+    cart = root / "src" / "cart.ts"
+    original = cart.read_text(encoding="utf-8")
+    cart.write_text('import { formatSum } from "@demo/mathlib";\n\n'
+                    'export function checkout(prices: number[]): string {\n  return formatSum(prices.length);\n}\n',
+                    encoding="utf-8")
+    assert api.post(f"/v1/projects/{app}/refresh").json()["status"] == "ok"
+    _wait_edges(api, lambda rows: not has_call(rows))  # bỏ lời gọi: cạnh liên repo phải biến mất sau refresh
+    cart.write_text(original, encoding="utf-8")
+    assert api.post(f"/v1/projects/{app}/refresh").json()["status"] == "ok"
+    _wait_edges(api, has_call)  # và xuất hiện lại
