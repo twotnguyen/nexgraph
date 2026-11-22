@@ -55,7 +55,9 @@ it('rejects stale or invalid hunk identities without changing the index', async 
 })
 
 it('handles literal paths with spaces and tabs and missing final newlines', async () => {
-  const file = '[name] space file.txt'
+  // Win32 cấm tab trong tên tệp; POSIX giữ fixture đặc biệt.
+  const file = process.platform === 'win32' ? '[name] space file.txt' : '[name] space\tfile.txt'
+  if (process.platform !== 'win32') expect(file).toContain('\t')
   writeFileSync(join(root, file), 'before\nlast')
   sh('--literal-pathspecs', 'add', '--', `app/${file}`)
   sh('commit', '-q', '-m', 'special filename')
