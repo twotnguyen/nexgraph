@@ -1,6 +1,6 @@
 # Kiến trúc NexGraph
 
-Tài liệu mô tả mã tại mốc `43d44bd` (origin/main, 23/11/2026) và bổ sung cho [SRS](SRS.md) và [mô hình dữ liệu](data-model.md). Các thiết kế ở Sprint 2 phản ánh thời điểm lập kế hoạch. Sơ đồ dưới đây lấy điểm vào, hợp đồng và chỗ lưu dữ liệu từ mã hiện hành. [Bản phát hành hiện hành 0.1.2](../release/README.md) dùng Electron độc lập và Monaco. Code-OSS là bản xem trước tích hợp.
+Tài liệu mô tả mã tại mốc `66a2cfc` (origin/main, 23/11/2026) và bổ sung cho [SRS](SRS.md) và [mô hình dữ liệu](data-model.md). Các thiết kế ở Sprint 2 phản ánh thời điểm lập kế hoạch. Sơ đồ dưới đây lấy điểm vào, hợp đồng và chỗ lưu dữ liệu từ mã hiện hành. [Bản phát hành hiện hành 0.1.2](../release/README.md) dùng Electron độc lập và Monaco. Code-OSS là bản xem trước tích hợp.
 
 ## Thành phần và ranh giới tiến trình
 
