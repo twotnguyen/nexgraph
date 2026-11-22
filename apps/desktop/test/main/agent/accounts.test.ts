@@ -624,4 +624,47 @@ describe('AccountService', () => {
       expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-moi')).toBe(true)
     })
   })
+
+  describe('Minor #29: đăng xuất khi đồng bộ credential lỗi', () => {
+    /** Phiên OAuth openai + key đã lưu (như test I1); trả hàm logout thật của pi để test tự điều khiển lỗi. */
+    const seeded = async (notify?: (e: unknown) => void) => {
+      mkdirSync(join(base, 'agent'), { recursive: true })
+      writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
+        expires: Date.now() + 3_600_000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
+      new SecretStore(join(base, 'ai-key.json'), box).set('openai', 'sk-fake-da-luu')
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).endsWith('openid-configuration')
+        ? Response.json({ revocation_endpoint: 'https://auth.openai.com/oauth/revoke' }) : new Response(null, { status: 200 }))
+      const { svc } = await make({ notify })
+      return { svc, realLogout: svc.modelRuntime.logout.bind(svc.modelRuntime) }
+    }
+
+    it('G1: refresh lỗi vẫn nạp lại key đã lưu trước khi báo lỗi', async () => {
+      const { svc, realLogout } = await seeded()
+      vi.spyOn(svc.modelRuntime, 'logout').mockImplementation(async (id) => {
+        await realLogout(id) // pi xoá credential trong kho rồi mới báo lỗi đồng bộ runtime
+        throw Object.assign(new Error('không ghi được models.json'), { name: 'CredentialSynchronizationError' })
+      })
+      // Lần refresh đầu (nhánh lỗi của logout) hỏng; lần refresh trong setRuntimeApiKey lúc nạp lại key thì được.
+      let refreshes = 0
+      vi.spyOn(svc.modelRuntime, 'refresh').mockImplementation(async () => {
+        refreshes++
+        return refreshes === 1
+          ? { aborted: false, errors: new Map([['openai', new Error('đồng bộ lỗi')]]) }
+          : { aborted: false, errors: new Map() }
+      })
+      await expect(svc.logout('openai')).rejects.toMatchObject({ code: 'ai_error' })
+      // Key phải active ngay, không phải chờ khởi động lại.
+      expect((await svc.modelRuntime.getAuth('openai'))?.auth.apiKey).toBe('sk-fake-da-luu')
+    })
+
+    it('G2: không nạp lại được key thì báo cho người dùng, không nuốt lỗi', async () => {
+      const notify = vi.fn()
+      const { svc } = await seeded(notify)
+      vi.spyOn(svc.modelRuntime, 'setRuntimeApiKey').mockRejectedValue(new Error('models.json chỉ đọc'))
+      await expect(svc.logout('openai')).resolves.toBeUndefined()
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'info', message: expect.stringContaining('API key')
+      }))
+    })
+  })
 })

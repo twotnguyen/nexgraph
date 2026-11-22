@@ -684,19 +684,32 @@ export class AccountService {
     } catch (e) {
       if (!(e instanceof Error) || e.name !== 'CredentialSynchronizationError') throw e
       const result = await this.modelRuntime.refresh({ allowNetwork: false, providers: [providerId] }).catch(() => null)
-      if (!result || result.errors.has(providerId)) throw new AgentError('ai_error', 'Đã xóa thông tin đăng nhập. Mở lại ứng dụng để đồng bộ danh sách tài khoản.')
+      if (!result || result.errors.has(providerId)) {
+        // Credential đã bị xoá nhưng runtime chưa đồng bộ: nạp lại key đã lưu trước khi báo lỗi (G1).
+        await this.restoreSavedKey(providerId)
+        throw new AgentError('ai_error', 'Đã xóa thông tin đăng nhập. Mở lại ứng dụng để đồng bộ danh sách tài khoản.')
+      }
     } finally {
       this.accountGeneration(providerId, true)
     }
-    // Pi xoá cả override runtime khi logout: nạp lại key đã lưu ngay, đúng cách create() nạp lúc khởi động.
-    const savedKey = this.deps.secrets.get(providerId)
-    try {
-      if (savedKey && (await this.credentials.read(providerId))?.type !== 'oauth') {
-        rememberSecret(savedKey)
-        await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)
-      }
-    } catch { /* key vẫn còn trong ai-key.json; lần khởi động sau sẽ nạp lại */ }
+    await this.restoreSavedKey(providerId)
     if (!revoked) this.deps.notify({ type: 'info', message: 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.' })
+  }
+
+  /**
+   * Pi xoá cả override runtime khi logout: nạp lại key đã lưu ngay, đúng cách create() nạp lúc khởi động.
+   * Lỗi đồng bộ không được nuốt im lặng: người dùng phải biết key chưa active trong phiên này (G2).
+   */
+  private async restoreSavedKey(providerId: string): Promise<void> {
+    const savedKey = this.deps.secrets.get(providerId)
+    if (!savedKey) return
+    try {
+      if ((await this.credentials.read(providerId))?.type === 'oauth') return
+      rememberSecret(savedKey)
+      await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)
+    } catch {
+      this.deps.notify({ type: 'info', message: 'Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.' })
+    }
   }
 
   // ----- kiểm tra kết nối: gọi provider thật với model đang chọn -----
