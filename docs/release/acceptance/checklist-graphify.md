@@ -87,7 +87,7 @@ Mở hộp thoại **Xuất…**, lần lượt chọn **Phạm vi**: **Toàn b�
 
 ## §3.5 MCP và tích hợp trợ lý AI
 
-Số tool trên nhánh `int/dot-2` (`bc9b073`, `engine/tests/test_mcp.py`):
+Số tool trên `main` tại `83e49b7` (`engine/tests/test_mcp.py`; đối chiếu `grep -c "@mcp.tool" engine/src/nexgraph_engine/mcp/server.py` = 27, trong đó 2 tool chỉ có ở chế độ `--global`):
 
 - `nexgraph-engine mcp --project …` có **25 tool**. 24 tool chỉ đọc (`readOnlyHint`); riêng `remember` ghi vào CSDL NexGraph.
   - `search`, `get_node`, `get_neighbors`, `get_architecture`, `get_evidence`, `get_impact`, `read_code`;
