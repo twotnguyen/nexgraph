@@ -43,3 +43,4 @@
 .dbg-attach select { flex: none; height: 25px; padding: 0 4px; font-size: 12px; }
 .dbg-attach .dbg-port { flex: none; width: 56px; }
 .dbg-actions { display: flex; gap: 2px; }
+.dbg-collapse-open { display: inline-flex; transform: rotate(90deg); }

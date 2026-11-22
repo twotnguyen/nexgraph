@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { listTasks, resolveTask } from '../src/main/tasks'
+import { ensureTasksFile, listTasks, parseJsonc, resolveTask } from '../src/main/tasks'
 import { UserError } from '../src/main/user-error'
 import type { TaskDefinition } from '../src/shared/api'
 
@@ -173,5 +173,27 @@ describe('project tasks', () => {
       symlinkSync(outside, join(root, 'link'), 'dir')
       expect(() => resolveTask(root, task, { file: 'link/file.ts' })).toThrow(expect.objectContaining({ code: 'outside_project' }))
     }
+  })
+})
+
+describe('tệp cấu hình task', () => {
+  it('tạo tasks.json mẫu và không ghi đè nội dung có sẵn', async () => {
+    expect(await ensureTasksFile(root)).toBe('.vscode/tasks.json')
+    const path = join(root, '.vscode', 'tasks.json')
+    expect(parseJsonc(readFileSync(path, 'utf8'))).toMatchObject({ version: '2.0.0', tasks: [] })
+    await expect(listTasks(root)).resolves.toEqual([])
+
+    const custom = '// của người dùng\n{ "version": "2.0.0", "tasks": [] }'
+    writeFileSync(path, custom)
+    expect(await ensureTasksFile(root)).toBe('.vscode/tasks.json')
+    expect(readFileSync(path, 'utf8')).toBe(custom)
+  })
+
+  it('luôn trả .vscode/tasks.json, kể cả khi chỉ có .nexgraph/tasks.json', async () => {
+    config('.nexgraph', '{ "version": "2.0.0", "tasks": [] }')
+    expect(await ensureTasksFile(root)).toBe('.vscode/tasks.json')
+    expect(parseJsonc(readFileSync(join(root, '.vscode', 'tasks.json'), 'utf8'))).toMatchObject({ version: '2.0.0', tasks: [] })
+    config('.vscode', '{ "version": "2.0.0", "tasks": [] }')
+    expect(await ensureTasksFile(root)).toBe('.vscode/tasks.json')
   })
 })

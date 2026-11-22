@@ -124,6 +124,7 @@ const api: NexGraphApi = {
   },
   tasks: {
     list: (pid) => call('tasks:list', pid),
+    configFile: (pid) => call('tasks:config-file', pid),
     resolve: (pid, task, context) => call('tasks:resolve', pid, task, context)
   },
   git: {

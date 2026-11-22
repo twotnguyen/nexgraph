@@ -1,8 +1,8 @@
 import { tr } from '../../strings'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { DebugConfigInfo, DebugVariable } from '@shared/api'
 import { Icon } from '../common/icons'
-import { addWatch, attachDebugging, clearAllBreakpoints, debugStep, evaluateConsole, pauseDebugging, removeWatch, restartDebugging, selectDebugConfig, selectFrame, setBreakpoint, setDebugError, startDebugging, stopDebugging, toggleBreakpoint, useDebugState, type ConfigRef, type DebugKind } from '../../state/debugState'
+import { addWatch, attachDebugging, clearAllBreakpoints, debugStep, evaluateConsole, pauseDebugging, removeWatch, restartDebugging, selectDebugConfig, selectFrame, setBreakpoint, setDebugError, setDebugSectionCollapsed, startDebugging, stopDebugging, toggleBreakpoint, useDebugLayout, useDebugState, type ConfigRef, type DebugKind, type DebugLayoutSection } from '../../state/debugState'
 import './debug-panel.css'
 import { errorText } from '../../state/errorText'
 import { BreakpointForm } from './BreakpointForm'
@@ -55,8 +55,9 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
   const loadConfigs = () => api?.configs(projectId).then((list) => { setConfigs(list); setConfigError(null) }, (e: unknown) => setConfigError(errorText(e)))
   const output = useRef<HTMLPreElement>(null)
   const kind = debugKindOf(target)
+  const collapsed = useDebugLayout(kind ?? 'node')
   useEffect(() => { void api?.adapterStatus().then(setInstalled).catch(() => {}) }, [api])
-  useEffect(() => { if (output.current) output.current.scrollTop = output.current.scrollHeight }, [debug.output])
+  useEffect(() => { if (output.current) output.current.scrollTop = output.current.scrollHeight }, [debug.output, collapsed.console])
   useEffect(() => { void loadConfigs() }, [api, projectId]) // eslint-disable-line react-hooks/exhaustive-deps
   // Cấu hình đã chọn không còn trong tệp (đổi tên, xoá): bỏ chọn để F5 không chạy cấu hình không tồn tại.
   useEffect(() => {
@@ -100,6 +101,20 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
   }
   const attach = () => void attachDebugging(projectId, attachKind, attachHost.trim() || ATTACH_DEFAULT[attachKind].host, Number(attachPort.trim() || ATTACH_DEFAULT[attachKind].port))
   const breakpoints = Object.entries(debug.breakpoints).sort(([a], [b]) => a.localeCompare(b)).flatMap(([file, points]) => points.map((point) => ({ file, ...point })))
+  const section = (id: DebugLayoutSection, title: string, body: ReactNode, actions?: ReactNode) => {
+    const isCollapsed = !!collapsed[id]
+    const label = tr(isCollapsed ? 'Mở rộng {section}' : 'Thu gọn {section}', { section: title })
+    return <section aria-label={tr(title)}>
+      <div className="dbg-section-head"><h3>{tr(title)}</h3>
+        <div className="dbg-actions">{actions}
+          <button type="button" className="dbg-btn" aria-expanded={!isCollapsed} aria-label={label} title={label} onClick={() => setDebugSectionCollapsed(kind ?? 'node', id, !isCollapsed)}>
+            <span className={isCollapsed ? undefined : 'dbg-collapse-open'}><Icon name="chevron" size={13} /></span>
+          </button>
+        </div>
+      </div>
+      {!isCollapsed && body}
+    </section>
+  }
 
   return (
     <div className="debug-panel">
@@ -150,13 +165,13 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
           {nodeAttachBlocked && needsAdapter !== 'node' && banner('node')}
         </section>
       )}
-      <section aria-label={tr('Ngăn xếp gọi')}><h3>{tr('Ngăn xếp gọi')}</h3>
+      {section('stack', 'Ngăn xếp gọi', <>
         <ul className="dbg-list">{debug.frames.map((f) => (
           <li key={f.id}><button type="button" className="dbg-frame" aria-current={f.id === debug.frameId || undefined} onClick={() => void selectFrame(f)}>
             <span>{f.name}</span><span className="muted">{f.file ? `${f.file.split('/').pop()}:${f.line}` : tr('ngoài dự án')}</span>
           </button></li>
         ))}</ul>
-      </section>
+      </>)}
       <section aria-label={tr('Theo dõi')}><h3>{tr('Theo dõi')}</h3>
         <ul className="dbg-list">{debug.watches.map((item) => (
           <li key={item.expression} className="dbg-watch">
@@ -169,30 +184,29 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
           <button type="submit" aria-label={tr('Thêm biểu thức theo dõi')} title={tr('Thêm biểu thức theo dõi')}>+</button>
         </form>
       </section>
-      <section aria-label={tr('Biến')}><h3>{tr('Biến')}</h3>
+      {section('variables', 'Biến', <>
         {debug.scopes.map((scope) => (
           <div key={scope.variablesReference}>
             <p className="dbg-scope muted">{scope.name}</p>
             <ul className="dbg-list">{scope.vars.map((v) => <VariableRow key={v.name} variable={v} depth={0} />)}</ul>
           </div>
         ))}
-      </section>
-      <section aria-label={tr('Modules')}><h3>{tr('Modules')}</h3>
+      </>)}
+      {section('modules', 'Modules', <>
         {debug.moduleError && <p role="alert" className="dbg-error">{debug.moduleError}</p>}
         {!debug.modules.length && !debug.moduleError && <p className="dbg-empty muted">{tr('Adapter không cung cấp danh sách module.')}</p>}
         <ul className="dbg-list">{debug.modules.map((module) => (
           <li key={module.id} className="dbg-scope" title={module.path ?? undefined}>{module.name}{module.version ? ` · ${module.version}` : ''}</li>
         ))}</ul>
-      </section>
-      <section aria-label={tr('Nguồn đã tải')}><h3>{tr('Nguồn đã tải')}</h3>
+      </>)}
+      {section('sources', 'Nguồn đã tải', <>
         {debug.sourceError && <p role="alert" className="dbg-error">{debug.sourceError}</p>}
         {!debug.loadedSources.length && !debug.sourceError && <p className="dbg-empty muted">{tr('Adapter không cung cấp danh sách nguồn.')}</p>}
         <ul className="dbg-list">{debug.loadedSources.map((source, index) => (
           <li key={source.sourceReference ?? source.path ?? source.name ?? index} className="dbg-scope" title={source.path ?? undefined}>{source.path ?? source.name ?? tr('(nguồn không tên)')}</li>
         ))}</ul>
-      </section>
-      <section aria-label={tr('Điểm dừng')}><div className="dbg-section-head"><h3>{tr('Điểm dừng')}</h3>
-        <button type="button" className="dbg-btn" disabled={!breakpoints.length} title={tr('Xoá tất cả điểm dừng')} aria-label={tr('Xoá tất cả điểm dừng')} onClick={clearAllBreakpoints}><Icon name="trash" size={13} /></button></div>
+      </>)}
+      {section('breakpoints', 'Điểm dừng', <>
         {breakpoints.length === 0 && <p className="dbg-empty muted">{tr('Bấm lề trái của editor để đặt điểm dừng.')}</p>}
         <ul className="dbg-list">{breakpoints.map((b) => (
           <li key={`${b.file}:${b.line}`}>
@@ -208,8 +222,8 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
             {editing?.file === b.file && editing.line === b.line && <BreakpointForm point={b} onSave={(changes) => { setBreakpoint(b.file, b.line, changes); setEditing(null) }} onCancel={() => setEditing(null)} />}
           </li>
         ))}</ul>
-      </section>
-      <section aria-label={tr('Debug console')}><h3>{tr('Debug console')}</h3>
+      </>, <button type="button" className="dbg-btn" disabled={!breakpoints.length} title={tr('Xoá tất cả điểm dừng')} aria-label={tr('Xoá tất cả điểm dừng')} onClick={clearAllBreakpoints}><Icon name="trash" size={13} /></button>)}
+      {section('console', 'Debug console', <>
         <pre ref={output} className="dbg-output">{debug.output.join('')}</pre>
         <form className="dbg-input" onSubmit={(event) => {
           event.preventDefault()
@@ -236,7 +250,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
             }} />
           <button type="submit" disabled={status !== 'stopped' || debug.frameId === null} aria-label={tr('Tính biểu thức')}>↵</button>
         </form>
-      </section>
+      </>)}
     </div>
   )
 }

@@ -227,6 +227,7 @@ export const uiEnEditor: Record<string, string> = {
   'Sửa (ghi có duyệt)': 'Edit (write with approval)',
   'tắt {count} tool': '{count} tools disabled',
   'Sửa': 'Edit',
+  'Sửa tasks.json': 'Edit tasks.json',
   'Xoá hồ sơ {name}': 'Delete profile {name}',
   'Xoá': 'Delete',
   'Tên hồ sơ': 'Profile name',
@@ -243,4 +244,6 @@ export const uiEnEditor: Record<string, string> = {
   'Đổi hướng': 'Switch Direction',
   'Đã xem': 'Acknowledged',
   'Chưa xem': 'Unseen',
+  'Mở rộng {section}': 'Expand {section}',
+  'Thu gọn {section}': 'Collapse {section}',
 }

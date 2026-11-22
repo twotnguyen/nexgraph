@@ -928,19 +928,27 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     if (chatDock !== 'right') { setChatDock('right'); setChatOpen(true) }
     else setChatOpen((value) => !value)
   }, !hosted)
-  const docked = useRef<{ panel: Panel | null; chatOpen: boolean; terminal: 'closed' | 'open' | 'hidden' } | null>(null)
+  const docked = useRef<{
+    saved: { panel: Panel | null; chatOpen: boolean; terminal: 'closed' | 'open' | 'hidden' }
+    hidden: { panel: Panel | null; chatOpen: boolean; terminal: 'closed' | 'open' | 'hidden' }
+  } | null>(null)
+  useEffect(() => {
+    const snapshot = docked.current
+    if (snapshot && (panel !== snapshot.hidden.panel || chatOpen !== snapshot.hidden.chatOpen || terminal !== snapshot.hidden.terminal)) docked.current = null
+  }, [panel, chatOpen, terminal])
   useCommand('dock.all', () => {
-    if (docked.current) {
-      const saved = docked.current
+    const snapshot = docked.current
+    if (snapshot) {
       docked.current = null
-      setPanel(saved.panel)
-      setChatOpen(saved.chatOpen)
-      setTerminal(saved.terminal)
+      setPanel(snapshot.saved.panel)
+      setChatOpen(snapshot.saved.chatOpen)
+      setTerminal(snapshot.saved.terminal)
     } else {
-      docked.current = { panel, chatOpen, terminal }
-      setPanel(null)
-      setChatOpen(false)
-      if (terminal !== 'closed') setTerminal('hidden')
+      const hidden = { panel: null, chatOpen: false, terminal: terminal === 'closed' ? 'closed' as const : 'hidden' as const }
+      docked.current = { saved: { panel, chatOpen, terminal }, hidden }
+      setPanel(hidden.panel)
+      setChatOpen(hidden.chatOpen)
+      setTerminal(hidden.terminal)
     }
   }, !hosted)
   const [zoomPane, setZoomPane] = useState(false)
@@ -958,7 +966,19 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
   useCommand('focus.next_part', () => focusPart(1))
   useCommand('focus.previous_part', () => focusPart(-1))
-  useCommand('picker.reopen', () => setFinder(true))
+  const lastPicker = useRef<'theme' | 'file' | 'task' | 'worktree'>('file')
+  useEffect(() => {
+    if (finder) lastPicker.current = 'file'
+    else if (taskPicker) lastPicker.current = 'task'
+    else if (worktrees) lastPicker.current = 'worktree'
+  }, [finder, taskPicker, worktrees])
+  const openTheme = () => { lastPicker.current = 'theme'; openThemePicker() }
+  useCommand('picker.reopen', () => {
+    if (lastPicker.current === 'theme') openTheme()
+    else if (lastPicker.current === 'task') setTaskPicker(true)
+    else if (lastPicker.current === 'worktree' && openWorktree) setWorktrees(true)
+    else { lastPicker.current = 'file'; setFinder(true) }
+  })
 
   return (
     <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px`, display: hidden ? 'none' : undefined } as CSSProperties}>
@@ -971,7 +991,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           onToggle={togglePanel}
           manage={[
             ...(openWorkspaceSettings ? [{ label: tr('Cài đặt'), icon: 'sliders' as const, onSelect: () => openWorkspaceSettings() }] : []),
-            { label: tr('Chọn theme…'), icon: 'palette', onSelect: openThemePicker }
+            { label: tr('Chọn theme…'), icon: 'palette', onSelect: openTheme }
           ]}
         />
       )}
@@ -1205,7 +1225,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             </div>
           )}
         </div>
-        {terminal !== 'closed' && <TerminalPanel projectId={project.project_id} projectPath={project.path} newRequest={terminalNew} taskRequest={taskRequest} hidden={hidden || terminal === 'hidden'}
+        {terminal !== 'closed' && <TerminalPanel projectId={project.project_id} projectPath={project.path} newRequest={terminalNew} taskRequest={taskRequest} hidden={hidden || zoomPane || terminal === 'hidden'}
           onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
           onHide={() => setTerminal('hidden')} onCloseAll={() => { setTerminal('closed'); setTaskRequest(null) }} />}
       </section>
@@ -1214,7 +1234,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         onOpen={(file, line, column) => openCode(file, line, undefined, column)} onDiagnostics={() => togglePanel('diagnostics')} onError={setFeedback} />}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
       {finder && <FileFinder projectId={project.project_id} projectName={project.name} recent={recentFiles} onOpen={(path) => openCode(path)} onClose={() => setFinder(false)} />}
-      {taskPicker && <TaskPicker projectId={project.project_id} history={taskHistory} onPick={(task, oneshot) => void runTask(task, oneshot)} onClose={() => setTaskPicker(false)} />}
+      {taskPicker && <TaskPicker projectId={project.project_id} history={taskHistory} onPick={(task, oneshot) => void runTask(task, oneshot)} onOpenFile={(path) => openCode(path)} onClose={() => setTaskPicker(false)} />}
       {worktrees && openWorktree && <WorktreePicker projectId={project.project_id} onOpen={openWorktree} onClose={() => setWorktrees(false)} />}
       {joining && <JoinDialog onClose={() => setJoining(false)} onJoined={() => setTab('collab')} />}
     </div>

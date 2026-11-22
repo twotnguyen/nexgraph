@@ -10,6 +10,39 @@ export type WatchView = { expression: string; value: string | null; variablesRef
 /** Cấu hình trong .vscode/launch.json hoặc .zed/debug.json, theo (tệp, tên). */
 export type ConfigRef = Pick<DebugConfigInfo, 'source' | 'name'>
 
+/** Các mục có thể thu gọn trong bảng Gỡ lỗi; mỗi adapter/kind giữ một bản riêng. */
+export type DebugLayoutSection = 'variables' | 'stack' | 'console' | 'breakpoints' | 'modules' | 'sources'
+export type DebugLayout = Partial<Record<DebugLayoutSection, boolean>>
+const DEBUG_LAYOUT_CHANGED = 'nexgraph:debug-layout'
+const layoutKey = (kind: DebugKind) => `nexgraph.debug.layout.${kind}`
+const EMPTY_LAYOUT: DebugLayout = {}
+let layoutCache: { kind: DebugKind; raw: string | null; value: DebugLayout } | null = null
+function readDebugLayout(kind: DebugKind): DebugLayout {
+  let raw: string | null = null
+  try { raw = localStorage.getItem(layoutKey(kind)) } catch { /* chỉ là tuỳ chọn */ }
+  if (layoutCache?.kind === kind && layoutCache.raw === raw) return layoutCache.value
+  let value: DebugLayout = {}
+  try {
+    const parsed: unknown = raw ? JSON.parse(raw) : null
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) value = parsed as DebugLayout
+  } catch { /* chỉ là tuỳ chọn */ }
+  layoutCache = { kind, raw, value }
+  return value
+}
+const subscribeLayout = (notify: () => void) => {
+  window.addEventListener(DEBUG_LAYOUT_CHANGED, notify)
+  return () => window.removeEventListener(DEBUG_LAYOUT_CHANGED, notify)
+}
+export const useDebugLayout = (kind: DebugKind): DebugLayout => useSyncExternalStore(subscribeLayout, () => readDebugLayout(kind), () => EMPTY_LAYOUT)
+export function setDebugSectionCollapsed(kind: DebugKind, section: DebugLayoutSection, collapsed: boolean): void {
+  const layout = { ...readDebugLayout(kind) }
+  if (collapsed) layout[section] = true
+  else delete layout[section]
+  try { localStorage.setItem(layoutKey(kind), JSON.stringify(layout)) } catch { /* chỉ là tuỳ chọn */ }
+  layoutCache = null
+  window.dispatchEvent(new Event(DEBUG_LAYOUT_CHANGED))
+}
+
 type State = {
   breakpoints: DebugBreakpoints
   at: { file: string; line: number } | null

@@ -37,7 +37,7 @@ import type { GeminiConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
-import { listTasks, resolveTask } from './tasks'
+import { ensureTasksFile, listTasks, resolveTask } from './tasks'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
 import { gitApplyHunk, gitHunks } from './git/hunks'
@@ -323,6 +323,7 @@ export function registerIpc(
   on('terminal:kill', async (id: number) => term.kill(Number(id)))
   on('terminal:resolve-path', async (pid: string, path: string) => resolveTerminalPath(await rootOf(pid), path))
   on('tasks:list', async (pid: string) => listTasks(await rootOf(pid)))
+  on('tasks:config-file', async (pid: string) => ensureTasksFile(await rootOf(pid)))
   on('tasks:resolve', async (pid: string, task: TaskDefinition, context: { file?: string; line?: number }) => {
     validateTask(task)
     if (!context || typeof context !== 'object' ||

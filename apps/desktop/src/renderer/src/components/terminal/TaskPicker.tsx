@@ -35,11 +35,12 @@ export function matchTaskChoices(items: readonly TaskChoice[], query: string): {
   return [{ item: { key: `command:${command}`, task: { label: command, command, type: 'shell' }, recent: false, oneshot: true }, positions: [] }]
 }
 
-export function TaskPicker({ projectId, history, onPick, onClose }: {
+export function TaskPicker({ projectId, history, onPick, onClose, onOpenFile }: {
   projectId: string
   history: readonly RecentTask[]
   onPick: (task: TaskDefinition, oneshot: boolean) => void
   onClose: () => void
+  onOpenFile?: (path: string) => void
 }) {
   const [tasks, setTasks] = useState<TaskDefinition[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -51,19 +52,40 @@ export function TaskPicker({ projectId, history, onPick, onClose }: {
     return () => { alive = false }
   }, [projectId])
 
+  const editConfig = async () => {
+    const api = window.nexgraph.tasks
+    if (!api?.configFile || !onOpenFile) return
+    try {
+      onOpenFile(await api.configFile(projectId))
+      onClose()
+    } catch (e) { setError(errorText(e)) }
+  }
+
   const defined = tasks ?? []
   const recent: TaskChoice[] = history.flatMap((item, index) => {
     const task = item.oneshot ? { label: item.label, command: item.command, type: 'shell' as const }
       : defined.find((candidate) => candidate.label === item.label && candidate.command === item.command)
     return task ? [{ key: `recent:${index}`, task, recent: true, oneshot: item.oneshot }] : []
   })
-  const choices: TaskChoice[] = [...recent, ...defined.flatMap((task, index) =>
+  const items: TaskChoice[] = [...recent, ...defined.flatMap((task, index) =>
     recent.some((item) => !item.oneshot && item.task === task) ? [] : [{ key: `task:${index}`, task, recent: false, oneshot: false }])]
+  const configChoice: TaskChoice | null = onOpenFile
+    ? { key: 'config', task: { label: tr('Sửa tasks.json'), command: '' }, recent: false, oneshot: false } : null
+  const choices = configChoice ? [...items, configChoice] : items
+  const filter = (list: readonly TaskChoice[], query: string) => {
+    const matches = matchTaskChoices(list.filter((item) => item !== configChoice), query)
+    return configChoice ? [...matches, { item: configChoice, positions: [] }] : matches
+  }
   return <Picker label={tr('Chạy task')} placeholder={tr('Tìm task, hoặc gõ lệnh để chạy')} items={choices}
-    itemKey={(item) => item.key} itemText={(item) => item.task.label} filter={matchTaskChoices}
-    empty={error ?? (tasks ? tr('Không có task') : tr('Đang đọc task…'))} onCancel={onClose}
-    onPick={(item) => { onClose(); onPick(item.task, item.oneshot) }}
-    renderItem={(item, positions) => <><Icon name={item.recent ? 'history' : 'terminal'} size={14} />
-      <span><Highlight text={item.task.label} positions={positions} /></span>
-      <small>{item.oneshot && !item.recent ? tr('Chạy lệnh') : item.task.command}</small></>} />
+    itemKey={(item) => item.key} itemText={(item) => item.task.label} filter={filter}
+    empty={error ?? (tasks ? tr('Không có task') : tr('Đang đọc task…'))} error={error} onCancel={onClose}
+    onPick={(item) => {
+      if (item === configChoice) { void editConfig(); return }
+      onClose(); onPick(item.task, item.oneshot)
+    }}
+    renderItem={(item, positions) => item === configChoice
+      ? <button type="button" onClick={(event) => { event.stopPropagation(); void editConfig() }}>{tr('Sửa tasks.json')}</button>
+      : <><Icon name={item.recent ? 'history' : 'terminal'} size={14} />
+        <span><Highlight text={item.task.label} positions={positions} /></span>
+        <small>{item.oneshot && !item.recent ? tr('Chạy lệnh') : item.task.command}</small></>} />
 }

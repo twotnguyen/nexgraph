@@ -584,4 +584,37 @@ describe('EditorTab view controls', () => {
     await userEvent.click(screen.getByTitle('Bảng mã'))
     expect((await screen.findByRole('status')).textContent).toContain('engine chỉ lưu UTF-8')
   })
+
+  it('đóng được thông báo bảng mã bằng × và tự xoá sau 5 giây', async () => {
+    open()
+    await ready()
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByTitle('Bảng mã'))
+      const banner = screen.getByRole('status')
+      expect(banner.textContent).toContain('engine chỉ lưu UTF-8')
+      fireEvent.click(within(banner).getByRole('button', { name: 'Đóng thông báo' }))
+      expect(screen.queryByRole('status')).toBeNull()
+      fireEvent.click(screen.getByTitle('Bảng mã'))
+      act(() => { vi.advanceTimersByTime(4999) })
+      expect(screen.getByRole('status')).toBeTruthy()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(screen.queryByRole('status')).toBeNull()
+    } finally { vi.useRealTimers() }
+  })
+
+  it('đặt lại hẹn giờ thông báo bảng mã khi bấm lại cùng nội dung', async () => {
+    open()
+    await ready()
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByTitle('Bảng mã'))
+      act(() => { vi.advanceTimersByTime(4000) })
+      fireEvent.click(screen.getByTitle('Bảng mã'))
+      act(() => { vi.advanceTimersByTime(4000) })
+      expect(screen.getByRole('status')).toBeTruthy()
+      act(() => { vi.advanceTimersByTime(1000) })
+      expect(screen.queryByRole('status')).toBeNull()
+    } finally { vi.useRealTimers() }
+  })
 })

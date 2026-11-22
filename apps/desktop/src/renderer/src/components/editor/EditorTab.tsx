@@ -139,7 +139,13 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const [blame, setBlameLines] = useState<Map<number, GitBlameLine> | null>(null)
   const diagnostics = useDiagnostics(projectId)
   const [picker, setPicker] = useState<'eol' | 'language' | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ text: string; seq: number } | null>(null)
+  const showNotice = (text: string) => setNotice((prev) => ({ text, seq: (prev?.seq ?? 0) + 1 }))
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(null), 5000)
+    return () => window.clearTimeout(timer)
+  }, [notice])
   const activeEditor = useActiveEditor()
   const symbols = useDocumentSymbols(projectId, activeEditor?.file === file ? activeEditor : null)
   const problems = Object.values(diagnostics).flat()
@@ -608,7 +614,9 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           )}
         </p>
       )}
-      {notice && <p role="status" className="stale-banner">{notice}</p>}
+      {notice && <p role="status" className="stale-banner">{notice.text}{' '}
+        <button type="button" aria-label={tr('Đóng thông báo')} title={tr('Đóng thông báo')} onClick={() => setNotice(null)}>×</button>
+      </p>}
       <div ref={host} className="editor-host" />
       <EditorDebug file={file} editor={ready ? editor.current : null} active={active} cursor={cursor.line} />
       {format && active && (
@@ -617,7 +625,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           <button type="button" data-status-id="cursor" className="status-item" title={tr('Đi đến dòng')} onClick={() => runCommand('editor.goto_line')}>{cursor.line}:{cursor.column}</button>
           <button type="button" data-status-id="language" className="status-item" title={tr('Ngôn ngữ')} onClick={() => setPicker('language')}>{format.language}</button>
           <button type="button" data-status-id="eol" className="status-item" title={tr('Kiểu xuống dòng')} onClick={() => setPicker('eol')}>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</button>
-          <button type="button" data-status-id="encoding" className="status-item" title={tr('Bảng mã')} onClick={() => setNotice(tr('Không đổi được bảng mã: engine chỉ lưu UTF-8 và giữ nguyên BOM theo tệp trên đĩa.'))}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</button>
+          <button type="button" data-status-id="encoding" className="status-item" title={tr('Bảng mã')} onClick={() => showNotice(tr('Không đổi được bảng mã: engine chỉ lưu UTF-8 và giữ nguyên BOM theo tệp trên đĩa.'))}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</button>
           {vim && <span data-status-id="vim" className="status-item vim-status" title={tr('Chế độ Vim')} ref={setVimNode} />}
         </StatusBarItems>
       )}

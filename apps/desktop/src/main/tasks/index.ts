@@ -3,7 +3,7 @@ import type { BigIntStats } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import type { TaskDefinition } from '../../shared/api'
 import { toProjectRelative } from '../agent/approval'
-import { isProtectedRel, isWithin, MAX_EDIT_BYTES, resolveInside } from '../fs/project-fs'
+import { isProtectedRel, isWithin, MAX_EDIT_BYTES, resolveInside, writeProjectFile } from '../fs/project-fs'
 import { UserError } from '../user-error'
 
 type TaskSource = '.nexgraph/tasks.json' | '.vscode/tasks.json'
@@ -158,6 +158,17 @@ export async function listTasks(root: string): Promise<TaskDefinition[]> {
     }
   }
   return tasks
+}
+
+const TASK_SAMPLE = '// Cấu hình task (cú pháp VS Code tasks.json, cho phép chú thích).\n' +
+  JSON.stringify({ version: '2.0.0', tasks: [] }, null, 2) + '\n'
+
+/** Tệp cấu hình để mở trong editor: `.vscode/tasks.json` đã có hoặc mẫu vừa tạo. */
+export async function ensureTasksFile(root: string): Promise<string> {
+  if (readTasksFile(root, '.vscode/tasks.json') === null) {
+    await writeProjectFile(root, '.vscode/tasks.json', TASK_SAMPLE, { eol: '\n', bom: false, expectedVersion: null })
+  }
+  return '.vscode/tasks.json'
 }
 
 export function resolveTask(root: string, task: TaskDefinition, context: { file?: string; line?: number }): TaskDefinition {

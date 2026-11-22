@@ -906,6 +906,55 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeInTheDocument()
   })
 
+  it('dock.all bỏ snapshot khi panel đổi trong lúc dock ẩn', () => {
+    setup()
+    expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
+    act(() => { expect(runCommand('dock.all')).toBe(true) })
+    expect(screen.queryByRole('complementary', { name: 'Duyệt tệp' })).toBeNull()
+    act(() => { expect(runCommand('project_search.toggle')).toBe(true) })
+    expect(screen.getByRole('complementary', { name: 'Tìm trong tệp' })).toBeVisible()
+    act(() => { expect(runCommand('dock.all')).toBe(true) })
+    expect(screen.queryByRole('complementary', { name: 'Duyệt tệp' })).toBeNull()
+    expect(screen.queryByRole('complementary', { name: 'Tìm trong tệp' })).toBeNull()
+    act(() => { expect(runCommand('dock.all')).toBe(true) })
+    expect(screen.getByRole('complementary', { name: 'Tìm trong tệp' })).toBeVisible()
+  })
+
+  it('view.zoom_pane cũng ẩn bảng terminal', () => {
+    setup()
+    act(() => { expect(runCommand('terminal.toggle')).toBe(true) })
+    expect(screen.getByRole('region', { name: 'Terminal' })).toBeVisible()
+    act(() => { expect(runCommand('view.zoom_pane')).toBe(true) })
+    expect(screen.queryByRole('region', { name: 'Terminal' })).toBeNull()
+    act(() => { runCommand('view.zoom_pane') })
+    expect(screen.getByRole('region', { name: 'Terminal' })).toBeVisible()
+  })
+
+  it('picker.reopen mở lại picker gần nhất: task rồi file finder', async () => {
+    installNexgraph()
+    Object.assign(window.nexgraph, { tasks: {
+      list: vi.fn(async () => [{ label: 'build', command: 'dart build', type: 'shell' }]),
+      resolve: vi.fn(async (_p: string, t: unknown) => t)
+    } })
+    render(<WorkspaceScreen project={project()} />)
+    act(() => { expect(runCommand('task.spawn')).toBe(true) })
+    expect(await screen.findByRole('dialog', { name: 'Chạy task' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Chạy task' }), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chạy task' })).toBeNull())
+    act(() => { expect(runCommand('picker.reopen')).toBe(true) })
+    expect(await screen.findByRole('dialog', { name: 'Chạy task' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Chạy task' }), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chạy task' })).toBeNull())
+
+    act(() => { expect(runCommand('file.new')).toBe(true) })
+    expect(await screen.findByRole('dialog', { name: 'Tìm tệp' })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'Tìm tệp' }), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tìm tệp' })).toBeNull())
+    act(() => { expect(runCommand('picker.reopen')).toBe(true) })
+    expect(await screen.findByRole('dialog', { name: 'Tìm tệp' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Chạy task' })).toBeNull()
+  })
+
   it('các lệnh bố cục, tiêu điểm và chia đôi 4 hướng đều có handler', () => {
     setup()
     expect(screen.getByRole('toolbar', { name: 'Thao tác nhanh' })).toBeInTheDocument()

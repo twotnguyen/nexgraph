@@ -239,6 +239,8 @@ export interface NexGraphApi {
   tasks?: {
     list(projectId: string): Promise<TaskDefinition[]>
     resolve(projectId: string, task: TaskDefinition, context: { file?: string; line?: number }): Promise<TaskDefinition>
+    /** Tệp cấu hình để mở trong editor (đường dẫn tương đối); tạo `.vscode/tasks.json` mẫu nếu dự án chưa có tệp nào. */
+    configFile(projectId: string): Promise<string>
   }
   /** Git panel: trạng thái, stage/unstage từng tệp, commit, diff và blame trong gốc dự án. */
   git?: {

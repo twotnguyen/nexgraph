@@ -69,3 +69,34 @@ it('hiện module và nguồn đã tải, đồng thời báo lỗi khi danh sá
   await waitFor(() => expect(screen.getByText('Không lấy được modules: boom')).toBeInTheDocument())
   act(() => emit({ type: 'state', state: 'terminated' }))
 })
+
+it('giữ trạng thái thu gọn của section theo từng adapter/kind', () => {
+  localStorage.removeItem('nexgraph.debug.layout.node')
+  localStorage.removeItem('nexgraph.debug.layout.python')
+  vi.stubGlobal('nexgraph', { debug: {
+    adapterStatus: async () => ({ node: true, python: true }),
+    configs: async () => [],
+    onEvent,
+    modules: async () => [],
+    loadedSources: async () => []
+  } })
+  setDebugProject('layout-test')
+  const view = render(<DebugPanel projectId="layout-test" target="a.js" onOpenFile={() => {}} />)
+  expect(view.container.querySelector('.dbg-output')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Thu gọn Debug console' }))
+  expect(view.container.querySelector('.dbg-output')).toBeNull()
+  expect(localStorage.getItem('nexgraph.debug.layout.node')).toBe(JSON.stringify({ console: true }))
+
+  view.rerender(<DebugPanel projectId="layout-test" target="a.py" onOpenFile={() => {}} />)
+  expect(view.container.querySelector('.dbg-output')).not.toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Thu gọn Nguồn đã tải' }))
+  expect(localStorage.getItem('nexgraph.debug.layout.python')).toBe(JSON.stringify({ sources: true }))
+
+  view.rerender(<DebugPanel projectId="layout-test" target="a.js" onOpenFile={() => {}} />)
+  expect(view.container.querySelector('.dbg-output')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Mở rộng Debug console' }))
+  expect(view.container.querySelector('.dbg-output')).not.toBeNull()
+  expect(localStorage.getItem('nexgraph.debug.layout.node')).toBe('{}')
+  expect(localStorage.getItem('nexgraph.debug.layout.python')).toBe(JSON.stringify({ sources: true }))
+  act(() => emit({ type: 'state', state: 'terminated' }))
+})
