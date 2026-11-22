@@ -11,11 +11,15 @@ const make = () => {
 }
 afterEach(() => { for (const h of hubs.splice(0)) h.stop() })
 
+/** Token hợp lệ về định dạng nhưng chắc chắn sai. */
+const wrongToken = (token: string) => (token === 'A'.repeat(22) ? 'B'.repeat(22) : 'A'.repeat(22))
+const serverAddress = (hub: CollabHub) => (hub as unknown as { server: { address(): { address: string } } }).server.address().address
+
 it('máy chia sẻ và hai người tham gia chuyển gói cho nhau; sai mã bị từ chối', async () => {
   const host = make()
-  const { port, code } = await host.hub.host({ file: 'src/app.ts', host: 'Máy A' })
+  const { port, code } = await host.hub.host({ file: 'src/app.ts', host: 'Máy A' }, 0, '127.0.0.1')
   const wrong = make()
-  await expect(wrong.hub.join(`127.0.0.1:${port}`, code === '000000' ? '111111' : '000000')).rejects.toMatchObject({ code: 'connect_failed' })
+  await expect(wrong.hub.join(`127.0.0.1:${port}`, wrongToken(code))).rejects.toMatchObject({ code: 'connect_failed' })
   const a = make()
   const b = make()
   expect(await a.hub.join(`127.0.0.1:${port}`, code)).toEqual({ file: 'src/app.ts', host: 'Máy A' })
@@ -37,4 +41,40 @@ it('máy chia sẻ và hai người tham gia chuyển gói cho nhau; sai mã b�
   host.hub.stop()
   await vi.waitFor(() => expect(a.events).toContainEqual({ type: 'closed' }))
   await expect(make().hub.join('không hợp lệ', '12')).rejects.toMatchObject({ code: 'bad_param' })
+})
+
+it('mã mời dài 22 ký tự base64url và server chỉ lắng nghe trên địa chỉ được chỉ định', async () => {
+  const host = make()
+  const { port, code, addresses } = await host.hub.host({ file: 'src/app.ts', host: 'Máy A' }, 0, '127.0.0.1')
+  expect(code).toMatch(/^[A-Za-z0-9_-]{22}$/)
+  expect(addresses).toEqual(['127.0.0.1'])
+  expect(serverAddress(host.hub)).toBe('127.0.0.1')
+  expect(serverAddress(host.hub)).not.toBe('0.0.0.0')
+  const wrong = make()
+  await expect(wrong.hub.join(`127.0.0.1:${port}`, wrongToken(code))).rejects.toMatchObject({ code: 'connect_failed' })
+})
+
+it('một IP sai 5 lần thì bị khoá tới hết phiên dù sau đó nhập đúng', async () => {
+  const host = make()
+  const { port, code } = await host.hub.host({ file: 'src/app.ts', host: 'Máy A' }, 0, '127.0.0.1')
+  for (let i = 0; i < 5; i++) {
+    await expect(make().hub.join(`127.0.0.1:${port}`, wrongToken(code))).rejects.toMatchObject({ code: 'connect_failed' })
+  }
+  await expect(make().hub.join(`127.0.0.1:${port}`, code)).rejects.toMatchObject({ code: 'connect_failed' })
+  expect(host.hub.hosting).toEqual({ file: 'src/app.ts', host: 'Máy A' })
+})
+
+it('20 lần nhập sai trong một phiên thì phiên dừng và phát sự kiện đóng', async () => {
+  const host = make()
+  const { port, code } = await host.hub.host({ file: 'src/app.ts', host: 'Máy A' }, 0, '127.0.0.1')
+  for (let i = 0; i < 20; i++) {
+    await expect(make().hub.join(`127.0.0.1:${port}`, wrongToken(code))).rejects.toMatchObject({ code: 'connect_failed' })
+  }
+  await vi.waitFor(() => expect(host.events).toContainEqual({ type: 'closed', reason: 'too_many_failures' }))
+  expect(host.hub.hosting).toBeNull()
+})
+
+it('join từ chối định dạng mã 6 số cũ', async () => {
+  const { hub } = make()
+  await expect(hub.join('127.0.0.1:41234', '123456')).rejects.toMatchObject({ code: 'bad_param' })
 })

@@ -7,9 +7,8 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
-from nexgraph_engine.api.errors import ApiError, error_response
+from nexgraph_engine.api.errors import ApiError, error_response, open_graph_readonly
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
-from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.semantic.chunks import TARGETS, Sources, plan
 from nexgraph_engine.semantic.run import Request as SemanticRequest
 from nexgraph_engine.semantic.run import estimate, make_work
@@ -131,7 +130,7 @@ def _prs(body, store: GraphStore, info) -> list[dict]:
 def _load_prs(info):
     """Chạy trong job: mở graph chỉ đọc riêng, không giữ request chờ `gh` (timeout 30 s mỗi lời gọi)."""
     def load() -> list[dict]:
-        with closing(open_graph_db(info.graph_db, read_only=True)) as conn:
+        with closing(open_graph_readonly(info.graph_db)) as conn:
             return _gh_prs(GraphStore(conn), info.path)
     return load
 
@@ -139,7 +138,7 @@ def _load_prs(info):
 @router.post("/projects/{project_id}/semantic/estimate")
 def semantic_estimate(project_id: str, body: EstimateBody, request: Request) -> dict:
     services, info = _project(request, project_id)
-    with closing(open_graph_db(info.graph_db, read_only=True)) as conn:
+    with closing(open_graph_readonly(info.graph_db)) as conn:
         store = GraphStore(conn)
         if not store.has_published_graph():
             raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục")
@@ -153,7 +152,7 @@ def semantic_start(project_id: str, body: SemanticBody, request: Request):
     # `dedup` chỉ chạy trên máy (gộp khái niệm trùng), không gửi gì cho model nên không đòi bật AI.
     if body.targets != "dedup" and not services.registry.ai_settings(project_id)["enabled"]:
         raise ApiError(403, "ai_disabled", "Chưa bật phân tích bằng AI cho dự án này")
-    with closing(open_graph_db(info.graph_db, read_only=True)) as conn:
+    with closing(open_graph_readonly(info.graph_db)) as conn:
         store = GraphStore(conn)
         if not store.has_published_graph():
             raise ApiError(409, "not_indexed", "Dự án chưa được lập chỉ mục")

@@ -794,14 +794,13 @@ export function registerIpc(
     return api().exportGraph(pid, format, scope, dir)
   })
   on('export:push', (pid: string, req: PushRequest) => api().pushGraph(pid, req))
-  on('export:png', async (rect?: { x: number; y: number; width: number; height: number }) => {
+  on('export:png', async (pid: string, rect?: { x: number; y: number; width: number; height: number }) => {
     const win = getWindow()
     if (!win) return null
     const image = await (rect && rect.width > 0 && rect.height > 0 ? win.webContents.capturePage(rect) : win.webContents.capturePage())
-    const prefs = readJson(prefsFile())
     const r = await dialog.showSaveDialog(win, {
       title: 'Lưu ảnh đồ thị',
-      defaultPath: join(prefs.exportDir ?? app.getPath('downloads'), 'nexgraph.png'),
+      defaultPath: join(savedExportDir(pid) ?? app.getPath('downloads'), 'nexgraph.png'),
       filters: [{ name: 'PNG', extensions: ['png'] }]
     })
     if (r.canceled || !r.filePath) return null
