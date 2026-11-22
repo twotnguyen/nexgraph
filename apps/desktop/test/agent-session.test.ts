@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentService, rememberSecret, scrub, type AgentAccounts, type PiSession, type SessionSpec } from '../src/main/agent/session'
 import { ASK_TOOLS, EDIT_TOOLS } from '../src/main/agent/extension'
 import { TOOL_DEFS } from '../src/main/ai/tools'
+import { modeInstruction } from '../src/main/agent/skill'
 import type { EngineApi } from '../src/main/engine/api'
 import type { AgentEvent } from '../src/shared/agent-types'
 
@@ -473,6 +474,19 @@ describe('AgentService durable conversations and task limits', () => {
     expect(sessions[0].decisions.at(-1)).toMatchObject({ block: true })
     svc.close('p1')
     expect(svc.getExecution('p1')).toEqual({ policy: 'review', allowCommands: false })
+  })
+
+  it('AI-03: chế độ Kế hoạch gửi kèm chỉ dẫn nêu tệp và kiểm thử dự kiến', async () => {
+    const { svc, sessions } = setup()
+    await svc.prompt('p1', 'mở phiên', TARGET)
+    const seen: string[] = []
+    sessions[0].script = async (s, text) => { seen.push(text); s.finish() }
+    svc.setMode('p1', 'plan')
+    await svc.prompt('p1', 'lập kế hoạch', TARGET)
+    expect(seen.at(-1)).toContain(modeInstruction('plan'))
+    svc.setMode('p1', 'ask')
+    await svc.prompt('p1', 'hỏi', TARGET)
+    expect(seen.at(-1)).not.toContain(modeInstruction('plan'))
   })
 
   it('isolates history when resolved provider credentials change despite the same synchronous identity', async () => {

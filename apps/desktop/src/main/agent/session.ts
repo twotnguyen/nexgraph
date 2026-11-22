@@ -13,7 +13,7 @@ import { verifyCitations } from '../ai/citations'
 import type { EngineApi } from '../engine/api'
 import { createApprovalGate, type ApprovalGate } from './approval'
 import { createNexgraphExtension, previewWrite, toolsFor } from './extension'
-import { NEXGRAPH_RULES } from './skill'
+import { modeInstruction, NEXGRAPH_RULES } from './skill'
 import { SessionStore, type SessionScope, type StoredSession } from './session-store'
 import { addUsage, emptyUsage, messageText, transcript, transcriptUsage, usageFromMessage } from './session-transcript'
 import { TaskExecution } from './process-tools'
@@ -555,8 +555,9 @@ export class AgentService {
         this.assertTaskCurrent(projectId, entry)
         entry.stored.manager.appendCustomEntry('nexgraph_input', { text: cleanAgentText(text, 200_000), context: context.items })
         this.store.touch(entry.stored, recipient.model.id, cleanAgentText(text, 200_000))
-        const planning = this.getMode(projectId) === 'plan' ? '\n\nHãy lập kế hoạch cụ thể, nêu tệp và kiểm thử dự kiến. Chỉ đọc và phân tích trong lượt này.' : ''
-        const result = await this.run(projectId, entry, recipient.model, text + planning + (context.prompt ? '\n\n' + context.prompt : ''), active, images)
+        const planning = modeInstruction(this.getMode(projectId))
+        const planningNote = planning ? '\n\n' + planning : ''
+        const result = await this.run(projectId, entry, recipient.model, text + planningNote + (context.prompt ? '\n\n' + context.prompt : ''), active, images)
         if (active()) {
           const completed = result.type === 'done'
           const error = result.type === 'error' ? result.message : undefined
