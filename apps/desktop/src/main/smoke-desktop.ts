@@ -350,6 +350,12 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
   const nextTheme = document.documentElement.dataset.appearance === 'dark' ? 'wu-light' : 'wu-dark'
   const initialBackground = getComputedStyle(document.body).backgroundColor
   themeButton.click()
+  // theme_selector.toggle đăng ký trong useEffect: click đầu có thể rơi trước khi handler mount.
+  // Lệnh là toggle nên chỉ click lại khi picker chưa mở; sau ~1s để waitFor bên dưới báo lỗi rõ ràng.
+  for (let attempt = 0; attempt < 10 && !document.querySelector('.theme-picker'); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    if (!document.querySelector('.theme-picker')) themeButton.click()
+  }
   const themeOption = await waitFor(() => document.querySelector<HTMLElement>(`.theme-picker [data-theme-id="${nextTheme}"]`), 'hộp chọn theme mở ra')
   themeOption.click()
   const themeState = () => ({
@@ -384,9 +390,9 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
 
   const projectPath = document.querySelector('.ws-head .mono')?.textContent?.normalize('NFC') ?? ''
   if (projectPath.length < 80 || !projectPath.includes('Đồ án')) throw new Error('workspace fixture path is not long enough')
-  const changes = document.querySelector<HTMLButtonElement>('.activity-bar button[aria-label="Thay đổi"]')
+  const changes = document.querySelector<HTMLButtonElement>('.activity-bar button[aria-label="Vùng ảnh hưởng"]')
   if (!changes) throw new Error('workspace smoke did not find the Changes toggle')
-  hit(changes, 'Thay đổi').click()
+  hit(changes, 'Vùng ảnh hưởng').click()
   await waitFor(() => document.querySelector('.workspace .ws-tools-changes'), 'bảng Thay đổi')
   const aiToggle = () => document.querySelector<HTMLButtonElement>('.ws-head button[aria-label="Ẩn/hiện trợ lý AI"]')
   const shown = (open: boolean) => {
@@ -398,7 +404,9 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
   if (!shown(true)) hit(open, 'Mở trợ lý AI khi bảng Thay đổi đang mở').click()
   const dismiss = await waitFor(() => shown(true), 'nút đóng trợ lý AI')
   const previousConnection = await api.ai.getSettings()
-  const connect = await button('.agent-actions .agent-connect', 'Kết nối')
+  const moreActions = await waitFor(() => document.querySelector<HTMLButtonElement>('.agent-actions button[aria-label="Thêm thao tác"]'), 'nút Thêm thao tác của trợ lý AI')
+  hit(moreActions, 'Mở menu thao tác AI').click()
+  const connect = await button('.agent-actions [role="menuitem"]', 'Kết nối AI')
   hit(connect, 'Mở kết nối AI').click()
   const gemini = await waitFor(() => document.querySelector<HTMLButtonElement>('.connection-provider-card[aria-label="Gemini"]'), 'nhà cung cấp Gemini')
   hit(gemini, 'Chọn Gemini').click()
@@ -438,7 +446,8 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
 
   const back = await waitFor(() => document.querySelector<HTMLButtonElement>('.ws-head .ws-back'), 'về Tổng quan')
   hit(back, 'Về Tổng quan').click()
-  const projects = await button('.overview .page-back', '← Dự án')
+  await waitFor(() => document.querySelector('.overview'), 'màn Tổng quan sau khi rời workspace')
+  const projects = await button('.overview .welcome-back', '← Dự án')
   projects.click()
   // `.recent-join` (thêm vào Graph chung) cùng kiểu nút nên phải loại ra.
   const remove = await waitFor(() => document.querySelector<HTMLButtonElement>('.recent-remove:not(.recent-join):not(:disabled)'), 'gỡ dự án mẫu')
