@@ -579,3 +579,12 @@ def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
     assert api.get(f"/v1/jobs/{job_id}").json()["state"] not in ("done", "error")
     release.set()
     assert wait_job(api, job_id)["state"] == "done"
+
+
+def test_direct_rejects_internal_and_metadata_base_url(api, docs_pid):
+    enable(api, docs_pid)
+    for url, reason in (("http://169.254.169.254/latest", "link-local"), ("http://10.1.2.3:8080/v1", "nội bộ")):
+        r = api.post(f"/v1/projects/{docs_pid}/semantic", json={
+            "targets": "docs", "transport": {"kind": "direct", "base_url": url, "api_key": KEY, "model": "m"}})
+        assert r.status_code == 400 and r.json()["error"]["code"] == "bad_url", r.text
+        assert reason in r.text and KEY not in r.text
