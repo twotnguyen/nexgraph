@@ -212,6 +212,8 @@ it('thanh summary gọi đúng refresh, clear, collapse-all, mở editor và l�
   fireEvent.change(screen.getByRole('textbox', { name: 'Tìm trong tệp' }), { target: { value: 'foo' } })
   await screen.findByText('2 kết quả trong 2 tệp')
   const fileA = screen.getByTitle('src/a.ts')
+  // search.collapse_all chỉ được đăng ký trong useEffect sau khi có kết quả; chờ React flush effect rồi mới gọi lệnh.
+  await act(async () => {})
 
   act(() => { expect(runCommand('search.collapse_all')).toBe(true) })
   expect(fileA).toHaveAttribute('aria-expanded', 'false')
