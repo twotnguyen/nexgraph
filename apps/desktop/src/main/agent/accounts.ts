@@ -669,6 +669,14 @@ export class AccountService {
     } finally {
       this.accountGeneration(providerId, true)
     }
+    // Pi xoá cả override runtime khi logout: nạp lại key đã lưu ngay, đúng cách create() nạp lúc khởi động.
+    const savedKey = this.deps.secrets.get(providerId)
+    try {
+      if (savedKey && (await this.credentials.read(providerId))?.type !== 'oauth') {
+        rememberSecret(savedKey)
+        await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)
+      }
+    } catch { /* key vẫn còn trong ai-key.json; lần khởi động sau sẽ nạp lại */ }
     if (!revoked) this.deps.notify({ type: 'info', message: 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.' })
   }
 

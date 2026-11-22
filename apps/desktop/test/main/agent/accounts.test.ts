@@ -457,6 +457,25 @@ describe('AccountService', () => {
     expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: expect.stringContaining('Chưa xác nhận được thu hồi phiên từ xa') }))
   })
 
+  it('đăng xuất ChatGPT nạp lại API key đã lưu ngay, không cần khởi động lại', async () => {
+    mkdirSync(join(base, 'agent'), { recursive: true })
+    writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
+      expires: Date.now() + 3600000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
+    new SecretStore(join(base, 'ai-key.json'), box).set('openai', 'sk-saved-after-logout')
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).endsWith('openid-configuration')
+      ? Response.json({ revocation_endpoint: 'https://auth.openai.com/oauth/revoke' }) : new Response(null, { status: 200 }))
+    const { svc } = await make()
+    // Phiên OAuth đang hoạt động che key đã lưu, nhưng key vẫn còn trong ai-key.json.
+    expect((await svc.modelRuntime.getAuth('openai'))?.source).toBe('OAuth')
+    expect((await svc.listProviders()).find((p) => p.id === 'openai')).toMatchObject({ hasKey: true, loggedIn: true })
+    await svc.logout('openai')
+    expect((await svc.listProviders()).find((p) => p.id === 'openai')).toMatchObject({ hasKey: true, loggedIn: false })
+    // Key dùng lại được ngay sau đăng xuất, không phải khởi động lại ứng dụng.
+    const auth = await svc.modelRuntime.getAuth('openai')
+    expect(auth?.auth.apiKey).toBe('sk-saved-after-logout')
+    expect(auth?.source).toBe('stored credential')
+  })
+
   it('không cho đăng nhập Anthropic OAuth qua chat NexGraph', async () => {
     const { svc } = await make()
     await expect(svc.loginOAuth('anthropic')).rejects.toMatchObject({ code: 'bad_param' })
