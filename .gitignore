@@ -7,6 +7,9 @@ engine/dist/
 engine/build/
 *.egg-info/
 
+# Cache AST do test graphify vendored sinh ra, không commit
+engine/third_party/graphify/graphify-out/
+
 # Node / Electron
 node_modules/
 out/
