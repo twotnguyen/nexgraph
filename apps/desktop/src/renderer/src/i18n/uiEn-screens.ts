@@ -281,4 +281,6 @@ export const uiEnScreens: Record<string, string> = {
   'Hiện lỗi và cảnh báo ngay dưới dòng mã.': 'Show errors and warnings inline under the code.',
   // SettingsScreen: nhóm mục thanh trạng thái
   'Mục thanh trạng thái': 'Status Bar Items',
+  'Trạng thái engine': 'Engine status',
+  'Chi tiết chẩn đoán': 'Diagnostic details',
 }

@@ -60,7 +60,8 @@ describe('bảng lệnh và phím tắt', () => {
     press({ key: 'P', code: 'KeyP', ctrlKey: true, shiftKey: true })
     const input = screen.getByRole('combobox', { name: 'Bảng lệnh' })
     // Chỉ lệnh có handler ở màn hiện tại mới hiện.
-    expect(screen.getAllByRole('option').map((o) => o.dataset.commandId).sort()).toEqual(['graph.export', 'settings.open'])
+    // editor.indentation_selector có handler toàn cục trong CommandPaletteHost nên cũng hiện ở đây.
+    expect(screen.getAllByRole('option').map((o) => o.dataset.commandId).sort()).toEqual(['editor.indentation_selector', 'graph.export', 'settings.open'])
     fireEvent.change(input, { target: { value: 'xuat dt' } })
     expect(screen.getAllByRole('option')).toHaveLength(1)
     vi.useFakeTimers()

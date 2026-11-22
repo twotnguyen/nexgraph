@@ -27,6 +27,7 @@ interface PickerProps<T> {
   onActive?: (item: T) => void
   onQueryChange?: (query: string) => void
   initialKey?: string
+  initialQuery?: string
   empty: string
   className?: string
   itemData?: (item: T) => Record<`data-${string}`, string>
@@ -35,9 +36,9 @@ interface PickerProps<T> {
 }
 
 /** Picker kiểu Wu: neo cách đỉnh 80px, ô tìm trên cùng, danh sách mục, mũi tên/Enter/Esc, bấm ra ngoài là huỷ. */
-export function Picker<T>({ label, placeholder, items, itemKey, itemText, renderItem, onPick, onCancel, onActive, onQueryChange, onSecondary, footer, inputRef, error, initialKey, empty, className, itemData, filter }: PickerProps<T>) {
+export function Picker<T>({ label, placeholder, items, itemKey, itemText, renderItem, onPick, onCancel, onActive, onQueryChange, onSecondary, footer, inputRef, error, initialKey, initialQuery, empty, className, itemData, filter }: PickerProps<T>) {
   const listId = useId()
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(initialQuery ?? '')
   const shown = useMemo(() => (filter ? filter(items, query) : fuzzyFilter(items, query, itemText)), [items, query, filter, itemText])
   const [index, setIndex] = useState(() => Math.max(0, initialKey ? items.findIndex((item) => itemKey(item) === initialKey) : 0))
   const active = shown[Math.min(index, shown.length - 1)]

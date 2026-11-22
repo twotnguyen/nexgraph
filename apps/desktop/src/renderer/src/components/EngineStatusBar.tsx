@@ -2,6 +2,8 @@ import { Children, cloneElement, isValidElement, useEffect, useRef, useState, ty
 import { createPortal } from 'react-dom'
 import type { EngineStatus } from '@shared/engine-status'
 import { isStatusItemHidden, setStatusItemHidden, useHiddenStatusItems, useStatusBar } from '../state/layoutPrefs'
+import { runCommand } from '../state/commands'
+import { getStatusBarItem } from '../state/statusBarRegistry'
 import { tr } from '../strings'
 
 const RIGHT_SLOT = 'status-bar-right'
@@ -17,12 +19,18 @@ export function EngineStatusBar({ status, onRestart }: Props) {
   // Ẩn bằng thuộc tính hidden (vẫn dựng sẵn để StatusBarItems tìm được chỗ gắn); engine lỗi thì luôn hiện để còn nút Khởi động lại.
   return (
     <footer className="status-bar" aria-label={tr('Thanh trạng thái')} data-state={status.state} hidden={!shown && status.state !== 'error'}>
-      <span className="status-item status-engine" role="status">
-        {status.state === 'starting' && tr('Engine: đang khởi động…')}
-        {status.state === 'ready' && tr('Engine: sẵn sàng (v{version})', { version: status.engineVersion })}
-        {status.state === 'error' && tr('Engine: lỗi — {message}', { message: status.message })}
-      </span>
-      {status.state === 'error' && <button type="button" className="status-item" onClick={onRestart}>{tr('Khởi động lại')}</button>}
+      <button type="button" className="status-item status-engine" title={tr(getStatusBarItem('engine')!.labelKey)}
+        aria-label={status.state === 'error' ? tr('Khởi động lại') : undefined} onClick={onRestart}>
+        <span role="status">
+          {status.state === 'starting' && tr('Engine: đang khởi động…')}
+          {status.state === 'ready' && tr('Engine: sẵn sàng (v{version})', { version: status.engineVersion })}
+          {status.state === 'error' && tr('Engine: lỗi — {message}', { message: status.message })}
+        </span>
+      </button>
+      <StatusBarItems>
+        <button type="button" data-status-id="git" className="status-item">{tr(getStatusBarItem('git')!.labelKey)}</button>
+        <button type="button" data-status-id="notifications" className="status-item">{tr(getStatusBarItem('notifications')!.labelKey)}</button>
+      </StatusBarItems>
       <div id={RIGHT_SLOT} className="status-right" />
     </footer>
   )
@@ -52,12 +60,16 @@ export function StatusBarItems({ children }: { children: ReactNode }) {
     const given = element.props['data-status-id']
     const id = typeof given === 'string' ? given : `item-${index}`
     if (hidden.has(id)) return []
-    const previous = element.props.onContextMenu as ((event: ReactMouseEvent) => void) | undefined
+    const previousClick = element.props.onClick as ((event: ReactMouseEvent) => void) | undefined
+    const previousContext = element.props.onContextMenu as ((event: ReactMouseEvent) => void) | undefined
+    const registryItem = getStatusBarItem(id)
     return [cloneElement(element, {
       key: id,
       'data-status-id': id,
+      title: registryItem && !element.props.title ? tr(registryItem.labelKey) : element.props.title,
+      onClick: registryItem && !previousClick && registryItem.visible !== false ? () => runCommand(registryItem.command) : previousClick,
       onContextMenu: (event: ReactMouseEvent) => {
-        previous?.(event)
+        previousContext?.(event)
         event.preventDefault()
         setMenu({ id, x: event.clientX, y: event.clientY })
       }

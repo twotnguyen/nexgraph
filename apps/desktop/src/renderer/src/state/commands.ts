@@ -120,6 +120,7 @@ export const COMMANDS: CommandDef[] = [
   { id: 'editor.copy_and_trim', category: 'Editor', title: 'Sao chép và cắt bỏ', key: 'mod+k c' },
   { id: 'editor.toggle_comment', category: 'Editor', title: 'Bật/tắt chú thích', key: 'mod+/' },
   { id: 'editor.select_line_ending', category: 'Editor', title: 'Chọn kết thúc dòng' },
+  { id: 'editor.indentation_selector', category: 'Editor', title: 'Chọn kiểu thụt lề (indent)' },
   { id: 'editor.select_language', category: 'Editor', title: 'Chọn ngôn ngữ', key: 'mod+k l' },
   { id: 'markdown.preview', category: 'Markdown', title: 'Mở / đóng xem trước Markdown', key: 'mod+shift+v' },
   { id: 'markdown.preview_side', category: 'Markdown', title: 'Xem trước Markdown bên cạnh', key: 'mod+k v' },

@@ -129,13 +129,14 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const formatRef = useRef<EditorFormat | null>(null)
   formatRef.current = format
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
+  const [selected, setSelected] = useState(0)
   const [modified, setModified] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [loadAttempt, setLoadAttempt] = useState(0)
   const vim = useVimMode()
   const [vimNode, setVimNode] = useState<HTMLElement | null>(null)
   const blameOn = useBlame()
-  const { blameDelay, blameSummary, breadcrumbs } = useEditorPrefs()
+  const { blameDelay, blameSummary, breadcrumbs, tabSize } = useEditorPrefs()
   const [blame, setBlameLines] = useState<Map<number, GitBlameLine> | null>(null)
   const diagnostics = useDiagnostics(projectId)
   const [picker, setPicker] = useState<'eol' | 'language' | null>(null)
@@ -448,7 +449,10 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         clearTimeout(lspTimer)
         lspTimer = setTimeout(() => { if (alive) void window.nexgraph.lsp?.open(projectId, file, ed.getValue()).catch(() => {}) }, 180)
       })
-      ed.onCursor?.((line, column) => setCursor({ line, column }))
+      ed.onCursor?.((line, column) => {
+        setCursor({ line, column })
+        setSelected(ed.getSelection?.()?.text.length ?? 0)
+      })
       ed.onGutterClick?.((at) => toggleBreakpoint(file, at))
       if (column !== undefined && ed.revealPosition) ed.revealPosition(line, column)
       else ed.revealLines(line, lineEnd)
@@ -622,10 +626,13 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       {format && active && (
         <StatusBarItems>
           <button type="button" data-status-id="diagnostics" className="status-item" title={tr('{errors} lỗi, {warnings} cảnh báo', { errors: errorCount, warnings: warningCount })} onClick={() => runCommand('editor.diagnostics')}>{tr('Lỗi {errors} · Cảnh báo {warnings}', { errors: errorCount, warnings: warningCount })}</button>
+          {problems.length > 0 && <button type="button" data-status-id="diagnosticsDetail" className="status-item">{problems[0].message}</button>}
           <button type="button" data-status-id="cursor" className="status-item" title={tr('Đi đến dòng')} onClick={() => runCommand('editor.goto_line')}>{cursor.line}:{cursor.column}</button>
+          {selected > 0 && <button type="button" data-status-id="selection" className="status-item">{tr('Đã chọn {n}', { n: selected })}</button>}
           <button type="button" data-status-id="language" className="status-item" title={tr('Ngôn ngữ')} onClick={() => setPicker('language')}>{format.language}</button>
           <button type="button" data-status-id="eol" className="status-item" title={tr('Kiểu xuống dòng')} onClick={() => setPicker('eol')}>{format.eol === '\r\n' ? 'CRLF' : 'LF'}</button>
           <button type="button" data-status-id="encoding" className="status-item" title={tr('Bảng mã')} onClick={() => showNotice(tr('Không đổi được bảng mã: engine chỉ lưu UTF-8 và giữ nguyên BOM theo tệp trên đĩa.'))}>{format.bom ? 'UTF-8 BOM' : 'UTF-8'}</button>
+          <button type="button" data-status-id="indentation" className="status-item">{tr('Thụt lề: {n}', { n: tabSize })}</button>
           {vim && <span data-status-id="vim" className="status-item vim-status" title={tr('Chế độ Vim')} ref={setVimNode} />}
         </StatusBarItems>
       )}

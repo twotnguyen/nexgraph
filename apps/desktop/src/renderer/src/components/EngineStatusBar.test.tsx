@@ -4,8 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EngineStatusBar, StatusBarItems } from './EngineStatusBar'
 import { isStatusItemHidden, setStatusBar, setStatusItemHidden } from '../state/layoutPrefs'
+import { COMMANDS, registerHandler } from '../state/commands'
+import { STATUS_BAR_ITEMS, getStatusBarItem } from '../state/statusBarRegistry'
 
-afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false) }) })
+afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false); setStatusItemHidden('git', false) }) })
 
 describe('EngineStatusBar', () => {
   it('shows starting', () => {
@@ -27,8 +29,16 @@ describe('EngineStatusBar', () => {
     const onRestart = vi.fn()
     render(<EngineStatusBar status={{ state: 'error', message: 'exit 5' }} onRestart={onRestart} />)
     expect(screen.getByText('Engine: lỗi — exit 5')).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Khởi động lại' })).toHaveLength(1)
     await userEvent.click(screen.getByRole('button', { name: 'Khởi động lại' }))
     expect(onRestart).toHaveBeenCalled()
+  })
+
+  it('clicking the engine item restarts the engine', async () => {
+    const onRestart = vi.fn()
+    render(<EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={onRestart} />)
+    await userEvent.click(screen.getByText('Engine: sẵn sàng (v1)'))
+    expect(onRestart).toHaveBeenCalledOnce()
   })
 
   it('puts items of the open tab on the right side of the bar', () => {
@@ -61,11 +71,62 @@ describe('EngineStatusBar', () => {
     expect(screen.queryByText('12:4')).not.toBeInTheDocument()
     expect(screen.getByText('TypeScript')).toBeInTheDocument()
     expect(isStatusItemHidden('cursor')).toBe(true)
+    expect(localStorage.getItem('nexgraph.statusbar.hidden:cursor')).toBe('1')
     cleanup()
     render(bar())
     expect(screen.queryByText('12:4')).not.toBeInTheDocument()
     expect(screen.getByText('TypeScript')).toBeInTheDocument()
     act(() => setStatusItemHidden('cursor', false))
     expect(screen.getByText('12:4')).toBeInTheDocument()
+  })
+})
+
+describe('status bar registry', () => {
+  it('covers the 11 Wu items plus opt-in vim with commands that exist', () => {
+    expect(STATUS_BAR_ITEMS.map((item) => item.id)).toEqual([
+      'engine', 'diagnostics', 'diagnosticsDetail', 'git', 'cursor', 'selection',
+      'language', 'eol', 'encoding', 'indentation', 'notifications', 'vim'
+    ])
+    const commandIds = new Set(COMMANDS.map((command) => command.id))
+    for (const item of STATUS_BAR_ITEMS) {
+      expect(commandIds.has(item.command), `${item.id}: ${item.command}`).toBe(true)
+      expect(getStatusBarItem(item.id)).toBe(item)
+    }
+    expect(getStatusBarItem('missing')).toBeUndefined()
+    expect(getStatusBarItem('selection')?.command).toBe('editor.goto_line')
+    expect(getStatusBarItem('indentation')?.command).toBe('editor.indentation_selector')
+  })
+
+  it('shows a context item only while its provider supplies it and runs the registry command', () => {
+    const run = vi.fn()
+    const unregister = registerHandler('editor.indentation_selector', run)
+    try {
+      render(<><StatusBarItems><span data-status-id="indentation">4 spaces</span></StatusBarItems>
+        <EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={() => {}} /></>)
+      const item = screen.getByText('4 spaces')
+      expect(item).toHaveAttribute('title', 'Thụt lề')
+      fireEvent.click(item)
+      expect(run).toHaveBeenCalledOnce()
+      cleanup()
+      render(<EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={() => {}} />)
+      const right = screen.getByLabelText('Thanh trạng thái').querySelector('.status-right')!
+      expect(right).not.toHaveTextContent('4 spaces')
+      expect(right).toHaveTextContent('Git')
+    } finally {
+      unregister()
+    }
+  })
+
+  it('renders global git and notification items and hides them by their own key', () => {
+    render(<EngineStatusBar status={{ state: 'ready', engineVersion: '1', vendorCommit: 'x' }} onRestart={() => {}} />)
+    const right = () => screen.getByLabelText('Thanh trạng thái').querySelector('.status-right')!
+    expect(right()).toHaveTextContent('Git')
+    expect(right()).toHaveTextContent('Thông báo')
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'Git' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Ẩn nút này' }))
+    expect(screen.queryByRole('button', { name: 'Git' })).not.toBeInTheDocument()
+    expect(localStorage.getItem('nexgraph.statusbar.hidden:git')).toBe('1')
+    expect(right()).toHaveTextContent('Thông báo')
+    act(() => setStatusItemHidden('git', false))
   })
 })

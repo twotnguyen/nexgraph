@@ -42,22 +42,27 @@ export function CommandPaletteHost() {
     return `${category}: ${title}`
   }
   const [items, setItems] = useState<CommandDef[] | null>(null)
+  const [initialQuery, setInitialQuery] = useState('')
   const [recording, setRecording] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   useKeybindings()
-  useCommand('command_palette.toggle', () => {
+  const openPalette = (query: string) => {
     setRecording(null)
+    setInitialQuery(query)
     setItems((open) => {
       if (open) return null
       const hits = readHits()
       return availableCommands().filter((command) => command.id !== 'command_palette.toggle')
         .sort((a, b) => (hits[b.id] ?? 0) - (hits[a.id] ?? 0))
     })
-  })
+  }
+  useCommand('command_palette.toggle', () => openPalette(''))
+  useCommand('editor.indentation_selector', () => openPalette('indent'))
   if (!items) return null
   const close = () => { setRecording(null); setItems(null) }
   return (
     <Picker label={tr('Bảng lệnh')} placeholder={tr('Chạy lệnh…')} className="command-palette" items={items} itemKey={commandKey} itemText={label}
+      initialQuery={initialQuery}
       empty={tr('Không có lệnh khớp')} onCancel={close} inputRef={inputRef}
       onActive={(command) => setRecording((current) => current && current !== command.id ? null : current)}
       onSecondary={(command) => setRecording(command.id)}
@@ -68,9 +73,8 @@ export function CommandPaletteHost() {
           if (restoreFocus) inputRef.current?.focus()
         }} />
         : <>
-          <button type="button" onClick={() => setRecording(command.id)}>
-            {bindingFor(command.id) ? tr('Đổi phím tắt…') : tr('Thêm phím tắt…')} <kbd>⌘↵</kbd>
-          </button>
+          <button type="button" disabled={!!bindingFor(command.id)} onClick={() => setRecording(command.id)}>{tr('Thêm phím tắt…')}</button>
+          <button type="button" disabled={!bindingFor(command.id)} onClick={() => setRecording(command.id)}>{tr('Đổi phím tắt…')} <kbd>⌘↵</kbd></button>
           <button type="button" onClick={pick}>{tr('Chạy')} <kbd>↵</kbd></button>
         </>}
       onPick={(command) => {
@@ -85,7 +89,7 @@ export function CommandPaletteHost() {
         const key = bindingFor(command.id)
         return <>
           <span><Highlight text={label(command)} positions={positions} /></span>
-          {key && <kbd>{formatKey(key)}</kbd>}
+          <kbd>{key ? formatKey(key) : '—'}</kbd>
         </>
       }} />
   )

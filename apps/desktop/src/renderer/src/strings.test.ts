@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale } from './state/locale'
 import { tr, vi as t } from './strings'
+import { localizeCommand } from './state/commandLabels'
 
 afterEach(() => setLocale('vi'))
 
@@ -54,5 +55,20 @@ describe('i18n', () => {
   it('dịch Luồng {id} là Flow chứ không phải Thread', () => {
     setLocale('en')
     expect(tr('Luồng {id}', { id: '1' })).toBe('Flow 1')
+  })
+
+  it('dịch nhãn mới của thanh trạng thái và bảng lệnh sang tiếng Anh', () => {
+    setLocale('en')
+    expect(tr('Trạng thái engine')).toBe('Engine status')
+    expect(tr('Chi tiết chẩn đoán')).toBe('Diagnostic details')
+    expect(tr('Vùng chọn')).toBe('Selection')
+    expect(tr('Thụt lề')).toBe('Indentation')
+    expect(tr('Thụt lề: {n}', { n: 4 })).toBe('Indent: 4')
+    expect(tr('Đã chọn {n}', { n: 3 })).toBe('3 selected')
+    expect(tr('Thêm phím tắt…')).toBe('Add keybinding…')
+    expect(tr('Đổi phím tắt…')).toBe('Change keybinding…')
+    expect(tr('Chạy')).toBe('Run')
+    expect(localizeCommand({ id: 'editor.indentation_selector', title: 'Chọn kiểu thụt lề (indent)', category: 'Editor' }))
+      .toEqual({ title: 'Select Indentation', category: 'Editor' })
   })
 })

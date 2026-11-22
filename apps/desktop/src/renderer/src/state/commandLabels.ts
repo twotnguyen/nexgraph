@@ -109,6 +109,7 @@ const EN: Record<string, readonly [title: string, category: string]> = {
   'editor.toggle_comment': ['Toggle Comment', 'Editor'],
   'editor.select_line_ending': ['Select Line Ending', 'Editor'],
   'editor.select_language': ['Select Language', 'Editor'],
+  'editor.indentation_selector': ['Select Indentation', 'Editor'],
   'markdown.preview': ['Toggle Markdown Preview', 'Markdown'],
   'markdown.preview_side': ['Open Markdown Preview to the Side', 'Markdown'],
   'table.preview': ['Toggle Table and Source View', 'CSV/TSV'],
