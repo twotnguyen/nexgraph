@@ -225,7 +225,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
 
   return <div className="git-panel">
     <div className="git-tabs" role="tablist" aria-label="Git">
-      <button type="button" role="tab" aria-selected={tab === 'changes'} onClick={() => setTab('changes')}>{tr('Thay đổi')}{count ? ` (${count})` : ''}</button>
+      <button type="button" role="tab" aria-selected={tab === 'changes'} onClick={() => setTab('changes')}>{tr('Tệp thay đổi')}{count ? ` (${count})` : ''}</button>
       <button type="button" role="tab" aria-selected={tab === 'history'} onClick={() => setTab('history')}>{tr('Lịch sử')}</button>
     </div>
     {tab === 'history' ? <GitHistory projectId={projectId} onOpenDiff={onOpenDiff} /> : <>
@@ -253,11 +253,11 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
       </div>
       <div className="git-list">
         {view.group === 'none'
-          ? section(tr('Thay đổi'), allRows)
+          ? section(tr('Tệp thay đổi'), allRows)
           : <>
             {section(tr('Xung đột'), rowsOf(conflicts, false, true))}
             {section(tr('Đã stage'), rowsOf(stagedFiles, true), 'unstage')}
-            {section(tr('Thay đổi'), rowsOf(unstagedFiles, false), 'stage')}
+            {section(tr('Tệp thay đổi'), rowsOf(unstagedFiles, false), 'stage')}
           </>}
         {status && !count && <p className="git-empty muted">{tr('Không có thay đổi.')}</p>}
         {showStashes && <StashSection projectId={projectId} onChanged={() => void refresh()} />}

@@ -28,7 +28,7 @@ const tick = (ms: number) => act(async () => void vi.advanceTimersByTime(ms))
 describe('SearchPanel', () => {
   it('waits 200 ms after the last keystroke, then searches once', async () => {
     const { search, user } = setup()
-    await user.type(screen.getByLabelText('Tìm kiếm'), 'login')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'login')
     expect(search).not.toHaveBeenCalled()
     await tick(120)
     expect(search).not.toHaveBeenCalled()  // chưa đủ 200 ms kể từ lần gõ cuối
@@ -39,7 +39,7 @@ describe('SearchPanel', () => {
 
   it('only searches for the final text when typing continues', async () => {
     const { search, user } = setup()
-    const input = screen.getByLabelText('Tìm kiếm')
+    const input = screen.getByLabelText('Tìm trong đồ thị')
     await user.type(input, 'lo')
     await tick(80)
     await user.type(input, 'gin')
@@ -50,7 +50,7 @@ describe('SearchPanel', () => {
 
   it('does not search blank text and clears the results', async () => {
     const { search, user } = setup()
-    const input = screen.getByLabelText('Tìm kiếm')
+    const input = screen.getByLabelText('Tìm trong đồ thị')
     await user.type(input, 'login')
     await tick(250)
     expect(await screen.findByText('login')).toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('SearchPanel', () => {
 
   it('shows label, kind and file:line, and opens a result on click', async () => {
     const { onOpen, user } = setup()
-    await user.type(screen.getByLabelText('Tìm kiếm'), 'login')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'login')
     await tick(250)
     const btn = await screen.findByRole('button', { name: /login/ })
     expect(btn).toHaveTextContent('method')
@@ -74,10 +74,10 @@ describe('SearchPanel', () => {
 
   it('Enter opens the first result', async () => {
     const { onOpen, user } = setup(vi.fn(async () => [hit('lib/a.dart::A.one#method'), hit('lib/a.dart::A.two#method')]))
-    await user.type(screen.getByLabelText('Tìm kiếm'), 'a')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'a')
     await tick(250)
     await screen.findByText('one')
-    await user.type(screen.getByLabelText('Tìm kiếm'), '{Enter}')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), '{Enter}')
     expect(onOpen).toHaveBeenCalledTimes(1)
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'lib/a.dart::A.one#method' }))
   })
@@ -85,7 +85,7 @@ describe('SearchPanel', () => {
   it('does not open the previous result when Enter precedes the new debounced request', async () => {
     const search = vi.fn().mockImplementation(async (_project: string, q: string) => [hit(`lib/a.dart::A.${q}#method`)])
     const { onOpen, user } = setup(search)
-    const input = screen.getByLabelText('Tìm kiếm')
+    const input = screen.getByLabelText('Tìm trong đồ thị')
     await user.type(input, 'login')
     await tick(250)
     expect(screen.getByText('login')).toBeInTheDocument()
@@ -99,14 +99,14 @@ describe('SearchPanel', () => {
 
   it('shows "Không có kết quả" for an empty answer', async () => {
     const { user } = setup(vi.fn(async () => []))
-    await user.type(screen.getByLabelText('Tìm kiếm'), 'zzz')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'zzz')
     await tick(250)
     expect(await screen.findByText('Không có kết quả')).toBeInTheDocument()
   })
 
   it('shows engine errors with role=alert', async () => {
     const { user } = setup(vi.fn(async () => { throw Object.assign(new Error('Cần ít nhất một từ'), { code: 'bad_param' }) }))
-    await user.type(screen.getByLabelText('Tìm kiếm'), '***')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), '***')
     await tick(250)
     expect(await screen.findByRole('alert')).toHaveTextContent('Cần ít nhất một từ')
   })
@@ -117,7 +117,7 @@ describe('SearchPanel', () => {
       .mockImplementationOnce(() => new Promise<SearchHit[]>((r) => (resolveFirst = r)))
       .mockImplementationOnce(async () => [hit('lib/a.dart::New.item#method')])
     const { user } = setup(search)
-    const input = screen.getByLabelText('Tìm kiếm')
+    const input = screen.getByLabelText('Tìm trong đồ thị')
     await user.type(input, 'old')
     await tick(250)
     await user.clear(input)

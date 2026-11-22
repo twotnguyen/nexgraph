@@ -453,7 +453,7 @@ const viStrings = {
     tag: { changed: 'đã đổi', impacted: 'ảnh hưởng', test: 'test', gap: 'chưa có test' }
   },
   search: {
-    label: 'Tìm kiếm',
+    label: 'Tìm trong đồ thị',
     placeholder: 'Tìm hàm, lớp, tệp…',
     empty: 'Không có kết quả',
     modeSymbol: 'Tìm symbol',

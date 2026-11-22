@@ -89,13 +89,13 @@ it('menu remote chỉ cung cấp fetch, pull và push', async () => {
   expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Fetch', 'Pull', 'Push'])
 })
 
-it('chuyển tab Lịch sử rồi trở lại Thay đổi', async () => {
+it('chuyển tab Lịch sử rồi trở lại Tệp thay đổi', async () => {
   setup()
   await screen.findByText('staged.txt')
   fireEvent.click(screen.getByRole('tab', { name: 'Lịch sử' }))
   expect(screen.getByText('Lịch sử commit')).toBeInTheDocument()
   expect(screen.queryByText('staged.txt')).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('tab', { name: /Thay đổi/ }))
+  fireEvent.click(screen.getByRole('tab', { name: /Tệp thay đổi/ }))
   expect(screen.getByText('staged.txt')).toBeInTheDocument()
 })
 
@@ -195,7 +195,7 @@ it('MM: dòng chưa stage mở diff unstaged và gọi stage, dòng đã stage m
   const { git, onOpenDiff } = setup(mmStatus)
   await screen.findAllByText('both.txt')
   const staged = screen.getByRole('region', { name: 'Đã stage' })
-  const unstaged = screen.getByRole('region', { name: 'Thay đổi' })
+  const unstaged = screen.getByRole('region', { name: 'Tệp thay đổi' })
   const stagedBox = within(staged).getByRole('checkbox')
   const unstagedBox = within(unstaged).getByRole('checkbox')
   expect(stagedBox).toBeChecked()
@@ -231,7 +231,7 @@ it('Group By None giữ hai dòng MM với khoá riêng và mở đúng diff t�
   await screen.findAllByText('both.txt')
   fireEvent.click(screen.getByRole('button', { name: 'Tuỳ chọn hiển thị' }))
   fireEvent.click(screen.getByRole('menuitem', { name: 'Group By: None' }))
-  const group = screen.getByRole('region', { name: 'Thay đổi' })
+  const group = screen.getByRole('region', { name: 'Tệp thay đổi' })
   const boxes = within(group).getAllByRole('checkbox')
   expect(boxes).toHaveLength(2)
   expect(boxes[0]).toBeChecked()

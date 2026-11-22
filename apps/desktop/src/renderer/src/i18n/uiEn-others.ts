@@ -152,6 +152,7 @@ export const uiEnOthers: Record<string, string> = {
   'Thay {count} chỗ trong {files} tệp bằng “{text}”?': 'Replace {count} occurrences in {files} files with “{text}”?',
   'Thay trong tệp này': 'Replace in this file',
   'Thay đổi': 'Changes',
+  'Tệp thay đổi': 'Changed Files',
   'Thay đổi git: {status}': 'Git status: {status}',
   'Thu gọn': 'Collapse',
   'Thu gọn cây tệp': 'Collapse file tree',
