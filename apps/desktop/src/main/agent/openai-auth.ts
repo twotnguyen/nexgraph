@@ -187,8 +187,12 @@ async function authorizationCallback(state: string, issued: string | undefined, 
       const url = new URL(req.url ?? '', redirect)
       const expected = new URL(redirect)
       if (url.origin === expected.origin && url.pathname === expected.pathname &&
-          url.searchParams.get('state') === state && url.searchParams.has('error'))
+          url.searchParams.get('state') === state && url.searchParams.has('error')) {
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
+        res.end('<!doctype html><html lang="vi"><meta charset="utf-8"><title>NexGraph</title><body><h1>Đã huỷ xác nhận</h1><p>Quay lại NexGraph để xem kết quả kết nối.</p></body></html>')
         reject(new Error('Đăng nhập ChatGPT chưa được chấp thuận'))
+        return
+      }
       const result = parse(url)
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' })
       res.end('<!doctype html><html lang="vi"><meta charset="utf-8"><title>NexGraph</title><body><h1>Đã nhận xác nhận</h1><p>Quay lại NexGraph để xem kết quả kết nối.</p></body></html>')

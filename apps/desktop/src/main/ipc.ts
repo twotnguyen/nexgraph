@@ -158,6 +158,9 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promi
       pendingPrompts.set(view.id, resolve)
       getWindow()?.webContents.send('auth:login-prompt', view)
     })
+  }).catch((e: unknown) => {
+    accountsPromise = null // lỗi tạo một lần không được làm chết mọi lần gọi auth sau đó
+    throw e
   }))
 
 export function stopAllWatchers(): void {
