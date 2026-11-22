@@ -180,6 +180,7 @@ class Indexer:
         self.include_docs, self.include_media, self.transcript_dir = include_docs, include_media, transcript_dir
         self.include_config, self.workers, self.force = include_config, workers, force
         self.sources_dir = sources_dir
+        self._file_errors: list[tuple[str, str, str]] = []  # (tệp, loại, chi tiết) để báo cho người dùng
 
     def run(self) -> RunResult:
         t0 = time.time()
@@ -200,6 +201,14 @@ class Indexer:
             self.on_progress(ProgressEvent("structure", 0, total))
             if not self._structure(run_id, files):
                 return self._finish(run_id, "huy", t0, ProgressEvent("cancelled", 0, total))
+            if total and len({rel for rel, _k, _d in self._file_errors}) >= total:
+                # Không đọc được tệp nào: công bố đồ thị rỗng là nói dối người dùng, phải báo lỗi.
+                message = self._failure_message() or f"Không đọc được tệp nào trong {total} tệp"
+                store.conn.rollback()
+                store.set_run_state(run_id, "loi", error=message)
+                store.commit()
+                self.on_progress(ProgressEvent("error", 0, 0, message))
+                return self._result(run_id, "loi", t0)
             if self.sources is not None and self.sources.any():
                 self.on_progress(ProgressEvent("structure", total, total, "Đang đọc nguồn bổ sung"))
                 ingest_sources(store, run_id, self.root, self.sources, subdir=self.subdir, exclude=self.exclude,
@@ -230,7 +239,7 @@ class Indexer:
                 self.on_progress(ProgressEvent("resolve", total, total, f"Không phát hiện được cụm: {exc}"))
             store.snapshot_baseline()
             store.set_run_state(run_id, "hoan_tat", files_done=total)
-            self.on_progress(ProgressEvent("done", total, total))
+            self.on_progress(ProgressEvent("done", total, total, self._failure_message()))
             return self._result(run_id, "hoan_tat", t0)
         except Exception as exc:  # không để job làm sập engine; ghi lỗi vào lần lập chỉ mục
             if self.cancel.is_set():
@@ -239,6 +248,14 @@ class Indexer:
             store.set_run_state(run_id, "loi", error=f"{type(exc).__name__}: {exc}")
             self.on_progress(ProgressEvent("error", 0, 0, str(exc)))
             return self._result(run_id, "loi", t0)
+
+    def _failure_message(self) -> str | None:
+        """Câu cảnh báo cho người dùng khi một phần tệp không đọc/trích xuất được."""
+        if not self._file_errors:
+            return None
+        files = list(dict.fromkeys(rel for rel, _k, _d in self._file_errors))
+        first_rel, _kind, detail = self._file_errors[0]
+        return f"{len(files)} tệp không đọc được hoặc lỗi trích xuất (ví dụ {first_rel}: {detail})"
 
     # ------------------------------------------------------------------------------------------------
     def _finish(self, run_id: int, state: RunState, t0: float, event: ProgressEvent) -> RunResult:
@@ -273,6 +290,8 @@ class Indexer:
                 store.add_bindings(x.bindings)
             for kind, detail in x.errors:
                 store.add_file_error(f.rel_path, kind, detail)
+                if kind in ("read", "extract"):
+                    self._file_errors.append((f.rel_path, kind, detail))
 
             parent = f.rel_path.rpartition("/")[0]
             contains.append((directory_node_id(parent) if parent else REPOSITORY_ID, file_node_id(f.rel_path)))
