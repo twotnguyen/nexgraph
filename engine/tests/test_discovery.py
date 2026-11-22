@@ -178,3 +178,26 @@ def test_graphifyrc_language_overrides_are_honoured(tmp_path):
     assert [f.language for f in discover(tmp_path)] == ["php"]
     from nexgraph_engine.index.generic import extract_generic
     assert [n.label for n in extract_generic(tmp_path, "a.inc", "php", is_test=False).nodes] == ["run"]
+
+
+def test_skips_default_build_dependency_and_minified_paths(tmp_path):
+    for rel in ("dist/app.js", "__pycache__/mod.py", ".venv/lib/x.py", "venv/lib/y.py",
+                "lib/app.min.js", "lib/app.min.css", "lib/vendor.bundle.js", "lib/keep.js"):
+        write(tmp_path, rel)
+    assert rels(tmp_path) == ["lib/keep.js"]
+
+
+def test_hidden_directories_are_skipped_by_default(tmp_path):
+    for rel in (".github/workflows.py", ".config/tool/x.py", ".cache/y.py", "lib/keep.py"):
+        write(tmp_path, rel)
+    assert rels(tmp_path) == ["lib/keep.py"]
+    # Người dùng chọn rõ thư mục ẩn thì vẫn lập chỉ mục được (monorepo chọn package).
+    assert rels(tmp_path, subdir=".config") == [".config/tool/x.py"]
+
+
+def test_user_selected_package_inside_a_default_skip_dir_is_indexed(tmp_path):
+    write(tmp_path, "dist/pkg/a.py")
+    write(tmp_path, "dist/other/b.py")
+    write(tmp_path, "lib/c.py")
+    assert rels(tmp_path) == ["lib/c.py"]
+    assert rels(tmp_path, subdir="dist/pkg") == ["dist/pkg/a.py"]
