@@ -52,6 +52,11 @@ class ModelGraph:
             self._groups[ref] = all(self.source.allows(row[0]) for row in rows)
         return self._groups[ref]
 
+    def _allows_ref(self, ref: str) -> bool:
+        """`source`/`target` có thể là mã nút (`tệp.py::hàm#function`) hoặc id khối (`file:tệp.py`)."""
+        return self._allows_block(ref) if ref.partition(":")[0] in ("dir", "file", "more", "com") \
+            else self.allows_node(ref)
+
     def _allows_flow(self, flow_id: int) -> bool:
         if flow_id not in self._flows:
             rows = self.store.conn.execute(
@@ -66,6 +71,26 @@ class ModelGraph:
             raise protected_source()
         return result
 
+    def filter_tour(self, payload: dict) -> dict:
+        """Chuyến tham quan là danh sách bước rời: bỏ bước có nút bị loại, giữ các bước còn lại."""
+        steps = [step for step in payload.get("steps", [])
+                 if not (isinstance(step.get("node"), dict) and isinstance(step["node"].get("file"), str)
+                         and not self.source.allows(step["node"]["file"]))]
+        return {**payload, "steps": steps}
+
+    def filter_cycles(self, payload: dict) -> dict:
+        """Chu trình là danh sách tên tệp trần: chỉ giữ chu trình mà mọi thành viên đều được phép.
+
+        Giữ một phần chu trình sẽ lộ tên tệp bị loại, nên bỏ cả chu trình và đếm lại `total`.
+        Nhận cả `{"cycles": [...]}` lẫn `{"cycles": {"cycles": [...]}}` (báo cáo lồng một lớp).
+        """
+        inner = payload.get("cycles")
+        if isinstance(inner, dict):
+            return {**payload, "cycles": self.filter_cycles(inner)}
+        cycles = [cycle for cycle in payload.get("cycles", [])
+                  if all(self.source.allows(name) for name in cycle.get("files", []))]
+        return {**payload, "cycles": cycles, "total": len(cycles)}
+
     def _filter(self, value: Any) -> Any:
         if isinstance(value, list):
             return [safe for item in value if (safe := self._filter(item)) is not _OMIT]
@@ -78,7 +103,7 @@ class ModelGraph:
                 return _OMIT
         for key in _NODE_REFS:
             ref = value.get(key)
-            if isinstance(ref, str) and not self.allows_node(ref):
+            if isinstance(ref, str) and not self._allows_ref(ref):
                 return _OMIT
         for key in ("id", "from", "to"):
             ref = value.get(key)

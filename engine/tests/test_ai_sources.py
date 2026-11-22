@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import pytest
 
@@ -169,3 +170,83 @@ def test_sensitive_names_of_the_reference_detector_are_blocked(tmp_path, name):
     policy = SourcePolicy(tmp_path)
     assert policy.allows("src.py")
     assert not policy.allows(name)
+
+
+def _cycle_project(tmp_path):
+    root = tmp_path / "cycle app"
+    root.mkdir()
+    (root / "app.py").write_text("from service import login_user\n\n\ndef main():\n    return login_user({})\n", encoding="utf-8")
+    (root / "service.py").write_text("from repo import find_user\n\n\ndef login_user(body):\n    return find_user(body)\n", encoding="utf-8")
+    (root / "repo.py").write_text("from service import login_user\n\n\ndef find_user(body):\n    return login_user(body)\n", encoding="utf-8")
+    (root / "test_service.py").write_text("from service import login_user\n\n\ndef test_login():\n    assert login_user({}) == {}\n", encoding="utf-8")
+    return root
+
+
+def _names_excluded(text: str) -> bool:
+    """Tên `service.py` đứng riêng, không tính `test_service.py`."""
+    return re.search(r"(?<![A-Za-z0-9._-])service\.py(?![A-Za-z0-9])", text) is not None
+
+
+def _wait(api, job_id: str) -> dict:
+    import time
+    end = time.time() + 20
+    while time.time() < end:
+        job = api.get(f"/v1/jobs/{job_id}").json()
+        if job["state"] in ("done", "error", "cancelled"):
+            return job
+        time.sleep(0.02)
+    raise AssertionError("job không kết thúc")
+
+
+def test_model_audience_hides_excluded_sources_on_every_graph_route(api, tmp_path):
+    root = _cycle_project(tmp_path)
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    prefix = f"/v1/projects/{pid}"
+    assert api.get(f"{prefix}/cycles").json()["total"] == 1  # người dùng vẫn thấy chu trình
+    link = next(link for link in api.get(f"{prefix}/architecture").json()["links"]
+                if "service.py" in (link["from"] + link["to"]))
+    evidence_params = {"from": link["from"], "to": link["to"]}
+    evidence = api.get(f"{prefix}/architecture/evidence", params=evidence_params)
+    assert evidence.status_code == 200 and "service.py" in evidence.text
+    user_tour = api.get(f"{prefix}/tour").json()
+    (root / ".gitignore").write_text("service.py\n", encoding="utf-8")
+    (root / "service.py").write_text((root / "service.py").read_text(encoding="utf-8") + "\n# đổi\n", encoding="utf-8")
+    (root / "repo.py").write_text((root / "repo.py").read_text(encoding="utf-8") + "\n# đổi\n", encoding="utf-8")
+
+    responses = {
+        "evidence": api.get(f"{prefix}/architecture/evidence", params=evidence_params, headers=MODEL),
+        "changes": api.get(f"{prefix}/changes", headers=MODEL),
+        "report": api.get(f"{prefix}/report", headers=MODEL),
+        "map": api.get(f"{prefix}/map", headers=MODEL),
+        "cycles": api.get(f"{prefix}/cycles", headers=MODEL),
+        "tour": api.get(f"{prefix}/tour", headers=MODEL),
+    }
+    for name, response in responses.items():
+        assert response.status_code == 200, (name, response.status_code, response.text[:300])
+        assert not _names_excluded(response.text), name
+    assert "repo.py" in responses["changes"].text  # chỉ ẩn tệp bị loại, không ẩn cả route
+    assert responses["cycles"].json() == {"cycles": [], "total": 0}
+    assert len(responses["tour"].json()["steps"]) < len(user_tour["steps"])
+
+
+def test_model_audience_hides_excluded_sources_in_the_global_graph(api, tmp_path):
+    root = _cycle_project(tmp_path)
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    assert _wait(api, api.post("/v1/global/projects", json={"project_id": pid}).json()["job_id"])["state"] == "done"
+
+    def hidden(payload: str) -> bool:
+        return any(marker in payload for marker in ('"file":"service.py"', '"id":"service.py'))
+
+    assert hidden(api.get("/v1/global/graph", headers=MODEL).text)  # trước khi loại: graph chung có nó
+    assert any(hit["node"]["file"] == "service.py" for hit in api.get("/v1/global/search", params={"q": "login"}, headers=MODEL).json())
+    assert hidden(api.get("/v1/global/graph", headers=api.headers).text)  # người dùng vẫn thấy graph chung đầy đủ
+    (root / ".gitignore").write_text("service.py\n", encoding="utf-8")
+    graph = api.get("/v1/global/graph", headers=MODEL)
+    assert graph.status_code == 200 and not hidden(graph.text)
+    assert graph.json()["nodes"], "graph chung vẫn còn nút của tệp được phép"
+    assert all(edge["source"] in {n["id"] for n in graph.json()["nodes"]} for edge in graph.json()["edges"])
+    assert all(edge["target"] in {n["id"] for n in graph.json()["nodes"]} for edge in graph.json()["edges"])
+    hits = api.get("/v1/global/search", params={"q": "login"}, headers=MODEL).json()
+    assert hits and all(hit["node"]["file"] != "service.py" for hit in hits)
