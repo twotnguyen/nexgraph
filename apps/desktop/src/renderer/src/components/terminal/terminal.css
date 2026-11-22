@@ -1,7 +1,6 @@
 /* Bảng terminal neo dưới vùng giữa; thẻ và các khung chia sẻ phiên đang chạy. */
 .terminal-panel { position: relative; display: flex; flex: none; flex-direction: column; height: min(var(--terminal-height, 280px), calc(100vh - 200px)); min-height: 120px; border-top: 1px solid var(--color-border); background: var(--color-surface); }
 .terminal-panel[hidden] { display: none; }
-.workspace-shell > .center:has(> .terminal-panel[data-maximized]:not([hidden])) { position: relative; }
 .terminal-panel[data-maximized] { position: absolute; z-index: 20; inset: 0; height: auto; min-height: 0; border-top: 0; }
 .terminal-tabs { display: flex; flex: none; align-items: center; gap: 2px; height: 32px; padding: 0 6px; }
 .terminal-tab-list { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }

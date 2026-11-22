@@ -13,7 +13,6 @@
 
 /* Slot wrappers vô hình: phần tử con giữ nguyên vai trò flex và kích thước cũ. */
 .workspace-shell > [data-ws-part] { display: contents; }
-.workspace-shell > [data-ws-part='dock'][hidden] { display: none; }
 .ws-dock { display: contents; }
 .ws-dock[hidden] > * { display: none; }
 

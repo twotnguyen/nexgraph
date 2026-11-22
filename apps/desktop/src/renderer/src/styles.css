@@ -2763,6 +2763,8 @@ dialog.modal::backdrop { background: var(--overlay); }
 .status-bar :is(.status-right .status-item, button.status-item):hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); color: var(--color-text); }
 .status-bar button.status-item { color: var(--color-text); cursor: pointer; }
 .status-bar .status-engine { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Tin nhắn chẩn đoán đầu có thể rất dài: cắt bằng dấu ba chấm thay vì đẩy các mục khác ra khỏi thanh. */
+.status-bar [data-status-id='diagnosticsDetail'] { display: block; max-width: min(32vw, 360px); min-width: 0; overflow: hidden; text-overflow: ellipsis; line-height: 22px; }
 .status-right { display: flex; flex: none; align-items: center; gap: 4px; margin-inline-start: auto; }
 .status-bar[hidden] { display: none; }
 /* Dãy bốn nút icon kiểu Wu ở đầu vùng editor: mỗi nút mở một nhóm lệnh. */

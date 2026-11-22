@@ -2,7 +2,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FileContent, FileRevision, NexGraphApi } from '@shared/api'
+import type { FileContent, FileRevision, LspDiagnosticsEvent, NexGraphApi } from '@shared/api'
+import { startDiagnostics } from '../../state/diagnostics'
 import type { EngineEvent } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
 
@@ -616,5 +617,24 @@ describe('EditorTab view controls', () => {
       act(() => { vi.advanceTimersByTime(1000) })
       expect(screen.queryByRole('status')).toBeNull()
     } finally { vi.useRealTimers() }
+  })
+
+  it('giữ thông điệp chẩn đoán đầy đủ trong title khi cắt ngắn ở thanh trạng thái', async () => {
+    let emit: ((event: LspDiagnosticsEvent) => void) | undefined
+    open({ lsp: {
+      onDiagnostics: (cb: (event: LspDiagnosticsEvent) => void) => { emit = cb; return () => {} },
+      open: vi.fn(async () => {}), close: vi.fn(async () => {})
+    } })
+    await ready()
+    const stop = startDiagnostics()
+    try {
+      const message = 'Argument of type string is not assignable to parameter of type number and the message is long'
+      await act(async () => { emit?.({ projectId: 'p1', file: 'src/math.ts', diagnostics: [
+        { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } }, severity: 1, message }
+      ] }) })
+      const detail = document.querySelector('[data-status-id="diagnosticsDetail"]')
+      expect(detail?.getAttribute('title')).toBe(message)
+      expect(detail?.textContent).toBe(message)
+    } finally { stop() }
   })
 })

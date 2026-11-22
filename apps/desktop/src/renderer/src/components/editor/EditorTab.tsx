@@ -626,7 +626,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       {format && active && (
         <StatusBarItems>
           <button type="button" data-status-id="diagnostics" className="status-item" title={tr('{errors} lỗi, {warnings} cảnh báo', { errors: errorCount, warnings: warningCount })} onClick={() => runCommand('editor.diagnostics')}>{tr('Lỗi {errors} · Cảnh báo {warnings}', { errors: errorCount, warnings: warningCount })}</button>
-          {problems.length > 0 && <button type="button" data-status-id="diagnosticsDetail" className="status-item">{problems[0].message}</button>}
+          {problems.length > 0 && <button type="button" data-status-id="diagnosticsDetail" className="status-item" title={problems[0].message}>{problems[0].message}</button>}
           <button type="button" data-status-id="cursor" className="status-item" title={tr('Đi đến dòng')} onClick={() => runCommand('editor.goto_line')}>{cursor.line}:{cursor.column}</button>
           {selected > 0 && <button type="button" data-status-id="selection" className="status-item">{tr('Đã chọn {n}', { n: selected })}</button>}
           <button type="button" data-status-id="language" className="status-item" title={tr('Ngôn ngữ')} onClick={() => setPicker('language')}>{format.language}</button>
