@@ -79,6 +79,26 @@ def _only(cands: list[Node]) -> Node | None:
     return cands[0] if len(cands) == 1 else None
 
 
+def _include_target(idx: "_Index", uri: str, src_file: str) -> str | None:
+    """Tệp cho `#include <a/b.h>`: khớp theo **đoạn** đường dẫn, không khớp mỗi tên tệp.
+
+    Nhiều ứng viên → chọn tệp có thư mục gần tệp đang include nhất nếu phân định được duy nhất; không thì bỏ.
+    """
+    if not uri:
+        return None
+    cands = sorted(f for f in idx.files if f == uri or f.endswith("/" + uri))
+    if len(cands) <= 1:
+        return cands[0] if cands else None
+    base = posixpath.dirname(src_file)
+
+    def distance(path: str) -> tuple[int, int]:
+        rel = posixpath.relpath(path, base or ".")
+        return (sum(1 for part in rel.split("/") if part == ".."), len(rel))
+
+    best = min(cands, key=distance)
+    return best if sum(1 for c in cands if distance(c) == distance(best)) == 1 else None
+
+
 def _module_path(rel: str) -> str:
     """Đường dẫn tệp → đường dẫn mô-đun Python: `app/models.py` → `app.models`."""
     head, _, name = rel.rpartition("/")
@@ -155,18 +175,25 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
         for prefix, st in (("export:", "export"), ("part:", "part")):
             if uri.startswith(prefix):
                 uri, subtype = uri[len(prefix):], st
+        angle = uri.startswith("<") and uri.endswith(">")  # `#include <a/b.h>`
+        if angle:
+            uri = uri[1:-1].strip()
         target_rel: str | None = None
-        if uri.startswith("package:"):
-            m = re.match(r"package:([^/]+)/(.+)", uri)
-            if m and package_name and m.group(1) == package_name:
-                target_rel = f"lib/{m.group(2)}"
-        elif ":" not in uri.split("/")[0]:
-            joined = posixpath.normpath(posixpath.join(posixpath.dirname(src.file), uri))
-            target_rel = joined if not joined.startswith("..") else None
-        if (not target_rel or target_rel not in idx.files) and not src.file.endswith(".dart"):
-            # `#include "x/y.h"` qua thư mục -I: tệp duy nhất trong dự án có đường dẫn kết thúc bằng `x/y.h`
-            target_rel = idx.file_by_gid.get(uri) or _only(
-                [f for f in idx.files_by_name.get(posixpath.basename(uri), []) if f == uri or f.endswith("/" + uri)])
+        if angle:
+            # Header hệ thống không có trong dự án thì không khớp tệp nào → không cạnh, không tạo nút.
+            target_rel = _include_target(idx, uri, src.file)
+        else:
+            if uri.startswith("package:"):
+                m = re.match(r"package:([^/]+)/(.+)", uri)
+                if m and package_name and m.group(1) == package_name:
+                    target_rel = f"lib/{m.group(2)}"
+            elif ":" not in uri.split("/")[0]:
+                joined = posixpath.normpath(posixpath.join(posixpath.dirname(src.file), uri))
+                target_rel = joined if not joined.startswith("..") else None
+            if (not target_rel or target_rel not in idx.files) and not src.file.endswith(".dart"):
+                # `#include "x/y.h"` qua thư mục -I: tệp duy nhất trong dự án có đường dẫn kết thúc bằng `x/y.h`
+                target_rel = idx.file_by_gid.get(uri) or _only(
+                    [f for f in idx.files_by_name.get(posixpath.basename(uri), []) if f == uri or f.endswith("/" + uri)])
         if target_rel and target_rel in idx.files and target_rel != src.file:
             edge(ref, idx.by_id[f"{target_rel}#file"], EdgeType.IMPORTS, 1.0, subtype, exact=True)
             imports[src.file].append((target_rel, subtype))
