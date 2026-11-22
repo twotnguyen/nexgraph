@@ -54,6 +54,20 @@ it('status chỉ trong thư mục dự án; stage, unstage, commit từng tệp;
   await expect(gitCommit(root, '  ')).rejects.toMatchObject({ code: 'bad_param' })
 })
 
+it.skipIf(process.platform === 'win32')('không chạy fsmonitor do repo tự đặt', async () => {
+  // REV-16: core.fsmonitor trong .git/config của repo lạ là một hook chạy mã khi `git status`.
+  const marker = join(repo, 'fsmonitor-đã-chạy')
+  const hook = join(repo, 'fsmonitor.sh')
+  writeFileSync(hook, `#!/bin/sh\ntouch '${marker}'\nprintf '1\\n'\n`, { mode: 0o755 })
+  sh('config', 'core.fsmonitor', hook)
+  try {
+    await gitStatus(root)
+    expect(existsSync(marker)).toBe(false)
+  } finally {
+    sh('config', '--unset', 'core.fsmonitor')
+  }
+})
+
 it('diff với base lấy nội dung tại ref, phía sau vẫn theo index/worktree và chặn ref kiểu option', async () => {
   writeFileSync(join(root, 'src/a.ts'), 'one\nthree\n')
   sh('add', '-A', 'app/src/a.ts')

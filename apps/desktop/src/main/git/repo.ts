@@ -21,7 +21,8 @@ export async function git(root: string, args: string[], options?: { okCodes?: nu
   let done!: (value: string) => void
   let failed!: (error: Error) => void
   const output = new Promise<string>((resolve, reject) => { done = resolve; failed = reject })
-  const child = execFile('git', ['-c', 'core.quotepath=off', '-c', 'color.ui=false', ...args], {
+  // `core.fsmonitor=` (rỗng) tắt hook fsmonitor của repo: .git/config của repo lạ không được chạy mã (REV-16).
+  const child = execFile('git', ['-c', 'core.quotepath=off', '-c', 'color.ui=false', '-c', 'core.fsmonitor=', ...args], {
     cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, env: gitEnv()
   }, (error, stdout, stderr) => {
     if (!error || (typeof error.code === 'number' && options?.okCodes?.includes(error.code))) {
@@ -208,7 +209,7 @@ export async function gitBlame(root: string, file: unknown): Promise<GitBlameLin
   let done!: (value: string) => void
   let failed!: (error: Error) => void
   const outPromise = new Promise<string>((resolve, reject) => { done = resolve; failed = reject })
-  const child = execFile('git', ['-c', 'core.quotepath=off', 'blame', '--porcelain', '--contents', '-', '--', path],
+  const child = execFile('git', ['-c', 'core.quotepath=off', '-c', 'core.fsmonitor=', 'blame', '--porcelain', '--contents', '-', '--', path],
     { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, env: gitEnv() }, (error, stdout, stderr) => {
       if (error) failed(fail('git_failed', (stderr || String(error)).trim().split('\n').slice(-2).join('\n')))
       else done(stdout)
