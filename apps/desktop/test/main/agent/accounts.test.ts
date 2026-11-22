@@ -256,6 +256,32 @@ describe('AccountService', () => {
     expect(vault()).toEqual({})
   })
 
+  it('huỷ đăng nhập ChatGPT giữa chừng → ai_cancelled, không phải lỗi đăng nhập', async () => {
+    let svc!: AccountService
+    const made = await make({ notify: (raw) => {
+      if ((raw as { type: string }).type === 'auth_url') svc.cancelLogin()
+    } })
+    svc = made.svc
+    await expect(svc.loginOAuth('openai')).rejects.toMatchObject({ code: 'ai_cancelled' })
+    expect(vault()).toEqual({})
+  })
+
+  it('API key đã lưu không che khuất đăng nhập ChatGPT, kể cả sau khởi động lại', async () => {
+    const { svc } = await make()
+    fakeOauthProvider(svc, async () => ({ refresh: 'r', access: 'a', expires: Date.now() + 3_600_000 }))
+    await svc.setApiKey('fakeoauth', 'sk-shadowed-by-oauth')
+    await svc.loginOAuth('fakeoauth')
+    expect(svc.modelRuntime.isUsingOAuth('fakeoauth')).toBe(true)
+    expect((await svc.modelRuntime.getAuth('fakeoauth'))?.source).toBe('OAuth')
+    // Khởi động lại với cả credential OAuth của OpenAI lẫn API key OpenAI đã lưu trong ai-key.json.
+    mkdirSync(join(base, 'agent'), { recursive: true })
+    new SecretStore(vaultFile(), box).set('credentials', JSON.stringify({ openai: { type: 'oauth', access: 'openai-access',
+      refresh: 'openai-refresh', expires: Date.now() + 3_600_000, clientId: 'oaiapp_saved', sub: 'openai-account' } }))
+    new SecretStore(join(base, 'ai-key.json'), box).set('openai', 'sk-still-saved')
+    const { svc: restarted } = await make()
+    expect((await restarted.modelRuntime.getAuth('openai'))?.source).toBe('OAuth')
+  })
+
   it('di trú auth.json, xóa bản rõ sau khi kiểm tra bản mã; logout không khôi phục token', async () => {
     mkdirSync(join(base, 'agent'))
     writeFileSync(legacyAuth(), JSON.stringify({ fakeoauth: { type: 'oauth', access: 'legacy-fake-access', refresh: 'legacy-fake-refresh', expires: Date.now() + 3_600_000 } }))
