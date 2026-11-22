@@ -246,6 +246,7 @@ export const uiEnEditor: Record<string, string> = {
   'Chưa xem': 'Unseen',
   'Mở rộng {section}': 'Expand {section}',
   'Thu gọn {section}': 'Collapse {section}',
+  'Chiều cao {section}': 'Height of {section}',
   'Thụt lề': 'Indentation',
   'Thụt lề: {n}': 'Indent: {n}',
   'Đã chọn {n}': '{n} selected',

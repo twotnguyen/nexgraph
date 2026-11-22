@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { DebugEvent } from '@shared/api'
-import { setDebugProject, toggleBreakpoint } from '../../state/debugState'
+import { setDebugProject, toggleBreakpoint, useDebugLayout } from '../../state/debugState'
 import { DebugPanel } from './DebugPanel'
 
 
@@ -85,18 +85,60 @@ it('giữ trạng thái thu gọn của section theo từng adapter/kind', () =>
   expect(view.container.querySelector('.dbg-output')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Thu gọn Debug console' }))
   expect(view.container.querySelector('.dbg-output')).toBeNull()
-  expect(localStorage.getItem('nexgraph.debug.layout.node')).toBe(JSON.stringify({ console: true }))
+  expect(localStorage.getItem('nexgraph.debug.layout.node')).toBe(JSON.stringify({ collapsed: { console: true }, heights: {} }))
 
   view.rerender(<DebugPanel projectId="layout-test" target="a.py" onOpenFile={() => {}} />)
   expect(view.container.querySelector('.dbg-output')).not.toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Thu gọn Nguồn đã tải' }))
-  expect(localStorage.getItem('nexgraph.debug.layout.python')).toBe(JSON.stringify({ sources: true }))
+  expect(localStorage.getItem('nexgraph.debug.layout.python')).toBe(JSON.stringify({ collapsed: { sources: true }, heights: {} }))
 
   view.rerender(<DebugPanel projectId="layout-test" target="a.js" onOpenFile={() => {}} />)
   expect(view.container.querySelector('.dbg-output')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Mở rộng Debug console' }))
   expect(view.container.querySelector('.dbg-output')).not.toBeNull()
-  expect(localStorage.getItem('nexgraph.debug.layout.node')).toBe('{}')
-  expect(localStorage.getItem('nexgraph.debug.layout.python')).toBe(JSON.stringify({ sources: true }))
+  expect(localStorage.getItem('nexgraph.debug.layout.node')).toBe(JSON.stringify({ collapsed: {}, heights: {} }))
+  expect(localStorage.getItem('nexgraph.debug.layout.python')).toBe(JSON.stringify({ collapsed: { sources: true }, heights: {} }))
+  act(() => emit({ type: 'state', state: 'terminated' }))
+})
+
+it('lưu layout dạng {collapsed, heights} và đọc được state boolean cũ', () => {
+  localStorage.removeItem('nexgraph.debug.layout.node')
+  const view = renderHook(() => useDebugLayout('node'))
+  act(() => view.result.current.toggle('console'))
+  expect(JSON.parse(localStorage.getItem('nexgraph.debug.layout.node')!)).toEqual({ collapsed: { console: true }, heights: {} })
+  act(() => view.result.current.setHeight('console', 184))
+  expect(JSON.parse(localStorage.getItem('nexgraph.debug.layout.node')!)).toEqual({ collapsed: { console: true }, heights: { console: 184 } })
+  expect(view.result.current.collapsed.console).toBe(true)
+  expect(view.result.current.heights.console).toBe(184)
+
+  localStorage.setItem('nexgraph.debug.layout.node', JSON.stringify({ stack: true, variables: false }))
+  view.rerender()
+  expect(view.result.current.collapsed).toEqual({ stack: true })
+  expect(view.result.current.heights).toEqual({})
+
+  localStorage.setItem('nexgraph.debug.layout.node', JSON.stringify({ collapsed: { sources: true }, heights: { sources: 208 } }))
+  view.unmount()
+  const reloaded = renderHook(() => useDebugLayout('node'))
+  expect(reloaded.result.current.collapsed).toEqual({ sources: true })
+  expect(reloaded.result.current.heights.sources).toBe(208)
+})
+
+it('resize section console bằng phím và lưu chiều cao theo kind', () => {
+  localStorage.removeItem('nexgraph.debug.layout.node')
+  vi.stubGlobal('nexgraph', { debug: {
+    adapterStatus: async () => ({ node: true, python: true }),
+    configs: async () => [],
+    onEvent,
+    modules: async () => [],
+    loadedSources: async () => []
+  } })
+  setDebugProject('resize-test')
+  render(<DebugPanel projectId="resize-test" target="a.js" onOpenFile={() => {}} />)
+  const separator = screen.getByRole('separator', { name: 'Chiều cao Debug console' })
+  separator.focus()
+  fireEvent.keyDown(separator, { key: 'ArrowUp' })
+  expect(separator).toHaveAttribute('aria-valuenow', '184')
+  expect(JSON.parse(localStorage.getItem('nexgraph.debug.layout.node')!)).toEqual({ collapsed: {}, heights: { console: 184 } })
+  expect(document.activeElement).toBe(separator)
   act(() => emit({ type: 'state', state: 'terminated' }))
 })

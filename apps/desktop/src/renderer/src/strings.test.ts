@@ -57,6 +57,12 @@ describe('i18n', () => {
     expect(tr('Luồng {id}', { id: '1' })).toBe('Flow 1')
   })
 
+  it('dịch nhãn separator của PaneStack sang tiếng Anh', () => {
+    setLocale('en')
+    expect(tr('Chiều cao {section}', { section: tr('Ngăn xếp gọi') })).toBe('Height of Call stack')
+    expect(tr('Chiều cao {section}', { section: tr('Biến') })).toBe('Height of Variables')
+  })
+
   it('dịch nhãn mới của thanh trạng thái và bảng lệnh sang tiếng Anh', () => {
     setLocale('en')
     expect(tr('Trạng thái engine')).toBe('Engine status')

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugEvent, DebugFrame, DebugLoadedSource, DebugModule, DebugScope, DebugVariable, NexGraphApi } from '@shared/api'
 import { errorText } from './errorText'
 import { tr } from '../strings'
@@ -11,20 +11,30 @@ export type WatchView = { expression: string; value: string | null; variablesRef
 export type ConfigRef = Pick<DebugConfigInfo, 'source' | 'name'>
 
 /** Các mục có thể thu gọn trong bảng Gỡ lỗi; mỗi adapter/kind giữ một bản riêng. */
-export type DebugLayoutSection = 'variables' | 'stack' | 'console' | 'breakpoints' | 'modules' | 'sources'
-export type DebugLayout = Partial<Record<DebugLayoutSection, boolean>>
+export type DebugLayoutSection = 'variables' | 'stack' | 'console' | 'breakpoints' | 'modules' | 'sources' | 'watches'
+export type PaneLayout = { collapsed: Partial<Record<DebugLayoutSection, boolean>>; heights: Partial<Record<DebugLayoutSection, number>> }
+export type DebugLayout = PaneLayout & {
+  toggle: (section: DebugLayoutSection) => void
+  setHeight: (section: DebugLayoutSection, height: number) => void
+}
 const DEBUG_LAYOUT_CHANGED = 'nexgraph:debug-layout'
 const layoutKey = (kind: DebugKind) => `nexgraph.debug.layout.${kind}`
-const EMPTY_LAYOUT: DebugLayout = {}
-let layoutCache: { kind: DebugKind; raw: string | null; value: DebugLayout } | null = null
-function readDebugLayout(kind: DebugKind): DebugLayout {
+const EMPTY_LAYOUT: PaneLayout = { collapsed: {}, heights: {} }
+let layoutCache: { kind: DebugKind; raw: string | null; value: PaneLayout } | null = null
+function readDebugLayout(kind: DebugKind): PaneLayout {
   let raw: string | null = null
   try { raw = localStorage.getItem(layoutKey(kind)) } catch { /* chỉ là tuỳ chọn */ }
   if (layoutCache?.kind === kind && layoutCache.raw === raw) return layoutCache.value
-  let value: DebugLayout = {}
+  const value: PaneLayout = { collapsed: {}, heights: {} }
   try {
     const parsed: unknown = raw ? JSON.parse(raw) : null
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) value = parsed as DebugLayout
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const data = parsed as Record<string, unknown>
+      const savedCollapsed = data.collapsed && typeof data.collapsed === 'object' && !Array.isArray(data.collapsed) ? data.collapsed as Record<string, unknown> : data
+      const savedHeights = data.heights && typeof data.heights === 'object' && !Array.isArray(data.heights) ? data.heights as Record<string, unknown> : null
+      for (const [key, on] of Object.entries(savedCollapsed)) if (on === true) value.collapsed[key as DebugLayoutSection] = true
+      for (const [key, height] of Object.entries(savedHeights ?? {})) if (typeof height === 'number' && Number.isFinite(height) && height > 0) value.heights[key as DebugLayoutSection] = height
+    }
   } catch { /* chỉ là tuỳ chọn */ }
   layoutCache = { kind, raw, value }
   return value
@@ -33,15 +43,32 @@ const subscribeLayout = (notify: () => void) => {
   window.addEventListener(DEBUG_LAYOUT_CHANGED, notify)
   return () => window.removeEventListener(DEBUG_LAYOUT_CHANGED, notify)
 }
-export const useDebugLayout = (kind: DebugKind): DebugLayout => useSyncExternalStore(subscribeLayout, () => readDebugLayout(kind), () => EMPTY_LAYOUT)
-export function setDebugSectionCollapsed(kind: DebugKind, section: DebugLayoutSection, collapsed: boolean): void {
-  const layout = { ...readDebugLayout(kind) }
-  if (collapsed) layout[section] = true
-  else delete layout[section]
-  try { localStorage.setItem(layoutKey(kind), JSON.stringify(layout)) } catch { /* chỉ là tuỳ chọn */ }
+function writeDebugLayout(kind: DebugKind, update: (layout: PaneLayout) => void): void {
+  const current = readDebugLayout(kind)
+  const next: PaneLayout = { collapsed: { ...current.collapsed }, heights: { ...current.heights } }
+  update(next)
+  try { localStorage.setItem(layoutKey(kind), JSON.stringify(next)) } catch { /* chỉ là tuỳ chọn */ }
   layoutCache = null
   window.dispatchEvent(new Event(DEBUG_LAYOUT_CHANGED))
 }
+export const useDebugLayout = (kind: DebugKind): DebugLayout => {
+  const layout = useSyncExternalStore(subscribeLayout, () => readDebugLayout(kind), () => EMPTY_LAYOUT)
+  return useMemo(() => ({
+    collapsed: layout.collapsed,
+    heights: layout.heights,
+    toggle: (section) => setDebugSectionCollapsed(kind, section, !layout.collapsed[section]),
+    setHeight: (section, height) => writeDebugLayout(kind, (current) => {
+      if (Number.isFinite(height) && height > 0) current.heights[section] = Math.round(height)
+    })
+  }), [kind, layout])
+}
+export function setDebugSectionCollapsed(kind: DebugKind, section: DebugLayoutSection, collapsed: boolean): void {
+  writeDebugLayout(kind, (layout) => {
+    if (collapsed) layout.collapsed[section] = true
+    else delete layout.collapsed[section]
+  })
+}
+
 
 type State = {
   breakpoints: DebugBreakpoints

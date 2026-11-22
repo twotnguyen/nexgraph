@@ -1,0 +1,13 @@
+/* PaneStack: separator là một row của grid, không phải overlay chồng lên nội dung. */
+.pane-stack { display: grid; gap: 4px; min-height: 0; }
+.pane-section { display: grid; grid-template-rows: auto auto auto; min-height: 0; }
+.pane-section[data-collapsed] { grid-template-rows: auto; }
+.pane-head { display: flex; align-items: center; justify-content: space-between; min-width: 0; padding-right: 6px; }
+.pane-toggle { display: flex; flex: 1; align-items: center; gap: 4px; min-width: 0; min-height: 0; padding: 6px 10px; border: 0; background: transparent; color: var(--color-muted); font-family: inherit; font-size: 11px; font-weight: 600; letter-spacing: .03em; text-align: left; text-transform: uppercase; }
+.pane-stack .pane-toggle h3 { margin: 0; padding: 0; font-size: inherit; font-weight: inherit; }
+.pane-collapse-open { display: inline-flex; transform: rotate(90deg); }
+.pane-actions { display: flex; flex: none; gap: 2px; }
+.pane-body { min-height: 0; height: var(--pane-height, auto); overflow: auto; }
+.pane-resize { height: 6px; background: transparent; cursor: ns-resize; }
+.pane-resize:hover, .pane-resize:focus-visible { background: var(--accent, var(--color-border)); outline: none; }
+.pane-toggle:focus-visible, .pane-actions :focus-visible { outline: 1px solid var(--accent, var(--color-border)); outline-offset: -1px; }
