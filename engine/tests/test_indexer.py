@@ -465,6 +465,45 @@ def test_crashed_extraction_pool_recovers_same_graph(tmp_path, index_project, mo
     assert any(e.state == "structure" and e.files_done == 0 and e.message for e in events)
 
 
+def test_submit_error_in_sequential_fallback_reads_remaining_files_in_main_process(
+        tmp_path, index_project, monkeypatch):
+    """Pool fallback không spawn được tiến trình (`submit` ném OSError): đọc tiếp trong tiến trình chính,
+    không xử lý lại các tệp đã ghi và job vẫn hoàn tất."""
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    class SubmitFailsPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            self.parallel = max_workers > 1  # 2: pool song song; 1: pool của fallback không spawn được
+            self.batches = 0
+
+        def submit(self, fn, *args):
+            if not self.parallel:
+                raise OSError("cannot spawn child process")
+            future = Future()
+            if self.batches == 0:  # lô đầu xong; các lô sau treo để rơi vào fallback tuần tự
+                future.set_result(fn(*args))
+            self.batches += 1
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", SubmitFailsPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    recovered, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert recovered.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 40
+    assert graph_state(recovered) == graph_state(serial)
+    assert any(e.message and "tiến trình chính" in e.message for e in events)
+
+
 def test_index_workers_policy(monkeypatch):
     from nexgraph_engine.index import indexer
     monkeypatch.delenv("NEXGRAPH_INDEX_WORKERS", raising=False)
