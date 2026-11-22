@@ -291,6 +291,8 @@ def test_app_transport_times_out_reports_errors_and_releases_write_lock(api, doc
     assert res["chunks"]["sent"] > 0 and res["chunks"]["failed"] == res["chunks"]["sent"]
     assert len(res["errors"]) == res["chunks"]["sent"]
     assert all("timeout" in e["message"] for e in res["errors"])
+    # Hàng đợi đã bị bỏ: câu trả lời đến sau timeout không còn đường vào job.
+    assert api.get(f"/v1/jobs/{job['job_id']}/llm/next").status_code == 404
     # Job đã nhả khoá ghi: một thao tác ghi khác của dự án mở được ngay.
     info = api.app.state.services.registry.get(docs_pid)
     with graph_writer(info.graph_db):
