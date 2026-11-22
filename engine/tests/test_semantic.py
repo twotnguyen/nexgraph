@@ -588,3 +588,22 @@ def test_direct_rejects_internal_and_metadata_base_url(api, docs_pid):
             "targets": "docs", "transport": {"kind": "direct", "base_url": url, "api_key": KEY, "model": "m"}})
         assert r.status_code == 400 and r.json()["error"]["code"] == "bad_url", r.text
         assert reason in r.text and KEY not in r.text
+
+
+def test_doc_secrets_are_redacted_before_llm_and_graph(api, llm, tmp_path):
+    secret = "AKIA" + "Q" * 16
+    root = tmp_path / "secret docs"
+    root.mkdir()
+    (root / "README.md").write_text(
+        f"# Bí mật {secret}\n\nDòng thân có {secret} và token để lộ.\n\n## Mục\n\nNội dung.\n", encoding="utf-8")
+    pid = index_docs(api, root)
+    enable(api, pid)
+    llm.reply = lambda body: fragment("README.md", "Ghi chú")
+    job = wait_job(api, run(api, pid, "docs", direct(llm)))
+    assert job["state"] == "done" and llm.requests
+    assert all(secret not in json.dumps(body) for body in llm.requests)
+    assert "[redacted]" in json.dumps(llm.requests)
+    conn = graph(api, pid)
+    labels = [row[0] or "" for row in conn.execute("SELECT nhan FROM nut")]
+    assert labels and all(secret not in label for label in labels)
+    conn.close()
