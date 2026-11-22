@@ -1,6 +1,7 @@
 """Lập chỉ mục hai giai đoạn: đọc cấu trúc rồi phân giải tham chiếu."""
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 import subprocess
@@ -32,6 +33,8 @@ from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, FileRec, Node, RunState, UnresolvedRef
 from nexgraph_engine.subprocesses import run_captured
+
+logger = logging.getLogger(__name__)
 
 RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm lại (hai lần sửa trong cùng một giây)
 
@@ -160,6 +163,7 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
         else:
             x = extract_generic(root, f.rel_path, f.language, is_test=f.is_test)
     except Exception as exc:  # lỗi trích xuất một tệp không được dừng cả job
+        logger.warning("Không trích xuất được %s", f.rel_path, exc_info=True)
         return ExtractedFile(rec, [file_node], [], [], {}, [("extract", f"{type(exc).__name__}: {exc}")])
     return ExtractedFile(rec, [file_node, *x.nodes], list(x.edges), list(x.refs), dict(x.bindings), list(x.errors))
 
@@ -304,7 +308,7 @@ class Indexer:
             except (BrokenProcessPool, OSError, RuntimeError):
                 # Worker có thể không khởi động được hoặc bị hệ điều hành chặn; các tệp chưa xong
                 # sẽ được đọc tiếp ở nhánh fallback tuần tự bên dưới.
-                pass
+                logger.warning("Bộ trích xuất song song gián đoạn; đọc tiếp tuần tự", exc_info=True)
             finally:
                 if executor is not None and consumed < total:
                     # Python 3.12 chưa có terminate_workers() trên executor.
@@ -404,5 +408,6 @@ def add_batch_calls(store: GraphStore, root: Path, files: list[tuple[str, str]],
         try:
             added += store.insert_edges(batch_cross_file_calls(root, rels, nodes))
         except Exception:  # noqa: BLE001 — graphify có thể ném lỗi trên cú pháp lạ; cạnh từng tệp vẫn còn
+            logger.warning("Bỏ lô lời gọi liên tệp của %s", rels[0].rsplit("/", 1)[0] if rels else "?", exc_info=True)
             continue
     return added

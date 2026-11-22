@@ -8,6 +8,7 @@ nên chạy thêm bộ trích xuất của riêng tệp để lấy `raw_calls` 
 from __future__ import annotations
 
 import atexit
+import logging
 import re
 import tempfile
 from pathlib import Path
@@ -19,6 +20,8 @@ from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, LANGUAGE_BY_EXT, i
 from nexgraph_engine.ids import file_node_id, node_id
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.models import Edge, Node, UnresolvedRef
+
+logger = logging.getLogger(__name__)
 
 _cache_dir: tempfile.TemporaryDirectory | None = None
 
@@ -53,6 +56,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     try:
         result = extract([path], cache_root=_cache_root(), root=Path(root), parallel=False)
     except Exception as exc:  # bộ trích xuất có thể ném lỗi trên cú pháp lạ; không để job dừng
+        logger.warning("Bộ trích xuất lỗi trên %s (%s)", rel_path, language, exc_info=True)
         return FileExtraction(errors=[("extract", f"Bộ trích xuất lỗi: {exc}")])
     if result.get("failed_sources"):
         return FileExtraction(errors=[("extract", f"Bộ trích xuất không đọc được {rel_path} ({language})")])
@@ -210,6 +214,7 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
     try:
         per_file = _safe_extract_with_xaml_root(extractor, path, root)
     except Exception:  # lỗi ở lần đọc thứ hai không được làm mất kết quả của lần đầu
+        logger.warning("Không đọc lại được %s để lấy lời gọi liên tệp", path, exc_info=True)
         return [], {}, {}
     # Id trong kết quả riêng tệp mang tiền tố đường dẫn tuyệt đối; id của extract() là đuôi của nó.
     by_suffix = sorted(raw, key=len, reverse=True)
@@ -262,6 +267,7 @@ def _ts_scoped_types(path: Path, raw: dict) -> dict[str, dict[str, str]]:
         parser = Parser(Language(language()))
         tree = parser.parse(source)
     except Exception:
+        logger.warning("Không đọc được kiểu theo hàm của %s", path, exc_info=True)
         return {}
     by_line: dict[int, list[str]] = {}
     for gid, node in raw.items():
