@@ -14,7 +14,9 @@ const h = vi.hoisted(() => ({
   mcpStarts: [] as [string, string][],
   watcherRoots: [] as string[],
   userData: '',
+  window: null as unknown,
   showOpenDialog: vi.fn(async () => ({ canceled: false, filePaths: [] as string[] })),
+  showSaveDialog: vi.fn(async () => ({ canceled: true }) as { canceled: boolean; filePath?: string }),
   showItemInFolder: vi.fn(async (_path: string) => {})
 }))
 
@@ -23,7 +25,7 @@ vi.mock('electron', () => ({
   ipcMain: { handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => Promise<unknown>) => { h.handlers.set(channel, fn) } },
   contextBridge: { exposeInMainWorld: (name: string, api: unknown) => { h.exposed = [name, api] } },
   ipcRenderer: { invoke: (channel: string, ...args: unknown[]) => h.handlers.get(channel)!({}, ...args) },
-  dialog: { showOpenDialog: h.showOpenDialog },
+  dialog: { showOpenDialog: h.showOpenDialog, showSaveDialog: h.showSaveDialog },
   shell: { showItemInFolder: h.showItemInFolder },
   safeStorage: { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() }
 }))
@@ -81,7 +83,7 @@ beforeAll(() => {
   execFileSync('git', ['init', '-q', root])
   writeFileSync(join(root, 'a.ts'), 'x')
   h.projects = [{ project_id: 'p1', path: root }, { project_id: 'p2', path: root2 }]
-  registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => null, () => ({ command: 'engine', args: [], cwd: base }), base)
+  registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => h.window as never, () => ({ command: 'engine', args: [], cwd: base }), base)
 })
 
 describe('IPC: path thô từ renderer bị từ chối', () => {
@@ -234,5 +236,17 @@ describe('IPC: xuất chỉ dùng thư mục đã chọn trong main', () => {
       aiSelectedModel: { provider: 'example', id: 'm1' },
       'exportDir:p1': exportDir
     })
+  })
+
+  it('export:png nhớ thư mục xuất theo dự án, chưa lưu thì về Downloads', async () => {
+    h.window = { webContents: { capturePage: vi.fn(async () => ({ toPNG: () => new Uint8Array() })), send: vi.fn() } }
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [exportDir] })
+    expect(await invoke('export:pick-dir', 'p1')).toMatchObject({ ok: true, data: exportDir })
+    h.showSaveDialog.mockResolvedValueOnce({ canceled: true })
+    expect(await invoke('export:png', 'p1', { x: 1, y: 2, width: 3, height: 4 })).toMatchObject({ ok: true, data: null })
+    expect(h.showSaveDialog).toHaveBeenLastCalledWith(h.window, expect.objectContaining({ defaultPath: join(exportDir, 'nexgraph.png') }))
+    h.showSaveDialog.mockResolvedValueOnce({ canceled: true })
+    expect(await invoke('export:png', 'p2', { x: 1, y: 2, width: 3, height: 4 })).toMatchObject({ ok: true, data: null })
+    expect(h.showSaveDialog).toHaveBeenLastCalledWith(h.window, expect.objectContaining({ defaultPath: join('/tmp', 'nexgraph.png') }))
   })
 })

@@ -99,8 +99,14 @@ it('thư mục không phải kho git', async () => {
 })
 
 it('đếm numstat NUL-safe, đổi tên, nhị phân và tệp chưa theo dõi', async () => {
-  const oldName = 'src/old name.ts'
-  const newName = 'src/new line file.ts'
+  // Win32 cấm tab/newline trong tên tệp; POSIX giữ fixture đặc biệt.
+  const oldName = process.platform === 'win32' ? 'src/old name.ts' : 'src/old\tname.ts'
+  const newName = process.platform === 'win32' ? 'src/new line file.ts' : 'src/new\tline\nfile.ts'
+  if (process.platform !== 'win32') {
+    expect(oldName).toContain('\t')
+    expect(newName).toContain('\t')
+    expect(newName).toContain('\n')
+  }
   writeFileSync(join(root, oldName), 'one\ntwo\nthree\n')
   writeFileSync(join(root, 'binary.bin'), Buffer.from([0, 1]))
   sh('add', '.')

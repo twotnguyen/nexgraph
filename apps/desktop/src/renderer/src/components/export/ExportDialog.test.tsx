@@ -58,7 +58,7 @@ describe('ExportDialog', () => {
     render(<ExportDialog {...props} />)
     await userEvent.click(screen.getByLabelText('Ảnh PNG vùng đang xem'))
     await userEvent.click(screen.getByRole('button', { name: 'Lưu ảnh PNG' }))
-    await waitFor(() => expect(api.exporter.png).toHaveBeenCalledWith({ x: 10, y: 80, width: 601, height: 400 }))
+    await waitFor(() => expect(api.exporter.png).toHaveBeenCalledWith('p1', { x: 10, y: 80, width: 601, height: 400 }))
     expect(dialogShown).toBe(false)
     expect(await screen.findByText('/tmp/nexgraph.png')).toBeInTheDocument()
     canvas.remove()
