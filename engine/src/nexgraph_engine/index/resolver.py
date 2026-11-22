@@ -224,6 +224,12 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
         elif len(parts) == 2 and parts[0] == "this":
             own = idx.members.get((file, owner), {}).get(parts[1], []) if owner else []
             hit = _levels([(own, SAME_SCOPE)])
+        elif len(parts) == 3 and parts[0] in ("self", "this"):
+            # `self.repo.save()`: kiểu của `self.repo` lấy từ bảng kiểu của lớp (gán hoặc chú thích).
+            tname = receiver_type(src, parts[1])
+            type_hit = find_type(tname, file) if tname else None
+            if type_hit:
+                hit = member(type_hit, parts[2])
         elif len(parts) == 2:
             recv, x = parts
             tname = recv if recv[:1].isupper() else receiver_type(src, recv)

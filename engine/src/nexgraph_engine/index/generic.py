@@ -222,6 +222,11 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
             for e in raw_edges if e["relation"] == "calls" and e["target"] in raw}
     out: list[tuple[str | None, str, int]] = []
     scoped_types = _ts_scoped_types(path, raw) if path.suffix in _TS_SUFFIXES else {}
+    python = path.suffix in _PY_SUFFIXES
+    source = path.read_bytes() if python else b""
+    if python:
+        scoped_types.update(_py_scoped_types(source, raw))
+    aliases = _py_module_aliases(source) if python else {}
     per_file_fid = next((n["id"] for n in per_file.get("nodes", []) if n.get("label") == path.name), None)
     for rc in per_file.get("raw_calls") or []:
         caller_nid = rc.get("caller_nid") or ""
@@ -238,10 +243,12 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
         line, callee, recv = _line(rc.get("source_location")), rc.get("callee"), rc.get("receiver")
         if not line or not callee:
             continue
+        if not recv and rc.get("is_member_call"):
+            recv = _call_receiver(source, rc)  # `self.repo.save()` / `app.models.User()`: receiver bị extractor ẩn
         if recv in ("self", "this"):
             name = f"this.{callee}"
         elif recv:
-            name = f"{recv}.{callee}"
+            name = f"{aliases.get(recv, recv)}.{callee}"  # `import pkg.mod as m` → m.x thành pkg.mod.x
         elif rc.get("is_member_call"):
             continue  # `X().m()`: không biết kiểu của receiver, không đoán
         else:
@@ -425,3 +432,161 @@ def _data_kind(n: dict, name: str, language: str, is_type: bool) -> NodeKind:
 
 def _plain_name(raw: dict, gid: str) -> str:
     return re.sub(r"\(\)$", "", raw[gid]["label"]).lstrip(".")
+
+
+_PY_SUFFIXES = {".py", ".pyi"}
+
+
+def _call_receiver(source: bytes, rc: dict) -> str | None:
+    """Chuỗi receiver của lời gọi Python (`self.repo` trong `self.repo.save()`), từ vị trí byte của extractor."""
+    site = rc.get("_python_call_site")
+    callee = rc.get("callee") or ""
+    if not callee or not isinstance(site, list) or len(site) != 2:
+        return None
+    chunk = source[site[0]:site[1]].decode("utf-8", "replace")
+    idx = chunk.rfind(f".{callee}")
+    if idx <= 0:
+        return None
+    recv = chunk[:idx]
+    # `X().m()`, `f().m()`: receiver không phải chuỗi tên → không đoán.
+    return recv if re.fullmatch(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*", recv) else None
+
+
+def _py_module_aliases(source: bytes) -> dict[str, str]:
+    """Tên cục bộ của mô-đun Python → đường dẫn mô-đun (`import a.b as m` → m: a.b).
+
+    Chỉ nhận tên viết thường (quy ước mô-đun); `from pkg import Class` không bị đổi thành `pkg.Class`.
+    """
+    out: dict[str, str] = {}
+    for raw_line in source.decode("utf-8", "replace").splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        match = re.match(r"import\s+([\w.]+)(?:\s+as\s+(\w+))?$", line)
+        if match:
+            module, alias = match.group(1), match.group(2)
+            if alias and alias[:1].islower():
+                out[alias] = module
+            continue
+        match = re.match(r"from\s+([\w.]+)\s+import\s+(.+)$", line)
+        if match and not match.group(1).startswith("."):
+            module, names = match.group(1), match.group(2)
+            for part in names.split(","):
+                bits = [piece.strip() for piece in part.split(" as ")]
+                name, alias = bits[0], bits[-1]
+                if name and name != "*" and alias[:1].islower():
+                    out[alias] = f"{module}.{name}"
+    return out
+
+
+def _py_scoped_types(source: bytes, raw: dict) -> dict[str, dict[str, str]]:
+    """Kiểu tĩnh của `self.x` theo lớp Python: gán `ClassName(...)`, `self.x: T`, thuộc tính lớp `x: T`.
+
+    Mơ hồ (gán hai kiểu khác nhau) hoặc không suy ra được kiểu → bỏ thuộc tính, resolver không tạo cạnh.
+    """
+    try:
+        from tree_sitter import Language, Parser
+        import tree_sitter_python
+
+        parser = Parser(Language(tree_sitter_python.language()))
+        tree = parser.parse(source)
+    except Exception:
+        logger.warning("Không đọc được cây cú pháp Python để lấy kiểu self.x", exc_info=True)
+        return {}
+    by_line: dict[int, list[str]] = {}
+    for gid, node in raw.items():
+        line = _line(node.get("source_location"))
+        if line:
+            by_line.setdefault(line, []).append(gid)
+
+    def text(node) -> str:
+        return source[node.start_byte:node.end_byte].decode("utf-8", "replace")
+
+    def type_name(node) -> str | None:
+        """`Repo` / `mod.Repo` → `Repo`; `list[Repo]`, `Repo | None`, `None` → None (không đoán)."""
+        if node is None:
+            return None
+        if node.type == "identifier":
+            return text(node)
+        if node.type == "attribute":
+            attr = node.child_by_field_name("attribute")
+            return text(attr) if attr is not None else None
+        if node.type == "type" and len(node.named_children) == 1:
+            return type_name(node.named_children[0])  # `(type (identifier))` của grammar Python
+        return None
+
+    def self_attr(node) -> str | None:
+        if node is None or node.type != "attribute":
+            return None
+        obj, attr = node.child_by_field_name("object"), node.child_by_field_name("attribute")
+        if obj is not None and obj.type == "identifier" and text(obj) == "self" and attr is not None:
+            return text(attr)
+        return None
+
+    def fields_of(body) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        ambiguous: set[str] = set()
+
+        def add(attr: str, typ: str | None) -> None:
+            if not typ or attr in ambiguous:
+                return
+            if attr in fields and fields[attr] != typ:
+                fields.pop(attr, None)
+                ambiguous.add(attr)
+                return
+            fields[attr] = typ
+
+        def scan(node) -> None:
+            stack = [node]
+            while stack:
+                current = stack.pop()
+                if current is None:
+                    continue
+                if current.type == "assignment":
+                    attr = self_attr(current.child_by_field_name("left"))
+                    if attr:
+                        annotation = current.child_by_field_name("type")
+                        right = current.child_by_field_name("right")
+                        if annotation is not None:
+                            add(attr, type_name(annotation))
+                        elif right is not None and right.type == "call":
+                            add(attr, type_name(right.child_by_field_name("function")))
+                        elif right is not None and right.type == "identifier":
+                            add(attr, local.get(text(right)))
+                stack.extend(current.children)
+
+        for member in body.named_children:
+            if member.type == "expression_statement":
+                for stmt in member.named_children:
+                    if stmt.type == "assignment" and stmt.child_by_field_name("type") is not None:
+                        left = stmt.child_by_field_name("left")
+                        if left is not None and left.type == "identifier":
+                            add(text(left), type_name(stmt.child_by_field_name("type")))
+                continue
+            if member.type != "function_definition":
+                continue
+            params = member.child_by_field_name("parameters")
+            local: dict[str, str] = {}
+            for param in params.named_children if params is not None else ():
+                name = param.child_by_field_name("name")
+                if name is None and param.type == "typed_parameter":
+                    name = next((c for c in param.named_children if c.type == "identifier"), None)
+                annotation = param.child_by_field_name("type")
+                if name is not None and annotation is not None and text(name) != "self":
+                    local[text(name)] = type_name(annotation)
+            scan(member.child_by_field_name("body"))
+        return fields
+
+    out: dict[str, dict[str, str]] = {}
+    stack = [tree.root_node]
+    while stack:
+        node = stack.pop()
+        if node.type == "class_definition":
+            name, body = node.child_by_field_name("name"), node.child_by_field_name("body")
+            gid = next((g for g in by_line.get(node.start_point[0] + 1, [])
+                        if raw[g].get("_callable_class") and _plain_name(raw, g) == (text(name) if name else "")), None)
+            if gid is not None and body is not None:
+                fields = fields_of(body)
+                if fields:
+                    out[gid] = fields
+            continue  # lớp lồng nhau: kiểu của nó do `class_definition` bên trong xử lý
+        stack.extend(node.children)
+    return out
