@@ -17,7 +17,7 @@ export function CollabBar() {
       {collab.role === 'host' && collab.share && <>
         <Icon name="share" size={13} /><span>{tr('Đang chia sẻ')} <b>{collab.file}</b></span>
         <span className="muted">{tr('Địa chỉ')}</span><code>{collab.share.addresses.map((a) => `${a}:${collab.share!.port}`).join(' · ') || `localhost:${collab.share.port}`}</code>
-        <span className="muted">{tr('Mã')}</span><code>{collab.share.code}</code>
+        <span className="muted">{tr('Mã mời')}</span><code>{collab.share.code}</code>
         <span className="muted">{tr('{count} người tham gia', { count: collab.peers })}</span>
       </>}
       {collab.role === 'guest' && <><Icon name="share" size={13} /><span>{tr('Đang cộng tác')} <b>{collab.file}</b></span></>}
@@ -27,7 +27,7 @@ export function CollabBar() {
   )
 }
 
-/** Hộp thoại tham gia: địa chỉ máy:cổng, mã 6 số và tên hiển thị cho con trỏ của mình. */
+/** Hộp thoại tham gia: địa chỉ máy:cổng, mã mời 22 ký tự và tên hiển thị cho con trỏ của mình. */
 export function JoinDialog({ onClose, onJoined }: { onClose: () => void; onJoined: () => void }) {
   const [address, setAddress] = useState('')
   const [code, setCode] = useState('')
@@ -52,12 +52,12 @@ export function JoinDialog({ onClose, onJoined }: { onClose: () => void; onJoine
     <div className="modal-backdrop" onKeyDown={(e) => { if (e.key === 'Escape') onClose() }}>
       <form className="modal" role="dialog" aria-label={tr('Tham gia cộng tác')} onSubmit={(e) => { e.preventDefault(); void submit() }}>
         <header><b>{tr('Tham gia cộng tác')}</b><button type="button" aria-label={tr('Đóng')} onClick={onClose}><Icon name="close" size={14} /></button></header>
-        <p className="muted">{tr('Nhập địa chỉ và mã do máy chia sẻ hiển thị (cùng mạng LAN, kết nối thẳng giữa hai máy).')}</p>
+        <p className="muted">{tr('Nhập địa chỉ và mã mời do máy chia sẻ hiển thị (cùng mạng LAN, kết nối thẳng giữa hai máy).')}</p>
         <label className="field"><span>{tr('Địa chỉ')}</span><input autoFocus placeholder="192.168.1.5:41234" value={address} onChange={(e) => setAddress(e.target.value)} /></label>
-        <label className="field"><span>{tr('Mã')}</span><input inputMode="numeric" placeholder={tr('6 chữ số')} value={code} onChange={(e) => setCode(e.target.value)} /></label>
+        <label className="field"><span>{tr('Mã mời')}</span><input placeholder={tr('Dán mã mời')} value={code} onChange={(e) => setCode(e.target.value)} /></label>
         <label className="field"><span>{tr('Tên của bạn')}</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
         {error && <p role="alert" className="error">{error}</p>}
-        <footer><button type="button" onClick={onClose}>{tr('Huỷ')}</button><button type="submit" className="primary" disabled={busy || !address.trim() || !/^\d{6}$/.test(code.trim())}>{busy ? tr('Đang nối…') : tr('Tham gia')}</button></footer>
+        <footer><button type="button" onClick={onClose}>{tr('Huỷ')}</button><button type="submit" className="primary" disabled={busy || !address.trim() || !/^[A-Za-z0-9_-]{22}$/.test(code.trim())}>{busy ? tr('Đang nối…') : tr('Tham gia')}</button></footer>
       </form>
     </div>
   )

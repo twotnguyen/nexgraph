@@ -189,7 +189,7 @@ const api: NexGraphApi = {
     pickDir: (pid) => call('export:pick-dir', pid),
     run: (pid, format, scope) => call('export:run', pid, format, scope),
     push: (pid, req) => call('export:push', pid, req),
-    png: (rect) => call('export:png', rect),
+    png: (pid, rect) => call('export:png', pid, rect),
     reveal: (pid, path) => call('export:reveal', pid, path)
   },
   hook: {
