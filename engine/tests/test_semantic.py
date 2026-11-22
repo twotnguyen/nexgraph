@@ -8,6 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION
+
 KEY = "sk-test-SECRET-key-9f3a1c77"
 TERMINAL = {"done", "error", "cancelled"}
 
@@ -126,6 +128,21 @@ def test_estimate_needs_no_key_and_lists_only_documents(api, docs_pid):
     est = r.json()
     assert "lib/auth.py" not in est["files"] and "README.md" in est["files"] and "docs/notes.txt" in est["files"]
     assert est["chunks"] >= 1 and est["input_tokens"] > 0 and est["output_tokens"] > 0 and est["cached_chunks"] == 0
+
+
+@pytest.mark.parametrize("version,status,code", [
+    (GRAPH_SCHEMA_VERSION + 1, 400, "schema_version"),
+    (GRAPH_SCHEMA_VERSION - 1, 409, "schema_outdated"),
+])
+def test_estimate_reports_graph_schema_mismatch(api, docs_pid, version, status, code):
+    conn = graph(api, docs_pid)
+    conn.execute(f"PRAGMA user_version = {version}")
+    conn.close()
+
+    r = api.post(f"/v1/projects/{docs_pid}/semantic/estimate", json={"targets": "docs"})
+
+    assert r.status_code == status
+    assert r.json()["error"]["code"] == code
 
 
 # --- đường B ---------------------------------------------------------------------------------------
