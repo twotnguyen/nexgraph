@@ -150,7 +150,8 @@ def semantic_estimate(project_id: str, body: EstimateBody, request: Request) -> 
 @router.post("/projects/{project_id}/semantic", status_code=202)
 def semantic_start(project_id: str, body: SemanticBody, request: Request):
     services, info = _project(request, project_id)
-    if not services.registry.ai_settings(project_id)["enabled"]:
+    # `dedup` chỉ chạy trên máy (gộp khái niệm trùng), không gửi gì cho model nên không đòi bật AI.
+    if body.targets != "dedup" and not services.registry.ai_settings(project_id)["enabled"]:
         raise ApiError(403, "ai_disabled", "Chưa bật phân tích bằng AI cho dự án này")
     with closing(open_graph_db(info.graph_db, read_only=True)) as conn:
         store = GraphStore(conn)

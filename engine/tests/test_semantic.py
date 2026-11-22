@@ -372,6 +372,18 @@ def test_dedup_merges_duplicate_concepts(api, copy_fixture, llm):
     conn.close()
 
 
+def test_dedup_runs_without_ai_enabled(api, copy_fixture, llm):
+    """AI-08: dedup chạy trên máy, không gửi gì — không được đòi bật AI/model/consent."""
+    pid = index_docs(api, copy_fixture("docs_app"))
+    assert api.get(f"/v1/projects/{pid}/ai").json()["enabled"] is False
+    r = api.post(f"/v1/projects/{pid}/semantic", json={"targets": "dedup", "transport": {"kind": "app", "model_label": ""}})
+    assert r.status_code == 202, r.text
+    job = wait_job(api, r.json()["job_id"])
+    assert job["state"] == "done", job
+    assert job["result"]["merged"] == 0
+    assert llm.requests == []
+
+
 def test_pr_triage_returns_result_without_graph_write(api, docs_pid, llm):
     enable(api, docs_pid)
     conn = graph(api, docs_pid)
