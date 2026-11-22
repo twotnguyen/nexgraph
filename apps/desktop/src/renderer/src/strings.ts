@@ -406,8 +406,8 @@ const viStrings = {
   },
   activity: {
     tour: 'Tham quan',
-    search: 'Tìm kiếm',
-    changes: 'Thay đổi'
+    search: 'Tìm trong đồ thị',
+    changes: 'Vùng ảnh hưởng'
   },
   code: {
     open: 'Mở mã',

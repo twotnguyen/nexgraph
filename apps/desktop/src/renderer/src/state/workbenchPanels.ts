@@ -101,7 +101,7 @@ export const WORKBENCH_PANELS: WorkbenchPanel[] = [
     }))
   },
   {
-    id: 'outline', title: () => tr('Ký hiệu'), icon: h(Icon, { name: 'tree', size: 20 }), command: 'editor.document_symbols', group: 'inspect',
+    id: 'outline', title: () => tr('Ký hiệu tệp'), icon: h(Icon, { name: 'tree', size: 20 }), command: 'editor.document_symbols', group: 'inspect',
     render: (ctx) => h('div', { className: 'ws-tools-body' }, h(OutlinePanel, { editor: ctx.editor, symbols: ctx.symbols, error: ctx.symbolError }))
   },
   {

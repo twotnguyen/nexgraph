@@ -63,6 +63,13 @@ describe('i18n', () => {
     expect(tr('Chiều cao {section}', { section: tr('Biến') })).toBe('Height of Variables')
   })
 
+  it('dịch nhãn activity rail mới sang tiếng Anh', () => {
+    setLocale('en')
+    expect(tr('Tìm trong đồ thị')).toBe('Search Graph')
+    expect(tr('Vùng ảnh hưởng')).toBe('Impact')
+    expect(tr('Ký hiệu tệp')).toBe('File Symbols')
+  })
+
   it('dịch nhãn mới của thanh trạng thái và bảng lệnh sang tiếng Anh', () => {
     setLocale('en')
     expect(tr('Trạng thái engine')).toBe('Engine status')

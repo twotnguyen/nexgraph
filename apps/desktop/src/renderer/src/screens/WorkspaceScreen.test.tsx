@@ -301,7 +301,7 @@ describe('WorkspaceScreen', () => {
 
   it('toggles the search panel from the activity bar', async () => {
     setup()
-    const btn = screen.getByRole('button', { name: 'Tìm kiếm' })
+    const btn = screen.getByRole('button', { name: 'Tìm trong đồ thị' })
     expect(btn).toHaveAttribute('aria-pressed', 'false')
     await userEvent.click(btn)
     expect(btn).toHaveAttribute('aria-pressed', 'true')
@@ -314,7 +314,7 @@ describe('WorkspaceScreen', () => {
 
   it('opening a search result switches to the Graph tab centred on that node', async () => {
     const { neighbors } = setup()
-    await userEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'login')
     const result = await screen.findByRole('button', { name: /lib\/a\.dart:3/ }, { timeout: 2000 })
     fireEvent.click(result)
@@ -340,11 +340,11 @@ describe('WorkspaceScreen: changes', () => {
     expect(api.watch.stop).toHaveBeenCalledWith('p1')
   })
 
-  it('opens the Thay đổi panel and jumps to the Graph tab with the node highlighted', async () => {
+  it('opens the Vùng ảnh hưởng panel and jumps to the Graph tab with the node highlighted', async () => {
     const neighbors = vi.fn(async (_p: string, q: { node: string }) => ({ nodes: [gnode(q.node, 'build')], edges: [], truncated: false }))
     const { api } = installNexgraph({ graph: { changes: vi.fn(async () => changes), neighbors } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
-    await userEvent.click(screen.getByRole('button', { name: 'Thay đổi' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Vùng ảnh hưởng' }))
     const impacted = await screen.findByRole('region', { name: 'Vùng ảnh hưởng' })
     expect(api.graph.changes).toHaveBeenCalled()
     await userEvent.click(within(impacted).getByRole('button', { name: /build/ }))
@@ -363,7 +363,7 @@ describe('WorkspaceScreen: editor tabs', () => {
     const search = vi.fn(async () => [{ node: gnode('lib/a.dart::AuthService.login#method', 'login'), score: 2 }])
     const { api } = installNexgraph({ ...over, fs: { read: code }, graph: { neighbors, search } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
-    await userEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'login')
     await userEvent.click(await screen.findByText('login'))
     await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
@@ -647,7 +647,7 @@ describe('WorkspaceScreen: editor tabs', () => {
     installNexgraph({ fs: { read: read() }, graph: { neighbors, search } })
     const onBack = vi.fn()
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} onBack={onBack} /></div>)
-    await userEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'login')
     await userEvent.click(await screen.findByText('login'))
     await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
@@ -686,7 +686,7 @@ describe('WorkspaceScreen: editor tabs', () => {
     const search = vi.fn(async (_p: string, q: string) => [{ node: q.startsWith('go') ? b : a, score: 1 }])
     installNexgraph({ graph: { neighbors: vi.fn(async (_p: string, q: { node: string }) => ({ nodes: [q.node === b.id ? b : a], edges: [], truncated: false })), search, paths } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
-    await userEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'run')
     fireEvent.click(await screen.findByRole('button', { name: /run/ }))
     const nodeLabel = await within(await flowEl()).findByText('run')
@@ -709,7 +709,7 @@ describe('WorkspaceScreen: editor tabs', () => {
     installNexgraph({ graph: { neighbors: vi.fn(async () => ({ nodes: [a, c], edges: [], truncated: false })),
       search: vi.fn(async () => [{ node: a, score: 1 }]), impactOf } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
-    await userEvent.click(screen.getByRole('button', { name: 'Tìm kiếm' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm kiếm', { selector: 'input' }), 'run')
     fireEvent.click(await screen.findByRole('button', { name: /run/ }))
     const flow = await flowEl()
