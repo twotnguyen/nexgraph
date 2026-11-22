@@ -137,8 +137,11 @@ describe('WorkspaceScreen', () => {
   })
 
   it('mở Kiến trúc ở giữa, cây tệp bên trái; trợ lý kiểu Wu thay chỗ cây tệp và chuyển được sang phải', async () => {
-    localStorage.removeItem('nexgraph.chat.dock')
+    // Đã lưu 'left' thì tôn trọng kiểu Wu: khung chat đóng sẵn, nhường chỗ cây tệp.
+    localStorage.setItem('nexgraph.chat.dock', 'left')
     setup()
+    expect(document.querySelector<HTMLElement>('.workspace-shell')!.dataset.chatDock).toBe('left')
+    expect(localStorage.getItem('nexgraph.chat.dock')).toBe('left')
     expect(screen.getByRole('tab', { name: 'Kiến trúc', selected: true })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Graph', selected: false })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: 'Duyệt tệp' })).toBeVisible()
@@ -152,6 +155,15 @@ describe('WorkspaceScreen', () => {
     expect(screen.getByRole('complementary', { name: 'Trợ lý AI' })).toBeVisible()
     expect(localStorage.getItem('nexgraph.chat.dock')).toBe('right')
     localStorage.removeItem('nexgraph.chat.dock')
+  })
+
+  it('lần đầu vào workspace chưa có tuỳ chọn: trợ lý AI mở sẵn bên phải và không ghi vào localStorage', () => {
+    localStorage.removeItem('nexgraph.chat.dock')
+    setup()
+    expect(document.querySelector<HTMLElement>('.workspace-shell')!.dataset.chatDock).toBe('right')
+    expect(screen.getByRole('complementary', { name: 'Trợ lý AI' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Ẩn/hiện trợ lý AI' })).toHaveAttribute('aria-pressed', 'true')
+    expect(localStorage.getItem('nexgraph.chat.dock')).toBeNull()
   })
 
   it('mở cấu hình MCP của OpenCode từ panel trợ lý', async () => {
@@ -894,7 +906,7 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
   })
 
   it('dock.right đổi bên phải và dock.all ẩn rồi khôi phục các bảng', async () => {
-    localStorage.removeItem('nexgraph.chat.dock')
+    localStorage.setItem('nexgraph.chat.dock', 'left')
     setup()
     expect(screen.queryByRole('complementary', { name: 'Trợ lý AI' })).not.toBeInTheDocument()
     act(() => { expect(runCommand('dock.right')).toBe(true) })
