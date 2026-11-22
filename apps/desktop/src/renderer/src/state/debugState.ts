@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugFrame, DebugScope, DebugVariable, NexGraphApi } from '@shared/api'
+import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugEvent, DebugFrame, DebugLoadedSource, DebugModule, DebugScope, DebugVariable, NexGraphApi } from '@shared/api'
 import { errorText } from './errorText'
 import { tr } from '../strings'
 
@@ -18,13 +18,17 @@ type State = {
   frames: DebugFrame[]
   frameId: number | null
   scopes: ScopeView[]
+  modules: DebugModule[]
+  loadedSources: DebugLoadedSource[]
+  moduleError: string | null
+  sourceError: string | null
   watches: WatchView[]
   output: string[]
   error: string | null
   /** Cấu hình đang chọn; null = chạy tệp đang mở như trước. */
   config: ConfigRef | null
 }
-let state: State = { breakpoints: {}, at: null, status: 'idle', threadId: 0, frames: [], frameId: null, scopes: [], watches: [], output: [], error: null, config: null }
+let state: State = { breakpoints: {}, at: null, status: 'idle', threadId: 0, frames: [], frameId: null, scopes: [], modules: [], loadedSources: [], moduleError: null, sourceError: null, watches: [], output: [], error: null, config: null }
 const listeners = new Set<() => void>()
 const patch = (next: Partial<State>) => { state = { ...state, ...next }; for (const l of listeners) l() }
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
@@ -57,7 +61,7 @@ export function setDebugProject(id: string): void {
   const current = ++generation
   ++frameRequest
   const mustStop = state.status !== 'idle' || !!starting || !!switching
-  patch({ breakpoints: loadBreakpoints(id), watches: [], output: [], error: null, frames: [], scopes: [], frameId: null, at: null, config: null,
+  patch({ breakpoints: loadBreakpoints(id), watches: [], output: [], error: null, frames: [], scopes: [], modules: [], loadedSources: [], moduleError: null, sourceError: null, frameId: null, at: null, config: null,
     status: mustStop ? 'starting' : 'idle' })
   if (mustStop) {
     const stop = switching ?? Promise.resolve(starting).catch(() => {}).then(() => api()?.stop())
@@ -141,6 +145,23 @@ export async function selectFrame(frame: DebugFrame): Promise<void> {
   } catch (e) { if (request === frameRequest) patch({ error: errorText(e) }) }
 }
 
+
+async function refreshInventory(current: number): Promise<void> {
+  const debug = api()
+  if (!debug) return
+  if (generation === current) patch({ moduleError: null, sourceError: null })
+  const [modules, loadedSources] = await Promise.all([
+    debug.modules?.().catch((e: unknown) => { if (generation === current) patch({ modules: [], moduleError: errorText(e) }); return [] }) ?? [],
+    debug.loadedSources?.().catch((e: unknown) => { if (generation === current) patch({ loadedSources: [], sourceError: errorText(e) }); return [] }) ?? []
+  ])
+  if (generation === current) patch({ modules, loadedSources })
+}
+const NOTICE_TEMPLATES: Record<string, string> = {
+  'debug.modules_failed': 'Không lấy được modules: {detail}',
+  'debug.sources_failed': 'Không lấy được nguồn đã tải: {detail}'
+}
+const noticeText = (event: Extract<DebugEvent, { type: 'notice' }>): string =>
+  tr(event.code ? NOTICE_TEMPLATES[event.code] ?? event.code : event.text ?? '', { detail: event.detail ?? '' })
 let listening = false
 function listen() {
   const debug = api()
@@ -149,9 +170,16 @@ function listen() {
   debug.onEvent((event) => {
     if (switching) return
     if (event.type === 'output') return patch({ output: [...state.output.slice(-500), event.text] })
+    if (event.type === 'notice') {
+      const message = noticeText(event)
+      if (event.target === 'modules') patch({ modules: [], moduleError: message })
+      else patch({ loadedSources: [], sourceError: message })
+      return
+    }
     const request = ++frameRequest
     if (event.state === 'stopped') {
       patch({ status: 'stopped', threadId: event.threadId ?? 0, frames: [], scopes: [], frameId: null })
+      void refreshInventory(generation)
       void debug.stackTrace(event.threadId ?? 0).then((frames) => {
         if (request !== frameRequest || state.status !== 'stopped') return
         patch({ frames })
@@ -160,7 +188,7 @@ function listen() {
       }).catch((e: unknown) => { if (request === frameRequest) patch({ error: errorText(e) }) })
       return
     }
-    patch({ status: event.state === 'terminated' ? 'idle' : event.state, frames: [], scopes: [], frameId: null, at: null,
+    patch({ status: event.state === 'terminated' ? 'idle' : event.state, frames: [], scopes: [], modules: [], loadedSources: [], moduleError: null, sourceError: null, frameId: null, at: null,
       watches: state.watches.map((watch) => ({ ...watch, value: null, variablesReference: 0 })) })
   })
 }
@@ -179,6 +207,7 @@ async function begin(projectId: string, launch: Launch): Promise<void> {
   starting = task
   try {
     await task
+    if (generation === current) void refreshInventory(current)
     if (generation === current) {
       for (const path of new Set([...Object.keys(initial), ...Object.keys(state.breakpoints)])) {
         if (generation !== current) break

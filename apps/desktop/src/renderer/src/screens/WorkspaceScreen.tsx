@@ -45,6 +45,7 @@ import { Icon, VIEW_TONE } from '../components/common/icons'
 import { openThemePicker } from '../components/layout/ThemePicker'
 import { FileFinder } from '../components/layout/FileFinder'
 import { useCommand } from '../state/commands'
+import { getFileSaver, saveAllFiles } from '../state/fileSaveRegistry'
 import { getExplorerOpen, setChatDock, setChatWidth, useChatDock, useChatWidth } from '../state/layoutPrefs'
 import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
 import { listBookmarks } from '../state/bookmarks'
@@ -520,11 +521,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const openWorktree = onOpenProject && !hosted && ((path: string) => guardLeave(() => {
     void window.nexgraph.project.open(path).then(onOpenProject, (e: unknown) => setFeedback(errorText(e)))
   })?.())
-  const closeFiles = (paths: string[]) => {
+  const closeFiles = (paths: string[], force = false) => {
     const selected = orderedFiles.filter((item) => paths.includes(item.file))
     if (!selected.length) return
     for (const item of selected) {
-      if (dirtyFiles.has(item.file) && !window.confirm(vi.editor.confirmClose(baseName(item.file)))) return
+      if (!force && dirtyFiles.has(item.file) && !window.confirm(vi.editor.confirmClose(baseName(item.file)))) return
     }
     const closing = new Set(selected.map((item) => item.file))
     closedFiles.current = [...closedFiles.current, ...selected].slice(-100)
@@ -693,6 +694,14 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Lệnh cho bảng lệnh và phím tắt (state/commands.ts); rời màn hình thì hỏi trước nếu còn tệp chưa lưu.
   useCommand('agent.toggle', () => setChatOpen((v) => !v), !hosted)
   useCommand('file_finder.toggle', () => setFinder((v) => !v))
+  useCommand('file.new', () => setFinder(true))
+  useCommand('file.open_recent', () => setFinder(true))
+  useCommand('file.save_all', () => {
+    void saveAllFiles(project.project_id, [...dirtyFiles]).then((failed) => {
+      for (const file of failed) notify(tr('Không lưu được tệp {file}', { file }))
+    })
+  }, dirtyFiles.size > 0)
+  useCommand('file.save_as', () => { const current = activeFile ?? previewFile; if (current) void getFileSaver(project.project_id, current)?.saveAs() }, !!(activeFile ?? previewFile))
   const openHistoryLocation = (entry: NavigationEntry | null) => { if (entry) openCode(entry.file, entry.line, undefined, entry.column, false) }
   useCommand('navigation.back', () => openHistoryLocation(navigationBack(project.project_id)))
   useCommand('navigation.forward', () => openHistoryLocation(navigationForward(project.project_id)))
@@ -1176,7 +1185,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
               onClose={() => closeFile(f.file)} onDirtyChange={onDirtyChange} onContextReady={contextReady} onSplit={() => { setPreviewSide(null); setSide(f.file) }}
               onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
               onReadOnlyChange={(file, readOnly) => setReadOnlyFiles((cur) => cur[file] === readOnly ? cur : { ...cur, [file]: readOnly })}
-              onLoadError={(file, error) => setViewerErrors((cur) => (cur[file] ?? null) === error ? cur : { ...cur, [file]: error })} />
+              onLoadError={(file, error) => setViewerErrors((cur) => (cur[file] ?? null) === error ? cur : { ...cur, [file]: error })}
+              onSavedAs={(from, to) => { closeFiles([from], true); openCode(to) }} />
           ))}
           {multiBuffers.map((request) => <MultiBufferView key={request.id} projectId={project.project_id} request={request}
             active={!hidden && tab === `multi:${request.id}`} onClose={() => closeMulti(request)} onDirtyChange={onDirtyChange}

@@ -5,15 +5,19 @@ import type { DebugEvent } from '@shared/api'
 import { setDebugProject, toggleBreakpoint } from '../../state/debugState'
 import { DebugPanel } from './DebugPanel'
 
+
+// Bảng chỉ đăng ký sự kiện một lần; dùng chung handler để test thứ hai vẫn phát được sự kiện.
+let emit: (event: DebugEvent) => void = () => {}
+const onEvent = (handler: (event: DebugEvent) => void) => { emit = handler; return () => {} }
 afterEach(() => vi.unstubAllGlobals())
 
 it('bật tắt điểm dừng, tính watch và console theo frame đang dừng', async () => {
-  let emit: (event: DebugEvent) => void = () => {}
+
   const evaluate = vi.fn(async (expression: string) => ({ result: expression === 'items' ? '[1, 2, 3]' : '10', variablesReference: 0 }))
   const api = {
     adapterStatus: async () => ({ node: true, python: true }),
     configs: async () => [],
-    onEvent: (handler: (event: DebugEvent) => void) => { emit = handler; return () => {} },
+    onEvent,
     start: async () => {},
     setBreakpoints: vi.fn(async () => {}),
     stackTrace: async () => [{ id: 7, name: 'main', file: 'a.py', line: 4, column: 1 }],
@@ -42,5 +46,26 @@ it('bật tắt điểm dừng, tính watch và console theo frame đang dừng'
   await waitFor(() => expect(screen.getByText(/\[1, 2, 3\]/)).toBeInTheDocument())
   fireEvent.keyDown(consoleInput, { key: 'ArrowUp' })
   expect(consoleInput).toHaveValue('items')
+  act(() => emit({ type: 'state', state: 'terminated' }))
+})
+
+it('hiện module và nguồn đã tải, đồng thời báo lỗi khi danh sách rỗng', async () => {
+  vi.stubGlobal('nexgraph', { debug: {
+    adapterStatus: async () => ({ node: true, python: true }),
+    configs: async () => [],
+    onEvent,
+    modules: async () => [{ id: 1, name: 'app-module', path: '/proj/app.js', version: '1.0' }],
+    loadedSources: async () => [{ path: '/proj/main.js' }]
+  } })
+  setDebugProject('inventory-test')
+  render(<DebugPanel projectId="inventory-test" target="app.js" onOpenFile={() => {}} />)
+  act(() => emit({ type: 'state', state: 'stopped', threadId: 1 }))
+  await waitFor(() => expect(screen.getByText(/app-module · 1\.0/)).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByText('/proj/main.js')).toBeInTheDocument())
+  act(() => emit({ type: 'notice', target: 'loadedSources', text: 'Không lấy được nguồn đã tải: lỗi' }))
+  await waitFor(() => expect(screen.getByText('Không lấy được nguồn đã tải: lỗi')).toBeInTheDocument())
+  expect(screen.queryByText('/proj/main.js')).not.toBeInTheDocument()
+  act(() => emit({ type: 'notice', target: 'modules', code: 'debug.modules_failed', detail: 'boom' }))
+  await waitFor(() => expect(screen.getByText('Không lấy được modules: boom')).toBeInTheDocument())
   act(() => emit({ type: 'state', state: 'terminated' }))
 })

@@ -52,6 +52,22 @@ it('status chỉ trong thư mục dự án; stage, unstage, commit từng tệp;
   await expect(gitCommit(root, '  ')).rejects.toMatchObject({ code: 'bad_param' })
 })
 
+it('diff với base lấy nội dung tại ref, phía sau vẫn theo index/worktree và chặn ref kiểu option', async () => {
+  writeFileSync(join(root, 'src/a.ts'), 'one\nthree\n')
+  sh('add', '-A', 'app/src/a.ts')
+  sh('commit', '-q', '-m', 'hai')
+  sh('branch', 'old', 'HEAD~1')
+  writeFileSync(join(root, 'src/a.ts'), 'one\nfour\n')
+  expect(await gitDiffSides(root, 'src/a.ts', false)).toEqual({ before: 'one\nthree\n', after: 'one\nfour\n' })
+  expect(await gitDiffSides(root, 'src/a.ts', false, 'HEAD~1')).toEqual({ before: 'one\ntwo\n', after: 'one\nfour\n' })
+  expect(await gitDiffSides(root, 'src/a.ts', false, 'old')).toEqual({ before: 'one\ntwo\n', after: 'one\nfour\n' })
+  await gitStage(root, ['src/a.ts'])
+  expect(await gitDiffSides(root, 'src/a.ts', true, 'old')).toEqual({ before: 'one\ntwo\n', after: 'one\nfour\n' })
+  for (const bad of ['--help', '-e', 'HEAD; touch x', 'HEAD:src/a.ts', '']) {
+    await expect(gitDiffSides(root, 'src/a.ts', false, bad)).rejects.toMatchObject({ code: 'bad_param' })
+  }
+})
+
 it('commit thêm trailer Co-authored-by từ giá trị người dùng và chặn giá trị có dòng mới', async () => {
   writeFileSync(join(root, 'src/a.ts'), 'one\nthree\n')
   await gitStage(root, ['src/a.ts'])

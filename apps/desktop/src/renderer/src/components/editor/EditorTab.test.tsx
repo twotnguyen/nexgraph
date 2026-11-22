@@ -51,6 +51,7 @@ import { setLocale } from '../../state/locale'
 import { listBookmarks, toggleBookmark } from '../../state/bookmarks'
 import { getActiveEditor } from '../../state/activeEditor'
 import { runCommand } from '../../state/commands'
+import { getFileSaver } from '../../state/fileSaveRegistry'
 
 const revision = (mtimeMs: number): FileRevision => ({ mtimeMs, version: `version-${mtimeMs}` })
 const content = (over: Partial<FileContent> = {}): FileContent => ({
@@ -447,6 +448,64 @@ describe('EditorTab', () => {
     cursorPosition.line = 3
     runCommand('editor.previous_bookmark')
     expect(revealPosition).toHaveBeenLastCalledWith(7, 1)
+  })
+  it('Lưu thành ghi nội dung với EOL/BOM của bản gốc và mở path mới', async () => {
+    const read = vi.fn(async (_pid: string, path: string) => {
+      if (path === 'lib/a.dart') return content()
+      throw rejection('file_not_found')
+    })
+    const write = vi.fn<NexGraphApi['fs']['write']>(async () => revision(200))
+    installNexgraph({ fs: { read, write } })
+    const onSavedAs = vi.fn()
+    render(<EditorTab projectId="p1" file="lib/a.dart" line={1} onClose={vi.fn()} onDirtyChange={vi.fn()} onSavedAs={onSavedAs} />)
+    await userEvent.type(await box(), '!')
+    await act(async () => { await getFileSaver('p1', 'lib/a.dart')?.saveAs() })
+    await userEvent.type(await screen.findByRole('combobox', { name: 'Lưu thành…' }), 'lib/b.dart')
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(write).toHaveBeenCalledWith('p1', 'lib/b.dart', 'void a() {}\n!', { eol: '\r\n', bom: true, expectedVersion: null }))
+    expect(onSavedAs).toHaveBeenCalledWith('lib/a.dart', 'lib/b.dart')
+    expect(write).toHaveBeenCalledTimes(1)
+  })
+
+  it('Lưu thành đọc phiên bản tệp có sẵn và bỏ qua ghi khi không xác nhận ghi đè', async () => {
+    const read = vi.fn(async (_pid: string, path: string) => path === 'lib/a.dart' ? content() : content({ text: 'có sẵn\n', version: 'disk-version' }))
+    const write = vi.fn<NexGraphApi['fs']['write']>(async () => revision(200))
+    installNexgraph({ fs: { read, write } })
+    const onSavedAs = vi.fn()
+    render(<EditorTab projectId="p1" file="lib/a.dart" line={1} onClose={vi.fn()} onDirtyChange={vi.fn()} onSavedAs={onSavedAs} />)
+    await box()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await act(async () => { await getFileSaver('p1', 'lib/a.dart')?.saveAs() })
+    await userEvent.type(await screen.findByRole('combobox', { name: 'Lưu thành…' }), 'lib/exists.dart')
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(confirm).toHaveBeenCalledWith('Tệp lib/exists.dart đã tồn tại. Ghi đè?'))
+    expect(write).not.toHaveBeenCalled()
+    expect(onSavedAs).not.toHaveBeenCalled()
+    confirm.mockReturnValue(true)
+    await act(async () => { await getFileSaver('p1', 'lib/a.dart')?.saveAs() })
+    await userEvent.type(await screen.findByRole('combobox', { name: 'Lưu thành…' }), 'lib/exists.dart')
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(write).toHaveBeenCalledWith('p1', 'lib/exists.dart', 'void a() {}\n', expect.objectContaining({ expectedVersion: 'disk-version' })))
+    expect(onSavedAs).toHaveBeenCalledWith('lib/a.dart', 'lib/exists.dart')
+    confirm.mockRestore()
+  })
+  it('Lưu thành vẫn hiện dialog khi thẻ bị ẩn bởi preview', async () => {
+    const read = vi.fn(async (_pid: string, path: string) => {
+      if (path === 'docs/a.md') return content({ text: '# A\n' })
+      throw rejection('file_not_found')
+    })
+    const write = vi.fn<NexGraphApi['fs']['write']>(async () => revision(200))
+    installNexgraph({ fs: { read, write } })
+    const onSavedAs = vi.fn()
+    render(<EditorTab projectId="p1" file="docs/a.md" line={1} active={false} onClose={vi.fn()} onDirtyChange={vi.fn()} onSavedAs={onSavedAs} />)
+    await box()
+    await act(async () => { await getFileSaver('p1', 'docs/a.md')?.saveAs() })
+    const dialog = await screen.findByRole('dialog', { name: 'Lưu thành…' })
+    expect(dialog.parentElement?.parentElement).toBe(document.body)
+    await userEvent.type(within(dialog).getByRole('combobox', { name: 'Lưu thành…' }), 'docs/b.md')
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(write).toHaveBeenCalledWith('p1', 'docs/b.md', '# A\n', { eol: '\r\n', bom: true, expectedVersion: null }))
+    expect(onSavedAs).toHaveBeenCalledWith('docs/a.md', 'docs/b.md')
   })
 })
 

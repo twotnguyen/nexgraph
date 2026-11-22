@@ -131,7 +131,7 @@ const api: NexGraphApi = {
     stage: (pid, files) => call('git:stage', pid, files),
     unstage: (pid, files) => call('git:unstage', pid, files),
     commit: (pid, message, amend, coAuthors) => call('git:commit', pid, message, amend, coAuthors),
-    diff: (pid, file, staged) => call('git:diff', pid, file, staged),
+    diff: (pid, file, staged, base) => call('git:diff', pid, file, staged, base),
     blame: (pid, file) => call('git:blame', pid, file),
     restore: (pid, file) => call('git:restore', pid, file),
     branches: (pid) => call('git:branches', pid),
@@ -167,6 +167,8 @@ const api: NexGraphApi = {
     stackTrace: (threadId) => call('debug:stack-trace', threadId),
     scopes: (frameId) => call('debug:scopes', frameId),
     variables: (ref) => call('debug:variables', ref),
+    modules: () => call('debug:modules'),
+    loadedSources: () => call('debug:loaded-sources'),
     stop: () => call('debug:stop'),
     onEvent: (cb) => subscribe('debug:event', cb)
   },

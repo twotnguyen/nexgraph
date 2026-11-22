@@ -334,7 +334,7 @@ export function registerIpc(
   on('git:stage', async (pid: string, files: string[]) => gitStage(await rootOf(pid), files))
   on('git:unstage', async (pid: string, files: string[]) => gitUnstage(await rootOf(pid), files))
   on('git:commit', async (pid: string, message: string, amend: boolean, coAuthors?: string[]) => gitCommit(await rootOf(pid), message, amend === true, coAuthors ?? []))
-  on('git:diff', async (pid: string, file: string, staged: boolean) => gitDiffSides(await rootOf(pid), file, staged === true))
+  on('git:diff', async (pid: string, file: string, staged: boolean, base?: string) => gitDiffSides(await rootOf(pid), file, staged === true, base))
   on('git:blame', async (pid: string, file: string) => gitBlame(await rootOf(pid), file))
   on('git:restore', async (pid: string, file: string) => gitRestore(await rootOf(pid), file, (path) => shell.trashItem(path)))
   on('git:branches', async (pid: string) => gitBranches(await rootOf(pid)))
@@ -422,6 +422,8 @@ export function registerIpc(
   on('debug:stack-trace', async (threadId: number) => dbg.stackTrace(Number(threadId)))
   on('debug:scopes', async (frameId: number) => dbg.scopes(Number(frameId)))
   on('debug:variables', async (ref: number) => dbg.variables(Number(ref)))
+  on('debug:modules', async () => dbg.modules())
+  on('debug:loaded-sources', async () => dbg.loadedSources())
   on('debug:stop', async () => dbg.stop())
   // Cộng tác LAN: main chỉ mở/nối WebSocket và chuyển tiếp gói nhị phân giữa renderer và các máy khác.
   collab = new CollabHub((event) => getWindow()?.webContents.send('collab:event', event))

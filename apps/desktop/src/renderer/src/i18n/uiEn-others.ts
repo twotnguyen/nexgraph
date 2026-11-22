@@ -297,4 +297,6 @@ export const uiEnOthers: Record<string, string> = {
   'Group By: None': 'Group By: None',
   'Group By: Status': 'Group By: Status',
   'Group By: Directory': 'Group By: Directory',
+  'so với {base}': 'against {base}',
+  'Base để so sánh': 'Base to compare',
 }

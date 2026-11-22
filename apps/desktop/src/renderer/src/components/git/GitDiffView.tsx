@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GitHunk } from '@shared/api'
+import type { GitCommit, GitHunk } from '@shared/api'
 import { createDiffEditor, languageFor } from '../editor/monaco'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
@@ -14,6 +14,16 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
   const [hunks, setHunks] = useState<GitHunk[]>([])
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [baseChoice, setBaseChoice] = useState<string | undefined>(undefined)
+  const [baseOptions, setBaseOptions] = useState<GitCommit[]>([])
+  useEffect(() => {
+    if (rev !== undefined) return
+    let live = true
+    void window.nexgraph.git?.history(projectId, false).then((commits) => {
+      if (live) setBaseOptions(commits.slice(0, 8))
+    }).catch(() => {})
+    return () => { live = false }
+  }, [projectId, rev])
 
   useEffect(() => {
     if (rev !== undefined) return
@@ -39,18 +49,18 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
       setError(tr('Git không dùng được ở chế độ này.'))
       return () => { live = false }
     }
-    const sides = rev === undefined ? api.diff(projectId, file, staged) : api.commitDiff(projectId, rev, file, from)
+    const sides = rev === undefined ? api.diff(projectId, file, staged, baseChoice) : api.commitDiff(projectId, rev, file, from)
     void sides.then((result) => {
       if (!live || !host.current) return
       handle = createDiffEditor(host.current, { ...result, language: languageFor(file) })
     }).catch((e: unknown) => { if (live) setError(errorText(e)) })
-    if (rev === undefined) {
+    if (rev === undefined && baseChoice === undefined) {
       void api.hunks(projectId, file, staged).then((result) => {
         if (live) setHunks(result)
       }).catch((e: unknown) => { if (live) setError(errorText(e)) })
     }
     return () => { live = false; handle?.dispose() }
-  }, [projectId, file, staged, rev, from, revision])
+  }, [projectId, file, staged, rev, from, baseChoice, revision])
 
   const applyHunk = async (id: string) => {
     const api = window.nexgraph.git
@@ -71,15 +81,22 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
   return (
     <div className="code-viewer editor-tab git-diff">
       <header className="code-head">
-        <span className="editor-path mono" title={file}><FileTypeIcon name={file} size={14} /> {file} <span className="muted">· {rev !== undefined ? `commit ${rev.slice(0, 7)}` : staged ? tr('đã stage') : tr('chưa stage')}</span></span>
+        <span className="editor-path mono" title={file}><FileTypeIcon name={file} size={14} /> {file} <span className="muted">· {rev !== undefined ? `commit ${rev.slice(0, 7)}` : baseChoice !== undefined ? tr('so với {base}', { base: baseChoice.slice(0, 7) }) : staged ? tr('đã stage') : tr('chưa stage')}</span></span>
         <span className="ws-editor-actions">
+          {rev === undefined && <label className="git-diff-base">{tr('Base')}{' '}
+            <select aria-label={tr('Base để so sánh')} value={baseChoice ?? ''} onChange={(event) => setBaseChoice(event.target.value || undefined)}>
+              <option value="">{tr('HEAD')}</option>
+              {baseChoice && !baseOptions.some((commit) => commit.sha === baseChoice) && <option value={baseChoice}>{baseChoice.slice(0, 7)}</option>}
+              {baseOptions.map((commit) => <option key={commit.sha} value={commit.sha}>{commit.sha.slice(0, 7)} {commit.subject}</option>)}
+            </select>
+          </label>}
           <button type="button" className="ws-icon-button" aria-label={tr('Mở tệp')} title={tr('Mở tệp')} onClick={onOpenFile}><Icon name="pencil" size={15} /></button>
           <button type="button" className="ws-icon-button" aria-label={tr('Đóng diff')} title={tr('Đóng diff')} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>
       {error && <p role="alert" className="ws-editor-loading error">{error}</p>}
       {actionError && <p role="alert" className="ws-editor-loading error git-hunk-error">{actionError}</p>}
-      {rev === undefined && hunks.length > 0 && (
+      {rev === undefined && baseChoice === undefined && hunks.length > 0 && (
         <section className="git-hunk-bar" aria-label={tr('Các khối thay đổi')}>
           <header className="git-head">{tr('Các khối thay đổi')}</header>
           {hunks.map((hunk, i) => (

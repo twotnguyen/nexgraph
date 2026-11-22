@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import { connect, type Socket } from 'node:net'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
-import type { DebugBreakpoint, DebugBreakpoints, DebugEvaluation, DebugEvent, DebugFrame, DebugScope, DebugVariable } from '../../shared/api'
+import type { DebugBreakpoint, DebugBreakpoints, DebugEvaluation, DebugEvent, DebugFrame, DebugLoadedSource, DebugModule, DebugScope, DebugVariable } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
 import { ADAPTERS, adapterDir, findPython, type DebugKind } from './adapters'
 import { DapClient } from './dap-client'
@@ -23,6 +23,8 @@ type Session = {
   root: string
   supportsRestart: boolean
   state: 'starting' | 'running' | 'stopped'
+  supportsModules: boolean
+  supportsLoadedSources: boolean
   /** Tiến trình adapter do app chạy; null khi nối TCP thẳng vào adapter của tiến trình đích (attach Python). */
   adapter: ChildProcess | null
   /** Phiên điều khiển (js-debug: phiên con do startDebugging tạo; debugpy: chính phiên gốc). */
@@ -148,12 +150,14 @@ export class DebugManager {
       client = new DapClient(adapter.stdout!, adapter.stdin!)
       adapter.stdin!.on('error', () => {})
     }
-    const session: Session = { spec, root, supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets, breakpoints, threadWaiters: new Set() }
+    const session: Session = { spec, root, supportsRestart: false, supportsModules: false, supportsLoadedSources: false, state: 'starting', adapter, control: client, clients: [client], sockets, breakpoints, threadWaiters: new Set() }
     this.session = session
     if (!adapter) sockets[0].once('close', () => this.finish(session))
     this.wire(session, client)
-    const capabilities = await client.request<{ supportsRestartRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'debugpy', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path' })
+    const capabilities = await client.request<{ supportsRestartRequest?: boolean; supportsModulesRequest?: boolean; supportsLoadedSourcesRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'debugpy', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path' })
     session.supportsRestart = capabilities.supportsRestartRequest === true
+    session.supportsModules = capabilities.supportsModulesRequest === true
+    session.supportsLoadedSources = capabilities.supportsLoadedSourcesRequest === true
     const initialized = this.waitInitialized(client)
     // debugpy chỉ trả lời launch/attach sau configurationDone: không chờ trả lời trước.
     const started = client.request(spec.request, spec.request === 'launch' ? { ...spec.args, python: [python] } : spec.args, 60_000)
@@ -182,7 +186,7 @@ export class DebugManager {
     const open = () => this.dial('127.0.0.1', port)
     const rootSocket = await open()
     const client = new DapClient(rootSocket, rootSocket)
-    const session: Session = { spec, root, supportsRestart: false, state: 'starting', adapter, control: client, clients: [client], sockets: [rootSocket], breakpoints, threadWaiters: new Set() }
+    const session: Session = { spec, root, supportsRestart: false, supportsModules: false, supportsLoadedSources: false, state: 'starting', adapter, control: client, clients: [client], sockets: [rootSocket], breakpoints, threadWaiters: new Set() }
     this.session = session
     this.wire(session, client)
     // js-debug chạy chương trình trong phiên con: yêu cầu startDebugging → mở kết nối mới tới cùng server.
@@ -194,7 +198,9 @@ export class DebugManager {
       session.clients.push(child)
       session.control = child
       this.wire(session, child)
-      await child.request('initialize', { clientID: 'nexgraph', adapterID: 'pwa-node', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path', supportsStartDebuggingRequest: true })
+      const childCaps = await child.request<{ supportsModulesRequest?: boolean; supportsLoadedSourcesRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'pwa-node', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path', supportsStartDebuggingRequest: true })
+      session.supportsModules = childCaps.supportsModulesRequest === true
+      session.supportsLoadedSources = childCaps.supportsLoadedSourcesRequest === true
       const initialized = this.waitInitialized(child)
       const configuration = (args.configuration ?? {}) as Record<string, unknown>
       const started = child.request(args.request === 'attach' ? 'attach' : 'launch', configuration, 60_000)
@@ -203,8 +209,10 @@ export class DebugManager {
       await this.configure(child, root, session.breakpoints)
       return {}
     }
-    const capabilities = await client.request<{ supportsRestartRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'pwa-node', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path', supportsStartDebuggingRequest: true })
+    const capabilities = await client.request<{ supportsRestartRequest?: boolean; supportsModulesRequest?: boolean; supportsLoadedSourcesRequest?: boolean }>('initialize', { clientID: 'nexgraph', adapterID: 'pwa-node', linesStartAt1: true, columnsStartAt1: true, pathFormat: 'path', supportsStartDebuggingRequest: true })
     session.supportsRestart = capabilities.supportsRestartRequest === true
+    session.supportsModules = capabilities.supportsModulesRequest === true
+    session.supportsLoadedSources = capabilities.supportsLoadedSourcesRequest === true
     const initialized = this.waitInitialized(client)
     // Như Wu: js-debug luôn nhận cwd (mặc định gốc dự án), kể cả attach.
     const launched = client.request(spec.request, { cwd: root, ...spec.args }, 60_000)
@@ -301,6 +309,31 @@ export class DebugManager {
   async variables(variablesReference: number): Promise<DebugVariable[]> {
     const body = await this.active().control.request<{ variables?: { name: string; value: string; type?: string; variablesReference: number }[] }>('variables', { variablesReference })
     return (body.variables ?? []).map((v) => ({ name: v.name, value: v.value, type: v.type ?? '', variablesReference: v.variablesReference }))
+  }
+
+  /** Chỉ hỏi adapter có khai báo capability tương ứng; lỗi coi như danh sách rỗng và báo nhẹ. */
+  async modules(): Promise<DebugModule[]> {
+    const session = this.active()
+    if (!session.supportsModules) return []
+    try {
+      const body = await session.control.request<{ modules?: { id: number | string; name: string; path?: string | null; version?: string | null }[] }>('modules')
+      return (body.modules ?? []).map((m) => ({ id: m.id, name: m.name, path: m.path ?? null, version: m.version ?? null }))
+    } catch (error) {
+      this.emit({ type: 'notice', target: 'modules', code: 'debug.modules_failed', detail: error instanceof Error ? error.message : String(error) })
+      return []
+    }
+  }
+
+  async loadedSources(): Promise<DebugLoadedSource[]> {
+    const session = this.active()
+    if (!session.supportsLoadedSources) return []
+    try {
+      const body = await session.control.request<{ sources?: { name?: string; path?: string | null; sourceReference?: number }[] }>('loadedSources')
+      return body.sources ?? []
+    } catch (error) {
+      this.emit({ type: 'notice', target: 'loadedSources', code: 'debug.sources_failed', detail: error instanceof Error ? error.message : String(error) })
+      return []
+    }
   }
 
   private finish(session: Session) {

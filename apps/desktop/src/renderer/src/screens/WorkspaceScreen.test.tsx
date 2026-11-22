@@ -915,4 +915,57 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     }
     expect(document.querySelector('.workspace .center')).toHaveStyle({ maxWidth: '960px' })
   })
+  it('file.new và file.open_recent mở bộ tìm tệp kèm danh sách gần đây', async () => {
+    localStorage.setItem('nexgraph.recentFiles:p1', JSON.stringify(['lib/recent.dart']))
+    installNexgraph({ fs: { files: vi.fn(async () => ({ files: ['lib/recent.dart'], truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    act(() => { expect(runCommand('file.open_recent')).toBe(true) })
+    const dialog = await screen.findByRole('dialog', { name: 'Tìm tệp' })
+    expect(within(dialog).getByText('recent.dart')).toBeInTheDocument()
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tìm tệp' })).toBeNull())
+    act(() => { expect(runCommand('file.new')).toBe(true) })
+    expect(await screen.findByRole('dialog', { name: 'Tìm tệp' })).toBeInTheDocument()
+  })
+
+  it('file.save_all lưu từng tệp đang dirty, không bỏ qua tệp còn lại khi một tệp lỗi', async () => {
+    const entries = ['a.ts', 'b.ts'].map((name) => ({ path: name, name, kind: 'file' as const }))
+    const read = vi.fn(async () => ({ text: 'one\n', eol: '\n' as const, bom: false, mtimeMs: 1, version: 'v1', readOnly: false }))
+    const write = vi.fn(async (_pid: string, file: string) => {
+      if (file === 'b.ts') throw new Error('lỗi ghi')
+      return { mtimeMs: 2, version: 'v2' }
+    })
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })), read, write } })
+    render(<WorkspaceScreen project={project()} />)
+    for (const name of ['a.ts', 'b.ts']) await userEvent.click(await screen.findByRole('treeitem', { name }))
+    const editors = await screen.findAllByLabelText('editor')
+    expect(editors).toHaveLength(2)
+    fireEvent.input(editors[0], { target: { value: 'one\nx' } })
+    fireEvent.input(editors[1], { target: { value: 'one\ny' } })
+    await waitFor(() => expect(screen.getAllByText('Chưa lưu')).toHaveLength(2))
+    act(() => { expect(runCommand('file.save_all')).toBe(true) })
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(2))
+    expect(write).toHaveBeenCalledWith('p1', 'a.ts', 'one\nx', expect.objectContaining({ expectedVersion: 'v1' }))
+    expect(write).toHaveBeenCalledWith('p1', 'b.ts', 'one\ny', expect.objectContaining({ expectedVersion: 'v1' }))
+  })
+
+  it('file.save_as lưu bản mới, mở thẻ path mới và đóng thẻ cũ', async () => {
+    const read = vi.fn(async (_pid: string, path: string) => {
+      if (path === 'a.ts') return { text: 'one\n', eol: '\n' as const, bom: false, mtimeMs: 1, version: 'v1', readOnly: false }
+      throw Object.assign(new Error('missing'), { code: 'file_not_found' })
+    })
+    const write = vi.fn(async () => ({ mtimeMs: 2, version: 'v2' }))
+    installNexgraph({ fs: {
+      list: vi.fn(async () => ({ entries: [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }], truncated: false })), read, write
+    } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    fireEvent.input(await screen.findByLabelText('editor'), { target: { value: 'one\nchanged' } })
+    act(() => { expect(runCommand('file.save_as')).toBe(true) })
+    await userEvent.type(await screen.findByRole('combobox', { name: 'Lưu thành…' }), 'b.ts')
+    await userEvent.keyboard('{Enter}')
+    expect(await screen.findByRole('tab', { name: 'b.ts', selected: true })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('tab', { name: 'a.ts' })).toBeNull())
+    expect(write).toHaveBeenCalledWith('p1', 'b.ts', 'one\nchanged', expect.objectContaining({ expectedVersion: null }))
+  })
 })

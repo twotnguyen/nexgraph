@@ -177,6 +177,20 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
           </div>
         ))}
       </section>
+      <section aria-label={tr('Modules')}><h3>{tr('Modules')}</h3>
+        {debug.moduleError && <p role="alert" className="dbg-error">{debug.moduleError}</p>}
+        {!debug.modules.length && !debug.moduleError && <p className="dbg-empty muted">{tr('Adapter không cung cấp danh sách module.')}</p>}
+        <ul className="dbg-list">{debug.modules.map((module) => (
+          <li key={module.id} className="dbg-scope" title={module.path ?? undefined}>{module.name}{module.version ? ` · ${module.version}` : ''}</li>
+        ))}</ul>
+      </section>
+      <section aria-label={tr('Nguồn đã tải')}><h3>{tr('Nguồn đã tải')}</h3>
+        {debug.sourceError && <p role="alert" className="dbg-error">{debug.sourceError}</p>}
+        {!debug.loadedSources.length && !debug.sourceError && <p className="dbg-empty muted">{tr('Adapter không cung cấp danh sách nguồn.')}</p>}
+        <ul className="dbg-list">{debug.loadedSources.map((source, index) => (
+          <li key={source.sourceReference ?? source.path ?? source.name ?? index} className="dbg-scope" title={source.path ?? undefined}>{source.path ?? source.name ?? tr('(nguồn không tên)')}</li>
+        ))}</ul>
+      </section>
       <section aria-label={tr('Điểm dừng')}><div className="dbg-section-head"><h3>{tr('Điểm dừng')}</h3>
         <button type="button" className="dbg-btn" disabled={!breakpoints.length} title={tr('Xoá tất cả điểm dừng')} aria-label={tr('Xoá tất cả điểm dừng')} onClick={clearAllBreakpoints}><Icon name="trash" size={13} /></button></div>
         {breakpoints.length === 0 && <p className="dbg-empty muted">{tr('Bấm lề trái của editor để đặt điểm dừng.')}</p>}

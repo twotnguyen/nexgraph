@@ -177,16 +177,19 @@ export async function gitCommit(root: string, message: unknown, amend = false, c
 
 /**
  * Hai phía của diff một tệp: đã stage thì HEAD ↔ index, chưa stage thì index ↔ thư mục làm việc.
+ * Có `base`: phía trước lấy nội dung tại ref đó, phía sau giữ nguyên index/worktree.
  * Phía không tồn tại (tệp mới, tệp đã xoá) là chuỗi rỗng.
  */
-export async function gitDiffSides(root: string, file: unknown, staged: boolean): Promise<{ before: string; after: string }> {
+export async function gitDiffSides(root: string, file: unknown, staged: boolean, base?: string): Promise<{ before: string; after: string }> {
   const path = relativePath(root, safePaths(root, [file])[0])
+  if (base !== undefined && (typeof base !== 'string' || !/^(?!-)[A-Za-z0-9._\/^~-]+$/.test(base))) throw fail('bad_param', 'Base không hợp lệ')
   const show = (spec: string) => git(root, ['show', spec]).catch(() => '')
   const rel = `./${path}`
-  if (staged) return { before: await show(`HEAD:${rel}`), after: await show(`:${rel}`) }
-  const after = await readFile(resolveInside(root, path), 'utf8').catch(() => '')
+  const after = staged ? show(`:${rel}`) : readFile(resolveInside(root, path), 'utf8').catch(() => '')
+  if (base !== undefined) return { before: await show(`${base}:${rel}`), after: await after }
+  if (staged) return { before: await show(`HEAD:${rel}`), after: await after }
   const indexed = await git(root, ['ls-files', '-z', '--', `:(literal)${path}`])
-  return { before: indexed.split('\0').filter(Boolean).length ? await show(`:${rel}`) : '', after }
+  return { before: indexed.split('\0').filter(Boolean).length ? await show(`:${rel}`) : '', after: await after }
 }
 
 /** Blame từng dòng của bản trên đĩa (dòng chưa commit có `uncommitted`). */

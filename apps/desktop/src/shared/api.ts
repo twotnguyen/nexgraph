@@ -88,9 +88,12 @@ export type GitBlameLine = { line: number; sha: string; author: string; time: nu
 export type DebugBreakpoint = { line: number; enabled: boolean; condition?: string; hitCondition?: string; logMessage?: string }
 export type DebugBreakpoints = Record<string, DebugBreakpoint[]>
 export type DebugEvaluation = { result: string; variablesReference: number }
+export type DebugModule = { id: number | string; name: string; path?: string | null; version?: string | null }
+export type DebugLoadedSource = { name?: string; path?: string | null; sourceReference?: number }
 export type DebugEvent =
-  | { type: 'state'; state: 'starting' | 'running' | 'stopped' | 'terminated'; reason?: string; threadId?: number }
-  | { type: 'output'; category: string; text: string }
+   | { type: 'state'; state: 'starting' | 'running' | 'stopped' | 'terminated'; reason?: string; threadId?: number }
+   | { type: 'output'; category: string; text: string }
+  | { type: 'notice'; target: 'modules' | 'loadedSources'; code?: string; detail?: string; text?: string }
 /** `file` null khi khung ngăn xếp nằm ngoài dự án (thư viện, mã nội bộ). */
 export type DebugFrame = { id: number; name: string; file: string | null; line: number; column: number }
 export type DebugScope = { name: string; variablesReference: number; expensive: boolean }
@@ -243,7 +246,7 @@ export interface NexGraphApi {
     stage(projectId: string, files: string[]): Promise<void>
     unstage(projectId: string, files: string[]): Promise<void>
     commit(projectId: string, message: string, amend?: boolean, coAuthors?: string[]): Promise<string>
-    diff(projectId: string, file: string, staged: boolean): Promise<{ before: string; after: string }>
+    diff(projectId: string, file: string, staged: boolean, base?: string): Promise<{ before: string; after: string }>
     blame(projectId: string, file: string): Promise<GitBlameLine[]>
     restore(projectId: string, file: string): Promise<void>
     branches(projectId: string): Promise<string[]>
@@ -286,7 +289,9 @@ export interface NexGraphApi {
     evaluate(expression: string, frameId: number, context: 'watch' | 'repl'): Promise<DebugEvaluation>
     stackTrace(threadId: number): Promise<DebugFrame[]>
     scopes(frameId: number): Promise<DebugScope[]>
-    variables(variablesReference: number): Promise<DebugVariable[]>
+    variables(ref: number): Promise<DebugVariable[]>
+    modules(): Promise<DebugModule[]>
+    loadedSources(): Promise<DebugLoadedSource[]>
     stop(): Promise<void>
     onEvent(cb: (event: DebugEvent) => void): () => void
   }

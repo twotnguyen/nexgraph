@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { FileContent, GitBlameLine, LspDocumentSymbol } from '@shared/api'
 import type { AgentContextItem } from '@shared/agent-types'
 import { vi, tr } from '../../strings'
@@ -14,6 +15,7 @@ import { leaveSession, useCollab } from '../../state/collab'
 import { setActiveEditor } from '../../state/activeEditor'
 import { useDiagnostics } from '../../state/diagnostics'
 import { runCommand, useCommand } from '../../state/commands'
+import { registerFileSaver } from '../../state/fileSaveRegistry'
 import { listBookmarks, nextBookmark, subscribeBookmarks, toggleBookmark } from '../../state/bookmarks'
 import './editor-tab.css'
 import { largerSymbolAt, smallestSymbolAt } from '../../state/syntaxSelection'
@@ -46,6 +48,8 @@ interface Props {
   onViewTable?: () => void
   onReadOnlyChange?: (file: string, readOnly: boolean) => void
   onLoadError?: (file: string, error: string | null) => void
+  /** Sau khi Lưu thành: WorkspaceScreen mở path mới và đóng thẻ cũ. */
+  onSavedAs?: (from: string, to: string) => void
   /** Khoá chỉ đọc do người dùng bật từ thẻ tệp; không đổi nội dung trên đĩa. */
   locked?: boolean
 }
@@ -95,10 +99,10 @@ export function blameText(line: GitBlameLine, now = Date.now(), summary = true):
 }
 
 /** Thẻ soạn thảo một tệp: nạp, sửa, lưu (Ctrl/Cmd+S) và xử lý tệp đổi trên đĩa. */
-export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onViewTable, onReadOnlyChange, onLoadError, locked }: Props) {
+export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onViewTable, onReadOnlyChange, onLoadError, onSavedAs, locked }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
-  const actions = useRef<{ save: () => void; reload: () => void; keepMine: () => void; blur: () => void; eolChanged: () => void } | null>(null)
+  const actions = useRef<{ save: () => Promise<boolean>; saveAs: (path: string) => Promise<boolean>; reload: () => void; keepMine: () => void; blur: () => void; eolChanged: () => void } | null>(null)
   const dirty = useRef(false)
   const contextCallback = useRef(onContextReady)
   contextCallback.current = onContextReady
@@ -108,6 +112,9 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   readOnlyCallback.current = onReadOnlyChange
   const loadErrorCallback = useRef(onLoadError)
   loadErrorCallback.current = onLoadError
+  const savedAsCallback = useRef(onSavedAs)
+  savedAsCallback.current = onSavedAs
+  const [saveAsOpen, setSaveAsOpen] = useState(false)
   const lockedRef = useRef(locked === true)
   lockedRef.current = locked === true
   const [readOnly, setReadOnly] = useState<FileContent['reason'] | boolean>(false)
@@ -181,6 +188,12 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
     let diskConflict: Conflict | null = null
     let writing: string | undefined
     let pendingSave: string | undefined
+    let saveWaiters: { text: string; done: (ok: boolean) => void }[] = []
+    const settleSave = (text: string | undefined, ok: boolean) => {
+      const waiting = text === undefined ? saveWaiters.splice(0) : saveWaiters.filter((w) => w.text === text)
+      if (text !== undefined) saveWaiters = saveWaiters.filter((w) => w.text !== text)
+      for (const w of waiting) w.done(ok)
+    }
     let pendingReload: string | undefined
     let pendingCheck = false
     let busy = false
@@ -212,7 +225,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
 
     const updateConflict = (next: Conflict | null) => {
       diskConflict = next
-      if (next) pendingSave = undefined
+      if (next) { pendingSave = undefined; settleSave(undefined, false) }
       setConflict(next)
       updateDirty()
     }
@@ -254,6 +267,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       const eol = formatRef.current?.eol ?? b.eol
       if (diskConflict || b.readOnly || (b.text === text && eol === b.eol)) {
         updateDirty()
+        settleSave(text, false)
         return
       }
       writing = text
@@ -264,6 +278,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         current.base = { ...b, ...revision, text, eol }
         setError(null)
         setSaveState('saved')
+        settleSave(text, true)
       } catch (e) {
         if (!alive) return
         setSaveState('idle')
@@ -273,6 +288,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           updateConflict({ disk: null })
           await readDisk(current)
         } else setError(vi.editor.saveFailed)
+        settleSave(text, false)
       } finally {
         writing = undefined
         if (alive) updateDirty()
@@ -309,17 +325,22 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
 
     actions.current = {
       save: () => {
-        if (lockedRef.current) return
+        if (lockedRef.current) return Promise.resolve(false)
         const current = open
-        if (!current) return
+        if (!current || current.base.readOnly || diskConflict || isReloading) return Promise.resolve(false)
         const generation = ++saveGeneration
+        let finish!: (ok: boolean) => void
+        const result = new Promise<boolean>((resolve) => { finish = resolve })
         const queueSave = () => {
-          if (!alive || lockedRef.current || generation !== saveGeneration || open !== current || current.base.readOnly || diskConflict || isReloading) return
+          if (!alive || lockedRef.current || generation !== saveGeneration || open !== current || current.base.readOnly || diskConflict || isReloading) { finish(false); return }
           const text = current.editor.getValue()
           const eol = formatRef.current?.eol ?? current.base.eol
           pendingSave = text === current.base.text && eol === current.base.eol && writing === undefined ? undefined : text
           updateDirty()
-          if (pendingSave !== undefined) void flush()
+          if (pendingSave !== undefined) {
+            saveWaiters.push({ text, done: finish })
+            void flush()
+          } else finish(true)
         }
         if (!formatting && getEditorPrefs().formatOnSave && current.editor.formatDocument) {
           pendingSave = undefined
@@ -329,6 +350,35 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         }
         if (formatting) void formatting.then(queueSave)
         else queueSave()
+        return result
+      },
+      saveAs: async (path: string) => {
+        const current = open
+        if (!current || !path || path === file) return false
+        const text = current.editor.getValue()
+        const eol = formatRef.current?.eol ?? current.base.eol
+        const bom = current.base.bom
+        let expectedVersion: string | null = null
+        try {
+          const disk = await fs.read(projectId, path)
+          if (disk.readOnly) { if (alive) setError(vi.editor.readOnly); return false }
+          if (!window.confirm(tr('Tệp {path} đã tồn tại. Ghi đè?', { path }))) return false
+          expectedVersion = disk.version
+        } catch (e) {
+          if ((e as { code?: string })?.code !== 'file_not_found') {
+            if (alive) setError(explain(e as { code?: string; message?: string }))
+            return false
+          }
+        }
+        try {
+          await fs.write(projectId, path, text, { eol, bom, expectedVersion })
+          if (!alive) return false
+          savedAsCallback.current?.(file, path)
+          return true
+        } catch (e) {
+          if (alive) setError((e as { code?: string })?.code === 'conflict' ? tr('Tệp đã thay đổi trong khi đổi tên. Hãy thử lại.') : vi.editor.saveFailed)
+          return false
+        }
       },
       reload: () => {
         if (!open || !diskConflict || isReloading) return
@@ -375,6 +425,10 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         void flush()
       }
     })
+    const offSaver = registerFileSaver(projectId, file, {
+      save: () => actions.current?.save() ?? Promise.resolve(false),
+      saveAs: async () => setSaveAsOpen(true)
+    })
     fs.read(projectId, file).then((c) => {
       if (!alive || !host.current) return
       const ed = createEditor(host.current, { value: c.text, language, readOnly: lockedRef.current || c.readOnly, path: file, projectId, onOpenFile: (target, at, col) => openFileRef.current?.(target, at, col) })
@@ -413,6 +467,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       offPrefs()
       document.removeEventListener('focusout', onFocusOut)
       actions.current = null
+      offSaver()
+      settleSave(undefined, false)
       contextCallback.current?.(file, null)
       editor.current?.dispose()
       void window.nexgraph.lsp?.close(projectId, file).catch(() => {})
@@ -585,6 +641,16 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           setFormat((old) => old ? { ...old, language: item.name } : old)
           setPicker(null)
         }} renderItem={(item) => <span>{item.name}</span>} />}
+      {saveAsOpen && createPortal(<Picker label={tr('Lưu thành…')} placeholder={tr('Đường dẫn tệp mới')} items={[] as string[]}
+        itemKey={(item) => item} itemText={(item) => item}
+        filter={(_items, query) => {
+          const path = query.trim()
+          return path && !/^(?:\/|[A-Za-z]:)/.test(path) && !/[\\\x00-\x1f]/.test(path)
+            && path.split('/').every((part) => part && part !== '.' && part !== '..') ? [{ item: path, positions: [] }] : []
+        }}
+        empty={tr('Nhập đường dẫn tệp tương đối.')} onCancel={() => setSaveAsOpen(false)}
+        onPick={(path) => { setSaveAsOpen(false); void actions.current?.saveAs(path) }}
+        renderItem={(path) => <><Icon name="save" size={16} /><span>{tr('Lưu thành {path}', { path })}</span></>} />, document.body)}
     </div>
   )
 }

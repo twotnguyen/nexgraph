@@ -42,6 +42,29 @@ it('chỉ gửi điểm dừng đang bật và các thuộc tính DAP có giá t
   ])).toEqual([{ line: 4, condition: 'n == 2', hitCondition: '3', logMessage: 'n={n}' }, { line: 8 }])
 })
 
+it('chỉ gọi modules/loadedSources khi adapter hỗ trợ và trả danh sách rỗng kèm thông báo khi lỗi', async () => {
+  const request = vi.fn((command: string) => {
+    if (command === 'modules') return Promise.resolve({ modules: [{ id: 3, name: 'app', path: '/p/app.js', version: '1' }] })
+    if (command === 'loadedSources') return Promise.reject(new Error('không có nguồn'))
+    return Promise.resolve({})
+  })
+  const events: DebugEvent[] = []
+  const manager = new DebugManager('', (event) => events.push(event))
+  const session = { control: { request }, supportsModules: true, supportsLoadedSources: true }
+  Reflect.set(manager, 'session', session)
+  await expect(manager.modules()).resolves.toEqual([{ id: 3, name: 'app', path: '/p/app.js', version: '1' }])
+  expect(request).toHaveBeenCalledWith('modules')
+  await expect(manager.loadedSources()).resolves.toEqual([])
+  expect(request).toHaveBeenCalledWith('loadedSources')
+  expect(events).toContainEqual({ type: 'notice', target: 'loadedSources', code: 'debug.sources_failed', detail: expect.stringContaining('không có nguồn') })
+  session.supportsModules = false
+  session.supportsLoadedSources = false
+  request.mockClear()
+  expect(await manager.modules()).toEqual([])
+  expect(await manager.loadedSources()).toEqual([])
+  expect(request).not.toHaveBeenCalled()
+})
+
 // Chạy adapter thật (tải js-debug và debugpy về thư mục tạm): NEXGRAPH_DEBUG_IT=1 pnpm exec vitest run test/debug-manager.test.ts
 describe.skipIf(!process.env.NEXGRAPH_DEBUG_IT)('gỡ lỗi thật với js-debug và debugpy', () => {
   const base = mkdtempSync(join(tmpdir(), 'ng-dbg-adapters-'))
