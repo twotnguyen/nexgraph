@@ -9,6 +9,9 @@ let repo: string
 let root: string
 const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' })
 const head = () => git('rev-parse', 'HEAD').trim()
+// Win32 cấm tab/newline trong tên tệp; POSIX phải thử tên thật sự đặc biệt.
+const globFile = process.platform === 'win32' ? '[glob]file.txt' : ':(glob)*.txt'
+const specialFile = process.platform === 'win32' ? 'tab line.txt' : 'tab\tline\n.txt'
 
 beforeEach(() => {
   repo = mkdtempSync(join(tmpdir(), 'ng-git-history-'))
@@ -18,8 +21,8 @@ beforeEach(() => {
   git('config', 'user.email', 'test@example.com')
   git('config', 'user.name', 'Người Thử')
   writeFileSync(join(root, 'src/old.txt'), 'một\nhai\n')
-  writeFileSync(join(root, '[glob]file.txt'), 'literal\n')
-  writeFileSync(join(root, 'tab line.txt'), 'special\n')
+  writeFileSync(join(root, globFile), 'literal\n')
+  writeFileSync(join(root, specialFile), 'special\n')
   writeFileSync(join(repo, 'outside.txt'), 'outside\n')
   git('add', '--all')
   git('commit', '-q', '-m', 'đầu tiên')
@@ -57,16 +60,21 @@ it('returns commits from the current branch or all refs with complete parent and
 })
 
 it('parses root changes with project-relative paths and reads literal special filenames', async () => {
+  if (process.platform !== 'win32') {
+    expect(globFile).toBe(':(glob)*.txt')
+    expect(specialFile).toContain('\t')
+    expect(specialFile).toContain('\n')
+  }
   const sha = head()
   const files = await gitCommitFiles(root, sha)
   expect(files).toHaveLength(3)
   expect(files).toEqual(expect.arrayContaining([
     { path: 'src/old.txt', status: 'A' },
-    { path: '[glob]file.txt', status: 'A' },
-    { path: 'tab line.txt', status: 'A' }
+    { path: globFile, status: 'A' },
+    { path: specialFile, status: 'A' }
   ]))
-  expect(await gitCommitDiff(root, sha, '[glob]file.txt')).toEqual({ before: '', after: 'literal\n' })
-  expect(await gitCommitDiff(root, sha, 'tab line.txt')).toEqual({ before: '', after: 'special\n' })
+  expect(await gitCommitDiff(root, sha, globFile)).toEqual({ before: '', after: 'literal\n' })
+  expect(await gitCommitDiff(root, sha, specialFile)).toEqual({ before: '', after: 'special\n' })
 })
 
 it('compares renamed, modified and deleted files to the first parent', async () => {
