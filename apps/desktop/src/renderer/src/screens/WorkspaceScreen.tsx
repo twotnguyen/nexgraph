@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { Changes, ExportFormat, ExportScope, GraphEdge, GraphNode, NodeImpact, ProjectSummary } from '@shared/graph-types'
 import type { HostCommand, TaskDefinition } from '@shared/api'
-import { ChangesPanel } from '../components/changes/ChangesPanel'
 import type { EditorContextGetter } from '../components/editor/EditorTab'
-import { DiagnosticsPanel, OutlinePanel, useDocumentSymbols } from '../components/editor/EditorPanels'
+import { useDocumentSymbols } from '../components/editor/EditorPanels'
 import { EditorTools } from '../components/editor/EditorTools'
 import { FileView } from '../components/viewers/FileView'
 import { MarkdownPreview } from '../components/viewers/MarkdownPreview'
@@ -12,10 +11,9 @@ import { SplitEditor } from '../components/editor/SplitEditor'
 import { clearNotifications, notify, toggleNotifications } from '../components/common/NotificationCenter'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import { TaskPicker, readTaskHistory, rememberTask } from '../components/terminal/TaskPicker'
-import { GitPanel } from '../components/git/GitPanel'
 import { WorktreePicker } from '../components/git/WorktreePicker'
 import { GitDiffView } from '../components/git/GitDiffView'
-import { DebugPanel, debugKindOf } from '../components/debug/DebugPanel'
+import { debugKindOf } from '../components/debug/DebugPanel'
 import { clearAllBreakpoints, debugStep, pauseDebugging, restartDebugging, setDebugOpener, setDebugProject, startDebugging, stopDebugging, useDebugState } from '../state/debugState'
 import { CollabBar, CollabTab, JoinDialog } from '../components/collab/CollabUi'
 import { leaveSession, shareActiveFile, useCollab } from '../state/collab'
@@ -26,16 +24,16 @@ import { ExportDialog } from '../components/export/ExportDialog'
 import { ArchitectureCanvas } from '../components/architecture/ArchitectureCanvas'
 import { ActivityBar } from '../components/layout/ActivityBar'
 import { QuickActionBar } from '../components/layout/WorkbenchBar'
+import { WorkspaceShell } from '../components/layout/WorkspaceShell'
+import { WorkbenchCenter } from '../components/layout/WorkbenchCenter'
+import { ChatDock } from '../components/layout/ChatDock'
+import { WORKBENCH_PANELS, getWorkbenchPanel, type WorkbenchPanelContext } from '../state/workbenchPanels'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
 import type { HighlightKind } from '../components/graph/kindStyle'
 import { NodeContextMenu } from '../components/graph/NodeContextMenu'
 import { NodeInspector } from '../components/graph/NodeInspector'
 import { ReportView } from '../components/report/ReportView'
-import { TreeView } from '../components/tree/TreeView'
-import { SearchPanel } from '../components/search/SearchPanel'
-import { ProjectSearch } from '../components/search/ProjectSearch'
 import { FlowsView } from '../components/flows/FlowsView'
-import { TourPanel } from '../components/tour/TourPanel'
 import { AgentPanel } from '../components/agent/AgentPanel'
 import { IntegrationsDialog } from '../components/overview/IntegrationsDialog'
 import { MapView } from '../components/map/MapView'
@@ -78,10 +76,6 @@ const readRecentFiles = (projectId: string): string[] => {
 }
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
 type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour' | 'outline' | 'diagnostics'
-const PANEL_TITLES: Record<Panel, () => string> = {
-  explorer: () => tr('Duyệt tệp'), find: () => tr('Tìm trong tệp'), git: () => 'Git', debug: () => tr('Gỡ lỗi'), search: () => vi.activity.search, changes: () => vi.activity.changes, tour: () => vi.activity.tour,
-  outline: () => tr('Ký hiệu'), diagnostics: () => tr('Lỗi trong dự án')
-}
 const messageOf = (e: unknown): string =>
   e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
 
@@ -91,40 +85,6 @@ const impactAsChanges = (i: NodeImpact): Changes => ({
   impacted: i.impacted, tests: i.tests, test_gaps: [], truncated: i.truncated
 })
 
-const SearchIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-    <circle cx="11" cy="11" r="6" />
-    <path d="m20 20-4.5-4.5" />
-  </svg>
-)
-
-const TourIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-    <circle cx="12" cy="12" r="8" />
-    <path d="m15.5 8.5-2 5-5 2 2-5z" />
-  </svg>
-)
-
-const ChangesIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-    <circle cx="6" cy="6" r="2.5" />
-    <circle cx="6" cy="18" r="2.5" />
-    <circle cx="18" cy="12" r="2.5" />
-    <path d="M6 8.5v7M8.5 6C14 6 18 7 18 9.5" />
-  </svg>
-)
-
-const FilesIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M8 3h8l4 4v12H8zM15 3v5h5M4 7v14h12" />
-  </svg>
-)
-
-const FindIcon = (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M4 6h9M4 11h5M4 16h4" /><circle cx="15.5" cy="14.5" r="3.5" /><path d="m18 17 3 3" />
-  </svg>
-)
 
 const FileIcon = (
   <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -132,17 +92,6 @@ const FileIcon = (
   </svg>
 )
 
-const activities = () => [
-  { id: 'explorer', title: PANEL_TITLES.explorer(), icon: FilesIcon },
-  { id: 'find', title: PANEL_TITLES.find(), icon: FindIcon },
-  { id: 'outline', title: PANEL_TITLES.outline(), icon: <Icon name="tree" size={20} /> },
-  { id: 'git', title: PANEL_TITLES.git(), icon: <Icon name="branch" size={20} /> },
-  { id: 'debug', title: PANEL_TITLES.debug(), icon: <Icon name="bug" size={20} /> },
-  { id: 'search', title: PANEL_TITLES.search(), icon: SearchIcon },
-  { id: 'changes', title: PANEL_TITLES.changes(), icon: ChangesIcon },
-  { id: 'tour', title: PANEL_TITLES.tour(), icon: TourIcon }
-] satisfies { id: Panel; title: string; icon: typeof SearchIcon }[]
-const AGENT_ACTIVITY = { id: 'agent', title: vi.chat.title, icon: <Icon name="spark" size={20} /> }
 
 interface Props {
   project: ProjectSummary
@@ -617,7 +566,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         selectView(view)
       } else if (c.startsWith('panel:')) {
         const tool = c.slice(6)
-        if (Object.hasOwn(PANEL_TITLES, tool)) setPanel((cur) => cur === tool ? null : tool as Panel)
+        const target = getWorkbenchPanel(tool)
+        if (target && target.group !== 'dock') setPanel((cur) => cur === tool ? null : tool as Panel)
       } else if (c === 'highlight') {
         const h = arg as { nodes: GraphNode[]; edges: GraphEdge[]; note: string | null } | undefined
         if (Array.isArray(h?.nodes) && Array.isArray(h?.edges)) highlightFromChat(h.nodes, h.edges, h.note)
@@ -672,8 +622,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const toolsId = `${id}-tools`
   const chatId = `${id}-chat`
   const togglePanel = (key: string) => {
-    if (key === AGENT_ACTIVITY.id) return setChatOpen((v) => !v)
-    if (!Object.hasOwn(PANEL_TITLES, key)) return
+    if (key === 'agent') return setChatOpen((v) => !v)
+    const entry = getWorkbenchPanel(key)
+    if (!entry || entry.group === 'dock') return
     if (leftChat) {
       setChatOpen(false)
       setPanel(key as Panel)
@@ -956,7 +907,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [centered, setCentered] = useState(false)
   useCommand('view.centered_layout', () => setCentered((value) => !value))
   const focusPart = (step: number) => {
-    const parts = Array.from(document.querySelectorAll<HTMLElement>('.workspace-shell [data-ws-part]'))
+    const parts = Array.from(document.querySelectorAll<HTMLElement>(
+      '.workspace-shell > [data-ws-part]:not([data-ws-part="center"]), .workspace-shell .ws-head, .workspace-shell .canvas-wrap'
+    )).filter((part) => !part.hidden && !part.querySelector(':scope > [hidden]'))
     if (!parts.length) return
     const current = parts.findIndex((part) => part.contains(document.activeElement))
     const index = current < 0 ? (step > 0 ? -1 : 0) : current
@@ -979,14 +932,32 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     else if (lastPicker.current === 'worktree' && openWorktree) setWorktrees(true)
     else { lastPicker.current = 'file'; setFinder(true) }
   })
+  const panelCtx: WorkbenchPanelContext = {
+    projectId: project.project_id, projectName: project.name, projectPath: project.path,
+    revision, activeFile, previewFile, dirtyFiles, findFocus,
+    editor: activeEditor, symbols: documentSymbols.symbols, symbolError: documentSymbols.error,
+    debugTarget, worktreeAvailable: !!openWorktree && !!window.nexgraph.git, chatDock, hosted,
+    openFlow, openArch, openNode, openNodeId, openCode, previewCode,
+    pinFile: (file, line) => { setPreviews((cur) => cur.filter((item) => item !== file)); openCode(file, line ?? 1) },
+    closeFile, renamePath: renamedPath, trashPath: trashedPath,
+    showSubgraph: (g) => highlightFromChat(g.nodes, g.edges, null),
+    openDiff, openWorktrees: openWorktree ? () => setWorktrees(true) : undefined,
+    nodeImpact, impactPending,
+    changes, changesLoading: live.loading, changesError: live.error,
+    reloadChanges: live.reload,
+    reloadImpact: () => { if (nodeImpact) void showImpact(nodeImpact.node) },
+    clearImpact: () => setNodeImpact(null)
+  }
 
   return (
-    <div className="workspace workspace-shell" data-hosted={hosted || undefined} data-chat-dock={chatDock} style={{ '--ws-chat': `${chatWidth}px`, display: hidden ? 'none' : undefined } as CSSProperties}>
-      {/* Trong extension, thanh bên của nền đã có mục Công cụ nên không dựng dải icon thứ hai. */}
-      {!hosted && (
+    <WorkspaceShell hidden={hidden} hosted={hosted} chatWidth={chatWidth} dockSide={chatDock}
+      rail={!hosted && (
         <ActivityBar
-          items={[...(chatDock === 'left' ? [AGENT_ACTIVITY] : []), ...activities().map((a) => a.id === 'changes' ? { ...a, badge: live.changes?.changed_files.length } : a)]}
-          active={leftChat ? AGENT_ACTIVITY.id : panel}
+          items={WORKBENCH_PANELS.filter((entry) => !entry.visible || entry.visible(panelCtx))
+            .sort((a, b) => Number(b.group === 'dock') - Number(a.group === 'dock'))
+            .map((entry) => ({ id: entry.id, title: entry.title(), icon: entry.icon,
+              ...(entry.id === 'changes' ? { badge: live.changes?.changed_files.length } : {}) }))}
+          active={leftChat ? 'agent' : panel}
           panelId={leftChat ? chatId : toolsId}
           onToggle={togglePanel}
           manage={[
@@ -995,53 +966,19 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ]}
         />
       )}
-      {chatDock === 'left' && !zoomPane && <>{agentPanel}{resizeHandle}</>}
-      {panel && !leftChat && !zoomPane && (
-        <aside data-ws-part id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={PANEL_TITLES[panel]()}>
+      sidebar={panel && !leftChat && !zoomPane && (
+        <aside id={toolsId} className={`sidebar ws-tools ws-tools-${panel}`} aria-label={getWorkbenchPanel(panel)?.title()}>
           <div className="ws-tools-head">
-            <h2>{PANEL_TITLES[panel]()}</h2>
+            <h2>{getWorkbenchPanel(panel)?.title()}</h2>
             <button type="button" className="ws-icon-button" aria-label={vi.workspace.closePanel} title={vi.workspace.closePanel}
               onClick={() => setPanel(null)}><Icon name="close" size={15} /></button>
           </div>
-          {panel === 'explorer' && (
-            <div className="ws-project-root" title={project.path}>
-              <Icon name="folder" size={16} /><span>{project.name}</span>
-            </div>
-          )}
-          <div className="ws-tools-body">
-            {panel === 'explorer' && (
-              <TreeView projectId={project.project_id} projectPath={project.path} activeFile={activeFile ?? previewFile} revision={revision} dirtyFiles={dirtyFiles}
-                onRename={renamedPath} onTrash={trashedPath} onOpenNode={openNodeId} onOpenCode={openCode} compact
-                onPreviewFile={previewCode} onPinFile={(file, line) => { setPreviews((cur) => cur.filter((item) => item !== file)); openCode(file, line ?? 1) }} onCloseFile={closeFile} />
-            )}
-            {panel === 'outline' && <OutlinePanel editor={activeEditor} symbols={documentSymbols.symbols} error={documentSymbols.error} />}
-            {panel === 'diagnostics' && <DiagnosticsPanel projectId={project.project_id} onOpen={(file, line, column) => openCode(file, line, undefined, column)} />}
-            {panel === 'search' && (
-              <SearchPanel projectId={project.project_id} revision={revision} onOpen={openNode}
-                onShowSubgraph={(g) => highlightFromChat(g.nodes, g.edges, null)} onOpenFlow={openFlow} />
-            )}
-            {panel === 'git' && <GitPanel projectId={project.project_id} onOpenDiff={openDiff} onOpenFile={(file) => openCode(file)} onOpenWorktrees={openWorktree ? () => setWorktrees(true) : undefined} />}
-            {panel === 'debug' && <DebugPanel projectId={project.project_id} target={debugTarget} onOpenFile={(file, line) => openCode(file, line)} />}
-            {panel === 'find' && (
-              <ProjectSearch projectId={project.project_id} onOpen={(file, line) => openCode(file, line)} dirtyFiles={dirtyFiles} focusRequest={findFocus} />
-            )}
-            {panel === 'tour' && (
-              <TourPanel projectId={project.project_id} revision={revision} projectName={project.name} onOpenFlow={openFlow} onOpenNode={openNodeId} onOpenArch={openArch} />
-            )}
-            {panel === 'changes' && (
-              <>
-                {nodeImpact && !impactPending && (
-                  <button type="button" className="link back" onClick={() => setNodeImpact(null)}>{vi.impact.back}</button>
-                )}
-                <ChangesPanel changes={changes} loading={impactPending || (!nodeImpact && live.loading)} error={nodeImpact || impactPending ? null : live.error}
-                  onReload={nodeImpact ? () => void showImpact(nodeImpact.node) : live.reload} onOpenNode={openNodeId} onOpenCode={openCode} />
-              </>
-            )}
-          </div>
+          {getWorkbenchPanel(panel)?.render(panelCtx)}
         </aside>
       )}
-      <section className="center" style={centered ? { maxWidth: 960, width: '100%', marginInline: 'auto' } : undefined}>
-        <header className="ws-head" data-ws-part>
+      center={
+        <WorkbenchCenter centered={centered}>
+        <header className="ws-head">
           {onBack && <button type="button" className="ws-icon-button ws-back" title={backLabel} aria-label={backLabel} onClick={guardLeave(onBack)}>←</button>}
           <span className="ws-path muted mono" title={project.path}>{project.path}</span>
           <span className="ws-actions">
@@ -1155,7 +1092,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             ].map((item) => <button key={item.label} type="button" role="menuitem" onClick={() => { setTabMenu(null); item.action() }}>{item.label}</button>)}
           </div>
         </>}
-        <div data-ws-part data-split={sideShown ? splitSide : undefined} className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
+        <div data-split={sideShown ? splitSide : undefined} className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
           {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} openRequest={openSeq} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
@@ -1228,8 +1165,14 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         {terminal !== 'closed' && <TerminalPanel projectId={project.project_id} projectPath={project.path} newRequest={terminalNew} taskRequest={taskRequest} hidden={hidden || zoomPane || terminal === 'hidden'}
           onOpenFile={(file, line, column) => openCode(file, line, undefined, column)}
           onHide={() => setTerminal('hidden')} onCloseAll={() => { setTerminal('closed'); setTaskRequest(null) }} />}
-      </section>
-      {chatDock === 'right' && !zoomPane && <>{resizeHandle}{agentPanel}</>}
+      </WorkbenchCenter>
+      }
+      dock={!hosted && !zoomPane && (
+        <ChatDock side={chatDock} hidden={!chatOpen}>
+          {agentPanel}
+          {resizeHandle}
+        </ChatDock>
+      )}>
       {!hidden && <EditorTools projectId={project.project_id} editor={activeEditor} symbols={documentSymbols.symbols} symbolsError={documentSymbols.error}
         onOpen={(file, line, column) => openCode(file, line, undefined, column)} onDiagnostics={() => togglePanel('diagnostics')} onError={setFeedback} />}
       {connectOpenCode && <IntegrationsDialog project={project} initialAgent="opencode" onClose={() => setConnectOpenCode(false)} />}
@@ -1237,6 +1180,6 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       {taskPicker && <TaskPicker projectId={project.project_id} history={taskHistory} onPick={(task, oneshot) => void runTask(task, oneshot)} onOpenFile={(path) => openCode(path)} onClose={() => setTaskPicker(false)} />}
       {worktrees && openWorktree && <WorktreePicker projectId={project.project_id} onOpen={openWorktree} onClose={() => setWorktrees(false)} />}
       {joining && <JoinDialog onClose={() => setJoining(false)} onJoined={() => setTab('collab')} />}
-    </div>
+    </WorkspaceShell>
   )
 }

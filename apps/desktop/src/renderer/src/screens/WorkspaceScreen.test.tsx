@@ -9,6 +9,8 @@ import { buildExcerpts, consumePendingMultiBuffer, requestMultiBuffer } from '..
 import { toggleBookmark } from '../state/bookmarks'
 import { recordNavigation } from '../state/navigationHistory'
 import { NotificationCenter, clearNotifications, notify } from '../components/common/NotificationCenter'
+import { WORKBENCH_PANELS, getWorkbenchPanel } from '../state/workbenchPanels'
+import { setChatDock } from '../state/layoutPrefs'
 
 vi.mock('../services/elkLayoutService', async () => ({
   layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
@@ -1016,5 +1018,30 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     expect(await screen.findByRole('tab', { name: 'b.ts', selected: true })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('tab', { name: 'a.ts' })).toBeNull())
     expect(write).toHaveBeenCalledWith('p1', 'b.ts', 'one\nchanged', expect.objectContaining({ expectedVersion: null }))
+  })
+
+  it('workspace dựng từ shell: đúng 4 slot và registry mở được các panel cũ', async () => {
+    installNexgraph()
+    const view = render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    const parts = () => Array.from(view.container.querySelectorAll<HTMLElement>('.workspace-shell > [data-ws-part]')).map((el) => el.dataset.wsPart)
+    expect(parts()).toEqual(['rail', 'sidebar', 'center', 'dock'])
+    const rail = screen.getByRole('navigation', { name: 'Thanh hoạt động' })
+    for (const entry of WORKBENCH_PANELS.filter((panel) => panel.group !== 'dock' && panel.id !== 'diagnostics')) {
+      expect(within(rail).getByRole('button', { name: entry.title() })).toBeInTheDocument()
+    }
+    const explorer = getWorkbenchPanel('explorer')!
+    expect(screen.getByRole('complementary', { name: explorer.title() })).toBeInTheDocument()
+    await userEvent.click(within(rail).getByRole('button', { name: explorer.title() }))
+    expect(screen.queryByRole('complementary', { name: explorer.title() })).not.toBeInTheDocument()
+    await userEvent.click(within(rail).getByRole('button', { name: explorer.title() }))
+    expect(screen.getByRole('complementary', { name: explorer.title() })).toBeInTheDocument()
+    for (const id of ['find', 'git', 'debug', 'search', 'changes']) {
+      const entry = getWorkbenchPanel(id)!
+      await userEvent.click(within(rail).getByRole('button', { name: entry.title() }))
+      expect(screen.getByRole('complementary', { name: entry.title() })).toBeInTheDocument()
+    }
+    act(() => { setChatDock('left') })
+    expect(parts()).toEqual(['rail', 'dock', 'center'])
+    view.unmount()
   })
 })

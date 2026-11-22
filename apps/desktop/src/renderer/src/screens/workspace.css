@@ -11,8 +11,14 @@
   overflow: hidden;
 }
 
+/* Slot wrappers vô hình: phần tử con giữ nguyên vai trò flex và kích thước cũ. */
+.workspace-shell > [data-ws-part] { display: contents; }
+.workspace-shell > [data-ws-part='dock'][hidden] { display: none; }
+.ws-dock { display: contents; }
+.ws-dock[hidden] > * { display: none; }
+
 /* Thanh icon kiểu Wu: rộng 44px (icon 20 + 24), nút 36px bo 6, cách nhau 8px; mục đang bật chỉ sáng nền, không có vạch màu. */
-.workspace-shell > .activity-bar {
+.workspace-shell .activity-bar {
   width: var(--ws-rail);
   flex: 0 0 var(--ws-rail);
   gap: 8px;
@@ -22,8 +28,8 @@
   z-index: 4;
 }
 
-.workspace-shell > .activity-bar > button,
-.workspace-shell > .activity-bar .activity-bar-manage > button {
+.workspace-shell .activity-bar > button,
+.workspace-shell .activity-bar .activity-bar-manage > button {
   position: relative;
   display: grid;
   place-items: center;
@@ -36,19 +42,19 @@
   background: transparent;
 }
 
-.workspace-shell > .activity-bar > button:hover,
-.workspace-shell > .activity-bar .activity-bar-manage > button:is(:hover, [aria-expanded='true']) {
+.workspace-shell .activity-bar > button:hover,
+.workspace-shell .activity-bar .activity-bar-manage > button:is(:hover, [aria-expanded='true']) {
   color: var(--color-text);
   background: color-mix(in srgb, var(--color-text) 7%, transparent);
 }
 
-.workspace-shell > .activity-bar > button[aria-pressed='true'] {
+.workspace-shell .activity-bar > button[aria-pressed='true'] {
   color: var(--color-text);
   background: color-mix(in srgb, var(--color-text) 11%, transparent);
 }
 
-.workspace-shell > .activity-bar svg { width: 20px; height: 20px; stroke-width: 1.6; }
-.workspace-shell > .activity-bar .activity-bar-manage { margin-top: auto; }
+.workspace-shell .activity-bar svg { width: 20px; height: 20px; stroke-width: 1.6; }
+.workspace-shell .activity-bar .activity-bar-manage { margin-top: auto; }
 /* styles.css tô mọi .activity-bar button thành ô icon; trả hàng menu về dạng hàng chữ. */
 .workspace-shell .activity-bar .popover-menu button { display: flex; width: 100%; height: auto; padding: 6px 8px; border-radius: 7px; background: transparent; color: var(--color-text); }
 .workspace-shell .activity-bar .popover-menu button:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--color-text) 11%, transparent); color: var(--color-text); }
@@ -69,7 +75,7 @@
   text-align: center;
 }
 
-.workspace-shell > .ws-tools {
+.workspace-shell .ws-tools {
   width: var(--ws-tools);
   flex: 0 0 var(--ws-tools);
   min-width: 0;
@@ -194,11 +200,13 @@
 .workspace-shell .tree-icon-folder { color: var(--color-muted); }
 .file-type-icon { flex: none; display: block; }
 
-.workspace-shell > .center {
+.workspace-shell .center {
   min-width: 0;
   min-height: 0;
   background: var(--color-surface);
 }
+
+.workspace-shell .center:has(> .terminal-panel[data-maximized]:not([hidden])) { position: relative; }
 
 .workspace-shell .ws-head {
   min-height: var(--ws-header);
@@ -521,7 +529,7 @@
   background: color-mix(in srgb, var(--tone) 12%, var(--color-surface));
 }
 
-.workspace-shell > .chat:not([hidden]) {
+.workspace-shell .chat:not([hidden]) {
   flex: 0 0 min(var(--ws-chat), max(300px, calc(100vw - 560px)));
   width: min(var(--ws-chat), max(300px, calc(100vw - 560px)));
   min-width: 0;
@@ -555,7 +563,7 @@
 }
 
 @media (max-width: 979px) {
-  .workspace-shell > .chat:not([hidden]) {
+  .workspace-shell .chat:not([hidden]) {
     position: absolute;
     z-index: 9;
     inset: var(--ws-header) 0 0 auto;
@@ -563,7 +571,7 @@
     background: var(--panel-raised, var(--color-surface));
     box-shadow: var(--shadow);
   }
-  .workspace-shell[data-chat-dock='left'] > .chat:not([hidden]) { inset: 0 auto 0 var(--ws-rail); }
+  .workspace-shell[data-chat-dock='left'] .chat:not([hidden]) { inset: 0 auto 0 var(--ws-rail); }
 }
 
 @media (max-width: 1120px) {
@@ -574,7 +582,7 @@
 
 @media (max-width: 780px) {
   .workspace-shell { --ws-rail: 42px; }
-  .workspace-shell > .ws-tools {
+  .workspace-shell .ws-tools {
     position: absolute;
     z-index: 8;
     inset: 0 auto 0 var(--ws-rail);
@@ -582,8 +590,8 @@
     box-shadow: var(--shadow);
     animation: workspace-panel-in .14s ease-out;
   }
-  .workspace-shell[data-hosted] > .ws-tools { inset-inline-start: 0; }
-  .workspace-shell > .ws-tools.ws-tools-explorer {
+  .workspace-shell[data-hosted] .ws-tools { inset-inline-start: 0; }
+  .workspace-shell .ws-tools.ws-tools-explorer {
     position: relative;
     inset: auto;
     width: clamp(132px, 32vw, 218px);
