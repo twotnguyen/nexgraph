@@ -318,8 +318,8 @@ export interface NexGraphApi {
     /** Chỉ dùng thư mục đã lưu theo projectId; renderer không gửi path. */
     run(projectId: string, format: ExportFormat, scope: ExportScope): Promise<ExportResult>
     push(projectId: string, req: PushRequest): Promise<PushResult>
-    /** Chụp vùng `rect` của cửa sổ (toạ độ CSS; vắng thì cả cửa sổ) và lưu PNG; `null` khi huỷ. */
-    png(rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>
+    /** Chụp vùng `rect` của cửa sổ (toạ độ CSS; vắng thì cả cửa sổ) và lưu PNG vào thư mục xuất đã lưu theo projectId; `null` khi huỷ. */
+    png(projectId: string, rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>
     /** Chỉ cho path nằm trong gốc dự án hoặc thư mục xuất đã lưu. */
     reveal(projectId: string, path: string): Promise<void>
   }
