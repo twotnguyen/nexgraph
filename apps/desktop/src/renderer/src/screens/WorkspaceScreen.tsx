@@ -1180,10 +1180,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           ))}
           {multiBuffers.map((request) => <MultiBufferView key={request.id} projectId={project.project_id} request={request}
             active={!hidden && tab === `multi:${request.id}`} onClose={() => closeMulti(request)} onDirtyChange={onDirtyChange}
-            onOpenFile={(file, line) => openCode(file, line)} />)}
+            lockedFiles={lockedFiles} onOpenFile={(file, line) => openCode(file, line)} />)}
           {previewFile && isMarkdownFile(previewFile) && <MarkdownPreview key={previewFile} projectId={project.project_id} file={previewFile} active={!hidden} loadError={viewerErrors[previewFile]} readOnly={readOnlyFiles[previewFile] !== false} onClose={() => closePreview(previewFile)} onOpenFile={openCode} />}
           {previewSideShown && previewSide && isMarkdownFile(previewSide) && <MarkdownPreview key={`side:${previewSide}`} projectId={project.project_id} file={previewSide} active={!hidden} loadError={viewerErrors[previewSide]} readOnly={readOnlyFiles[previewSide] !== false} side onClose={() => setPreviewSide(null)} onOpenFile={openCode} />}
-          {sideShown && !previewSideShown && side && <SplitEditor key={side} projectId={project.project_id} file={side} onClose={() => setSide(null)} />}
+          {sideShown && !previewSideShown && side && <SplitEditor key={side} projectId={project.project_id} file={side} locked={lockedFiles.has(side)} onClose={() => setSide(null)} />}
           {inspections.filter((inspection) => tab === `task:${inspection.id}`).map((inspection) => <TaskInspector key={inspection.id} inspection={inspection} />)}
           {tab === 'collab' && collab.role === 'guest' && collab.file && <CollabTab key={collab.file} file={collab.file} />}
           {diffs.filter((d) => tab === diffKey(d)).map((d) => <GitDiffView key={diffKey(d)} projectId={project.project_id} file={d.file} staged={d.staged} rev={d.rev} from={d.from}

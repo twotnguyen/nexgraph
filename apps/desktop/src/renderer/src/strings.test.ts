@@ -50,4 +50,9 @@ describe('i18n', () => {
     expect(tr('Tên và email đồng tác giả')).toBe('Co-author name and email')
     expect(tr('Tên <email>')).toBe('Name <email>')
   })
+
+  it('dịch Luồng {id} là Flow chứ không phải Thread', () => {
+    setLocale('en')
+    expect(tr('Luồng {id}', { id: '1' })).toBe('Flow 1')
+  })
 })

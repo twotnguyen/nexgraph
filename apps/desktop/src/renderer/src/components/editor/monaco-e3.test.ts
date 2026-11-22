@@ -23,6 +23,7 @@ type FakeEditor = {
   setSelection: Mock
   revealRangeInCenter: Mock
   dispose: Mock
+  updateOptions: Mock
   createDecorationsCollection(): FakeCollection
   onKeyDown(cb: (event: FakeKey) => void): { dispose(): void }
   getPosition(): { lineNumber: number; column: number }
@@ -73,6 +74,7 @@ const fake = vi.hoisted(() => {
       setSelection: vi.fn(),
       revealRangeInCenter: vi.fn(),
       dispose: vi.fn(),
+      updateOptions: vi.fn(),
       createDecorationsCollection: () => {
         const collection = { set: vi.fn(), clear: vi.fn() }
         collections.push(collection)
@@ -261,6 +263,16 @@ describe('E3 editor handles', () => {
     expect(model.dispose).not.toHaveBeenCalled()
     mirror?.dispose()
     expect(model.dispose).toHaveBeenCalledTimes(1)
+
+  })
+  it('creates a locked split mirror readOnly and can unlock it', () => {
+    const handle = createEditor(el(), opts('src/c.ts'))
+    const mirror = createMirror(el(), 'src/c.ts', 'p1', true)!
+    expect(fake.createEditorMock.mock.calls.at(-1)?.[0]).toMatchObject({ readOnly: true })
+    mirror.setReadOnly(false)
+    expect(fake.editors.at(-1)!.updateOptions).toHaveBeenCalledWith({ readOnly: false })
+    handle.dispose()
+    mirror.dispose()
   })
 })
 

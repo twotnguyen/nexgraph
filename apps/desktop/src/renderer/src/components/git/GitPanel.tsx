@@ -233,13 +233,13 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
         <span className="git-summary" aria-label={tr('Thống kê diff')}>± <span className="git-added">+{added}</span> <span className="git-deleted">−{deleted}</span></span>
         <button type="button" className="git-view-diff" disabled={busy || !allRows.length} title={tr('Mở diff của mọi thay đổi')} onClick={() => allRows.forEach((r) => r.conflict ? onOpenFile(r.change.path) : onOpenDiff(r.change.path, r.staged))}>{tr('Xem diff')}</button>
         <PopoverMenu label={tr('Tuỳ chọn hiển thị')} trigger={<Icon name="sliders" size={13} />} buttonClass="git-icon" items={[
-          { label: `${view.layout === 'list' ? '✓ ' : ''}List`, icon: view.layout === 'list' ? 'check' : 'report', onSelect: () => setView((v) => ({ ...v, layout: 'list' })) },
-          { label: `${view.layout === 'tree' ? '✓ ' : ''}Tree`, icon: view.layout === 'tree' ? 'check' : 'tree', onSelect: () => setView((v) => ({ ...v, layout: 'tree' })) },
-          { label: `${view.sort === 'path' ? '✓ ' : ''}Sort: Path`, icon: view.sort === 'path' ? 'check' : 'folder', onSelect: () => setView((v) => ({ ...v, sort: 'path' })) },
-          { label: `${view.sort === 'name' ? '✓ ' : ''}Sort: Name`, icon: view.sort === 'name' ? 'check' : 'pencil', onSelect: () => setView((v) => ({ ...v, sort: 'name' })) },
-          { label: `${view.group === 'none' ? '✓ ' : ''}Group By: None`, icon: view.group === 'none' ? 'check' : 'close', onSelect: () => setView((v) => ({ ...v, group: 'none' })) },
-          { label: `${view.group === 'status' ? '✓ ' : ''}Group By: Status`, icon: view.group === 'status' ? 'check' : 'shield', onSelect: () => setView((v) => ({ ...v, group: 'status' })) },
-          { label: `${view.group === 'directory' ? '✓ ' : ''}Group By: Directory`, icon: view.group === 'directory' ? 'check' : 'folder', onSelect: () => setView((v) => ({ ...v, group: 'directory' })) }
+          { label: `${view.layout === 'list' ? '✓ ' : ''}${tr('List')}`, icon: view.layout === 'list' ? 'check' : 'report', onSelect: () => setView((v) => ({ ...v, layout: 'list' })) },
+          { label: `${view.layout === 'tree' ? '✓ ' : ''}${tr('Tree')}`, icon: view.layout === 'tree' ? 'check' : 'tree', onSelect: () => setView((v) => ({ ...v, layout: 'tree' })) },
+          { label: `${view.sort === 'path' ? '✓ ' : ''}${tr('Sort: Path')}`, icon: view.sort === 'path' ? 'check' : 'folder', onSelect: () => setView((v) => ({ ...v, sort: 'path' })) },
+          { label: `${view.sort === 'name' ? '✓ ' : ''}${tr('Sort: Name')}`, icon: view.sort === 'name' ? 'check' : 'pencil', onSelect: () => setView((v) => ({ ...v, sort: 'name' })) },
+          { label: `${view.group === 'none' ? '✓ ' : ''}${tr('Group By: None')}`, icon: view.group === 'none' ? 'check' : 'close', onSelect: () => setView((v) => ({ ...v, group: 'none' })) },
+          { label: `${view.group === 'status' ? '✓ ' : ''}${tr('Group By: Status')}`, icon: view.group === 'status' ? 'check' : 'shield', onSelect: () => setView((v) => ({ ...v, group: 'status' })) },
+          { label: `${view.group === 'directory' ? '✓ ' : ''}${tr('Group By: Directory')}`, icon: view.group === 'directory' ? 'check' : 'folder', onSelect: () => setView((v) => ({ ...v, group: 'directory' })) }
         ]} />
         <div className="git-split">
           <button type="button" disabled={busy || (!allUnstaged.length && !allStaged.length)} onClick={() => void (allUnstaged.length ? stage(allUnstaged) : unstage(allStaged))}>{allUnstaged.length ? tr('Stage tất cả') : tr('Bỏ stage tất cả')}</button>

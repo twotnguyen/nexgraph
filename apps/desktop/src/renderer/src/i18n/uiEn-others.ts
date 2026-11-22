@@ -289,4 +289,12 @@ export const uiEnOthers: Record<string, string> = {
   'Ẩn terminal': 'Hide terminal',
   'Ẩn terminal (⌃`)': 'Hide terminal (⌃`)',
   'Ẩn ô thay': 'Hide replace field',
+  // GitPanel: view options (giữ dấu ✓ do component thêm)
+  'List': 'List',
+  'Tree': 'Tree',
+  'Sort: Path': 'Sort: Path',
+  'Sort: Name': 'Sort: Name',
+  'Group By: None': 'Group By: None',
+  'Group By: Status': 'Group By: Status',
+  'Group By: Directory': 'Group By: Directory',
 }

@@ -193,24 +193,25 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
         ? await api.callHierarchyIncoming(projectId, root.file, text, line, column, root)
         : await api.callHierarchyOutgoing(projectId, root.file, text, line, column, root)
       if (serial !== hierarchySerial.current) return
-      // Một caller có thể gọi nhiều lần: gộp các fromRanges để chỉ hiện một dòng có số lượt gọi.
-      const groups = new Map<string, { call: LspCallHierarchyCall; ranges: LspCallHierarchyCall['fromRanges'] }>()
+      const groups = new Map<string, { call: LspCallHierarchyCall; file: string; ranges: LspCallHierarchyCall['fromRanges'] }>()
       for (const call of calls) {
         const from = call.from
-        const key = `${from.file}:${from.range.start.line}:${from.range.start.character}:${from.name}`
+        // Outgoing: LSP trả callee trong `from`, nhưng fromRanges nằm trong tệp gốc.
+        const file = direction === 'incoming' ? from.file : root.file
+        const key = `${file}:${from.range.start.line}:${from.range.start.character}:${from.name}`
         const group = groups.get(key)
         if (group) group.ranges.push(...call.fromRanges)
-        else groups.set(key, { call, ranges: [...call.fromRanges] })
+        else groups.set(key, { call, file, ranges: [...call.fromRanges] })
       }
       setMode((current) => current?.kind === 'hierarchy' && serial === hierarchySerial.current ? {
         ...current,
-        rows: [...groups.values()].map(({ call, ranges }, index) => {
+        rows: [...groups.values()].map(({ call, file, ranges }, index) => {
           const site = ranges[0]?.start ?? call.from.range.start
           const total = ranges.length
           return {
-            key: `${call.from.file}:${call.from.range.start.line}:${call.from.range.start.character}:${index}`,
-            item: call.from, name: total > 1 ? `${call.from.name} — ${call.from.file}${tr(' ({count} lời gọi)', { count: total })}` : call.from.name,
-            file: call.from.file, line: site.line + 1, column: site.character + 1, isCall: true
+            key: `${file}:${call.from.range.start.line}:${call.from.range.start.character}:${index}`,
+            item: call.from, name: total > 1 ? `${call.from.name} — ${file}${tr(' ({count} lời gọi)', { count: total })}` : call.from.name,
+            file, line: site.line + 1, column: site.character + 1, isCall: true
           }
         }),
         status: calls.length ? '' : (direction === 'incoming' ? tr('Không có lời gọi vào.') : tr('Không có lời gọi ra.'))

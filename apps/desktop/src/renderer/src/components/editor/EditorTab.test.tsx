@@ -512,6 +512,13 @@ describe('EditorTab view controls', () => {
     expect(within(dialog).getByText('Plain text')).toBeTruthy()
   })
 
+  it('keeps the backslash in the translated split shortcut title', () => {
+    setLocale('en')
+    installNexgraph({ fs: { read: vi.fn(async () => content()), write: vi.fn() } })
+    render(<EditorTab projectId="p1" file="src/math.ts" line={1} onClose={vi.fn()} onDirtyChange={vi.fn()} onSplit={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Split right' }).title).toBe('Split right (⌘\\)')
+  })
+
   it('explains why the encoding cannot be changed', async () => {
     open()
     await ready()

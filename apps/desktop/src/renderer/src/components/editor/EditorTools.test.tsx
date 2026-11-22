@@ -211,6 +211,25 @@ describe('EditorTools E3', () => {
       expect(incoming.mock.calls[incoming.mock.calls.length - 1][5].data).toEqual({ token: 'keep' })
     })
 
+    it('outgoing gán fromRanges vào tệp gốc và mở đúng dòng/cột', async () => {
+      const { onOpen, outgoing } = setup()
+      outgoing.mockResolvedValue([{ from: item('callee', 'src/lib.ts', 10), fromRanges: [lspRange(7, 4, 7, 9)] }])
+      act(() => { runCommand('editor.call_hierarchy_outgoing') })
+      fireEvent.click(await screen.findByText('callee'))
+      const row = await screen.findByRole('option')
+      expect(row.textContent).toContain('src/b.ts:8')
+      fireEvent.click(row)
+      expect(onOpen).toHaveBeenCalledWith('src/b.ts', 8, 5)
+    })
+
+    it('outgoing gộp nhiều lời gọi dưới tên tệp gốc', async () => {
+      const { outgoing } = setup()
+      outgoing.mockResolvedValue([{ from: item('callee', 'src/lib.ts', 10), fromRanges: [lspRange(7, 4, 7, 9), lspRange(9, 1, 9, 5)] }])
+      act(() => { runCommand('editor.call_hierarchy_outgoing') })
+      fireEvent.click(await screen.findByText('callee'))
+      expect(await screen.findByText('callee — src/b.ts (2 lời gọi)')).toBeTruthy()
+    })
+
     it('có bản Anh cho số lời gọi gộp', async () => {
       setLocale('en')
       const { incoming, caller } = setup()

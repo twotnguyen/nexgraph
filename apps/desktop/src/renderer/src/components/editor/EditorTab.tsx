@@ -532,7 +532,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           </button>
           <button type="button" className="ws-icon-button" disabled={!ready || locked === true || !!readOnly || !modified || !!conflict} onClick={() => actions.current?.save()}
             aria-label={tr('Lưu')} title={tr('Lưu (Ctrl/Cmd+S)')}><Icon name="save" size={15} /></button>
-          {onSplit && <button type="button" className="ws-icon-button" disabled={!ready} aria-label={tr('Chia đôi sang phải')} title={tr('Chia đôi sang phải (⌘\)')} onClick={onSplit}><Icon name="panelRight" size={15} /></button>}
+          {onSplit && <button type="button" className="ws-icon-button" disabled={!ready} aria-label={tr('Chia đôi sang phải')} title={tr('Chia đôi sang phải (⌘\\)')} onClick={onSplit}><Icon name="panelRight" size={15} /></button>}
           <button type="button" className="ws-icon-button" aria-label={vi.editor.close} title={vi.editor.close} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>

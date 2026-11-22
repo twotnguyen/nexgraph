@@ -7,7 +7,7 @@ import { MultiBufferView } from './MultiBufferView'
 
 const tabProps = vi.hoisted(() => vi.fn())
 vi.mock('../editor/EditorTab', () => ({
-  EditorTab: (props: { projectId: string; file: string; line: number; lineEnd: number; onDirtyChange: (file: string, dirty: boolean) => void }) => {
+  EditorTab: (props: { projectId: string; file: string; line: number; lineEnd: number; locked?: boolean; onDirtyChange: (file: string, dirty: boolean) => void }) => {
     tabProps(props)
     return null
   }
@@ -50,6 +50,16 @@ describe('MultiBufferView', () => {
     expect(tabProps).toHaveBeenCalledWith(expect.objectContaining({ file: 'src/b.ts', line: 9, lineEnd: 11 }))
     const firstCall = tabProps.mock.calls[0][0]
     expect(firstCall.onDirtyChange).toBe(onDirtyChange)
+  })
+
+  it('truyền trạng thái khoá theo từng tệp và cập nhật khi toggle sau khi mở', () => {
+    tabProps.mockClear()
+    const view = render(<MultiBufferView projectId="p1" request={request} lockedFiles={new Set(['src/a.ts'])} />)
+    expect(tabProps).toHaveBeenCalledWith(expect.objectContaining({ file: 'src/a.ts', locked: true }))
+    expect(tabProps).toHaveBeenCalledWith(expect.objectContaining({ file: 'src/b.ts', locked: false }))
+    view.rerender(<MultiBufferView projectId="p1" request={request} lockedFiles={new Set(['src/b.ts'])} />)
+    expect(tabProps).toHaveBeenLastCalledWith(expect.objectContaining({ file: 'src/b.ts', locked: true }))
+    expect(tabProps).toHaveBeenCalledWith(expect.objectContaining({ file: 'src/a.ts', locked: false }))
   })
 
   it('does nothing on header click when no opener was provided', () => {

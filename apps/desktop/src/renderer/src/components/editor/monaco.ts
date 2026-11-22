@@ -546,23 +546,25 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
 export interface MirrorHandle {
   dispose(): void
   setVim(status: HTMLElement | null): void
+  setReadOnly(readOnly: boolean): void
   onDisposeModel(cb: () => void): void
 }
 
 /** Khung thứ hai trên cùng model của một tệp đang mở (chia đôi kiểu Wu); null nếu tệp chưa nạp xong. */
-export function createMirror(el: HTMLElement, path: string, projectId?: string): MirrorHandle | null {
+export function createMirror(el: HTMLElement, path: string, projectId?: string, readOnly = false): MirrorHandle | null {
   const model = monaco.editor.getModel(modelUri(path, projectId))
   if (!model) return null
   retainModel(model)
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
   const editor = monaco.editor.create(el, {
-    model, theme: editorTheme(), automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
+    model, theme: editorTheme(), readOnly, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
     ...(font ? { fontFamily: font } : {})
   })
   installFontKeys(editor)
   const setVim = vimAttacher(editor)
   return {
     setVim,
+    setReadOnly: (value) => editor.updateOptions({ readOnly: value }),
     onDisposeModel: (cb) => void model.onWillDispose(cb),
     dispose: () => { setVim(null); editor.dispose(); releaseModel(model) }
   }

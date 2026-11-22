@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { setLocale } from '../../state/locale'
 import type { GitStatus, NexGraphApi } from '@shared/api'
 import { installNexgraph } from '../../test-utils'
 import { GitPanel } from './GitPanel'
@@ -11,6 +12,7 @@ vi.mock('./StashSection', () => ({ StashSection: () => null }))
 
 
 beforeEach(() => localStorage.clear())
+afterEach(() => setLocale('vi'))
 const status: GitStatus = {
   repo: true, branch: 'main', upstream: 'origin/main', ahead: 1, behind: 0, remote: 'origin',
   staged: [{ path: 'staged.txt', status: 'M', added: 2, deleted: 1 }],
@@ -112,6 +114,20 @@ it('giữ tuỳ chọn hiển thị qua localStorage khi reload panel', async ()
   expect(screen.getByRole('menuitem', { name: '✓ List' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: '✓ Sort: Name' })).toBeInTheDocument()
   expect(screen.getByRole('menuitem', { name: '✓ Group By: Directory' })).toBeInTheDocument()
+})
+
+it('giữ nhãn và dấu ✓ của tuỳ chọn hiển thị ở cả hai locale', async () => {
+  for (const locale of ['vi', 'en'] as const) {
+    setLocale(locale)
+    const { unmount } = setup()
+    await screen.findByText('staged.txt')
+    fireEvent.click(screen.getByRole('button', { name: locale === 'vi' ? 'Tuỳ chọn hiển thị' : 'Display options' }))
+    for (const name of ['List', 'Tree', 'Sort: Path', 'Sort: Name', 'Group By: None', 'Group By: Status', 'Group By: Directory']) {
+      expect(screen.getByRole('menuitem', { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) })).toBeInTheDocument()
+    }
+    expect(screen.getAllByRole('menuitem').some((item) => item.textContent?.includes('✓'))).toBe(true)
+    unmount()
+  }
 })
 
 it('giữ draft commit theo repo và không tràn sang repo khác', async () => {

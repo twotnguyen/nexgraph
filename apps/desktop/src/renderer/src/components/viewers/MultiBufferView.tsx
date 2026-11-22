@@ -9,10 +9,11 @@ interface Props {
   onClose?: () => void
   onDirtyChange?: (file: string, dirty: boolean) => void
   onOpenFile?: (file: string, line: number) => void
+  lockedFiles?: ReadonlySet<string>
 }
 
 /** Một thẻ gồm nhiều đoạn mã: mỗi đoạn là một EditorTab gắn đúng đường dẫn tệp gốc. */
-export function MultiBufferView({ projectId, request, active = true, onClose, onDirtyChange, onOpenFile }: Props) {
+export function MultiBufferView({ projectId, request, active = true, onClose, onDirtyChange, onOpenFile, lockedFiles }: Props) {
   return (
     <div className="multi-buffer" style={{ position: 'absolute', inset: 0, display: active ? 'flex' : 'none', flexDirection: 'column', overflow: 'auto' }}>
       {request.excerpts.map((excerpt) => {
@@ -27,7 +28,7 @@ export function MultiBufferView({ projectId, request, active = true, onClose, on
             </button>
             <div style={{ position: 'absolute', top: 24, right: 0, bottom: 0, left: 0 }}>
               <EditorTab projectId={projectId} file={excerpt.file} line={excerpt.startLine} lineEnd={excerpt.endLine}
-                active={active} onClose={() => onClose?.()} onDirtyChange={onDirtyChange ?? (() => {})} />
+                active={active} locked={lockedFiles?.has(excerpt.file)} onClose={() => onClose?.()} onDirtyChange={onDirtyChange ?? (() => {})} />
             </div>
           </section>
         )
