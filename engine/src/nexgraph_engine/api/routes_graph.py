@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Query, Request
 
-from nexgraph_engine.api.errors import ApiError
+from nexgraph_engine.api.errors import ApiError, open_graph_readonly
 from nexgraph_engine.query.contracts import (
     get_node_json,
     neighbors_json,
@@ -17,7 +17,6 @@ from nexgraph_engine.query.contracts import (
 )
 from nexgraph_engine.query.model_view import MODEL_AUDIENCE_HEADER, ModelGraph
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source
-from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo
@@ -40,7 +39,7 @@ def open_store(request: Request, project_id: str) -> Iterator[tuple[GraphStore, 
     if info is None:
         raise ApiError(404, "unknown_project", f"Không có dự án {project_id}")
     try:
-        conn = open_graph_db(info.graph_db, read_only=True)
+        conn = open_graph_readonly(info.graph_db)
     except (sqlite3.Error, OSError) as exc:
         raise ApiError(404, "graph_unavailable", f"Chưa có dữ liệu đồ thị: {exc}") from exc
     try:

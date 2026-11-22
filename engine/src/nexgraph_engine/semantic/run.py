@@ -6,6 +6,7 @@ transaction cùng dòng cache, sau khi đã xem cờ huỷ: huỷ giữa chừng
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field, replace
@@ -19,6 +20,9 @@ from nexgraph_engine.semantic.chunks import Chunk, Sources, plan
 from nexgraph_engine.semantic.transport import ChunkError, DirectTransport, LlmQueue
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.publication import graph_writer
+
+# Tổng thời gian chờ main trả lời cả lượt đường A, tính từ lúc offer; test hạ xuống nhỏ.
+LLM_QUEUE_TIMEOUT_SECONDS = 1800
 
 
 @dataclass
@@ -148,11 +152,18 @@ def make_work(*, graph_db, src: Sources, req: Request, transport: DirectTranspor
                     transport.offer(todo)
                     stats["sent"] = len(todo)
                     remaining = {c.id: c for c in todo}
+                    deadline = time.monotonic() + LLM_QUEUE_TIMEOUT_SECONDS
                     if remaining:
                         ctx.set_state("waiting_llm")
                     while remaining:
                         if ctx.cancel.is_set():
                             raise TaskCancelled
+                        if time.monotonic() >= deadline:
+                            for chunk in remaining.values():
+                                handle(chunk, None, f"Hết thời gian chờ trả lời từ ứng dụng (timeout "
+                                                    f"{LLM_QUEUE_TIMEOUT_SECONDS:g} giây)")
+                            remaining.clear()
+                            continue
                         answer = transport.wait(0.1)
                         if answer is not None and answer[0] in remaining:
                             handle(remaining.pop(answer[0]), answer[1], answer[2])

@@ -13,10 +13,10 @@ const original: Parameters<typeof createOpenAiOAuth>[0] = {
 }
 type Credential = Awaited<ReturnType<typeof original.login>>
 
-function harness(options: { rejectFirst?: boolean; wrongNonce?: boolean; wrongSignature?: boolean; issuer?: string; audience?: string; sub?: string; scope?: string; stored?: OpenAiRegistration } = {}) {
+function harness(options: { rejectFirst?: boolean; wrongNonce?: boolean; wrongSignature?: boolean; issuer?: string; audience?: string; sub?: string; scope?: string; stored?: OpenAiRegistration; deny?: boolean } = {}) {
   const authorizations: URLSearchParams[] = []
   const grants: URLSearchParams[] = []
-  const callbacks: Promise<unknown>[] = []
+  const callbacks: Promise<{ status: number; body: string }>[] = []
   const saveRegistration = vi.fn()
   const controller = new AbortController()
   const request = vi.fn<typeof fetch>(async (input, init) => {
@@ -52,11 +52,14 @@ function harness(options: { rejectFirst?: boolean; wrongNonce?: boolean; wrongSi
       const authorization = new URL(event.url).searchParams
       authorizations.push(authorization)
       const callback = new URL(authorization.get('redirect_uri')!)
-      callback.searchParams.set('code', `test-code-${authorizations.length}`)
       callback.searchParams.set('state', authorization.get('state')!)
-      if (authorization.get('client_id') === 'dynamic_agent_client')
-        callback.searchParams.set('client_id', 'oaiapp_test_registration')
-      callbacks.push(fetch(callback).then((response) => response.text()))
+      if (options.deny) callback.searchParams.set('error', 'access_denied')
+      else {
+        callback.searchParams.set('code', `test-code-${authorizations.length}`)
+        if (authorization.get('client_id') === 'dynamic_agent_client')
+          callback.searchParams.set('client_id', 'oaiapp_test_registration')
+      }
+      callbacks.push(fetch(callback).then(async (response) => ({ status: response.status, body: await response.text() })))
     }
   }, { agentName: 'NexGraph', getDeviceId: () => device })
   return { run, authorizations, grants, callbacks, controller, saveRegistration }
@@ -120,6 +123,29 @@ describe('OpenAI SIWC recovery', () => {
       signal: controller.signal, prompt: vi.fn(),
       notify: (event) => { if (event.type === 'auth_url') controller.abort() }
     }, { agentName: 'NexGraph', getDeviceId: () => device })).rejects.toThrow('hủy')
+  })
+})
+
+describe('OpenAI login failure paths', () => {
+  it('denied authorization rejects the login and tells the browser it was cancelled, not invalid', async () => {
+    const test = harness({ deny: true })
+    await expect(test.run()).rejects.toThrow('chưa được chấp thuận')
+    const [response] = await Promise.all(test.callbacks)
+    expect(response.status).toBe(200)
+    expect(response.body).toContain('huỷ')
+  })
+
+  it('timeout settles the login with a timeout message and closes the loopback port', async () => {
+    const redirects: string[] = []
+    const oauth = createOpenAiOAuth(original, { timeoutMs: 40 })
+    await expect(oauth.login({
+      signal: new AbortController().signal, prompt: vi.fn(),
+      notify: (event: { type: string; url?: string }) => {
+        if (event.type === 'auth_url' && event.url) redirects.push(new URL(event.url).searchParams.get('redirect_uri')!)
+      }
+    }, { agentName: 'NexGraph', getDeviceId: () => device })).rejects.toThrow('quá thời gian chờ')
+    expect(redirects).toHaveLength(1)
+    await expect(fetch(`${redirects[0]}?code=x&state=y`)).rejects.toThrow()
   })
 })
 
