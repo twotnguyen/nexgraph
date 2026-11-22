@@ -33,8 +33,8 @@ const flag = (value: boolean): string => (value ? '1' : '0')
 export const CHAT_WIDTH = { min: 300, max: 640 }
 export const TERMINAL_HEIGHT = { min: 120, max: 2000 }
 
-/** Khung trợ lý ở trái (dùng chung chỗ với cây tệp như Wu) hoặc phải. */
-export const [useChatDock, , setChatDock, defaultChatDock] = pref<'left' | 'right'>('nexgraph.chat.dock', (raw) => (raw === 'right' ? 'right' : 'left'))
+/** Khung trợ lý ở trái (dùng chung chỗ với cây tệp như Wu) hoặc phải; chưa lưu thì mặc định bên phải. */
+export const [useChatDock, , setChatDock, defaultChatDock] = pref<'left' | 'right'>('nexgraph.chat.dock', (raw) => (raw === 'left' ? 'left' : 'right'))
 export const [useChatWidth, , setChatWidth, defaultChatWidth] = pref('nexgraph.chat.width', int(CHAT_WIDTH.min, CHAT_WIDTH.max, 360))
 /** Chiều cao panel dưới (terminal). */
 export const [useTerminalHeight, , setTerminalHeight, defaultTerminalHeight] = pref('nexgraph.terminal.height', int(TERMINAL_HEIGHT.min, TERMINAL_HEIGHT.max, 280))

@@ -19,7 +19,18 @@ describe('tuỳ chọn bố cục', () => {
     localStorage.setItem('nexgraph.chat.width', 'abc')
     localStorage.setItem('nexgraph.terminal.height', ' ')
     render(<Probe />)
+    expect(screen.getByText('right|360|280|true|true')).toBeInTheDocument()
+  })
+
+  it('khung chat mặc định bên phải khi chưa lưu, chỉ đọc không ghi; đã lưu left thì giữ left', () => {
+    render(<Probe />)
+    expect(screen.getByText('right|360|280|true|true')).toBeInTheDocument()
+    expect(localStorage.getItem('nexgraph.chat.dock')).toBeNull()
+    cleanup()
+    localStorage.setItem('nexgraph.chat.dock', 'left')
+    render(<Probe />)
     expect(screen.getByText('left|360|280|true|true')).toBeInTheDocument()
+    expect(localStorage.getItem('nexgraph.chat.dock')).toBe('left')
   })
 
   it('giới hạn và làm tròn số khi ghi; số 0 vẫn là số chứ không rơi về mặc định', () => {
@@ -53,7 +64,7 @@ describe('tuỳ chọn bố cục', () => {
     setChatDock('right')
     expect(localStorage.getItem('nexgraph.chat.dock')).toBe('right')
     setChatDock('middle' as never)
-    expect(localStorage.getItem('nexgraph.chat.dock')).toBe('left')
+    expect(localStorage.getItem('nexgraph.chat.dock')).toBe('right')
   })
 
   it('component đang mở vẽ lại ngay khi ghi từ nơi khác', () => {
