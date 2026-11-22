@@ -1,6 +1,6 @@
 # Kiến trúc NexGraph
 
-Tài liệu mô tả mã tại mốc `6687fc9` và bổ sung cho [SRS](SRS.md) và [mô hình dữ liệu](data-model.md). Các thiết kế ở Sprint 2 phản ánh thời điểm lập kế hoạch. Sơ đồ dưới đây lấy điểm vào, hợp đồng và chỗ lưu dữ liệu từ mã hiện hành. [Bản bàn giao chính 0.1.0](../release/README.md) dùng Electron độc lập và Monaco. Code-OSS là bản xem trước tích hợp.
+Tài liệu mô tả mã tại mốc `83e49b7` (origin/main, 23/11/2026) và bổ sung cho [SRS](SRS.md) và [mô hình dữ liệu](data-model.md). Các thiết kế ở Sprint 2 phản ánh thời điểm lập kế hoạch. Sơ đồ dưới đây lấy điểm vào, hợp đồng và chỗ lưu dữ liệu từ mã hiện hành. [Bản phát hành hiện hành 0.1.2](../release/README.md) dùng Electron độc lập và Monaco. Code-OSS là bản xem trước tích hợp.
 
 ## Thành phần và ranh giới tiến trình
 
@@ -16,9 +16,11 @@ flowchart LR
         Monaco["Monaco tích hợp"]
         Preload["Preload và NexGraphApi"]
         Main["Electron main<br/>Đăng ký IPC và quản lý tiến trình"]
+        DevTools["Công cụ phát triển (F16)<br/>LSP · terminal · Git · DAP<br/>cộng tác LAN · extension"]
         React --> Monaco
         React -->|"NexGraphApi"| Preload
         Preload <-->|"IPC giới hạn kênh"| Main
+        Main --> DevTools
     end
 
     subgraph Hosted["Code-OSS · Bản xem trước tích hợp"]
@@ -73,6 +75,21 @@ flowchart LR
 - **Code-OSS** dùng extension host với lớp tương thích `electron`, dùng lại mô-đun main và renderer. Webview gọi các kênh đã đăng ký qua `postMessage`. Editor của nền mở mã và chọn dòng. Code-OSS, extension và Python engine có quy trình đóng gói riêng ở `apps/shell`. [Extension](../../apps/extension/src/extension.ts) · [Lớp tương thích](../../apps/extension/src/electron-host.ts) · [Quy trình build shell](../../apps/shell/README.md)
 - **HTTP nội bộ** chạy tại `127.0.0.1`. Engine báo cổng đang nghe và phục vụ `/v1` với Host hợp lệ và Bearer token. SSE truyền tiến độ và thông báo đồ thị thay đổi. Renderer cũng đọc `/v1/jobs/{id}` qua host để tiếp tục theo dõi nếu mất sự kiện. CLI `refresh` là điểm vào cập nhật độc lập mà Git hook có thể gọi. [CLI engine](../../engine/src/nexgraph_engine/cli.py) · [FastAPI](../../engine/src/nexgraph_engine/api/app.py) · [SSE](../../engine/src/nexgraph_engine/api/routes_events.py) · [Git hook](../../apps/desktop/src/main/git-hook.ts)
 - **MCP cho agent ngoài** là điểm vào riêng. Server dùng hợp đồng truy vấn chung và mở `graph.db` ở chế độ chỉ đọc. Nếu đồ thị nằm trong thư mục ứng dụng, MCP cũng mở `app.db` ở chế độ chỉ đọc để tìm đường dẫn. Stdio dành cho client quản lý tiến trình. Streamable HTTP bind loopback và dùng `X-API-Key` riêng. Các công cụ MCP phục vụ tìm kiếm, bằng chứng, lân cận, flow và ngữ cảnh. Agent tích hợp đi qua `EngineApi`. [MCP server](../../engine/src/nexgraph_engine/mcp/server.py) · [MCP HTTP phía host](../../apps/desktop/src/main/mcp-http.ts) · [Registry](../../engine/src/nexgraph_engine/store/projects.py) · [Công cụ agent tích hợp](../../apps/desktop/src/main/ai/tools.ts)
+
+## Công cụ phát triển tích hợp (F16, ADR 0020)
+
+Sáu nhóm dưới đây chạy trong tiến trình chính của Electron, cùng tiến trình với dịch vụ tệp và watcher; renderer chỉ mở thẻ và gửi lệnh qua IPC. Mỗi nhóm có lớp quản lý riêng và test riêng.
+
+| Nhóm | Lớp quản lý | Cách chạy |
+|---|---|---|
+| LSP | [quản lý LSP](../../apps/desktop/src/main/lsp/manager.ts), [kết nối](../../apps/desktop/src/main/lsp/connection.ts) | `typescript-language-server` và `pyright` là tiến trình con (stdio), đóng gói trong `asarUnpack`; khai báo `callHierarchy`, `definition`, `references`, `hover`, `completion` |
+| Terminal | [quản lý terminal](../../apps/desktop/src/main/terminal/manager.ts) | `node-pty` với shell mặc định của máy; mỗi dự án một phiên, đóng thẻ thì kill tiến trình con |
+| Git | [kho Git](../../apps/desktop/src/main/git/repo.ts), [lịch sử](../../apps/desktop/src/main/git/history.ts), [hunk](../../apps/desktop/src/main/git/hunks.ts), [thao tác](../../apps/desktop/src/main/git/operations.ts), [worktree](../../apps/desktop/src/main/git/worktree.ts), [permalink](../../apps/desktop/src/main/git/permalink.ts) | Gọi `git` CLI của máy; thao tác ghi chỉ chạy khi người dùng xác nhận |
+| Gỡ lỗi | [quản lý gỡ lỗi](../../apps/desktop/src/main/debug/manager.ts), [DAP client](../../apps/desktop/src/main/debug/dap-client.ts), [adapter](../../apps/desktop/src/main/debug/adapters.ts), [cấu hình chạy](../../apps/desktop/src/main/debug/launch-config.ts) | DAP trên stdio; js-debug và debugpy tải về lần đầu |
+| Cộng tác LAN | [hub](../../apps/desktop/src/main/collab/hub.ts) | WebSocket trong LAN, mã tham gia, không qua máy chủ ngoài |
+| Extension | [registry](../../apps/desktop/src/main/extensions/registry.ts) | Khai báo theme, lệnh, snippet; không nạp mã Node tuỳ ý |
+
+Trạng thái dùng chung của nhóm này nằm trong bộ nhớ tiến trình chính (không vào CSDL), trừ lịch sử phiên chat của agent. Các giới hạn (không marketplace, LSP chỉ TS/JS + Python, terminal không phải sandbox, cộng tác LAN cần mạng tin cậy) ghi ở [UC18](use-cases/UC18.md).
 
 ## Mở dự án, lập chỉ mục và xem vùng ảnh hưởng
 
@@ -170,15 +187,19 @@ sequenceDiagram
             UI->>Host: Trả quyết định
             Host-->>Pi: Cho thực hiện hoặc chặn
         end
-        opt Mô hình gọi công cụ shell
-            Pi-->>Model: Yêu cầu bị từ chối
+        opt Chế độ Sửa, đã bật công tắc chạy lệnh, và mô hình yêu cầu chạy lệnh
+            Pi->>Host: Yêu cầu duyệt lệnh
+            Host-->>UI: Executable, tham số, cwd, timeout
+            User->>UI: Cho phép hoặc từ chối
+            UI->>Host: Trả quyết định
+            Host-->>Pi: Cho chạy hoặc chặn
         end
         Pi-->>Host: Sự kiện và lời đáp
         Host-->>UI: Hiện lời đáp và trích dẫn
     end
 ```
 
-Chế độ Hỏi cấp công cụ đọc tệp và tra cứu đồ thị. Chế độ Sửa cấp thêm `edit` và `write`. Hai thao tác này cần duyệt từng diff, rồi kiểm lại đường dẫn và phiên bản tệp trước khi ghi. Lời gọi công cụ shell bị từ chối ở cả hai chế độ. Pi tắt nạp extension, skill, mẫu và tệp ngữ cảnh của dự án. Công cụ tệp áp dụng phạm vi đọc trước khi tìm hoặc trả dữ liệu. Engine kiểm cùng phạm vi cho đồ thị và đoạn mã cung cấp cho AI hoặc MCP. Quyền gửi dữ liệu gắn với dự án, nhà cung cấp và URL đích. [Phiên agent](../../apps/desktop/src/main/agent/session.ts) · [Cổng duyệt](../../apps/desktop/src/main/agent/approval.ts) · [Phạm vi tệp](../../apps/desktop/src/main/agent/file-scope.ts) · [Tài khoản và consent](../../apps/desktop/src/main/agent/accounts.ts) · [Lọc dữ liệu đồ thị](../../engine/src/nexgraph_engine/query/model_view.py)
+Chế độ Hỏi và Kế hoạch cấp công cụ đọc tệp và tra cứu đồ thị. Chế độ Sửa cấp thêm `edit`, `write` và `run_process`. Hai thao tác ghi cần duyệt từng diff, rồi kiểm lại đường dẫn và phiên bản tệp trước khi ghi. Chạy lệnh chỉ ở chế độ Sửa, sau khi bật công tắc, và mỗi lệnh hiện executable, tham số, cwd, timeout để duyệt riêng (ADR 0016); không có shell tự do. Pi tắt nạp extension, skill, mẫu và tệp ngữ cảnh của dự án. Công cụ tệp áp dụng phạm vi đọc trước khi tìm hoặc trả dữ liệu. Engine kiểm cùng phạm vi cho đồ thị và đoạn mã cung cấp cho AI hoặc MCP. Quyền gửi dữ liệu gắn với dự án, nhà cung cấp và URL đích. [Phiên agent](../../apps/desktop/src/main/agent/session.ts) · [Cổng duyệt](../../apps/desktop/src/main/agent/approval.ts) · [Công cụ chạy lệnh](../../apps/desktop/src/main/agent/process-tools.ts) · [Phạm vi tệp](../../apps/desktop/src/main/agent/file-scope.ts) · [Tài khoản và consent](../../apps/desktop/src/main/agent/accounts.ts) · [Lọc dữ liệu đồ thị](../../engine/src/nexgraph_engine/query/model_view.py)
 
 ## Phạm vi đã có và phần cần kiểm chứng
 
