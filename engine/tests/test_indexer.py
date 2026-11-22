@@ -374,11 +374,12 @@ def test_stalled_workers_fall_back_without_repeating_completed_files(tmp_path, i
         _processes = {}
 
         def __init__(self, *, max_workers):
+            self.parallel = max_workers > 1  # 1 worker: pool của fallback, chạy được mọi tệp
             self.batches = 0
 
         def submit(self, fn, *args):
             future = Future()
-            if self.batches == 0:
+            if not self.parallel or self.batches == 0:
                 future.set_result(fn(*args))
             self.batches += 1
             return future
@@ -398,6 +399,42 @@ def test_stalled_workers_fall_back_without_repeating_completed_files(tmp_path, i
     assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
 
 
+def test_hung_file_in_sequential_fallback_is_skipped_with_a_report(tmp_path, index_project, monkeypatch):
+    """Worker song song gián đoạn, rồi tệp treo trong fallback: chỉ tệp đó bị bỏ qua, có báo, các tệp khác vẫn vào đồ thị."""
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+
+    hung = "m2.py"
+
+    class HangingPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            pass
+
+        def submit(self, fn, *args):
+            future = Future()
+            files = args[1] if isinstance(args[1], list) else [args[1]]
+            if any(f.rel_path == hung for f in files):
+                return future  # giả lập tiến trình con treo ở tệp này
+            future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 20)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", HangingPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(indexer, "FILE_EXTRACT_TIMEOUT_SECONDS", 0.2, raising=False)
+    store, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert store.get_node(f"{hung}#file") is None
+    assert store.get_node("m19.py#file") is not None
+    assert any(e.message and hung in e.message for e in events)
+
+
 def test_crashed_extraction_pool_recovers_same_graph(tmp_path, index_project, monkeypatch):
     from concurrent.futures import Future
     from concurrent.futures.process import BrokenProcessPool
@@ -408,7 +445,7 @@ def test_crashed_extraction_pool_recovers_same_graph(tmp_path, index_project, mo
         _processes = {}
 
         def __init__(self, *, max_workers):
-            assert max_workers == 2
+            assert max_workers in (1, 2)  # 2: pool song song; 1: pool của fallback cũng hỏng
 
         def submit(self, _fn, *_args):
             future = Future()
@@ -426,6 +463,45 @@ def test_crashed_extraction_pool_recovers_same_graph(tmp_path, index_project, mo
     assert result.state == "hoan_tat"
     assert graph_state(recovered) == graph_state(serial)
     assert any(e.state == "structure" and e.files_done == 0 and e.message for e in events)
+
+
+def test_submit_error_in_sequential_fallback_reads_remaining_files_in_main_process(
+        tmp_path, index_project, monkeypatch):
+    """Pool fallback không spawn được tiến trình (`submit` ném OSError): đọc tiếp trong tiến trình chính,
+    không xử lý lại các tệp đã ghi và job vẫn hoàn tất."""
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    class SubmitFailsPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            self.parallel = max_workers > 1  # 2: pool song song; 1: pool của fallback không spawn được
+            self.batches = 0
+
+        def submit(self, fn, *args):
+            if not self.parallel:
+                raise OSError("cannot spawn child process")
+            future = Future()
+            if self.batches == 0:  # lô đầu xong; các lô sau treo để rơi vào fallback tuần tự
+                future.set_result(fn(*args))
+            self.batches += 1
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", SubmitFailsPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    recovered, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert recovered.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 40
+    assert graph_state(recovered) == graph_state(serial)
+    assert any(e.message and "tiến trình chính" in e.message for e in events)
 
 
 def test_index_workers_policy(monkeypatch):

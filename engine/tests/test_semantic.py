@@ -299,6 +299,27 @@ def test_cancel_mid_way_writes_no_partial_chunk(api, copy_fixture):
     assert "Khối một" in labels and "Khối hai" not in labels
 
 
+def test_app_transport_times_out_reports_errors_and_releases_write_lock(api, docs_pid, monkeypatch):
+    """Đường A không ai trả lời: job kết thúc trong hạn, báo timeout từng khối, và nhả khoá ghi của dự án."""
+    from nexgraph_engine.semantic import run as semantic_run
+    from nexgraph_engine.store.publication import graph_writer
+
+    monkeypatch.setattr(semantic_run, "LLM_QUEUE_TIMEOUT_SECONDS", 0.3, raising=False)
+    enable(api, docs_pid, "app")
+    job = wait_job(api, run(api, docs_pid, "docs", {"kind": "app"}), timeout=8)
+    assert job["state"] == "done", job
+    res = job["result"]
+    assert res["chunks"]["sent"] > 0 and res["chunks"]["failed"] == res["chunks"]["sent"]
+    assert len(res["errors"]) == res["chunks"]["sent"]
+    assert all("timeout" in e["message"] for e in res["errors"])
+    # Hàng đợi đã bị bỏ: câu trả lời đến sau timeout không còn đường vào job.
+    assert api.get(f"/v1/jobs/{job['job_id']}/llm/next").status_code == 404
+    # Job đã nhả khoá ghi: một thao tác ghi khác của dự án mở được ngay.
+    info = api.app.state.services.registry.get(docs_pid)
+    with graph_writer(info.graph_db):
+        pass
+
+
 # --- labels ----------------------------------------------------------------------------------------
 def test_labels_name_communities_and_survive_recluster(api, copy_fixture, llm):
     pid = api.open(copy_fixture("bookstore_app"))["project_id"]

@@ -38,6 +38,7 @@ RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm l�
 COMMIT_EVERY = 100
 EXTRACTION_BATCH_SIZE = 16
 WORKER_PROGRESS_TIMEOUT_SECONDS = 20
+FILE_EXTRACT_TIMEOUT_SECONDS = 60  # fallback tuần tự: quá hạn một tệp thì bỏ qua tệp đó
 IS_WINDOWS = os.name == "nt"
 
 
@@ -82,8 +83,20 @@ def index_workers(n_files: int, include_media: bool, requested: int | None = Non
     return min(cpus - 1, 8)
 
 
+def _extract_one(root: Path, f: DiscoveredFile, transcript_dir: Path | None) -> ExtractedFile:
+    return extract_file(root, f, transcript_dir=transcript_dir, cancel=None)
+
+
 def _extract_batch(root: Path, files: list[DiscoveredFile], transcript_dir: Path | None) -> list[ExtractedFile]:
-    return [extract_file(root, f, transcript_dir=transcript_dir, cancel=None) for f in files]
+    return [_extract_one(root, f, transcript_dir) for f in files]
+
+
+def _kill_pool(executor: ProcessPoolExecutor) -> None:
+    """Dừng tiến trình con đang treo rồi đóng executor (Python 3.12 chưa có terminate_workers())."""
+    for process in list((executor._processes or {}).values()):
+        with suppress(OSError):
+            process.terminate()
+    executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _git_head(root: Path) -> str | None:
@@ -288,8 +301,9 @@ class Indexer:
                             return False
                         _consume(consumed + 1, files[consumed], extracted)
                         consumed += 1
-            except (BrokenProcessPool, OSError):
-                # Worker có thể không khởi động được hoặc bị hệ điều hành chặn.
+            except (BrokenProcessPool, OSError, RuntimeError):
+                # Worker có thể không khởi động được hoặc bị hệ điều hành chặn; các tệp chưa xong
+                # sẽ được đọc tiếp ở nhánh fallback tuần tự bên dưới.
                 pass
             finally:
                 if executor is not None and consumed < total:
@@ -303,13 +317,64 @@ class Indexer:
                 self.on_progress(ProgressEvent("structure", consumed, total,
                                                "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
 
-        # Nếu worker treo, tiếp tục đọc tuần tự từ tệp đầu tiên chưa ghi.
-        for i in range(consumed, total):
-            if self.cancel.is_set():
-                return False
-            f = files[i]
-            x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
-            _consume(i + 1, f, x)
+        # Nếu worker song song treo/gãy, đọc tiếp từ tệp đầu tiên chưa ghi. Mỗi tệp chạy trong tiến trình con
+        # để tệp treo không treo cả engine; chỉ khi không dùng được tiến trình con mới đọc trong tiến trình chính.
+        executor: ProcessPoolExecutor | None = None
+        isolated = workers > 1
+        try:
+            i = consumed
+            while i < total:
+                if self.cancel.is_set():
+                    return False
+                f = files[i]
+                x = None
+                pool = executor
+                if isolated and pool is None:
+                    try:
+                        pool = executor = ProcessPoolExecutor(max_workers=1)
+                    except (BrokenProcessPool, OSError):
+                        isolated = False
+                        self.on_progress(ProgressEvent(
+                            "structure", i, total,
+                            "Không tạo được tiến trình trích xuất; đang đọc trong tiến trình chính."))
+                if pool is not None:
+                    try:
+                        future = pool.submit(_extract_one, self.root, f, self.transcript_dir)
+                    except (BrokenProcessPool, OSError, RuntimeError):
+                        # Hết fd/process hay bị chính sách chặn (OSError), pool đã hỏng hoặc đã đóng
+                        # (BrokenProcessPool/RuntimeError): bỏ pool và đọc tệp này ngay trong tiến trình chính.
+                        _kill_pool(pool)
+                        executor, isolated = None, False
+                        self.on_progress(ProgressEvent(
+                            "structure", i, total,
+                            "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
+                    else:
+                        deadline = time.monotonic() + FILE_EXTRACT_TIMEOUT_SECONDS
+                        while not future.done() and not self.cancel.is_set() and time.monotonic() < deadline:
+                            wait((future,), timeout=0.1)
+                        if future.done():
+                            try:
+                                x = future.result()
+                            except (BrokenProcessPool, OSError, RuntimeError):
+                                _kill_pool(pool)
+                                executor, isolated = None, False
+                        else:  # quá hạn hoặc bị huỷ: dừng tiến trình con, bỏ qua tệp và đi tiếp
+                            _kill_pool(pool)
+                            executor = None
+                            if self.cancel.is_set():
+                                return False
+                            self.on_progress(ProgressEvent(
+                                "structure", i + 1, total,
+                                f"Bỏ qua {f.rel_path}: trích xuất quá {FILE_EXTRACT_TIMEOUT_SECONDS:g} giây"))
+                            i += 1
+                            continue
+                if x is None:
+                    x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
+                _consume(i + 1, f, x)
+                i += 1
+        finally:
+            if executor is not None:
+                executor.shutdown(wait=False, cancel_futures=True)
 
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)
         store.commit()
