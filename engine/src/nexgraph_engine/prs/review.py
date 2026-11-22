@@ -97,10 +97,31 @@ def unreferenced(store: GraphStore, files: list[DiffFile]) -> list[dict]:
     return [{"node": node_json(n), "heuristic": True} for n in nodes[:MAX_LISTED]]
 
 
-def _runner_for(root: Path, ext: str) -> str | None:
+_MANIFEST_NAMES = ("package.json", "pubspec.yaml", "pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg",
+                   "setup.py", "go.mod")
+
+
+def _package_dir(root: Path, rel: str) -> Path:
+    """Thư mục package gần nhất có manifest (monorepo); gốc dự án khi không có."""
+    base = Path(root).resolve()
+    try:
+        current = (base / rel).parent.resolve()
+    except OSError:
+        return base
+    if not current.is_relative_to(base):
+        return base
+    while True:
+        if any((current / name).is_file() for name in _MANIFEST_NAMES):
+            return current
+        if current == base:
+            return base
+        current = current.parent
+
+
+def _runner_for(package: Path, ext: str) -> str | None:
     def mentions(name: str, word: str) -> bool:
         try:
-            return word in (root / name).read_text("utf-8", "replace")
+            return word in (package / name).read_text("utf-8", "replace")
         except OSError:
             return False
     if ext == ".py":
@@ -135,22 +156,35 @@ def select_tests(root: Path, report: ImpactReport, files: list[DiffFile], trunca
     if code and not tests:
         reasons.append("Không tìm được test nào liên quan tới thay đổi")
     commands: list[str] = []
-    groups: dict[str, list[str]] = {}
-    go_dirs: set[str] = set()
+    groups: dict[tuple[str, Path], list[str]] = {}
+    go_dirs: dict[Path, set[str]] = {}
+    root = Path(root).resolve()
+
+    def local(package: Path, path: str) -> str:
+        prefix = package.relative_to(root).as_posix()
+        return str(PurePosixPath(path).relative_to(prefix)) if prefix != "." else path
+
     for t in sorted(tests):
         ext = PurePosixPath(t).suffix.lower()
+        package = _package_dir(root, t)
         if ext == ".go":
-            go_dirs.add("./" + str(PurePosixPath(t).parent))
+            go_dirs.setdefault(package, set()).add("./" + str(PurePosixPath(t).parent))
             continue
-        runner = _runner_for(root, ext)
+        runner = _runner_for(package, ext)
         if runner is None:
             reasons.append(f"Chưa biết lệnh chạy test cho {t}")
             continue
-        groups.setdefault(runner, []).append(t)
-    for runner, items in groups.items():
-        commands.append(f"{runner} {' '.join(shlex.quote(i) for i in items)}")
-    if go_dirs:
-        commands.append("go test " + " ".join(shlex.quote(d) for d in sorted(go_dirs)))
+        groups.setdefault((runner, package), []).append(t)
+    for (runner, package), items in groups.items():
+        command = f"{runner} {' '.join(shlex.quote(local(package, i)) for i in items)}"
+        if package != root:  # monorepo: chạy trong đúng package để config/manifest của nó có hiệu lực
+            command = f"cd {shlex.quote(package.relative_to(root).as_posix())} && {command}"
+        commands.append(command)
+    for package, dirs in go_dirs.items():
+        command = "go test " + " ".join(shlex.quote(d) for d in sorted(dirs))
+        if package != root:
+            command = f"cd {shlex.quote(package.relative_to(root).as_posix())} && {command}"
+        commands.append(command)
     return {"files": sorted(tests), "commands": commands, "run_all": bool(reasons), "reasons": reasons}
 
 
