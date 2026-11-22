@@ -10,7 +10,7 @@ import { promisify } from 'node:util'
 import type { FileContent, FileRevision, ProjectDirectory, WriteOpts } from '../../shared/api'
 import { shouldIgnore } from '../watch/ignore'
 
-export type FsErrorCode = 'outside_project' | 'file_not_found' | 'too_large' | 'not_text' | 'conflict' | 'unknown_project' | 'protected_path' | 'bad_param'
+export type FsErrorCode = 'outside_project' | 'file_not_found' | 'too_large' | 'not_text' | 'conflict' | 'unknown_project' | 'protected_path' | 'bad_param' | 'unapproved_task'
 
 export class FsError extends Error {
   constructor(public code: FsErrorCode, message: string) {

@@ -1,4 +1,5 @@
 import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'electron'
+import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -38,6 +39,7 @@ import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
 import { ensureTasksFile, listTasks, resolveTask } from './tasks'
+import { createTaskSigner } from './tasks/signature'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
 import { gitApplyHunk, gitHunks } from './git/hunks'
@@ -58,6 +60,8 @@ let agents: AgentRouter | null = null
 let geminiConnection: GeminiConnectionManager | null = null
 let editors: EditorStateRegistry | null = null
 let terminals: TerminalManager | null = null
+/** Khoá ký task sống theo phiên app: task renderer gửi lại phải do chính main cấp (REV-13). */
+const taskSigner = createTaskSigner(randomBytes(32))
 let debugManager: DebugManager | null = null
 let collab: CollabHub | null = null
 
@@ -317,7 +321,16 @@ export function registerIpc(
     exit: (id, code) => getWindow()?.webContents.send('terminal:event', { id, type: 'exit', code })
   })
   const term = terminals
-  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => term.create(await rootOf(pid), Number(cols), Number(rows), task))
+  // REV-13: task chỉ được chạy khi chính main cấp qua `tasks:resolve` (chữ ký HMAC khoá theo phiên).
+  // Renderer bị chiếm quyền không thể tự đặt command/args/env rồi mở tiến trình.
+  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => {
+    const root = await rootOf(pid)
+    if (task !== undefined) {
+      validateTask(task)
+      if (!taskSigner.verify(task)) throw new FsError('unapproved_task', 'Task không do NexGraph cấp, hãy chọn lại trong danh sách tác vụ.')
+    }
+    return term.create(root, Number(cols), Number(rows), task)
+  })
   on('terminal:write', async (id: number, data: string) => { if (typeof data === 'string') term.write(Number(id), data) })
   on('terminal:resize', async (id: number, cols: number, rows: number) => term.resize(Number(id), Number(cols), Number(rows)))
   on('terminal:kill', async (id: number) => term.kill(Number(id)))
@@ -329,7 +342,7 @@ export function registerIpc(
     if (!context || typeof context !== 'object' ||
       (context.file !== undefined && typeof context.file !== 'string') ||
       (context.line !== undefined && (!Number.isInteger(context.line) || context.line < 1))) throw new FsError('bad_param', 'Ngữ cảnh task không hợp lệ')
-    return resolveTask(await rootOf(pid), task, context)
+    return taskSigner.sign(resolveTask(await rootOf(pid), task, context))
   })
   on('git:status', async (pid: string) => gitStatus(await rootOf(pid)))
   on('git:stage', async (pid: string, files: string[]) => gitStage(await rootOf(pid), files))
