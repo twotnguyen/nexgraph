@@ -160,6 +160,11 @@ export const CUSTOM_MODEL_SPEC = (id: string, metadata?: CustomProvider) => ({
 const OLLAMA_ID = 'ollama-local'
 const OLLAMA_DEFAULT = 'http://127.0.0.1:11434/v1'
 const BLOCKED_OAUTH = new Set(['anthropic'])
+/**
+ * Provider có catalog pi.dev: pi phủ catalog mới qua mạng cho provider built-in. OpenCode Go/Zen đổi model
+ * thường xuyên nên làm mới ngay khi lưu key; provider khác để pi tự làm mới theo nhịp của nó.
+ */
+const CATALOG_REFRESH = new Set(['opencode-go', 'opencode'])
 const finitePositive = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0
 
 /** Local provider chỉ dùng địa chỉ loopback tường minh, không đọc URL do mô hình cung cấp. */
@@ -465,7 +470,19 @@ export class AccountService {
     rememberSecret(key.trim())
     this.deps.secrets.set(providerId, key.trim())
     await this.modelRuntime.setRuntimeApiKey(providerId, key.trim())
+    await this.refreshModelCatalog(providerId)
     this.accountGeneration(providerId, true)
+  }
+
+  /**
+   * pi phủ catalog pi.dev qua mạng cho provider built-in (`refreshModels`, tối đa 4 giờ một lần, cần mạng).
+   * OpenCode Go/Zen đổi model thường xuyên: làm mới ngay khi lưu key để bộ chọn model thấy model mới.
+   * Mạng lỗi không được làm hỏng việc lưu key — catalog đóng gói sẵn vẫn dùng được.
+   */
+  private async refreshModelCatalog(providerId: string): Promise<void> {
+    if (!CATALOG_REFRESH.has(providerId) || !this.modelRuntime.getProvider(providerId)?.refreshModels) return
+    await this.modelRuntime.refresh({ allowNetwork: true, providers: [providerId], signal: AbortSignal.timeout(6_000) })
+      .catch(() => undefined)
   }
 
   async removeApiKey(providerId: string): Promise<void> {
@@ -534,7 +551,9 @@ export class AccountService {
         ...(p.id === 'anthropic' ? { description: 'Claude qua Anthropic API key' }
           : p.id === 'openai' ? { description: 'API key hoặc tài khoản ChatGPT đủ điều kiện' }
             : p.id === 'google' ? { description: 'Gemini API key từ Google AI Studio; quota theo dự án' }
-              : p.id === 'openrouter' ? { description: 'Model miễn phí và trả phí theo tài khoản OpenRouter' } : {})
+              : p.id === 'openrouter' ? { description: 'Model miễn phí và trả phí theo tài khoản OpenRouter' }
+                : p.id === 'opencode-go' ? { description: 'Gói OpenCode Go: dùng API key OpenCode, model lấy từ danh mục của OpenCode' }
+                  : p.id === 'opencode' ? { description: 'OpenCode Zen: dùng API key OpenCode, tính phí theo lượng dùng' } : {})
       }))
   }
 

@@ -493,7 +493,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
           </select>
         </label>
         {keyTarget?.hasKey && <p className="muted">{vi.accounts.keySaved}</p>}
-        {keyTarget?.description && <p className="muted small">{keyTarget.description}</p>}
+        {keyTarget?.description && <p className="muted small">{tr(keyTarget.description)}</p>}
         <div className="field">
           <label htmlFor="account-key">{vi.accounts.apiKey}</label>
           <input id="account-key" type="password" autoComplete="off" disabled={busy}

@@ -572,4 +572,56 @@ describe('AccountService', () => {
       contextWindow: 4096, maxTokens: 1024, supportsTools: false
     })
   })
+
+  describe('OpenCode Go (thẻ t_1499a87f)', () => {
+    /** Server giả pi.dev: chỉ nhận đúng URL catalog của opencode-go, trả model chỉ có ở catalog mới. */
+    const catalogHit = () => vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (!url.startsWith('https://pi.dev/api/models/providers/opencode-go')) throw new Error(`fetch ngoài dự kiến: ${url}`)
+      return new Response(JSON.stringify({ models: [{
+        id: 'go-catalog-moi', name: 'Go catalog mới', api: 'openai-completions',
+        baseUrl: 'https://opencode.ai/inference/go/openai/v1', reasoning: false, input: ['text'],
+        cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 1024
+      }] }), { status: 200, headers: { 'content-type': 'application/json', 'last-modified': 'Wed, 01 Jan 2031 00:00:00 GMT' } })
+    })
+
+    it('có trong listProviders với authMethods api_key và mô tả tiếng Việt', async () => {
+      const { svc } = await make()
+      const list = await svc.listProviders()
+      expect(list.find((p) => p.id === 'opencode-go')).toMatchObject({
+        label: 'OpenCode Go', hasKey: false, oauth: false, custom: false, authMethods: ['api_key']
+      })
+      expect(list.find((p) => p.id === 'opencode-go')?.description).toMatch(/OpenCode Go/)
+      expect(list.find((p) => p.id === 'opencode')?.description).toMatch(/OpenCode/)
+    })
+
+    it('lưu key: kho mã hoá, hasKey, model OpenCode Go xuất hiện; xoá key thì mất', async () => {
+      const { svc } = await make()
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+      await svc.setApiKey('opencode-go', 'oc_sk_test_khong_that')
+      expect(scan('oc_sk_test_khong_that')).toEqual([])
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(true)
+      expect((await svc.listModels()).filter((m) => m.provider === 'opencode-go').length).toBeGreaterThan(0)
+      await svc.removeApiKey('opencode-go')
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(false)
+      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go')).toBe(false)
+    })
+
+    it('khởi động lại giữ key và model OpenCode Go', async () => {
+      const { svc: first } = await make()
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+      await first.setApiKey('opencode-go', 'oc_sk_test_restart')
+      const { svc } = await make()
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')).toMatchObject({ hasKey: true, authMethods: ['api_key'] })
+      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go')).toBe(true)
+    })
+
+    it('làm mới catalog pi.dev ngay khi lưu key', async () => {
+      const { svc } = await make()
+      const fetchSpy = catalogHit()
+      await svc.setApiKey('opencode-go', 'oc_sk_test_catalog')
+      expect(String(fetchSpy.mock.calls[0]?.[0])).toContain('https://pi.dev/api/models/providers/opencode-go')
+      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-moi')).toBe(true)
+    })
+  })
 })

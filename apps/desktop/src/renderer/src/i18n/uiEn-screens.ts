@@ -286,4 +286,11 @@ export const uiEnScreens: Record<string, string> = {
   'Mục thanh trạng thái': 'Status Bar Items',
   'Trạng thái engine': 'Engine status',
   'Chi tiết chẩn đoán': 'Diagnostic details',
+  // SettingsScreen: mô tả nhà cung cấp AI (main trả về trong listProviders)
+  'Claude qua Anthropic API key': 'Claude via an Anthropic API key',
+  'API key hoặc tài khoản ChatGPT đủ điều kiện': 'API key or an eligible ChatGPT account',
+  'Gemini API key từ Google AI Studio; quota theo dự án': 'Gemini API key from Google AI Studio; quota is per project',
+  'Model miễn phí và trả phí theo tài khoản OpenRouter': 'Free and paid models on your OpenRouter account',
+  'Gói OpenCode Go: dùng API key OpenCode, model lấy từ danh mục của OpenCode': 'OpenCode Go plan: use an OpenCode API key; models come from the OpenCode catalog',
+  'OpenCode Zen: dùng API key OpenCode, tính phí theo lượng dùng': 'OpenCode Zen: use an OpenCode API key; pay as you go',
 }

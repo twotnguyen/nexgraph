@@ -85,4 +85,13 @@ describe('i18n', () => {
     expect(localizeCommand({ id: 'editor.indentation_selector', title: 'Chọn kiểu thụt lề (indent)', category: 'Editor' }))
       .toEqual({ title: 'Select Indentation', category: 'Editor' })
   })
+
+  it('dịch mô tả nhà cung cấp OpenCode Go và OpenCode Zen sang tiếng Anh', () => {
+    setLocale('en')
+    for (const text of ['Gói OpenCode Go: dùng API key OpenCode, model lấy từ danh mục của OpenCode',
+      'OpenCode Zen: dùng API key OpenCode, tính phí theo lượng dùng']) {
+      expect(tr(text)).not.toBe(text)
+      expect(tr(text)).toMatch(/OpenCode/)
+    }
+  })
 })
