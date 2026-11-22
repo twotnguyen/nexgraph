@@ -147,7 +147,7 @@ erDiagram
 
 ## Graph chung nhiều repo (global v1)
 
-`<engine-data>/global.db` là CSDL riêng cho graph chung (W8, ADR 0010). Nó chỉ tham chiếu, không chép nút: `du_an_chung` giữ danh sách dự án thành viên (`ma_du_an` 36 ký tự, trùng id trong `app.db`), `canh_lien_repo` giữ cạnh nối hai dự án khác nhau với khoá ngoại tới `du_an_chung` và `ON DELETE CASCADE`. Mỗi lần một thành viên lập chỉ mục xong, engine tính lại toàn bộ cạnh liên repo; gỡ thành viên thì cạnh của nó mất theo. Cột `id_nut_nguon`/`id_nut_dich` là `id_nut` của từng `graph.db` thành viên, `loai_canh` chỉ nhận `CALLS` hoặc `REFERENCES`, mức tin cậy luôn `INFERRED`. [Schema global](../../engine/src/nexgraph_engine/schema/global.sql) · [Đăng ký graph chung](../../engine/src/nexgraph_engine/global_graph/registry.py) · [Route global](../../engine/src/nexgraph_engine/api/routes_global.py)
+`<engine-data>/global.db` là CSDL riêng cho graph chung (W8, ADR 0010). Nó chỉ tham chiếu, không chép nút: `du_an_chung` giữ danh sách dự án thành viên (`ma_du_an` 36 ký tự, trùng id trong `app.db`), `canh_lien_repo` giữ cạnh nối hai dự án khác nhau với khoá ngoại tới `du_an_chung` và `ON DELETE CASCADE`. Mỗi lần một thành viên lập chỉ mục xong, engine tính lại toàn bộ cạnh liên repo; gỡ thành viên thì cạnh của nó mất theo. Cột `id_nut_nguon`/`id_nut_dich` là `id_nut` của từng `graph.db` thành viên, `loai_canh` chỉ nhận `CALLS` hoặc `REFERENCES`, mức tin cậy luôn `INFERRED`. [Schema global](../../engine/src/nexgraph_engine/schema/global.sql) · [Đăng ký graph chung](../../engine/src/nexgraph_engine/global_graph/store.py) · [Route global](../../engine/src/nexgraph_engine/api/routes_global.py)
 
 ## App v3 và phần được dùng lúc chạy
 
