@@ -2753,6 +2753,19 @@ dialog.modal::backdrop { background: var(--overlay); }
 }
 .toast > svg { color: var(--green); flex: none; }
 .toast .icon-button { margin-inline-start: auto; }
+/* Nhiều thông báo cùng lúc: xếp chồng, không chồng lên nhau ở góc dưới phải. */
+.toast-stack {
+  position: fixed;
+  right: 18px;
+  bottom: 43px;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  max-width: min(410px, calc(100vw - 36px));
+}
+.toast-stack .toast { position: static; right: auto; bottom: auto; max-width: none; }
 .chat .me { color: var(--color-text); background: var(--accent-soft); border-radius: 7px; }
 .chat > header { border-top: 0; }
 /* Thanh trạng thái kiểu Wu: đệm 4px, mục là nút ma chữ 12px cao 22px bo 6; trái là engine, phải là mục của thẻ đang mở. */

@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { emptyGeminiStatus, installNexgraph } from '../test-utils'
 import type { NexGraphApi } from '@shared/api'
+import type { ModelInfo } from '@shared/agent-types'
 import { SettingsScreen } from './SettingsScreen'
 import { isStatusItemHidden, setStatusItemHidden } from '../state/layoutPrefs'
 import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
+import { setLocale } from '../state/locale'
 
 const provider = (id: string, over: Record<string, unknown> = {}) =>
   ({ id, label: id, hasKey: false, oauth: false, loggedIn: false, custom: false, ...over })
+
+const RESTORE_FAILED = 'Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.'
+const REVOKE_FAILED = 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.'
+
+afterEach(() => setLocale('vi'))
 
 describe('SettingsScreen', () => {
   it('switch bật lại các mục thanh trạng thái đã ẩn bằng chuột phải', async () => {
@@ -207,17 +214,77 @@ describe('SettingsScreen', () => {
     unmount()
     expect(api.auth.loginCancel).toHaveBeenCalled()
   })
+
+  it('Đăng xuất không nạp lại được API key → hiện thông báo dù không ở luồng đăng nhập', async () => {
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai', { oauth: true, loggedIn: true, hasKey: true })]) } })
+    const { emitNotice } = installAuthSinks(api)
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
+    act(() => emitNotice({ message: RESTORE_FAILED }))
+    expect(await screen.findByText(RESTORE_FAILED)).toBeInTheDocument()
+  })
+
+  it('thông báo Đăng xuất có bản English khi giao diện English', async () => {
+    setLocale('en')
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai', { oauth: true, loggedIn: true, hasKey: true })]) } })
+    const { emitNotice } = installAuthSinks(api)
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    act(() => emitNotice({ message: RESTORE_FAILED }))
+    expect(await screen.findByText('Signed out but could not reload the saved API key. The key is still in the keychain; reopen the app to use it.')).toBeInTheDocument()
+  })
+
+  it('nhiều auth:notice cùng lúc → hiện đủ cả hai, không che nhau', async () => {
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai', { oauth: true, loggedIn: true, hasKey: true })]) } })
+    const { emitNotice } = installAuthSinks(api)
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
+    act(() => {
+      emitNotice({ message: REVOKE_FAILED })
+      emitNotice({ message: RESTORE_FAILED })
+    })
+    expect(await screen.findByText(REVOKE_FAILED)).toBeInTheDocument()
+    expect(screen.getByText(RESTORE_FAILED)).toBeInTheDocument()
+    expect(screen.getAllByRole('status').filter((el) => el.closest('.toast'))).toHaveLength(2)
+  })
+
+  it('main báo catalog model đổi sau khi lưu key → danh sách tự tải lại, listener huỷ khi unmount', async () => {
+    let catalog = [model('go-a')]
+    const { api } = installNexgraph({ auth: {
+      list: vi.fn(async () => [provider('opencode-go')]),
+      models: vi.fn(async () => catalog)
+    } })
+    const { emitModelsChanged } = installAuthSinks(api)
+    const { unmount } = render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('option', { name: 'go-a (opencode-go)' })).toBeInTheDocument()
+    catalog = [model('go-a'), model('go-b')]
+    act(() => emitModelsChanged({ providerId: 'opencode-go' }))
+    expect(await screen.findByRole('option', { name: 'go-b (opencode-go)' })).toBeInTheDocument()
+    expect(api.auth.models).toHaveBeenCalledTimes(2)
+    unmount()
+    act(() => emitModelsChanged({ providerId: 'opencode-go' }))
+    expect(api.auth.models).toHaveBeenCalledTimes(2)
+  })
 })
 
-/** Nối các sink onEvent/onPrompt của stub auth trong installNexgraph để bắn sự kiện từ main. */
-function installAuthSinks(api: { auth: Pick<NexGraphApi['auth'], 'onEvent' | 'onPrompt'> }) {
+const model = (id: string, provider = 'opencode-go'): ModelInfo =>
+  ({ provider, id, label: id, supportsImages: false, pricing: 'unknown', cost: { input: null, output: null } })
+
+/** Nối các sink onEvent/onPrompt/onNotice của stub auth trong installNexgraph để bắn sự kiện từ main. */
+function installAuthSinks(api: { auth: Pick<NexGraphApi['auth'], 'onEvent' | 'onPrompt' | 'onNotice' | 'onModelsChanged'> }) {
   const eventSinks = new Set<(e: unknown) => void>()
   const promptSinks = new Set<(p: unknown) => void>()
+  const noticeSinks = new Set<(n: unknown) => void>()
+  const modelsSinks = new Set<(e: unknown) => void>()
   const auth = api.auth
   ;(auth.onEvent as ReturnType<typeof vi.fn>).mockImplementation((cb: (e: unknown) => void) => { eventSinks.add(cb); return () => eventSinks.delete(cb) })
   ;(auth.onPrompt as ReturnType<typeof vi.fn>).mockImplementation((cb: (p: unknown) => void) => { promptSinks.add(cb); return () => promptSinks.delete(cb) })
+  ;(auth.onNotice as ReturnType<typeof vi.fn>).mockImplementation((cb: (n: unknown) => void) => { noticeSinks.add(cb); return () => noticeSinks.delete(cb) })
+  ;(auth.onModelsChanged as ReturnType<typeof vi.fn>).mockImplementation((cb: (e: unknown) => void) => { modelsSinks.add(cb); return () => modelsSinks.delete(cb) })
   return {
     emitAuth: (e: unknown) => eventSinks.forEach((h) => h(e)),
-    emitPrompt: (p: unknown) => promptSinks.forEach((h) => h(p))
+    emitPrompt: (p: unknown) => promptSinks.forEach((h) => h(p)),
+    emitNotice: (n: unknown) => noticeSinks.forEach((h) => h(n)),
+    emitModelsChanged: (e: unknown) => modelsSinks.forEach((h) => h(e))
   }
 }

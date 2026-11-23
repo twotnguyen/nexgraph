@@ -390,6 +390,8 @@ def test_images_send_base64(api, copy_fixture, llm):
     llm.reply = lambda body: fragment("docs/so-do.png", "Sơ đồ hệ thống")
     # docs_app còn ảnh fixture khác (checklist QA-18) nên số khối lấy theo ước tính, không ghim 1.
     expected = api.post(f"/v1/projects/{pid}/semantic/estimate", json={"targets": "images"}).json()["chunks"]
+    # Endpoint trả 0 thì `done == expected` đúng mà không chứng minh gì; docs_app có logo.png + so-do.png.
+    assert expected >= 2, f"ước tính phải thấy ≥ 2 ảnh trong docs_app, nhận {expected}"
     job = wait_job(api, run(api, pid, "images", direct(llm)))
     assert job["state"] == "done" and job["result"]["chunks"]["done"] == expected, job
     sent = next(r["messages"][1]["content"] for r in llm.requests if "docs/so-do.png" in r["messages"][1]["content"][0]["text"])
