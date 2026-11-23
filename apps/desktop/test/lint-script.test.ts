@@ -44,8 +44,18 @@ describe('script lint ở gốc chạy đúng như CI', () => {
   // chưa có cổng CI (đợi X1); test chỉ đòi local phủ mọi đường dẫn CI lint nên vẫn đúng khi CI mở rộng.
   it('lint:desktop phủ thêm e2e/ ngoài phạm vi Biome của CI', () => {
     expect(scripts()['lint:desktop']).toContain('apps/desktop/e2e')
-    const biomeStep = ci.slice(ci.indexOf('npx --yes @biomejs/biome'))
-    const ciPaths = [...new Set(biomeStep.slice(0, biomeStep.indexOf('\n\n')).match(/apps\/desktop\/[\w/-]+/g) ?? [])]
+    // Đọc theo dòng (bỏ CRLF của Windows) và chỉ lấy dòng chỉ gồm đường dẫn — CI dùng folded scalar `>-`.
+    const lines = ci.split(/\r?\n/)
+    const biome = lines.findIndex((line) => line.includes('@biomejs/biome'))
+    expect(biome).toBeGreaterThanOrEqual(0)
+    const ciPaths = [
+      ...new Set(
+        lines
+          .slice(biome)
+          .map((line) => line.trim())
+          .filter((line) => /^apps\/desktop\/[\w/-]+$/.test(line))
+      )
+    ]
     expect(ciPaths.length).toBeGreaterThan(0)
     for (const path of ciPaths) expect(lintCommands()).toContain(path)
   })
