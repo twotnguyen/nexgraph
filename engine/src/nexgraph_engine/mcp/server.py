@@ -195,7 +195,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     async def read_code(file: str, start: int | None = None, end: int | None = None) -> dict:
         """Đọc mã của tệp đã lập chỉ mục (đường dẫn tương đối trong dự án), tối đa 2.000 dòng."""
         return await run("read_code", lambda s: read_code_json(
-            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s)))
+            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s),
+            redact_documents=True))
 
     @mcp.tool(annotations=READ_ONLY)
     async def query_graph(question: str, depth: int = 2, budget: int = 2000,
@@ -241,7 +242,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         """Gói các nút và đoạn mã liên quan nhất tới câu hỏi, xếp hạng hợp nhất và gọn trong ngân sách token (500–20000)."""
         def body(s: GraphStore) -> dict:
             try:
-                out = build_context(s, root, question, max(500, min(budget, 20_000)), sources_dir=src(s))
+                out = build_context(s, root, question, max(500, min(budget, 20_000)), sources_dir=src(s),
+                                    redact_documents=True)
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
             touch_query_stamp(data_dir, s.project_id())

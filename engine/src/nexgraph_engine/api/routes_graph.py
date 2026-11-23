@@ -86,7 +86,8 @@ def code(project_id: str, request: Request, file: str = Query(...), start: int |
         source = SourcePolicy(info.path, store.last_exclude()) if for_model(request) else None
         return read_code(store, info.path, file, start, end,
                          transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id,
-                         source=source, sources_dir=sources_root(request.app.state.services.data_dir, project_id))
+                         source=source, sources_dir=sources_root(request.app.state.services.data_dir, project_id),
+                         redact_documents=for_model(request))
 
 
 @router.get("/search")
