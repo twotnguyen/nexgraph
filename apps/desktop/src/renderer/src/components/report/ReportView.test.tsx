@@ -8,7 +8,7 @@ import { setLocale } from '../../state/locale'
 import { ReportView } from './ReportView'
 
 const gnode = (id: string, label: string): GraphNode => ({ id, kind: 'function', label, qualified_name: label, language: 'python',
-  file: 'util.py', line_start: 3, line_end: 9, is_test: false, origin: 'ast', signature: null, community: null })
+  file: 'lib/util.py', line_start: 3, line_end: 9, is_test: false, origin: 'ast', signature: null, community: null })
 
 const report = (over: Partial<GraphReport> = {}): GraphReport => ({
   god_nodes: [{ node: gnode('util.py::helper#function', 'helper'), degree: 12 }],
@@ -49,6 +49,8 @@ describe('ReportView', () => {
     render(<ReportView {...p} />)
     await userEvent.click(await screen.findByRole('button', { name: 'helper' }))
     expect(p.onOpenNode).toHaveBeenCalledWith('util.py::helper#function')
+    expect(screen.getByText('Hàm')).toBeInTheDocument()
+    expect(document.querySelectorAll('.report-view wbr').length).toBeGreaterThan(0)
     expect(screen.getByText('Xác thực')).toBeInTheDocument()
     expect(screen.getByText(/login/)).toBeInTheDocument()
     expect(screen.getByText(/50/)).toBeInTheDocument()

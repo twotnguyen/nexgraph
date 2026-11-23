@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { DocSection, GraphNode, NodeExplain } from '@shared/graph-types'
 import { vi } from '../../strings'
-import { kindStyle } from './kindStyle'
+import { kindLabel, kindStyle } from './kindStyle'
 import { NodeMemory } from './NodeMemory'
 
 /** Bậc, cụm và cạnh vào/ra theo loại như `explain`: engine đã nhóm sẵn, phần quá 20 node gom theo tệp. */
@@ -82,7 +82,7 @@ export function NodeInspector({ node, onOpenCode, projectId, onOpenNode }: {
   return (
     <aside className="inspector">
       <h3>{node.label}</h3>
-      <p><span className="kind" style={{ color: kindStyle(node.kind).color }}>{node.kind}</span></p>
+      <p><span className="kind" style={{ color: kindStyle(node.kind).color }}>{kindLabel(node.kind)}</span></p>
       {where && <p className="mono">{where}</p>}
       {node.signature && <p className="mono">{node.signature}</p>}
       {node.is_test && <p>{vi.graph.isTest}</p>}

@@ -26,7 +26,16 @@
 .screen.welcome-page .card > .card-icon { width: 14px; height: 14px; border-radius: 0; background: none; color: var(--color-muted); }
 .screen.welcome-page .card > .card-icon svg { width: 14px; height: 14px; }
 .screen.welcome-page .card b { font-size: 13px; font-weight: 400; white-space: nowrap; }
-.screen.welcome-page .card > .muted { min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.screen.welcome-page .card > .muted {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  /* Mô tả dài (nhất là bản English) xuống tối đa 2 dòng thay vì cắt ngang; title của thẻ có bản đầy đủ. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .screen.welcome-page .card-status { color: var(--color-muted); font-size: 11px; font-weight: 400; white-space: nowrap; }
 .screen.welcome-page button.card:hover:not(:disabled) { border: 0; background: color-mix(in srgb, var(--color-text) 7%, transparent); box-shadow: none; transform: none; }
 .screen.welcome-page button.card:hover:not(:disabled) .card-icon { background: none; color: var(--color-text); }

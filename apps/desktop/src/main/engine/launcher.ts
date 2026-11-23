@@ -59,7 +59,10 @@ export class EngineStartError extends Error {
   constructor(
     message: string,
     public readonly pid: number,
-    public readonly stderrTail: string
+    public readonly stderrTail: string,
+    /** Khoá i18n của `message` (main không biết ngôn ngữ UI; renderer dịch). */
+    public readonly messageKey?: string,
+    public readonly messageVars?: Record<string, string | number>
   ) {
     super(message)
     this.name = 'EngineStartError'
@@ -158,18 +161,22 @@ export function startEngine(
 
   return new Promise<EngineHandle>((resolve, reject) => {
     let settled = false
-    const fail = async (message: string): Promise<void> => {
+    const fail = async (message: string, messageKey?: string, messageVars?: Record<string, string | number>): Promise<void> => {
       if (settled) return
       settled = true
       clearTimeout(timeout)
       await stop()
-      reject(new EngineStartError(message, pid, stderrTail))
+      reject(new EngineStartError(message, pid, stderrTail, messageKey, messageVars))
     }
 
-    const timeout = setTimeout(() => void fail(`Engine không sẵn sàng sau ${opts.readyTimeoutMs ?? 20000} ms`), opts.readyTimeoutMs ?? 20000)
+    const readyMs = opts.readyTimeoutMs ?? 20000
+    const timeout = setTimeout(() => void fail(`Engine không sẵn sàng sau ${readyMs} ms`,
+      'Engine không sẵn sàng sau {ms} ms', { ms: readyMs }), readyMs)
 
-    child.once('error', (err) => void fail(`Không khởi động được engine: ${err.message}`))
-    child.once('exit', (code) => void fail(`Engine thoát trước khi sẵn sàng (exit ${code})`))
+    child.once('error', (err) => void fail(`Không khởi động được engine: ${err.message}`,
+      'Không khởi động được engine: {message}', { message: err.message }))
+    child.once('exit', (code) => void fail(`Engine thoát trước khi sẵn sàng (exit ${code})`,
+      'Engine thoát trước khi sẵn sàng (exit {code})', { code: code ?? 'unknown' }))
 
     const rl = createInterface({ input: child.stdout as NodeJS.ReadableStream })
     rl.on('line', (line) => {

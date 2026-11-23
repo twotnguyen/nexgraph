@@ -26,7 +26,9 @@ export function EngineStatusBar({ status, onRestart }: Props) {
         <span role="status">
           {status.state === 'starting' && tr('Engine: đang khởi động…')}
           {status.state === 'ready' && tr('Engine: sẵn sàng (v{version})', { version: status.engineVersion })}
-          {status.state === 'error' && tr('Engine: lỗi — {message}', { message: status.message })}
+          {status.state === 'error' && tr('Engine: lỗi — {message}', {
+            message: status.messageKey ? tr(status.messageKey, status.messageVars) : status.message
+          })}
         </span>
       </button>
       <StatusBarItems>

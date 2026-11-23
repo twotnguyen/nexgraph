@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
 import type { ArchEvidence, ArchView } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
+import { setLocale } from '../../state/locale'
+
+afterEach(() => setLocale('vi'))
 
 vi.mock('../../services/elkLayoutService', async () => ({
   layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
@@ -42,6 +45,14 @@ function setup(over: Partial<NexGraphApi['graph']> = {}, onParentChange?: (paren
 const nodeByText = (text: string) => screen.getByText(text, { selector: '.react-flow__node b' })
 
 describe('ArchitectureCanvas', () => {
+  it('hiện attribution của React Flow đúng giấy phép', async () => {
+    setup()
+    await screen.findByText('lib', { selector: '.react-flow__node b' })
+    const attribution = document.querySelector('.react-flow__attribution')
+    expect(attribution).not.toBeNull()
+    expect(attribution).toHaveTextContent('React Flow')
+  })
+
   it('mở tệp từ bản đồ tại thư mục chứa và chọn đúng khối tệp', async () => {
     const architecture = vi.fn(async () => CHILD('dir:lib'))
     installNexgraph({ graph: { architecture } })
@@ -120,5 +131,27 @@ describe('ArchitectureCanvas', () => {
     const rel = await screen.findByRole('list', { name: 'Quan hệ giữa các khối' })
     await userEvent.click(within(rel).getAllByRole('button')[0])
     expect(await within(await screen.findByRole('dialog')).findByRole('alert')).toHaveTextContent('Không có khối')
+  })
+
+  it('đổi ngôn ngữ áp dụng ngay cho breadcrumb và phụ đề số tệp, không gọi lại engine', async () => {
+    const { architecture } = setup()
+    expect(await screen.findByText('8 tệp')).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Đường dẫn khối' })).toHaveTextContent('Dự án')
+    act(() => setLocale('en'))
+    expect(await screen.findByText('8 files')).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Block path' })).toHaveTextContent('Project')
+    expect(architecture).toHaveBeenCalledTimes(1)
+    act(() => setLocale('vi'))
+    expect(await screen.findByText('8 tệp')).toBeInTheDocument()
+  })
+
+  it('breadcrumb đã drill giữ tên thư mục khi đổi ngôn ngữ', async () => {
+    setup()
+    await waitFor(() => expect(document.querySelectorAll('.react-flow__node')).toHaveLength(4))
+    fireEvent.click(nodeByText('lib'))
+    const crumbs = await screen.findByRole('navigation', { name: 'Đường dẫn khối' })
+    await waitFor(() => expect(within(crumbs).getAllByRole('button')).toHaveLength(2))
+    act(() => setLocale('en'))
+    expect(screen.getByRole('navigation', { name: 'Block path' })).toHaveTextContent('Project › lib')
   })
 })

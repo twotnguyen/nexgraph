@@ -4,10 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EngineStatusBar, StatusBarItems } from './EngineStatusBar'
 import { isStatusItemHidden, setStatusBar, setStatusItemHidden } from '../state/layoutPrefs'
+import { setLocale } from '../state/locale'
 import { COMMANDS, registerHandler } from '../state/commands'
 import { STATUS_BAR_ITEMS, getStatusBarItem } from '../state/statusBarRegistry'
 
-afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false); setStatusItemHidden('git', false) }) })
+afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false); setStatusItemHidden('git', false) }); setLocale('vi') })
 
 const withGlobalHandlers = () => [
   registerHandler('git_panel.toggle', () => {}),
@@ -37,6 +38,13 @@ describe('EngineStatusBar', () => {
     expect(screen.getAllByRole('button', { name: 'Khởi động lại' })).toHaveLength(1)
     await userEvent.click(screen.getByRole('button', { name: 'Khởi động lại' }))
     expect(onRestart).toHaveBeenCalled()
+  })
+
+  it('dịch thông báo engine thoát sang tiếng Anh bằng messageKey', () => {
+    setLocale('en')
+    render(<EngineStatusBar status={{ state: 'error', message: 'engine thoát (exit 5)',
+      messageKey: 'engine thoát (exit {code})', messageVars: { code: 5 } }} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: error — engine exited (exit 5)')).toBeInTheDocument()
   })
 
   it('clicking the engine item restarts the engine', async () => {

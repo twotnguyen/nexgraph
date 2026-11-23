@@ -16,6 +16,13 @@ const renderOverview = (over: Parameters<typeof installNexgraph>[0] = {}) => {
 }
 
 describe('ProjectOverviewScreen', () => {
+  it('thẻ có mô tả dài vẫn có title đầy đủ để đọc khi bị giới hạn 2 dòng', async () => {
+    renderOverview()
+    const desc = await screen.findByText('Đọc lại toàn bộ mã nguồn và dựng graph mới.')
+    expect(desc).toHaveAttribute('title', 'Đọc lại toàn bộ mã nguồn và dựng graph mới.')
+    expect(desc.closest('button')).toHaveAttribute('title', 'Đọc lại toàn bộ mã nguồn và dựng graph mới.')
+  })
+
   it('báo ngôn ngữ ở mức chung khi dự án có Go/Java', async () => {
     renderOverview({ graph: { stats: vi.fn(async () => ({ ...stats, generic_languages: ['go', 'java'] })) } })
     expect(await screen.findByRole('note')).toHaveTextContent('mức chung')

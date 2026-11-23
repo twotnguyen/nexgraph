@@ -4,6 +4,7 @@ import type { GraphEdge, GraphNode, Neighborhood } from '@shared/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
 import { tr, vi } from '../../strings'
 import { useTheme } from '../../state/useTheme'
+import { useLocale } from '../../state/locale'
 import { AutoFit } from '../common/AutoFit'
 import { CanvasState } from '../common/CanvasState'
 import { BOX_H, BOX_W, dotEdge, dotEdgeTypes, dotNodeTypes, dotSize, radialLayout, type DotData } from '../common/dotGraph'
@@ -51,6 +52,7 @@ interface View { boxes: boolean; pos: Record<string, { x: number; y: number }>; 
 
 export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId, onSelect, highlights, onNodeContextMenu, overlay, onClearOverlay, onBackToRoot }: Props) {
   const theme = useTheme()
+  const locale = useLocale()
   const [center, setCenter] = useState(focusNodeId ?? startNodeId)
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -171,7 +173,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
         {overlay && onClearOverlay && <button type="button" onClick={onClearOverlay}>{vi.path.clear}</button>}
       </div>
     ),
-    [startNodeId, overlay, onClearOverlay, onBackToRoot]
+    [startNodeId, overlay, onClearOverlay, onBackToRoot, locale]
   )
 
   return (
@@ -188,7 +190,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
       {view && view.raw.size > 0 && (
         <ReactFlow className="dot-graph" colorMode={theme} key={overlay ? 'overlay' : center} nodes={nodes} edges={edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes}
           onNodeMouseEnter={(_, n) => setHover(n.id)} onNodeMouseLeave={() => setHover(null)} onNodeClick={onNodeClick} onNodeContextMenu={onContextMenu}
-          nodesDraggable={false} minZoom={0.2} proOptions={{ hideAttribution: true }}>
+          nodesDraggable={false} minZoom={0.2}>
           <Background />
           <Controls showInteractive={false} />
           <AutoFit />

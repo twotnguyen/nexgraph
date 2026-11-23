@@ -189,6 +189,13 @@ export const uiEnOthers: Record<string, string> = {
   'Tìm trong tệp…': 'Find in files…',
   'Tạo nhánh “{name}” từ HEAD': 'Create branch “{name}” from HEAD',
   'Tạo thông điệp bằng AI': 'Generate commit message with AI',
+  // Nhãn Git trong panel: bản Việt dùng tiếng Việt, bản Anh giữ thuật ngữ Git.
+  'Kéo về': 'Pull',
+  'Lấy về': 'Fetch',
+  'Đẩy lên': 'Push',
+  'Xuất bản': 'Publish',
+  'Tạo commit': 'Commit',
+  'Sửa commit cuối': 'Amend',
   'Tạo và mở': 'Create and open',
   'Tạo worktree cho nhánh có sẵn “{branch}”': 'Create worktree for existing branch “{branch}”',
   'Tạo worktree với nhánh mới “{branch}” từ HEAD': 'Create worktree with new branch “{branch}” from HEAD',

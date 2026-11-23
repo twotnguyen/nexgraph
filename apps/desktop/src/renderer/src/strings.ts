@@ -1029,7 +1029,7 @@ const enStrings: typeof viStrings = {
     colName: 'Name',
     colKind: 'Kind',
     colFile: 'Location',
-    colDegree: 'Connections',
+    colDegree: 'Links',
     colSize: 'Node count',
     colCohesion: 'Cohesion',
     communities: (n: number) => `Communities (${n})`,

@@ -4,6 +4,7 @@ import { tr } from '../../strings'
 import { useCommand } from '../../state/commands'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { errorText } from '../../state/errorText'
+import { useLocale } from '../../state/locale'
 import { largerSymbolAt, positionInRange, previousFromHistory, siblingSymbol, smallestSymbolAt } from '../../state/syntaxSelection'
 import { Highlight, Picker } from '../layout/Picker'
 import * as editorMonaco from './monaco'
@@ -104,9 +105,11 @@ function RenameDialog({ projectId, editor, close }: { projectId: string; editor:
 }
 
 function WorkspaceSymbolPicker({ projectId, onOpen, close }: { projectId: string; onOpen: OpenEditorLocation; close: (restore?: boolean) => void }) {
+  useLocale()
   const [query, setQuery] = useState('')
   const [symbols, setSymbols] = useState<LspWorkspaceSymbol[]>([])
-  const [status, setStatus] = useState(() => tr('Đang tìm ký hiệu…'))
+  // null = đang tìm: để nguyên trạng thái, nhãn dịch lúc render nên đổi ngôn ngữ là đổi ngay.
+  const [status, setStatus] = useState<string | null>(null)
   useEffect(() => {
     let live = true
     const timer = setTimeout(() => {
@@ -120,8 +123,8 @@ function WorkspaceSymbolPicker({ projectId, onOpen, close }: { projectId: string
   }, [projectId, query])
   return <Picker label={tr('Tìm ký hiệu trong dự án')} placeholder={tr('Tìm ký hiệu trong dự án…')} items={symbols}
     itemKey={(item) => `${item.file}:${item.range.start.line}:${item.range.start.character}:${item.name}`} itemText={(item) => item.name}
-    filter={(items) => items.map((item) => ({ item, positions: [] }))} onQueryChange={(value) => { setSymbols([]); setStatus(tr('Đang tìm ký hiệu…')); setQuery(value) }}
-    empty={status} onCancel={() => close()} onPick={(symbol) => { close(false); onOpen(symbol.file, symbol.range.start.line + 1, symbol.range.start.character + 1) }}
+    filter={(items) => items.map((item) => ({ item, positions: [] }))} onQueryChange={(value) => { setSymbols([]); setStatus(null); setQuery(value) }}
+    empty={status ?? tr('Đang tìm ký hiệu…')} onCancel={() => close()} onPick={(symbol) => { close(false); onOpen(symbol.file, symbol.range.start.line + 1, symbol.range.start.character + 1) }}
     renderItem={(symbol) => <><span>{symbol.name}{symbol.containerName ? ` · ${symbol.containerName}` : ''}</span><small>{symbol.file}:{symbol.range.start.line + 1}</small></>} />
 }
 

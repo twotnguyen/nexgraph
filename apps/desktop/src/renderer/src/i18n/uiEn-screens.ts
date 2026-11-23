@@ -81,7 +81,7 @@ export const uiEnScreens: Record<string, string> = {
   'Đang tìm đường nối…': 'Finding a connection path…',
   'Độ rộng trợ lý AI': 'AI assistant width',
   'Cài đặt': 'Settings',
-  'Chọn theme…': 'Choose theme…',
+  'Chọn chủ đề màu…': 'Choose theme…',
   'Các thẻ không gian làm việc': 'Workspace tabs',
   'Bỏ ghim {name}': 'Unpin {name}',
   'Bỏ ghim': 'Unpin',

@@ -31,10 +31,10 @@
 .ps-name { flex: none; white-space: nowrap; }
 .ps-dir { flex: 1; min-width: 0; overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .ps-count { flex: none; min-width: 18px; padding: 0 5px; border-radius: 9px; background: color-mix(in srgb, var(--color-text) 10%, transparent); color: var(--color-muted); font-size: 11px; text-align: center; }
-.ps-match { padding-left: 34px; font: 12px var(--font-mono, monospace); }
+.ps-match { padding-left: 18px; font: 12px var(--font-mono, monospace); align-items: flex-start; }
 .ps-line { flex: none; min-width: 3ch; text-align: right; }
-.ps-preview { display: flex; flex: 1; min-width: 0; align-items: baseline; white-space: pre; }
-.ps-context-before { flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; direction: rtl; text-align: left; text-overflow: ellipsis; unicode-bidi: plaintext; }
-.ps-context-after { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ps-preview mark { flex: none; max-width: 100%; overflow-wrap: anywhere; white-space: pre-wrap; border-radius: 2px; background: color-mix(in srgb, var(--amber, #e5c07b) 35%, transparent); color: inherit; }
+/* Dòng kết quả xuống tối đa 3 dòng: panel hẹp (194px ở 1024) vẫn đọc được ngữ cảnh thay vì bóp còn vài px. */
+.ps-preview { display: block; flex: 1; min-width: 0; max-height: 3.9em; overflow: hidden; line-height: 1.3; white-space: pre-wrap; overflow-wrap: break-word; }
+.ps-context-before, .ps-context-after { display: inline; max-width: none; overflow: visible; direction: ltr; text-overflow: clip; white-space: inherit; }
+.ps-preview mark { display: inline; max-width: none; overflow-wrap: normal; white-space: pre; border-radius: 2px; background: color-mix(in srgb, var(--amber, #e5c07b) 35%, transparent); color: inherit; }
 .ps-summary-actions .ps-toggle:disabled, .ps-replace:disabled { cursor: default; }
