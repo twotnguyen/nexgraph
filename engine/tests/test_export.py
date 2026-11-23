@@ -237,6 +237,9 @@ def test_hard_kill_during_write_leaves_no_destination_file(copy_fixture, index_p
     db = store.conn.execute("PRAGMA database_list").fetchone()[2]
     out = tmp_path / "out"
     out.mkdir()
+    # POSIX: SIGKILL thật; Windows không có SIGKILL nên dùng os._exit (cũng bỏ qua finally/atexit).
+    kill = "os.kill(os.getpid(), signal.SIGKILL)" if hasattr(signal, "SIGKILL") else "os._exit(9)"
+    expected = -signal.SIGKILL if hasattr(signal, "SIGKILL") else 9
     script = (
         "import os, signal, sqlite3\n"
         "from pathlib import Path\n"
@@ -249,14 +252,14 @@ def test_hard_kill_during_write_leaves_no_destination_file(copy_fixture, index_p
         "        fh.write(b'x' * 4096)\n"
         "        fh.flush()\n"
         "        os.fsync(fh.fileno())\n"
-        "        os.kill(os.getpid(), signal.SIGKILL)\n"
+        f"        {kill}\n"
         "\n"
         "run._write = half_then_kill\n"
         f"conn = sqlite3.connect({db!r})\n"
         f"run.export_graph(GraphStore(conn), 'json', Scope(), Path({str(out)!r}), 'py_mini app')\n"
     )
     proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
-    assert proc.returncode == -signal.SIGKILL, (proc.returncode, proc.stderr[-800:])
+    assert proc.returncode == expected, (proc.returncode, proc.stderr[-800:])
     assert [p.name for p in out.iterdir() if not p.name.startswith(".")] == []
 
 
