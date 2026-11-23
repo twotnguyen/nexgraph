@@ -191,7 +191,8 @@ def _ignored(rel: str, rules: list[Rule]) -> bool:
 
 
 def _language(root: Path, rel: str, include_docs: bool, include_media: bool,
-              language_map: dict[str, str] | None, include_config: bool = False) -> str | None:
+              language_map: dict[str, str] | None, include_config: bool = False,
+              include_images: bool = False) -> str | None:
     ext = os.path.splitext(rel)[1].lower()
     if include_docs and ext in DOC_LANGUAGE_BY_EXT and not (language_map and ext in language_map):
         return DOC_LANGUAGE_BY_EXT[ext]
@@ -199,7 +200,9 @@ def _language(root: Path, rel: str, include_docs: bool, include_media: bool,
         return "google_workspace" if _media.has_gws() else None
     if include_media and ext in MEDIA_EXTS:
         return "media"
-    if include_media and ext in IMAGE_EXTS:
+    # Ảnh có cờ riêng (E10): bản đóng gói không có faster-whisper nên `include_media` bị khoá ở UI,
+    # trong khi tính năng AI mô tả ảnh (W9) vẫn dùng được. `include_media=true` vẫn bao gồm ảnh (tương thích).
+    if (include_media or include_images) and ext in IMAGE_EXTS:
         return "image"
     language = language_of(rel, root, language_map)
     if language in CONFIG_LANGUAGES and not include_config:
@@ -212,8 +215,12 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
              include_media: bool = False, language_map: dict[str, str] | None = None,
              include_config: bool = False, sources_dir: Path | None = None,
              unreadable: list[str] | None = None,
-             skip_stats: dict[str, int] | None = None) -> Iterator[DiscoveredFile]:
+             skip_stats: dict[str, int] | None = None,
+             include_images: bool = False) -> Iterator[DiscoveredFile]:
     """`sources_dir`: nguồn tải từ URL (`<data_dir>/sources/<pid>/`), vào graph dưới dạng `sources/<tên>`.
+
+    `include_images`: thêm ảnh cục bộ (`.png`, `.jpg`, …) dưới dạng nút tệp ngôn ngữ `image` mà không
+    cần bật `include_media` (audio/video); `include_media=true` vẫn bao gồm ảnh như trước (E10).
 
     `unreadable`: nếu truyền một list, đường dẫn tương đối của thư mục/tệp không đọc được (chmod 000,
     ổ đĩa rút…) được thêm vào đó thay vì bỏ qua im lặng (A1 F6) — index vẫn chạy tiếp.
@@ -274,7 +281,8 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                 if subdir is None or selected:  # chỉ đi xuống nhánh dẫn tới thư mục con
                     walk(Path(entry.path), rel, rules)
             elif is_file:
-                language = _language(root, rel, include_docs, include_media, language_map, include_config)
+                language = _language(root, rel, include_docs, include_media, language_map, include_config,
+                                     include_images)
                 if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES):
                     continue
                 chosen = chosen_inside_next(subdir)
@@ -294,7 +302,8 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                     _skip("dense")
                     continue
                 doc = language in DOC_LANGUAGES
-                cap = MAX_MEDIA_BYTES if language == "media" else max_file_bytes
+                # Ảnh chỉ băm (không parse) nên dùng hạn media: ảnh chụp vài MB không bị coi là "quá lớn" (E10).
+                cap = MAX_MEDIA_BYTES if language in ("media", "image") else max_file_bytes
                 found.append(DiscoveredFile(rel, language, st.st_size, int(st.st_mtime),
                                             not doc and is_test_path(rel), st.st_size > cap))
 
@@ -338,7 +347,7 @@ def _discover_sources(directory: Path, root: Path, rules: list[Rule], max_file_b
         if language not in DOC_LANGUAGES:
             continue
         st = entry.stat(follow_symlinks=False)
-        cap = MAX_MEDIA_BYTES if language == "media" else max_file_bytes
+        cap = MAX_MEDIA_BYTES if language in ("media", "image") else max_file_bytes
         out.append(DiscoveredFile(rel, language, st.st_size, int(st.st_mtime), False, st.st_size > cap,
                                   path=entry.path))
     return out

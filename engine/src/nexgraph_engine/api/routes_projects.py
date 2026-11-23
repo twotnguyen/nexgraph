@@ -38,6 +38,8 @@ class IndexBody(BaseModel):
     include_docs: bool | None = None
     include_media: bool | None = None
     include_config: bool | None = None
+    # Ảnh cục bộ (E10): tách khỏi `include_media` để bản đóng gói (không có faster-whisper) vẫn index ảnh được.
+    include_images: bool | None = None
     workers: int | None = Field(default=None, ge=1, le=64)  # None = tự chọn theo số tệp
     force: bool = False  # bỏ cache AST, trích lại mọi tệp
     sources: SourcesBody | None = None
@@ -137,6 +139,7 @@ def start_index(project_id: str, request: Request, body: IndexBody | None = None
                                                                        include_docs=body.include_docs if body else None,
                                                                        include_media=body.include_media if body else None,
                                                                        include_config=body.include_config if body else None,
+                                                                       include_images=body.include_images if body else None,
                                                                        workers=body.workers if body else None,
                                                                        force=body.force if body else False,
                                                                        sources=_sources(body))}
