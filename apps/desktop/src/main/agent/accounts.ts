@@ -151,6 +151,8 @@ export type AccountDeps = {
   openExternal(url: string): void
   /** Sự kiện đăng nhập (auth_url, device_code…) gửi xuống renderer. */
   notify(event: AuthEventView): void
+  /** Thông báo không thuộc luồng đăng nhập (sau Đăng xuất): không đi kèm sự kiện đăng nhập. */
+  notice(message: string): void
   /** Catalog model đổi ở main (refresh nền sau khi lưu key): renderer tải lại danh sách. */
   modelsChanged(providerId: string): void
   /** Câu hỏi đăng nhập hiện ở renderer; trả về chuỗi nhập, `null` khi renderer huỷ. */
@@ -705,7 +707,7 @@ export class AccountService {
       this.accountGeneration(providerId, true)
     }
     await this.restoreSavedKey(providerId)
-    if (!revoked) this.deps.notify({ type: 'info', message: 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.' })
+    if (!revoked) this.deps.notice('Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.')
   }
 
   /**
@@ -722,7 +724,7 @@ export class AccountService {
       rememberSecret(savedKey)
       await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)
     } catch {
-      this.deps.notify({ type: 'info', message: 'Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.' })
+      this.deps.notice('Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.')
     }
   }
 

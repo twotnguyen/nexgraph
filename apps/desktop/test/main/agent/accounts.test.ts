@@ -28,7 +28,7 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true })
 })
 
-const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox;
+const make = async (over: { notify?: (e: unknown) => void; notice?: (m: string) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox;
   devHooks?: { failRestoreKey?: boolean }; modelsChanged?: (providerId: string) => void } = {}) => {
   const prefs = join(base, 'prefs.json')
   const svc = await AccountService.create({
@@ -36,6 +36,7 @@ const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) =>
     secrets: new SecretStore(join(base, 'ai-key.json'), over.secretBox ?? box),
     openExternal: (url) => opens.push(url),
     notify: over.notify ?? (() => {}),
+    notice: over.notice ?? (() => {}),
     ask: over.ask ?? (async () => 'answer'),
     ...(over.devHooks ? { devHooks: over.devHooks } : {}),
     modelsChanged: over.modelsChanged ?? (() => {})
@@ -452,12 +453,25 @@ describe('AccountService', () => {
     mkdirSync(join(base, 'agent'), { recursive: true })
     writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
       expires: Date.now() + 3600000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
-    const notify = vi.fn()
+    const notice = vi.fn()
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({}, { status: 503 }))
-    const { svc } = await make({ notify })
+    const { svc } = await make({ notice })
     await svc.logout('openai')
     expect((await svc.modelRuntime.listCredentials()).some((c) => c.providerId === 'openai')).toBe(false)
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: expect.stringContaining('Chưa xác nhận được thu hồi phiên từ xa') }))
+    expect(notice).toHaveBeenCalledWith(expect.stringContaining('Chưa xác nhận được thu hồi phiên từ xa'))
+  })
+
+  it('info của luồng đăng nhập chỉ đi kênh sự kiện đăng nhập, không thành thông báo rời', async () => {
+    const notify = vi.fn()
+    const notice = vi.fn()
+    const { svc } = await make({ notify, notice })
+    vi.spyOn(svc.modelRuntime, 'login').mockImplementation(async (_id, _method, interaction) => {
+      interaction.notify({ type: 'info', message: 'Đang mở trình duyệt để đăng nhập' })
+      return { type: 'oauth', access: 'a', refresh: 'r', expires: Date.now() + 3_600_000 }
+    })
+    await svc.loginOAuth('openai')
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: expect.stringContaining('Đang mở trình duyệt') }))
+    expect(notice).not.toHaveBeenCalled()
   })
 
   it('đăng xuất ChatGPT nạp lại API key đã lưu ngay, không cần khởi động lại', async () => {
@@ -672,14 +686,14 @@ describe('AccountService', () => {
 
   describe('Minor #29: đăng xuất khi đồng bộ credential lỗi', () => {
     /** Phiên OAuth openai + key đã lưu (như test I1); trả hàm logout thật của pi để test tự điều khiển lỗi. */
-    const seeded = async (notify?: (e: unknown) => void, devHooks?: { failRestoreKey?: boolean }) => {
+    const seeded = async (over: { notify?: (e: unknown) => void; notice?: (m: string) => void; devHooks?: { failRestoreKey?: boolean } } = {}) => {
       mkdirSync(join(base, 'agent'), { recursive: true })
       writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
         expires: Date.now() + 3_600_000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
       new SecretStore(join(base, 'ai-key.json'), box).set('openai', 'sk-fake-da-luu')
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).endsWith('openid-configuration')
         ? Response.json({ revocation_endpoint: 'https://auth.openai.com/oauth/revoke' }) : new Response(null, { status: 200 }))
-      const { svc } = await make({ notify, ...(devHooks ? { devHooks } : {}) })
+      const { svc } = await make(over)
       return { svc, realLogout: svc.modelRuntime.logout.bind(svc.modelRuntime) }
     }
 
@@ -703,36 +717,32 @@ describe('AccountService', () => {
     })
 
     it('G2: không nạp lại được key thì báo cho người dùng, không nuốt lỗi', async () => {
-      const notify = vi.fn()
-      const { svc } = await seeded(notify)
+      const notice = vi.fn()
+      const { svc } = await seeded({ notice })
       vi.spyOn(svc.modelRuntime, 'setRuntimeApiKey').mockRejectedValue(new Error('models.json chỉ đọc'))
       await expect(svc.logout('openai')).resolves.toBeUndefined()
-      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'info', message: expect.stringContaining('API key')
-      }))
+      expect(notice).toHaveBeenCalledWith(expect.stringContaining('API key'))
     })
 
     it('cờ NEXGRAPH_DEV_FAIL_RESTORE_KEY không có hiệu lực nếu không nối devHooks (bản đóng gói)', async () => {
       process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY = '1'
       let svc!: AccountService
-      const notify = vi.fn()
+      const notice = vi.fn()
       try {
-        svc = (await seeded(notify)).svc // không devHooks: đúng như app.isPackaged
+        svc = (await seeded({ notice })).svc // không devHooks: đúng như app.isPackaged
         await svc.logout('openai')
         expect((await svc.modelRuntime.getAuth('openai'))?.auth.apiKey).toBe('sk-fake-da-luu')
       } finally {
         delete process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY
       }
-      expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('chưa nạp lại được API key') }))
+      expect(notice).not.toHaveBeenCalledWith(expect.stringContaining('chưa nạp lại được API key'))
     })
 
     it('devHooks.failRestoreKey (chỉ nối khi dev) mô phỏng setRuntimeApiKey lỗi khi Đăng xuất', async () => {
-      const notify = vi.fn()
-      const { svc } = await seeded(notify, { failRestoreKey: true })
+      const notice = vi.fn()
+      const { svc } = await seeded({ notice, devHooks: { failRestoreKey: true } })
       await expect(svc.logout('openai')).resolves.toBeUndefined()
-      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
-        type: 'info', message: expect.stringContaining('chưa nạp lại được API key')
-      }))
+      expect(notice).toHaveBeenCalledWith(expect.stringContaining('chưa nạp lại được API key'))
     })
   })
 })

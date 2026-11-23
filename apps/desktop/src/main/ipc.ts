@@ -156,12 +156,11 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHoo
     openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
     devHooks,
     notify: (event: AuthEventView) => {
-      const win = getWindow()
-      win?.webContents.send('auth:login-event', event)
-      // Thông báo 'info' không thuộc luồng đăng nhập (ví dụ Đăng xuất không nạp lại được key):
-      // gửi kênh riêng để Cài đặt hiện được dù loginPending=false.
-      if (event.type === 'info') win?.webContents.send('auth:notice', { message: event.message })
+      // Chỉ sự kiện của luồng đăng nhập: message 'info' của pi hiện ở loginEvent, không thành toast.
+      getWindow()?.webContents.send('auth:login-event', event)
     },
+    // Thông báo sau Đăng xuất (ngoài luồng đăng nhập): kênh riêng để Cài đặt hiện toast dù loginPending=false.
+    notice: (message: string) => getWindow()?.webContents.send('auth:notice', { message }),
     modelsChanged: (providerId: string) => getWindow()?.webContents.send('auth:models-changed', { providerId }),
     ask: (view: AuthPromptView) => new Promise<string | null>((resolve) => {
       pendingPrompts.set(view.id, resolve)

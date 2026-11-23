@@ -124,7 +124,7 @@ describe('AgentService + pi SDK thật', () => {
     accounts = await AccountService.create({
       dataDir, prefsFile: join(base, 'prefs.json'),
       secrets: new SecretStore(join(base, 'key.json'), { available: () => true, encrypt: (s) => `enc:${s}`, decrypt: (s) => s.slice(4) }),
-      openExternal: () => {}, notify: () => {}, modelsChanged: () => {}, ask: async () => null
+      openExternal: () => {}, notify: () => {}, notice: () => {}, modelsChanged: () => {}, ask: async () => null
     })
     await accounts.saveCustomProvider({ id: 'fake', label: 'Fake', baseUrl: llm.url, model: 'fake-1' }, KEY)
     accounts.selectModel('fake', 'fake-1')
