@@ -1,14 +1,14 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { isAbsolute, join, parse, relative, resolve } from 'node:path'
 
 /**
  * Quản lý `NEXGRAPH_E2E_DATA_DIR` — thư mục dữ liệu engine dùng lại giữa các lượt E2E.
  *
  * Mỗi lượt phải bắt đầu từ trạng thái sạch, nhưng biến này do người chạy đặt nên có thể trỏ nhầm vào thư mục
- * thật: chỉ xoá khi thư mục nằm dưới thư mục tạm **hoặc** có marker do chính E2E ghi ở lượt trước. Trước khi xoá
- * còn chờ tiến trình của lượt trước (Playwright worker, Electron và engine `--data-dir` đó) thoát hẳn, vì engine
+ * thật: chỉ xoá khi thư mục là thư mục con thật sự của thư mục tạm **hoặc** có marker do chính E2E ghi ở lượt
+ * trước; gốc ổ đĩa, home và chính thư mục tạm thì luôn từ chối. Trước khi xoá còn chờ tiến trình của lượt trước
  * còn giữ khoá SQLite thì `rmSync` trên Windows sẽ `EBUSY/EPERM`.
  */
 export const DATA_DIR_MARKER = '.nexgraph-e2e-data-dir.json'
@@ -43,7 +43,25 @@ function realOrResolved(path: string): string {
 
 function isInside(child: string, parent: string): boolean {
   const rel = relative(parent, child)
-  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+  // `rel === ''` là chính `parent`: thư mục dữ liệu phải là thư mục CON thật sự, nếu không `isTemporaryDir('/tmp')`
+  // sẽ trả true và `NEXGRAPH_E2E_DATA_DIR=/tmp` xoá luôn cả thư mục tạm của máy.
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel)
+}
+
+function canonical(path: string): string {
+  const real = realOrResolved(path)
+  return process.platform === 'win32' ? real.toLowerCase() : real
+}
+
+/**
+ * Gốc không bao giờ được xoá, kể cả khi có marker E2E: gốc ổ đĩa (`/`, `C:\`), home và thư mục tạm
+ * (`tmpdir()`, `/tmp`). So bằng realpath để `/tmp` và `/private/tmp` (macOS) là một.
+ */
+export function isProtectedRoot(dir: string): boolean {
+  const target = canonical(dir)
+  const roots = process.platform === 'win32' ? [homedir(), tmpdir()] : [homedir(), tmpdir(), '/tmp']
+  if (roots.some((root) => target === canonical(root))) return true
+  return target === canonical(parse(target).root)
 }
 
 /** Thư mục tạm của máy (`TMPDIR`) hoặc `/tmp` trên POSIX (`/tmp` là symlink của `/private/tmp` trên macOS). */
@@ -115,11 +133,18 @@ async function waitForPreviousRun(dataDir: string, timeoutMs: number): Promise<v
 /**
  * Dọn thư mục dữ liệu engine rồi tạo lại kèm marker.
  *
- * Từ chối (ném lỗi, không xoá gì) khi thư mục đã có dữ liệu nhưng không nằm dưới thư mục tạm và không có marker
- * do E2E tạo — tránh xoá nhầm thư mục thật khi `NEXGRAPH_E2E_DATA_DIR` bị trỏ sai. Trước khi xoá chờ tiến trình
- * của lượt trước thoát; `rmSync` retry mỗi 500 ms để Windows kịp nhả khoá SQLite.
+ * Từ chối (ném lỗi, không xoá gì) khi thư mục là gốc ổ đĩa/home/thư mục tạm — kể cả khi có marker — hoặc khi
+ * thư mục đã có dữ liệu nhưng không nằm dưới thư mục tạm và không có marker do E2E tạo — tránh xoá nhầm thư
+ * mục thật khi `NEXGRAPH_E2E_DATA_DIR` bị trỏ sai. Trước khi xoá chờ tiến trình của lượt trước thoát; `rmSync`
+ * retry mỗi 500 ms để Windows kịp nhả khoá SQLite.
  */
 export async function prepareDataDir(dataDir: string, opts: PrepareDataDirOptions = {}): Promise<void> {
+  if (isProtectedRoot(dataDir)) {
+    throw new Error(
+      `Từ chối xoá ${dataDir}: đây là gốc ổ đĩa/thư mục home/thư mục tạm nên không bao giờ là dữ liệu E2E ` +
+        `(kể cả khi có ${DATA_DIR_MARKER}). Đặt NEXGRAPH_E2E_DATA_DIR vào một thư mục con của thư mục tạm.`
+    )
+  }
   if (existsSync(dataDir)) {
     if (!readDataDirMarker(dataDir) && !isTemporaryDir(dataDir)) {
       throw new Error(

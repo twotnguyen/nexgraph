@@ -1,9 +1,39 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { DATA_DIR_MARKER, enginePids, isTemporaryDir, prepareDataDir, readDataDirMarker } from '../e2e/data-dir'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DATA_DIR_MARKER, enginePids, isProtectedRoot, isTemporaryDir, prepareDataDir, readDataDirMarker } from '../e2e/data-dir'
+
+/**
+ * Lưới an toàn cho chính bộ test: nếu code còn lỗi mà gọi `rmSync` lên gốc tạm/home/gốc ổ thì chặn ngay,
+ * tuyệt đối không xoá thư mục thật (trên macOS `$TMPDIR` chứa cả worktree đang làm việc).
+ */
+const rmGuard = vi.hoisted(() => ({ blocked: new Set<string>() }))
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>()
+  const os = await import('node:os')
+  const path = await import('node:path')
+  const normalize = (target: string): string => {
+    try {
+      return actual.realpathSync(target)
+    } catch {
+      return path.resolve(target)
+    }
+  }
+  for (const root of ['/', '/tmp', os.tmpdir(), os.homedir()]) {
+    rmGuard.blocked.add(normalize(root))
+    rmGuard.blocked.add(path.resolve(root))
+  }
+  const rmSync = ((target: Parameters<typeof actual.rmSync>[0], options?: Parameters<typeof actual.rmSync>[1]) => {
+    if (rmGuard.blocked.has(normalize(String(target)))) {
+      throw new Error(`CHẶN xoá thư mục gốc trong test: ${String(target)}`)
+    }
+    return actual.rmSync(target, options)
+  }) as typeof actual.rmSync
+  return { ...actual, rmSync }
+})
 
 const cleaned: string[] = []
 const children: ChildProcess[] = []
@@ -95,5 +125,29 @@ describe('NEXGRAPH_E2E_DATA_DIR chỉ bị xoá khi chắc chắn là của E2E'
 
   it('enginePids bỏ qua tiến trình không liên quan tới data dir', () => {
     expect(enginePids(join(tmpdir(), 'ng-e2e-khong-co-that-123456'))).toEqual([])
+  })
+})
+
+describe('không bao giờ xoá chính thư mục tạm, home hay gốc ổ', () => {
+  it('isTemporaryDir chỉ đúng với thư mục con thật sự của tmpdir', () => {
+    expect(isTemporaryDir('/tmp')).toBe(false)
+    expect(isTemporaryDir(tmpdir())).toBe(false)
+    expect(isTemporaryDir(homedir())).toBe(false)
+    const child = mkdtempSync(join(tmpdir(), 'ng-e2e-con-that-'))
+    cleaned.push(child)
+    expect(isTemporaryDir(child)).toBe(true)
+  })
+
+  it('coi /, /tmp, tmpdir() và homedir() là gốc nguy hiểm (so bằng realpath)', () => {
+    expect(isProtectedRoot('/')).toBe(true)
+    expect(isProtectedRoot('/tmp')).toBe(true)
+    expect(isProtectedRoot(tmpdir())).toBe(true)
+    expect(isProtectedRoot(homedir())).toBe(true)
+    expect(isProtectedRoot(join(tmpdir(), 'ng-e2e-con-that'))).toBe(false)
+  })
+
+  it.each(['/tmp', tmpdir(), homedir()])('từ chối prepareDataDir(%s) và không xoá gì', async (dir) => {
+    await expect(prepareDataDir(dir)).rejects.toThrow(/Từ chối xoá/)
+    expect(existsSync(dir)).toBe(true)
   })
 })
