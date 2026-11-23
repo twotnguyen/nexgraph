@@ -66,10 +66,12 @@ def build_context(store: GraphStore, root: Path, question: str, budget: int = 40
         if any(a <= node.line_start and node.line_end <= b for a, b in spans.get(node.file, [])):
             continue
         end = min(node.line_end, node.line_start + MAX_CODE_SPAN - 1)
+        span_cut = end < node.line_end  # thân hàm dài hơn MAX_CODE_SPAN: gói ngữ cảnh bị cắt, phải báo (REV-21)
         try:
             code = read_code(store, root, node.file, node.line_start, end, source=source, sources_dir=sources_dir)
         except ApiError:
             continue
+        truncated = truncated or span_cut
         cost = len(code["text"]) // 4 + 20
         if tokens + cost > budget:
             truncated = True
