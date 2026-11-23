@@ -62,6 +62,10 @@ def project(api, copy_fixture):
     ("http://127.0.0.1/x", "blocked_private_ip"),
     ("http://169.254.169.254/latest/meta-data", "blocked_private_ip"),
     ("http://[::1]/x", "blocked_private_ip"),
+    # Review #52 Minor 3: 2 nhánh của blocked_url_port + blocked_url_host.
+    ("http://example.com:99999/x", "blocked_url_port"),
+    ("http://example.com:0/x", "blocked_url_port"),
+    ("http:///x", "blocked_url_host"),
 ])
 def test_blocked_urls_rejected_before_job(api, project, url, code):
     """A3 #8: lỗi chặn URL có mã ổn định để desktop dịch, message cũ giữ nguyên."""
@@ -71,6 +75,23 @@ def test_blocked_urls_rejected_before_job(api, project, url, code):
     error = r.json()["error"]
     assert error["code"] == code, error
     assert error["message"].startswith("Blocked "), error
+    assert api.get(f"/v1/projects/{pid}/sources").json() == []
+
+
+def test_blocked_url_dns_failure_has_stable_code(api, project, monkeypatch):
+    """Review #52 Minor 3: `dns_failed` — ánh xạ bằng tiền tố message của graphify, kiểm bằng lỗi phân giải."""
+    import socket
+
+    def no_dns(*_args, **_kwargs):
+        raise socket.gaierror(-2, "Name or service not known")
+
+    monkeypatch.setattr(socket, "getaddrinfo", no_dns)
+    _, pid = project
+    r = api.post(f"/v1/projects/{pid}/sources", json={"url": "https://nexgraph-e6b.invalid/x"})
+    assert r.status_code == 400
+    error = r.json()["error"]
+    assert error["code"] == "dns_failed", error
+    assert error["message"].startswith("DNS resolution failed"), error
     assert api.get(f"/v1/projects/{pid}/sources").json() == []
 
 
