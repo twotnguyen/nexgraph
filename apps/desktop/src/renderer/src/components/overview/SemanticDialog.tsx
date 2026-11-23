@@ -74,7 +74,16 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
     <div className="modal-backdrop">
       <div role="dialog" aria-modal="true" aria-label={(fixed && TITLE[fixed]) || vi.semantic.title} className="modal">
         <h2>{(fixed && TITLE[fixed]) || vi.semantic.title}</h2>
-        {settings && !settings.enabled && (
+        {settings && !fixed && (
+          <fieldset>
+            <legend>{vi.semantic.targetLabel}</legend>
+            {(['docs', 'deep', 'images', 'dedup'] as const).map((t) => (
+              <label key={t}><input type="radio" name="target" checked={target === t} disabled={busy} onChange={() => setTarget(t)} /> {vi.semantic.targets[t]}</label>
+            ))}
+          </fieldset>
+        )}
+        {/* `dedup` chạy trên máy, không gửi gì: không đòi bật AI, chọn model hay đồng ý. */}
+        {settings && !settings.enabled && !local && (
           <>
             <p>{vi.semantic.enableIntro}</p>
             <label><input type="radio" name="transport" checked={transport === 'app'} onChange={() => setTransport('app')} /> {vi.semantic.transportApp}</label>
@@ -82,20 +91,13 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
             <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {(fixed && CONSENT[fixed]) || vi.semantic.consent}</label>
           </>
         )}
+        {local && <p className="muted">{vi.semantic.sends[target]}</p>}
         {settings?.enabled && (
           <>
             {estimate && !local && (model ? <p className="muted">{vi.semantic.provider(model)}</p> : <p className="inline-message warning">{vi.semantic.noModel}</p>)}
             {changed && <p role="alert" className="inline-message warning">{vi.semantic.modelChanged(settings.model ?? '—', model)}
               {' '}<button type="button" disabled={busy} onClick={() => void agreeNewModel()}>{vi.semantic.agreeNewModel}</button></p>}
-            {!fixed && (
-              <fieldset>
-                <legend>{vi.semantic.targetLabel}</legend>
-                {(['docs', 'deep', 'images', 'dedup'] as const).map((t) => (
-                  <label key={t}><input type="radio" name="target" checked={target === t} disabled={busy} onChange={() => setTarget(t)} /> {vi.semantic.targets[t]}</label>
-                ))}
-              </fieldset>
-            )}
-            <p className="muted">{vi.semantic.sends[target]}</p>
+            {!local && <p className="muted">{vi.semantic.sends[target]}</p>}
             {!local && <label><input type="checkbox" checked={noCache} disabled={busy} onChange={(e) => setNoCache(e.target.checked)} /> {vi.semantic.noCache}</label>}
             {!estimate && !error && <p className="muted">{vi.semantic.estimating}</p>}
             {estimate && !local && (
@@ -132,7 +134,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
           {settings?.enabled && !job && <button type="button" className="link" disabled={busy} onClick={() => void disable()}>{vi.semantic.disable}</button>}
           {job ? <button type="button" onClick={cancel}>{vi.semantic.cancel}</button>
             : <button type="button" onClick={onClose}>{vi.semantic.close}</button>}
-          {settings && !settings.enabled && <button type="button" className="primary" disabled={!consent || busy} onClick={() => void enable()}>{vi.semantic.enable}</button>}
+          {settings && !settings.enabled && !local && <button type="button" className="primary" disabled={!consent || busy} onClick={() => void enable()}>{vi.semantic.enable}</button>}
+          {settings && !settings.enabled && local && <button type="button" className="primary" disabled={busy} onClick={() => void run()}>{vi.semantic.runLocal}</button>}
           {settings?.enabled && !job && <button type="button" className="primary" disabled={busy || !estimate || empty || changed || (!local && !model)} onClick={() => void run()}>{vi.semantic.run}</button>}
         </footer>
       </div>

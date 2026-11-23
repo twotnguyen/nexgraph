@@ -283,6 +283,8 @@ describe('EditorTools E3', () => {
       const { outgoing, root } = setup()
       act(() => { runCommand('editor.call_hierarchy_incoming') })
       const dialog = await screen.findByRole('dialog', { name: 'Phân cấp lời gọi' })
+      // hierarchy.switch_direction được useCommand đăng ký trong useEffect; chờ flush để keymap thấy hợp âm ⌘K ⌘⇧H.
+      await act(async () => {})
       const uninstall = installKeymap(window)
       try {
         fireEvent.keyDown(dialog, { key: 'k', code: 'KeyK', ctrlKey: true })
