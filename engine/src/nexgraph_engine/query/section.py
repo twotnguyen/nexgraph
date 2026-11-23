@@ -1,4 +1,8 @@
-"""Đọc thân một mục tài liệu (nút `document`) như `get_section` của Graphify: đọc lại từ tệp, che secret."""
+"""Đọc thân một mục tài liệu (nút `document`) như `get_section` của Graphify: đọc lại từ tệp, che secret.
+
+Người gọi trả nội dung cho model phải truyền `SourcePolicy(..., allow_secret_names=True)`; việc miễn tên tệp
+trông như kho bí mật là quyết định của policy, `section_json` không tự bật (review #52 Minor 1).
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -25,7 +29,8 @@ def section_json(store: GraphStore, root: Path, node_id: str, *, source: SourceP
     section_end = node.line_end or start
     end = min(section_end, start + MAX_CODE_LINES - 1)
     code = read_code(store, root, node.file, start, end, transcript_dir=transcript_dir, source=source,
-                     sources_dir=sources_dir, allow_secret_names=True)
+                     sources_dir=sources_dir,
+                     allow_secret_names=source is not None and source.allow_secret_names)
     # Bỏ ký tự điều khiển (trừ tab) để tài liệu không chèn mã thoát terminal vào ngữ cảnh model, rồi che secret.
     text = redact_doc_secrets(_BODY_CONTROL_RE.sub("", code["text"]).rstrip())
     # Cắt vì số dòng (section dài hơn MAX_CODE_LINES) cũng là cắt: phải báo, không chỉ khi vượt max_chars (REV-21).

@@ -183,7 +183,7 @@ def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
 
 
 def test_section_masks_document_that_only_contains_secret(tmp_path):
-    """A3 #4: tài liệu chỉ CHỨA secret (tên tệp không thuộc danh sách loại trừ thật) trả bản đã che như UI."""
+    """A3 #4: tài liệu chỉ CHỨA secret trả bản đã che như UI; quyền đọc tên tệp do policy quyết định."""
     token = "sk-" + "live-" + "A3TEST" + "1234567890"
     root = tmp_path / "proj"
     (root / "docs").mkdir(parents=True)
@@ -193,11 +193,18 @@ def test_section_masks_document_that_only_contains_secret(tmp_path):
     (root / "secrets" / "notes.md").write_text("# Ghi chú\n\n## Khoá\n\nkhông chia sẻ.\n", encoding="utf-8")
     store = _index(root, tmp_path / "g.db")
     try:
-        out = section_json(store, root, _doc(store, "Cấu hình", "docs/secret.md").id, source=SourcePolicy(root))
+        node = _doc(store, "Cấu hình", "docs/secret.md")
+        out = section_json(store, root, node.id, source=SourcePolicy(root, allow_secret_names=True))
         assert token not in out["text"] and "[redacted]" in out["text"]
 
+        # Minor 1 (review #52): policy strict phải là nguồn quyết định, không bị section_json ghi đè.
+        with pytest.raises(ApiError) as strict:
+            section_json(store, root, node.id, source=SourcePolicy(root))
+        assert strict.value.code == "protected_source"
+
         with pytest.raises(ApiError) as exc:
-            section_json(store, root, _doc(store, "Khoá", "secrets/notes.md").id, source=SourcePolicy(root))
+            section_json(store, root, _doc(store, "Khoá", "secrets/notes.md").id,
+                         source=SourcePolicy(root, allow_secret_names=True))
         assert exc.value.code == "protected_source"
     finally:
         store.conn.close()
