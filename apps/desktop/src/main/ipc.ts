@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
@@ -212,6 +212,20 @@ export function registerIpc(
   const api = (): EngineApi => new EngineApi(handle())
   const on = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
     ipcMain.handle(channel, (_e, ...args) => toIpcResult(() => fn(...(args as A))))
+  /**
+   * Kênh mới (#38/REV-*): chỉ nhận lệnh từ khung chính của một cửa sổ NexGraph.
+   * Renderer không có iframe/webview, nhưng chặn ở đây để khung lạ không gọi ké được
+   * các kênh mở hộp thoại/tạo cửa sổ/đổi menu.
+   */
+  const onTrusted = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const sender = event?.sender
+      const frame = event?.senderFrame
+      if (!sender || !frame || frame !== sender.mainFrame || !BrowserWindow.fromWebContents(sender)) {
+        throw new UserError('forbidden_sender', 'Yêu cầu không đến từ cửa sổ NexGraph.')
+      }
+      return fn(...(args as A))
+    }))
 
   on('project:pick-folder', async () => {
     const win = getWindow()
@@ -219,9 +233,9 @@ export function registerIpc(
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
   })
-  if (openWindow) on('window:open-new', async () => { openWindow() })
+  if (openWindow) onTrusted('window:open-new', async () => { openWindow() })
   // Menu native và hộp thoại của menu File đổi nhãn theo ngôn ngữ UI; renderer gửi khi đổi.
-  on('app-menu:set-locale', async (value?: unknown) => {
+  onTrusted('app-menu:set-locale', async (value?: unknown) => {
     if (!isMenuLocale(value)) throw new UserError('bad_locale', 'Ngôn ngữ không hợp lệ.')
     setMenuLocale(value)
     rebuildMenu?.(value)
@@ -254,7 +268,7 @@ export function registerIpc(
   const fsh = fsHandlers(listProjects)
   /** Mọi kênh nhận path đều phải suy root từ projectId đã đăng ký; id lạ → FsError('unknown_project'). */
   const rootOf = projectRoot(listProjects)
-  on('file:pick-open', async (projectId?: string) => {
+  onTrusted('file:pick-open', async (projectId?: string) => {
     const win = getWindow()
     const opts = { properties: ['openFile' as const], title: pickFileTitle[getMenuLocale()] }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
