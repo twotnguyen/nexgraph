@@ -27,6 +27,15 @@ GENERATED_SUFFIXES = (".g.dart", ".freezed.dart", ".gr.dart", ".config.dart", ".
 # Tệp đã rút gọn/nhúng: không có cấu trúc đọc được, chỉ làm phình đồ thị (spec §5.5).
 MINIFIED_SUFFIXES = (".min.js", ".min.mjs", ".min.cjs", ".min.css", ".bundle.js", ".bundle.mjs",
                      ".bundle.css", "-min.js", "-min.css")
+# Bundle Next.js: tên tệp băm, nội dung rút gọn trên một dòng — E3 (#36) chỉ chặn *.min.js nên hai tệp
+# trong `plugins/…/_next/static/chunks/` của open-design vẫn lọt, tốn 57 s CPU và nhét 2.812 nút nhiễu.
+BUNDLE_DIR_NAMES = ("_next", "static")
+# Tệp JS/CSS rút gọn: đọc đầu tệp rồi đo byte/dòng (không đọc cả tệp lớn). Dưới DENSE_MIN_BYTES thì bỏ qua
+# phép đoán để không loại nhầm tệp nhỏ vài dòng.
+DENSE_SUFFIXES = (".js", ".mjs", ".cjs", ".jsx", ".css")
+DENSE_MIN_BYTES = 64 * 1024
+DENSE_HEAD_BYTES = 64 * 1024
+DENSE_BYTES_PER_LINE = 500
 
 # Tên cố định cho các ngôn ngữ có từ trước W2 (giữ dữ liệu cũ). Ngôn ngữ khác lấy từ extractor của graphify.
 LANGUAGE_BY_EXT = {
@@ -105,6 +114,41 @@ def is_test_path(rel_path: str) -> bool:
             or (name.startswith("test_") and name.endswith((".py", ".sh"))))
 
 
+def is_next_static(rel_path: str) -> bool:
+    """Tệp nằm trong `<…>/_next/static/` — bundle do Next.js sinh, không có cấu trúc đọc được."""
+    parts = rel_path.lower().split("/")
+    return any(a == BUNDLE_DIR_NAMES[0] and b == BUNDLE_DIR_NAMES[1] for a, b in zip(parts, parts[1:]))
+
+
+def chosen_inside_next(subdir: str | None) -> bool:
+    """Người dùng chọn rõ `_next` hoặc một thư mục con của nó ⇒ `_next/static` vẫn được lập chỉ mục.
+
+    Chọn thư mục CHA (ví dụ `apps/site`) thì KHÔNG: review-53 Minor 3 — phép thử cũ
+    (`rel.startswith(subdir + "/")`) áp lên **tệp** nên chọn cha là bật lại toàn bộ `_next/static`,
+    trong khi ý định chỉ là "chọn rõ package trong `_next/static`".
+    """
+    if subdir is None:
+        return False
+    return any(part == BUNDLE_DIR_NAMES[0] for part in subdir.lower().split("/"))
+
+
+def is_dense_minified(path: Path, size: int) -> bool:
+    """Tệp JS/CSS rút gọn: đọc đầu tệp (không đọc cả tệp lớn) rồi đo byte/dòng.
+
+    Bundle thật của open-design: 925 KB / 1.150 dòng (804 B/dòng) và 496 KB / 9 dòng (55.111 B/dòng);
+    mã viết tay hiếm khi quá 500 B/dòng. Chỉ áp cho JS/CSS và tệp từ 64 KB để không loại nhầm tệp nhỏ.
+    """
+    if size < DENSE_MIN_BYTES or not path.name.lower().endswith(DENSE_SUFFIXES):
+        return False
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(DENSE_HEAD_BYTES)
+    except OSError:
+        return False
+    lines = head.count(b"\n") + 1
+    return len(head) / lines > DENSE_BYTES_PER_LINE
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -167,14 +211,22 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
              exclude: list[str] | None = None, include_docs: bool = False,
              include_media: bool = False, language_map: dict[str, str] | None = None,
              include_config: bool = False, sources_dir: Path | None = None,
-             unreadable: list[str] | None = None) -> Iterator[DiscoveredFile]:
+             unreadable: list[str] | None = None,
+             skip_stats: dict[str, int] | None = None) -> Iterator[DiscoveredFile]:
     """`sources_dir`: nguồn tải từ URL (`<data_dir>/sources/<pid>/`), vào graph dưới dạng `sources/<tên>`.
 
     `unreadable`: nếu truyền một list, đường dẫn tương đối của thư mục/tệp không đọc được (chmod 000,
     ổ đĩa rút…) được thêm vào đó thay vì bỏ qua im lặng (A1 F6) — index vẫn chạy tiếp.
+
+    `skip_stats`: nếu truyền dict thì cộng dồn số tệp bị bỏ theo lý do (`bundle`, `dense`) — kết quả job
+    dùng để báo cho người dùng biết đã bỏ bao nhiêu tệp sinh tự động (PERF-L mục 3).
     """
     root = Path(root)
     found: list[DiscoveredFile] = []
+
+    def _skip(reason: str) -> None:
+        if skip_stats is not None:
+            skip_stats[reason] = skip_stats.get(reason, 0) + 1
     # `.graphifyrc` của dự án (language.inc = php): graphify áp cùng ánh xạ này khi extract() nên hai bên khớp nhau.
     rc_map = {ext: language_of("x" + target) for ext, target in activate_language_overrides(root).items()}
     language_map = {**{k: v for k, v in rc_map.items() if v}, **(language_map or {})}
@@ -223,14 +275,23 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                     walk(Path(entry.path), rel, rules)
             elif is_file:
                 language = _language(root, rel, include_docs, include_media, language_map, include_config)
-                if (not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES)
-                        or entry.name.lower().endswith(MINIFIED_SUFFIXES) or _ignored(rel, rules)):
+                if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES):
+                    continue
+                chosen = chosen_inside_next(subdir)
+                if _ignored(rel, rules):
+                    continue
+                # *.min.js/*.bundle.js luôn bị bỏ (như E3); riêng `_next/static` thì chọn rõ package là đi vào.
+                if entry.name.lower().endswith(MINIFIED_SUFFIXES) or (not chosen and is_next_static(rel)):
+                    _skip("bundle")
                     continue
                 try:
                     st = entry.stat(follow_symlinks=False)
                 except OSError:
                     if unreadable is not None:
                         unreadable.append(rel)
+                    continue
+                if is_dense_minified(Path(entry.path), st.st_size):
+                    _skip("dense")
                     continue
                 doc = language in DOC_LANGUAGES
                 cap = MAX_MEDIA_BYTES if language == "media" else max_file_bytes

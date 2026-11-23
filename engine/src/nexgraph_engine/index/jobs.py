@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.extra_sources import ExtraSources
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.index.indexer import Indexer, ProgressEvent, RunResult
 from nexgraph_engine.index.scan import resolve_subdir
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
@@ -135,6 +135,14 @@ class JobManager:
                 self._prune_finished_locked(keep=job_id)
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
+
+    @staticmethod
+    def _job_result(indexer: "Indexer | None", result: RunResult) -> dict:
+        """Số liệu một lần index cho JSON của job: tệp sinh tự động đã bỏ (mục 3) và số worker hiệu dụng (mục 4)."""
+        skipped = indexer.skipped_files() if indexer is not None else {}
+        return {"files_skipped": result.files_skipped, "skipped": skipped,
+                "workers_effective": result.workers_effective, "fallback_serial": result.fallback_serial,
+                "parallel_files": result.parallel_files, "serial_files": result.serial_files}
 
     def _forget_locked(self, job_id: str) -> None:
         """Caller giữ `_lock`: bỏ job đã xong khỏi bộ nhớ (client cũ nhận 404 như job không tồn tại)."""
@@ -277,6 +285,8 @@ class JobManager:
             lock.acquire()  # đợi lần refresh hiện tại của project xong
         terminal_event: ProgressEvent | None = None
         published = False
+        indexer: Indexer | None = None  # giữ lại để lấy số liệu kết quả (workers_effective, tệp bị bỏ)
+        result: RunResult | None = None
         index_result: dict | None = None
 
         def on_event(e: ProgressEvent) -> None:
@@ -307,10 +317,11 @@ class JobManager:
                     transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id,
                     sources_dir=sources_root(self._registry.app_data_dir, info.project_id),
                 )
-                indexer.run()
-                # (A1 F6) Thư mục/tệp không đọc được khi quét đi kèm kết quả job, trường tên ổn định cho desktop.
+                result = indexer.run()
+                # (A1 F6) Thư mục/tệp không đọc được khi quét + số liệu PERF-L đi CÙNG một dict kết quả job.
                 unreadable = indexer.unreadable_paths
-                index_result = {"unreadable_paths": unreadable, "unreadable_count": len(unreadable)}
+                index_result = {**self._job_result(indexer, result),
+                                "unreadable_paths": unreadable, "unreadable_count": len(unreadable)}
 
                 if terminal_event is None:
                     raise RuntimeError("Lập chỉ mục kết thúc mà chưa báo kết quả")
