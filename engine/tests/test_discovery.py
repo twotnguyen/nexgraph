@@ -218,6 +218,14 @@ def test_explicitly_chosen_next_static_package_is_indexed(tmp_path):
     assert rels(tmp_path, subdir="apps/site/_next/static") == ["apps/site/_next/static/chunks/a.js"]
 
 
+def test_minified_files_stay_skipped_inside_a_chosen_subdir(tmp_path):
+    """Chọn package không làm *.min.js lọt vào (giữ nguyên hành vi E3)."""
+    write(tmp_path, "apps/site/src/app.min.js")
+    write(tmp_path, "apps/site/src/vendor.bundle.js")
+    write(tmp_path, "apps/site/src/keep.js")
+    assert rels(tmp_path, subdir="apps/site") == ["apps/site/src/keep.js"]
+
+
 def test_skips_default_build_dependency_and_minified_paths(tmp_path):
     for rel in ("dist/app.js", "__pycache__/mod.py", ".venv/lib/x.py", "venv/lib/y.py",
                 "lib/app.min.js", "lib/app.min.css", "lib/vendor.bundle.js", "lib/keep.js"):

@@ -256,7 +256,8 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                                                  or subdir.startswith(rel + "/"))
                 if _ignored(rel, rules):
                     continue
-                if not chosen and (is_next_static(rel) or entry.name.lower().endswith(MINIFIED_SUFFIXES)):
+                # *.min.js/*.bundle.js luôn bị bỏ (như E3); riêng `_next/static` thì chọn rõ package là đi vào.
+                if entry.name.lower().endswith(MINIFIED_SUFFIXES) or (not chosen and is_next_static(rel)):
                     _skip("bundle")
                     continue
                 st = entry.stat(follow_symlinks=False)
