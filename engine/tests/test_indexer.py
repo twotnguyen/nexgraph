@@ -450,7 +450,7 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
     assert graph_state(store) == graph_state(serial)
     # Chỉ tệp của lô quá hạn đi đường từng-tệp, không phải toàn bộ phần còn lại.
     slow_batch = next(b for b in batches if slow in b)
-    assert slow_batch is batches[0] and len(slow_batch) == 16
+    assert slow_batch is batches[0] and 8 <= len(slow_batch) < 40
     assert sorted(per_file) == sorted(slow_batch)
     # Pool mới sau lô quá hạn vẫn giữ 2 worker (không hạ xuống 1).
     assert pools.count(2) >= 2 and max(pools) == 2
@@ -493,7 +493,7 @@ def test_largest_files_are_batched_first(tmp_path, index_project, monkeypatch):
     store, result, _ = index_project(root)
     assert result.state == "hoan_tat" and store.get_node("z_big.py#file") is not None
     assert submitted and submitted[0][0] == "z_big.py"
-    assert len(submitted[0]) == 16
+    assert 8 <= len(submitted[0]) < 22  # lô cân theo byte nên chia vòng tròn, không dồn 16 tệp lớn vào lô 0
 
 
 def test_extraction_batches_are_longest_processing_time_first():
@@ -506,8 +506,13 @@ def test_extraction_batches_are_longest_processing_time_first():
             [f(f"z{i}.py", 1) for i in range(20)]
     batches = extraction_batches(files)
     assert len(batches) == 2 and sum(len(b) for b in batches) == 24
-    assert [files[i].rel_path for i in batches[0]][:3] == ["b.py", "d.py", "c.py"]  # giảm dần theo byte
+    assert files[batches[0][0]].rel_path == "b.py"   # tệp lớn nhất vào lô đầu
+    assert files[batches[1][0]].rel_path == "d.py"   # tệp lớn thứ hai sang lô khác, không dồn một lô
     assert {i for b in batches for i in b} == set(range(24))  # không sót, không lặp
+    # Cân theo byte: lô nặng nhất không vượt lô nhẹ nhất quá một tệp lớn nhất (biên của LPT).
+    loads = [sum(files[i].size for i in b) for b in batches]
+    assert max(loads) - min(loads) <= max(f.size for f in files)
+    assert extraction_batches([]) == []
 
 
 def test_index_reports_skipped_bundle_files(tmp_path, index_project):

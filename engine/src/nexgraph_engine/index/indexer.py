@@ -112,14 +112,21 @@ def _extract_batch(root: Path, files: list[DiscoveredFile], transcript_dir: Path
 
 
 def extraction_batches(files: Sequence[DiscoveredFile]) -> list[list[int]]:
-    """Chia lô theo LPT (Longest Processing Time first): tệp lớn nhất vào lô đầu tiên (PERF-L mục 4).
+    """Chia lô theo LPT (Longest Processing Time first), cân theo byte (PERF-L mục 4).
 
-    Lô theo thứ tự đường dẫn từng đặt `apps/daemon/src/server.ts` (846 KB, ~21 s) ở lô thứ 45, nên nó
-    vừa là đường tới hạn của cả lần index vừa là lô dễ vượt hạn watchdog nhất. Xếp giảm dần theo byte
-    thì các worker nhận tệp đắt tiền ngay từ đầu và phần đuôi hàng đợi chỉ còn tệp nhỏ.
+    Lô theo thứ tự đường dẫn từng đặt `apps/daemon/src/server.ts` (846 KB, ~21 s) ở lô thứ 45: nó vừa là
+    đường tới hạn của cả lần index vừa là lô dễ vượt hạn watchdog nhất. Ở đây tệp lớn nhất đứng đầu lô 0
+    rồi chia **vòng tròn** sang các lô khác, nên lô đầu nặng nhất chỉ chứa 1 tệp lớn thay vì dồn cả 16 tệp
+    lớn vào một lô (dồn lô làm một worker chạy lâu hơn hẳn phần còn lại — đo trên nexgraph: chậm thêm 5,5 s).
     """
+    if not files:
+        return []
     order = sorted(range(len(files)), key=lambda i: files[i].size, reverse=True)
-    return [order[start:start + EXTRACTION_BATCH_SIZE] for start in range(0, len(order), EXTRACTION_BATCH_SIZE)]
+    count = (len(order) + EXTRACTION_BATCH_SIZE - 1) // EXTRACTION_BATCH_SIZE
+    batches: list[list[int]] = [[] for _ in range(count)]
+    for position, index in enumerate(order):
+        batches[position % count].append(index)  # chia vòng tròn: mỗi lô nhận tệp lớn thứ k×count + lô
+    return batches
 
 
 def _kill_pool(executor: ProcessPoolExecutor) -> None:
