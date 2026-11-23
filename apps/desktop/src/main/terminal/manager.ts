@@ -60,14 +60,16 @@ export interface TerminalSink {
   exit(id: number, code: number): void
 }
 
-/** Các phiên terminal (pty) của app; mỗi phiên chạy trong gốc một dự án. */
+/** Các phiên terminal (pty) của app; mỗi phiên chạy trong gốc một dự án và thuộc cửa sổ đã mở nó. */
 export class TerminalManager {
   private readonly sessions = new Map<number, IPty>()
+  /** Cửa sổ (webContents) đã mở từng phiên: dữ liệu chỉ gửi về đó, reload/đóng cửa sổ chỉ kill của nó. */
+  private readonly owners = new Map<number, unknown>()
   private nextId = 1
 
   constructor(private readonly sink: TerminalSink) {}
 
-  async create(root: string, cols: number, rows: number, task?: TaskDefinition): Promise<{ id: number; shell: string; cwd: string }> {
+  async create(root: string, cols: number, rows: number, task?: TaskDefinition, owner?: unknown): Promise<{ id: number; shell: string; cwd: string }> {
     if (task !== undefined) validateTask(task)
     const { spawn } = await loadPty()
     const shell = defaultShell()
@@ -89,12 +91,21 @@ export class TerminalManager {
     }
     const id = this.nextId++
     this.sessions.set(id, term)
+    this.owners.set(id, owner)
     term.onData((chunk) => this.sink.data(id, chunk))
     term.onExit(({ exitCode }) => {
-      this.sessions.delete(id)
-      this.sink.exit(id, exitCode)
+      // Gửi exit trước khi quên chủ: sink tra ownerOf(id) để biết gửi về cửa sổ nào.
+      try { this.sink.exit(id, exitCode) } finally {
+        this.sessions.delete(id)
+        this.owners.delete(id)
+      }
     })
     return { id, shell: basename(shell.file), cwd }
+  }
+
+  /** Cửa sổ đã mở phiên; undefined khi phiên không còn. */
+  ownerOf(id: number): unknown {
+    return this.owners.get(id)
   }
 
   write(id: number, data: string): void {
@@ -108,10 +119,22 @@ export class TerminalManager {
   kill(id: number): void {
     this.sessions.get(id)?.kill()
     this.sessions.delete(id)
+    this.owners.delete(id)
+  }
+
+  /** Kill mọi phiên do một cửa sổ mở (cửa sổ reload/crash/đóng) — không đụng phiên cửa sổ khác. */
+  killOwned(owner: unknown): void {
+    for (const [id, term] of [...this.sessions]) {
+      if (this.owners.get(id) !== owner) continue
+      term.kill()
+      this.sessions.delete(id)
+      this.owners.delete(id)
+    }
   }
 
   killAll(): void {
     for (const term of this.sessions.values()) term.kill()
     this.sessions.clear()
+    this.owners.clear()
   }
 }

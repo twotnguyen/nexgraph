@@ -91,6 +91,7 @@ export const closeWindowResources = (owner: WebContents): void => {
     editors?.clear(projectId)
     agents?.close(projectId)
   }
+  terminals?.killOwned(owner)
 }
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
@@ -234,6 +235,9 @@ export function registerIpc(
   const api = (): EngineApi => new EngineApi(handle())
   const on = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
     ipcMain.handle(channel, (_e, ...args) => toIpcResult(() => fn(...(args as A))))
+  /** Như on() nhưng truyền webContents đã gọi vào handler (tài nguyên gắn cửa sổ đã mở nó). */
+  const onFrom = <A extends unknown[], R>(channel: string, fn: (owner: WebContents, ...args: A) => Promise<R>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(() => fn(event?.sender as WebContents, ...(args as A))))
   /**
    * Kênh mới (#38/REV-*): chỉ nhận lệnh từ khung chính của một cửa sổ NexGraph.
    * Renderer không có iframe/webview, nhưng chặn ở đây để khung lạ không gọi ké được
@@ -411,16 +415,17 @@ export function registerIpc(
   }))
   on('lsp:close', lspRequest((root, file: string) => { lsp.close(root, file); return Promise.resolve() }))
   on('lsp:open', lspRequest((root, file: string, text: string) => lsp.open(root, file, lspArgs(text, 1, 1)[0])))
-  // Terminal: shell của người dùng trong gốc dự án; dữ liệu về renderer qua 'terminal:event'.
-  terminals = new TerminalManager({
-    data: (id, chunk) => getWindow()?.webContents.send('terminal:event', { id, type: 'data', data: chunk }),
-    exit: (id, code) => getWindow()?.webContents.send('terminal:event', { id, type: 'exit', code })
+  // Terminal: shell của người dùng trong gốc dự án; dữ liệu về đúng cửa sổ đã mở terminal qua 'terminal:event'.
+  const terminalManager = new TerminalManager({
+    data: (id, chunk) => sendOwned(terminalManager.ownerOf(id), 'terminal:event', { id, type: 'data', data: chunk }),
+    exit: (id, code) => sendOwned(terminalManager.ownerOf(id), 'terminal:event', { id, type: 'exit', code })
   })
-  const term = terminals
+  terminals = terminalManager
+  const term = terminalManager
   // REV-13: task chỉ được chạy khi chính main ký — và main chỉ ký task khai trong tệp của dự án
   // (`tasks:resolve`). Chữ ký gắn projectId + root nên không replay sang dự án khác.
   // Đây là rào chắn cho *task*, không phải sandbox: terminal không task vẫn mở shell của người dùng.
-  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => {
+  onFrom('terminal:create', async (owner, pid: string, cols: number, rows: number, task?: TaskDefinition) => {
     const root = await rootOf(pid)
     let approved: TaskDefinition | undefined
     if (task !== undefined) {
@@ -431,11 +436,20 @@ export function registerIpc(
       // Chỉ chuyển các trường đã ký; bỏ mọi thuộc tính lạ renderer gắn thêm.
       approved = { label: task.label, command: task.command, type: task.type, args: task.args, cwd: task.cwd, env: task.env }
     }
-    return term.create(root, Number(cols), Number(rows), approved)
+    return term.create(root, Number(cols), Number(rows), approved, owner)
   })
-  on('terminal:write', async (id: number, data: string) => { if (typeof data === 'string') term.write(Number(id), data) })
-  on('terminal:resize', async (id: number, cols: number, rows: number) => term.resize(Number(id), Number(cols), Number(rows)))
-  on('terminal:kill', async (id: number) => term.kill(Number(id)))
+  /** Chỉ cửa sổ đã mở terminal mới được ghi/đổi kích thước/kill nó (id đoán được). */
+  const ownsTerminal = (owner: WebContents, id: number): boolean => {
+    const held = term.ownerOf(Number(id))
+    return held === undefined || held === owner
+  }
+  onFrom('terminal:write', async (owner, id: number, data: string) => {
+    if (ownsTerminal(owner, Number(id)) && typeof data === 'string') term.write(Number(id), data)
+  })
+  onFrom('terminal:resize', async (owner, id: number, cols: number, rows: number) => {
+    if (ownsTerminal(owner, Number(id))) term.resize(Number(id), Number(cols), Number(rows))
+  })
+  onFrom('terminal:kill', async (owner, id: number) => { if (ownsTerminal(owner, Number(id))) term.kill(Number(id)) })
   on('terminal:resolve-path', async (pid: string, path: string) => resolveTerminalPath(await rootOf(pid), path))
   on('tasks:list', async (pid: string) => listTasks(await rootOf(pid)))
   on('tasks:config-file', async (pid: string) => ensureTasksFile(await rootOf(pid)))

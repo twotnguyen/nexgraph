@@ -85,3 +85,31 @@ it.skipIf(process.platform === 'win32')('truyền args của shell task như t�
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+it.skipIf(process.platform === 'win32')('gắn terminal với cửa sổ đã mở và chỉ kill terminal của cửa sổ đó', async () => {
+  // PR #49 vòng 2 (Important 3): dữ liệu terminal phải theo cửa sổ đã mở pty, không theo cửa sổ đang focus.
+  const root = mkdtempSync(join(tmpdir(), 'ng-term-owner-'))
+  const chunks: { id: number; chunk: string }[] = []
+  const exited = vi.fn()
+  const manager = new TerminalManager({ data: (id, chunk) => chunks.push({ id, chunk }), exit: exited })
+  const windowA = { name: 'A' }
+  const windowB = { name: 'B' }
+  try {
+    const termA = await manager.create(root, 80, 24, undefined, windowA)
+    const termB = await manager.create(root, 80, 24, undefined, windowB)
+    expect(manager.ownerOf(termA.id)).toBe(windowA)
+    expect(manager.ownerOf(termB.id)).toBe(windowB)
+
+    manager.killOwned(windowA)
+    await vi.waitFor(() => expect(exited).toHaveBeenCalledWith(termA.id, expect.any(Number)), { timeout: 10_000 })
+    expect(manager.ownerOf(termA.id)).toBeUndefined()
+    expect(manager.ownerOf(termB.id)).toBe(windowB)
+    expect(exited.mock.calls.some(([id]) => id === termB.id)).toBe(false)
+
+    manager.write(termB.id, 'echo B_CON_SONG\r')
+    await vi.waitFor(() => expect(chunks.some(({ id, chunk }) => id === termB.id && chunk.includes('B_CON_SONG'))).toBe(true), { timeout: 10_000 })
+  } finally {
+    manager.killAll()
+    rmSync(root, { recursive: true, force: true })
+  }
+})
