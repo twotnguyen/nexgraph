@@ -53,7 +53,7 @@ import { errorText } from '../state/errorText'
 import { buildExcerpts, consumePendingMultiBuffer, getPendingMultiBuffer, requestMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi, tr } from '../strings'
-import { msg, msgText, type Message } from '../state/messages'
+import { msg, msgId, msgText, type Message, type Msg } from '../state/messages'
 import './workspace.css'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
@@ -71,6 +71,8 @@ const tabLabels = (): Record<(typeof MAIN_TABS)[number], string> => ({
 interface OpenFile { file: string; line: number; lineEnd?: number; column?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
 const isMarkdownFile = (file: string) => /\.(?:md|markdown|mdown|mkd)$/i.test(file)
+/** Khoá câu cảnh báo refresh nền; ở cấp module để lúc lỗi và lúc khôi phục dùng đúng một khoá (M3). */
+const WATCH_ERROR_KEY = 'Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.'
 const containsPath = (parent: string, file: string) => file === parent || file.startsWith(`${parent}/`)
 const readRecentFiles = (projectId: string): string[] => {
   try {
@@ -127,7 +129,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Mọi lỗi/feedback của Workspace cũng vào trung tâm thông báo để chuông trên thanh công cụ đếm đúng.
   const setFeedback = useCallback((message: Message | null) => {
     setFeedbackText(message)
-    if (message) notify(msgText(message))
+    if (message) notify(msgText(message), msgId(message) ?? undefined)
   }, [])
   const chatDock = useChatDock()
   // Kiểu Wu (trái): khung chat dùng chung chỗ với bảng công cụ nên mặc định đóng để cây tệp hiện trước.
@@ -188,24 +190,27 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp. Rời đi cũng đóng phiên agent.
   useEffect(() => {
     let current = true
-    let lastWatchError: string | null = null
+    // M3 (review #51): giữ dữ liệu lỗi (chi tiết), không giữ câu đã dịch — đổi ngôn ngữ giữa lỗi và
+    // lúc khôi phục vẫn so/thu hồi đúng.
+    let lastWatchError: { error: string } | null = null
+    const watchMessage = (error: string): Msg => msg(WATCH_ERROR_KEY, { error })
     // UI-REFRESH-ERR: refresh nền lỗi phải hiện thông báo riêng (main đã lọc lỗi lặp), không chỉ cảnh báo graph cũ.
     const offWatchError = window.nexgraph.watch.onError((failure) => {
       if (!current || failure.projectId !== project.project_id) return
       // Câu lỗi của engine thường đã có dấu chấm cuối: bỏ để không thành ".." trong câu ghép.
       const detail = failure.message.trim().replace(/\.+$/, '')
-      const message = msg('Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.', { error: detail })
-      if (msgText(message) === lastWatchError) return
-      lastWatchError = msgText(message)
-      setFeedback(message)
+      if (lastWatchError?.error === detail) return
+      lastWatchError = { error: detail }
+      setFeedback(watchMessage(detail))
     })
     // UI-REFRESH-ERR M2: refresh nền chạy được trở lại thì gỡ cảnh báo cũ (toast + mục trung tâm thông báo).
     const offWatchRecovered = window.nexgraph.watch.onRecovered((projectId) => {
       if (!current || projectId !== project.project_id || !lastWatchError) return
-      const message = lastWatchError
+      const message = watchMessage(lastWatchError.error)
+      const id = msgId(message)
       lastWatchError = null
-      withdrawNotification(message)
-      setFeedbackText((previous) => (msgText(previous) === message ? null : previous))
+      withdrawNotification(msgText(message), id ?? undefined)
+      setFeedbackText((previous) => (msgId(previous) === id ? null : previous))
     })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
       if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
@@ -337,7 +342,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Thông báo trên đồ thị cũng vào trung tâm để chuông đếm cả thao tác tìm đường/hỏi/trích dẫn.
   const setNotice = useCallback((message: Message | null) => {
     setNoticeText(message)
-    if (message) notify(msgText(message))
+    if (message) notify(msgText(message), msgId(message) ?? undefined)
   }, [])
   const inspect = (inspection: AgentInspection) => {
     setInspections((current) => current.some((item) => item.id === inspection.id) ? current.map((item) => item.id === inspection.id ? inspection : item) : [...current, inspection])

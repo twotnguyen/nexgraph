@@ -934,6 +934,24 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     expect(within(bell).queryByText('1')).not.toBeInTheDocument()
   })
 
+  it('M3: đổi ngôn ngữ giữa lúc có cảnh báo và lúc khôi phục vẫn gỡ được cảnh báo', async () => {
+    act(() => clearNotifications())
+    const { emitWatchError, emitWatchRecovered } = installNexgraph()
+    render(<><div style={{ width: 1000, height: 700 }}><LocaleHost render={() => <WorkspaceScreen project={project()} />} /></div><NotificationCenter /></>)
+    const bell = screen.getByRole('button', { name: 'Thông báo' })
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
+    expect(await screen.findByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Đổi ngôn ngữ khi cảnh báo đang hiện: câu đổi theo, không chốt chuỗi lúc nhận sự kiện.
+    act(() => setLocale('en'))
+    expect(screen.getByText(/Background graph refresh failed after files changed/)).toBeInTheDocument()
+    // Khôi phục sau khi đã đổi ngôn ngữ: vẫn phải gỡ đúng cảnh báo (trước đây so chuỗi đã dịch nên trượt).
+    act(() => emitWatchRecovered('p1'))
+    expect(screen.queryByText(/Background graph refresh failed after files changed/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).not.toBeInTheDocument()
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+  })
+
   it('thao tác thật trong Workspace (Xem dấu trang) làm badge chuông tăng', async () => {
     act(() => clearNotifications())
     installNexgraph()
