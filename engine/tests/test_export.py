@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.bridge.to_nx import Scope
+from nexgraph_engine.export.callflow_i18n import localize_callflow_html
 from nexgraph_engine.export.run import export_graph
 
 
@@ -328,8 +329,106 @@ def test_callflow_html_in_vietnamese(copy_fixture, index_project, tmp_path):
     assert "groups implementation around" in en and "gom phần triển khai quanh" in vi
     assert "This section comes from graphify community clustering." in en
     assert "Phần này do graphify gom cụm cộng đồng sinh ra." in vi
+    # Thanh công cụ Mermaid (JS template của graphify, review-48 Minor 4)
+    assert 'title="Zoom out"' in en and 'title="Thu nhỏ"' in vi
+    assert 'title="Zoom in"' in en and 'title="Phóng to"' in vi
+    assert 'title="Fit width">Fit</button>' in en and 'title="Vừa chiều rộng">Vừa</button>' in vi
+    assert 'title="Reset view">Reset</button>' in en and 'title="Đặt lại khung nhìn">Đặt lại</button>' in vi
+    assert ">Fit<" not in vi and ">Reset<" not in vi
     # EN như cũ: không lẫn tiếng Việt (fixture py_mini là mã tiếng Anh)
     assert not any(ch in en for ch in "ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ")
+
+
+_CALLFLOW_RULE_SAMPLES = [
+    # (nguồn tiếng Anh, bản dịch phải có trong kết quả) — phủ MỌI quy tắc trong _RULES + _NOTE.
+    (" — Complete Call Flow &amp; Architecture Documentation", " — Tài liệu luồng gọi &amp; kiến trúc đầy đủ"),
+    ("Generated from graphify knowledge graph: 11 nodes, 15 edges, 2 communities. Commit: abc1234",
+     "Sinh từ đồ thị tri thức graphify: 11 nút, 15 cạnh, 2 cộng đồng. Commit: abc1234"),
+    ('<h2 id="overview">1. Architecture Overview</h2>', '<h2 id="overview">1. Tổng quan kiến trúc</h2>'),
+    ('<a href="#overview">Architecture Overview</a>', '<a href="#overview">Tổng quan kiến trúc</a>'),
+    ('<h2 id="other">3. Other</h2>', '<h2 id="other">3. Khác</h2>'),
+    ('<a href="#other">Other</a>', '<a href="#other">Khác</a>'),
+    ("<h4>Architecture Layers</h4>", "<h4>Các tầng kiến trúc</h4>"),
+    ("<tr><th>Layer</th><th>Nodes</th><th>Communities</th></tr>",
+     "<tr><th>Tầng</th><th>Nút</th><th>Cộng đồng</th></tr>"),
+    ("<h4>Core Flow</h4>", "<h4>Luồng chính</h4>"),
+    (">Graph nodes -> documentation<", ">Các nút đồ thị -> tài liệu<"),
+    ("Serving API groups implementation around utilpy, mostly in main.py. This section covers 11 nodes"
+     " and 15 internal edges; the diagram shows only representative relationships to stay readable.",
+     "Serving API gom phần triển khai quanh utilpy, chủ yếu ở main.py. Phần này gồm 11 nút và 15 cạnh nội bộ;"),
+    ("<h3>Call Details</h3>", "<h3>Chi tiết lời gọi</h3>"),
+    ('<th style="width:28%">Node</th>', '<th style="width:28%">Nút</th>'),
+    ('<th style="width:10%">Type</th>', '<th style="width:10%">Loại</th>'),
+    ('<th style="width:17%">Caller</th>', '<th style="width:17%">Nơi gọi</th>'),
+    ('<th style="width:20%">Callees</th>', '<th style="width:20%">Được gọi</th>'),
+    ('<th style="width:20%">Description</th>', '<th style="width:20%">Mô tả</th>'),
+    ("<td>External entry / no inbound edge</td>", "<td>Điểm vào ngoài / không có cạnh vào</td>"),
+    ("<td>No direct outbound edge</td>", "<td>Không có cạnh ra trực tiếp</td>"),
+    ("<td>Module file in main.py.</td>", "<td>Tệp mô-đun trong main.py.</td>"),
+    ("<td>Design note for App.</td>", "<td>Ghi chú thiết kế cho App.</td>"),
+    ("<td>Documentation node describing Guide.</td>", "<td>Nút tài liệu mô tả Guide.</td>"),
+    ("<td>App node in main.py.</td>", "<td>Nút App trong main.py.</td>"),
+    ("<h4>Key Files</h4>", "<h4>Tệp chính</h4>"),
+    ("<tr><th>File</th><th>Coverage</th></tr>", "<tr><th>Tệp</th><th>Độ phủ</th></tr>"),
+    ('<td colspan="2">No source file mapping</td>', '<td colspan="2">Không có tệp nguồn</td>'),
+    ("<h4>Design Notes</h4>", "<h4>Ghi chú thiết kế</h4>"),
+    ("No high-confidence call edges detected", "Không phát hiện cạnh gọi có độ tin cậy cao"),
+    ('<h2 id="stats">Project Statistics</h2>', '<h2 id="stats">Thống kê dự án</h2>'),
+    ("<h4>Graph</h4>", "<h4>Đồ thị</h4>"),
+    ("<tr><td>Nodes</td>", "<tr><td>Nút</td>"),
+    ("<tr><td>Edges</td>", "<tr><td>Cạnh</td>"),
+    ("<tr><td>Hyperedges</td>", "<tr><td>Siêu cạnh</td>"),
+    ("<tr><td>Communities</td>", "<tr><td>Cộng đồng</td>"),
+    ("<tr><td>Documented Sections</td>", "<tr><td>Phần đã ghi tài liệu</td>"),
+    ("<h4>Edge Confidence</h4>", "<h4>Độ tin cậy của cạnh</h4>"),
+    ('title="Zoom out"', 'title="Thu nhỏ"'),
+    ('title="Zoom in"', 'title="Phóng to"'),
+    ('title="Fit width">Fit</button>', 'title="Vừa chiều rộng">Vừa</button>'),
+    ('title="Reset view">Reset</button>', 'title="Đặt lại khung nhìn">Đặt lại</button>'),
+    (" — Architecture Documentation</p>", " — Tài liệu kiến trúc</p>"),
+    ("Generated: 2026-11-23 14:26 UTC · graphify callflow-html", "Tạo lúc: 2026-11-23 14:26 UTC · graphify callflow-html"),
+    ('<h2 id="hyperedges">Group Relationships (Hyperedges)</h2>',
+     '<h2 id="hyperedges">Quan hệ nhóm (Siêu cạnh)</h2>'),
+    (" — 3 participants</p>", " — 3 thành viên</p>"),
+    ("<li>... and 5 more</li>", "<li>... và 5 nữa</li>"),
+    ("This section comes from graphify community clustering. Relationship summary: calls x2. "
+     "The diagram prioritizes high-confidence calls or usage relationships; the table keeps the broader"
+     " node inventory.",
+     "Tóm tắt quan hệ: gọi x2"),
+]
+
+
+def test_every_callflow_translation_rule_applies():
+    """MIN-48: test cũ chỉ phủ ~15/42 quy tắc; đây phủ từng quy tắc, để graphify đổi chuỗi là đỏ ngay."""
+    from nexgraph_engine.export.callflow_i18n import _NOTE, _RULES
+
+    assert len(_RULES) + 1 == len(_CALLFLOW_RULE_SAMPLES)  # thêm quy tắc phải thêm mẫu
+    for english, vietnamese in _CALLFLOW_RULE_SAMPLES:
+        out = localize_callflow_html(english, "vi")
+        assert vietnamese in out, f"chưa dịch: {english!r} → {out!r}"
+        if english != vietnamese:
+            assert english not in out, f"còn nguyên tiếng Anh: {english!r}"
+
+
+def test_callflow_section_names_translated_only_as_labels():
+    """MIN-48: tên phần trùng tên dự án/cụm/nút không được dịch; chỉ nhãn do graphify sinh mới dịch."""
+    html = ('<a href="#x">Serving API</a><h2 id="x">2. Serving API</h2>'
+            "<h4>Tests &amp; Fixtures</h4>"
+            "<p>Serving API gom phần triển khai quanh utilpy, chủ yếu ở main.py.</p>"
+            "<tr><td>Serving API</td><td>3</td></tr>"
+            '<div class="arrow-chain">Serving API -> Graph Build</div>'
+            '<span class="tag tag-class">Serving API</span><td>Serving API</td>')
+    out = localize_callflow_html(html, "vi")
+
+    assert '<a href="#x">Phục vụ API</a>' in out
+    assert '<h2 id="x">2. Phục vụ API</h2>' in out
+    assert "<h4>Kiểm thử &amp; dữ liệu mẫu</h4>" in out
+    assert "<p>Phục vụ API gom phần triển khai quanh utilpy" in out
+    assert "<tr><td>Phục vụ API</td><td>3</td></tr>" in out
+    assert '<div class="arrow-chain">Phục vụ API -> Dựng đồ thị</div>' in out
+    # Dữ liệu (nhãn nút/tệp) giữ nguyên
+    assert '<span class="tag tag-class">Serving API</span>' in out
+    assert "<td>Serving API</td>" in out
 
 
 def test_export_route_accepts_lang(api, copy_fixture, tmp_path):
