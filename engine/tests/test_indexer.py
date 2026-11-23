@@ -818,6 +818,26 @@ def test_repeated_pool_creation_failure_gives_up_to_the_per_file_path(tmp_path, 
     assert any(e.message and "gián đoạn" in e.message for e in events)
 
 
+def test_single_worker_index_has_no_interruption_message(tmp_path, index_project, monkeypatch):
+    """workers == 1 (mọi dự án < 200 tệp, mặc định trên Windows) không có gián đoạn nào để báo.
+
+    review-53 Important 3: khi `workers == 1` khối song song bị bỏ qua nên `pending` chứa MỌI lô, `todo`
+    luôn khác rỗng ⇒ engine phát "Bộ trích xuất song song gián đoạn…" ngay 0/N dù chưa từng có pool song
+    song. `IndexingScreen` render `job.message` ở pha `structure` nên người dùng thấy banner sai.
+    """
+    from nexgraph_engine.index import indexer
+
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 1)
+    root = _many_py(tmp_path / "p", 30)
+    store, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert [e.message for e in events if e.message] == []  # không message nào, kể cả "gián đoạn"
+    assert [e.files_done for e in events if e.state == "structure"] == list(range(0, 31))
+    # Hành vi/đầu ra như main: đủ tệp, đọc trong tiến trình chính, không tự khai fallback.
+    assert store.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 30
+    assert result.workers_effective == 1 and result.fallback_serial is False
+
+
 def test_index_workers_policy(monkeypatch):
     from nexgraph_engine.index import indexer
     monkeypatch.delenv("NEXGRAPH_INDEX_WORKERS", raising=False)

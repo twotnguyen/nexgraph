@@ -468,7 +468,10 @@ class Indexer:
 
         remaining = [i for b in pending for i in batches[b]]
         todo = suspects + remaining
-        if todo and not self.cancel.is_set():
+        # Chỉ báo "gián đoạn" khi thật sự có lớp song song bị mất. `workers == 1` (mọi dự án < 200 tệp,
+        # mặc định trên Windows) chưa từng có pool song song nên đây không phải gián đoạn — bản trước
+        # phát câu này ngay 0/N ở mọi lần index một worker (review-53 I3).
+        if workers > 1 and todo and not self.cancel.is_set():
             self.on_progress(ProgressEvent("structure", consumed, total,
                                            "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
 
