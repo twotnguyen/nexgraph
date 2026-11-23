@@ -124,7 +124,7 @@ describe('WorkspaceScreen', () => {
     installNexgraph({ graph: { tour } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
     await userEvent.click(screen.getByRole('button', { name: 'Tham quan' }))
-    expect(tour).toHaveBeenCalledWith('p1')
+    expect(tour).toHaveBeenCalledWith('p1', 'vi')
     expect(await screen.findByText(/Chưa đủ dữ liệu/)).toBeInTheDocument()
   })
 
@@ -908,6 +908,32 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     act(() => { runCommand('notifications.toggle'); clearNotifications() })
   })
 
+  it('UI-REFRESH-ERR: lỗi refresh nền hiện toast + thông báo rõ, lỗi lặp không spam', async () => {
+    act(() => clearNotifications())
+    const { emitWatchError, emitWatchRecovered } = installNexgraph()
+    render(<><div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div><NotificationCenter /></>)
+    const bell = screen.getByRole('button', { name: 'Thông báo' })
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+    // Dự án khác thì bỏ qua.
+    act(() => emitWatchError({ projectId: 'p-khac', message: 'disk I/O error' }))
+    expect(screen.queryByText(/disk I\/O error/)).not.toBeInTheDocument()
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
+    expect(await screen.findByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    expect(screen.getByText(/Lỗi nội bộ engine\. Xem log để biết chi tiết\. Đồ thị/)).toBeInTheDocument()
+    expect(screen.queryByText(/\.\. Đồ thị/)).not.toBeInTheDocument()
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Cùng lỗi lặp lại: không thêm thông báo thứ hai.
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Dự án khác khôi phục thì không đụng cảnh báo của dự án này.
+    act(() => emitWatchRecovered('p-khac'))
+    expect(screen.getByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    // Refresh thành công trở lại: main gửi watch:ok → toast + mục thông báo cũ biến mất.
+    act(() => emitWatchRecovered('p1'))
+    expect(screen.queryByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).not.toBeInTheDocument()
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+  })
+
   it('thao tác thật trong Workspace (Xem dấu trang) làm badge chuông tăng', async () => {
     act(() => clearNotifications())
     installNexgraph()
@@ -1008,9 +1034,27 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     act(() => { expect(runCommand('editor.split_up')).toBe(true) })
     expect(canvas().getAttribute('data-split')).toBe('up')
     expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    // MIN-43 M1: thẻ xem trước được thăng cấp thành tab thường sau khi chia đôi (như VS Code).
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab', { name: 'Xem trước a.ts' })).not.toBeInTheDocument()
     // Bấm lại đúng hướng đang chia thì bỏ chia đôi.
     act(() => { expect(runCommand('editor.split_up')).toBe(true) })
     expect(canvas().getAttribute('data-split')).toBeNull()
+  })
+
+  it('MIN-43 M3: chia đôi từ tab tệp thật (nhánh activeFile) vẫn chạy và không đổi thẻ đang chọn', async () => {
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    // Bấm vào thẻ tệp thật để rời thẻ xem trước: đây là nhánh `activeFile` của splitTo.
+    await userEvent.click(screen.getByRole('tab', { name: 'a.ts' }))
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
+    const canvas = () => document.querySelector('.canvas-wrap') as HTMLElement
+    act(() => { expect(runCommand('editor.split_right')).toBe(true) })
+    expect(canvas().getAttribute('data-split')).toBe('right')
+    expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('chia đôi trên rồi sang phải đổi trục, terminal vẫn nằm ngoài khung chia đôi', async () => {

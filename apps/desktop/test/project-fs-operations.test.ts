@@ -196,6 +196,22 @@ describe('project filesystem operations', () => {
     expect(readdirSync(join(root, 'dest'))).toEqual([])
   })
 
+  it('MIN-38b M2 (quyết định lead): tạo, chép, đổi tên, hiện và dọn .vscode/tasks.json đều không bị chặn', async () => {
+    const fs = operations()
+    mkdirSync(join(root, '.vscode'))
+    writeFileSync(join(root, 'tasks.json'), '{"version":"2.0.0","tasks":[]}')
+    await fs.copy('p1', 'tasks.json', '.vscode')
+    expect(readFileSync(join(root, '.vscode', 'tasks.json'), 'utf8')).toBe('{"version":"2.0.0","tasks":[]}')
+    await fs.reveal('p1', '.vscode/tasks.json')
+    expect(revealed).toEqual([join(realpathSync.native(root), '.vscode', 'tasks.json')])
+    await fs.rename('p1', '.vscode/tasks.json', '.vscode/khac.json')
+    expect(existsSync(join(root, '.vscode', 'tasks.json'))).toBe(false)
+    await fs.createFile('p1', '.vscode/tasks.json')
+    expect(readFileSync(join(root, '.vscode', 'tasks.json'), 'utf8')).toBe('')
+    await fs.trash('p1', '.vscode/tasks.json')
+    expect(trashed).toEqual([join(realpathSync.native(root), '.vscode', 'tasks.json')])
+  })
+
   it('only passes validated, existing project items to the system shell', async () => {
     const fs = operations()
     writeFileSync(join(root, 'a.txt'), 'a')

@@ -8,7 +8,7 @@ import { FileView } from '../components/viewers/FileView'
 import { MarkdownPreview } from '../components/viewers/MarkdownPreview'
 import { MultiBufferView } from '../components/viewers/MultiBufferView'
 import { SplitEditor } from '../components/editor/SplitEditor'
-import { clearNotifications, notify, toggleNotifications } from '../components/common/NotificationCenter'
+import { clearNotifications, notify, toggleNotifications, withdrawNotification } from '../components/common/NotificationCenter'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import { TaskPicker, readTaskHistory, rememberTask } from '../components/terminal/TaskPicker'
 import { WorktreePicker } from '../components/git/WorktreePicker'
@@ -187,16 +187,37 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp. Rời đi cũng đóng phiên agent.
   useEffect(() => {
     let current = true
+    let lastWatchError: string | null = null
+    // UI-REFRESH-ERR: refresh nền lỗi phải hiện thông báo riêng (main đã lọc lỗi lặp), không chỉ cảnh báo graph cũ.
+    const offWatchError = window.nexgraph.watch.onError((failure) => {
+      if (!current || failure.projectId !== project.project_id) return
+      // Câu lỗi của engine thường đã có dấu chấm cuối: bỏ để không thành ".." trong câu ghép.
+      const detail = failure.message.trim().replace(/\.+$/, '')
+      const message = tr('Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.', { error: detail })
+      if (message === lastWatchError) return
+      lastWatchError = message
+      setFeedback(message)
+    })
+    // UI-REFRESH-ERR M2: refresh nền chạy được trở lại thì gỡ cảnh báo cũ (toast + mục trung tâm thông báo).
+    const offWatchRecovered = window.nexgraph.watch.onRecovered((projectId) => {
+      if (!current || projectId !== project.project_id || !lastWatchError) return
+      const message = lastWatchError
+      lastWatchError = null
+      withdrawNotification(message)
+      setFeedbackText((previous) => (previous === message ? null : previous))
+    })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
       if (current) setFeedback(tr('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
     })
     return () => {
       current = false
+      offWatchError()
+      offWatchRecovered()
       void window.nexgraph.watch.stop(project.project_id).catch(() => {})
       // Trong extension, trợ lý sống ở view riêng của nền nên rời màn này không đóng phiên của nó.
       if (!window.nexgraph.host) void window.nexgraph.agent.close(project.project_id).catch(() => {})
     }
-  }, [project.project_id, project.path])
+  }, [project.project_id, project.path, setFeedback])
 
   // Một nút vừa đổi vừa thiếu test thì hiện là "chưa có test" (đỏ); ưu tiên: gap > changed > test > impacted.
   const highlights = useMemo(() => {
@@ -804,7 +825,15 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     }
     // Thẻ xem trước (`preview:`) không có `activeFile`; chia đôi phải dùng tệp đang xem.
     const current = activeFile ?? previewFile
-    if (current) { setSplitSide(direction); setSide(current) }
+    if (current) {
+      setSplitSide(direction)
+      setSide(current)
+      // MIN-43 M1: chia đôi một thẻ xem trước thì nó thành tab thường (như VS Code), không bị thay khi bấm tệp khác.
+      if (!activeFile && previewFile) {
+        setPreviews((cur) => cur.filter((file) => file !== previewFile))
+        setTab(`file:${previewFile}`)
+      }
+    }
   }
   useCommand('editor.split_right', () => splitTo('right'))
   useCommand('editor.split_up', () => splitTo('up'))

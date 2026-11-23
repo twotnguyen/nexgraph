@@ -38,6 +38,11 @@ export function dismissNotification(id: number): void {
 export function clearNotifications(): void {
   if (notices.length) publish([])
 }
+/** Gỡ mọi thông báo có đúng nội dung — dùng khi cảnh báo đã khôi phục (refresh nền chạy lại được). */
+export function withdrawNotification(message: string): void {
+  const next = notices.filter((notice) => notice.message !== message)
+  if (next.length !== notices.length) publish(next)
+}
 export function toggleNotifications(): void {
   open = !open
   emit(openListeners)

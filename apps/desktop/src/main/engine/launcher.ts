@@ -30,7 +30,7 @@ const PYTHON_ISOLATION = ['PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP']
  * bằng env kế thừa nên bỏ hai biến này là tab Pull request mất đăng nhập khi người dùng dùng
  * token qua env thay vì `gh auth login`.
  */
-const ENGINE_PASSTHROUGH = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_HOST']
+const ENGINE_PASSTHROUGH = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_HOST', 'GH_CONFIG_DIR', 'XDG_CONFIG_HOME']
 /** NEXGRAPH_* là cấu hình nội bộ của engine (token, chế độ hook, số worker…). */
 const ENGINE_PREFIX = /^NEXGRAPH_/i
 
@@ -102,7 +102,6 @@ export function startEngine(
   const isWin = process.platform === 'win32'
   const child = spawn(cmd.command, [...cmd.args, 'serve', '--data-dir', opts.dataDir, '--port', '0', '--exit-on-stdin-close'], {
     cwd: cmd.cwd,
-    // Token chỉ đi qua biến môi trường, không bao giờ qua argv.
     // Token chỉ đi qua biến môi trường, không bao giờ qua argv. `opts.env` là biến main đặt thêm
     // (test hook), không phải env kế thừa từ shell — env kế thừa đi qua allowlist của `engineEnv`.
     env: engineEnv(process.env, { ...opts.env, NEXGRAPH_TOKEN: token }),

@@ -171,6 +171,11 @@ export async function ensureTasksFile(root: string): Promise<string> {
   return '.vscode/tasks.json'
 }
 
+/**
+ * Thay biến `${file}`/`${fileDirname}`… **nguyên văn** như VS Code, kể cả trong `command`: người dùng tự đặt ngoặc
+ * nếu cần, không chèn thêm nháy (review #47 I1/I3). Task do repo khai báo vốn chạy lệnh tuỳ ý nên quote biến không
+ * tăng an toàn thật (ADR 0016). `args` để nguyên vì shellTask tự quote từng arg.
+ */
 export function resolveTask(root: string, task: TaskDefinition, context: { file?: string; line?: number }): TaskDefinition {
   const workspace = resolveInside(root, '.')
   const file = context.file ? resolveInside(root, toProjectRelative(root, context.file)) : undefined
@@ -199,7 +204,7 @@ export function resolveTask(root: string, task: TaskDefinition, context: { file?
     ...task,
     label: expand(task.label),
     command: expand(task.command),
-    ...(task.args !== undefined ? { args: task.args.map(expand) } : {}),
+    ...(task.args !== undefined ? { args: task.args.map((arg) => expand(arg)) } : {}),
     ...(task.cwd !== undefined ? { cwd: expand(task.cwd) } : {}),
     ...(task.env !== undefined ? { env: Object.fromEntries(Object.entries(task.env).map(([key, value]) => [key, expand(value)])) } : {})
   }

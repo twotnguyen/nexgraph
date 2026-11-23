@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
+import { errorText } from '../../state/errorText'
 import { Icon } from '../common/icons'
 import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -95,7 +96,9 @@ function errorCode(e: unknown): string {
 }
 
 function errorMessage(e: unknown): string {
-  return vi.chat.errors[errorCode(e)] || (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
+  // Mã cũ có câu riêng trong `chat.errors`; mã mới (conflict, bad_param, …) dịch câu Việt của main qua `errorText`
+  // để không lọt tiếng Việt khi giao diện English (review #47 Minor 6).
+  return vi.chat.errors[errorCode(e)] || errorText(e)
 }
 
 function isFileApproval(value: unknown): value is FileApprovalRequest {
@@ -343,7 +346,9 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       } else if (e.type === 'error') {
         if (e.code !== 'ai_cancelled') announceAgent('error', alertTitle.current)
         // Câu theo mã lỗi (dịch theo ngôn ngữ) + thông điệp ngắn của provider để người dùng biết phải sửa gì.
-        fail(t.q, `${vi.chat.errors[e.code] || e.message}${e.detail ? ` — ${e.detail}` : ''}`)
+        // Mã lạ dùng `errorText` để câu Việt của main (kể cả `ai_context_small` kèm số token) dịch được ở EN.
+        const text = vi.chat.errors[e.code] || errorText({ message: e.message })
+        fail(t.q, `${text}${e.detail ? ` — ${e.detail}` : ''}`)
       }
     })
     return () => {

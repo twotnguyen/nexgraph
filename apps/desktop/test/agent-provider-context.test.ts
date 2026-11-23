@@ -2,9 +2,9 @@
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AccountService, CUSTOM_MODEL_SPEC } from '../src/main/agent/accounts'
-import { AgentService, createPiSession } from '../src/main/agent/session'
+import { AgentService, contextWindowFailure, createPiSession, CONTEXT_WINDOW_MESSAGE } from '../src/main/agent/session'
 import { SecretStore } from '../src/main/ai/settings'
 import type { EngineApi } from '../src/main/engine/api'
 import type { AgentEvent, AiConsentTarget } from '../src/shared/agent-types'
@@ -107,13 +107,47 @@ describe('F4 mục 1 — context window provider tuỳ chỉnh', () => {
     expect(maxOutput(seen.bodies[from])).toBeGreaterThanOrEqual(1024)
   })
 
-  it('context window quá nhỏ: báo lỗi rõ ràng và KHÔNG gửi yêu cầu nào', async () => {
+  it('context window quá nhỏ: nói rõ số token của model và KHÔNG gửi yêu cầu nào (MIN-46 M3)', async () => {
     const from = seen.bodies.length
     const events = await turn('tiny', 'fake-1', { contextWindow: 2000 })
     expect(seen.bodies.length).toBe(from) // không có request nào rời app
     const end = lastEnd(events) as { code: string; message: string }
-    expect(end).toMatchObject({ code: 'ai_context_window' })
-    expect(end.message).toMatch(/Ngữ cảnh vượt giới hạn mô hình/)
+    expect(end).toMatchObject({ code: 'ai_context_small' })
+    expect(end.message).toBe('Mô hình chỉ có 2000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.')
+  })
+
+  it('câu lỗi ngữ cảnh theo đúng cửa sổ: nhỏ thì chỉ model lớn hơn, đủ rộng thì giữ câu cũ', () => {
+    expect(contextWindowFailure(6000)).toMatchObject({
+      code: 'ai_context_small', message: 'Mô hình chỉ có 6000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.'
+    })
+    expect(contextWindowFailure(8000)).toEqual({ code: 'ai_context_window', message: CONTEXT_WINDOW_MESSAGE })
+    expect(contextWindowFailure(128_000)).toEqual({ code: 'ai_context_window', message: CONTEXT_WINDOW_MESSAGE })
+  })
+
+  it('MIN-46 M2: sửa provider khi /v1/models lỗi vẫn giữ contextWindow đã dò của cùng model', async () => {
+    const accounts = await account()
+    await accounts.saveCustomProvider({ id: 'keep', label: 'Keep', baseUrl: llm.url, model: 'fake-1' }, KEY)
+    expect((accounts.modelRuntime.getModel('keep', 'fake-1') as { contextWindow: number }).contextWindow).toBe(65_536)
+    const offline = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+    try {
+      await accounts.saveCustomProvider({ id: 'keep', label: 'Keep đổi tên', baseUrl: llm.url, model: 'fake-1' })
+    } finally { offline.mockRestore() }
+    accounts.selectModel('keep', 'fake-1')
+    expect((await accounts.listModels()).find((m) => m.provider === 'keep')?.contextWindow).toBe(65_536)
+    expect(accounts.selectedModelWindowKnown()).toBe(true)
+  })
+
+  it('MIN-46 M3: Kiểm tra kết nối cảnh báo ngay khi cửa sổ ngữ cảnh quá nhỏ', async () => {
+    const small = await account()
+    await small.saveCustomProvider({ id: 'small', label: 'Small', baseUrl: llm.url, model: 'fake-1', contextWindow: 6000 }, KEY)
+    small.selectModel('small', 'fake-1')
+    await expect(small.test()).resolves.toMatchObject({ ok: true, contextWarning: 6000 })
+    const wide = await account()
+    await wide.saveCustomProvider({ id: 'wide', label: 'Wide', baseUrl: llm.url, model: 'fake-1' }, KEY)
+    wide.selectModel('wide', 'fake-1')
+    const wideResult = await wide.test()
+    expect(wideResult).toMatchObject({ ok: true })
+    expect(wideResult.contextWarning).toBeUndefined()
   })
 
   it('createPiSession không gửi maxTokens dưới sàn khi ngân sách tác vụ cạn', async () => {

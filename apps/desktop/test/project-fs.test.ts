@@ -137,6 +137,20 @@ describe('fsHandlers qua toIpcResult', () => {
   it('projectId lạ trả unknown_project', async () => {
     expect(await toIpcResult(() => h.read('nope', 'a.ts'))).toMatchObject({ ok: false, error: { code: 'unknown_project' } })
   })
+  it('MIN-38b M2 (quyết định lead): fs:write lưu được .vscode/tasks.json như mọi tệp người dùng mở trong editor', async () => {
+    mkdirSync(join(root, '.vscode'))
+    writeFileSync(join(root, '.vscode', 'tasks.json'), '{"version":"2.0.0","tasks":[]}')
+    const version = (await h.read('p1', '.vscode/tasks.json')).version
+    expect(await toIpcResult(() => h.write('p1', '.vscode/tasks.json', '{"version":"2.0.0","tasks":[{"label":"x"}]}', { eol: '\n', bom: false, expectedVersion: version })))
+      .toMatchObject({ ok: true })
+    expect(readFileSync(join(root, '.vscode', 'tasks.json'), 'utf8')).toContain('"label":"x"')
+    // Biến thể đường dẫn ghi đúng cùng tệp — không còn deny-list nên không còn khái niệm "lách".
+    const after = (await h.read('p1', '.vscode/tasks.json')).version
+    expect(await toIpcResult(() => h.write('p1', '.vscode//tasks.json', '{"version":"2.0.0","tasks":[{"label":"y"}]}', { eol: '\n', bom: false, expectedVersion: after })))
+      .toMatchObject({ ok: true })
+    expect(readFileSync(join(root, '.vscode', 'tasks.json'), 'utf8')).toContain('"label":"y"')
+  })
+
   it('đọc ghi đúng gốc của dự án', async () => {
     await toIpcResult(() => h.write('p1', 'a.ts', 'hi', { eol: '\n', bom: false }))
     expect(await toIpcResult(() => h.read('p1', 'a.ts'))).toMatchObject({ ok: true, data: { text: 'hi' } })

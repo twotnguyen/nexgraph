@@ -43,7 +43,8 @@ const viStrings = {
     modelTitle: 'Chọn model',
     modelPlaceholder: '— Chưa chọn —',
     test: 'Kiểm tra kết nối',
-    testOk: 'Kết nối được'
+    testOk: 'Kết nối được',
+    contextTooSmall: 'Mô hình chỉ có {n} token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.'
   },
   agent: {
     ask: 'Hỏi', edit: 'Sửa', modeTitle: 'Chế độ',
@@ -739,7 +740,8 @@ const enStrings: typeof viStrings = {
     modelTitle: 'Select a model',
     modelPlaceholder: '— None selected —',
     test: 'Test connection',
-    testOk: 'Connection successful'
+    testOk: 'Connection successful',
+    contextTooSmall: 'The model has only {n} context tokens — not enough for the system prompt and tools. Choose a larger model.'
   },
   agent: {
     ask: 'Ask', edit: 'Edit', modeTitle: 'Mode',
@@ -1488,6 +1490,7 @@ export const uiEn: Record<string, string> = {
   'Người dùng': 'User',
   // WorkspaceScreen: lệnh E3 (dấu trang, nhiều đoạn mã)
   'Không có dấu trang nào trong dự án này.': 'No bookmarks in this project.',
+  'Engine chưa sẵn sàng.': 'The engine is not ready yet.',
   'Dấu trang': 'Bookmarks',
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.

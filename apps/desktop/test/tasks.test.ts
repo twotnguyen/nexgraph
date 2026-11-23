@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -137,7 +138,35 @@ describe('project tasks', () => {
     expect(task.env?.FILE).toBe('${file}')
     expect(resolveTask(root, task, { file: join(root, 'src', 'hello.ts'), line: 42 }).args?.[0]).toBe(join(root, 'src', 'hello.ts'))
     const absolute = join(root, 'src', 'hello.ts')
+    // Quyết định lead (review #47 I1/I3): biến trong `command` chèn nguyên văn như VS Code; `args` để nguyên vì shellTask tự quote từng arg.
     expect(resolveTask(root, { label: 'x', command: '${file}' }, { file: absolute, line: 42 }).command).toBe(absolute)
+  })
+
+  it.runIf(process.platform !== 'win32')('MIN-38b M1 (quyết định lead): echo "${file}" in đường dẫn sạch, không thêm nháy', () => {
+    const file = join(root, 'src', 'hello.ts')
+    const resolved = resolveTask(root, { label: 'x', command: 'echo "${file}"' }, { file })
+    expect(resolved.command).toBe(`echo "${file}"`)
+    expect(execFileSync('/bin/sh', ['-c', resolved.command], { cwd: root, encoding: 'utf8' }).trim()).toBe(file)
+    // Người dùng đã tự đặt ngoặc đơn: giữ nguyên, không thành ''/path''.
+    const single = resolveTask(root, { label: 'x', command: "printf '%s' '${file}'" }, { file })
+    expect(execFileSync('/bin/sh', ['-c', single.command], { cwd: root, encoding: 'utf8' })).toBe(file)
+  })
+
+  it.runIf(process.platform !== 'win32')('MIN-38b M1 (quyết định lead): --goto "${file}:${lineNumber}" ghép đúng như VS Code', () => {
+    const resolved = resolveTask(root, { label: 'x', command: 'code --goto "${file}:${lineNumber}"' }, { file: 'src/a.ts', line: 7 })
+    expect(resolved.command).toBe(`code --goto "${join(root, 'src', 'a.ts')}:7"`)
+    const multi = resolveTask(root, { label: 'x', command: 'echo "line ${lineNumber}: ${file}"' }, { file: 'src/a.ts', line: 7 })
+    expect(multi.command).toBe(`echo "line 7: ${join(root, 'src', 'a.ts')}"`)
+  })
+
+  it.runIf(process.platform !== 'win32')('MIN-38b M1 (quyết định lead): echo ${file} chèn nguyên văn, giống VS Code', () => {
+    const resolved = resolveTask(root, { label: 'x', command: 'echo ${file}' }, { file: 'a;touch pwned;' })
+    expect(resolved.command).toBe(`echo ${join(root, 'a;touch pwned;')}`)
+  })
+
+  it.runIf(process.platform !== 'win32')('MIN-38b M1: task type process giữ command là chương trình, không quote', () => {
+    const resolved = resolveTask(root, { label: 'x', command: '${file}', type: 'process' }, { file: 'a;touch pwned;' })
+    expect(resolved.command).toBe(join(root, 'a;touch pwned;'))
   })
 
   it('expands braced Zed variables and rejects missing context by name', () => {

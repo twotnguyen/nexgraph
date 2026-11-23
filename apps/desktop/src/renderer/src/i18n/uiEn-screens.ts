@@ -75,6 +75,7 @@ export const uiEnScreens: Record<string, string> = {
   'Ký hiệu tệp': 'File Symbols',
   'Lỗi trong dự án': 'Problems in project',
   'Không theo dõi được thay đổi của tệp. {error}': 'Could not watch file changes. {error}',
+  'Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.': 'Background graph refresh failed after files changed: {error}. The graph may be older than the source.',
   'Luồng {id}': 'Flow {id}',
   'Kiến trúc dự án': 'Project architecture',
   'Đang tìm đường nối…': 'Finding a connection path…',

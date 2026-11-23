@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { TourStep } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
+import { useLocale } from '../../state/locale'
 
 interface Props {
   projectId: string
@@ -19,12 +20,13 @@ export function TourPanel({ projectId, revision = 0, projectName, onOpenFlow, on
   const [index, setIndex] = useState(0)
   const [retry, setRetry] = useState(0)
   const started = useRef<string | null>(null)
+  const locale = useLocale()
 
   useEffect(() => {
     let alive = true
     setSteps(null)
     setError(null)
-    window.nexgraph.graph.tour(projectId).then((t) => {
+    window.nexgraph.graph.tour(projectId, locale).then((t) => {
       if (!alive) return
       setSteps(t.steps)
       if (t.steps.length && started.current !== projectId) {
@@ -33,7 +35,7 @@ export function TourPanel({ projectId, revision = 0, projectName, onOpenFlow, on
       } else setIndex((current) => Math.min(current, Math.max(0, t.steps.length - 1)))
     }).catch((e) => alive && setError(errMessage(e)))
     return () => { alive = false }
-  }, [projectId, revision, retry]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [projectId, revision, retry, locale]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // flow_id -> thẻ Luồng; block_id -> thẻ Kiến trúc; còn lại -> thẻ Graph ở nút của bước.
   function go(list: TourStep[], i: number): void {

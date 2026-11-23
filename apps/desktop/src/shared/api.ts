@@ -124,6 +124,9 @@ export type ExtensionInfo = { id: string; name: string; version: string; descrip
 export type HostCommand = { name: string; arg?: unknown }
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
+/** Lỗi refresh nền do watcher gửi sang renderer; main đã gộp lỗi lặp. */
+export type WatchFailure = { projectId: string; message: string }
+
 export interface NexGraphApi {
   gemini: GeminiCliApi
   /** Chỉ có khi chạy trong extension (nền Code-OSS): thư mục đang mở và lệnh mở tệp bằng editor của nền. */
@@ -174,7 +177,8 @@ export interface NexGraphApi {
     archEvidence(projectId: string, from: string, to: string, limit?: number): Promise<ArchEvidence[]>
     /** `refresh: false` chỉ đọc, không cập nhật đồ thị trước. */
     changes(projectId: string, opts?: { refresh?: boolean }): Promise<Changes>
-    report(projectId: string): Promise<GraphReport>
+    /** `lang` là ngôn ngữ UI hiện tại: câu hỏi/lý do do engine sinh theo ngôn ngữ đó. */
+    report(projectId: string, lang?: 'vi' | 'en'): Promise<GraphReport>
     explain(projectId: string, nodeId: string): Promise<NodeExplain>
     section(projectId: string, nodeId: string): Promise<DocSection>
     paths(projectId: string, nodeIds: string[], opts?: { maxHops?: number; directed?: boolean }): Promise<PathResult>
@@ -184,7 +188,7 @@ export interface NexGraphApi {
     recluster(projectId: string): Promise<{ communities: number }>
     flows(projectId: string, opts?: FlowQuery): Promise<FlowList>
     flow(projectId: string, flowId: number): Promise<FlowDetail>
-    tour(projectId: string): Promise<{ steps: TourStep[] }>
+    tour(projectId: string, lang?: 'vi' | 'en'): Promise<{ steps: TourStep[] }>
     locate(projectId: string, file: string, line: number): Promise<{ node: GraphNode }>
     context(projectId: string, question: string, budget?: number): Promise<ContextPack>
     map(projectId: string, opts?: { parent?: string; detail?: number }): Promise<ProjectMap>
@@ -325,7 +329,8 @@ export interface NexGraphApi {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */
     pickDir(projectId: string): Promise<string | null>
     /** Chỉ dùng thư mục đã lưu theo projectId; renderer không gửi path. */
-    run(projectId: string, format: ExportFormat, scope: ExportScope): Promise<ExportResult>
+    /** `lang` áp cho HTML callflow và chuỗi do engine sinh trong tệp xuất. */
+    run(projectId: string, format: ExportFormat, scope: ExportScope, lang?: 'vi' | 'en'): Promise<ExportResult>
     push(projectId: string, req: PushRequest): Promise<PushResult>
     /** Chụp vùng `rect` của cửa sổ (toạ độ CSS; vắng thì cả cửa sổ) và lưu PNG vào thư mục xuất đã lưu theo projectId; `null` khi huỷ. */
     png(projectId: string, rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>
@@ -363,7 +368,8 @@ export interface NexGraphApi {
     models(): Promise<ModelInfo[]>
     selectModel(provider: string, id: string): Promise<void>
     /** Gọi provider thật với model đang chọn. */
-    test(): Promise<{ ok: boolean; message: string; detail?: string; capabilities?: { streaming: boolean; tools: boolean } }>
+    /** `contextWarning`: số token cửa sổ ngữ cảnh của model khi quá nhỏ để chạy trợ lý. */
+    test(): Promise<{ ok: boolean; message: string; detail?: string; capabilities?: { streaming: boolean; tools: boolean }; contextWarning?: number }>
     discoverLocal(baseUrl?: string): Promise<LocalModelInfo[]>
     connectLocal(baseUrl: string, modelId: string): Promise<void>
     onEvent(cb: (e: AuthEventView) => void): () => void
@@ -425,6 +431,10 @@ export interface NexGraphApi {
   watch: {
     start(projectId: string): Promise<void>
     stop(projectId: string): Promise<void>
+    /** Refresh nền thất bại (ví dụ graph.db chỉ đọc): renderer phải báo rõ thay vì chỉ "graph cũ hơn mã nguồn". Đã gộp lỗi lặp ở main. */
+    onError(cb: (failure: WatchFailure) => void): () => void
+    /** Refresh nền chạy được trở lại sau lỗi: gỡ cảnh báo cũ của dự án. */
+    onRecovered(cb: (projectId: string) => void): () => void
   }
   /** Nguồn ngoài thư mục. Tiến độ job theo dõi bằng `index.status`/`index.cancel`. */
   sources: {

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale } from './locale'
 import { errorText } from './errorText'
@@ -20,6 +22,16 @@ const sessionErrors = [
   'Đã đạt giới hạn số lượt gọi mô hình của tác vụ'
 ]
 
+/** Đọc thẳng mã nguồn main để không bỏ sót câu mới thêm; chỉ hai literal không phải câu lỗi được miễn. */
+const sessionSource = readFileSync(fileURLToPath(new URL('../../../main/agent/session.ts', import.meta.url)), 'utf8')
+const NON_ERROR_LITERALS: (string | RegExp)[] = [
+  /^Bạn là trợ lý mã nguồn NexGraph\./, // system prompt gửi model
+  'Hãy phân tích ảnh đính kèm.' // câu mặc định khi người dùng chỉ gửi ảnh
+]
+const vietnameseLiterals = [...new Set([...sessionSource.matchAll(/'((?:[^'\\\n]|\\.)*)'/g)].map((m) => m[1]))]
+  .filter((text) => /[À-Ỹà-ỹ]/.test(text))
+  .filter((text) => !NON_ERROR_LITERALS.some((rule) => typeof rule === 'string' ? rule === text : rule.test(text)))
+
 describe('errorText', () => {
   it('giữ nguyên câu tiếng Việt khi giao diện tiếng Việt', () => {
     for (const message of sessionErrors) expect(errorText({ message })).toBe(message)
@@ -33,6 +45,30 @@ describe('errorText', () => {
     expect(errorText({ message: 'Chưa chọn mô hình' })).toMatch(/No model selected/i)
     expect(errorText({ message: 'Hội thoại không thuộc tài khoản và dự án đang chọn' })).toMatch(/does not belong to the selected account and project/i)
     for (const message of sessionErrors) expect(errorText({ message })).not.toBe(message)
+  })
+
+  it('phủ TOÀN BỘ literal tiếng Việt trong main/agent/session.ts (MIN-46 M1)', () => {
+    expect(vietnameseLiterals.length).toBeGreaterThan(35)
+    setLocale('en')
+    const missing = vietnameseLiterals.filter((text) => errorText({ message: text }) === text)
+    expect(missing).toEqual([])
+    // Bản tiếng Việt không được đổi câu của main.
+    setLocale('vi')
+    for (const text of vietnameseLiterals) expect(errorText({ message: text })).toBe(text)
+  })
+
+  it('dịch câu ngữ cảnh nhỏ có số token thật (MIN-46 M3)', () => {
+    const text = 'Mô hình chỉ có 6000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.'
+    expect(errorText({ message: text })).toBe(text)
+    setLocale('en')
+    expect(errorText({ message: text }))
+      .toBe('The model has only 6000 context tokens — not enough for the system prompt and tools. Choose a larger model.')
+  })
+
+  it('I18N-IPC: câu "Engine chưa sẵn sàng." của main cũng dịch được', () => {
+    expect(errorText({ message: 'Engine chưa sẵn sàng.' })).toBe('Engine chưa sẵn sàng.')
+    setLocale('en')
+    expect(errorText({ message: 'Engine chưa sẵn sàng.' })).toBe('The engine is not ready yet.')
   })
 
   it('câu lạ đi nguyên văn, không nuốt lỗi', () => {

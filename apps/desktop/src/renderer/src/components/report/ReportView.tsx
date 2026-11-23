@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { GraphReport } from '@shared/graph-types'
 import { vi, tr } from '../../strings'
-import { formatNumber } from '../../state/locale'
+import { formatNumber, useLocale } from '../../state/locale'
 import { kindLabel, kindStyle } from '../graph/kindStyle'
 import { CanvasState } from '../common/CanvasState'
 import { LessonsSection } from './LessonsSection'
@@ -22,19 +22,20 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
   const [report, setReport] = useState<GraphReport | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
+  const locale = useLocale()
 
   useEffect(() => {
     let alive = true
     setReport(null)
     setError(null)
     window.nexgraph.graph
-      .report(projectId)
+      .report(projectId, locale)
       .then((r) => alive && setReport(r))
       .catch((e: { message?: string }) => alive && setError(e?.message ?? String(e)))
     return () => {
       alive = false
     }
-  }, [projectId, revision, retry])
+  }, [projectId, revision, retry, locale])
 
   if (error) return <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />
   if (!report) return <CanvasState kind="loading" message={vi.report.loading} />
