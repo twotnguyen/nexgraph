@@ -7,8 +7,9 @@ on:
   pull_request:
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # Chỉ huỷ lượt cũ trên PR; trên main mỗi commit đều phải có kết luận CI.
+  # CI-01: trên main mỗi commit là một group riêng, nên merge liên tiếp không thay thế run đang chờ
+  # và mỗi commit trên main đều có kết luận CI. Nhánh PR/tag giữ một group theo ref để run mới huỷ run cũ.
+  group: ci-${{ github.ref }}-${{ github.ref == 'refs/heads/main' && github.sha || '' }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
