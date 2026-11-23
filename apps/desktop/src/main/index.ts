@@ -16,6 +16,7 @@ import { externalWebUrl, isSameDocument } from './external-links'
 import { accountDevHooks } from './dev-hooks'
 import { installPermissionHandlers } from './security/permissions'
 import { installAppMenu } from './appMenu'
+import { WindowSet } from './windows'
 
 // Kiểm bản cài dùng kho tài khoản riêng, không đọc/ghi cấu hình AI thật của người dùng.
 if (process.env.NEXGRAPH_USER_DATA_DIR) {
@@ -23,7 +24,13 @@ if (process.env.NEXGRAPH_USER_DATA_DIR) {
   app.setPath('userData', process.env.NEXGRAPH_USER_DATA_DIR)
 }
 
-let mainWindow: BrowserWindow | null = null
+/** Mọi cửa sổ đang mở; menu File → Cửa sổ mới thêm vào đây thay vì ghi đè cửa sổ chính. */
+const appWindows = new WindowSet<BrowserWindow>()
+const mainWindowRef = (): BrowserWindow | null => appWindows.main()
+/** Gửi sự kiện engine tới mọi cửa sổ (mỗi cửa sổ là một renderer độc lập). */
+const broadcast = (channel: string, payload: unknown): void => {
+  for (const win of appWindows.all()) win.webContents.send(channel, payload)
+}
 
 const dataDir = process.env.NEXGRAPH_DATA_DIR ?? join(app.getPath('userData'), 'engine-data')
 // apps/desktop -> gốc repo (chỉ dùng lúc dev)
@@ -39,7 +46,7 @@ function followEvents(handle: EngineHandle | null): void {
   if (!handle) return
   stopEvents = subscribeEvents(
     handle,
-    (e) => mainWindow?.webContents.send('engine:event', e),
+    (e) => broadcast('engine:event', e),
     () => {
       retry = setTimeout(() => followEvents(supervisor.getHandle()), 1000)
     }
@@ -51,13 +58,13 @@ const supervisor = new EngineSupervisor(
   engineCommand,
   dataDir,
   (status) => {
-    mainWindow?.webContents.send('engine:status-changed', status)
+    broadcast('engine:status-changed', status)
     followEvents(status.state === 'ready' ? supervisor.getHandle() : null)
   }
 )
 
 async function createWindow(show = true): Promise<void> {
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1280,
     height: 800,
     show: false,
@@ -70,7 +77,7 @@ async function createWindow(show = true): Promise<void> {
       webgl: !app.commandLine.hasSwitch('disable-webgl')
     }
   })
-  const win = mainWindow
+  appWindows.add(win)
   // REV-17: từ chối mặc định mọi quyền (camera, vị trí, thông báo, USB…); app không dùng quyền nào.
   installPermissionHandlers(win.webContents.session)
   const openExternal = (raw: string) => {
@@ -94,15 +101,17 @@ async function createWindow(show = true): Promise<void> {
   win.webContents.on('did-start-navigation', (e) => { if (closesAgents(e)) closeAllAgents() })
   win.webContents.on('render-process-gone', () => closeAllAgents())
   win.on('closed', () => {
-    closeAllAgents()
-    mainWindow = null
+    // Chỉ dọn phiên agent/engine khi cửa sổ CUỐI đóng; đóng một trong nhiều cửa sổ không được
+    // giết phiên đang chạy ở cửa sổ khác.
+    if (appWindows.remove(win).empty) closeAllAgents()
   })
 
-  if (process.env['ELECTRON_RENDERER_URL']) await mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  else await mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  if (process.env['ELECTRON_RENDERER_URL']) await win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  else await win.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged), () => { void createWindow() }, (locale) => installAppMenu(() => mainWindow, locale))
+const focusedOrMainWindow = (): BrowserWindow | null => BrowserWindow.getFocusedWindow() ?? mainWindowRef()
+registerIpc(() => supervisor.getHandle(), focusedOrMainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged), () => { void createWindow() }, (locale) => installAppMenu(mainWindowRef, locale))
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
@@ -131,7 +140,7 @@ async function smoke(): Promise<void> {
       let desktop = ''
       if (url) {
         await createWindow(false)
-        const win = mainWindow!
+        const win = mainWindowRef()!
         const script = `(${runRendererSmoke.toString()})(window.nexgraph, ${JSON.stringify(root)}, ${JSON.stringify(url)})`
         desktop = await win.webContents.executeJavaScript(script) as string
         await win.loadURL(win.webContents.getURL())
@@ -183,7 +192,7 @@ app.whenReady().then(() => {
     return
   }
   // Thay menu mặc định File/Edit/View/Window bằng menu chứa đầy đủ lệnh của NexGraph.
-  installAppMenu(() => mainWindow)
+  installAppMenu(mainWindowRef)
   void createWindow()
   void supervisor.startEngine()
   app.on('activate', () => {
@@ -199,8 +208,10 @@ app.on('before-quit', (e) => {
   if (quitting) return
   e.preventDefault()
   // close() hỏi beforeunload trước; chọn “Ở lại” thì mọi dịch vụ phải tiếp tục chạy.
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.close()
+  // Đóng mọi cửa sổ; cửa sổ cuối đóng → window-all-closed → app.quit() → before-quit lần nữa.
+  const open = appWindows.all()
+  if (open.length > 0) {
+    for (const win of open) win.close()
     return
   }
   quitting = true
