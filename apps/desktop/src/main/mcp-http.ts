@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createInterface } from 'node:readline'
+import { pythonSafeEnv, PYTHON_ENV_GUARD } from './engine/python-env'
 import { signalProcessTree, type EngineCommand } from './engine/launcher'
 
 /** Nơi giữ key theo project (bản thật mã hoá bằng safeStorage trong ipc.ts). */
@@ -38,7 +39,7 @@ type Endpoint = { url: string; key: string }
 /** Chuỗi JSON `mcpServers` để dán vào cấu hình trợ lý AI (stdio). */
 export function mcpStdioConfig(cmd: EngineCommand, projectPath: string, dataDir: string): string {
   const args = [...cmd.args, 'mcp', '--project', projectPath, '--data-dir', dataDir]
-  return JSON.stringify({ mcpServers: { nexgraph: { command: cmd.command, args } } }, null, 2)
+  return JSON.stringify({ mcpServers: { nexgraph: { command: cmd.command, args, env: { ...PYTHON_ENV_GUARD } } } }, null, 2)
 }
 
 /** Một MCP server HTTP (127.0.0.1, X-API-Key) cho mỗi project; dừng hết khi app thoát. */
@@ -109,8 +110,8 @@ export class McpHttpManager {
     const cmd = this.getCommand()
     const child = spawn(cmd.command, [...cmd.args, 'mcp', '--project', projectPath, '--data-dir', this.dataDir, '--http', '--port', String(port)], {
       cwd: cmd.cwd,
-      // Key chỉ đi qua biến môi trường, không qua argv.
-      env: { ...process.env, NEXGRAPH_MCP_KEY: key, PYTHONUTF8: '1' },
+      // Key chỉ đi qua biến môi trường, không qua argv. Env Python sạch: không thừa hưởng PYTHONPATH/PYTHONHOME.
+      env: { ...pythonSafeEnv(), NEXGRAPH_MCP_KEY: key, PYTHONUTF8: '1' },
       windowsHide: true,
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe']

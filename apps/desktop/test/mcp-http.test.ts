@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { McpHttpManager, mcpStdioConfig } from '../src/main/mcp-http'
+import { pythonSafeEnv } from '../src/main/engine/python-env'
 
 const fake = {
   command: process.execPath,
@@ -31,6 +32,24 @@ describe('McpHttpManager', () => {
     expect(mgr.status('p1')).toBeNull()
   })
 
+  // A4-F3: MCP server phải chạy với Python sạch, không thừa hưởng PYTHONPATH của shell cha.
+  it('không truyền PYTHONPATH của shell cha cho MCP server và tắt site người dùng', async () => {
+    const saved = process.env.PYTHONPATH
+    process.env.PYTHONPATH = '/gói/của/dự/án/khác'
+    try {
+      mgr = new McpHttpManager(() => fake, '/data')
+      const { url, key } = await mgr.start('p1', '/x')
+      const body = (await (await fetch(url, { headers: { 'X-API-Key': key } })).json()) as {
+        pythonPath: string | null; pythonNoUserSite: string | null
+      }
+      expect(body.pythonPath).toBeNull()
+      expect(body.pythonNoUserSite).toBe('1')
+    } finally {
+      if (saved === undefined) delete process.env.PYTHONPATH
+      else process.env.PYTHONPATH = saved
+    }
+  })
+
   it('coalesces concurrent starts and returns the single live endpoint', async () => {
     const command = vi.fn(() => fake)
     mgr = new McpHttpManager(command, '/data')
@@ -51,6 +70,13 @@ describe('McpHttpManager', () => {
     const next = await mgr.start('p1', '/x')
     expect(command).toHaveBeenCalledTimes(2)
     expect((await fetch(next.url, { headers: { 'X-API-Key': next.key } })).status).toBe(200)
+  })
+})
+
+describe('pythonSafeEnv', () => {
+  it('bỏ PYTHONPATH/PYTHONHOME và tắt site của người dùng', () => {
+    expect(pythonSafeEnv({ PATH: '/bin', PYTHONPATH: '/gói/lạ', PYTHONHOME: '/home/lạ' }))
+      .toEqual({ PATH: '/bin', PYTHONNOUSERSITE: '1' })
   })
 })
 
@@ -84,6 +110,7 @@ describe('mcpStdioConfig', () => {
   it('builds an mcpServers JSON block for the engine command', () => {
     const cfg = JSON.parse(mcpStdioConfig({ command: 'uv', args: ['run', 'nexgraph-engine'] }, '/Đồ án/demo', '/data'))
     expect(cfg).toEqual({ mcpServers: { nexgraph: { command: 'uv',
-      args: ['run', 'nexgraph-engine', 'mcp', '--project', '/Đồ án/demo', '--data-dir', '/data'] } } })
+      args: ['run', 'nexgraph-engine', 'mcp', '--project', '/Đồ án/demo', '--data-dir', '/data'],
+      env: { PYTHONPATH: '', PYTHONHOME: '', PYTHONNOUSERSITE: '1' } } } })
   })
 })
