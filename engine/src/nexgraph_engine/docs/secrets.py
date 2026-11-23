@@ -9,6 +9,7 @@ ngoặc kép/đơn/ngoặc vuông, và câu văn kiểu ``Đặt `API_KEY=…` t
 `MAX_TOKENS=8192` trong tài liệu kỹ thuật không bị che nhầm. Tên kết thúc bằng `KEY` bị coi là nhạy cảm trừ
 danh sách trắng khái niệm kỹ thuật (`PRIMARY_KEY`, `FOREIGN_KEY`, `SORT_KEY`, `CACHE_KEY`…); tên `KEY` trần
 chỉ che khi đứng ở vị trí gán cấu hình (đầu dòng/bullet/ngoặc), không che tham số `key=` trong code.
+Khối PEM được che **từng dòng** trước khi gọi `redact_secrets` để heading sau khối không lệch số dòng (Minor 1).
 """
 from __future__ import annotations
 
@@ -56,6 +57,10 @@ _PLACEHOLDER_HINTS = ("fake", "dummy", "example", "placeholder", "sample", "chan
 _TYPE_NAME = re.compile(r"^[A-Z][A-Za-z]*[a-z][A-Z][A-Za-z]*$")
 # `key=` trần chỉ là cấu hình khi đứng đầu dòng/bullet/sau `export`/ngoặc mở; `sorted(x, key=y)` thì không.
 _BARE_KEY_PREFIX = re.compile(r"^[ \t]*(?:[-*+>][ \t]+)?(?:export[ \t]+)?[`" + '"' + r"'\[" + r"]*$")
+# Khối PEM: che cả khối kể cả khi thiếu dòng END (bị cắt), giữ nguyên số dòng.
+_PEM_BLOCK = re.compile(
+    r"(?ms)^[ \t]*-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----"
+    r"(?:.*?^[ \t]*-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----|.*)")
 
 def _key_rule(key: str) -> bool:
     compact = re.sub(r"[^A-Z0-9]", "", key.upper())
@@ -75,9 +80,20 @@ def _looks_like_secret(value: str) -> bool:
     return not _OBVIOUS_CODE.search(value)
 
 
+def _redact_pem_blocks(text: str) -> str:
+    """Thay mỗi dòng trong khối PEM bằng `[redacted]`, giữ nguyên số dòng để số dòng của tài liệu không lệch."""
+    def repl(match: re.Match[str]) -> str:
+        block = match.group(0)
+        trailing_newline = block.endswith("\n")
+        body = block[:-1] if trailing_newline else block
+        line_count = body.count("\n") + 1
+        return "\n".join([REDACTED] * line_count) + ("\n" if trailing_newline else "")
+    return _PEM_BLOCK.sub(repl, text)
+
+
 def redact_doc_secrets(text: str) -> str:
-    """Trả `text` đã che token theo hình dạng và `KEY[:=]value` của tên khoá nhạy cảm."""
-    text = redact_secrets(text)
+    """Trả `text` đã che token theo hình dạng, khối PEM và `KEY[:=]value` của tên khoá nhạy cảm."""
+    text = redact_secrets(_redact_pem_blocks(text))
 
     def repl(match: re.Match[str]) -> str:
         key = match.group("key")

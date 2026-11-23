@@ -126,6 +126,26 @@ def test_document_shapes_without_secret_are_kept(line):
     assert redact_doc_secrets(line) == line
 
 
+def test_pem_block_keeps_line_count():
+    """Minor 1 (review #52): che PEM theo từng dòng để heading sau khối không lệch số dòng."""
+    body = "\n".join(["MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "A" * 20] * 3)
+    text = (f"# Khoá\n\n-----BEGIN RSA PRIVATE KEY-----\n{body}\n"
+            "-----END RSA PRIVATE KEY-----\n\n## Sau\n\nNội dung sau.\n")
+    out = redact_doc_secrets(text)
+    assert out.count("\n") == text.count("\n")
+    assert "BEGIN" not in out and "MIIE" not in out
+    assert out.splitlines().index("## Sau") == text.splitlines().index("## Sau")
+    assert out.count("[redacted]") == 5  # 3 dòng thân + BEGIN + END, mỗi dòng một marker
+
+
+def test_pem_block_without_end_line_is_redacted():
+    """PEM bị cắt (không có dòng END) vẫn che hết phần còn lại, giữ nguyên số dòng."""
+    text = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nAAAA\n"
+    out = redact_doc_secrets(text)
+    assert "b3BlbnNzaC1rZXk" not in out and "BEGIN" not in out
+    assert out.count("\n") == text.count("\n")
+
+
 def test_repo_markdown_has_no_false_positive_redaction():
     """Quét mọi tệp .md của repo: không dòng nào bị đổi (mục tiêu 0 dương tính giả)."""
     listed = subprocess.run(["git", "ls-files", "*.md"], cwd=REPO, capture_output=True, text=True, check=True)

@@ -5,6 +5,7 @@ import pytest
 
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.query.contracts import read_code
 from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.schema.db import open_graph_db
@@ -169,6 +170,44 @@ def test_section_route_masks_secret_key_document(api, tmp_path):
     assert blocked.status_code == 403, blocked.text
     assert blocked.json()["error"]["code"] == "protected_source"
     assert value not in blocked.text
+
+
+PEM_BODY = ["MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "B" * 24,
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "C" * 24,
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "D" * 24]
+PEM_DOC = ("# Khoá\n\n-----BEGIN RSA PRIVATE KEY-----\n" + "\n".join(PEM_BODY) +
+           "\n-----END RSA PRIVATE KEY-----\n\n## Sau\n\nNội dung sau.\n")
+
+
+def test_section_after_pem_keeps_line_numbers(tmp_path):
+    """Minor 1 (review #52): PEM che theo dòng nên heading sau khối không lệch số dòng khi lập chỉ mục."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "pem.md").write_text(PEM_DOC, encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        node = _doc(store, "Sau", "pem.md")
+        # Dòng thật của "## Sau" trong tệp là 9 (1-based); trước khi sửa, PEM 5 dòng bị gộp còn 1 nên lệch -4.
+        assert node.line_start == PEM_DOC.splitlines().index("## Sau") + 1
+        out = section_json(store, root, node.id)
+        assert out["text"].startswith("## Sau") and "Nội dung sau." in out["text"]
+        assert "PRIVATE KEY" not in out["text"] and "MIIE" not in out["text"]
+    finally:
+        store.conn.close()
+
+
+def test_read_code_slice_starting_inside_pem_is_redacted(tmp_path):
+    """Dải bắt đầu giữa khối PEM (MCP read_code start=…) vẫn không lộ thân base64."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "pem.md").write_text(PEM_DOC, encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        out = read_code(store, root, "pem.md", 4, 6, redact_documents=True)
+        assert all(part not in out["text"] for part in PEM_BODY)
+        assert "[redacted]" in out["text"]
+    finally:
+        store.conn.close()
 
 
 def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):

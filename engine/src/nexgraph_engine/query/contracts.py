@@ -114,14 +114,20 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
                 lines = doc_text(document, record.language).splitlines()
     else:
         lines = (snapshot if snapshot is not None else path.read_bytes()).decode("utf-8", errors="replace").splitlines()
+    # Đường tới model: tài liệu trả bản đã che (re-review #52 Important 2). Tệp mã giữ nguyên.
+    is_document = redact_documents and record.language in DOC_LANGUAGES and record.language != "image"
+    pre_redacted = False
+    if is_document and any("PRIVATE KEY" in line for line in lines):
+        # Khối PEM: che cả tệp (giữ số dòng) để dải bắt đầu giữa khối vẫn không lộ thân base64.
+        lines = redact_doc_secrets("\n".join(lines)).splitlines()
+        pre_redacted = True
     last = min(len(lines), end if end is not None else first + MAX_CODE_LINES - 1)
     digest = hashlib.sha256(snapshot).hexdigest() if snapshot is not None else sha256_file(path)
     # REV-21: chỉ cắt ngầm khi người đọc không truyền `end` mà tệp dài hơn giới hạn; xin dải cụ thể thì
     # trả đúng dải đó, không tính là cắt (MCP/UI đọc cả tệp mới là chỗ trước đây mất dòng mà không báo).
     truncated = end is None and last < len(lines)
     text = "\n".join(lines[first - 1:last])
-    # Đường tới model: tài liệu trả bản đã che (re-review #52 Important 2). Tệp mã giữ nguyên.
-    if redact_documents and record.language in DOC_LANGUAGES and record.language != "image":
+    if is_document and not pre_redacted:
         text = redact_doc_secrets(text)
     return {"file": file, "start": first, "end": last, "text": text,
             "language": language_of(file) or record.language, "stale": digest != record.sha256,
