@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import multiprocessing
 import os
 import socket
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
 # uvicorn và api.app nạp trong _serve: hook-guard chạy ở mỗi lần gọi tool của agent, không được trả 0,3 s nạp FastAPI.
 
 MIN_TOKEN_LEN = 32
+logger = logging.getLogger("nexgraph_engine.cli")  # `python -m` đặt __name__ = "__main__"; cần đúng tên để handler của package bắt
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -247,6 +249,7 @@ def _serve(data_dir: Path, port: int, exit_on_stdin_close: bool) -> int:
     app = create_app(token, {f"127.0.0.1:{real_port}", f"localhost:{real_port}"}, data_dir=data_dir)
 
     print(json.dumps({"event": "ready", "port": real_port, "pid": os.getpid()}), flush=True)
+    logger.info("HTTP API tại 127.0.0.1:%s (pid %s), dữ liệu %s", real_port, os.getpid(), data_dir)
     server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
     if exit_on_stdin_close:
         threading.Thread(target=_exit_when_stdin_closes, args=(server,), daemon=True).start()
@@ -264,12 +267,16 @@ def main(argv: list[str] | None = None) -> int:
         if argv[:1] == ["hook-guard"]:
             return 0
         raise
+    if args.command in ("serve", "mcp"):
+        from nexgraph_engine.logging_setup import configure_logging
+        configure_logging()  # stderr; stdout của `mcp` là giao thức
     if args.command == "serve":
         return _serve(args.data_dir, args.port, args.exit_on_stdin_close)
     if args.command == "refresh":
         return _refresh_cmd(args.project, args.data_dir, args.hook, args.hook_args)
     if args.command == "mcp":
         from nexgraph_engine.mcp.server import ProjectNotIndexed, run_http, run_stdio
+        logger.info("MCP %s: dự án %s", "HTTP" if args.http else "stdio", args.project)
         if args.http:
             key = os.environ.get("NEXGRAPH_MCP_KEY", "")
             if len(key) < MIN_TOKEN_LEN:
@@ -287,8 +294,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             raw = b"" if args.kind == "gemini" else sys.stdin.buffer.read()
             sys.stdout.buffer.write(guard_output(args.kind, args.project, args.data_dir, args.strict, raw).encode("utf-8"))
-        except Exception:
-            pass  # fail-open: không bao giờ chặn lần gọi tool vì lỗi của hook
+        except Exception as exc:
+            logger.warning("hook-guard bỏ qua do lỗi: %s", type(exc).__name__)  # fail-open: không chặn lần gọi tool
         return 0
     return 2
 

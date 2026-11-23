@@ -1,6 +1,7 @@
 """Đăng ký project đã mở (CSDL cá nhân app.db) và chọn nơi lưu đồ thị (spec §5.10)."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 import time
 import uuid
@@ -12,6 +13,7 @@ from nexgraph_engine.schema.db import SchemaOutdatedError, SchemaVersionError, o
 from nexgraph_engine.store.graph_store import GraphStore
 
 NEXGRAPH_DIR = ".nexgraph"
+logger = logging.getLogger(__name__)
 
 
 class ProjectPathError(ValueError):
@@ -148,10 +150,12 @@ class ProjectRegistry:
             conn = sqlite3.connect(f"{graph_db.resolve().as_uri()}?mode=ro", uri=True)
             conn.row_factory = sqlite3.Row
         except Exception:
+            logger.warning("Không mở được %s để đọc mã dự án", graph_db, exc_info=True)
             return None
         try:
             row = conn.execute("SELECT ma_du_an FROM du_an").fetchone()
         except sqlite3.Error:  # tệp có nhưng chưa có schema (engine bị kill giữa lúc tạo)
+            logger.warning("Không đọc được mã dự án trong %s", graph_db, exc_info=True)
             return None
         finally:
             conn.close()

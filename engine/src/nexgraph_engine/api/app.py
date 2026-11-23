@@ -24,6 +24,8 @@ from nexgraph_engine.selftest import run_selftest
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 
 class Guard:
     """ASGI thuần (không dùng BaseHTTPMiddleware để SSE không bị chặn): kiểm Host rồi token."""
@@ -40,10 +42,12 @@ class Guard:
             return
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope["headers"]}
         if headers.get("host", "") not in self.allowed_hosts:
+            logger.warning("Từ chối yêu cầu: forbidden_host")  # không ghi header/token
             response = error_response(403, "forbidden_host", "Host không được phép")
         else:
             scheme, _, supplied = headers.get("authorization", "").partition(" ")
             if scheme != "Bearer" or not hmac.compare_digest(supplied.encode("utf-8"), self.expected):
+                logger.warning("Từ chối yêu cầu: unauthorized")  # không ghi header/token
                 response = error_response(401, "unauthorized", "Thiếu hoặc sai token")
             else:
                 await self.app(scope, receive, send)

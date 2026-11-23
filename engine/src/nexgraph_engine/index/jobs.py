@@ -1,6 +1,7 @@
 """Công việc chạy nền (mỗi job một luồng, kết nối CSDL riêng), có hủy và sự kiện: lập chỉ mục và task tổng quát."""
 from __future__ import annotations
 
+import logging
 import sqlite3
 import threading
 import time
@@ -21,6 +22,7 @@ ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting
 # Job đã xong chỉ giữ để client hỏi kết quả một lúc: giới hạn số lượng và TTL để `_jobs` không phình mãi (REV-19).
 MAX_FINISHED_JOBS = 50
 FINISHED_JOB_TTL_SECONDS = 60 * 60
+logger = logging.getLogger(__name__)
 
 
 class IndexAlreadyRunning(RuntimeError):
@@ -170,6 +172,8 @@ class JobManager:
                     lambda state: self._set(job_id, state=state))
                 final = {"state": "done", "result": work(ctx)}
         except Exception as exc:
+            if not (cancel.is_set() or isinstance(exc, TaskCancelled)):
+                logger.exception("Job %s (%s, dự án %s) thất bại", job_id, self._jobs[job_id]["kind"], project_id)
             final = {"state": "cancelled" if cancel.is_set() or isinstance(exc, TaskCancelled) else "error",
                      "message": None if isinstance(exc, TaskCancelled) else f"{type(exc).__name__}: {exc}"}
         finally:
@@ -241,7 +245,7 @@ class JobManager:
                 try:
                     hook(snapshot["project_id"])
                 except Exception:  # móc phụ không được làm hỏng job index đã xong
-                    pass
+                    logger.warning("Móc sau khi index xong lỗi (dự án %s)", snapshot["project_id"], exc_info=True)
 
     def _run(self, job_id: str, info: ProjectInfo, cancel: threading.Event, subdir: str | None,
              exclude: list[str] | None = None, include_docs: bool | None = None,
@@ -298,6 +302,8 @@ class JobManager:
                     backup_graph(stage, live)
                     published = True
         except Exception as exc:
+            logger.exception("Lập chỉ mục thất bại (job %s, dự án %s, đã công bố: %s)",
+                             job_id, info.project_id, published)
             if not published:
                 terminal_event = ProgressEvent("error", 0, 0, f"{type(exc).__name__}: {exc}")
         finally:
