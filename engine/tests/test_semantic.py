@@ -639,6 +639,23 @@ def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
     assert wait_job(api, job_id)["state"] == "done"
 
 
+def test_load_prs_failure_closes_llm_queue(tmp_path):
+    """REV-19: `gh` lỗi trước khi mở CSDL vẫn phải đóng hàng đợi LLM (không rò job đường A)."""
+    from nexgraph_engine.index.jobs import TaskContext
+    from nexgraph_engine.semantic.run import Request, make_work
+    from nexgraph_engine.semantic.transport import LlmQueue
+
+    def boom() -> list[dict]:
+        raise RuntimeError("gh lỗi")
+
+    queue = LlmQueue()
+    work = make_work(graph_db=tmp_path / "graph.db", src=None,
+                     req=Request("pr_triage", 1), transport=queue, on_written=lambda: None, load_prs=boom)
+    with pytest.raises(RuntimeError, match="gh lỗi"):
+        work(TaskContext(threading.Event(), lambda *_args: None))
+    assert queue.closed is True
+
+
 def test_direct_rejects_internal_and_metadata_base_url(api, docs_pid):
     enable(api, docs_pid)
     for url, reason in (("http://169.254.169.254/latest", "link-local"), ("http://10.1.2.3:8080/v1", "nội bộ")):

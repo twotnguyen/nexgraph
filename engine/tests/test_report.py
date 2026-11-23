@@ -6,7 +6,7 @@ def test_report_excludes_tests_and_files(copy_fixture, index_project):
     store, _, _ = index_project(root)
     r = report_json(store, root)
     assert set(r) == {"god_nodes", "communities", "surprising", "questions", "benchmark", "truncated",
-                      "cycles", "freshness", "gaps"}
+                      "warnings", "cycles", "freshness", "gaps"}
     assert r["god_nodes"] and all(not g["node"]["is_test"] and g["node"]["kind"] != "file" for g in r["god_nodes"])
     assert r["god_nodes"] == sorted(r["god_nodes"], key=lambda g: -g["degree"])
     assert all(c["id"].startswith("com:") for c in r["communities"])
@@ -117,3 +117,17 @@ def test_report_gaps_isolated_and_ambiguous(tmp_path, index_project):
     assert [n["label"] for n in gaps["isolated"]["nodes"]] == ["orphan"] and gaps["isolated"]["total"] == 1
     assert gaps["ambiguous_edges"]["total"] == 1
     assert gaps["ambiguous_edges"]["edges"][0]["confidence"] == "AMBIGUOUS"
+
+
+def test_report_surfaces_benchmark_failure(copy_fixture, index_project, monkeypatch):
+    """M3: benchmark hỏng thì mục benchmark biến mất nhưng phải kèm cảnh báo cho người dùng."""
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+
+    def boom(**_kwargs):
+        raise RuntimeError("benchmark nổ")
+
+    monkeypatch.setattr("graphify.benchmark.run_benchmark", boom)
+    report = report_json(store, root)
+    assert report["benchmark"] is None
+    assert any("benchmark" in message and "benchmark nổ" in message for message in report["warnings"])

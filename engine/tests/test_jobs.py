@@ -158,3 +158,82 @@ def test_stale_run_from_crash_is_cleared(env):
     conn.commit()
     conn.close()
     assert wait_done(manager, manager.start_index(info.project_id))["state"] == "done"
+
+
+def test_finished_jobs_are_pruned_by_limit(env):
+    """REV-19: `_jobs` không được phình mãi; job đã xong cũ bị bỏ, job mới còn tra được."""
+    registry, info, bus, _ = env
+    manager = JobManager(registry, bus, max_finished_jobs=2)
+    try:
+        ids = []
+        for _ in range(4):
+            job_id = manager.start_task(None, "probe", lambda ctx: {"ok": True})
+            assert wait_done(manager, job_id)["state"] == "done"
+            ids.append(job_id)
+        assert manager.get(ids[0]) is None and manager.get(ids[1]) is None
+        assert manager.get(ids[-1])["state"] == "done"
+        assert len(manager._jobs) <= 2
+    finally:
+        manager.shutdown()
+
+
+def test_finished_jobs_are_pruned_by_ttl(env, monkeypatch):
+    registry, info, bus, _ = env
+    manager = JobManager(registry, bus, finished_job_ttl_seconds=0.15)
+    try:
+        job_id = manager.start_task(None, "probe", lambda ctx: None)
+        assert wait_done(manager, job_id)["state"] == "done"
+        assert manager.get(job_id) is not None  # vừa xong: chưa bị dọn
+        time.sleep(0.3)
+        assert manager.get(job_id) is None
+    finally:
+        manager.shutdown()
+
+
+def test_index_job_also_honours_finished_ttl(env):
+    """F2: TTL 1 h áp cho mọi job đã xong, kể cả job index (trước chỉ job `start_task` có `finished_at`)."""
+    registry, info, bus, _ = env
+    manager = JobManager(registry, bus, finished_job_ttl_seconds=0.15)
+    try:
+        job_id = manager.start_index(info.project_id)
+        assert wait_done(manager, job_id)["state"] == "done"
+        assert manager.get(job_id)["finished_at"] > 0
+        time.sleep(0.3)
+        assert manager.get(job_id) is None
+    finally:
+        manager.shutdown()
+
+
+def test_long_running_job_is_not_evicted_when_it_finishes(env):
+    """F3: prune theo thời điểm xong — job dài xong sau nhiều job ngắn vẫn tra được kết quả."""
+    registry, info, bus, _ = env
+    manager = JobManager(registry, bus, max_finished_jobs=2)
+    gate = threading.Event()
+    try:
+        long_id = manager.start_task(None, "long", lambda ctx: (gate.wait(10), {"ok": True})[1])
+        deadline = time.time() + 10
+        while manager.get(long_id)["state"] != "running" and time.time() < deadline:
+            time.sleep(0.01)
+        for _ in range(3):
+            quick = manager.start_task(None, "quick", lambda ctx: {"ok": True})
+            assert wait_done(manager, quick)["state"] == "done"
+        gate.set()
+        assert wait_done(manager, long_id)["state"] == "done"
+        assert manager.get(long_id)["result"] == {"ok": True}
+    finally:
+        gate.set()
+        manager.shutdown()
+
+
+def test_app_shutdown_stops_job_manager(tmp_path, monkeypatch):
+    """REV-19: engine tắt phải gọi shutdown() (huỷ + join job nền), không chỉ trong test."""
+    from fastapi.testclient import TestClient
+
+    from nexgraph_engine.api.app import create_app
+
+    app = create_app("t" * 40, {"testserver"}, data_dir=tmp_path / "appdata")
+    called: list[bool] = []
+    monkeypatch.setattr(app.state.services.jobs, "shutdown", lambda: called.append(True))
+    with TestClient(app):
+        pass
+    assert called == [True]

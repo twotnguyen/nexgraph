@@ -79,4 +79,12 @@ describe('ReportView', () => {
     expect(await screen.findByText('Không có vòng import giữa các tệp.')).toBeInTheDocument()
     expect(screen.queryByText(/Graph cũ hơn mã nguồn/)).not.toBeInTheDocument()
   })
+
+  it('hiện cảnh báo của báo cáo (ví dụ benchmark không chạy được)', async () => {
+    installNexgraph({ graph: { report: vi.fn(async () => report({
+      benchmark: null, warnings: ['Không chạy được benchmark của báo cáo (RuntimeError: nổ)']
+    })) } })
+    render(<ReportView {...props()} />)
+    expect(await screen.findByText(/Không chạy được benchmark của báo cáo/)).toBeInTheDocument()
+  })
 })

@@ -20,6 +20,10 @@ class ProjectPathError(ValueError):
     """Đường dẫn không phải một thư mục tồn tại."""
 
 
+class ProjectGraphUnreadable(RuntimeError):
+    """graph.db có nhưng không đọc được: không được im lặng coi là dự án mới (ENG-07/M3)."""
+
+
 @dataclass(frozen=True)
 class ProjectInfo:
     project_id: str
@@ -145,20 +149,28 @@ class ProjectRegistry:
     @staticmethod
     def _read_id(graph_db: Path) -> str | None:
         try:
-            conn = open_graph_db(graph_db, read_only=True)
-        except SchemaOutdatedError:
-            conn = sqlite3.connect(f"{graph_db.resolve().as_uri()}?mode=ro", uri=True)
-            conn.row_factory = sqlite3.Row
-        except Exception:
-            logger.warning("Không mở được %s để đọc mã dự án", graph_db, exc_info=True)
-            return None
-        try:
-            row = conn.execute("SELECT ma_du_an FROM du_an").fetchone()
-        except sqlite3.Error:  # tệp có nhưng chưa có schema (engine bị kill giữa lúc tạo)
+            try:
+                conn = open_graph_db(graph_db, read_only=True)
+            except SchemaOutdatedError:
+                conn = sqlite3.connect(f"{graph_db.resolve().as_uri()}?mode=ro", uri=True)
+                conn.row_factory = sqlite3.Row
+            try:
+                row = conn.execute("SELECT ma_du_an FROM du_an").fetchone()
+            finally:
+                conn.close()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                # Tệp rỗng: engine bị kill sau khi tạo tệp, trước khi có schema — mở lại tạo schema mới.
+                return None
             logger.warning("Không đọc được mã dự án trong %s", graph_db, exc_info=True)
-            return None
-        finally:
-            conn.close()
+            raise ProjectGraphUnreadable(
+                f"Không đọc được CSDL đồ thị {graph_db} ({type(exc).__name__}: {exc})") from exc
+        except Exception as exc:
+            # Tệp có nhưng không đọc được (hỏng, khoá): báo lỗi thay vì sinh ID mới khiến người dùng
+            # tưởng đang mở một dự án mới và mất liên kết với đồ thị cũ (ENG-07/M3).
+            logger.warning("Không đọc được mã dự án trong %s", graph_db, exc_info=True)
+            raise ProjectGraphUnreadable(
+                f"Không đọc được CSDL đồ thị {graph_db} ({type(exc).__name__}: {exc})") from exc
         return row["ma_du_an"] if row else None
 
     def _create_storage(self, root: Path, project_id: str, in_project_db: Path) -> tuple[Path, str]:

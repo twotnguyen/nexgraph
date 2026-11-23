@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { APPROVAL_TIMEOUT_MS, createApprovalGate, type ApprovalGate } from '../src/main/agent/approval'
+import { APPROVAL_TIMEOUT_MS, createApprovalGate, needsExplicitApproval, type ApprovalGate } from '../src/main/agent/approval'
 import type { AgentMode, ApprovalRequest } from '../src/shared/agent-types'
 
 const input: Record<string, unknown> = {
@@ -102,6 +102,33 @@ describe('approval gate', () => {
     expect(gate.pending()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
     gate.resolve(asked().id, true) // no-op
+  })
+  it('chế độ auto vẫn hỏi tệp có thể biến lần ghi thành chạy mã', async () => {
+    // REV-15: auto duyệt mọi tệp trong dự án, kể cả .vscode/tasks.json và .husky/* —
+    // ghi được hai chỗ đó là chạy được mã ngoài phạm vi checkpoint.
+    gate = createApprovalGate({ root, getMode: () => mode, getPolicy: () => 'auto', ask, preview } as never)
+    for (const path of ['.vscode/tasks.json', '.husky/pre-commit', '.github/workflows/ci.yml', 'package.json', 'packages/app/package.json']) {
+      ask.mockClear()
+      const p = gate.check('write', { path })
+      await flush()
+      expect(ask, path).toHaveBeenCalledTimes(1)
+      gate.resolve(asked().id, true)
+      expect(await p).toMatchObject({ allow: true })
+    }
+  })
+  it('REV-15: .npmrc luôn hỏi nếu tới được cổng duyệt; fs deny-list đã chặn hẳn trước đó', async () => {
+    expect(needsExplicitApproval('package.json')).toBe(true)
+    expect(needsExplicitApproval('node_modules/x/package.json')).toBe(true)
+    expect(needsExplicitApproval('src/a.ts')).toBe(false)
+    expect(needsExplicitApproval('.npmrc')).toBe(true)
+    // project-fs coi .npmrc là tệp bảo vệ: cổng từ chối trước khi kịp hỏi.
+    expect(await gate.check('write', { path: '.npmrc' })).toMatchObject({ allow: false })
+    expect(ask).not.toHaveBeenCalled()
+  })
+  it('chế độ auto vẫn tự duyệt tệp nguồn thường', async () => {
+    gate = createApprovalGate({ root, getMode: () => mode, getPolicy: () => 'auto', ask, preview } as never)
+    expect(await gate.check('write', { path: 'src/a.ts' })).toMatchObject({ allow: true })
+    expect(ask).not.toHaveBeenCalled()
   })
   it('denyAll từ chối mọi yêu cầu đang treo', async () => {
     const a = gate.check('write', { path: 'a.ts' })

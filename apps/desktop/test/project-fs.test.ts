@@ -2,8 +2,9 @@ import { chmodSync, statSync, existsSync, mkdirSync, mkdtempSync, readdirSync, r
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { fsHandlers, readProjectFile, resolveInside, writeProjectFile } from '../src/main/fs/project-fs'
+import { FsError, fsHandlers, readProjectFile, resolveInside, writeProjectFile } from '../src/main/fs/project-fs'
 import { toIpcResult } from '../src/main/ipc-result'
+import { UserError } from '../src/main/user-error'
 
 let root: string
 let outsideDir: string
@@ -319,5 +320,20 @@ describe('TOCTOU khi ghi', () => {
     expect(readdirSync(root)).toEqual([])
     await writeProjectFile(root, 'file.ts', 'after cancellation', opts)
     expect(readFileSync(join(root, 'file.ts'), 'utf8')).toBe('after cancellation')
+  })
+})
+
+describe('mã lỗi', () => {
+  it('unapproved_task là UserError của tầng task, không nằm trong FsErrorCode', async () => {
+    // Minor 7: lỗi task không thuộc tầng fs; `@ts-expect-error` bị báo "unused" nếu ai thêm lại
+    // 'unapproved_task' vào FsErrorCode (typecheck là cổng đỏ).
+    // @ts-expect-error 'unapproved_task' không phải mã lỗi fs
+    const wrongLayer = new FsError('unapproved_task', 'x')
+    expect(wrongLayer).toBeInstanceOf(FsError) // chỉ kiểu bị chặn, runtime không đổi
+    const taskError = new UserError('unapproved_task', 'Task không do NexGraph cấp')
+    expect(taskError).toMatchObject({ name: 'UserError', code: 'unapproved_task' })
+    expect(await toIpcResult(async () => { throw taskError })).toMatchObject({
+      ok: false, error: { code: 'unapproved_task', message: 'Task không do NexGraph cấp' }
+    })
   })
 })

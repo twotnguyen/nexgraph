@@ -41,6 +41,25 @@ export type ApprovalDeps = {
 const deny = (reason: string): ApprovalDecision => ({ allow: false, reason })
 const OUTSIDE = deny('Đường dẫn nằm ngoài dự án')
 
+/**
+ * Tệp mà một lần ghi có thể biến thành chạy mã ngoài phạm vi checkpoint: task của VS Code,
+ * hook của Husky, workflow CI, script npm (postinstall) và cấu hình npm. Policy `auto` không
+ * được tự duyệt các đường này (REV-15).
+ */
+const ALWAYS_ASK = [
+  /^\.vscode[/\\]tasks\.json$/i,
+  /^\.husky[/\\]/i,
+  /^\.github[/\\]workflows[/\\]/i,
+  /^(?:.*[/\\])?package\.json$/i,
+  /^(?:.*[/\\])?\.npmrc$/i
+]
+
+/** true khi đường dẫn tương đối cần người dùng duyệt tay kể cả ở policy `auto`. */
+export function needsExplicitApproval(relPath: string): boolean {
+  const posix = relPath.split('\\').join('/').replace(/^\.\//, '')
+  return ALWAYS_ASK.some((pattern) => pattern.test(posix))
+}
+
 /** Chuẩn hóa đầu vào của Pi trước khi chuyển cho resolveInside kiểm tra đích thật. */
 export function toProjectRelative(root: string, path: string): string {
   if (!isAbsolute(path)) return path
@@ -101,7 +120,7 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
       return deny('Không tạo được bản xem trước thay đổi')
     }
     if (myEpoch !== epoch) return deny(revokedReason)
-    const decision = deps.getPolicy?.() === 'auto' ? { allow: true as const }
+    const decision = deps.getPolicy?.() === 'auto' && !needsExplicitApproval(preview.path) ? { allow: true as const }
       : await wait({ id: randomUUID(), tool: toolName, path: preview.path, before: preview.before, after: preview.after })
     if (!decision.allow) return decision
     if (myEpoch !== epoch) return deny(revokedReason)

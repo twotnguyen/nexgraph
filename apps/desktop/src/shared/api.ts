@@ -70,7 +70,16 @@ export type LspSignatureHelp = {
 export type LspCodeAction = { title: string; kind?: string; edit: LspWorkspaceEdit }
 export type LspDiagnosticsEvent = { projectId: string; file: string; diagnostics: LspDiagnostic[] }
 export type TerminalEvent = { id: number; type: 'data'; data: string } | { id: number; type: 'exit'; code: number }
-export type TaskDefinition = { label: string; command: string; args?: string[]; type?: 'shell' | 'process'; cwd?: string; env?: Record<string, string> }
+export type TaskDefinition = {
+  label: string
+  command: string
+  args?: string[]
+  type?: 'shell' | 'process'
+  cwd?: string
+  env?: Record<string, string>
+  /** Chữ ký do main cấp trong `tasks:resolve`; renderer chỉ chuyển tiếp, không tự đặt. */
+  signature?: string
+}
 /** `status`: chữ trạng thái của `git status --porcelain` (M, A, D, R, C, U, ? cho tệp mới chưa theo dõi). */
 export type GitFileChange = { path: string; status: string; from?: string; added?: number | null; deleted?: number | null }
 export type GitStatus = {

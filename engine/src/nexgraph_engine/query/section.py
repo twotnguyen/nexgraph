@@ -22,11 +22,13 @@ def section_json(store: GraphStore, root: Path, node_id: str, *, source: SourceP
     if node.kind != NodeKind.DOCUMENT or not node.file or not node.line_start:
         raise ApiError(400, "not_section", f"{node.label} không phải một mục tài liệu")
     start = node.line_start
-    end = min(node.line_end or start, start + MAX_CODE_LINES - 1)
+    section_end = node.line_end or start
+    end = min(section_end, start + MAX_CODE_LINES - 1)
     code = read_code(store, root, node.file, start, end, transcript_dir=transcript_dir, source=source,
                      sources_dir=sources_dir)
     # Bỏ ký tự điều khiển (trừ tab) để tài liệu không chèn mã thoát terminal vào ngữ cảnh model, rồi che secret.
     text = redact_secrets(_BODY_CONTROL_RE.sub("", code["text"]).rstrip())
-    truncated = len(text) > max_chars
+    # Cắt vì số dòng (section dài hơn MAX_CODE_LINES) cũng là cắt: phải báo, không chỉ khi vượt max_chars (REV-21).
+    truncated = len(text) > max_chars or end < section_end
     return {"node": node_json(node), "file": node.file, "start": code["start"], "end": code["end"],
             "text": text[:max_chars], "truncated": truncated, "stale": code["stale"]}

@@ -42,6 +42,7 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
         <button type="button" onClick={onExportMarkdown}>{vi.report.exportMd}</button>
       </header>
       {report.truncated && <p className="warn">{vi.report.truncated}</p>}
+      {report.warnings?.map((warning) => <p className="warn" role="status" key={warning}>{warning}</p>)}
 
       <section>
         <h3>{vi.report.godNodes}</h3>

@@ -1,4 +1,5 @@
 import logging
+import sqlite3
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
@@ -7,9 +8,11 @@ from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.index.extra_sources import ExtraSources
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.index import scan as scan_module
-from nexgraph_engine.schema.db import SchemaVersionError, open_graph_db
+from nexgraph_engine.schema.db import (
+    SchemaOutdatedError, SchemaVersionError, UnsupportedSqliteError, open_graph_db,
+)
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.projects import ProjectInfo, ProjectPathError
+from nexgraph_engine.store.projects import ProjectGraphUnreadable, ProjectInfo, ProjectPathError
 
 router = APIRouter(prefix="/v1")
 logger = logging.getLogger(__name__)
@@ -40,9 +43,24 @@ class IndexBody(BaseModel):
     sources: SourcesBody | None = None
 
 
-def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
+def _transient_read_error(exc: BaseException) -> bool:
+    """Lỗi đọc chỉ là tạm thời: CSDL đang bị tiến trình khác giữ, chưa có bảng, hoặc schema mới hơn app.
+
+    Không phải lỗi đọc thật (file hỏng) nên không được hiện "Không đọc được lần lập chỉ mục cuối"
+    như thể đồ thị đã mất (F6 của review PR #41).
+    """
+    if isinstance(exc, (SchemaVersionError, SchemaOutdatedError, UnsupportedSqliteError)):
+        return True
+    if not isinstance(exc, sqlite3.DatabaseError):
+        return True  # OSError khi mở tệp… cũng chỉ là tạm thời với người dùng
+    text = str(exc).lower()
+    return "locked" in text or "busy" in text or "no such table" in text
+
+
+def _last_run(info: ProjectInfo) -> tuple[int | None, str | None, str | None]:
+    """(thời điểm, commit, lỗi đọc) — lỗi đọc phải đến người dùng, không chỉ ghi log (ENG-07/M3)."""
     if not info.graph_db.exists():
-        return None, None
+        return None, None, None
     try:
         conn = open_graph_db(info.graph_db, read_only=True)
         try:
@@ -50,10 +68,14 @@ def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
             run = store.last_completed_run() if store.has_published_graph() else None
         finally:
             conn.close()
-    except Exception:
+    except Exception as exc:
+        if _transient_read_error(exc):
+            logger.info("Bỏ qua lần đọc trạng thái lập chỉ mục tạm thời của %s: %s", info.graph_db, exc)
+            return None, None, None
         logger.warning("Không đọc được lần lập chỉ mục cuối trong %s", info.graph_db, exc_info=True)
-        return None, None
-    return run if run else (None, None)
+        return None, None, (f"Không đọc được lần lập chỉ mục cuối trong {info.graph_db} "
+                            f"({type(exc).__name__}: {exc})")
+    return (run[0], run[1], None) if run else (None, None, None)
 
 
 def _summary(info: ProjectInfo) -> dict:
@@ -69,16 +91,20 @@ def open_project(body: OpenBody, request: Request) -> dict:
         raise ApiError(400, "bad_path", str(exc)) from exc
     except SchemaVersionError as exc:
         raise ApiError(400, "schema_version", str(exc)) from exc
-    at, commit = _last_run(info)
-    return {**_summary(info), "last_indexed_at": at, "last_index_commit": commit}
+    except ProjectGraphUnreadable as exc:
+        raise ApiError(400, "graph_unreadable", str(exc)) from exc
+    at, commit, read_error = _last_run(info)
+    return {**_summary(info), "last_indexed_at": at, "last_index_commit": commit,
+            "last_index_error": read_error}
 
 
 @router.get("/projects")
 def list_projects(request: Request) -> list[dict]:
     out = []
     for info in request.app.state.services.registry.list_projects():
-        at, commit = _last_run(info)
-        out.append({**_summary(info), "last_indexed_at": at, "last_index_commit": commit})
+        at, commit, read_error = _last_run(info)
+        out.append({**_summary(info), "last_indexed_at": at, "last_index_commit": commit,
+                    "last_index_error": read_error})
     return out
 
 

@@ -138,3 +138,21 @@ def test_section_route(api, tmp_path):
     assert got.status_code == 200, got.text
     assert got.json()["text"].startswith("## Setup")
     assert api.get(f"/v1/projects/{p['project_id']}/section", params={"node": "app.py::main#function"}).status_code == 400
+
+
+def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
+    """REV-21: section dài hơn MAX_CODE_LINES bị cắt ngầm phải báo truncated, không im lặng."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    body = "\n".join("a" for _ in range(2200))  # ngắn hơn DEFAULT_MAX_CHARS: chỉ cắt vì số dòng
+    (root / "long.md").write_text(f"# Long\n\n{body}\n", encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        node = _doc(store, "Long", "long.md")
+        assert node.line_end - node.line_start + 1 > 2000
+        out = section_json(store, root, node.id)
+        assert out["end"] < node.line_end
+        assert len(out["text"]) < 8000
+        assert out["truncated"] is True
+    finally:
+        store.conn.close()
