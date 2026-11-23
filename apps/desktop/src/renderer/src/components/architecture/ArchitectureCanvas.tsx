@@ -13,11 +13,13 @@ import { EvidencePopover } from './EvidencePopover'
 const EVIDENCE_LIMIT = 50
 
 interface Crumb { id: string | null; label: string }
-interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void; initialParent?: string; onParentChange?: (parent?: string) => void }
+interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void; initialParent?: string; onParentChange?: (parent?: string) => void
+  /** Bấm mốc "Dự án" ở gốc đường dẫn khối: về danh sách dự án. Không có thì mốc gốc khoá như cũ. */
+  onOpenProjects?: () => void }
 interface Laid { nodes: Node[]; edges: Edge[]; view: ArchView }
 interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
 
-export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent, onParentChange }: Props) {
+export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent, onParentChange, onOpenProjects }: Props) {
   const theme = useTheme()
   const initialDirectory = initialParent?.startsWith('file:')
     ? (initialParent.slice(5).includes('/') ? `dir:${initialParent.slice(5, initialParent.lastIndexOf('/'))}` : undefined)
@@ -93,12 +95,19 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
   return (
     <div className="arch-canvas" aria-busy={!laid && !error}>
       <nav className="breadcrumb" aria-label={vi.arch.breadcrumb}>
-        {crumbs.map((c, i) => (
-          <span key={`${c.id}-${i}`}>
-            {i > 0 && <span className="muted"> › </span>}
-            <button type="button" disabled={i === crumbs.length - 1} onClick={() => setCrumbs((cs) => cs.slice(0, i + 1))}>{c.label}</button>
-          </span>
-        ))}
+        {crumbs.map((c, i) => {
+          const last = i === crumbs.length - 1
+          // Mốc gốc "Dự án" là mức trên cùng: đang ở gốc mà có handler thì mở danh sách dự án,
+          // không có thì khoá (đừng để nút trông bấm được mà không làm gì).
+          const openProjects = last && c.id === null ? onOpenProjects : undefined
+          return (
+            <span key={`${c.id}-${i}`}>
+              {i > 0 && <span className="muted"> › </span>}
+              <button type="button" disabled={last && !openProjects}
+                onClick={() => { if (openProjects) openProjects(); else if (!last) setCrumbs((cs) => cs.slice(0, i + 1)) }}>{c.label}</button>
+            </span>
+          )
+        })}
       </nav>
       <div className="legend muted"><span>{vi.arch.legendArrow}</span><span>{vi.arch.legendCount}</span></div>
       {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
