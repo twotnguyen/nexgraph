@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { StrictMode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood } from '@shared/graph-types'
@@ -43,6 +43,13 @@ vi.mock('../components/editor/monaco', () => ({
 
 import { WorkspaceScreen } from './WorkspaceScreen'
 import { installKeymap, runCommand } from '../state/commands'
+import { setLocale, useLocale } from '../state/locale'
+
+/** App thật đăng ký useLocale rồi dựng lại các màn trong render của nó; test màn lẻ dùng render-prop để giống. */
+function LocaleHost({ render }: { render: () => ReactNode }) {
+  useLocale()
+  return <>{render()}</>
+}
 
 beforeAll(() => {
   class RO { observe() {} unobserve() {} disconnect() {} }
@@ -53,7 +60,7 @@ beforeAll(() => {
 beforeEach(() => localStorage.setItem('nexgraph.chat.dock', 'right'))
 // App cài bộ phân phối phím; ở đây màn được render riêng nên tự cài.
 beforeAll(() => installKeymap())
-afterEach(() => consumePendingMultiBuffer())
+afterEach(() => { consumePendingMultiBuffer(); setLocale('vi') })
 
 const gnode = (id: string, label = id): GraphNode => ({
   id, kind: 'method', label, qualified_name: id, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,
@@ -732,6 +739,14 @@ describe('WorkspaceScreen: editor tabs', () => {
     expect(impactOf).toHaveBeenCalledWith('p1', a.id)
     expect(await screen.findByText('Ảnh hưởng nếu sửa run')).toBeInTheDocument()
     await waitFor(() => expect(within(flow).getByText('ảnh hưởng')).toBeInTheDocument())
+  })
+
+  it('đổi ngôn ngữ áp dụng ngay cho nhãn thẻ workspace', async () => {
+    installNexgraph()
+    render(<div style={{ width: 1000, height: 700 }}><LocaleHost render={() => <WorkspaceScreen project={project()} />} /></div>)
+    expect(await screen.findByRole('tab', { name: 'Kiến trúc' })).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(await screen.findByRole('tab', { name: 'Architecture' })).toBeInTheDocument()
   })
 
   it('tab Báo cáo: câu hỏi gợi ý chạy Hỏi graph và chuyển sang Graph; Xuất Markdown chọn sẵn markdown', async () => {

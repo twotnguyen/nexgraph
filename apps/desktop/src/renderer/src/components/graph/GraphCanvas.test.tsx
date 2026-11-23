@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NexGraphApi } from '@shared/api'
 import type { GraphNode, Neighborhood } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
+import { setLocale, useLocale } from '../../state/locale'
+
+afterEach(() => setLocale('vi'))
+
+/** App thật đăng ký useLocale rồi dựng lại canvas trong render của nó; test lẻ dùng render-prop để giống. */
+function LocaleHost({ render }: { render: () => ReactNode }) {
+  useLocale()
+  return <>{render()}</>
+}
 
 vi.mock('../../services/elkLayoutService', async () => ({
   layoutDiagram: async (nodes: { id: string }[]) => ({ pos: Object.fromEntries(nodes.map((n, i) => [n.id, { x: i * 220, y: 0 }])), routes: {} })
@@ -72,6 +82,14 @@ describe('GraphCanvas', () => {
     fireEvent.click(await screen.findByText('x'))
     await userEvent.click(screen.getByRole('button', { name: 'Về gốc' }))
     await waitFor(() => expect(neighbors).toHaveBeenLastCalledWith('p1', expect.objectContaining({ node: '.#repository' })))
+  })
+
+  it('đổi ngôn ngữ áp dụng ngay cho nút trên toolbar', async () => {
+    installNexgraph({ graph: { neighbors: vi.fn(async () => hood(['.#repository', 'a'])) } })
+    render(<div style={{ width: 800, height: 600 }}><LocaleHost render={() => <GraphCanvas projectId="p1" startNodeId=".#repository" />} /></div>)
+    expect(await screen.findByRole('button', { name: 'Về gốc' })).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(await screen.findByRole('button', { name: 'Back to root' })).toBeInTheDocument()
   })
 })
 
