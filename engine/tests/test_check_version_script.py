@@ -151,6 +151,36 @@ def test_bo_qua_version_o_bang_khac(tmp_path):
     assert res.returncode == 0, res.stdout + res.stderr
 
 
+def test_doc_version_bang_toml_parser_chuan(tmp_path):
+    # Review vòng 3 (Important 3): chuỗi literal nhiều dòng của `description` chứa
+    # `version = "0.2.0rc3"`; version thật của [project] là 0.2.0rc2. Parser theo
+    # dòng đọc nhầm chuỗi trong description nên báo 4/4 OK; TOML parser chuẩn
+    # (tomllib) phải thấy 0.2.0rc2 và chặn tag v0.2.0-rc.3.
+    root = make_tree(
+        tmp_path,
+        npm="0.2.0-rc.3",
+        desktop="0.2.0-rc.3",
+        pyproject="0.2.0rc3",
+        engine="0.2.0rc3",
+    )
+    (root / "engine" / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "fixture"\n'
+        "description = '''\n"
+        "Ví dụ cấu hình:\n"
+        'version = "0.2.0rc3"\n'
+        "'''\n"
+        'version = "0.2.0rc2"\n',
+        encoding="utf-8",
+    )
+    res = run_check(root, "v0.2.0-rc.3")
+    assert res.returncode != 0, res.stdout + res.stderr
+    out = res.stdout + res.stderr
+    assert "engine/pyproject.toml" in out
+    assert "0.2.0rc2" in out
+    assert "OK: tag" not in res.stdout
+
+
 def test_thieu_tep_version_thi_fail(tmp_path):
     root = make_tree(tmp_path, npm="0.1.2", desktop="0.1.2", pyproject="0.1.2", engine="0.1.2")
     (root / "engine" / "src" / "nexgraph_engine" / "__init__.py").unlink()

@@ -15,13 +15,17 @@
  * Python mới được chuẩn hoá semver -> PEP 440.
  *
  * Không phụ thuộc gói ngoài để job `version-check` chạy được trên runner sạch.
+ * Riêng `[project].version` đọc bằng TOML parser chuẩn của Python (`tomllib`,
+ * script `scripts/ci/read-toml-version.py`, cần Python >= 3.11).
  */
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = resolve(HERE, '..', '..');
+const TOML_HELPER = join(HERE, 'read-toml-version.py');
 
 /** 4 nguồn version — đúng danh sách đợt V1 sẽ tăng version. */
 const SOURCES = [
@@ -36,6 +40,34 @@ const PRE_RELEASE = [
   [/-(?:beta)\.(\d+)$/i, 'b$1'],
   [/-(?:rc)\.(\d+)$/i, 'rc$1'],
 ];
+
+/** Python chạy `read-toml-version.py`; `py -3` là launcher trên Windows. */
+const PYTHON_CANDIDATES = [
+  ...(process.env.NEXGRAPH_CI_PYTHON
+    ? [{ command: process.env.NEXGRAPH_CI_PYTHON, prefix: [] }]
+    : []),
+  { command: 'python3', prefix: [] },
+  { command: 'python', prefix: [] },
+  { command: 'py', prefix: ['-3'] },
+];
+
+let tomlPython; // undefined: chưa dò; null: không có Python >= 3.11
+
+function findTomlPython() {
+  if (tomlPython !== undefined) return tomlPython;
+  for (const candidate of PYTHON_CANDIDATES) {
+    const probe = spawnSync(candidate.command, [...candidate.prefix, '-c', 'import tomllib'], {
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+    if (!probe.error && probe.status === 0) {
+      tomlPython = candidate;
+      return candidate;
+    }
+  }
+  tomlPython = null;
+  return null;
+}
 
 /** Tag phát hành: semver của dự án, pre-release luôn có `-` (PEP 440 không dùng cho tag). */
 const RELEASE_TAG = /^v(\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?)$/;
@@ -73,23 +105,31 @@ function parseJsonVersion(text) {
 }
 
 function parseTomlVersion(text) {
-  // TOML tối thiểu, theo bảng: chỉ lấy `version = "..."` nằm trong đúng bảng
-  // [project]; bỏ qua [tool.*], [build-system], bảng con [project.*] và bảng
-  // mảng [[...]]. Không cần Python/TOML parser ngoài trên runner.
-  let table = '';
-  for (const rawLine of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
-    const line = rawLine.replace(/#.*$/, '').trim();
-    if (!line) continue;
-    if (line.startsWith('[')) {
-      const header = /^\[\s*([^[\]]+?)\s*\]$/.exec(line);
-      table = header ? header[1].trim() : '';
-      continue;
-    }
-    if (table !== 'project') continue;
-    const match = /^version\s*=\s*(?:"([^"]*)"|'([^']*)')\s*$/.exec(line);
-    if (match) return match[1] ?? match[2];
+  // Version của [project] phải do TOML parser chuẩn đọc: `version = "..."` nằm
+  // trong chuỗi nhiều dòng của trường khác (vd. description) không được tính.
+  // Python 3.11+ có tomllib trong stdlib; runner ubuntu/macos/windows của job
+  // `version-check` và `package` đều có Python >= 3.11 trên PATH.
+  const python = findTomlPython();
+  if (!python) {
+    throw new Error('cần Python 3.11+ (tomllib) để đọc TOML: không thấy python3/python/py');
   }
-  throw new Error('không thấy version = "..." trong bảng [project]');
+  const res = spawnSync(python.command, [...python.prefix, TOML_HELPER], {
+    input: text,
+    encoding: 'utf8',
+    timeout: 60000,
+  });
+  if (res.error) throw new Error(`không chạy được ${python.command}: ${res.error.message}`);
+  if (res.status !== 0) {
+    const detail = (res.stderr || res.stdout || '')
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .pop();
+    throw new Error(detail || `${python.command} thoát với mã ${res.status}`);
+  }
+  const version = (res.stdout || '').trim();
+  if (!version) throw new Error('không thấy version dạng chuỗi trong bảng [project]');
+  return version;
 }
 
 function parsePythonVersion(text) {
