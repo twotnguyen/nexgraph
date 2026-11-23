@@ -2804,6 +2804,18 @@ dialog.modal::backdrop { background: var(--overlay); }
     transition-duration: .01ms !important;
     scroll-behavior: auto !important;
   }
+  /* Monaco đo kích thước widget tràn bằng getBoundingClientRect() ngay trong task đặt lại kích thước:
+     `.monaco-resizable-hover` được phồng tạm bằng chiều cao editor rồi mới co về kích thước nội dung.
+     Chỉ cần transition-duration > 0 thì lần đọc đầu tiên vẫn trả về kích thước CŨ (đang phồng), Monaco
+     cache lại và đặt `top = neo - chiều cao editor` ⇒ hover lệch đúng một chiều cao editor và bị cắt.
+     Tắt hẳn transition/animation trong cây editor để mọi thay đổi kích thước áp dụng tức thì. */
+  .monaco-editor,
+  .monaco-editor *,
+  .monaco-editor *::before,
+  .monaco-editor *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
 }
 
 /* W10: ghi nhớ trong Inspector và mục Bài học. */
