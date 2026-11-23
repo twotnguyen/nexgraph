@@ -138,6 +138,14 @@ describe('lỗi provider trong chat', () => {
     act(() => emitAgent(pid, { type: 'error', code: 'ai_context_small', message: 'Mô hình chỉ có 6000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.' }))
     expect((await screen.findAllByText(/The model has only 6000 context tokens/)).length).toBeGreaterThan(0)
   })
+
+  it('MIN-46 M1/M6 EN: mã conflict không có trong chat.errors vẫn dịch qua errorText', async () => {
+    setLocale('en')
+    const { emitAgent } = await startTurn()
+    act(() => emitAgent(pid, { type: 'error', code: 'conflict', message: 'Tệp đang có bản nháp chưa lưu trong trình soạn thảo. Lưu hoặc đóng bản nháp trước khi trợ lý sửa.' }))
+    expect((await screen.findAllByText(/The file has an unsaved draft in the editor\. Save or close the draft before the assistant edits it\./)).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/bản nháp chưa lưu/)).not.toBeInTheDocument()
+  })
 })
 
 describe('vòng context', () => {
