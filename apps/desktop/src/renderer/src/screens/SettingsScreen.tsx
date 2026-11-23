@@ -9,6 +9,7 @@ import { setBlame, setEditorPrefs, setVimMode, useBlame, useEditorPrefs, useVimM
 import { CHAT_WIDTH, TERMINAL_HEIGHT, setChatDock, setChatWidth, setExplorerOpen, setStatusBar, setStatusItemHidden, setTerminalHeight, useChatDock, useChatWidth, useExplorerOpen, useHiddenStatusItems, useStatusBar, useTerminalHeight } from '../state/layoutPrefs'
 import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
 import { Toast } from '../components/common/Toast'
+import { errorText } from '../state/errorText'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
 import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
@@ -237,9 +238,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
     setTestResult(null)
     try {
       const r = await window.nexgraph.auth.test()
-      setTestResult(r.ok ? vi.accounts.testOk : vi.accounts.testFail(r.message))
+      setTestResult(r.ok ? vi.accounts.testOk : `${tr(r.message)}${r.detail ? ` — ${r.detail}` : ''}`)
     } catch (e) {
-      setTestResult(vi.accounts.testFail(errMessage(e)))
+      setTestResult(errorText(e))
     } finally {
       operation.current = false
       setTesting(false)

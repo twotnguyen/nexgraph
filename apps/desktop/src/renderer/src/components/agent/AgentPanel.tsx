@@ -341,7 +341,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         announceAgent('done', alertTitle.current)
       } else if (e.type === 'error') {
         if (e.code !== 'ai_cancelled') announceAgent('error', alertTitle.current)
-        fail(t.q, vi.chat.errors[e.code] || e.message)
+        // Câu theo mã lỗi (dịch theo ngôn ngữ) + thông điệp ngắn của provider để người dùng biết phải sửa gì.
+        fail(t.q, `${vi.chat.errors[e.code] || e.message}${e.detail ? ` — ${e.detail}` : ''}`)
       }
     })
     return () => {

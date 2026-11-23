@@ -3,8 +3,14 @@ import { tr } from '../strings'
 /** Lỗi IPC tiếng Việt phổ biến: chỉ những câu có bản dịch mới đổi theo ngôn ngữ. */
 const knownErrors: Record<string, true> = {
   'API key bị từ chối': true,
+  'API key bị từ chối. Kiểm tra lại trong Cài đặt.': true,
+  'Không tìm thấy mô hình ở nhà cung cấp. Kiểm tra tên mô hình trong Cài đặt.': true,
+  'Nhà cung cấp AI từ chối yêu cầu.': true,
+  'Nhà cung cấp AI tạm thời gặp lỗi.': true,
+  'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi.': true,
   'Đã chạm hạn mức hoặc giới hạn tốc độ của nhà cung cấp. Kiểm tra hạn mức rồi thử lại.': true,
   'Không kết nối được tới nhà cung cấp AI': true,
+  'Không kết nối được tới nhà cung cấp AI.': true,
   'Trợ lý AI gặp lỗi': true,
   'Đã dừng': true,
   'Nhà cung cấp AI đã thay đổi. Hãy kiểm tra đích nhận và gửi lại câu hỏi.': true,

@@ -191,6 +191,25 @@ describe('SettingsScreen', () => {
     expect(probe).toHaveBeenCalledTimes(2)
   })
 
+  it('đặt sai model: "Kiểm tra kết nối" báo không có mô hình kèm chi tiết, không phải "không kết nối được"', async () => {
+    const test = vi.fn(async () => ({ ok: false, message: 'Không tìm thấy mô hình ở nhà cung cấp', detail: 'The model `x` does not exist' }))
+    installNexgraph({ auth: { test } })
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Kiểm tra kết nối' }))
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Không tìm thấy mô hình ở nhà cung cấp')
+    expect(status).toHaveTextContent('The model `x` does not exist')
+    expect(status).not.toHaveTextContent('Không kết nối được')
+  })
+
+  it('EN: kết quả kiểm tra kết nối dịch câu theo ngôn ngữ, giữ chi tiết của provider', async () => {
+    setLocale('en')
+    installNexgraph({ auth: { test: vi.fn(async () => ({ ok: false, message: 'Không tìm thấy mô hình ở nhà cung cấp. Kiểm tra tên mô hình trong Cài đặt.', detail: 'The model `x` does not exist' })) } })
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('The provider does not have this model')
+  })
+
   it('đăng nhập OAuth: sự kiện auth_url hiện hướng dẫn, Huỷ gọi loginCancel', async () => {
     const { api } = installNexgraph({ auth: {
       list: vi.fn(async () => [provider('openai-codex', { oauth: true })]),

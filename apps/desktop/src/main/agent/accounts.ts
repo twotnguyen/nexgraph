@@ -6,7 +6,7 @@ import type { CredentialSynchronizationError, ModelRuntime } from '@earendil-wor
 import { Type } from 'typebox'
 import { normalizeConsentTarget, sameConsentTarget, type AiConsentTarget, type AuthEventView, type AuthPromptView, type CustomProvider, type LocalModelInfo, type ModelInfo, type ProviderInfo } from '../../shared/agent-types'
 import { readJson, writeJson, type SecretStore } from '../ai/settings'
-import { AgentError, loadPi, rememberSecret, scrub } from './session'
+import { AgentError, classifyProviderError, loadPi, rememberSecret, scrub } from './session'
 import { createOpenAiOAuth, revokeOpenAiSession, type OpenAiRegistration } from './openai-auth'
 
 // pi-coding-agent không tái xuất các kiểu auth; suy ra từ chữ ký login() công khai.
@@ -770,7 +770,12 @@ export class AccountService {
 
   // ----- kiểm tra kết nối: gọi provider thật với model đang chọn -----
 
-  async test(): Promise<{ ok: boolean; message: string; capabilities?: { streaming: boolean; tools: boolean } }> {
+  /**
+   * "Kiểm tra kết nối" không được phụ thuộc context window người dùng khai: câu thử chỉ có một message + một tool,
+   * nên dùng một bản model có cửa sổ đủ rộng và `maxTokens` nhỏ nhưng hợp lệ (>= 16). Trước đây cửa sổ 4096 làm SDK
+   * kẹp `max_completion_tokens` còn 1 và provider thật trả 400 ngay ở bước kiểm tra.
+   */
+  async test(): Promise<{ ok: boolean; message: string; detail?: string; capabilities?: { streaming: boolean; tools: boolean } }> {
     const sel = this.getSelectedModel()
     const model = sel && this.modelRuntime.getModel(sel.provider, sel.id)
     if (!model) return { ok: false, message: 'Chưa chọn model hoặc model không còn' }
@@ -795,7 +800,12 @@ export class AccountService {
       return { ok: true, message: tools ? 'Kết nối được và gọi công cụ thành công' : 'Kết nối được; model chưa xác nhận gọi công cụ',
         capabilities: { streaming, tools } }
     } catch (e) {
-      return { ok: false, message: scrub(e instanceof Error ? e.message : String(e)) }
+      const raw = e instanceof Error ? e.message : String(e)
+      // Lỗi 4xx nói rõ sai key / sai model / yêu cầu không hợp lệ, kèm thông điệp ngắn của provider.
+      const failure = classifyProviderError(raw)
+      return failure.code === 'ai_error'
+        ? { ok: false, message: scrub(raw) }
+        : { ok: false, message: failure.message, ...(failure.detail ? { detail: failure.detail } : {}) }
     }
   }
 

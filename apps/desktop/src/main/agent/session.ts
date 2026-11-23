@@ -132,10 +132,18 @@ export async function createPiSession(spec: SessionSpec): Promise<AgentSession> 
   session.agent.streamFunction = (model, context, options) => {
     spec.beforeModelTurn?.()
     spec.assertDispatch(model)
-    const fetch: typeof globalThis.fetch = (input, init) => {
+    const fetch: typeof globalThis.fetch = async (input, init) => {
       spec.assertDispatch(model)
       spec.assertRequest(new URL(typeof input === 'string' || input instanceof URL ? input : input.url))
-      return (options?.fetch ?? globalThis.fetch)(input, { ...init, redirect: 'manual' })
+      const response = await (options?.fetch ?? globalThis.fetch)(input, { ...init, redirect: 'manual' })
+      // SDK bọc lỗi HTTP thành chuỗi chung ("Connection error.") và mất mã trạng thái: ghi lại đúng mã + body
+      // để lượt chat báo "sai key / không có model / yêu cầu không hợp lệ" thay vì "không kết nối được".
+      if (!response.ok) {
+        let body = ''
+        try { body = (await response.clone().text()).slice(0, 4000) } catch { /* body không đọc được: chỉ dùng mã */ }
+        spec.onProviderFailure?.(classifyProviderStatus(response.status, body))
+      }
+      return response
     }
     return stream(model, context, {
       ...options,
@@ -214,7 +222,13 @@ function inConsentBase(base: URL, request: URL): boolean {
   return true
 }
 
-const STATUS = /\b([45]\d\d)\b/
+const STATUS_LEADING = /^\s*(?:HTTP\s*)?([45]\d\d)\b/
+const STATUS_ANY = /\b([45]\d\d)\b/
+/** Mã HTTP của provider trong chuỗi lỗi; ưu tiên dạng `400: {…}` (pi ghép status + body). */
+const statusOf = (raw: string): number | undefined => {
+  const match = STATUS_LEADING.exec(raw) ?? STATUS_ANY.exec(raw)
+  return match ? Number(match[1]) : undefined
+}
 const NETWORK = /fetch failed|connection error|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timed? ?out|network|socket|terminated|stream ended|premature close|other side closed|EPIPE|UND_ERR_SOCKET|hang up|reset by peer/i
 
 /** Khoá đang active (do AccountService đăng ký) để che cả giá trị không theo mẫu `sk-*`. */
@@ -240,15 +254,53 @@ export const cleanAgentText = (raw: string, limit = 32_000): string => {
 }
 export const scrub = (raw: string): string => cleanAgentText(raw, 200)
 
+/** Thông điệp ngắn của provider trong body lỗi (JSON `error.message`/`message` hoặc văn bản), đã che khoá và cắt ngắn. */
+export const providerDetail = (raw: string, limit = 300): string | undefined => {
+  const text = raw.trim()
+  if (!text) return undefined
+  const start = text.indexOf('{')
+  if (start >= 0) {
+    try {
+      const value = JSON.parse(text.slice(start)) as { error?: unknown; message?: unknown }
+      const error = value.error
+      const message = typeof error === 'string' ? error
+        : error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string' ? (error as { message: string }).message
+          : typeof value.message === 'string' ? value.message : ''
+      if (message.trim()) return scrub(message.trim()).slice(0, limit)
+    } catch { /* không phải JSON: dùng nguyên văn bên dưới */ }
+  }
+  const plain = scrub(text.replace(/\s+/g, ' ')).slice(0, limit)
+  return plain || undefined
+}
+
+/**
+ * Phân loại lỗi HTTP của nhà cung cấp thành mã người dùng hiểu được. Chỉ lỗi mạng mới là `ai_unreachable`;
+ * 4xx nói rõ sai key / sai model / yêu cầu không hợp lệ, kèm thông điệp ngắn (đã che khoá) của provider.
+ */
+export function classifyProviderStatus(status: number, body?: string): ProviderFailure {
+  const detail = body === undefined ? undefined : providerDetail(body)
+  const withDetail = (failure: ProviderFailure): ProviderFailure => detail ? { ...failure, detail } : failure
+  if (status === 401 || status === 403) return withDetail({ code: 'ai_unauthorized', message: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.' })
+  if (status === 404) return withDetail({ code: 'ai_model_not_found', message: 'Không tìm thấy mô hình ở nhà cung cấp. Kiểm tra tên mô hình trong Cài đặt.' })
+  if (status === 429) return withDetail({ code: 'ai_rate_limited', message: 'Đã chạm hạn mức hoặc giới hạn tốc độ của nhà cung cấp. Kiểm tra hạn mức rồi thử lại.' })
+  // 408/504 là hết thời gian chờ của máy chủ, không phải yêu cầu sai.
+  if (status === 408 || status === 504) return withDetail({ code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI.' })
+  if (status >= 500) return withDetail({ code: 'ai_provider_error', message: 'Nhà cung cấp AI tạm thời gặp lỗi.' })
+  return withDetail({ code: 'ai_bad_request', message: 'Nhà cung cấp AI từ chối yêu cầu.' })
+}
+
+/** Phân loại chuỗi lỗi thô của provider (dùng khi không có mã HTTP riêng, ví dụ "Kiểm tra kết nối"). */
+export function classifyProviderError(raw: string): ProviderFailure {
+  const status = statusOf(raw)
+  if (status) return classifyProviderStatus(status, raw)
+  if (NETWORK.test(raw)) return { code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI.' }
+  return { code: 'ai_error', message: 'Trợ lý AI gặp lỗi' }
+}
+
 /** Ánh xạ lỗi nhà cung cấp sang mã/câu tiếng Việt, dùng lại mã của chat.ts cũ. */
-function providerError(raw: string): AgentEvent {
-  const status = STATUS.exec(raw)?.[1]
-  if (status === '401' || status === '403') return { type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' }
-  if (status === '429') return { type: 'error', code: 'ai_rate_limited', message: 'Đã chạm hạn mức hoặc giới hạn tốc độ của nhà cung cấp. Kiểm tra hạn mức rồi thử lại.' }
-  if (status) return { type: 'error', code: 'ai_unreachable', message: `Nhà cung cấp AI trả về ${status}` }
-  if (NETWORK.test(raw)) return { type: 'error', code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI' }
-  // Không đưa err.message thô (dù đã scrub) vào AgentEvent.error.message.
-  return { type: 'error', code: 'ai_error', message: 'Trợ lý AI gặp lỗi' }
+function providerError(raw: string, failure?: ProviderFailure): AgentEvent {
+  if (failure) return { type: 'error', ...failure }
+  return { type: 'error', ...classifyProviderError(raw) }
 }
 const CANCELLED: AgentEvent = { type: 'error', code: 'ai_cancelled', message: 'Đã dừng' }
 const PROVIDER_CHANGED = { type: 'error', code: 'ai_provider_changed', message: 'Nhà cung cấp AI đã thay đổi. Hãy kiểm tra đích nhận và gửi lại câu hỏi.' } as const
