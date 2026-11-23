@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomllib
 from pathlib import Path
 
 from nexgraph_engine import __version__
@@ -27,20 +28,21 @@ def _semver_to_pep440(version: str) -> str:
     )
 
 
-def _pyproject_version() -> str:
-    text = (REPO / "engine" / "pyproject.toml").read_text(encoding="utf-8")
-    match = re.search(r'^version = "([^"]+)"', text, re.MULTILINE)
-    assert match, "không thấy version trong engine/pyproject.toml"
-    return match.group(1)
+def _pyproject_version(path: Path | None = None) -> str:
+    source = path or (REPO / "engine" / "pyproject.toml")
+    version = tomllib.loads(source.read_text(encoding="utf-8"))["project"]["version"]
+    return str(version)
 
 
-def _lock_version() -> str:
-    text = (REPO / "engine" / "uv.lock").read_text(encoding="utf-8")
-    match = re.search(
-        r'\[\[package\]\]\nname = "nexgraph-engine"\nversion = "([^"]+)"', text
+def _lock_version(path: Path | None = None) -> str:
+    source = path or (REPO / "engine" / "uv.lock")
+    lock = tomllib.loads(source.read_text(encoding="utf-8"))
+    for package in lock.get("package", []):
+        if package.get("name") == "nexgraph-engine":
+            return str(package["version"])
+    raise AssertionError(
+        'không thấy khối [[package]] name = "nexgraph-engine" trong uv.lock'
     )
-    assert match, 'không thấy khối [[package]] name = "nexgraph-engine" trong uv.lock'
-    return match.group(1)
 
 
 def test_version_khop_o_bon_tep():
@@ -59,3 +61,39 @@ def test_version_khop_o_bon_tep():
 
 def test_uv_lock_khop_version_goi():
     assert _lock_version() == _pyproject_version()
+
+
+PYPROJECT_CO_DONG_VERSION = """
+[tool.example]
+version = "0.2.0a1"
+
+[project]
+name = "nexgraph-engine"
+version = "0.2.0a0"
+"""
+
+
+def test_pyproject_doc_dung_bang_project(tmp_path: Path) -> None:
+    """`[tool.*].version` đứng trước không được che `[project].version` (Minor review-61)."""
+    path = tmp_path / "pyproject.toml"
+    path.write_text(PYPROJECT_CO_DONG_VERSION, encoding="utf-8")
+    assert _pyproject_version(path) == "0.2.0a0"
+
+
+UV_LOCK_KHOA_KHONG_THEO_THU_TU = """
+[[package]]
+version = "0.2.0a1"
+name = "nexgraph-engine"
+source = { editable = "." }
+
+[[package]]
+name = "nexgraph-engine-extra"
+version = "9.9.9"
+"""
+
+
+def test_uv_lock_doc_block_theo_ten(tmp_path: Path) -> None:
+    """Đọc block `[[package]]` theo tên, không phụ thuộc thứ tự khoá (Minor review-61)."""
+    path = tmp_path / "uv.lock"
+    path.write_text(UV_LOCK_KHOA_KHONG_THEO_THU_TU, encoding="utf-8")
+    assert _lock_version(path) == "0.2.0a1"
