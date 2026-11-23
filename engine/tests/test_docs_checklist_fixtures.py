@@ -16,7 +16,8 @@ from nexgraph_engine.store.graph_store import GraphStore
 
 FIX = Path(__file__).parent / "fixtures" / "docs_app"
 
-# Đúng tên tệp ghi trong checklist-graphify.md (mục Chuẩn bị → docs_app).
+# Tên tệp do đợt QA-18 tự đặt; checklist-graphify.md chỉ yêu cầu thư mục `engine/tests/fixtures/docs_app`
+# (mục Chuẩn bị) chứ không liệt kê tên tệp.
 CHECKLIST_FILES = ("docs/huong-dan.docx", "docs/bang-diem.xlsx", "docs/huong-dan.html",
                    "cau-hinh.yaml", "docs/logo.png", "docs/ghi-am.wav")
 
