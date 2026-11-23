@@ -79,6 +79,33 @@ def _only(cands: list[Node]) -> Node | None:
     return cands[0] if len(cands) == 1 else None
 
 
+def _include_target(idx: "_Index", uri: str, src_file: str) -> str | None:
+    """Tệp cho `#include <a/b.h>`: khớp theo **đoạn** đường dẫn, không khớp mỗi tên tệp.
+
+    Nhiều ứng viên → chọn tệp có thư mục gần tệp đang include nhất nếu phân định được duy nhất; không thì bỏ.
+    """
+    if not uri:
+        return None
+    cands = sorted(f for f in idx.files if f == uri or f.endswith("/" + uri))
+    if len(cands) <= 1:
+        return cands[0] if cands else None
+    base = posixpath.dirname(src_file)
+
+    def distance(path: str) -> tuple[int, int]:
+        rel = posixpath.relpath(path, base or ".")
+        return (sum(1 for part in rel.split("/") if part == ".."), len(rel))
+
+    best = min(cands, key=distance)
+    return best if sum(1 for c in cands if distance(c) == distance(best)) == 1 else None
+
+
+def _module_path(rel: str) -> str:
+    """Đường dẫn tệp → đường dẫn mô-đun Python: `app/models.py` → `app.models`."""
+    head, _, name = rel.rpartition("/")
+    stem = name.rsplit(".", 1)[0] if "." in name else name
+    return f"{head.replace('/', '.')}.{stem}" if head else stem
+
+
 def _levels(levels: list[tuple[list[Node], float]]) -> _Hit | None:
     """Mức đầu tiên có ứng viên quyết định: đúng một thì chọn, nhiều hơn thì bỏ (không đoán)."""
     for cands, score in levels:
@@ -148,18 +175,25 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
         for prefix, st in (("export:", "export"), ("part:", "part")):
             if uri.startswith(prefix):
                 uri, subtype = uri[len(prefix):], st
+        angle = uri.startswith("<") and uri.endswith(">")  # `#include <a/b.h>`
+        if angle:
+            uri = uri[1:-1].strip()
         target_rel: str | None = None
-        if uri.startswith("package:"):
-            m = re.match(r"package:([^/]+)/(.+)", uri)
-            if m and package_name and m.group(1) == package_name:
-                target_rel = f"lib/{m.group(2)}"
-        elif ":" not in uri.split("/")[0]:
-            joined = posixpath.normpath(posixpath.join(posixpath.dirname(src.file), uri))
-            target_rel = joined if not joined.startswith("..") else None
-        if (not target_rel or target_rel not in idx.files) and not src.file.endswith(".dart"):
-            # `#include "x/y.h"` qua thư mục -I: tệp duy nhất trong dự án có đường dẫn kết thúc bằng `x/y.h`
-            target_rel = idx.file_by_gid.get(uri) or _only(
-                [f for f in idx.files_by_name.get(posixpath.basename(uri), []) if f == uri or f.endswith("/" + uri)])
+        if angle:
+            # Header hệ thống không có trong dự án thì không khớp tệp nào → không cạnh, không tạo nút.
+            target_rel = _include_target(idx, uri, src.file)
+        else:
+            if uri.startswith("package:"):
+                m = re.match(r"package:([^/]+)/(.+)", uri)
+                if m and package_name and m.group(1) == package_name:
+                    target_rel = f"lib/{m.group(2)}"
+            elif ":" not in uri.split("/")[0]:
+                joined = posixpath.normpath(posixpath.join(posixpath.dirname(src.file), uri))
+                target_rel = joined if not joined.startswith("..") else None
+            if (not target_rel or target_rel not in idx.files) and not src.file.endswith(".dart"):
+                # `#include "x/y.h"` qua thư mục -I: tệp duy nhất trong dự án có đường dẫn kết thúc bằng `x/y.h`
+                target_rel = idx.file_by_gid.get(uri) or _only(
+                    [f for f in idx.files_by_name.get(posixpath.basename(uri), []) if f == uri or f.endswith("/" + uri)])
         if target_rel and target_rel in idx.files and target_rel != src.file:
             edge(ref, idx.by_id[f"{target_rel}#file"], EdgeType.IMPORTS, 1.0, subtype, exact=True)
             imports[src.file].append((target_rel, subtype))
@@ -197,6 +231,22 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
         n = _only(idx.members.get((hit.node.file, hit.node.qualified_name), {}).get(name, []))
         return _Hit(n, hit.score) if n else None
 
+    def module_file(file: str, prefix: str) -> str | None:
+        """Tệp của mô-đun đã import khớp `prefix` (`models`, `app.models`); mơ hồ thì bỏ."""
+        if not prefix:
+            return None
+        cands = [f for f in visible(file)
+                 if (path := _module_path(f)) == prefix or path.endswith("." + prefix)]
+        return cands[0] if len(cands) == 1 else None
+
+    def module_member(file: str, prefix: str, name: str) -> _Hit | None:
+        """`mod.Class(...)` / `app.models.User(...)`: tìm kiểu/hàm cùng tên trong tệp mô-đun đã import."""
+        target = module_file(file, prefix)
+        if target is None:
+            return None
+        n = _only(idx.types.get(target, {}).get(name, []) + idx.funcs.get(target, {}).get(name, []))
+        return _Hit(n, IMPORTED) if n else None
+
     def receiver_type(src: Node, recv: str) -> str | None:
         owner = _Index.owner_of(src)
         owner_id = next((n.id for k in TYPE_KINDS for n in idx.types.get(src.file, {}).get(owner or "", [])
@@ -224,6 +274,12 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
         elif len(parts) == 2 and parts[0] == "this":
             own = idx.members.get((file, owner), {}).get(parts[1], []) if owner else []
             hit = _levels([(own, SAME_SCOPE)])
+        elif len(parts) == 3 and parts[0] in ("self", "this"):
+            # `self.repo.save()`: kiểu của `self.repo` lấy từ bảng kiểu của lớp (gán hoặc chú thích).
+            tname = receiver_type(src, parts[1])
+            type_hit = find_type(tname, file) if tname else None
+            if type_hit:
+                hit = member(type_hit, parts[2])
         elif len(parts) == 2:
             recv, x = parts
             tname = recv if recv[:1].isupper() else receiver_type(src, recv)
@@ -232,6 +288,10 @@ def resolve_references(store: GraphStore, *, package_name: str | None, created_o
                 hit = member(type_hit, x)
                 if hit is None and recv[:1].isupper():  # `Type.named(...)`: constructor có tên
                     hit, subtype = type_hit, "construct"
+            if hit is None:
+                hit = module_member(file, recv, x)  # `models.User(...)` với `import ... as models`
+        elif len(parts) > 2:
+            hit = module_member(file, ".".join(parts[:-1]), parts[-1])  # `app.models.User(...)`
         if hit is None:
             continue
         if hit.node.kind in TYPE_KINDS and subtype is None:

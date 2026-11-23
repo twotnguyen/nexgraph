@@ -64,6 +64,8 @@ const EN: Record<string, readonly [title: string, category: string]> = {
   'editor.diagnostics': ['Show Problems in Project', 'Editor'],
   'editor.rename': ['Rename Symbol', 'Editor'],
   'editor.implementation': ['Go to Implementation', 'Editor'],
+  'editor.declaration': ['Go to Declaration', 'Editor'],
+  'editor.type_definition': ['Go to Type Definition', 'Editor'],
   'editor.references': ['Find References', 'Editor'],
   'editor.next_diagnostic': ['Next Problem', 'Editor'],
   'editor.previous_diagnostic': ['Previous Problem', 'Editor'],
