@@ -65,6 +65,12 @@ describe('errorText', () => {
       .toBe('The model has only 6000 context tokens — not enough for the system prompt and tools. Choose a larger model.')
   })
 
+  it('I18N-IPC: câu "Engine chưa sẵn sàng." của main cũng dịch được', () => {
+    expect(errorText({ message: 'Engine chưa sẵn sàng.' })).toBe('Engine chưa sẵn sàng.')
+    setLocale('en')
+    expect(errorText({ message: 'Engine chưa sẵn sàng.' })).toBe('The engine is not ready yet.')
+  })
+
   it('câu lạ đi nguyên văn, không nuốt lỗi', () => {
     setLocale('en')
     expect(errorText(new Error('một lỗi lạ'))).toBe('một lỗi lạ')

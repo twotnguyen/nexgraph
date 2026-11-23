@@ -265,7 +265,8 @@ const api: NexGraphApi = {
   },
   watch: {
     start: (pid) => call('watch:start', pid),
-    stop: (pid) => call('watch:stop', pid)
+    stop: (pid) => call('watch:stop', pid),
+    onError: (cb) => subscribe('watch:error', cb)
   },
   sources: {
     clone: (url) => call('sources:clone', url),

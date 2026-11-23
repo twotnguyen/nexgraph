@@ -893,6 +893,24 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     act(() => { runCommand('notifications.toggle'); clearNotifications() })
   })
 
+  it('UI-REFRESH-ERR: lỗi refresh nền hiện toast + thông báo rõ, lỗi lặp không spam', async () => {
+    act(() => clearNotifications())
+    const { emitWatchError } = installNexgraph()
+    render(<><div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div><NotificationCenter /></>)
+    const bell = screen.getByRole('button', { name: 'Thông báo' })
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+    // Dự án khác thì bỏ qua.
+    act(() => emitWatchError({ projectId: 'p-khac', message: 'disk I/O error' }))
+    expect(screen.queryByText(/disk I\/O error/)).not.toBeInTheDocument()
+    act(() => emitWatchError({ projectId: 'p1', message: 'SQLITE_READONLY: attempt to write a readonly database' }))
+    expect(await screen.findByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    expect(screen.getByText(/SQLITE_READONLY/)).toBeInTheDocument()
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Cùng lỗi lặp lại: không thêm thông báo thứ hai.
+    act(() => emitWatchError({ projectId: 'p1', message: 'SQLITE_READONLY: attempt to write a readonly database' }))
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+  })
+
   it('thao tác thật trong Workspace (Xem dấu trang) làm badge chuông tăng', async () => {
     act(() => clearNotifications())
     installNexgraph()

@@ -91,6 +91,7 @@ const knownErrors: Record<string, true> = {
   'Kết nối Google đã thay đổi. Hãy kiểm tra và xác nhận lại trước khi gửi mã nguồn.': true,
   'Yêu cầu không được phép trong kết nối NexGraph': true,
   'Không hỗ trợ': true,
+  'Engine chưa sẵn sàng.': true,
   'Quyền thực thi không hợp lệ': true,
   'Ngân sách phải là số nguyên dương và thời gian phải nằm trong giới hạn bộ đếm của hệ thống': true,
   'Chế độ trợ lý không hợp lệ': true,

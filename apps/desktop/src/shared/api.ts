@@ -124,6 +124,9 @@ export type ExtensionInfo = { id: string; name: string; version: string; descrip
 export type HostCommand = { name: string; arg?: unknown }
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
+/** Lỗi refresh nền do watcher gửi sang renderer; main đã gộp lỗi lặp. */
+export type WatchFailure = { projectId: string; message: string }
+
 export interface NexGraphApi {
   gemini: GeminiCliApi
   /** Chỉ có khi chạy trong extension (nền Code-OSS): thư mục đang mở và lệnh mở tệp bằng editor của nền. */
@@ -428,6 +431,8 @@ export interface NexGraphApi {
   watch: {
     start(projectId: string): Promise<void>
     stop(projectId: string): Promise<void>
+    /** Refresh nền thất bại (ví dụ graph.db chỉ đọc): renderer phải báo rõ thay vì chỉ "graph cũ hơn mã nguồn". */
+    onError(cb: (failure: WatchFailure) => void): () => void
   }
   /** Nguồn ngoài thư mục. Tiến độ job theo dõi bằng `index.status`/`index.cancel`. */
   sources: {

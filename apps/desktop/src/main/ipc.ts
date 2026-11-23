@@ -25,6 +25,7 @@ import { applyPlatform, applyUninstall, planPlatform, planUninstall } from './in
 import type { AgentId, IntegrationOptions } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
+import { WatchErrorNotifier } from './watch/error-notice'
 import { EditorStateRegistry } from './agent/editor-state'
 import { AgentRouter } from './agent-router'
 import { GeminiConnectionManager } from './gemini/connection'
@@ -192,6 +193,8 @@ export function registerIpc(
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
+  // UI-REFRESH-ERR: lỗi refresh nền gửi sang renderer (đã gộp lỗi lặp) thay vì chỉ ghi log main.
+  const watchErrors = new WatchErrorNotifier((failure) => getWindow()?.webContents.send('watch:error', failure))
   const handle = (): EngineHandle => {
     const h = getHandle()
     if (!h) throw new EngineApiError(503, 'engine_unavailable', 'Engine chưa sẵn sàng.')
@@ -515,11 +518,16 @@ export function registerIpc(
         root,
         onFlush: async () => {
           const result = await api().refresh(pid)
+          // Refresh chạy được: lỗi sau đó (nếu có) phải được báo lại, không bị gộp với lỗi cũ.
+          watchErrors.clear(pid)
           if (result.status === 'skipped' && (result.reason === 'index_running' || result.reason === 'refresh_running')) {
             return 'retry'
           }
         },
-        onError: (e) => console.warn(`[watch] ${pid}: ${e.message}`)
+        onError: (e) => {
+          console.warn(`[watch] ${pid}: ${e.message}`)
+          watchErrors.report(pid, e)
+        }
       })
       w.start()
       watchers.set(pid, w)
@@ -527,7 +535,10 @@ export function registerIpc(
       if (watchStarts.get(pid) === generation) watchStarts.delete(pid)
     }
   })
-  on('watch:stop', async (pid: string) => stopWatch(pid))
+  on('watch:stop', async (pid: string) => {
+    watchErrors.clear(pid)
+    return stopWatch(pid)
+  })
   // Nguồn bổ sung (W11): DSN chỉ đi một chiều renderer → main; renderer chỉ biết đã có DSN hay chưa.
   on('index-sources:has-dsn', async (pid: string) => indexSources.hasDsn(pid))
   on('index-sources:remembered', async (pid: string) => indexSources.remembered(pid))

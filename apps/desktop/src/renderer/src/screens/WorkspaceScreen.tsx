@@ -184,16 +184,26 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp. Rời đi cũng đóng phiên agent.
   useEffect(() => {
     let current = true
+    let lastWatchError: string | null = null
+    // UI-REFRESH-ERR: refresh nền lỗi phải hiện thông báo riêng (main đã lọc lỗi lặp), không chỉ cảnh báo graph cũ.
+    const offWatchError = window.nexgraph.watch.onError((failure) => {
+      if (!current || failure.projectId !== project.project_id) return
+      const message = tr('Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.', { error: failure.message })
+      if (message === lastWatchError) return
+      lastWatchError = message
+      setFeedback(message)
+    })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
       if (current) setFeedback(tr('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
     })
     return () => {
       current = false
+      offWatchError()
       void window.nexgraph.watch.stop(project.project_id).catch(() => {})
       // Trong extension, trợ lý sống ở view riêng của nền nên rời màn này không đóng phiên của nó.
       if (!window.nexgraph.host) void window.nexgraph.agent.close(project.project_id).catch(() => {})
     }
-  }, [project.project_id, project.path])
+  }, [project.project_id, project.path, setFeedback])
 
   // Một nút vừa đổi vừa thiếu test thì hiện là "chưa có test" (đỏ); ưu tiên: gap > changed > test > impacted.
   const highlights = useMemo(() => {
