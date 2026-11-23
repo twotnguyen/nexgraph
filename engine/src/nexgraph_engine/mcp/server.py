@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import io
 import json
 import os
 import sqlite3
@@ -489,6 +490,70 @@ def run_http(project: Path, data_dir: Path | None, port: int, key: str, global_g
     return 0
 
 
+class _PreInitFilter(io.TextIOBase):
+    """Lọc stdin stdio: request lạ trước `initialize` nhận MethodNotFound gọn thay vì lỗi validation SDK.
+
+    Claude Code 2.1.330 gửi probe `server/discover` trước initialize; SDK từ chối và in cả chục dòng
+    validation ra stderr, client tưởng server hỏng rồi respawn (A4-F1). Chỉ chặn trước initialize;
+    sau đó mọi message đi nguyên qua SDK. `ping` được đi qua vì spec cho phép ping trước initialize.
+    """
+
+    _ALLOWED_BEFORE_INIT = ("initialize", "ping")
+
+    def __init__(self, inner: Any, out: Any) -> None:
+        self._inner = inner
+        self._out = out
+        self._initialized = False
+
+    def readline(self, size: int = -1) -> str:
+        while True:
+            line = self._inner.readline() if size < 0 else self._inner.readline(size)
+            if not line:
+                return line
+            try:
+                message = json.loads(line)
+            except (TypeError, ValueError):
+                return line
+            if not isinstance(message, dict):
+                return line
+            method = message.get("method")
+            if method is None or method in self._ALLOWED_BEFORE_INIT:
+                if method == "initialize":
+                    self._initialized = True
+                return line
+            if self._initialized:
+                return line
+            if "id" in message:  # request: trả lỗi JSON-RPC một dòng, không để SDK dump stack
+                self._reply(message["id"], method)
+            # notification lạ trước initialize: bỏ im lặng
+
+    def _reply(self, request_id: Any, method: str) -> None:
+        body = {"jsonrpc": "2.0", "id": request_id,
+                "error": {"code": -32601, "message": f"Method not found: {method}"}}
+        self._out.write((json.dumps(body, ensure_ascii=False) + "\n").encode("utf-8"))
+        self._out.flush()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+def _run_stdio_quiet(mcp: Any) -> None:
+    import sys
+    from io import TextIOWrapper
+
+    stdin = anyio.wrap_file(_PreInitFilter(
+        TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace"), sys.stdout.buffer))
+    anyio.run(_serve_stdio, mcp, stdin)
+
+
+async def _serve_stdio(mcp: Any, stdin: Any) -> None:
+    from mcp.server.stdio import stdio_server
+
+    async with stdio_server(stdin=stdin) as (read_stream, write_stream):
+        await mcp._mcp_server.run(read_stream, write_stream, mcp._mcp_server.create_initialization_options())
+
+
 def run_stdio(project: Path, data_dir: Path | None, global_graph: bool = False) -> int:
-    build_server(project, data_dir, global_graph=global_graph).run("stdio")
+    _run_stdio_quiet(build_server(project, data_dir, global_graph=global_graph))
     return 0
+

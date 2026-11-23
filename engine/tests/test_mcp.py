@@ -151,6 +151,37 @@ def test_stdio_cli(indexed):
     assert payload(anyio.run(run))
 
 
+def _stdio_probe(root, data_dir, messages: list[dict]) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if k != "NEXGRAPH_MCP_KEY"}
+    return subprocess.run(
+        [sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root), "--data-dir", str(data_dir)],
+        input="".join(json.dumps(message) + "\n" for message in messages),
+        capture_output=True, text=True, encoding="utf-8", timeout=60, env=env)
+
+
+def test_unknown_probe_before_initialize_is_quiet(indexed):
+    """A4-F1: Claude Code gửi `server/discover` trước `initialize`; trả MethodNotFound gọn,
+    không dump 31 lỗi validation ra stderr, và initialize sau đó vẫn thành công."""
+    root, data_dir = indexed
+    proc = _stdio_probe(root, data_dir, [
+        {"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {}},
+        {"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {
+            "protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "probe", "version": "0"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+    ])
+    assert proc.returncode == 0
+    responses = {r.get("id"): r for r in (json.loads(line) for line in proc.stdout.splitlines() if line.strip())}
+    assert responses[1]["error"]["code"] == -32601
+    assert responses[1]["error"]["message"] == "Method not found: server/discover"
+    assert responses[2]["result"]["serverInfo"]["name"] == "nexgraph"
+    assert "result" in responses[2]
+    stderr_lines = [line for line in proc.stderr.splitlines() if line.strip()]
+    assert len(stderr_lines) <= 1, proc.stderr
+    assert "Failed to validate request" not in proc.stderr
+
+
+
 def test_query_graph_tool(indexed):
     body = payload(call(build_server(*indexed), "query_graph", {"question": "login auth"}))
     assert body["nodes"] and "edges" in body
