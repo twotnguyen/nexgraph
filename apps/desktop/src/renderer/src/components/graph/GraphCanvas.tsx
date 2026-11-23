@@ -138,7 +138,9 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
     () =>
       view
         ? [...view.raw.values()].map((n) => {
-            const h = highlights?.[n.id]
+            // Vùng overlay (đường đi, "Tô luồng trên graph"): mọi nút được trích dẫn phải nổi bật,
+            // kể cả khi không tìm được cạnh nào — trước đây nút vẽ màu thường nên như "không tô".
+            const h = highlights?.[n.id] ?? (overlay ? 'current' : undefined)
             const size = view.boxes ? BOX_W : view.size[n.id]
             return {
               id: n.id,
@@ -151,12 +153,12 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
                 label: n.label, sub: n.kind, size,
                 color: h ? HIGHLIGHT_COLORS[h] : kindStyle(n.kind).color,
                 tag: h && h !== 'current' && h !== 'visited' ? vi.changes.tag[h] : undefined,
-                strong: n.id === center || h === 'changed' || h === 'gap' || h === 'current'
+                strong: n.id === center || overlay != null || h === 'changed' || h === 'gap' || h === 'current'
               }
             }
           })
         : [],
-    [view, highlights, center, near]
+    [view, highlights, center, near, overlay]
   )
   const edges = useMemo<Edge[]>(
     () => (view && hover ? view.edges.map((e) => (e.source === hover || e.target === hover ? { ...e, className: 'lit' } : { ...e, className: 'dim' })) : view?.edges ?? []),

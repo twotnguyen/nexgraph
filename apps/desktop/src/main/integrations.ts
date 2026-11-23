@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentId, IntegrationOptions, IntegrationPart, IntegrationPlan } from '../shared/integration-types'
 import { skillMarkdown } from './agent/skill'
+import { PYTHON_ENV_GUARD } from './engine/python-env'
 import type { EngineCommand } from './engine/launcher'
 import { resolveInside } from './fs/project-fs'
 
@@ -46,14 +47,16 @@ const mcpArgs = (c: Ctx): string[] => [...c.cmd.args, 'mcp', '--project', c.root
 
 // ---- MCP ------------------------------------------------------------------------------------------------
 // Đối chiếu nguồn chính thức và giới hạn schema: docs/install-notes.md §Tích hợp trợ lý AI.
+// `env` (OpenCode: `environment`) chặn PYTHONPATH/PYTHONHOME của shell cha lọt vào server (A4-F3).
 type McpAgent = 'claude' | 'cursor' | 'vscode' | 'opencode' | 'codex' | 'gemini' | 'kiro'
+const envGuard = (): Record<string, string> => ({ ...PYTHON_ENV_GUARD })
 const MCP_JSON: Record<Exclude<McpAgent, 'codex'>, { rel: (root: string) => string; key: string; entry: (cmd: EngineCommand, args: string[]) => Json }> = {
-  claude: { rel: () => '.mcp.json', key: 'mcpServers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a }) },
-  cursor: { rel: () => join('.cursor', 'mcp.json'), key: 'mcpServers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a }) },
-  vscode: { rel: () => join('.vscode', 'mcp.json'), key: 'servers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a }) },
-  opencode: { rel: openCodeConfigRel, key: 'mcp', entry: (c, a) => ({ type: 'local', command: [c.command, ...a] }) },
-  gemini: { rel: () => join('.gemini', 'settings.json'), key: 'mcpServers', entry: (c, a) => ({ command: c.command, args: a }) },
-  kiro: { rel: () => join('.kiro', 'settings', 'mcp.json'), key: 'mcpServers', entry: (c, a) => ({ command: c.command, args: a }) }
+  claude: { rel: () => '.mcp.json', key: 'mcpServers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a, env: envGuard() }) },
+  cursor: { rel: () => join('.cursor', 'mcp.json'), key: 'mcpServers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a, env: envGuard() }) },
+  vscode: { rel: () => join('.vscode', 'mcp.json'), key: 'servers', entry: (c, a) => ({ type: 'stdio', command: c.command, args: a, env: envGuard() }) },
+  opencode: { rel: openCodeConfigRel, key: 'mcp', entry: (c, a) => ({ type: 'local', command: [c.command, ...a], environment: envGuard() }) },
+  gemini: { rel: () => join('.gemini', 'settings.json'), key: 'mcpServers', entry: (c, a) => ({ command: c.command, args: a, env: envGuard() }) },
+  kiro: { rel: () => join('.kiro', 'settings', 'mcp.json'), key: 'mcpServers', entry: (c, a) => ({ command: c.command, args: a, env: envGuard() }) }
 }
 
 function mcpJsonPart(agent: Exclude<McpAgent, 'codex'>): Part {
@@ -111,7 +114,8 @@ const codexPart: Part = {
   part: 'mcp',
   rel: () => join('.codex', 'config.toml'),
   install(text, c) {
-    const snippet = `[mcp_servers.nexgraph]\ncommand = ${tomlStr(c.cmd.command)}\nargs = [${mcpArgs(c).map(tomlStr).join(', ')}]\n`
+    const envTable = Object.entries(PYTHON_ENV_GUARD).map(([k, v]) => `${k} = ${tomlStr(v)}`).join('\n')
+    const snippet = `[mcp_servers.nexgraph]\ncommand = ${tomlStr(c.cmd.command)}\nargs = [${mcpArgs(c).map(tomlStr).join(', ')}]\n\n[mcp_servers.nexgraph.env]\n${envTable}\n`
     return text === null ? { status: 'new', after: snippet, snippet } : text === snippet ? same(text, snippet) : invalid(snippet)
   },
   remove(text, c) {

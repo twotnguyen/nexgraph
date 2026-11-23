@@ -6,6 +6,7 @@ import type { NexGraphApi } from '@shared/api'
 import type { AgentSessionInfo, AgentSessionSnapshot } from '@shared/agent-types'
 import { emptyAgentSnapshot, installNexgraph } from '../../test-utils'
 import { setNotifyPrefs } from '../../state/agentNotify'
+import { setLocale } from '../../state/locale'
 import { AgentPanel } from './AgentPanel'
 
 vi.mock('../editor/monaco', () => ({ languageFor: () => 'typescript', createDiffEditor: () => ({ dispose: vi.fn() }) }))
@@ -35,7 +36,7 @@ beforeEach(() => {
   setNotifyPrefs({ notify: true, sound: false })
   vi.spyOn(document, 'hasFocus').mockReturnValue(false)
 })
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => { vi.restoreAllMocks(); setLocale('vi') })
 
 describe('thông báo khi lượt kết thúc', () => {
   it('xong lúc cửa sổ không focus: thông báo kèm tên hội thoại', async () => {
@@ -86,6 +87,41 @@ describe('thông báo khi lượt kết thúc', () => {
     expect(await screen.findByRole('group', { name: /a\.ts/ })).toBeInTheDocument()
     expect(notify).toHaveBeenCalledTimes(1)
     expect(notify).toHaveBeenCalledWith('Sửa lỗi đăng nhập', 'Trợ lý đang chờ bạn duyệt thay đổi')
+  })
+})
+
+describe('lỗi provider trong chat', () => {
+  /** Ô soạn tin: nhãn đổi theo ngôn ngữ nên tìm theo role, không theo tên. */
+  const anyBox = async () => { const input = screen.getByRole<HTMLTextAreaElement>('textbox'); await waitFor(() => expect(input).toBeEnabled()); return input }
+  /** Dựng một lượt đang chạy với ô soạn tìm theo role (dùng được ở cả VI và EN). */
+  async function startTurn() {
+    const resolvers: (() => void)[] = []
+    const prompt = vi.fn(() => new Promise<void>((resolve) => { resolvers.push(resolve) }))
+    const { emitAgent } = installNexgraph({ ai, agent: { prompt, snapshot: vi.fn(async () => snapshot()), listSessions: vi.fn(async () => [session]), notify } })
+    render(<AgentPanel {...props} />)
+    await userEvent.type(await anyBox(), 'hỏi gì đó{Enter}')
+    await waitFor(() => expect(screen.getByRole('button', { name: /Dừng|Stop/ })).toBeInTheDocument())
+    return { emitAgent }
+  }
+
+  it('hiện câu theo mã lỗi kèm thông điệp ngắn của provider, không phải "không kết nối được"', async () => {
+    const { emitAgent } = await startTurn()
+    act(() => emitAgent(pid, { type: 'error', code: 'ai_model_not_found', message: 'Không tìm thấy mô hình ở nhà cung cấp', detail: 'The model `x` does not exist' }))
+    expect(await screen.findByText(/Không tìm thấy mô hình ở nhà cung cấp.*The model `x` does not exist/)).toBeInTheDocument()
+    expect(screen.queryByText(/Không kết nối được tới nhà cung cấp AI/)).not.toBeInTheDocument()
+  })
+
+  it('EN: cùng mã lỗi ra một câu tiếng Anh kèm chi tiết', async () => {
+    setLocale('en')
+    const { emitAgent } = await startTurn()
+    act(() => emitAgent(pid, { type: 'error', code: 'ai_model_not_found', message: 'Không tìm thấy mô hình ở nhà cung cấp', detail: 'The model `x` does not exist' }))
+    expect(await screen.findByText(/The provider does not have this model.*The model `x` does not exist/)).toBeInTheDocument()
+  })
+
+  it('ngữ cảnh vượt cửa sổ: câu hướng dẫn tăng context window', async () => {
+    const { emitAgent } = await startTurn()
+    act(() => emitAgent(pid, { type: 'error', code: 'ai_context_window', message: 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi' }))
+    expect((await screen.findAllByText(/Ngữ cảnh vượt giới hạn mô hình/)).length).toBeGreaterThan(0)
   })
 })
 

@@ -16,6 +16,8 @@ beforeEach(() => {
   root = realpathSync.native(root)
 })
 const args = (r: string): string[] => ['mcp', '--project', r, '--data-dir', dataDir]
+// A4-F3: env chặn PYTHONPATH/PYTHONHOME của shell cha cho mọi client.
+const guard = { PYTHONPATH: '', PYTHONHOME: '', PYTHONNOUSERSITE: '1' }
 type Target = 'claude' | 'agents-md'
 const pick = (target: Target) => (target === 'claude' ? { agent: 'claude' as const, part: 'skill' } : { agent: 'agents' as const, part: 'rules' })
 const planSkill = (target: Target, r: string) => planPlatform(pick(target).agent, r, cmd, dataDir).find((p) => p.part === pick(target).part)!
@@ -30,11 +32,27 @@ describe('integrations', () => {
   it('tệp chưa có: status new, nội dung đúng định dạng từng agent; plan không ghi', () => {
     const p = planIntegration('claude', root, cmd, dataDir)
     expect(p).toMatchObject({ path: join(root, '.mcp.json'), exists: false, status: 'new' })
-    expect(JSON.parse(p.after)).toEqual({ mcpServers: { nexgraph: { type: 'stdio', command: '/Apps/NexGraph/engine', args: args(root) } } })
+    expect(JSON.parse(p.after)).toEqual({ mcpServers: { nexgraph: { type: 'stdio', command: '/Apps/NexGraph/engine', args: args(root), env: guard } } })
     expect(JSON.parse(planIntegration('vscode', root, cmd, dataDir).after).servers.nexgraph.type).toBe('stdio')
     expect(JSON.parse(planIntegration('opencode', root, cmd, dataDir).after).mcp.servers.nexgraph)
-      .toEqual({ type: 'local', command: ['/Apps/NexGraph/engine', ...args(root)] })
+      .toEqual({ type: 'local', command: ['/Apps/NexGraph/engine', ...args(root)], environment: guard })
     expect(existsSync(join(root, '.mcp.json'))).toBe(false)
+  })
+
+  // A4-F3: PYTHONPATH/PYTHONHOME của shell cha lọt vào MCP server → ImportError pydantic_core.
+  it('cấu hình MCP sinh kèm env chặn PYTHONPATH/PYTHONHOME và tắt site người dùng', () => {
+    for (const agent of ['claude', 'cursor', 'vscode', 'gemini', 'kiro'] as const) {
+      const cfg = JSON.parse(planIntegration(agent, root, cmd, dataDir).after)
+      const servers = cfg.mcpServers ?? cfg.servers
+      expect(servers.nexgraph.env, agent).toEqual(guard)
+    }
+    const opencode = JSON.parse(planIntegration('opencode', root, cmd, dataDir).after)
+    expect(opencode.mcp.servers.nexgraph.environment).toEqual(guard)
+    expect(opencode.mcp.servers.nexgraph.env).toBeUndefined() // OpenCode dùng tên trường environment
+    const codex = planIntegration('codex', root, cmd, dataDir).after
+    expect(codex).toContain('[mcp_servers.nexgraph.env]')
+    expect(codex).toContain('PYTHONPATH = ""')
+    expect(codex).toContain('PYTHONNOUSERSITE = "1"')
   })
 
   it('OpenCode V2: dùng cấu hình .opencode hiện có, giữ server và timeout, thay cấu hình NexGraph cũ', () => {
@@ -53,7 +71,7 @@ describe('integrations', () => {
       model: 'provider/model',
       mcp: {
         timeout: { startup: 7000 },
-        servers: { other, nexgraph: { type: 'local', command: [cmd.command, ...args(root)] } }
+        servers: { other, nexgraph: { type: 'local', command: [cmd.command, ...args(root)], environment: guard } }
       }
     })
     expect(planIntegration('opencode', root, cmd, dataDir).status).toBe('up_to_date')
@@ -67,7 +85,7 @@ describe('integrations', () => {
     writeFileSync(file, JSON.stringify({ mcp: { other } }))
     const plan = applyIntegration('opencode', root, cmd, dataDir)
     expect(plan.status).toBe('add')
-    expect(JSON.parse(plan.snippet)).toEqual({ mcp: { nexgraph: { type: 'local', command: [cmd.command, ...args(root)] } } })
+    expect(JSON.parse(plan.snippet)).toEqual({ mcp: { nexgraph: { type: 'local', command: [cmd.command, ...args(root)], environment: guard } } })
     expect(JSON.parse(readFileSync(file, 'utf8')).mcp).toEqual({ other, ...JSON.parse(plan.snippet).mcp })
   })
 
@@ -133,7 +151,7 @@ describe('integrations', () => {
     const p = planIntegration('codex', root, cmd, dataDir)
     expect(p).toMatchObject({ agent: 'codex', exists: false, status: 'new' })
     expect(p.path.replace(/\\/g, '/').endsWith('/.codex/config.toml')).toBe(true) // Windows dùng \
-    expect(p.after).toBe('[mcp_servers.nexgraph]\ncommand = "/Apps/NexGraph/engine"\nargs = ["mcp", "--project", ' + JSON.stringify(root) + ', "--data-dir", ' + JSON.stringify(dataDir) + ']\n')
+    expect(p.after).toBe('[mcp_servers.nexgraph]\ncommand = "/Apps/NexGraph/engine"\nargs = ["mcp", "--project", ' + JSON.stringify(root) + ', "--data-dir", ' + JSON.stringify(dataDir) + ']\n\n[mcp_servers.nexgraph.env]\nPYTHONPATH = ""\nPYTHONHOME = ""\nPYTHONNOUSERSITE = "1"\n')
     expect(p.snippet).toBe(p.after)
     expect(existsSync(join(root, '.codex', 'config.toml'))).toBe(false)
   })

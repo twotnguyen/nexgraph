@@ -125,6 +125,8 @@ Codex (tài liệu OpenAI tra ngày 2026-11-15): MCP cấu hình bằng bảng `
 
 NexGraph tạo mục `mcp.servers.nexgraph` theo OpenCode V2. Nếu tệp hiện có đặt các server trực tiếp dưới `mcp` theo V1, NexGraph dùng cùng cấu trúc. Khi dự án đã có cấu hình trong `.opencode/`, NexGraph ưu tiên tệp đó theo thứ tự của OpenCode. Sau khi xác nhận ghi cấu hình, chạy `opencode mcp list` từ thư mục dự án. Nếu OpenCode đang khởi động và hiện `pending` hoặc chưa liệt kê server, đợi vài giây rồi chạy lại.
 
+Mọi mục MCP do NexGraph sinh đều kèm `env` (`environment` với OpenCode) đặt `PYTHONPATH` và `PYTHONHOME` rỗng cùng `PYTHONNOUSERSITE=1`; Codex dùng bảng `[mcp_servers.nexgraph.env]`. Nhờ vậy server không thừa hưởng gói Python của shell cha và không hỏng `import pydantic_core` (A4-F3). Cấu hình cũ thiếu `env` được báo **Cập nhật** khi mở lại hộp thoại tích hợp.
+
 VS Code đánh dấu Local harness/editor-managed là deprecated; `.vscode/mcp.json` vẫn là cấu hình hợp lệ của editor và có thể forward sang Copilot. Copilot native dùng `.mcp.json`/`mcpServers`; không đồng nhất hai schema. Chọn Claude Code trong NexGraph nếu cần xuất dạng workspace-root `.mcp.json` rồi đối chiếu hướng dẫn Copilot.
 
 Đây là đối chiếu schema. Để nghiệm thu runtime, mở một dự án đã lập chỉ mục bằng client cần dùng và gọi tool NexGraph như `graph_stats`. JSONC có chú thích vẫn chỉ sao chép cấu hình để ghép tay: không ghi lại làm mất chú thích.

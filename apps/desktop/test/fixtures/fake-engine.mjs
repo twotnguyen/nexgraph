@@ -15,7 +15,7 @@ if (process.argv.includes('mcp') && process.argv.includes('--http')) {
   const wanted = Number(process.argv[process.argv.indexOf('--port') + 1])
   const server = http.createServer((req, res) => {
     res.writeHead(req.headers['x-api-key'] === key ? 200 : 401, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ argv: process.argv.slice(2) }))
+    res.end(JSON.stringify({ argv: process.argv.slice(2), pythonPath: process.env.PYTHONPATH ?? null, pythonNoUserSite: process.env.PYTHONNOUSERSITE ?? null }))
   })
   server.on('error', () => process.exit(1)) // cổng đã bị chiếm
   server.listen(wanted, '127.0.0.1', () => console.log(JSON.stringify({ event: 'ready', port: server.address().port, pid: process.pid })))

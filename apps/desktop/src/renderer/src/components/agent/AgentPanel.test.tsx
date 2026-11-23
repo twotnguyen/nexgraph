@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentEvent, ApprovalRequest } from '@shared/agent-types'
+import type { GraphEdge, GraphNode } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
 
 // jsdom không chạy Monaco: diff editor thay bằng <textarea> chỉ đọc.
@@ -323,6 +324,68 @@ describe('AgentPanel', () => {
     act(() => emitAgent('p2', done))
     expect(screen.queryByText('Sửa tệp lib/auth.dart')).toBeNull()
     expect(screen.getByRole('button', { name: 'Dừng' })).toBeInTheDocument()
+  })
+
+  it('"Tô luồng trên graph" vẫn tô nút được trích dẫn khi không có cạnh trực tiếp (A2-F5)', async () => {
+    const graphNode = (id: string) => ({
+      id, kind: 'function' as const, label: id, qualified_name: id, language: 'python', file: `${id}.py`,
+      line_start: 1, line_end: 2, is_test: false, origin: 'code', signature: null, community: null
+    })
+    const { emitAgent } = installNexgraph({
+      ...consented(),
+      agent: { prompt: pending() },
+      graph: {
+        locate: vi.fn(async (_p: string, file: string) => ({ node: graphNode(file.replace(/\.py$/, '')) })),
+        paths: vi.fn(async (_p: string, ids: string[]) => ({
+          nodes: ids.map((id) => graphNode(id)), edges: [], unconnected: [ids[1]]
+        }))
+      }
+    })
+    const p = props()
+    render(<AgentPanel {...p} />)
+    await ask('luồng đăng nhập')
+    act(() => emitAgent('p1', { type: 'done', text: 'xong', citations: [
+      { raw: '[[a.py:1]]', file: 'a.py', start: 1, end: 2, valid: true, reason: null },
+      { raw: '[[b.py:3]]', file: 'b.py', start: 3, end: 4, valid: true, reason: null }
+    ] }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tô luồng trên graph' }))
+    await waitFor(() => expect(p.onHighlight).toHaveBeenCalled())
+    const [nodes, edges, note] = p.onHighlight.mock.calls.at(-1) as [GraphNode[], GraphEdge[], string | null]
+    expect(nodes.map((n) => n.id)).toEqual(['a', 'b'])
+    expect(edges).toEqual([])
+    expect(note).toMatch(/Tô 2 nút được trích dẫn/)
+  })
+
+  it('"Tô luồng" trả cả nút lẫn cạnh khi các trích dẫn nối được', async () => {
+    const graphNode = (id: string) => ({
+      id, kind: 'function' as const, label: id, qualified_name: id, language: 'python', file: `${id}.py`,
+      line_start: 1, line_end: 2, is_test: false, origin: 'code', signature: null, community: null
+    })
+    const { emitAgent } = installNexgraph({
+      ...consented(),
+      agent: { prompt: pending() },
+      graph: {
+        locate: vi.fn(async (_p: string, file: string) => ({ node: graphNode(file.replace(/\.py$/, '')) })),
+        paths: vi.fn(async (_p: string, ids: string[]) => ({
+          nodes: ids.map((id) => graphNode(id)),
+          edges: [{ id: 5, source: ids[0], target: ids[1], type: 'CALLS', subtype: null, confidence: 'EXTRACTED' as const, confidence_score: 0, origin: 'code', evidence: null }],
+          unconnected: []
+        }))
+      }
+    })
+    const p = props()
+    render(<AgentPanel {...p} />)
+    await ask('luồng đăng nhập')
+    act(() => emitAgent('p1', { type: 'done', text: 'xong', citations: [
+      { raw: '[[a.py:1]]', file: 'a.py', start: 1, end: 2, valid: true, reason: null },
+      { raw: '[[b.py:3]]', file: 'b.py', start: 3, end: 4, valid: true, reason: null }
+    ] }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tô luồng trên graph' }))
+    await waitFor(() => expect(p.onHighlight).toHaveBeenCalled())
+    const [nodes, edges, note] = p.onHighlight.mock.calls.at(-1) as [GraphNode[], GraphEdge[], string | null]
+    expect(nodes.map((n) => n.id)).toEqual(['a', 'b'])
+    expect(edges.map((e) => e.id)).toEqual([5])
+    expect(note).toBeNull()
   })
 
   it('unmount khi đang chạy thì dừng lượt', async () => {
