@@ -11,6 +11,7 @@ from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, build_nx,
 from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
 from nexgraph_engine.query.source_policy import SourcePolicy
+from nexgraph_engine.report.i18n import translate_questions, translate_surprising
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -74,16 +75,19 @@ def _benchmark(bg: BridgeGraph, warnings: list[str]) -> dict | None:
 
 
 def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = None,
-                sources_dir: Path | None = None) -> dict:
+                sources_dir: Path | None = None, *, lang: str = "en") -> dict:
+    """`lang="en"` giữ nguyên chuỗi Graphify (hành vi cũ); `lang="vi"` dịch ở lớp NexGraph."""
     from graphify.analyze import suggest_questions, surprising_connections
     bg = build_nx(store, keep_file=source.allows if source else None)
     communities = [{"id": f"com:{cid}", "label": bg.labels[cid], "size": len(members), "cohesion": bg.cohesion[cid]}
                    for cid, members in sorted(bg.communities.items()) if cid != OTHER_COMMUNITY]
-    surprising = [{"source": s["source"], "target": s["target"], "source_files": s.get("source_files", []),
-                   "relation": s.get("relation", ""), "why": s.get("why") or s.get("note", "")}
-                  for s in surprising_connections(bg.G, bg.communities, top_n=5)]
-    questions = [{"question": q["question"], "why": q.get("why", "")}
-                 for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)]
+    surprising = translate_surprising(
+        [{"source": s["source"], "target": s["target"], "source_files": s.get("source_files", []),
+          "relation": s.get("relation", ""), "why": s.get("why") or s.get("note", "")}
+         for s in surprising_connections(bg.G, bg.communities, top_n=5)], lang)
+    questions = translate_questions(
+        [{"question": q["question"], "why": q.get("why", "")}
+         for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)], lang)
     warnings: list[str] = []
     return {"god_nodes": _god_nodes(store, bg), "communities": communities, "surprising": surprising,
             "questions": questions, "benchmark": _benchmark(bg, warnings), "truncated": bg.truncated,
