@@ -6,11 +6,32 @@ from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.routes_export import _writable_dir
+from nexgraph_engine.api.routes_graph import for_model
 from nexgraph_engine.global_graph.link import open_members
 from nexgraph_engine.global_graph.store import GlobalStore
 from nexgraph_engine.global_graph.view import export_global, graph_global, search_global
+from nexgraph_engine.query.model_view import ModelGraph
+from nexgraph_engine.store.graph_store import GraphStore
 
 router = APIRouter(prefix="/v1/global")
+
+
+def _models(members) -> dict[str, ModelGraph]:
+    """Một chính sách cho mỗi dự án thành viên: nút trong graph chung mang tiền tố `<project_id>::`."""
+    return {m.project_id: ModelGraph(GraphStore(m.conn), m.info.path) for m in members}
+
+
+def _filter_graph(payload: dict, models: dict[str, ModelGraph]) -> dict:
+    nodes = []
+    for node in payload["nodes"]:
+        project_id, _, node_id = node["id"].partition("::")
+        model = models.get(project_id)
+        if model is None or model.allows_node(node_id):
+            nodes.append(node)
+    keep = {node["id"] for node in nodes}
+    return {**payload, "nodes": nodes,
+            "edges": [edge for edge in payload["edges"] if edge["source"] in keep and edge["target"] in keep],
+            "truncated": payload.get("truncated") or len(nodes) != len(payload["nodes"])}
 
 
 class MemberBody(BaseModel):
@@ -59,7 +80,11 @@ def global_search(request: Request, q: str = Query(...), limit: int = Query(20, 
                   projects: str | None = None) -> list[dict]:
     services = request.app.state.services
     with open_members(services.data_dir, services.registry, _ids(projects)) as (members, _):
-        return search_global(members, q, limit)
+        hits = search_global(members, q, limit)
+        if not for_model(request):
+            return hits
+        models = _models(members)
+        return [hit for hit in hits if models[hit["project_id"]].allows_node(hit["node"]["id"])]
 
 
 @router.get("/graph")
@@ -67,7 +92,8 @@ def global_graph(request: Request, projects: str | None = None, limit: int = Que
     services = request.app.state.services
     with open_members(services.data_dir, services.registry, _ids(projects)) as (members, skipped):
         cross = GlobalStore(services.data_dir).edges([m.project_id for m in members])
-        return {**graph_global(members, cross, limit), "skipped": skipped}
+        payload = {**graph_global(members, cross, limit), "skipped": skipped}
+        return _filter_graph(payload, _models(members)) if for_model(request) else payload
 
 
 @router.post("/export")

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections.abc import Callable
 from contextlib import closing
 
 from nexgraph_engine.index.events import EventBus
@@ -34,6 +35,8 @@ class ProjectLocks:
 class RefreshService:
     def __init__(self, registry: ProjectRegistry, bus: EventBus, jobs: JobManager, locks: ProjectLocks) -> None:
         self._registry, self._bus, self._jobs, self._locks = registry, bus, jobs, locks
+        # Móc sau refresh tăng dần: graph chung phải nối lại cạnh liên repo khi nội dung dự án đổi (GFY-04).
+        self.on_refresh_done: list[Callable[[str], None]] = []
 
     @staticmethod
     def _skipped(reason: str) -> dict:
@@ -107,6 +110,8 @@ class RefreshService:
             extra = {"warnings": list(result.warnings)} if result.warnings else {}
             self._bus.publish({"type": "graph_updated", "project_id": project_id, **extra})
             self._bus.publish({"type": "changes_updated", "project_id": project_id, **extra})
+            for callback in self.on_refresh_done:
+                callback(project_id)
         payload = {"status": "ok", "reason": None, "added": result.added, "changed": result.changed,
                    "removed": result.removed, "seconds": round(result.seconds, 3)}
         if result.warnings:

@@ -15,15 +15,15 @@ Dùng NexGraph Electron độc lập với Monaco. Chọn bộ cài NSIS và DMG
 
 - [ ] Chạy [fixture Python với hồ sơ riêng và mô hình giả](demo-script.md#kiểm-nhanh-bằng-fixture-python). Ghi kết quả lập chỉ mục, tìm kiếm và mở mã đúng dòng.
 - [ ] Mở bản sao NestJS có dấu và khoảng trắng, chẳng hạn `Đồ án/nestjs demo`. Ghi mã commit dự án, thời gian lập chỉ mục mới, số tệp, nút và cạnh trong **Tổng quan**.
-- [ ] Tìm một symbol trong **Tìm kiếm**. Mở **Kiến trúc**, chọn một quan hệ có bằng chứng, mở tệp và đối chiếu đúng dòng trong Monaco. Mở **Bản đồ** rồi chọn luồng `signIn` trong **Luồng**.
-- [ ] Sửa một tệp mẫu, lưu bằng `Ctrl+S` hoặc `⌘S`, rồi xem **Thay đổi** và vùng ảnh hưởng. Với repo Git, kiểm thêm đổi nhánh và làm mới graph.
+- [ ] Tìm một symbol trong **Tìm trong đồ thị**. Mở **Kiến trúc**, chọn một quan hệ có bằng chứng, mở tệp và đối chiếu đúng dòng trong Monaco. Mở **Bản đồ** rồi chọn luồng `signIn` trong **Luồng**.
+- [ ] Sửa một tệp mẫu, lưu bằng `Ctrl+S` hoặc `⌘S`, rồi mở **Vùng ảnh hưởng**. Với repo Git, kiểm thêm đổi nhánh và làm mới graph.
 - [ ] Trên bản sao Git, bật **Cập nhật sau mỗi commit**. Commit một thay đổi và kiểm ứng dụng cập nhật graph. Gỡ tích hợp rồi kiểm khối NexGraph được bỏ khỏi `.git/hooks/post-commit`.
 - [ ] Chạy [ba lượt demo NestJS](demo-script.md#nghiệm-thu). Ghi thời gian thao tác, ảnh các điểm mốc và kết quả của lượt dùng phương án dự phòng.
 - [ ] Trước khi thoát, ghi PID của engine và worker của lượt kiểm. Đóng app và kiểm các PID đó đã thoát trong Task Manager hoặc Activity Monitor.
 
 ## C. Tình huống cần đối chiếu
 
-- [ ] **Không có Git**. Lập chỉ mục một bản sao nằm ngoài cây thư mục Git. Sửa tệp, mở **Thay đổi** và kiểm chênh lệch so với mốc lập chỉ mục.
+- [ ] **Không có Git**. Lập chỉ mục một bản sao nằm ngoài cây thư mục Git. Sửa tệp, mở **Vùng ảnh hưởng** và kiểm chênh lệch so với mốc lập chỉ mục.
 - [ ] **Thiếu WebGL**. Thêm `--disable-webgl` vào cuối lệnh mở app đã cài trong [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Mở **Bản đồ**, kiểm thông báo hướng người dùng sang **Kiến trúc**, rồi mở thẻ đó và xem bằng chứng.
 - [ ] **AI chưa cấu hình hoặc không kết nối được**. Kiểm Agent hướng dẫn vào **Tài khoản AI** khi chưa có model. Sau khi có kết nối, thử mất mạng hoặc dừng máy chủ giả theo [kịch bản fixture](demo-script.md#kiểm-nhanh-bằng-fixture-python). Ghi cách tạo lỗi, thông báo Agent và kết quả mở lại đồ thị đã lập chỉ mục.
 - [ ] **Dựng lại bị hủy**. Khi đã có graph, bấm **Index lại**, mở bản hiện có rồi quay lại tiến độ và bấm **Hủy**. Mở lại dự án, xác nhận tìm kiếm, Kiến trúc và Luồng giữ kết quả đã công bố.
@@ -35,10 +35,10 @@ Dùng NexGraph Electron độc lập với Monaco. Chọn bộ cài NSIS và DMG
 - [ ] Mở tệp CRLF có BOM. Sửa giữa hai lần lưu liên tiếp rồi so nội dung cuối và EOL/BOM theo byte. Đổi thẻ, đóng thẻ hoặc thoát khi có nháp để kiểm lựa chọn lưu hoặc giữ nháp.
 - [ ] Sửa từ ngoài. Thẻ sạch nạp lại. Thẻ có nháp hiển thị xung đột và giữ bản đang sửa.
 - [ ] Thêm provider tùy chỉnh, chọn model và thử kết nối. Nếu dùng API key, kiểm ô nhập không hiển thị lại key đã lưu.
-- [ ] Ẩn và mở lại Agent. Với **Hỏi**, xem streaming, thử **Dừng**, mở trích dẫn và **Tô luồng** nếu provider hỗ trợ.
+- [ ] Ẩn và mở lại Agent. Với **Hỏi**, xem streaming, thử **Dừng**, mở trích dẫn và **Tô luồng trên graph** nếu provider hỗ trợ.
 - [ ] Với **Sửa**, kiểm diff trước khi **Duyệt thay đổi**. So nội dung sau khi duyệt. Lặp lại với **Từ chối**, **Dừng**, chuyển sang **Hỏi** và tải lại cửa sổ khi đang chờ duyệt. Kiểm đề xuất cũ hết hiệu lực.
 - [ ] Trong lúc chờ duyệt, lưu bản khác của tệp từ editor. Duyệt diff cũ và kiểm thông báo xung đột cùng nội dung giữ trên đĩa. Lặp với đề xuất tạo tệp ở đường dẫn vừa có tệp.
-- [ ] Với mô hình giả, thử gọi shell trong cả **Hỏi** và **Sửa**. Kiểm danh sách tool gửi đi, không có thẻ duyệt lệnh và tệp đánh dấu không xuất hiện. [Smoke qua IPC](../apps/desktop/src/main/smoke-desktop.ts) · [Kiểm thử phiên Pi](../apps/desktop/test/agent-session-pi.test.ts).
+- [ ] Với mô hình giả, thử gọi shell ở **Hỏi** và **Kế hoạch**: danh sách tool không có `run_process`, không có thẻ duyệt lệnh và tệp đánh dấu không xuất hiện. Sang **Sửa**, bật công tắc chạy lệnh rồi gửi yêu cầu chạy một lệnh: phải hiện thẻ duyệt riêng ghi executable, tham số và cwd; **Từ chối** thì lệnh không chạy, **Duyệt** thì lệnh chạy. [Smoke qua IPC](../apps/desktop/src/main/smoke-desktop.ts) · [Kiểm thử phiên Pi](../apps/desktop/test/agent-session-pi.test.ts) · [Cổng duyệt](../apps/desktop/test/agent-approval.test.ts).
 - [ ] Với hai máy chủ giả, đổi provider trong khi hộp đồng ý gửi mã đang mở. Kiểm câu hỏi được giữ lại và payload đầu tiên sau khi xác nhận ở đích mới không mang lịch sử cũ.
 - [ ] Dùng `.env` giả và liên kết tới tệp đã bị loại để kiểm phạm vi dữ liệu của `read`, `grep`, `find`, `get_context` và MCP. Thử cùng một truy vấn trên tệp công khai để kiểm luồng đọc bình thường.
 - [ ] Khi có client MCP thật, mở bản sao dự án đã lập chỉ mục, xem trước và áp dụng cấu hình rồi thử `graph_stats`. Ghi client và kết quả bảo toàn cấu hình có sẵn.

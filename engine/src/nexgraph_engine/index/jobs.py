@@ -216,6 +216,12 @@ class JobManager:
         with self._lock:
             return self._running_job(project_id) is not None
 
+    def active_task(self, kind: str, *, states: tuple[str, ...] = ACTIVE) -> str | None:
+        """Job cùng loại ở một trong `states` (mặc định: còn hoạt động); dùng để gộp việc trùng."""
+        with self._lock:
+            return next((job["job_id"] for job in self._jobs.values()
+                         if job["kind"] == kind and job["state"] in states), None)
+
     def get(self, job_id: str) -> dict | None:
         with self._lock:
             self._prune_finished_locked()
