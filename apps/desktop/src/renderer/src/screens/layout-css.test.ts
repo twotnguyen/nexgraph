@@ -30,3 +30,10 @@ describe('CSS bảng Báo cáo (I2)', () => {
     expect(cells.map((rule) => rule.value)).toEqual(['normal'])
   })
 })
+
+describe('CSS thanh thẻ workspace (I3)', () => {
+  it('ở ≤1100px thanh thẻ cho xuống dòng thay vì cắt nhãn thẻ cuối', () => {
+    const narrow = /@media\s*\(max-width:\s*1100px\)\s*\{[\s\S]*?\.tabs\s*\{[^}]*flex-wrap:\s*wrap/.test(css)
+    expect(narrow, 'cần @media (max-width: 1100px) cho .tabs { flex-wrap: wrap }').toBe(true)
+  })
+})
