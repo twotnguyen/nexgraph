@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { NexGraphApi } from '../src/shared/api'
+import { prepareDataDir } from './data-dir'
 
 /**
  * E2E Electron tối thiểu cho NexGraph (QA-14).
@@ -60,10 +61,10 @@ test('mở dự án → index → tìm → Kiến trúc → Luồng → mở t�
 
   // `NEXGRAPH_E2E_DATA_DIR` cho phép dùng lại một thư mục giữa các lượt: dọn sạch đầu mỗi lượt để lượt sau
   // giống hệt lượt đầu. Không dọn thì dự án cũ còn trong kho engine, app mở ở “Chào mừng trở lại NexGraph”
-  // và assert heading dưới đỏ ngay lượt thứ 2.
+  // và assert heading dưới đỏ ngay lượt thứ 2. Lưu ý: thư mục này **bị xoá mỗi lượt**, chỉ dùng cho E2E;
+  // `prepareDataDir` từ chối xoá thư mục ngoài tmpdir khi không có marker do chính E2E tạo (e2e/data-dir.ts).
   const engineDataDir = process.env.NEXGRAPH_E2E_DATA_DIR ?? join(root, 'engine-data')
-  rmSync(engineDataDir, { recursive: true, force: true, maxRetries: 3 })
-  mkdirSync(engineDataDir, { recursive: true })
+  await prepareDataDir(engineDataDir)
 
   const app = await electron.launch({
     executablePath: electronPath,
