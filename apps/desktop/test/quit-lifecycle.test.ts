@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   closed: null as (() => void) | null,
   closeWindow: vi.fn(), stopEngine: vi.fn(async () => {}), stopWatchers: vi.fn(),
   closeAgents: vi.fn(), stopMcp: vi.fn(async () => {}), quit: vi.fn(), externalOpen: vi.fn(async () => {}),
+  closeResources: vi.fn(),
   openHandler: null as ((details: { url: string }) => { action: string }) | null,
   webEvents: new Map<string, (...args: unknown[]) => void>()
 }))
@@ -34,7 +35,8 @@ vi.mock('electron', () => ({
   Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn(() => ({ items: [] })) }
 }))
 vi.mock('../src/main/ipc', () => ({
-  registerIpc: vi.fn(), closeAllAgents: h.closeAgents, stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopEditorProcesses: vi.fn()
+  registerIpc: vi.fn(), closeAllAgents: h.closeAgents, closeWindowResources: h.closeResources,
+  stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopEditorProcesses: vi.fn()
 }))
 vi.mock('../src/main/engine/supervisor', () => ({ EngineSupervisor: class {
   startEngine = vi.fn(async () => {})

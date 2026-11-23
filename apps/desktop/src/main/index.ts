@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
-import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers, stopEditorProcesses } from './ipc'
+import { closeAllAgents, closeWindowResources, registerIpc, stopAllMcpHttp, stopAllWatchers, stopEditorProcesses } from './ipc'
 import { closesAgents, confirmUnload } from './unload-guard'
 import { basename, join } from 'node:path'
 import { resolveEngineCommand } from './engine/resolve-command'
@@ -78,6 +78,9 @@ async function createWindow(show = true): Promise<void> {
     }
   })
   appWindows.add(win)
+  // Giữ tham chiếu webContents: sau khi cửa sổ đóng, `win.webContents` không truy cập được nữa
+  // nhưng tài nguyên (agent/terminal) vẫn phải được dọn theo đúng chủ cũ.
+  const contents = win.webContents
   // REV-17: từ chối mặc định mọi quyền (camera, vị trí, thông báo, USB…); app không dùng quyền nào.
   installPermissionHandlers(win.webContents.session)
   const openExternal = (raw: string) => {
@@ -98,11 +101,13 @@ async function createWindow(show = true): Promise<void> {
   win.webContents.on('will-prevent-unload', (e) => {
     if (confirmUnload((o) => dialog.showMessageBoxSync(win, o))) e.preventDefault()
   })
-  win.webContents.on('did-start-navigation', (e) => { if (closesAgents(e)) closeAllAgents() })
-  win.webContents.on('render-process-gone', () => closeAllAgents())
+  // Reload/renderer chết của MỘT cửa sổ chỉ dọn phiên agent + terminal của chính cửa sổ đó.
+  win.webContents.on('did-start-navigation', (e) => { if (closesAgents(e)) closeWindowResources(contents) })
+  win.webContents.on('render-process-gone', () => closeWindowResources(contents))
   win.on('closed', () => {
-    // Chỉ dọn phiên agent/engine khi cửa sổ CUỐI đóng; đóng một trong nhiều cửa sổ không được
-    // giết phiên đang chạy ở cửa sổ khác.
+    // Đóng một trong nhiều cửa sổ không được giết phiên đang chạy ở cửa sổ khác; chỉ cửa sổ
+    // cuối đóng mới dọn toàn bộ (và before-quit vẫn dọn toàn bộ khi thoát app).
+    closeWindowResources(contents)
     if (appWindows.remove(win).empty) closeAllAgents()
   })
 

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
@@ -41,6 +42,7 @@ import type { GeminiConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
+import { WindowOwners } from './window-owners'
 import { ensureTasksFile, listTasks, resolveTask } from './tasks'
 import { createTaskSigner, taskContentKey } from './tasks/signature'
 import { UserError } from './user-error'
@@ -70,6 +72,26 @@ let terminals: TerminalManager | null = null
 const taskSigner = createTaskSigner(randomBytes(32))
 let debugManager: DebugManager | null = null
 let collab: CollabHub | null = null
+/** Phiên agent của mỗi dự án thuộc về cửa sổ đã mở nó (không theo cửa sổ đang focus). */
+const agentOwners = new WindowOwners<WebContents>()
+
+/** Gửi sự kiện của tài nguyên về đúng cửa sổ sở hữu; cửa sổ đã đóng thì bỏ, không gửi sang cửa sổ khác. */
+const sendOwned = (owner: unknown, channel: string, payload: unknown): void => {
+  const contents = owner as WebContents | undefined
+  if (!contents || contents.isDestroyed()) return
+  contents.send(channel, payload)
+}
+
+/**
+ * Dọn tài nguyên của MỘT cửa sổ: reload, renderer chết hoặc đóng cửa sổ chỉ được giết phiên agent
+ * và terminal của chính cửa sổ đó. Thoát app / cửa sổ cuối vẫn dùng `closeAllAgents`.
+ */
+export const closeWindowResources = (owner: WebContents): void => {
+  for (const projectId of agentOwners.release(owner)) {
+    editors?.clear(projectId)
+    agents?.close(projectId)
+  }
+}
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
 export const closeAllAgents = (): void => {
@@ -224,6 +246,17 @@ export function registerIpc(
       if (!sender || !frame || frame !== sender.mainFrame || !BrowserWindow.fromWebContents(sender)) {
         throw new UserError('forbidden_sender', 'Yêu cầu không đến từ cửa sổ NexGraph.')
       }
+      return fn(...(args as A))
+    }))
+  /**
+   * Kênh agent: ghi cửa sổ đã dùng phiên của dự án. Sự kiện agent đi về đúng cửa sổ đó (không
+   * theo cửa sổ đang focus) và reload/đóng cửa sổ chỉ dọn phiên do nó mở. `prompt` chuyển chủ vì
+   * lượt mới thuộc về cửa sổ vừa gửi; các kênh khác chỉ nhận chủ khi phiên chưa có.
+   */
+  const agentOn = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>, mode: 'claim' | 'assign' = 'claim'): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const pid = args[0]
+      if (typeof pid === 'string' && event?.sender) agentOwners[mode](pid, event.sender)
       return fn(...(args as A))
     }))
 
@@ -767,14 +800,14 @@ export function registerIpc(
     accounts: acc,
     rootOf,
     editorState: (projectId) => editorStates.get(projectId),
-    emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
+    emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event })
   })
   const googleAgent = new GeminiAgentService({
     api: liveApi, dataDir, rootOf, connection: google,
     consentTarget: () => geminiEnabled() ? googleTarget() : null,
     hasConsent: (pid, target) => googleConsent.hasConsent(pid, target),
     editorState: (pid) => editorStates.get(pid),
-    emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
+    emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event })
   })
   const agent = (agents = new AgentRouter(piAgent, googleAgent, selectedRuntime))
   const probeKey = () => JSON.stringify([google.connectionIdentity(), google.selectedModel()])
@@ -816,58 +849,58 @@ export function registerIpc(
       throw new AgentError('ai_not_configured', 'Kiểm tra kết nối và công cụ thành công trước khi dùng Gemini.')
     selectRuntime('antigravity-cli')
   })
-  on('agent:prompt', async (pid: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions) => {
+  agentOn('agent:prompt', async (pid: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions) => {
     validatePromptImages(options)
     await editorStates.wait(pid)
     return agent.prompt(pid, text, target, options)
-  })
-  on('agent:abort', (pid: string) => agent.abort(pid))
-  on('agent:set-mode', async (pid: string, mode: AgentMode) => {
+  }, 'assign')
+  agentOn('agent:abort', (pid: string) => agent.abort(pid))
+  agentOn('agent:set-mode', async (pid: string, mode: AgentMode) => {
     if (!['ask', 'plan', 'edit'].includes(mode)) throw new AgentError('bad_param', 'Chế độ trợ lý không hợp lệ')
     await rootOf(pid)
     return agent.setMode(pid, mode)
   })
-  on('agent:get-mode', async (pid: string) => agent.getMode(pid))
-  on('agent:set-disabled-tools', async (pid: string, tools: string[]) => {
+  agentOn('agent:get-mode', async (pid: string) => agent.getMode(pid))
+  agentOn('agent:set-disabled-tools', async (pid: string, tools: string[]) => {
     await rootOf(pid)
     setDisabledTools(pid, tools)
     // Áp lại tool đang bật của phiên (cùng đường với đổi chế độ).
     await agent.setMode(pid, await agent.getMode(pid))
   })
-  on('agent:get-disabled-tools', async (pid: string) => getDisabledTools(pid))
+  agentOn('agent:get-disabled-tools', async (pid: string) => getDisabledTools(pid))
   on('agent:tool-names', async () => allToolNames())
-  on('agent:approve', async (pid: string, id: string, allow: boolean) => {
+  agentOn('agent:approve', async (pid: string, id: string, allow: boolean) => {
     if (allow === true) await editorStates.wait(pid)
     return agent.approve(pid, id, allow === true)
   })
-  on('agent:close', async (pid: string) => {
+  agentOn('agent:close', async (pid: string) => {
     editorStates.clear(pid)
     return agent.close(pid)
   })
-  on('agent:snapshot', (pid: string) => agent.snapshot(pid))
-  on('agent:list-sessions', (pid: string) => agent.listSessions(pid))
-  on('agent:new-session', (pid: string) => agent.newSession(pid))
-  on('agent:fork-session', (pid: string, sessionId: string) => agent.forkSession(pid, sessionId))
-  on('agent:switch-session', (pid: string, sessionId: string) => agent.switchSession(pid, sessionId))
-  on('agent:rename-session', (pid: string, sessionId: string, title: string) => agent.renameSession(pid, sessionId, title))
-  on('agent:delete-session', (pid: string, sessionId: string) => agent.deleteSession(pid, sessionId))
-  on('agent:set-execution', async (pid: string, settings: AgentExecutionSettings) => {
+  agentOn('agent:snapshot', (pid: string) => agent.snapshot(pid))
+  agentOn('agent:list-sessions', (pid: string) => agent.listSessions(pid))
+  agentOn('agent:new-session', (pid: string) => agent.newSession(pid))
+  agentOn('agent:fork-session', (pid: string, sessionId: string) => agent.forkSession(pid, sessionId))
+  agentOn('agent:switch-session', (pid: string, sessionId: string) => agent.switchSession(pid, sessionId))
+  agentOn('agent:rename-session', (pid: string, sessionId: string, title: string) => agent.renameSession(pid, sessionId, title))
+  agentOn('agent:delete-session', (pid: string, sessionId: string) => agent.deleteSession(pid, sessionId))
+  agentOn('agent:set-execution', async (pid: string, settings: AgentExecutionSettings) => {
     await rootOf(pid)
     return agent.setExecution(pid, settings)
   })
-  on('agent:get-execution', async (pid: string) => agent.getExecution(pid))
-  on('agent:set-limits', async (pid: string, limits: AgentRunLimits) => {
+  agentOn('agent:get-execution', async (pid: string) => agent.getExecution(pid))
+  agentOn('agent:set-limits', async (pid: string, limits: AgentRunLimits) => {
     await rootOf(pid)
     return agent.setLimits(pid, limits)
   })
-  on('agent:get-limits', async (pid: string) => agent.getLimits(pid))
-  on('agent:project-commands', async (pid: string) => detectProjectCommands(await rootOf(pid)))
-  on('agent:checkpoints', (pid: string, taskId: string) => agent.checkpoints(pid, taskId))
-  on('agent:rollback', async (pid: string, taskId: string) => {
+  agentOn('agent:get-limits', async (pid: string) => agent.getLimits(pid))
+  agentOn('agent:project-commands', async (pid: string) => detectProjectCommands(await rootOf(pid)))
+  agentOn('agent:checkpoints', (pid: string, taskId: string) => agent.checkpoints(pid, taskId))
+  agentOn('agent:rollback', async (pid: string, taskId: string) => {
     await editorStates.wait(pid)
     return agent.rollback(pid, taskId)
   })
-  on('agent:editor-state', (pid: string, states: AgentEditorState[]) => editorStates.update(pid, states))
+  agentOn('agent:editor-state', (pid: string, states: AgentEditorState[]) => editorStates.update(pid, states))
   on('agent:notify', async (title: string, body: string) => notifyAgent(getWindow(), title, body))
 
   on('export:pick-dir', async (pid: string) => {
