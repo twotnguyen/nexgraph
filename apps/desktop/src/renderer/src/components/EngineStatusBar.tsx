@@ -24,13 +24,23 @@ export function EngineStatusBar({ status, onRestart }: Props) {
       <button type="button" className="status-item status-engine" title={tr(getStatusBarItem('engine')!.labelKey)}
         aria-label={status.state === 'error' ? tr('Khởi động lại') : undefined} onClick={onRestart}>
         <span role="status">
-          {status.state === 'starting' && tr('Engine: đang khởi động…')}
+          {status.state === 'starting' && (status.attempt
+            ? status.message || status.messageKey
+              // Đang thử lại mà không nói vì sao thì người dùng chỉ thấy lặp "đang khởi động lại" (M5).
+              ? tr('Engine: đang khởi động lại (lần {n}) — {reason}…', { n: status.attempt,
+                reason: status.messageKey ? tr(status.messageKey, status.messageVars) : status.message ?? '' })
+              : tr('Engine: đang khởi động lại (lần {n})…', { n: status.attempt })
+            : tr('Engine: đang khởi động…'))}
           {status.state === 'ready' && tr('Engine: sẵn sàng (v{version})', { version: status.engineVersion })}
           {status.state === 'error' && tr('Engine: lỗi — {message}', {
             message: status.messageKey ? tr(status.messageKey, status.messageVars) : status.message
           })}
         </span>
       </button>
+      {/* Hết lượt tự thử: nút riêng để người dùng thấy rõ đường khởi động lại, không chỉ bấm vào chữ trạng thái. */}
+      {status.state === 'error' && status.restartable && (
+        <button type="button" className="status-item status-engine-restart" onClick={onRestart}>{tr('Khởi động lại engine')}</button>
+      )}
       <StatusBarItems>
         {gitAvailable && <button type="button" data-status-id="git" className="status-item">{tr(getStatusBarItem('git')!.labelKey)}</button>}
         {notificationsAvailable && <button type="button" data-status-id="notifications" className="status-item">{tr(getStatusBarItem('notifications')!.labelKey)}</button>}

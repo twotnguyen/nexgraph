@@ -35,7 +35,8 @@ def rrf(lists: dict[str, list[str]], weights: dict[str, float], k: int = 60) -> 
 
 
 def build_context(store: GraphStore, root: Path, question: str, budget: int = 4000, *,
-                  source: SourcePolicy | None = None, sources_dir: Path | None = None) -> dict:
+                  source: SourcePolicy | None = None, sources_dir: Path | None = None,
+                  redact_documents: bool = False) -> dict:
     source = source or SourcePolicy(root, store.last_exclude())
     hits = [n for n, _ in search(store.conn, question, limit=20, any_terms=True)
             if n.file is None or source.allows(n.file)]
@@ -72,7 +73,8 @@ def build_context(store: GraphStore, root: Path, question: str, budget: int = 40
         end = min(node.line_end, node.line_start + MAX_CODE_SPAN - 1)
         span_cut = end < node.line_end  # thân hàm dài hơn MAX_CODE_SPAN: gói ngữ cảnh bị cắt, phải báo (REV-21)
         try:
-            code = read_code(store, root, node.file, node.line_start, end, source=source, sources_dir=sources_dir)
+            code = read_code(store, root, node.file, node.line_start, end, source=source,
+                             sources_dir=sources_dir, redact_documents=redact_documents)
         except ApiError:
             continue
         truncated = truncated or span_cut

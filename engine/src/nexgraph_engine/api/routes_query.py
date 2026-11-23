@@ -77,7 +77,8 @@ def context(project_id: str, request: Request, body: ContextBody) -> dict:
     with open_store(request, project_id) as (store, info):
         try:
             return build_context(store, info.path, body.question, body.budget,
-                                 sources_dir=sources_root(request.app.state.services.data_dir, project_id))
+                                 sources_dir=sources_root(request.app.state.services.data_dir, project_id),
+                                 redact_documents=for_model(request))
         except ValueError as exc:
             raise ApiError(400, "bad_param", str(exc)) from exc
 
@@ -93,6 +94,8 @@ def locate(project_id: str, request: Request, file: str = Query(...), line: int 
 @router.get("/section")
 def section(project_id: str, request: Request, node: str = Query(...)) -> dict:
     with open_store(request, project_id) as (store, info):
+        # Đường tới model dùng policy strict: tài liệu tên nhạy cảm bị từ chối như trên main, không miễn theo tên.
+        # Đường UI (không phải model) vẫn trả bản đã che.
         source = SourcePolicy(info.path, store.last_exclude()) if for_model(request) else None
         return section_json(store, info.path, node, source=source,
                             transcript_dir=request.app.state.services.registry.app_data_dir / "transcripts" / project_id,

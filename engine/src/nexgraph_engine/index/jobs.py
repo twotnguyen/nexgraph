@@ -252,10 +252,12 @@ class JobManager:
             t.join(timeout=10)
 
     # ------------------------------------------------------------------------------------------------
-    def _update(self, job_id: str, e: ProgressEvent) -> None:
+    def _update(self, job_id: str, e: ProgressEvent, *, result: dict | None = None) -> None:
         with self._lock:
             job = self._jobs[job_id]
             job.update(state=e.state, files_done=e.files_done, message=e.message)
+            if result is not None:
+                job["result"] = result
             if e.files_total or e.state in ("done", "structure"):
                 job["files_total"] = e.files_total
             if e.state in ("done", "cancelled", "error"):
@@ -284,6 +286,7 @@ class JobManager:
         published = False
         indexer: Indexer | None = None  # giữ lại để lấy số liệu kết quả (workers_effective, tệp bị bỏ)
         result: RunResult | None = None
+        index_result: dict | None = None
 
         def on_event(e: ProgressEvent) -> None:
             nonlocal terminal_event
@@ -314,6 +317,10 @@ class JobManager:
                     sources_dir=sources_root(self._registry.app_data_dir, info.project_id),
                 )
                 result = indexer.run()
+                # (A1 F6) Thư mục/tệp không đọc được khi quét + số liệu PERF-L đi CÙNG một dict kết quả job.
+                unreadable = indexer.unreadable_paths
+                index_result = {**self._job_result(indexer, result),
+                                "unreadable_paths": unreadable, "unreadable_count": len(unreadable)}
 
                 if terminal_event is None:
                     raise RuntimeError("Lập chỉ mục kết thúc mà chưa báo kết quả")
@@ -339,7 +346,4 @@ class JobManager:
             if lock is not None:
                 lock.release()
             if terminal_event is not None:
-                if result is not None and terminal_event.state == "done":
-                    # Kết quả job (JSON cho UI/bench): tệp bị bỏ do sinh tự động (PERF-L mục 3).
-                    self._set(job_id, result=self._job_result(indexer, result))
-                self._update(job_id, terminal_event)
+                self._update(job_id, terminal_event, result=index_result)

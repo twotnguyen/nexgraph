@@ -5,6 +5,7 @@ import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from './Picker'
 import { tr } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 
 type FileItem = { path: string; kind: 'file' | 'recent' | 'create' }
 const fileKey = (item: FileItem) => `${item.kind}:${item.path}`
@@ -32,7 +33,7 @@ export function rankFiles(files: readonly string[], query: string): { item: stri
 /** ⌘P: hiện lịch sử khi chưa gõ; tìm hoặc tạo tệp khi nhập đường dẫn. */
 export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: { projectId: string; projectName: string; recent: readonly string[]; onOpen: (path: string) => void; onClose: () => void }) {
   const [listing, setListing] = useState<{ projectId: string; files: string[] } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const creating = useRef(false)
   const mounted = useRef(true)
   const currentProject = useRef(projectId)
@@ -48,7 +49,7 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
     let live = true
     setError(null)
     const load = window.nexgraph.fs.files
-    if (!load) { setError(tr('Không liệt kê được tệp ở chế độ này')); return }
+    if (!load) { setError(msg('Không liệt kê được tệp ở chế độ này')); return }
     load(projectId).then(({ files: all }) => {
       if (live) setListing({ projectId, files: all })
     }).catch((e: unknown) => { if (live) setError(errorText(e)) })
@@ -72,7 +73,7 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
     setError(null)
     if (item.kind !== 'create') { onClose(); onOpen(item.path); return }
     const createFile = window.nexgraph.fs.createFile
-    if (!createFile) { setError(tr('Không tạo được tệp ở chế độ này')); return }
+    if (!createFile) { setError(msg('Không tạo được tệp ở chế độ này')); return }
     creating.current = true
     try {
       await createFile(projectId, item.path)
@@ -86,7 +87,7 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
 
   return (
     <Picker label={tr('Tìm tệp')} placeholder={tr('Tìm tệp…')} className="file-finder" items={items} itemKey={fileKey} itemText={fileText} filter={filter}
-      empty={files ? tr('Không có tệp khớp') : error ? tr('Không có tệp để tìm') : tr('Đang liệt kê tệp…')} error={error} onCancel={onClose}
+      empty={files ? tr('Không có tệp khớp') : error ? tr('Không có tệp để tìm') : tr('Đang liệt kê tệp…')} error={error ? msgText(error) : undefined} onCancel={onClose}
       onPick={(item) => { void pick(item) }}
       itemData={(item) => ({ 'data-path': item.path })}
       renderItem={(item, positions) => {

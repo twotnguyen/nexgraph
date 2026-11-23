@@ -3,6 +3,7 @@ import type { IndexOptions, ProjectSummary } from '@shared/graph-types'
 import { useIndexJob } from '../state/useIndexJob'
 import { Icon } from '../components/common/icons'
 import { vi, tr } from '../strings'
+import { msgText } from '../state/messages'
 import './welcome.css'
 
 interface Props {
@@ -42,7 +43,7 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
   const phase1Done = state === 'resolve' || completed
   const running = state === 'queued' || state === 'structure' || state === 'resolve'
   const preparing = !job && !error || state === 'queued'
-  const message = state === 'error' ? job?.message || vi.indexing.failed : error
+  const message = state === 'error' ? job?.message || vi.indexing.failed : msgText(error)
   const title = completed ? vi.indexing.titleDone(project.name)
     : state === 'cancelled' ? vi.indexing.titleCancelled(project.name)
     : state === 'error' ? vi.indexing.titleFailed(project.name)

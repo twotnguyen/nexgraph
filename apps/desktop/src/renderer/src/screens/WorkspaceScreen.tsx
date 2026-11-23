@@ -53,6 +53,7 @@ import { errorText } from '../state/errorText'
 import { buildExcerpts, consumePendingMultiBuffer, getPendingMultiBuffer, requestMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi, tr } from '../strings'
+import { msg, msgId, msgText, type Message, type Msg } from '../state/messages'
 import './workspace.css'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
@@ -70,6 +71,8 @@ const tabLabels = (): Record<(typeof MAIN_TABS)[number], string> => ({
 interface OpenFile { file: string; line: number; lineEnd?: number; column?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
 const isMarkdownFile = (file: string) => /\.(?:md|markdown|mdown|mkd)$/i.test(file)
+/** Khoá câu cảnh báo refresh nền; ở cấp module để lúc lỗi và lúc khôi phục dùng đúng một khoá (M3). */
+const WATCH_ERROR_KEY = 'Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.'
 const containsPath = (parent: string, file: string) => file === parent || file.startsWith(`${parent}/`)
 const readRecentFiles = (projectId: string): string[] => {
   try {
@@ -122,11 +125,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const impactRequest = useRef(0)
   const hostInitialHandled = useRef(false)
   const [revision, setRevision] = useState(0)
-  const [feedback, setFeedbackText] = useState<string | null>(null)
+  const [feedback, setFeedbackText] = useState<Message | null>(null)
   // Mọi lỗi/feedback của Workspace cũng vào trung tâm thông báo để chuông trên thanh công cụ đếm đúng.
-  const setFeedback = useCallback((message: string | null) => {
+  const setFeedback = useCallback((message: Message | null) => {
     setFeedbackText(message)
-    if (message) notify(message)
+    if (message) notify(msgText(message), msgId(message) ?? undefined)
   }, [])
   const chatDock = useChatDock()
   // Kiểu Wu (trái): khung chat dùng chung chỗ với bảng công cụ nên mặc định đóng để cây tệp hiện trước.
@@ -187,27 +190,30 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Theo dõi thư mục khi đang xem project; tắt khi rời đi để không giữ tay cầm tệp. Rời đi cũng đóng phiên agent.
   useEffect(() => {
     let current = true
-    let lastWatchError: string | null = null
+    // M3 (review #51): giữ dữ liệu lỗi (chi tiết), không giữ câu đã dịch — đổi ngôn ngữ giữa lỗi và
+    // lúc khôi phục vẫn so/thu hồi đúng.
+    let lastWatchError: { error: string } | null = null
+    const watchMessage = (error: string): Msg => msg(WATCH_ERROR_KEY, { error })
     // UI-REFRESH-ERR: refresh nền lỗi phải hiện thông báo riêng (main đã lọc lỗi lặp), không chỉ cảnh báo graph cũ.
     const offWatchError = window.nexgraph.watch.onError((failure) => {
       if (!current || failure.projectId !== project.project_id) return
       // Câu lỗi của engine thường đã có dấu chấm cuối: bỏ để không thành ".." trong câu ghép.
       const detail = failure.message.trim().replace(/\.+$/, '')
-      const message = tr('Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.', { error: detail })
-      if (message === lastWatchError) return
-      lastWatchError = message
-      setFeedback(message)
+      if (lastWatchError?.error === detail) return
+      lastWatchError = { error: detail }
+      setFeedback(watchMessage(detail))
     })
     // UI-REFRESH-ERR M2: refresh nền chạy được trở lại thì gỡ cảnh báo cũ (toast + mục trung tâm thông báo).
     const offWatchRecovered = window.nexgraph.watch.onRecovered((projectId) => {
       if (!current || projectId !== project.project_id || !lastWatchError) return
-      const message = lastWatchError
+      const message = watchMessage(lastWatchError.error)
+      const id = msgId(message)
       lastWatchError = null
-      withdrawNotification(message)
-      setFeedbackText((previous) => (previous === message ? null : previous))
+      withdrawNotification(msgText(message), id ?? undefined)
+      setFeedbackText((previous) => (msgId(previous) === id ? null : previous))
     })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
-      if (current) setFeedback(tr('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
+      if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
     })
     return () => {
       current = false
@@ -332,11 +338,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [menu, setMenu] = useState<{ node: GraphNode; x: number; y: number } | null>(null)
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null)
   const [overlay, setOverlay] = useState<Overlay | null>(null)
-  const [notice, setNoticeText] = useState<string | null>(null)
+  const [notice, setNoticeText] = useState<Message | null>(null)
   // Thông báo trên đồ thị cũng vào trung tâm để chuông đếm cả thao tác tìm đường/hỏi/trích dẫn.
-  const setNotice = useCallback((message: string | null) => {
+  const setNotice = useCallback((message: Message | null) => {
     setNoticeText(message)
-    if (message) notify(message)
+    if (message) notify(msgText(message), msgId(message) ?? undefined)
   }, [])
   const inspect = (inspection: AgentInspection) => {
     setInspections((current) => current.some((item) => item.id === inspection.id) ? current.map((item) => item.id === inspection.id ? inspection : item) : [...current, inspection])
@@ -386,7 +392,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setTab('graph')
     setPathFrom(null)
     setOverlay(null)
-    setNotice(tr('Đang tìm đường nối…'))
+    setNotice(msg('Đang tìm đường nối…'))
     try {
       const r = await window.nexgraph.graph.paths(project.project_id, [from.id, to.id])
       if (request !== graphRequest.current) return
@@ -404,7 +410,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     const request = ++graphRequest.current
     setTab('graph')
     setOverlay(null)
-    setNotice(vi.search.asking)
+    setNotice(msg('Đang tìm…'))
     try {
       const r = await window.nexgraph.graph.ask(project.project_id, question)
       if (request !== graphRequest.current) return
@@ -732,16 +738,16 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // shortcut: dấu trang không bị giới hạn số đoạn, thêm trần như tệp đang mở nếu danh sách dài.
   useCommand('editor.view_bookmarks', () => {
     const marks = listBookmarks(project.project_id)
-    if (!marks.length) return setFeedback(tr('Không có dấu trang nào trong dự án này.'))
-    requestMultiBuffer({ id: `bookmarks-${Date.now()}`, title: tr('Dấu trang'), excerpts: buildExcerpts(marks) })
+    if (!marks.length) return setFeedback(msg('Không có dấu trang nào trong dự án này.'))
+    requestMultiBuffer({ id: `bookmarks-${Date.now()}`, title: msg('Dấu trang'), excerpts: buildExcerpts(marks) })
   })
   // Tệp đang hiện đứng đầu (dòng con trỏ nếu biết) để không bị cắt khi mở quá 8 tệp.
   useCommand('editor.open_multibuffer', () => {
     const editor = getActiveEditor()
     const cursor = editor && editor.file === activeFile ? editor.handle.getPosition?.()?.line : undefined
     const shown = [...files].sort((a, b) => Number(b.file === activeFile) - Number(a.file === activeFile)).slice(0, 8)
-    if (!shown.length) return setFeedback(tr('Chưa mở tệp'))
-    requestMultiBuffer({ id: `open-files-${Date.now()}`, title: tr('Nhiều đoạn mã'),
+    if (!shown.length) return setFeedback(msg('Chưa mở tệp'))
+    requestMultiBuffer({ id: `open-files-${Date.now()}`, title: msg('Nhiều đoạn mã'),
       excerpts: buildExcerpts(shown.map((item) => ({ file: item.file, line: item.file === activeFile ? cursor ?? item.line : item.line }))) })
   })
   useCommand('tour.toggle', () => togglePanel('tour'))
@@ -980,7 +986,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     revision, activeFile, previewFile, dirtyFiles, findFocus,
     editor: activeEditor, symbols: documentSymbols.symbols, symbolError: documentSymbols.error,
     debugTarget, worktreeAvailable: !!openWorktree && !!window.nexgraph.git, chatDock, hosted,
-    openFlow, openArch, openNode, openNodeId, openCode, previewCode,
+    openFlow, openArch, openNode, openNodeId, openCode, previewCode, pickTarget: !!pathFrom,
     pinFile: (file, line) => { setPreviews((cur) => cur.filter((item) => item !== file)); openCode(file, line ?? 1) },
     closeFile, renamePath: renamedPath, trashPath: trashedPath,
     showSubgraph: (g) => highlightFromChat(g.nodes, g.edges, null),
@@ -1115,10 +1121,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           </span>)}
           {multiBuffers.map((request) => <span key={request.id} className={`tab file-tab${tab === `multi:${request.id}` ? ' active' : ''}`}>
             <button id={tabId(`multi:${request.id}`)} type="button" role="tab" aria-selected={tab === `multi:${request.id}`} aria-controls={viewId}
-              tabIndex={tab === `multi:${request.id}` ? 0 : -1} title={request.title} className="tab-name" onClick={() => setTab(`multi:${request.id}`)}>
-              <Icon name="tree" size={14} /><span>{request.title}</span>
+              tabIndex={tab === `multi:${request.id}` ? 0 : -1} title={msgText(request.title)} className="tab-name" onClick={() => setTab(`multi:${request.id}`)}>
+              <Icon name="tree" size={14} /><span>{msgText(request.title)}</span>
             </button>
-            <button type="button" className="tab-close" aria-label={tr('Đóng {name}', { name: request.title })} onClick={() => closeMulti(request)}><Icon name="close" size={12} /></button>
+            <button type="button" className="tab-close" aria-label={tr('Đóng {name}', { name: msgText(request.title) })} onClick={() => closeMulti(request)}><Icon name="close" size={12} /></button>
           </span>)}
         </div>
         {tabMenu && <>
@@ -1153,7 +1159,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
                 onNodeContextMenu={(node, x, y) => setMenu({ node, x, y })}
                 overlay={overlay} onClearOverlay={clearOverlay}
                 onBackToRoot={() => { nodeRequest.current++; setFocus(null); setSelected(null) }} />
-              {notice && <p role="status" className="path-notice">{notice}</p>}
+              {notice && <p role="status" className="path-notice">{msgText(notice)}</p>}
               <NodeInspector node={selected} onOpenCode={openCode} projectId={project.project_id} onOpenNode={openNode} />
               {menu && (
                 <NodeContextMenu node={menu.node} x={menu.x} y={menu.y} onClose={() => setMenu(null)}
@@ -1200,7 +1206,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
             onClose={() => closeDiff(d)} onOpenFile={() => openCode(d.file)} />)}
           {feedback && (
             <div className="ws-feedback">
-              <span role="alert">{feedback}</span>
+              <span role="alert">{msgText(feedback)}</span>
               <button type="button" className="ws-icon-button" aria-label={tr('Đóng thông báo')} onClick={() => setFeedback(null)}>×</button>
             </div>
           )}

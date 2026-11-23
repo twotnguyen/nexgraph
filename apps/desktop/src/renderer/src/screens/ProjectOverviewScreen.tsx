@@ -9,6 +9,7 @@ import { McpCard } from '../components/overview/McpCard'
 import { SourcesPanel } from '../components/overview/SourcesPanel'
 import { SemanticDialog } from '../components/overview/SemanticDialog'
 import { formatDate, formatNumber } from '../state/locale'
+import { msg, msgText, type Message } from '../state/messages'
 import { vi, tr } from '../strings'
 import './welcome.css'
 import './overview.css'
@@ -39,7 +40,7 @@ function Card({ title, desc, status, onClick, disabled, icon, tone = 'blue' }: {
 export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onBack, onOpenSettings }: Props) {
   const pid = project.project_id
   const [stats, setStats] = useState<GraphStats | null>(null)
-  const [clusters, setClusters] = useState<string | null>(null)
+  const [clusters, setClusters] = useState<Message | null>(null)
   const [statsError, setStatsError] = useState<string | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [reclustering, setReclustering] = useState(false)
@@ -83,7 +84,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
     setClusterError(null)
     try {
       const r = await window.nexgraph.graph.recluster(pid)
-      setClusters(vi.overview.clusters(r.communities))
+      setClusters(msg('Đã chia {n} cụm', { n: r.communities }))
     } catch (e) {
       setClusterError((e as { message?: string }).message ?? String(e))
     } finally {
@@ -109,7 +110,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
           {when && <span className="muted">{vi.overview.lastIndexed(when)}</span>}
         </header>
         {stats ? (
-          <div className="graph-metrics" aria-label={vi.overview.stats(formatNumber(stats.files), formatNumber(nodeCount), formatNumber(sum(stats.edges_by_type)))}>
+          <div className="graph-metrics" aria-label={vi.overview.stats(stats.files, nodeCount, sum(stats.edges_by_type))}>
             <div><strong>{formatNumber(stats.files)}</strong><span>{tr('Tệp đã lập chỉ mục')}</span></div>
             <div><strong>{formatNumber(nodeCount)}</strong><span>{tr('Nút')}</span></div>
             <div><strong>{formatNumber(sum(stats.edges_by_type))}</strong><span>{tr('Quan hệ')}</span></div>
@@ -126,10 +127,10 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
 
       <h2>{vi.overview.build}</h2>
       <div className="cards">
-        <Card title={vi.overview.reindex} icon="refresh" desc={vi.overview.reindexDesc} onClick={() => onReindex({ exclude: [] })} />
+        <Card title={vi.overview.reindex} icon="refresh" desc={vi.overview.reindexDesc} onClick={() => onReindex({})} />
         <Card title={vi.overview.options} icon="sliders" desc={vi.overview.optionsDesc} onClick={() => setOptions(true)} />
         <Card title={vi.overview.recluster} icon="cluster" desc={vi.overview.reclusterDesc}
-          status={reclustering ? vi.overview.reclustering : clusters} disabled={reclustering || noGraph} onClick={() => void recluster()} />
+          status={reclustering ? vi.overview.reclustering : msgText(clusters)} disabled={reclustering || noGraph} onClick={() => void recluster()} />
         <Card title={vi.semantic.labelsCard} icon="spark" tone="violet" desc={vi.semantic.labelsDesc} disabled={noGraph} onClick={() => setSemantic('labels')} />
       </div>
       {clusterError && <p role="alert" className="inline-message error">{clusterError}</p>}

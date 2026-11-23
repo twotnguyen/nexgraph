@@ -199,8 +199,12 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
              exclude: list[str] | None = None, include_docs: bool = False,
              include_media: bool = False, language_map: dict[str, str] | None = None,
              include_config: bool = False, sources_dir: Path | None = None,
+             unreadable: list[str] | None = None,
              skip_stats: dict[str, int] | None = None) -> Iterator[DiscoveredFile]:
     """`sources_dir`: nguồn tải từ URL (`<data_dir>/sources/<pid>/`), vào graph dưới dạng `sources/<tên>`.
+
+    `unreadable`: nếu truyền một list, đường dẫn tương đối của thư mục/tệp không đọc được (chmod 000,
+    ổ đĩa rút…) được thêm vào đó thay vì bỏ qua im lặng (A1 F6) — index vẫn chạy tiếp.
 
     `skip_stats`: nếu truyền dict thì cộng dồn số tệp bị bỏ theo lý do (`bundle`, `dense`) — kết quả job
     dùng để báo cho người dùng biết đã bỏ bao nhiêu tệp sinh tự động (PERF-L mục 3).
@@ -233,12 +237,21 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
         try:
             entries = sorted(os.scandir(directory), key=lambda e: e.name)
         except OSError:
+            if unreadable is not None and rel_dir:
+                unreadable.append(rel_dir)
             return
         for entry in entries:
             if entry.is_symlink() or "\\" in entry.name:
                 continue  # không theo symlink (tránh vòng lặp và đọc ngoài project); tên có \ vi phạm RB3
             rel = f"{rel_dir}/{entry.name}" if rel_dir else entry.name
-            if entry.is_dir(follow_symlinks=False):
+            try:
+                is_dir = entry.is_dir(follow_symlinks=False)
+                is_file = not is_dir and entry.is_file(follow_symlinks=False)
+            except OSError:
+                if unreadable is not None:
+                    unreadable.append(rel)
+                continue
+            if is_dir:
                 selected = subdir is not None and (inside(rel) or on_path_to_subdir(rel))
                 if entry.name in ALWAYS_SKIP_DIRS:
                     continue
@@ -248,7 +261,7 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                     continue
                 if subdir is None or selected:  # chỉ đi xuống nhánh dẫn tới thư mục con
                     walk(Path(entry.path), rel, rules)
-            elif entry.is_file(follow_symlinks=False):
+            elif is_file:
                 language = _language(root, rel, include_docs, include_media, language_map, include_config)
                 if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES):
                     continue
@@ -260,7 +273,12 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                 if entry.name.lower().endswith(MINIFIED_SUFFIXES) or (not chosen and is_next_static(rel)):
                     _skip("bundle")
                     continue
-                st = entry.stat(follow_symlinks=False)
+                try:
+                    st = entry.stat(follow_symlinks=False)
+                except OSError:
+                    if unreadable is not None:
+                        unreadable.append(rel)
+                    continue
                 if is_dense_minified(Path(entry.path), st.st_size):
                     _skip("dense")
                     continue

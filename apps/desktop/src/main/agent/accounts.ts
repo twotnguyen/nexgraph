@@ -652,6 +652,8 @@ export class AccountService {
   selectModel(provider: string, id: string): void {
     if (!this.modelRuntime.getModel(provider, id)) throw new AgentError('bad_param', 'Không có model này')
     writeJson(this.deps.prefsFile, { ...readJson(this.deps.prefsFile), aiSelectedModel: { provider, id } })
+    // Panel chat đang mở nghe auth:models-changed để đổi model ngay, không cần reload.
+    this.deps.modelsChanged(provider)
   }
 
   // ----- OAuth -----

@@ -220,6 +220,12 @@ class Indexer:
         self._skip_stats: dict[str, int] = {}  # tệp bị discovery bỏ, theo lý do (bundle/dense)
         self._workers_effective = 1
         self._fallback_serial = False
+        self._unreadable: list[str] = []  # (A1 F6) thư mục/tệp không đọc được khi quét
+
+    @property
+    def unreadable_paths(self) -> list[str]:
+        """Đường dẫn tương đối của thư mục/tệp không đọc được khi quét, không trùng, theo thứ tự gặp."""
+        return list(dict.fromkeys(self._unreadable))
 
     def run(self) -> RunResult:
         t0 = time.time()
@@ -232,6 +238,7 @@ class Indexer:
             files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
                                   include_docs=self.include_docs, include_media=self.include_media,
                                   include_config=self.include_config, sources_dir=self.sources_dir,
+                                  unreadable=self._unreadable,
                                   skip_stats=self._skip_stats))
             if self.force:
                 reset_cache_root()
@@ -290,12 +297,16 @@ class Indexer:
             return self._result(run_id, "loi", t0)
 
     def _failure_message(self) -> str | None:
-        """Câu cảnh báo cho người dùng khi một phần tệp không đọc/trích xuất được."""
-        if not self._file_errors:
-            return None
-        files = list(dict.fromkeys(rel for rel, _k, _d in self._file_errors))
-        first_rel, _kind, detail = self._file_errors[0]
-        return f"{len(files)} tệp không đọc được hoặc lỗi trích xuất (ví dụ {first_rel}: {detail})"
+        """Câu cảnh báo cho người dùng khi một phần tệp không đọc/trích xuất được hoặc bị bỏ qua khi quét."""
+        parts: list[str] = []
+        if self._file_errors:
+            files = list(dict.fromkeys(rel for rel, _k, _d in self._file_errors))
+            first_rel, _kind, detail = self._file_errors[0]
+            parts.append(f"{len(files)} tệp không đọc được hoặc lỗi trích xuất (ví dụ {first_rel}: {detail})")
+        unreadable = self.unreadable_paths
+        if unreadable:
+            parts.append(f"{len(unreadable)} mục không đọc được khi quét (ví dụ {unreadable[0]})")
+        return "; ".join(parts) or None
 
     # ------------------------------------------------------------------------------------------------
     def _finish(self, run_id: int, state: RunState, t0: float, event: ProgressEvent) -> RunResult:

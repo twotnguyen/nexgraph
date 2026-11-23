@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { SemanticDialog } from '../overview/SemanticDialog'
 import type { GraphNode, PrDetail, PrList } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 import { CanvasState } from '../common/CanvasState'
 
 type Props = { projectId: string; onOpenNode: (id: string) => void }
@@ -23,15 +24,15 @@ function NodeItems({ nodes, onOpenNode }: { nodes: GraphNode[]; onOpenNode: (id:
 }
 
 function Review({ d, onOpenNode }: { d: PrDetail; onOpenNode: (id: string) => void }) {
-  const [copied, setCopied] = useState<string | null>(null)
+  const [copied, setCopied] = useState<Message | null>(null)
   const sel = d.test_selection
-  const copy = () => void navigator.clipboard.writeText(d.comment).then(() => setCopied(vi.prs.copied)).catch(() => setCopied(vi.prs.copyFailed))
+  const copy = () => void navigator.clipboard.writeText(d.comment).then(() => setCopied(msg('Đã sao chép'))).catch(() => setCopied(msg('Không truy cập được clipboard')))
   return (
     <section aria-label={vi.prs.review(d.pr.number)}>
       <header className="report-head">
         <h3>{vi.prs.review(d.pr.number)}</h3>
         <button type="button" onClick={copy}>{vi.prs.copy}</button>
-        {copied && <span role="status" className="muted small">{copied}</span>}
+        {copied && <span role="status" className="muted small">{msgText(copied)}</span>}
       </header>
       <p><b>{d.pr.title}</b> <span className="muted small">{vi.prs.meta(d.pr.author, d.pr.branch, d.pr.base)}</span></p>
       <p className="muted small">{vi.prs.notPosted}</p>

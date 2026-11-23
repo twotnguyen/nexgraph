@@ -692,6 +692,18 @@ button:disabled {
   font-size: 13px;
 }
 
+/* Kết quả Tìm symbol mở mã; nút phụ mới mở node trên graph nên phải nhỏ, không chiếm cả dòng. */
+.search-hit {
+  display: grid;
+  gap: 2px;
+}
+
+.search-hit > button.link {
+  width: auto;
+  justify-self: start;
+  font-size: 12px;
+}
+
 .placeholder {
   padding: 24px;
 }
