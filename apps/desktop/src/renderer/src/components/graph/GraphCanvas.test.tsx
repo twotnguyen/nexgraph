@@ -95,8 +95,8 @@ describe('GraphCanvas highlights', () => {
     render(<div style={{ width: 800, height: 600 }}><GraphCanvas projectId="p1" startNodeId=".#repository" highlights={highlights} /></div>)
   }
   const nodeEl = (label: string) => screen.getByText(label).closest('.react-flow__node') as HTMLElement
-  // Màu của nút tròn nằm ở biến --node-c (tô nền và viền hình tròn).
-  const colorOf = (label: string) => (nodeEl(label).querySelector('.dot-node') as HTMLElement).style.getPropertyValue('--node-c')
+  // Màu của nút tròn nằm ở biến --node-c (tô nền và viền hình tròn). Vùng overlay vẽ ô (box-node).
+  const colorOf = (label: string) => (nodeEl(label).querySelector('.dot-node, .box-node') as HTMLElement).style.getPropertyValue('--node-c')
 
   it('tags and colours highlighted nodes by meaning', async () => {
     renderWith({ a: 'changed', b: 'impacted', c: 'test', d: 'gap' })
@@ -115,6 +115,33 @@ describe('GraphCanvas highlights', () => {
     await screen.findByText('a')
     expect(colorOf('a')).toBe('var(--blue)')
     expect(document.querySelectorAll('.tag')).toHaveLength(0)
+  })
+
+  // F4.4 / A2-F5: vùng overlay (đường đi, "Tô luồng trên graph") phải tô mọi nút được trích dẫn,
+  // kể cả khi không tìm được cạnh nào — trước đây nút vẽ màu thường nên như "không tô".
+  it('tô mọi nút của overlay kể cả khi không có cạnh', async () => {
+    installNexgraph({ graph: { neighbors: vi.fn(async () => hood(['.#repository'])) } })
+    render(
+      <div style={{ width: 800, height: 600 }}>
+        <GraphCanvas projectId="p1" startNodeId=".#repository" overlay={{ nodes: [gnode('a'), gnode('b')], edges: [] }} />
+      </div>
+    )
+    await screen.findByText('a')
+    expect(colorOf('a')).toBe('var(--magenta)')
+    expect(colorOf('b')).toBe('var(--magenta)')
+  })
+
+  it('highlight riêng vẫn thắng màu mặc định của overlay', async () => {
+    installNexgraph({ graph: { neighbors: vi.fn(async () => hood(['.#repository'])) } })
+    render(
+      <div style={{ width: 800, height: 600 }}>
+        <GraphCanvas projectId="p1" startNodeId=".#repository" highlights={{ a: 'changed' }}
+          overlay={{ nodes: [gnode('a'), gnode('b')], edges: [] }} />
+      </div>
+    )
+    await screen.findByText('a')
+    expect(colorOf('a')).toBe('var(--orange)')
+    expect(colorOf('b')).toBe('var(--magenta)')
   })
 })
 

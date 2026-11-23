@@ -1,4 +1,5 @@
 import { tr } from '../../strings'
+import { errorText } from '../../state/errorText'
 import { retryNotice } from './retry'
 
 import { useEffect, useRef, useState } from 'react'
@@ -7,7 +8,8 @@ import type { AgentContextUsage, AgentExecutionSettings, AgentRunLimits, AgentSe
 export type AgentInspection = { id: string; title: string; text?: string; before?: string; after?: string; file?: string }
 const defaults: AgentRunLimits = { maxTurns: 30, maxDurationMs: 600_000, maxTokens: 120_000 }
 const emptyUsage: AgentUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: null }
-const messageOf = (e: unknown): string => e instanceof Error ? e.message : e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
+/** Lỗi từ main: `errorText` dịch các câu đã biết (knownErrors) sang ngôn ngữ giao diện, câu lạ giữ nguyên. */
+const messageOf = (e: unknown): string => errorText(e)
 const pinKeyPrefix = 'nexgraph.agent.pinned.'
 const readPins = (projectId: string): string[] => {
   try {

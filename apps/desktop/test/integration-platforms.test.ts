@@ -61,7 +61,8 @@ describe('21 nền tảng', () => {
     expect(mcp.status).toBe('new')
     expect(hook.status).toBe('add')
     const merged = JSON.parse(hook.after)
-    expect(merged.mcpServers.nexgraph).toEqual({ command: cmd.command, args: ['mcp', '--project', root, '--data-dir', dataDir] })
+    expect(merged.mcpServers.nexgraph).toEqual({ command: cmd.command, args: ['mcp', '--project', root, '--data-dir', dataDir],
+      env: { PYTHONPATH: '', PYTHONHOME: '', PYTHONNOUSERSITE: '1' } })
     expect(merged.hooks.BeforeTool[0].hooks[0].command).toContain('hook-guard gemini')
     applyPlatform('gemini', root, cmd, dataDir)
     expect(JSON.parse(readFileSync(join(root, '.gemini', 'settings.json'), 'utf8'))).toEqual(merged)
