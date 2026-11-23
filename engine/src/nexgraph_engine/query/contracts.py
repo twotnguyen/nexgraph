@@ -18,6 +18,7 @@ from nexgraph_engine.impact.analyze import analyze
 from nexgraph_engine.index.extra_sources import is_source_language, is_source_path
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file, source_path
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source, safe_project_path
+from nexgraph_engine.query.terms import NO_MATCH_SUGGESTION, has_words
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
@@ -124,7 +125,8 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
 
 def search_json(store: GraphStore, q: str, kinds, limit: int) -> list[dict]:
     if build_match_query(q) is None:
-        raise ApiError(400, "bad_param", "Cần ít nhất một từ để tìm kiếm")
+        # Câu toàn hư từ (vd "làm sao") trả cùng gợi ý thân thiện với ask/context (M5, review 23/11).
+        raise ApiError(400, "bad_param", NO_MATCH_SUGGESTION if has_words(q) else "Cần ít nhất một từ để tìm kiếm")
     try:
         wanted = {NodeKind(k) for k in kinds if k} if kinds else None
     except ValueError as exc:

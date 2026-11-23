@@ -56,6 +56,11 @@ function fakeLlm(seen: { auth: string[]; tools: string[][]; bodies: string[] }, 
     let body = ''
     req.on('data', (c) => (body += c))
     req.on('end', () => {
+      // Danh mục model (đợi context_length) không phải lượt chat: không ghi vào `seen` và trả JSON.
+      if (req.url?.endsWith('/models')) {
+        res.writeHead(200, { 'content-type': 'application/json' })
+        return res.end(JSON.stringify({ data: [{ id: 'fake-1', context_length: 32_000 }] }))
+      }
       seen.auth.push(String(req.headers.authorization))
       seen.bodies.push(body)
       if (redirectTo) {
@@ -293,7 +298,7 @@ describe('AgentService + pi SDK thật', () => {
 
   it('nhà cung cấp trả 401 → error ai_unauthorized, lượt sau trên cùng phiên vẫn chạy', async () => {
     await turn('khoá sai')
-    expect(lastEnd()).toEqual({ type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' })
+    expect(lastEnd()).toMatchObject({ type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.', detail: 'bad key' })
     await turn('chào')
     expect(lastEnd()).toMatchObject({ type: 'done', text: 'Xong [[a.py:1-1]]' })
   }, 30_000)

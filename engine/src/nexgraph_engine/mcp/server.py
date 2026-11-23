@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import io
 import json
 import os
 import sqlite3
@@ -489,6 +490,88 @@ def run_http(project: Path, data_dir: Path | None, port: int, key: str, global_g
     return 0
 
 
+class _PreInitFilter(io.TextIOBase):
+    """Lọc stdin stdio: chặn message SDK sẽ nuốt cả chục dòng validation ra stderr.
+
+    Claude Code 2.1.330 gửi probe `server/discover` trước initialize; SDK từ chối và in cả chục dòng
+    validation ra stderr, client tưởng server hỏng rồi respawn (A4-F1). Method lạ — trước hay sau
+    initialize — nhận MethodNotFound một dòng; batch JSON-RPC (SDK không hỗ trợ, làm chết vòng đọc)
+    nhận -32600 cho từng request. `ping` được đi qua vì spec cho phép ping trước initialize.
+    """
+
+    def __init__(self, inner: Any, out: Any) -> None:
+        self._inner = inner
+        self._out = out
+
+    def readline(self, size: int = -1) -> str:
+        while True:
+            line = self._inner.readline() if size < 0 else self._inner.readline(size)
+            if not line:
+                return line
+            try:
+                message = json.loads(line)
+            except (TypeError, ValueError):
+                return line
+            if isinstance(message, list):  # batch: SDK không hỗ trợ và dừng đọc cả stream
+                for item in message:
+                    if isinstance(item, dict) and "id" in item:
+                        self._reply(item["id"], -32600, "Invalid Request: JSON-RPC batch không được hỗ trợ")
+                continue
+            if not isinstance(message, dict):
+                return line
+            method = message.get("method")
+            if method is None or method in _known_methods():
+                return line
+            if "id" in message:  # request lạ: trả lỗi JSON-RPC một dòng, không để SDK dump stack
+                self._reply(message["id"], -32601, f"Method not found: {method}")
+            # notification lạ: bỏ im lặng
+
+    def _reply(self, request_id: Any, code: int, text: str) -> None:
+        body = {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": text}}
+        self._out.write((json.dumps(body, ensure_ascii=False) + "\n").encode("utf-8"))
+        self._out.flush()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+_KNOWN_METHODS: frozenset[str] | None = None
+
+
+def _known_methods() -> frozenset[str]:
+    """Tên method SDK thật sự biết (đọc từ `mcp.types`), để không chặn method mới khi nâng SDK."""
+    global _KNOWN_METHODS
+    if _KNOWN_METHODS is None:
+        from mcp import types
+
+        found: set[str] = set()
+        for name in dir(types):
+            obj = getattr(types, name)
+            field = getattr(obj, "model_fields", {}).get("method") if isinstance(obj, type) else None
+            for literal in getattr(getattr(field, "annotation", None), "__args__", ()):
+                if isinstance(literal, str):
+                    found.add(literal)
+        _KNOWN_METHODS = frozenset(found)
+    return _KNOWN_METHODS
+
+
+def _run_stdio_quiet(mcp: Any) -> None:
+    import sys
+    from io import TextIOWrapper
+
+    stdin = anyio.wrap_file(_PreInitFilter(
+        TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace"), sys.stdout.buffer))
+    anyio.run(_serve_stdio, mcp, stdin)
+
+
+async def _serve_stdio(mcp: Any, stdin: Any) -> None:
+    from mcp.server.stdio import stdio_server
+
+    async with stdio_server(stdin=stdin) as (read_stream, write_stream):
+        await mcp._mcp_server.run(read_stream, write_stream, mcp._mcp_server.create_initialization_options())
+
+
 def run_stdio(project: Path, data_dir: Path | None, global_graph: bool = False) -> int:
-    build_server(project, data_dir, global_graph=global_graph).run("stdio")
+    _run_stdio_quiet(build_server(project, data_dir, global_graph=global_graph))
     return 0
+

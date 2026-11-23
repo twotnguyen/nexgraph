@@ -56,8 +56,10 @@ function splitCitations(value: string, citations: Citation[], byKey: Map<string,
     const found = resolve(scanned, citations, byKey)
     if (!found) continue
     if (scanned.index > last) out.push(text(value.slice(last, scanned.index)))
-    // Giữ chữ của câu đứng trước đường dẫn (main đã bỏ khi xác minh) làm text, chip chỉ bọc đường dẫn.
-    if (found.keep > 0) out.push(text(scanned.raw.slice(0, found.keep)))
+    // Chỉ giữ chữ đứng trước đường dẫn khi `raw` bắt đầu đúng bằng `file` (dạng không ngoặc).
+    // Dạng có ngoặc bắt đầu bằng `[[`: cắt theo `keep` sẽ để lại rác `[[flo`, nên bỏ cả cụm ngoặc.
+    const keep = scanned.raw.startsWith(scanned.file) ? found.keep : 0
+    if (keep > 0) out.push(text(scanned.raw.slice(0, keep)))
     out.push({
       type: 'link', url: '#nexgraph-citation',
       data: { hProperties: { dataNexgraphCitation: String(found.index) } },
@@ -91,7 +93,17 @@ function citationPlugin(citations: Citation[], blockLabel: string) {
           return parts.some((part) => part.type === 'link') ? parts : [child]
         }
         if (child.type === 'code' && child.value) {
-          const chips = splitCitations(child.value, citations, byKey).filter((part) => part.type === 'link')
+          // Cùng một trích dẫn lặp trong một khối mã: chỉ một chip; nhiều chip thì có dấu phẩy ngăn cách.
+          const seen = new Set<string>()
+          const chips: MarkdownNode[] = []
+          for (const part of splitCitations(child.value, citations, byKey)) {
+            if (part.type !== 'link') continue
+            const id = part.data?.hProperties.dataNexgraphCitation ?? ''
+            if (seen.has(id)) continue
+            seen.add(id)
+            if (chips.length > 0) chips.push({ type: 'text', value: ', ' })
+            chips.push(part)
+          }
           if (chips.length === 0) return [child]
           return [child, { type: 'paragraph', children: [{ type: 'text', value: `${blockLabel} ` }, ...chips] }]
         }

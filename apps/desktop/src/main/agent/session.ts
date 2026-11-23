@@ -42,6 +42,26 @@ export class AgentError extends Error {
 type Model = Parameters<AgentSession['setModel']>[0]
 // getContextUsage tùy chọn: phiên giả trong test không có; phiên Pi thật luôn có.
 export type PiSession = Pick<AgentSession, 'subscribe' | 'prompt' | 'abort' | 'dispose' | 'setActiveToolsByName' | 'getActiveToolNames' | 'setModel' | 'model' | 'messages'> & Partial<Pick<AgentSession, 'getContextUsage'>>
+
+/**
+ * Sàn đầu ra mỗi lượt gọi model. SDK kẹp `maxTokens` theo cửa sổ ngữ cảnh còn trống và có thể trả 1;
+ * provider thật (OpenAI, vLLM, OpenRouter…) từ chối `max_output_tokens < 16`, nên khi không đủ chỗ
+ * phải báo lỗi rõ ràng thay vì gửi một request chắc chắn hỏng.
+ */
+export const MIN_OUTPUT_TOKENS = 1024
+export const CONTEXT_WINDOW_MESSAGE = 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi.'
+/** Mã/câu lỗi do chính app phát hiện trước khi gửi (không phải chuỗi thô của SDK). */
+export type ProviderFailure = { code: string; message: string; detail?: string }
+
+/** Trường số token đầu ra trong payload đã dựng của từng API (OpenAI dùng `max_completion_tokens`). */
+export const outputTokensOf = (payload: unknown): number | undefined => {
+  if (!payload || typeof payload !== 'object') return undefined
+  for (const field of ['max_completion_tokens', 'max_tokens', 'max_output_tokens'] as const) {
+    const value = (payload as Record<string, unknown>)[field]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+  }
+  return undefined
+}
 export type SessionSpec = {
   cwd: string
   agentDir: string
@@ -52,6 +72,8 @@ export type SessionSpec = {
   sessionManager?: SessionManager
   beforeModelTurn?(): void
   remainingTokens?(): number
+  /** Lỗi do app phát hiện trước khi gửi (cửa sổ ngữ cảnh, HTTP 4xx): main biết mã chính xác. */
+  onProviderFailure?(failure: ProviderFailure): void
   assertDispatch(model: Model, resolvedEndpoint?: boolean): void
   assertRequest(url: URL): void
 }
@@ -110,19 +132,33 @@ export async function createPiSession(spec: SessionSpec): Promise<AgentSession> 
   session.agent.streamFunction = (model, context, options) => {
     spec.beforeModelTurn?.()
     spec.assertDispatch(model)
-    const fetch: typeof globalThis.fetch = (input, init) => {
+    const fetch: typeof globalThis.fetch = async (input, init) => {
       spec.assertDispatch(model)
       spec.assertRequest(new URL(typeof input === 'string' || input instanceof URL ? input : input.url))
-      return (options?.fetch ?? globalThis.fetch)(input, { ...init, redirect: 'manual' })
+      const response = await (options?.fetch ?? globalThis.fetch)(input, { ...init, redirect: 'manual' })
+      // SDK bọc lỗi HTTP thành chuỗi chung ("Connection error.") và mất mã trạng thái: ghi lại đúng mã + body
+      // để lượt chat báo "sai key / không có model / yêu cầu không hợp lệ" thay vì "không kết nối được".
+      if (!response.ok) {
+        let body = ''
+        try { body = (await response.clone().text()).slice(0, 4000) } catch { /* body không đọc được: chỉ dùng mã */ }
+        spec.onProviderFailure?.(classifyProviderStatus(response.status, body))
+      }
+      return response
     }
     return stream(model, context, {
       ...options,
-      ...(spec.remainingTokens ? { maxTokens: Math.min(options?.maxTokens ?? model.maxTokens, Math.max(1, spec.remainingTokens())) } : {}),
+      ...(spec.remainingTokens ? { maxTokens: Math.min(options?.maxTokens ?? model.maxTokens, Math.max(MIN_OUTPUT_TOKENS, spec.remainingTokens())) } : {}),
       ...(GUARDED_HTTP_APIS.has(model.api) ? { fetch } : {}),
       ...(model.api === 'openai-codex-responses' ? { transport: 'sse' as const } : {}),
       onPayload: (payload, requestModel) => {
         // SDK có thể đổi endpoint theo OAuth sau khi nhận model. Kiểm tra model thật ngay trước khi gửi payload.
         spec.assertDispatch(requestModel, true)
+        // SDK tự kẹp maxTokens theo cửa sổ ngữ cảnh (có thể còn 1): chặn trước khi gửi thay vì để provider 400.
+        const capped = outputTokensOf(payload)
+        if (capped !== undefined && capped < MIN_OUTPUT_TOKENS) {
+          spec.onProviderFailure?.({ code: 'ai_context_window', message: CONTEXT_WINDOW_MESSAGE })
+          throw new AgentError('ai_context_window', CONTEXT_WINDOW_MESSAGE)
+        }
         return options?.onPayload?.(payload, requestModel)
       }
     })
@@ -163,6 +199,8 @@ type Entry = {
   context: AgentContextUsage | null
   /** Phiên Pi đã tạo xong (entry.session còn đang chờ thì chưa có). */
   live?: PiSession
+  /** Lỗi provider do app phát hiện ở lượt đang chạy (cửa sổ ngữ cảnh, HTTP 4xx) — chính xác hơn chuỗi thô của SDK. */
+  providerFailure?: ProviderFailure
   failed?: boolean
 }
 
@@ -184,7 +222,13 @@ function inConsentBase(base: URL, request: URL): boolean {
   return true
 }
 
-const STATUS = /\b([45]\d\d)\b/
+const STATUS_LEADING = /^\s*(?:HTTP\s*)?([45]\d\d)\b/
+const STATUS_ANY = /\b([45]\d\d)\b/
+/** Mã HTTP của provider trong chuỗi lỗi; ưu tiên dạng `400: {…}` (pi ghép status + body). */
+const statusOf = (raw: string): number | undefined => {
+  const match = STATUS_LEADING.exec(raw) ?? STATUS_ANY.exec(raw)
+  return match ? Number(match[1]) : undefined
+}
 const NETWORK = /fetch failed|connection error|ECONN|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timed? ?out|network|socket|terminated|stream ended|premature close|other side closed|EPIPE|UND_ERR_SOCKET|hang up|reset by peer/i
 
 /** Khoá đang active (do AccountService đăng ký) để che cả giá trị không theo mẫu `sk-*`. */
@@ -210,15 +254,53 @@ export const cleanAgentText = (raw: string, limit = 32_000): string => {
 }
 export const scrub = (raw: string): string => cleanAgentText(raw, 200)
 
+/** Thông điệp ngắn của provider trong body lỗi (JSON `error.message`/`message` hoặc văn bản), đã che khoá và cắt ngắn. */
+export const providerDetail = (raw: string, limit = 300): string | undefined => {
+  const text = raw.trim()
+  if (!text) return undefined
+  const start = text.indexOf('{')
+  if (start >= 0) {
+    try {
+      const value = JSON.parse(text.slice(start)) as { error?: unknown; message?: unknown }
+      const error = value.error
+      const message = typeof error === 'string' ? error
+        : error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string' ? (error as { message: string }).message
+          : typeof value.message === 'string' ? value.message : ''
+      if (message.trim()) return scrub(message.trim()).slice(0, limit)
+    } catch { /* không phải JSON: dùng nguyên văn bên dưới */ }
+  }
+  const plain = scrub(text.replace(/\s+/g, ' ')).slice(0, limit)
+  return plain || undefined
+}
+
+/**
+ * Phân loại lỗi HTTP của nhà cung cấp thành mã người dùng hiểu được. Chỉ lỗi mạng mới là `ai_unreachable`;
+ * 4xx nói rõ sai key / sai model / yêu cầu không hợp lệ, kèm thông điệp ngắn (đã che khoá) của provider.
+ */
+export function classifyProviderStatus(status: number, body?: string): ProviderFailure {
+  const detail = body === undefined ? undefined : providerDetail(body)
+  const withDetail = (failure: ProviderFailure): ProviderFailure => detail ? { ...failure, detail } : failure
+  if (status === 401 || status === 403) return withDetail({ code: 'ai_unauthorized', message: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.' })
+  if (status === 404) return withDetail({ code: 'ai_model_not_found', message: 'Không tìm thấy mô hình ở nhà cung cấp. Kiểm tra tên mô hình trong Cài đặt.' })
+  if (status === 429) return withDetail({ code: 'ai_rate_limited', message: 'Đã chạm hạn mức hoặc giới hạn tốc độ của nhà cung cấp. Kiểm tra hạn mức rồi thử lại.' })
+  // 408/504 là hết thời gian chờ của máy chủ, không phải yêu cầu sai.
+  if (status === 408 || status === 504) return withDetail({ code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI.' })
+  if (status >= 500) return withDetail({ code: 'ai_provider_error', message: 'Nhà cung cấp AI tạm thời gặp lỗi.' })
+  return withDetail({ code: 'ai_bad_request', message: 'Nhà cung cấp AI từ chối yêu cầu.' })
+}
+
+/** Phân loại chuỗi lỗi thô của provider (dùng khi không có mã HTTP riêng, ví dụ "Kiểm tra kết nối"). */
+export function classifyProviderError(raw: string): ProviderFailure {
+  const status = statusOf(raw)
+  if (status) return classifyProviderStatus(status, raw)
+  if (NETWORK.test(raw)) return { code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI.' }
+  return { code: 'ai_error', message: 'Trợ lý AI gặp lỗi' }
+}
+
 /** Ánh xạ lỗi nhà cung cấp sang mã/câu tiếng Việt, dùng lại mã của chat.ts cũ. */
-function providerError(raw: string): AgentEvent {
-  const status = STATUS.exec(raw)?.[1]
-  if (status === '401' || status === '403') return { type: 'error', code: 'ai_unauthorized', message: 'API key bị từ chối' }
-  if (status === '429') return { type: 'error', code: 'ai_rate_limited', message: 'Đã chạm hạn mức hoặc giới hạn tốc độ của nhà cung cấp. Kiểm tra hạn mức rồi thử lại.' }
-  if (status) return { type: 'error', code: 'ai_unreachable', message: `Nhà cung cấp AI trả về ${status}` }
-  if (NETWORK.test(raw)) return { type: 'error', code: 'ai_unreachable', message: 'Không kết nối được tới nhà cung cấp AI' }
-  // Không đưa err.message thô (dù đã scrub) vào AgentEvent.error.message.
-  return { type: 'error', code: 'ai_error', message: 'Trợ lý AI gặp lỗi' }
+function providerError(raw: string, failure?: ProviderFailure): AgentEvent {
+  if (failure) return { type: 'error', ...failure }
+  return { type: 'error', ...classifyProviderError(raw) }
 }
 const CANCELLED: AgentEvent = { type: 'error', code: 'ai_cancelled', message: 'Đã dừng' }
 const PROVIDER_CHANGED = { type: 'error', code: 'ai_provider_changed', message: 'Nhà cung cấp AI đã thay đổi. Hãy kiểm tra đích nhận và gửi lại câu hỏi.' } as const
@@ -617,26 +699,29 @@ export class AgentService {
 
   private async run(projectId: string, entry: Entry, model: Model, text: string, active: () => boolean, images: NonNullable<AgentPromptOptions['images']>): Promise<AgentEvent> {
     const closed = () => !active() || this.entries.get(projectId) !== entry
+    /** Lỗi app đã phát hiện ở lượt này thắng chuỗi thô của SDK (SDK bọc 4xx thành "Connection error."). */
+    const failure = (): AgentEvent | null => entry.providerFailure ? { type: 'error', ...entry.providerFailure } : null
     try {
       const session = await entry.session
       if (closed()) return CANCELLED
       if (!entry.isCurrent()) return PROVIDER_CHANGED
       if (session.model?.provider !== model.provider || session.model?.id !== model.id) await session.setModel(model)
       this.assertTaskCurrent(projectId, entry)
+      entry.providerFailure = undefined
       await session.prompt(text, { expandPromptTemplates: false, ...(images.length ? { images: images.map(({ mimeType, data }) => ({ type: 'image' as const, mimeType, data })) } : {}) } as Parameters<PiSession['prompt']>[1])
       if (closed()) return CANCELLED
       if (entry.limitError) return { type: 'error', code: 'agent_limit', message: entry.limitError }
       if (entry.dispatchBlocked || !entry.isCurrent()) return PROVIDER_CHANGED
       const last = session.messages.filter((message) => message.role === 'assistant').at(-1) as { stopReason?: string; errorMessage?: string } | undefined
       if (last?.stopReason === 'aborted') return CANCELLED
-      if (last?.stopReason === 'error') return providerError(last.errorMessage ?? '')
+      if (last?.stopReason === 'error') return failure() ?? providerError(last.errorMessage ?? '')
       const citations = await verifyCitations(this.deps.api, projectId, entry.text)
       return closed() ? CANCELLED : { type: 'done', text: entry.text, citations }
     } catch (error) {
       if (closed()) return CANCELLED
       if (entry.limitError) return { type: 'error', code: 'agent_limit', message: entry.limitError }
       if (entry.dispatchBlocked || !entry.isCurrent()) return PROVIDER_CHANGED
-      return providerError(error instanceof Error ? error.message : String(error))
+      return failure() ?? providerError(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -779,6 +864,7 @@ export class AgentService {
         const used = entry.taskUsage.inputTokens + entry.taskUsage.outputTokens + entry.taskUsage.cacheReadTokens + entry.taskUsage.cacheWriteTokens
         return Math.max(0, (entry.task?.limits.maxTokens ?? DEFAULT_RUN_LIMITS.maxTokens) - used)
       },
+      onProviderFailure: (failure) => { entry.providerFailure = failure },
       assertDispatch: (requestModel, resolvedEndpoint) => {
         this.assertTaskCurrent(projectId, entry)
         if (!entry.isCurrent() || requestModel.provider !== entry.target.provider ||

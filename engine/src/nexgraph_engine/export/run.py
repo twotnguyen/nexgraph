@@ -123,16 +123,19 @@ def validate_push_uri(uri: str) -> str:
     return scheme
 
 
-def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Path, project_name: str) -> ExportResult:
+def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Path, project_name: str,
+                 *, lang: str = "en") -> ExportResult:
     from graphify import export as gx
+    from nexgraph_engine.report.i18n import check_lang
     if fmt not in FORMATS:
         raise ValueError(f"Định dạng không hỗ trợ: {fmt}")
+    lang = check_lang(lang, "en")  # HTML callflow theo ngôn ngữ của lần xuất (M2, review 23/11)
     directory = fmt in ("obsidian", "wiki")
     base = Path(out_dir) / _TARGETS[fmt].format(p=safe_name(project_name))
     if directory:
         target = unique_dir(base)
         try:
-            return ExportResult([str(target)], _write(store, fmt, scope, target, project_name, gx))
+            return ExportResult([str(target)], _write(store, fmt, scope, target, project_name, gx, lang=lang))
         except BaseException:
             shutil.rmtree(target, ignore_errors=True)  # không để lại thư mục dở dang
             raise
@@ -140,13 +143,14 @@ def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Pa
     holder: dict[str, bool] = {}
 
     def writer(tmp: Path) -> None:
-        holder["truncated"] = _write(store, fmt, scope, tmp, project_name, gx)
+        holder["truncated"] = _write(store, fmt, scope, tmp, project_name, gx, lang=lang)
 
     target = write_new_file(base, writer)
     return ExportResult([str(target)], holder["truncated"])
 
 
-def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, project_name: str, gx) -> bool:
+def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, project_name: str, gx,
+           lang: str = "en") -> bool:
     bg = build_nx(store, scope)
     if fmt == "markdown":
         from nexgraph_engine.report.build import render_report_markdown
@@ -162,7 +166,7 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
         with tempfile.TemporaryDirectory(prefix="nexgraph-callflow-") as d:
             graph = Path(d) / "graph.json"
             write_graph_json(bg, graph)
-            write_callflow_html(None, graph=graph, output=target, lang="en")
+            write_callflow_html(None, graph=graph, output=target, lang=lang)
     elif fmt == "obsidian":
         gx.to_obsidian(bg.G, bg.communities, str(target), community_labels=bg.labels, cohesion=bg.cohesion)
         gx.to_canvas(bg.G, bg.communities, str(target / "graph.canvas"), community_labels=bg.labels)

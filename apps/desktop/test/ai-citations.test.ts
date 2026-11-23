@@ -72,15 +72,34 @@ describe('citations', () => {
       if (file !== 'flow app/service.py') throw new EngineApiError(404, 'file_not_found', '')
       return { file, start, end, text: 'x', language: null, stale: false }
     })
-    // Bỏ dần từ đầu: "Theo nhu toi doc trong" là 5 từ trước đường dẫn, vẫn ra đúng tệp trong trần 6 lời gọi.
+    // Bỏ dần từ đầu: "Theo nhu toi doc trong" là 5 từ trước đường dẫn, vẫn ra đúng tệp trong trần 10 lời gọi.
     const found = await verifyCitations({ code } as unknown as EngineApi, 'p1', 'Theo nhu toi doc trong flow app/service.py:4-7')
     expect(found).toEqual([{ raw: 'Theo nhu toi doc trong flow app/service.py:4-7', file: 'flow app/service.py', start: 4, end: 7, valid: true, reason: null }])
     expect(code.mock.calls.length).toBe(6)
-    // Tiền tố dài hơn trần: dừng đúng 6 lời gọi, trả chip khoá (không false chip) thay vì thử vô hạn.
+    // Tiền tố dài hơn trần: dừng đúng 10 lời gọi, trả chip khoá (không false chip) thay vì thử vô hạn.
     code.mockClear()
-    const long = await verifyCitations({ code } as unknown as EngineApi, 'p1', 'a b c d e f g h flow app/service.py:4-7')
-    expect(code).toHaveBeenCalledTimes(6)
+    const long = await verifyCitations({ code } as unknown as EngineApi, 'p1', 'a b c d e f g h i j flow app/service.py:4-7')
+    expect(code).toHaveBeenCalledTimes(10)
     expect(long).toEqual([expect.objectContaining({ valid: false, reason: 'file_not_found' })])
+  })
+
+  it('N2: tiền tố 6–9 từ vẫn ra chip đã xác minh, quá trần thì khoá (không chip giả)', async () => {
+    const code = vi.fn(async (_p: string, file: string, start: number, end: number) => {
+      if (file !== 'flow app/service.py') throw new EngineApiError(404, 'file_not_found', '')
+      return { file, start, end, text: 'x', language: null, stale: false }
+    })
+    // 6 và 9 từ tiếng Anh đứng trước đường dẫn: model thật viết câu dài như vậy.
+    for (const prefix of ['in this flow the session', 'in this flow the session is stored inside the']) {
+      code.mockClear()
+      const found = await verifyCitations({ code } as unknown as EngineApi, 'p1', `${prefix} flow app/service.py:4-7`)
+      expect(found).toEqual([expect.objectContaining({ file: 'flow app/service.py', valid: true, reason: null })])
+      expect(code.mock.calls.length).toBeLessThanOrEqual(10)
+    }
+    // Trần vẫn chặn bùng nổ: 11 từ thì dừng, trả chip khoá thay vì thử vô hạn.
+    code.mockClear()
+    const tooLong = await verifyCitations({ code } as unknown as EngineApi, 'p1', 'a b c d e f g h i j k flow app/service.py:4-7')
+    expect(code).toHaveBeenCalledTimes(10)
+    expect(tooLong).toEqual([expect.objectContaining({ valid: false, reason: 'file_not_found' })])
   })
 
   it('kiểm chứng: hợp lệ, vượt cuối tệp, tệp không có', async () => {

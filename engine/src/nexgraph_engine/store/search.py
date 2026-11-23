@@ -5,6 +5,7 @@ import re
 import sqlite3
 
 from nexgraph_engine.index.keywords import split_identifier
+from nexgraph_engine.query.terms import drop_vi_stopwords, has_vietnamese
 from nexgraph_engine.schema.enums import NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Node
@@ -17,15 +18,21 @@ BM25_WEIGHTS = "10, 4, 3, 1, 5"
 
 def build_match_query(q: str, any_terms: bool = False) -> str | None:
     """Biến chuỗi người dùng nhập thành truy vấn FTS5 an toàn: mọi từ nằm trong ngoặc kép nên toán tử không có nghĩa.
-    any_terms=True (Hỏi graph): khớp từ nào cũng được, bm25 xếp nút khớp nhiều từ hiếm lên trước."""
+    any_terms=True (Hỏi graph): khớp từ nào cũng được, bm25 xếp nút khớp nhiều từ hiếm lên trước.
+
+    Câu tiếng Việt: bỏ từ dừng cơ bản trước khi dựng truy vấn; token 2–3 ký tự CÓ DẤU tiếng Việt chỉ khớp
+    nguyên từ (không thêm `*`) để `the`/`sao` không kéo về `other`/`saver` (A4-F4). Token không dấu
+    (kể cả trong câu tiếng Việt) vẫn giữ tiền tố như main, để không mất recall (I3).
+    """
     terms: list[str] = []
-    for token in re.findall(r"\w+", q, re.UNICODE)[:MAX_TERMS]:
+    for token in drop_vi_stopwords(re.findall(r"\w+", q, re.UNICODE), q)[:MAX_TERMS]:
         parts = split_identifier(token)
         if not parts:  # chỉ gồm gạch dưới
             continue
         low = token.lower()
         if len(parts) == 1:
-            terms.append(f'"{low}"*')
+            exact_only = len(low) < 4 and has_vietnamese(token)
+            terms.append(f'"{low}"' + ("" if exact_only else "*"))
         else:
             terms.append(f'("{low}"* OR ({" AND ".join(f"{chr(34)}{p}{chr(34)}" for p in parts)}))')
     return (" OR " if any_terms else " AND ").join(terms) or None

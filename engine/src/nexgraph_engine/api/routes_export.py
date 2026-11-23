@@ -23,6 +23,7 @@ class ExportBody(BaseModel):
     format: ExportFormat
     scope: ScopeBody = ScopeBody()
     out_dir: str
+    lang: Literal["vi", "en"] = "en"  # HTML callflow + chuỗi do engine sinh (mặc định giữ hành vi cũ)
 
 
 class PushBody(BaseModel):
@@ -60,7 +61,7 @@ def export(project_id: str, request: Request, body: ExportBody) -> dict:
     out_dir = _writable_dir(body.out_dir)
     with open_store(request, project_id) as (store, info):
         try:
-            r = export_graph(store, body.format, _scope(body.scope), out_dir, info.name)
+            r = export_graph(store, body.format, _scope(body.scope), out_dir, info.name, lang=body.lang)
         except KeyError as exc:
             raise ApiError(404, "unknown_scope", f"Không có phạm vi {body.scope.value}") from exc
         except Exception as exc:  # lỗi trong exporter của Graphify: trả lỗi JSON thay vì 500 trần
