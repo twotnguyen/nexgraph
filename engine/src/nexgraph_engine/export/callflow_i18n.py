@@ -148,6 +148,8 @@ _RULES: list[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
     # ── Siêu cạnh (chỉ có khi đồ thị có hyperedge) ─────────────────────────────────────────────
     (re.compile(r"<h2 id=\"hyperedges\">Group Relationships \(Hyperedges\)</h2>"),
      "<h2 id=\"hyperedges\">Quan hệ nhóm (Siêu cạnh)</h2>"),
+    (re.compile(r"%% Omitted for readability: (?P<n>\d+) nodes, (?P<e>\d+) edges"),
+     r"%% Bỏ bớt cho dễ đọc: \g<n> nút, \g<e> cạnh"),
     (re.compile(r" — (?P<n>\d+) participants</p>"), " — \\g<n> thành viên</p>"),
     (re.compile(r"<li>\.\.\. and (?P<n>\d+) more</li>"), "<li>... và \\g<n> nữa</li>"),
 ]

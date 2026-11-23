@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import glob
+import json
 import os
 import re
 import shutil
@@ -9,11 +10,12 @@ import tempfile
 import time
 import uuid
 from dataclasses import dataclass
+from html import escape as html_escape
 from pathlib import Path
 from typing import Literal, get_args
 from urllib.parse import urlsplit
 
-from nexgraph_engine.bridge.to_nx import Scope, build_nx, write_graph_json
+from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, Scope, build_nx, write_graph_json
 from nexgraph_engine.store.graph_store import GraphStore
 
 os.environ.setdefault("GRAPHIFY_BACKEND", "none")  # không bao giờ để Graphify tự dò claude-cli (spec F10 §5)
@@ -89,6 +91,9 @@ def _link_or_copy(tmp: Path, candidate: Path) -> None:
 
 
 _TMP_MAX_AGE_SECONDS = 3600
+_TITLE_TAG = re.compile(r"<title>.*?</title>", re.S)
+# Trùng mặc định `max_sections` của graphify (`write_callflow_html`); mục lục của NexGraph chừa một mục gộp.
+CALFLOW_MAX_SECTIONS = 15
 
 
 def write_new_file(base: Path, writer) -> Path:
@@ -113,6 +118,48 @@ def write_new_file(base: Path, writer) -> Path:
         finally:
             tmp.unlink(missing_ok=True)
     raise OSError(f"Không tìm được tên trống cho {base.name}")
+
+
+def _graph_commit(store: GraphStore) -> str | None:
+    """Commit HEAD lúc lập chỉ mục (indexer ghi `commit_sha`), None khi dự án không có git."""
+    run = store.last_completed_run()
+    return run[1] if run and run[1] else None
+
+
+def _callflow_sections(bg: BridgeGraph, lang: str) -> list[dict]:
+    """Mục lục callflow theo cộng đồng thật của đồ thị (`bg.labels`), không theo archetype của graphify.
+
+    `derive_sections_from_communities` của bản vendor gộp cộng đồng vào bộ từ khoá cứng của graphify
+    ("Extraction Pipeline", "CLI & Skill Installers"…) nên dự án thường bị dán nhãn sai (A3b-P1 F1).
+    Truyền `sections` cho `write_callflow_html` là đủ — không phải sửa mã vendored.
+    """
+    from nexgraph_engine.report.i18n import community_label
+    ordered = sorted(((cid, members) for cid, members in bg.communities.items() if cid != OTHER_COMMUNITY),
+                     key=lambda item: (-len(item[1]), str(item[0])))
+    keep = ordered[:CALFLOW_MAX_SECTIONS - 2]  # chừa chỗ cho "Tổng quan" và mục gộp
+    merged = [cid for cid, _ in ordered[len(keep):]]
+    if OTHER_COMMUNITY in bg.communities:
+        merged.append(OTHER_COMMUNITY)
+    sections = [{"id": f"community-{cid}", "name": community_label(bg.labels.get(cid) or f"Cộng đồng {cid}", lang),
+                 "communities": [str(cid)]} for cid, _ in keep]
+    if merged:
+        sections.append({"id": "other", "name": "Khác" if lang == "vi" else "Other",
+                         "communities": [str(cid) for cid in merged]})
+    return sections
+
+
+def _retitle_html(target: Path, title: str) -> None:
+    """Đặt `<title>` cho HTML do graphify sinh — `to_html` lấy tên tệp tạm làm tiêu đề (A3b-P1 F3).
+
+    Hậu xử lý ở lớp NexGraph như `localize_callflow_html`, không thêm tham số vào mã vendored.
+    Dùng callable: tên dự án có `\\`, `$`, `&`… là chuỗi thay thế hợp lệ (tên thư mục `QA\\Desktop`
+    từng làm `re.subn` báo `bad escape \\D` rồi route export trả 500 — E9b-2, review-62).
+    """
+    text = target.read_text(encoding="utf-8")
+    replacement = f"<title>{html_escape(title)}</title>"
+    updated, count = _TITLE_TAG.subn(lambda _match: replacement, text, count=1)
+    if count:
+        target.write_text(updated, encoding="utf-8")
 
 
 def validate_push_uri(uri: str) -> str:
@@ -157,19 +204,34 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
         files = store.stats()["files"] if scope.kind == "all" else len({
             node["source_file"] for _, node in bg.G.nodes(data=True) if node["source_file"]
         })
-        target.write_text(render_report_markdown(bg, project_name, files), encoding="utf-8")
+        target.write_text(render_report_markdown(bg, project_name, files, lang=lang), encoding="utf-8")
     elif fmt == "html":
         from graphify.exporters.html import to_html
         to_html(bg.G, bg.communities, str(target), community_labels=bg.labels, node_limit=scope.limit)
+        _retitle_html(target, f"{project_name} — NexGraph")
     elif fmt == "callflow_html":
         from graphify.callflow_html import write_callflow_html
         from nexgraph_engine.export.callflow_i18n import localize_callflow_html
+        sections = _callflow_sections(bg, lang)
         with tempfile.TemporaryDirectory(prefix="nexgraph-callflow-") as d:
             graph = Path(d) / "graph.json"
-            write_graph_json(bg, graph)
-            write_callflow_html(None, graph=graph, output=target, lang=lang)
+            write_graph_json(bg, graph, project_name=project_name, built_at_commit=_graph_commit(store))
+            labels = Path(d) / "labels.json"
+            labels.write_text(json.dumps({str(cid): name for cid, name in bg.labels.items()}, ensure_ascii=False),
+                              encoding="utf-8")
+            options: dict = {"labels": labels, "output": target, "lang": lang}
+            if sections:  # graphify tự thêm mục "Tổng quan"; không có cộng đồng nào thì để nó tự suy
+                sections_path = Path(d) / "sections.json"
+                sections_path.write_text(json.dumps(sections, ensure_ascii=False), encoding="utf-8")
+                options["sections"] = sections_path
+            write_callflow_html(None, graph=graph, **options)
+        from nexgraph_engine.export.callflow_flow import apply_callflow_flow
+        html = target.read_text(encoding="utf-8")
         if lang == "vi":  # graphify chỉ có zh/en: dịch ở lớp NexGraph, không sửa mã vendored
-            target.write_text(localize_callflow_html(target.read_text(encoding="utf-8"), lang), encoding="utf-8")
+            html = localize_callflow_html(html, lang)
+        # Mục lục theo cộng đồng thật: bỏ luồng/mũi tên mà fallback của vendor suy từ thứ tự mục (E9b-1).
+        html = apply_callflow_flow(html, bg, sections, lang)
+        target.write_text(html, encoding="utf-8")
     elif fmt == "obsidian":
         gx.to_obsidian(bg.G, bg.communities, str(target), community_labels=bg.labels, cohesion=bg.cohesion)
         gx.to_canvas(bg.G, bg.communities, str(target / "graph.canvas"), community_labels=bg.labels)

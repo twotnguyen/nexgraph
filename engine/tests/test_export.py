@@ -6,6 +6,9 @@ from nexgraph_engine.bridge.to_nx import Scope
 from nexgraph_engine.export.callflow_i18n import localize_callflow_html
 from nexgraph_engine.export.run import export_graph
 
+import re
+import subprocess
+
 
 @pytest.mark.parametrize("fmt,expect", [
     ("html", "py_mini app-graph.html"), ("callflow_html", "py_mini app-callflow.html"),
@@ -304,6 +307,7 @@ def test_callflow_html_in_vietnamese(copy_fixture, index_project, tmp_path):
     store, _, _ = index_project(copy_fixture("py_mini"))
 
     def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
         r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "py_mini app", lang=lang)
         return Path(r.files[0]).read_text(encoding="utf-8")
 
@@ -337,6 +341,200 @@ def test_callflow_html_in_vietnamese(copy_fixture, index_project, tmp_path):
     assert ">Fit<" not in vi and ">Reset<" not in vi
     # EN như cũ: không lẫn tiếng Việt (fixture py_mini là mã tiếng Anh)
     assert not any(ch in en for ch in "ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ")
+
+
+def _git_init(root: Path) -> str:
+    """Khởi tạo repo git + commit đầu, trả HEAD (để test commit của lần xuất)."""
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.email=e9@example.com", "-c", "user.name=E9",
+                    "commit", "-q", "-m", "fixture"], check=True)
+    return subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def test_html_export_title_is_project_name(copy_fixture, index_project, tmp_path):
+    """F3 (A3b-P1): `<title>` HTML đồ thị phải là tên dự án, không phải tệp tạm `.<uuid>.tmp`."""
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    r = export_graph(store, "html", Scope(), tmp_path, "py_mini app")
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
+    assert title == "py_mini app — NexGraph"
+    assert ".tmp" not in title
+
+
+@pytest.mark.parametrize("name", [r"QA\Desktop", "A$B&C", r"team\1 $&"])
+def test_html_export_title_keeps_regex_special_chars(copy_fixture, index_project, tmp_path, name):
+    """E9b-2 (review-62 Important 2): tên dự án có `\\`, `$`, `&` từng làm `re.subn` báo `bad escape` → 500."""
+    from html import escape as html_escape
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    out = tmp_path / f"case-{len(name)}-{abs(hash(name))}"
+    out.mkdir()
+    r = export_graph(store, "html", Scope(), out, name)
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
+    assert title == f"{html_escape(name)} — NexGraph"
+
+
+def test_callflow_uses_project_name_and_git_commit(copy_fixture, index_project, tmp_path):
+    """P1-F1: tiêu đề callflow lấy tên dự án thật + commit HEAD, không phải thư mục tạm và "unknown"."""
+    root = copy_fixture("py_mini")
+    head = _git_init(root)
+    store, _, _ = index_project(root)
+    r = export_graph(store, "callflow_html", Scope(), tmp_path, "du an mau", lang="en")
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    assert "nexgraph-callflow-" not in html
+    assert "<h1>du an mau — Complete Call Flow &amp; Architecture Documentation</h1>" in html
+    assert f"Commit: {head[:7]}" in html
+
+
+def test_callflow_sections_are_real_communities(copy_fixture, index_project, tmp_path):
+    """P1-F1: mục lục theo cộng đồng thật của đồ thị, không theo archetype cứng của graphify."""
+    store, _, _ = index_project(copy_fixture("polyglot"))
+    r = export_graph(store, "callflow_html", Scope(), tmp_path, "polyglot", lang="en")
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    assert "Extraction Pipeline" not in html and "CLI &amp; Skill Installers" not in html
+    labels = [row[0] for row in store.conn.execute("SELECT ten FROM khoi_kien_truc ORDER BY ten")]
+    assert len(labels) >= 8
+    links = re.findall(r'<a href="#[^"]*">([^<]+)</a>', html)
+    assert set(labels) <= set(links)
+
+
+def test_callflow_section_labels_follow_lang(copy_fixture, index_project, tmp_path):
+    """Nhãn cụm lưu tiếng Việt (`Cụm quanh X`) phải dịch khi xuất callflow tiếng Anh."""
+    store, _, _ = index_project(copy_fixture("py_mini"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "py_mini app", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    en, vi = exported("en"), exported("vi")
+    assert "Cụm quanh" not in en
+    assert "Cluster around " in en
+    assert "Cụm quanh" in vi
+
+
+def _arrow_chain(html: str) -> str:
+    match = re.search(r'<div class="arrow-chain">(.*?)</div>', html, re.S)
+    assert match, "không thấy thẻ luồng trong HTML callflow"
+    return match.group(1)
+
+
+def test_callflow_has_no_flow_without_inter_community_edges(copy_fixture, index_project, tmp_path):
+    """E9b-1 (review-62 Important 1): 0 cạnh giữa cộng đồng thì không in "Luồng chính" hay mũi tên nối mục."""
+    store, _, _ = index_project(copy_fixture("polyglot"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "polyglot", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    en, vi = exported("en"), exported("vi")
+    # Fixture polyglot: 8 cộng đồng, 0 cạnh liên cộng đồng → mọi mũi tên/chuỗi giữa mục đều là bịa.
+    assert " -.-> " not in en and " -.-> " not in vi
+    assert "java -&gt; cpp" not in en and "java -&gt; cpp" not in vi
+    assert _arrow_chain(en) == "No call flow between communities."
+    assert _arrow_chain(vi) == "Không có luồng gọi giữa các nhóm."
+    assert "<h4>Core Flow</h4>" not in en and "<h4>Luồng chính</h4>" not in vi
+
+
+def test_callflow_flow_uses_only_real_inter_community_edges(copy_fixture, index_project, tmp_path):
+    """E9b-1: có cạnh thật 1→2 thì chuỗi chỉ gồm hai mục đó, không nối tiếp mục "Khác" không có cạnh."""
+    store, _, _ = index_project(copy_fixture("bookstore_app"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "bookstore_app", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    assert _arrow_chain(exported("en")) == "lib -&gt; Cluster around auth_service.dart"
+    assert _arrow_chain(exported("vi")) == "lib -&gt; Cụm quanh auth_service.dart"
+
+
+def _synthetic_bg():
+    """Đồ thị 3 cộng đồng: hai cạnh thật 1→2, một cạnh AMBIGUOUS 2→3 (không được tính)."""
+    import networkx as nx
+
+    from nexgraph_engine.bridge.to_nx import BridgeGraph
+
+    def edge(a: str, b: str, *, relation: str = "calls", confidence: str = "EXTRACTED", score: float = 0.9) -> dict:
+        return {"source": a, "target": b, "relation": relation, "confidence": confidence,
+                "confidence_score": score, "weight": 1, "source_file": ""}
+
+    graph = nx.Graph()
+    for node, cid in (("a1", 1), ("a2", 1), ("b1", 2), ("b2", 2), ("c1", 3), ("c2", 3)):
+        graph.add_node(node, id=node, community=cid, label=node)
+    graph.add_edge("a1", "b1", **edge("a1", "b1"))
+    graph.add_edge("a2", "b2", **edge("a2", "b2"))
+    graph.add_edge("a2", "c2", **edge("a2", "c2", confidence="AMBIGUOUS", score=0.2))
+    return BridgeGraph(G=graph, communities={1: ["a1", "a2"], 2: ["b1", "b2"], 3: ["c1", "c2"]},
+                       labels={1: "Alpha", 2: "Beta", 3: "Gamma"})
+
+
+def test_apply_callflow_flow_follows_real_edges_only():
+    """E9b-1: chuỗi theo hướng/trọng số cạnh thật; mục không có cạnh đi ra không bị nối tiếp."""
+    from nexgraph_engine.export.callflow_flow import apply_callflow_flow, flow_chain, section_edge_weights
+
+    bg = _synthetic_bg()
+    sections = [{"id": "community-1", "name": "Alpha", "communities": ["1"]},
+                {"id": "community-2", "name": "Beta", "communities": ["2"]},
+                {"id": "community-3", "name": "Gamma", "communities": ["3"]}]
+    weights = section_edge_weights(bg, sections)
+    assert weights == {("community-1", "community-2"): 2}
+    assert flow_chain(sections, weights) == ["community-1", "community-2"]
+
+    html = ('<h4>Core Flow</h4><div class="arrow-chain">Alpha -> Beta -> Gamma</div>'
+            '<pre class="mermaid">\n    COMMUNITY_1 -.-> COMMUNITY_2\n    COMMUNITY_2 -.-> COMMUNITY_3\n</pre>')
+    out = apply_callflow_flow(html, bg, sections, "en")
+    assert '<div class="arrow-chain">Alpha -&gt; Beta</div>' in out
+    assert " -.-> " not in out
+
+
+def test_markdown_export_follows_lang(copy_fixture, index_project, tmp_path):
+    """F4 (A3b-P1): báo cáo Markdown nhận `lang` như callflow, không luôn tiếng Anh."""
+    store, _, _ = index_project(copy_fixture("polyglot"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "markdown", Scope(), tmp_path / lang, "polyglot", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    vi, en = exported("vi"), exported("en")
+    assert vi.startswith("# Báo cáo đồ thị - polyglot")
+    assert "## Kiểm tra kho mã" in vi and "## Tóm tắt" in vi and "## Cộng đồng" in vi
+    assert "## Summary" not in vi and "## Corpus Check" not in vi
+    assert "## Câu hỏi gợi ý" in vi and "## Suggested Questions" not in vi
+    assert "Không đủ tín hiệu để sinh câu hỏi." in vi
+    assert "Độ gắn kết:" in vi and "Nút (" in vi
+    assert "- 2 cạnh" in vi and " - 2 edges" not in vi
+    assert "## Summary" in en and "## Corpus Check" in en and "## Tóm tắt" not in en
+
+
+def test_markdown_vi_translates_negative_community_id_and_more_suffix():
+    """E9b-3 (review-62 Minor): `### Community -1` và `(+4 more)` từng còn tiếng Anh trên docs_app."""
+    from nexgraph_engine.report.markdown_i18n import localize_markdown
+
+    md = ('## Communities (1 total, 0 thin omitted)\n'
+          '\n### Community -1 - "Khác"\n'
+          'Cohesion: 0.00\n'
+          'Nodes (12): AuthService, login, helper (+4 more)\n'
+          '- **7 isolated node(s):** `helper`, `main.py` (+2 more)\n')
+    out = localize_markdown(md, "vi")
+    assert '### Cộng đồng -1 - "Khác"' in out
+    assert "Nút (12): AuthService, login, helper (+4 nữa)" in out
+    assert "- **7 nút cô lập:** `helper`, `main.py` (+2 nữa)" in out
+    assert "Community -1" not in out and "more)" not in out
+
+
+def test_markdown_export_translates_other_community_heading(copy_fixture, index_project, tmp_path):
+    """E9b-3: docs_app chỉ có cộng đồng -1 ("Khác") — tiêu đề dịch, ID và nhãn giữ nguyên."""
+    store, _, _ = index_project(copy_fixture("docs_app"))
+    r = export_graph(store, "markdown", Scope(), tmp_path, "docs_app", lang="vi")
+    md = Path(r.files[0]).read_text(encoding="utf-8")
+    assert '### Cộng đồng -1 - "Khác"' in md
+    assert "### Community" not in md
 
 
 _CALLFLOW_RULE_SAMPLES = [
@@ -389,6 +587,7 @@ _CALLFLOW_RULE_SAMPLES = [
     ("Generated: 2026-11-23 14:26 UTC · graphify callflow-html", "Tạo lúc: 2026-11-23 14:26 UTC · graphify callflow-html"),
     ('<h2 id="hyperedges">Group Relationships (Hyperedges)</h2>',
      '<h2 id="hyperedges">Quan hệ nhóm (Siêu cạnh)</h2>'),
+    ("    %% Omitted for readability: 3 nodes, 2 edges", "    %% Bỏ bớt cho dễ đọc: 3 nút, 2 cạnh"),
     (" — 3 participants</p>", " — 3 thành viên</p>"),
     ("<li>... and 5 more</li>", "<li>... và 5 nữa</li>"),
     ("This section comes from graphify community clustering. Relationship summary: calls x2. "
