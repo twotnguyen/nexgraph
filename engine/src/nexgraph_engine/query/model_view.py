@@ -72,10 +72,19 @@ class ModelGraph:
         return result
 
     def filter_tour(self, payload: dict) -> dict:
-        """Chuyến tham quan là danh sách bước rời: bỏ bước có nút bị loại, giữ các bước còn lại."""
-        steps = [step for step in payload.get("steps", [])
-                 if not (isinstance(step.get("node"), dict) and isinstance(step["node"].get("file"), str)
-                         and not self.source.allows(step["node"]["file"]))]
+        """Chuyến tham quan là danh sách bước rời: bỏ bước có nút hoặc luồng dùng nguồn bị loại.
+
+        `body` của bước luồng nhắc tên symbol ở bước cuối, nên phải xét cả luồng chứ không chỉ `node.file`.
+        """
+        steps = []
+        for step in payload.get("steps", []):
+            node = step.get("node")
+            if isinstance(node, dict) and isinstance(node.get("file"), str) and not self.source.allows(node["file"]):
+                continue
+            flow_id = step.get("flow_id")
+            if isinstance(flow_id, int) and not self._allows_flow(flow_id):
+                continue
+            steps.append(step)
         return {**payload, "steps": steps}
 
     def filter_cycles(self, payload: dict) -> dict:

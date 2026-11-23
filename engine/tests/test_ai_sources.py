@@ -250,3 +250,15 @@ def test_model_audience_hides_excluded_sources_in_the_global_graph(api, tmp_path
     assert all(edge["target"] in {n["id"] for n in graph.json()["nodes"]} for edge in graph.json()["edges"])
     hits = api.get("/v1/global/search", params={"q": "login"}, headers=MODEL).json()
     assert hits and all(hit["node"]["file"] != "service.py" for hit in hits)
+
+
+def test_model_tour_drops_steps_whose_flow_uses_excluded_sources(api, copy_fixture):
+    root = copy_fixture("flow_app")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    steps = api.get(f"/v1/projects/{pid}/tour").json()["steps"]
+    assert any("hash_password" in step["body"] for step in steps), steps  # người dùng vẫn thấy
+    (root / ".gitignore").write_text("service.py\n", encoding="utf-8")
+    model = api.get(f"/v1/projects/{pid}/tour", headers=MODEL).json()["steps"]
+    assert model and all("hash_password" not in step["body"] and "login_user" not in step["body"]
+                         for step in model)
