@@ -4,7 +4,17 @@
 
 ## Tóm tắt
 
-0.2.0-alpha.1 gộp bộ công cụ phát triển kiểu Wu (F16, ADR 0020) vào bản Electron + Monaco: LSP, terminal, Git, gỡ lỗi DAP, cộng tác LAN và extension khai báo. Giao diện làm lại theo 5 vùng, có bảng lệnh, thanh trạng thái và chế độ tiếng Anh. Các luồng F1–F15 giữ nguyên hành vi. Bản RC2 dựng từ `main` `8118db0` đã qua nghiệm thu demo trên macOS ([biên bản 23/11](acceptance/2026-11-23-macos.md)); bản alpha chỉ khác RC2 ở bốn chuỗi version, nên biên bản đó áp dụng cho phần mã. Cài lại bộ cài `v0.2.0-alpha.1` và điền checklist trên máy đích (macOS và Windows) vẫn còn chờ.
+0.2.0-alpha.1 gộp bộ công cụ phát triển kiểu Wu (F16, ADR 0020) vào bản Electron + Monaco: LSP, terminal, Git, gỡ lỗi DAP, cộng tác LAN và extension khai báo. Giao diện làm lại theo 5 vùng, có bảng lệnh, thanh trạng thái và chế độ tiếng Anh. Các luồng F1–F15 giữ nguyên hành vi. Bằng chứng nghiệm thu hiện có đến từ **hai bản RC — cả hai đều mang version 0.1.2, chưa phải bản alpha** — tóm tắt ở mục dưới. Bộ cài **0.2.0-alpha.1** chỉ được dựng từ tag `v0.2.0-alpha.1` (chưa tồn tại); việc cài và nghiệm thu bộ cài đó là lượt riêng sau phát hành.
+
+## Bằng chứng nghiệm thu theo bộ cài
+
+| Bộ cài | Commit · version · tệp | Phạm vi đã kiểm | Kết quả |
+|---|---|---|---|
+| **RC1** | `main` `72dc4ec` · app **0.1.2** · DMG macOS arm64 257.676.473 byte | Demo 4 bước, 5 kịch bản lỗi, giao diện EN ([biên bản 23/11](acceptance/2026-11-23-macos.md)) | Demo **đạt 4/4**; kịch bản lỗi **đạt 4/5** (engine bị kill chưa tự khởi động lại — đã sửa ở #50); EN đạt, còn tên thương hiệu "Pi" — đã sửa ở #50 |
+| **RC2** | `main` `8118db0` · app **0.1.2** · DMG macOS arm64 257.724.354 byte | Nghiệm thu bổ sung 23–24/11: xuất đồ thị (§3.4), AI thật và tab Pull request (§3.1/§3.7), hồi quy lỗi đã sửa + bước OS | Xuất: **5/9 dòng đạt, 4/9 đạt một phần, 0 không đạt**, 2 finding Important (HTML luồng gọi mất tên dự án/commit; hộp thoại Xuất thiếu phạm vi "Cộng đồng"). AI + PR: **10/11 dòng đạt**, 1 finding Important (ảnh trong dự án không index được trên bản đóng gói). Hồi quy + OS: đa số đạt, 1 Important (bundle thiếu `THIRD_PARTY_LICENSES.md`), 2 Minor (báo cáo EN còn nhãn cụm `Khác`; index dự án lớn còn thông điệp chuyển chế độ), 1 mục không chạy được (hộp thoại Gatekeeper cần người) |
+| **Alpha** | tag `v0.2.0-alpha.1` (chưa tạo) | Chưa nghiệm thu | Chờ dựng từ tag; nghiệm thu riêng sau khi phát hành |
+
+Hai bản RC đều là **0.1.2**: biên bản demo 23/11 chỉ áp dụng cho **RC1 `72dc4ec`**; **RC2 `8118db0`** không chạy lại demo 4 bước mà kiểm bổ sung như bảng trên. Bản alpha chỉ khác RC2 ở bốn chuỗi version, nhưng đây vẫn là **bộ cài khác** (dựng từ tag) và phải được cài, kiểm trên máy đích trước khi coi là đã nghiệm thu.
 
 ## Tính năng mới
 
@@ -20,7 +30,7 @@
 - **Nhà cung cấp OpenCode Go (#37).** Thêm trong Cài đặt tài khoản AI; danh sách model tự cập nhật, thông báo khi khôi phục key lỗi, token usage đường A.
 - **Nhà cung cấp tuỳ chỉnh dùng được với provider thật (#46).** Tự nhận context window (có ô chỉnh), sàn `max_tokens`, báo đúng lỗi 4xx; **Tô luồng trên graph** tô cả nút được trích dẫn.
 
-## Sửa lỗi nghiệm thu RC (macOS, 23/11)
+## Sửa lỗi nghiệm thu RC1 (macOS `72dc4ec`, 23/11)
 
 - **#50** — engine bị kill **tự khởi động lại** (backoff, tối đa 5 lần/10 phút rồi hiện nút khởi động lại); **Tìm symbol** mở đúng `tệp:dòng` trong editor; **Vùng ảnh hưởng** hiện node và test khi mở từ menu node; bỏ tên thương hiệu “Pi” khỏi panel trợ lý; **Index lại** nhớ tuỳ chọn index.
 - **#54** — chip trích dẫn đặt con trỏ và tô khoảng dòng; đổi model trong Cài đặt cập nhật panel chat đang mở; bubble lỗi AI gọn một câu, không còn 3 nút đánh giá; không còn engine mồ côi và thanh trạng thái nêu lý do engine chết; tuỳ chọn index lọc theo từng trường; bỏ dòng thừa “0 node, 0 cạnh liên quan”.
@@ -87,7 +97,7 @@
 |---|---|
 | macOS | Apple silicon (arm64). Không hỗ trợ Mac Intel. |
 | Windows | x64. Máy thử nghiệm: Windows 11 Home 25H2 (build 26200). |
-| Ổ đĩa | Khoảng 650 MB sau khi cài (số của 0.1.0). DMG macOS arm64 của RC2 (`0.2.0-alpha.1`): 257,7 MB. |
+| Ổ đĩa | Khoảng 650 MB sau khi cài (số của 0.1.0). DMG macOS arm64 của RC1 `72dc4ec` là 257.676.473 byte, của RC2 `8118db0` là 257.724.354 byte (257,7 MB); cả hai là app **0.1.2**. Bộ cài Alpha dựng từ tag chưa có số đo. |
 | Mạng | Chỉ cần khi dùng AI qua nhà cung cấp, clone repo, tải adapter gỡ lỗi hoặc cài Antigravity CLI. Các tính năng đọc đồ thị chạy offline. |
 
 ## Cài đặt
