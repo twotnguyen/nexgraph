@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { TourStep } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 interface Props {
   projectId: string
@@ -12,11 +14,10 @@ interface Props {
   onOpenArch: (blockId: string) => void
 }
 
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 export function TourPanel({ projectId, revision = 0, projectName, onOpenFlow, onOpenNode, onOpenArch }: Props) {
   const [steps, setSteps] = useState<TourStep[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [index, setIndex] = useState(0)
   const [retry, setRetry] = useState(0)
   const started = useRef<string | null>(null)
@@ -33,7 +34,7 @@ export function TourPanel({ projectId, revision = 0, projectName, onOpenFlow, on
         started.current = projectId
         go(t.steps, 0)
       } else setIndex((current) => Math.min(current, Math.max(0, t.steps.length - 1)))
-    }).catch((e) => alive && setError(errMessage(e)))
+    }).catch((e) => alive && setError(errorMsg(e)))
     return () => { alive = false }
   }, [projectId, revision, retry, locale]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -47,7 +48,7 @@ export function TourPanel({ projectId, revision = 0, projectName, onOpenFlow, on
     else if (s.node) onOpenNode(s.node.id)
   }
 
-  if (error) return <div className="panel-error"><p role="alert" className="error">{error}</p>
+  if (error) return <div className="panel-error"><p role="alert" className="error">{msgText(error)}</p>
     <button type="button" onClick={() => setRetry((n) => n + 1)}>{tr('Thử lại')}</button></div>
   if (!steps) return <p role="status" className="muted">{tr('Đang chuẩn bị chuyến tham quan…')}</p>
   if (steps.length === 0) return <p className="muted">{vi.tour.empty}</p>

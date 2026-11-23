@@ -79,7 +79,7 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
         failures += 1
         if (failures >= MAX_STATUS_FAILURES || (err as { code?: string })?.code === 'unknown_job') {
           setJob(null)
-          setError(msg('Không đọc được tiến độ lập chỉ mục. {detail}. Hãy quay lại và mở dự án.', { detail: errorText(err) }))
+          setError(msg('Không đọc được tiến độ lập chỉ mục. {detail}. Hãy quay lại và mở dự án.', { detail: errorMsg(err) }))
           return
         }
       } finally {

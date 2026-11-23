@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import type { ArchEvidence } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { msgText, type Message } from '../../state/messages'
 
 interface Props {
   items: ArchEvidence[]
   loading: boolean
-  error: string | null
+  error: Message | null
   title?: string
   onOpenNode: (nodeId: string) => void
   /** Khi có: bấm mục mở mã tại tệp:dòng, còn nút "Xem nút" mở nút ở thẻ Graph. */
@@ -35,7 +36,7 @@ export function EvidencePopover({ items, loading, error, title, onOpenNode, onOp
         <button type="button" aria-label={vi.arch.close} onClick={onClose}>×</button>
       </header>
       {loading && <p className="muted">{vi.arch.loading}</p>}
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <p role="alert" className="error">{msgText(error)}</p>}
       {!loading && !error && items.length === 0 && <p className="muted">{vi.arch.noEvidence}</p>}
       {!loading && items.length > 0 && (
         <ul>

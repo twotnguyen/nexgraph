@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { ProjectSummary } from '@shared/graph-types'
 import { vi } from '../../strings'
-
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 export function McpCard({ project }: { project: ProjectSummary }) {
   const [copied, setCopied] = useState(false)
   const [http, setHttp] = useState<{ url: string; key: string } | null>(null)
   const [showKey, setShowKey] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -30,7 +30,7 @@ export function McpCard({ project }: { project: ProjectSummary }) {
       await navigator.clipboard.writeText(stdio)
       setCopied(true)
     } catch (e) {
-      setError(errMessage(e))
+      setError(errorMsg(e))
     }
   }
   const toggleHttp = async () => {
@@ -45,7 +45,7 @@ export function McpCard({ project }: { project: ProjectSummary }) {
         setHttp(await window.nexgraph.mcp.startHttp(project.project_id))
       }
     } catch (e) {
-      setError(errMessage(e))
+      setError(errorMsg(e))
     } finally {
       setBusy(false)
     }
@@ -76,7 +76,7 @@ export function McpCard({ project }: { project: ProjectSummary }) {
           </dd>
         </dl>
       )}
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <p role="alert" className="error">{msgText(error)}</p>}
     </div>
   )
 }

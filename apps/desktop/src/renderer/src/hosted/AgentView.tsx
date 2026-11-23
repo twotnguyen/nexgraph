@@ -5,6 +5,8 @@ import type { ProjectSummary } from '@shared/graph-types'
 import { AgentPanel } from '../components/agent/AgentPanel'
 import { useLocale } from '../state/locale'
 import { tr } from '../strings'
+import { msgText, type Message } from '../state/messages'
+import { errorMsg } from '../state/errorText'
 import '@fontsource/be-vietnam-pro/400.css'
 import '@fontsource/be-vietnam-pro/500.css'
 import '@fontsource/be-vietnam-pro/600.css'
@@ -17,7 +19,7 @@ function AgentView() {
   const [folder, setFolder] = useState(host.folder)
   const [hidden, setHidden] = useState(false)
   const [opened, setOpened] = useState<{ folder: string; project: ProjectSummary } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
 
   useEffect(() => host.onCommand((name, arg) => {
     if (name === 'agent:visibility' && typeof arg === 'boolean') setHidden(!arg)
@@ -34,7 +36,7 @@ function AgentView() {
     const open = (): void => {
       window.nexgraph.project.open(folder)
         .then((project) => alive && (setOpened({ folder, project }), setError(null)))
-        .catch((e) => alive && setError((e as Error).message))
+        .catch((e) => alive && setError(errorMsg(e)))
     }
     void window.nexgraph.engine.status().then((s) => s.state === 'ready' && open())
     const off = window.nexgraph.engine.onStatus((s) => s.state === 'ready' && open())
@@ -42,7 +44,7 @@ function AgentView() {
   }, [folder])
 
   if (!folder) return <p className="muted agent-wait">{tr('Mở một thư mục để dùng Trợ lý AI.')}</p>
-  if (opened?.folder !== folder) return <p className="muted agent-wait">{error ?? tr('Đang chờ engine…')}</p>
+  if (opened?.folder !== folder) return <p className="muted agent-wait">{error != null ? msgText(error) : tr('Đang chờ engine…')}</p>
   const { project } = opened
   return (
     <AgentPanel projectId={project.project_id} projectName={project.name} hidden={hidden}

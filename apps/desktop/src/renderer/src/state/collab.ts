@@ -37,7 +37,6 @@ let live: Live | null = null
 
 const frame = (kind: number, body: Uint8Array) => { const out = new Uint8Array(body.length + 1); out[0] = kind; out.set(body, 1); return out }
 const send = (data: Uint8Array) => void window.nexgraph.collab?.send(data).catch(() => {})
-const message = errorMsg
 
 // Màu và tên nhãn con trỏ người khác: y-monaco gắn lớp yRemoteSelection(Head)-<clientID>.
 function paintRemote(awareness: Awareness, style: HTMLStyleElement) {
@@ -97,7 +96,7 @@ export async function shareActiveFile(): Promise<void> {
     patch({ role: 'host', file: target.file, share, peers: 0, error: null })
   } catch (e) {
     close()
-    patch({ error: message(e) })
+    patch({ error: errorMsg(e) })
   }
 }
 
@@ -110,7 +109,7 @@ export async function joinSession(address: string, code: string): Promise<void> 
     patch({ role: 'guest', file: hello.file, share: null, peers: 1, error: null })
   } catch (e) {
     close()
-    patch({ error: message(e) })
+    patch({ error: errorMsg(e) })
     throw e
   }
 }

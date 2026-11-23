@@ -14,8 +14,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const TRANSLATED = /(?<![\w.$])(vi\.|tr\()/
 /** Gọi hàm dịch ngay trong đối số setter = chốt câu theo ngôn ngữ lúc gọi, không đổi khi người dùng đổi ngôn ngữ. */
 const AT_CALL = /(?<![\w.$])(errorText|msgText|tr)\(|(?<![\w.$])(vi|en)\./
-/** `setX(e?.message ?? String(e))`: chép câu thô của main vào state, không qua `errorMsg`. */
-const RAW_ERROR = /\??\.message\s*\?\?\s*String\(|String\((?:e|err|error|ex)\)/
+/** `setX(e?.message ?? String(e))`, `setX(errMessage(e))`: chép câu thô của main vào state hiển thị, không qua `errorMsg`. */
+const RAW_ERROR = /\??\.message\s*\?\?\s*String\(|String\((?:e|err|error|ex)\)|(?<![\w.$])(?:e|err|error|ex|failure|failed\w*)\??\.message\b|(?<![\w.$])(?:errMessage|messageOf|rawText|message)\s*\(/
 /** `setAttribute`/`setTimeout`… không phải state: tham số là hiệu ứng DOM, không phải nhãn giữ lại. */
 const DOM_SETTERS = new Set(['setAttribute', 'setAttributeNS', 'setTimeout', 'setInterval', 'setImmediate', 'setProperty', 'setSelectionRange', 'setPointerCapture', 'setStart', 'setEnd'])
 /** Ngoại lệ có chủ đích: dữ liệu người dùng thấy nhưng không phải nhãn UI (đã ghi rõ lý do). */
@@ -155,6 +155,21 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
       }
     }
     expect(hits, 'nhãn cấp module đọc lúc render, hoặc dùng getter/hàm như agentProfiles/useTheme').toEqual([])
+  })
+
+  it('biến của msg()/msgError() không dịch lúc gọi — truyền errorMsg/Message', () => {
+    const hits: string[] = []
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8')
+      for (const match of text.matchAll(/(?<![\w.$])msg(?:Error)?\s*\(/g)) {
+        const argument = callArgument(text, match.index + match[0].length - 1)
+        // Bỏ khoá (literal đầu tiên); phần còn lại là biến — dịch ở đó là chốt ngôn ngữ lúc gọi.
+        const vars = argument.replace(/^\s*'(?:[^'\\]|\\.)*'|^\s*`(?:[^`\\]|\\.)*`/, '')
+        if (!/(?<![\w.$])(?:errorText|msgText|tr|errMessage|messageOf|rawText|message)\s*\(|(?<![\w.$])(?:vi|en)\./.test(vars)) continue
+        hits.push(`${relPosix(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 90).replace(/\s+/g, ' ')}`)
+      }
+    }
+    expect(hits, 'biến Msg nhận Message (errorMsg/msg) để dịch lúc render, không errorText/msgText/tr lúc gọi').toEqual([])
   })
 
   it('đường dẫn ngoại lệ viết "/" và khớp relPosix(ROOT, …) trên mọi hệ điều hành', () => {

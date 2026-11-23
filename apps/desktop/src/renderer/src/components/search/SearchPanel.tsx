@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { AskResult, GraphEdge, GraphNode, SearchHit } from '@shared/graph-types'
 import { useDebounced } from '../../state/useDebounced'
 import { vi, tr } from '../../strings'
+import { msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 import { kindStyle } from '../graph/kindStyle'
 
 interface Props {
@@ -17,9 +19,6 @@ interface Props {
 
 const DEBOUNCE_MS = 200
 const LIMIT = 30
-
-const errMessage = (err: unknown): string =>
-  err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
 
 /** Nguồn ảo (`nguon://cargo`, `nguon://scip`…) không phải tệp trên đĩa: mở editor sẽ ra tab chết. */
 const isVirtualSource = (file: string | null | undefined): boolean => !!file && file.includes('://')
@@ -45,7 +44,7 @@ function NodeButton({ node, onOpen, onOpenCode }: { node: GraphNode; onOpen: (n:
   )
 }
 
-type SymbolResponse = { projectId: string; query: string; revision: number; hits: SearchHit[] | null; error: string | null }
+type SymbolResponse = { projectId: string; query: string; revision: number; hits: SearchHit[] | null; error: Message | null }
 
 function SymbolSearch({ projectId, revision = 0, onOpen, onOpenCode }: Props) {
   const [text, setText] = useState('')
@@ -68,7 +67,7 @@ function SymbolSearch({ projectId, revision = 0, onOpen, onOpenCode }: Props) {
       .search(projectId, query, { limit: LIMIT })
       .then((r) => alive && setResponse({ projectId, query, revision, hits: r, error: null }))
       .catch((err: unknown) => {
-        if (alive) setResponse({ projectId, query, revision, hits: null, error: errMessage(err) })
+        if (alive) setResponse({ projectId, query, revision, hits: null, error: errorMsg(err) })
       })
     return () => { alive = false }
   }, [projectId, query, retry, revision])
@@ -90,7 +89,7 @@ function SymbolSearch({ projectId, revision = 0, onOpen, onOpenCode }: Props) {
         autoFocus
       />
       {loading && <p role="status" className="muted small">{tr('Đang tìm ký hiệu…')}</p>}
-      {error && <div className="panel-error"><p role="alert" className="error">{error}</p>
+      {error && <div className="panel-error"><p role="alert" className="error">{msgText(error)}</p>
         <button type="button" onClick={() => setRetry((value) => value + 1)}>{tr('Thử lại')}</button></div>}
       {hits && hits.length === 0 && !error && <p className="muted">{vi.search.empty}</p>}
       {hits && hits.length > 0 && (
@@ -108,7 +107,7 @@ function AskGraph({ projectId, revision, onOpen, onShowSubgraph, onOpenFlow }: P
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<AskResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const requestId = useRef(0)
 
   useEffect(() => {
@@ -129,7 +128,7 @@ function AskGraph({ projectId, revision, onOpen, onShowSubgraph, onOpenFlow }: P
       const answer = await window.nexgraph.graph.ask(projectId, q)
       if (next === requestId.current) setResult(answer)
     } catch (err) {
-      if (next === requestId.current) setError(errMessage(err))
+      if (next === requestId.current) setError(errorMsg(err))
     } finally {
       if (next === requestId.current) setBusy(false)
     }
@@ -148,7 +147,7 @@ function AskGraph({ projectId, revision, onOpen, onShowSubgraph, onOpenFlow }: P
       />
       <button type="button" className="primary" disabled={busy || !text.trim()} onClick={() => void ask()}>{vi.search.modeAsk}</button>
       {busy && <p role="status" className="muted small">{vi.search.asking}</p>}
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <p role="alert" className="error">{msgText(error)}</p>}
       {result && (
         <div className="ask-result">
           {result.ambiguous && result.ambiguous.length > 0 && (

@@ -17,6 +17,7 @@ export const uiEnScreens: Record<string, string> = {
   'để đọc lại thư mục này.': 'to scan this folder again.',
   'Chưa xác minh được đồ thị có khớp với mã nguồn hiện tại.': 'Could not verify that the graph matches the current source code.',
   'Dự án đang cập nhật đồ thị. Đợi hoàn tất hoặc hủy lập chỉ mục rồi thử lại.': 'The project is updating its graph. Wait for it to finish or cancel indexing, then try again.',
+  'Không mở được thư mục này': 'Could not open this folder',
   'Gỡ dự án khỏi danh sách': 'Remove project from list',
   'sẽ biến mất khỏi danh sách dự án gần đây. Mã nguồn và đồ thị đã lưu vẫn được giữ để mở lại sau.': 'will disappear from the recent projects list. The source code and saved graph are kept so you can open it again later.',
   'Hủy': 'Cancel',

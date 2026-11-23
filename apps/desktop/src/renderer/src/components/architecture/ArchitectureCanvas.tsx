@@ -21,7 +21,7 @@ interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: str
   onOpenProjects?: () => void }
 interface Pt { x: number; y: number }
 interface Laid { view: ArchView; pos: Record<string, Pt>; routes: Record<string, Pt[]> }
-interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
+interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: Message | null }
 
 export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent, onParentChange, onOpenProjects }: Props) {
   const theme = useTheme()
@@ -86,7 +86,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
       window.nexgraph.graph
         .archEvidence(projectId, link.from, link.to, EVIDENCE_LIMIT)
         .then((items) => setEvidence((cur) => (cur?.link === link ? { link, items, loading: false, error: null } : cur)))
-        .catch((err: Error) => setEvidence((cur) => (cur?.link === link ? { link, items: [], loading: false, error: err.message } : cur)))
+        .catch((err: Error) => setEvidence((cur) => (cur?.link === link ? { link, items: [], loading: false, error: errorMsg(err) } : cur)))
     },
     [projectId]
   )

@@ -10,7 +10,6 @@ export type AgentInspection = { id: string; title: string; text?: string; before
 const defaults: AgentRunLimits = { maxTurns: 30, maxDurationMs: 600_000, maxTokens: 120_000 }
 const emptyUsage: AgentUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: null }
 /** Lỗi từ main: `errorMsg` giữ khoá (knownErrors) để `msgText` dịch lúc render, câu lạ giữ nguyên. */
-const messageOf = (e: unknown): Message => errorMsg(e)
 const pinKeyPrefix = 'nexgraph.agent.pinned.'
 const readPins = (projectId: string): string[] => {
   try {
@@ -88,7 +87,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     mutating.current = false
     setPins({ projectId, ids: readPins(projectId) })
     setPending(false); setError('')
-    void restore().catch((e) => { if (alive.current && generation === mutationSeq.current) setError(messageOf(e)) })
+    void restore().catch((e) => { if (alive.current && generation === mutationSeq.current) setError(errorMsg(e)) })
     const off = window.nexgraph.agent.onEvent((pid, event) => {
       if (pid !== projectId || !alive.current) return
       if (!mutating.current && ['session', 'task', 'tool_detail', 'usage', 'command_output'].includes(event.type)) readSeq.current++
@@ -119,7 +118,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       onApplied?.()
       const list = await window.nexgraph.agent.listSessions(projectId)
       if (current()) setSessions(list)
-    } catch (e) { if (current()) setError(messageOf(e)) }
+    } catch (e) { if (current()) setError(errorMsg(e)) }
     finally {
       if (alive.current && mutation === mutationSeq.current) {
         mutating.current = false

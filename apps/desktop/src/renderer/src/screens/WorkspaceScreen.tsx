@@ -82,7 +82,6 @@ const readRecentFiles = (projectId: string): string[] => {
 }
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
 type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour' | 'outline' | 'diagnostics'
-const messageOf = (e: unknown): Message => errorMsg(e)
 
 /** Ảnh hưởng của một nút hiển thị bằng chính ChangesPanel (nút nguồn đứng ở mục "đã đổi"). */
 const impactAsChanges = (i: NodeImpact): Changes => ({
@@ -212,7 +211,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setFeedbackText((previous) => (msgId(previous) === id ? null : previous))
     })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
-      if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: errorText(error) }))
+      if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: errorMsg(error) }))
     })
     return () => {
       current = false
@@ -400,7 +399,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setNotice(r.unconnected.length ? vi.path.noLink : vi.path.found(r.edges.length, r.confidence ?? null))
     } catch (e) {
       if (request === graphRequest.current) {
-        setFeedback(messageOf(e))
+        setFeedback(errorMsg(e))
         setNotice(null)
       }
     }
@@ -417,7 +416,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setNotice(!r.nodes.length ? vi.search.askNone : r.truncated ? vi.search.askTruncated : null)
     } catch (e) {
       if (request === graphRequest.current) {
-        setFeedback(messageOf(e))
+        setFeedback(errorMsg(e))
         setNotice(null)
       }
     }
@@ -450,7 +449,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       const impact = await window.nexgraph.graph.impactOf(project.project_id, node.id)
       if (request === impactRequest.current) setNodeImpact(impact)
     } catch (e) {
-      if (request === impactRequest.current) setFeedback(messageOf(e))
+      if (request === impactRequest.current) setFeedback(errorMsg(e))
     } finally {
       if (request === impactRequest.current) setImpactPending(false)
     }
@@ -460,7 +459,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     // Các lệnh đi tới/quay lại chỉ di chuyển con trỏ trong lịch sử, không thêm mục mới.
     if (record) recordNavigation(project.project_id, { file, line, column: column ?? 1 })
     // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.
-    if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(messageOf(e)))
+    if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(errorMsg(e)))
     const seq = openSeq + 1
     setOpenSeq(seq)
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd, column, seq } : f)) : [...cur, { file, line, lineEnd, column, seq }]))
@@ -480,7 +479,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       else next.delete(file)
       return next
     })
-    void flushEditorState().catch((e) => setFeedback(messageOf(e)))
+    void flushEditorState().catch((e) => setFeedback(errorMsg(e)))
   }, [flushEditorState])
   // Đóng cửa sổ khi còn tệp chưa lưu: chặn unload, main hỏi bằng hộp thoại hệ thống (will-prevent-unload).
   useEffect(() => {
@@ -630,7 +629,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setSelected(null)
     void window.nexgraph.graph.node(project.project_id, id)
       .then((node) => { if (request === nodeRequest.current) setSelected(node) })
-      .catch((error: unknown) => { if (request === nodeRequest.current) setFeedback(messageOf(error)) })
+      .catch((error: unknown) => { if (request === nodeRequest.current) setFeedback(errorMsg(error)) })
   }
 
   const onTabKeys = (event: ReactKeyboardEvent<HTMLDivElement>) => {

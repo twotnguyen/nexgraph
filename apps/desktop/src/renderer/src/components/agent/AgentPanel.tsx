@@ -335,7 +335,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         return
       }
       if (e.type === 'write_conflict') {
-        if (t.mode === 'edit') setError(e.message)
+        if (t.mode === 'edit') setError(errorMsg(e))
         return
       }
       if (e.type === 'tool' && e.status === 'start') {

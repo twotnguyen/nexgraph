@@ -22,7 +22,6 @@ import './settings.css'
 
 type TestResult = { message: Message; detail?: string; contextWarning?: number }
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '', contextWindow: '' }
 /** Cùng giới hạn với `saveCustomProvider` ở main: số nguyên dương ≤ 10 triệu; để trống = tự nhận/mặc định. */
