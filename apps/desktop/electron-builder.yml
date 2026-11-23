@@ -5,12 +5,6 @@ directories:
 files:
   - out/**
   - package.json
-  - from: ../../THIRD_PARTY_LICENSES.md
-    to: THIRD_PARTY_LICENSES.md
-  - from: ../../NOTICE
-    to: NOTICE
-  - from: ../../LICENSE
-    to: LICENSE
 # Language server và terminal chạy tiến trình con (Node của Electron, spawn-helper của node-pty) nên không được nằm trong app.asar.
 asarUnpack:
   - node_modules/node-pty/**
@@ -21,6 +15,14 @@ asarUnpack:
 extraResources:
   - from: ../../engine/dist/nexgraph-engine
     to: engine
+  # P3-8.2: giấy phép phải nằm trong bản cài. Khai trong `files:` với `from` ngoài app dir bị bỏ,
+  # nên dùng extraResources → Contents/Resources/ (macOS) hoặc resources/ (Windows) của gói cài.
+  - from: ../../THIRD_PARTY_LICENSES.md
+    to: THIRD_PARTY_LICENSES.md
+  - from: ../../NOTICE
+    to: NOTICE
+  - from: ../../LICENSE
+    to: LICENSE
 # Electron fuses (REV-17): đóng các đường bật lại Node/gỡ lỗi và buộc nạp app từ asar.
 # runAsNode giữ bật vì language server và debug adapter chạy bằng chính Node của Electron
 # (spawn(process.execPath, …, { ELECTRON_RUN_AS_NODE: '1' })). Tắt nó sẽ làm LSP/debug chết trong bản đóng gói.

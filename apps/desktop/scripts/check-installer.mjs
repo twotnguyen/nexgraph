@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { appendFileSync, createReadStream, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { appendFileSync, createReadStream, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { REQUIRED_LICENSE_FILES, assertLicenseFiles, resourcesDir } from './license-files.mjs'
 
 const targets = {
   darwin: { os: 'macos', ext: 'dmg' },
@@ -26,6 +28,27 @@ const installers = readdirSync(new URL('../dist/', import.meta.url), { withFileT
 if (installers.length !== 1 || installers[0] !== filename) {
   throw new Error(`Cần đúng một tệp cài đặt ${filename}, tìm thấy: ${installers.join(', ') || '(không có)'}`)
 }
+
+// P3-8.2: bản cài RC2 thiếu THIRD_PARTY_LICENSES.md/NOTICE/LICENSE. Kiểm ngay trên app chưa nén
+// mà electron-builder vừa tạo; thiếu tệp là job `package` đỏ, không chờ tới lúc cài.
+function packagedAppDir() {
+  const dist = fileURLToPath(new URL('../dist/', import.meta.url))
+  if (process.platform === 'win32') {
+    const dir = join(dist, 'win-unpacked')
+    return existsSync(dir) ? dir : null
+  }
+  for (const entry of readdirSync(dist).filter((name) => name.startsWith('mac'))) {
+    const dir = join(dist, entry, 'NexGraph.app')
+    if (existsSync(dir)) return dir
+  }
+  return null
+}
+
+const appDir = packagedAppDir()
+if (!appDir) throw new Error('Không thấy app chưa nén trong apps/desktop/dist để kiểm tệp giấy phép (chạy electron-builder trước)')
+assertLicenseFiles(appDir, process.platform)
+console.log(`Tệp giấy phép trong ${resourcesDir(appDir, process.platform)}: ` +
+  REQUIRED_LICENSE_FILES.map((name) => `${name} ${statSync(join(resourcesDir(appDir, process.platform), name)).size} B`).join(' · '))
 
 const path = `apps/desktop/dist/${filename}`
 const manifest = `apps/desktop/dist/${name}.build.json`

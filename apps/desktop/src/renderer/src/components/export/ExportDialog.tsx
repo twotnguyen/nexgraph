@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ExportFormat, ExportScope } from '@shared/graph-types'
 import { getLocale } from '../../state/locale'
 import { vi } from '../../strings'
@@ -18,6 +18,8 @@ interface Props {
   projectId: string
   projectName: string
   scope: ExportScope
+  /** Nhãn hiển thị của phạm vi cộng đồng (tên cộng đồng); thiếu thì dùng id `com:<n>`. */
+  scopeLabel?: string
   /** Định dạng chọn sẵn khi mở (mặc định HTML). */
   initialFormat?: ExportFormat
   onClose: () => void
@@ -26,8 +28,13 @@ interface Props {
 // Hai khung hình: React bỏ hộp thoại khỏi DOM rồi trình duyệt vẽ lại, sau đó mới chụp.
 const nextFrame = () => new Promise<void>((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => r()) : setTimeout(r, 16)))
 
+/** Phần tử nhận focus được trong hộp thoại, cùng bộ chọn với ConnectionDialog. */
+const FOCUSABLE = 'button:not(:disabled),a[href],input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]'
 
-export function ExportDialog({ projectId, projectName, scope: initialScope, initialFormat = 'html', onClose }: Props) {
+const scopeKeyOf = (scope: ExportScope): string => scope.kind === 'all' ? 'all' : `${scope.kind}:${scope.value}`
+
+
+export function ExportDialog({ projectId, projectName, scope: initialScope, scopeLabel: initialScopeLabel, initialFormat = 'html', onClose }: Props) {
   const [choice, setChoice] = useState<Choice>(initialFormat)
   const [scope, setScope] = useState<ExportScope>(initialScope)
   const [busy, setBusy] = useState(false)
@@ -37,14 +44,59 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
   const [uri, setUri] = useState(DEFAULT_URI.neo4j)
   const [user, setUser] = useState('')
   const [password, setPassword] = useState('')
+  const dialog = useRef<HTMLDivElement>(null)
+  // `onClose` của chỗ dùng là arrow mới mỗi lần cha vẽ lại; giữ trong ref để effect focus chỉ chạy một lần.
+  const close = useRef(onClose)
+  close.current = onClose
 
+  // Nhãn phạm vi lấy từ prop; state phải theo khi prop đổi, nếu không hộp thoại mở lại cho cộng đồng
+  // khác vẫn xuất cộng đồng cũ (review #63, Important 2). So theo khoá chứ không theo identity object
+  // (ProjectOverviewScreen truyền object mới mỗi lần vẽ).
+  const scopeKey = scopeKeyOf(initialScope)
   useEffect(() => {
+    setScope(initialScope)
+    setDone(null)
+    setError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ đồng bộ khi phạm vi đổi
+  }, [scopeKey])
+
+  // Modal đúng nghĩa: đưa focus vào trong, giữ Tab trong hộp thoại, Escape đóng và trả focus về nút đã mở.
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const focusables = (): HTMLElement[] => Array.from(dialog.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])
+    dialog.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus()
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        close.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const controls = focusables()
+      if (controls.length === 0) {
+        e.preventDefault()
+        return
+      }
+      const first = controls[0]
+      const last = controls[controls.length - 1]
+      // Focus lạc ra sau lưng (ca QA #63) thì kéo về đầu hộp thoại thay vì đi tiếp ra bảng cộng đồng.
+      if (!dialog.current?.contains(document.activeElement)) {
+        e.preventDefault()
+        first.focus()
+      } else if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      if (previous?.isConnected) previous.focus()
+    }
+  }, [])
 
   const pick = (c: Choice) => {
     setChoice(c)
@@ -99,12 +151,12 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
 
   const isPush = choice === 'neo4j' || choice === 'falkordb'
   const scopeLabel = initialScope.kind === 'node' ? vi.export.scopeNode(initialScope.value)
-    : initialScope.kind === 'community' ? vi.export.scopeCommunity(initialScope.value) : null
+    : initialScope.kind === 'community' ? vi.export.scopeCommunity(initialScopeLabel ?? initialScope.value) : null
 
   if (capturing) return null
   return (
     <div className="modal-backdrop">
-      <div role="dialog" aria-modal="true" aria-label={vi.export.title(projectName)} className="modal export-dialog">
+      <div ref={dialog} role="dialog" aria-modal="true" aria-label={vi.export.title(projectName)} className="modal export-dialog">
         <header>
           <b>{vi.export.title(projectName)}</b>
           <button type="button" aria-label={vi.export.close} onClick={onClose}><Icon name="close" size={14} /></button>
