@@ -7,6 +7,7 @@ from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION
 TOKEN = "t" * 40
 INTERNAL_ERROR_MESSAGE = "Lỗi nội bộ engine. Xem log để biết chi tiết."
 OUTDATED_MESSAGE = "CSDL đồ thị cũ hơn ứng dụng. Mở lại dự án bằng ứng dụng để nâng cấp."
+GRAPH_READONLY_MESSAGE = "Không ghi được CSDL đồ thị: tệp đang chỉ đọc hoặc thiếu quyền ghi."
 
 
 def _set_user_version(api, project_id: str, version: int) -> None:
@@ -36,6 +37,69 @@ def test_unexpected_error_is_internal_error_without_leaking_details(api):
     assert r.json() == {"error": {"code": "internal_error", "message": INTERNAL_ERROR_MESSAGE}}
     assert "sk-secret" not in r.text
     assert "RuntimeError" not in r.text
+
+
+def test_refresh_of_newer_graph_reports_schema_version_code(api, copy_fixture):
+    """MIN-47-eng: đường refresh/watch phải trả `code` ổn định, không chỉ câu tiếng Việt chung."""
+    project_id = _indexed(api, copy_fixture)
+    _set_user_version(api, project_id, GRAPH_SCHEMA_VERSION + 1)
+
+    with TestClient(api.app, raise_server_exceptions=False) as client:
+        r = client.post(f"/v1/projects/{project_id}/refresh", headers={"Authorization": f"Bearer {TOKEN}"})
+
+    assert r.status_code == 400
+    assert r.json() == {"error": {
+        "code": "schema_version",
+        "message": f"CSDL phiên bản {GRAPH_SCHEMA_VERSION + 1}, ứng dụng chỉ hỗ trợ đến {GRAPH_SCHEMA_VERSION}",
+    }}
+
+
+def test_refresh_on_readonly_graph_reports_graph_readonly_code(api, copy_fixture, monkeypatch):
+    """`chmod 444 graph.db` (toast lỗi refresh nền của desktop) phải có mã riêng để desktop dịch."""
+    import nexgraph_engine.index.refresh_service as refresh_service
+
+    project_id = _indexed(api, copy_fixture)
+
+    def readonly_open(path, *, read_only=False):
+        raise sqlite3.OperationalError("attempt to write a readonly database")
+
+    monkeypatch.setattr(refresh_service, "open_graph_db", readonly_open)
+    with TestClient(api.app, raise_server_exceptions=False) as client:
+        r = client.post(f"/v1/projects/{project_id}/refresh", headers={"Authorization": f"Bearer {TOKEN}"})
+
+    assert r.status_code == 409
+    assert r.json() == {"error": {"code": "graph_readonly", "message": GRAPH_READONLY_MESSAGE}}
+    assert "Lỗi nội bộ engine" not in r.text
+    # Không lộ câu kỹ thuật của SQLite ra ngoài (thông điệp cố định).
+    assert "attempt to write" not in r.text
+
+
+def test_method_not_allowed_has_stable_code(api):
+    """Lỗi HTTP chung cũng phải có mã riêng thay vì bucket `http_error`."""
+    r = api.delete("/v1/health")
+
+    assert r.status_code == 405
+    assert r.json()["error"]["code"] == "method_not_allowed"
+
+
+def test_graph_error_maps_only_known_storage_failures():
+    """`graph_error` chỉ nhận lỗi CSDL đã biết; lỗi khác vẫn về `internal_error` để không đoán bừa."""
+    import errno
+
+    from nexgraph_engine.api.errors import graph_error
+    from nexgraph_engine.schema.db import SchemaOutdatedError
+    from nexgraph_engine.store.publication import GraphWriteBusy
+
+    def code_of(exc: BaseException) -> str | None:
+        mapped = graph_error(exc)
+        return None if mapped is None else mapped.code
+
+    assert code_of(sqlite3.OperationalError("database is locked")) == "graph_busy"
+    assert code_of(GraphWriteBusy("bận")) == "graph_busy"
+    assert code_of(OSError(errno.EROFS, "Read-only file system")) == "graph_readonly"
+    assert code_of(SchemaOutdatedError("cũ")) == "schema_outdated"
+    assert code_of(sqlite3.OperationalError("no such table: nut")) is None
+    assert code_of(RuntimeError("bí mật")) is None
 
 
 def test_open_store_rejects_newer_schema(api, copy_fixture):
