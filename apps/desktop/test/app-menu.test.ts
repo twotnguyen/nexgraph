@@ -34,6 +34,13 @@ const menu = (template: Item[], label: string): Item => {
 }
 const roles = (item: Item): string[] => (item.submenu ?? []).flatMap((sub) => sub.role ? [sub.role] : [])
 
+/** `installAppMenu` đọc `process.platform` của máy chạy test — ghim platform để kiểm cả hai nhánh. */
+const withPlatform = (platform: NodeJS.Platform, run: () => void): void => {
+  const previous = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+  try { run() } finally { Object.defineProperty(process, 'platform', previous) }
+}
+
 describe('template menu hệ thống', () => {
   beforeEach(() => { h.built.length = 0; h.appMenu = null; h.isPackaged = false })
 
@@ -83,14 +90,36 @@ describe('template menu hệ thống', () => {
     expect(send).toHaveBeenCalledWith('window.new')
   })
 
-  it('setAppMenuLocale chỉ nhận vi/en và dựng lại menu', () => {
+  it('setAppMenuLocale chỉ nhận vi/en và dựng lại menu, đúng cả macOS và Windows', () => {
     const getWindow = () => null
+    const current = (): Item[] => (h.appMenu as { template: Item[] }).template
+    const labels = (): string[] => current().map((item) => item.label ?? '')
+
     expect(setAppMenuLocale('fr', getWindow)).toBe(false)
     expect(h.built).toHaveLength(0)
-    expect(setAppMenuLocale('en', getWindow)).toBe(true)
-    expect(h.built).toHaveLength(1)
-    expect((h.appMenu as { template: Item[] }).template[1].label).toBe('File')
-    expect(setAppMenuLocale('vi', getWindow)).toBe(true)
-    expect((h.appMenu as { template: Item[] }).template[1].label).toBe('Tệp')
+
+    // macOS: menu ứng dụng đứng đầu nên File/Tệp là mục thứ hai — tìm theo nhãn, không theo chỉ số.
+    withPlatform('darwin', () => {
+      expect(setAppMenuLocale('en', getWindow)).toBe(true)
+      expect(h.built).toHaveLength(1)
+      expect(labels()[0]).toBe('NexGraph')
+      expect(menu(current(), 'File').submenu?.length).toBeGreaterThan(0)
+      expect(setAppMenuLocale('vi', getWindow)).toBe(true)
+      expect(h.built).toHaveLength(2)
+      expect(labels()[0]).toBe('NexGraph')
+      expect(menu(current(), 'Tệp').submenu?.length).toBeGreaterThan(0)
+    })
+
+    // Windows/Linux: không có menu ứng dụng — File/Tệp đứng đầu (đây là ca CI Windows bắt được).
+    withPlatform('win32', () => {
+      expect(setAppMenuLocale('en', getWindow)).toBe(true)
+      expect(h.built).toHaveLength(3)
+      expect(labels()[0]).toBe('File')
+      expect(menu(current(), 'File').submenu?.length).toBeGreaterThan(0)
+      expect(setAppMenuLocale('vi', getWindow)).toBe(true)
+      expect(h.built).toHaveLength(4)
+      expect(labels()[0]).toBe('Tệp')
+      expect(menu(current(), 'Tệp').submenu?.length).toBeGreaterThan(0)
+    })
   })
 })
