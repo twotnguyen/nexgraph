@@ -1521,6 +1521,12 @@ export function tr(text: string, vars?: Record<string, string | number>): string
     .replace(/\{(\w+)\}/g, (match, name: string) => vars && name in vars ? String(vars[name]) : match)
 }
 
+/**
+ * Từ điển tiếng Việt gốc. Chỉ dùng để lấy **khoá** VI cho `msg()` khi câu nằm sau một mã
+ * (ví dụ `chat.errors[code]`): `vi` trả câu theo ngôn ngữ hiện tại nên không dùng làm khoá được.
+ */
+export const viSource: typeof viStrings = viStrings
+
 /** Giữ nguyên import `vi` của 43 file cũ: dictionary được chọn lúc đọc thuộc tính. */
 export const vi: typeof viStrings = new Proxy(viStrings, {
   get(_target, key) {

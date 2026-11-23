@@ -3,6 +3,7 @@ import type { GlobalGraph, GlobalSearchHit } from '@shared/graph-types'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
 import { Icon } from '../components/common/icons'
 import { vi } from '../strings'
+import { msg, msgText, type Message } from '../state/messages'
 import './global-view.css'
 
 const LIMIT = 300 // overlay xếp lớp bằng ELK: giữ đồ thị gộp vừa phải
@@ -19,7 +20,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<GlobalSearchHit[] | null>(null)
   const [focus, setFocus] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Message | null>(null)
   const [exporting, setExporting] = useState(false)
   const key = projectIds.join(',')
 
@@ -49,7 +50,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
     setError(null)
     try {
       const r = await window.nexgraph.globalGraph.export(projectIds)
-      if (r) setNotice(vi.globalGraph.exported(r.files[0]))
+      if (r) setNotice(msg('Đã xuất {file}', { file: r.files[0] }))
     } catch (err) {
       setError((err as { message?: string })?.message ?? String(err))
     } finally {
@@ -82,7 +83,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
             </label>
           </form>
           {error && <p role="alert" className="inline-message error">{error}</p>}
-          {notice && <p role="status" className="inline-message">{notice}</p>}
+          {notice && <p role="status" className="inline-message">{msgText(notice)}</p>}
           {graph?.truncated && <p className="global-note">{vi.globalGraph.truncated}</p>}
           {graph && graph.skipped.length > 0 && <p className="global-note">{vi.globalGraph.skipped(graph.skipped.length)}</p>}
           {hits && hits.length === 0 && <p className="global-note">{vi.globalGraph.noHits}</p>}

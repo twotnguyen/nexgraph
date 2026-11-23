@@ -60,7 +60,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
   const [pending, setPending] = useState<'open' | 'remove' | 'clone' | null>(null)
   const [removing, setRemoving] = useState<ProjectSummary | null>(null)
   const [cloneUrl, setCloneUrl] = useState<string | null>(null)
-  const [cloneStatus, setCloneStatus] = useState<string | null>(null)
+  const [cloneStatus, setCloneStatus] = useState<Message | null>(null)
   const cloneJob = useRef<string | null>(null)
   const [members, setMembers] = useState<GlobalMember[]>([])
   const [picked, setPicked] = useState<string[]>([])
@@ -127,7 +127,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
 
   function cloneFromUrl(url: string) {
     void run('clone', async () => {
-      setCloneStatus(vi.sources.cloneRunning)
+      setCloneStatus(msg('Đang tải mã nguồn…'))
       try {
         const { jobId } = await window.nexgraph.sources.clone(url.trim())
         cloneJob.current = jobId
@@ -181,7 +181,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
               <input type="url" value={cloneUrl} placeholder={vi.sources.clonePlaceholder} disabled={pending === 'clone'}
                 onChange={(e) => setCloneUrl(e.target.value)} autoFocus />
             </label>
-            <p className="muted">{cloneStatus ?? vi.sources.cloneHint}</p>
+            <p className="muted">{cloneStatus ? msgText(cloneStatus) : vi.sources.cloneHint}</p>
             <div className="row">
               <button type="submit" className="primary" disabled={!engineReady || pending !== null || !cloneUrl.trim()}>{vi.sources.cloneSubmit}</button>
               {pending === 'clone'

@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { GraphNode, NodeKind } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
 import { msg, msgText, type Message } from '../../state/messages'
 import { runCommand } from '../../state/commands'
 import { useChanges } from '../../state/useChanges'
@@ -290,7 +290,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
       await action()
       return true
     } catch (error) {
-      setOperationError(errorText(error))
+      setOperationError(errorMsg(error))
       return false
     } finally {
       setWorking(false)

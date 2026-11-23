@@ -2,11 +2,12 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import type { NexGraphApi } from '@shared/api'
 import type { AgentSessionInfo, AgentSessionSnapshot } from '@shared/agent-types'
 import { emptyAgentSnapshot, installNexgraph } from '../../test-utils'
 import { setNotifyPrefs } from '../../state/agentNotify'
-import { setLocale } from '../../state/locale'
+import { setLocale, useLocale } from '../../state/locale'
 import { AgentPanel } from './AgentPanel'
 
 vi.mock('../editor/monaco', () => ({ languageFor: () => 'typescript', createDiffEditor: () => ({ dispose: vi.fn() }) }))
@@ -219,5 +220,28 @@ describe('tin nhắn đã lưu', () => {
     expect(saved).toBeEnabled()
     await userEvent.click(saved)
     expect(dialog()).toBeInTheDocument()
+  })
+})
+
+/** Cha theo dõi locale như App thật: đổi ngôn ngữ thì panel vẽ lại (element mới mỗi lần). */
+function LocaleHost({ render: draw }: { render: () => ReactNode }) {
+  useLocale()
+  return <>{draw()}</>
+}
+
+describe('I1: chuỗi lỗi giữ khoá, dịch lúc render', () => {
+  it('alert "chưa cấu hình trợ lý AI" đổi theo ngôn ngữ sau khi đã hiện', async () => {
+    installNexgraph({
+      ai: { getSettings: vi.fn(async () => ({ ...target, model: '', hasKey: false })), hasConsent: vi.fn(async () => true) },
+      agent: { snapshot: vi.fn(async () => snapshot()), listSessions: vi.fn(async () => [session]), notify }
+    })
+    render(<LocaleHost render={() => <AgentPanel {...props} />} />)
+    const input = await screen.findByRole<HTMLTextAreaElement>('textbox', { name: 'Tin nhắn cho trợ lý AI' })
+    await userEvent.type(input, 'hello{Enter}')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')
+    act(() => setLocale('en'))
+    expect(screen.getByRole('alert')).toHaveTextContent('The AI assistant is not configured. All other features still work.')
+    act(() => setLocale('vi'))
+    expect(screen.getByRole('alert')).toHaveTextContent('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')
   })
 })

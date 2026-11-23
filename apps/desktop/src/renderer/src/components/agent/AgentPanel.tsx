@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
-import { tr, vi } from '../../strings'
-import { errorText } from '../../state/errorText'
+import { tr, vi, viSource } from '../../strings'
+import { errorMsg } from '../../state/errorText'
 import { Icon } from '../common/icons'
 import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -22,7 +22,7 @@ import { matchProfile, useAgentProfiles, type AgentProfile } from '../../state/a
 import { ContextRing } from './ContextRing'
 import { SavedPrompts } from './SavedPrompts'
 import { announceAgent } from '../../state/agentNotify'
-import { msg, msgText, type Message } from '../../state/messages'
+import { msg, msgError, msgText, type Message } from '../../state/messages'
 
 interface Props {
   id?: string
@@ -96,10 +96,11 @@ function errorCode(e: unknown): string {
   return e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
 }
 
-function errorMessage(e: unknown): string {
-  // Mã cũ có câu riêng trong `chat.errors`; mã mới (conflict, bad_param, …) dịch câu Việt của main qua `errorText`
-  // để không lọt tiếng Việt khi giao diện English (review #47 Minor 6).
-  return vi.chat.errors[errorCode(e)] || errorText(e)
+function errorMessage(e: unknown): Message {
+  // Mã cũ có câu riêng trong `chat.errors`; mã mới (conflict, bad_param, …) dịch câu Việt của main qua `errorMsg`
+  // để không lọt tiếng Việt khi giao diện English (review #47 Minor 6). Khoá VI giữ trong `Msg`, dịch lúc render (I1).
+  const key = viSource.chat.errors[errorCode(e)]
+  return key ? msg(key) : errorMsg(e)
 }
 
 function isFileApproval(value: unknown): value is FileApprovalRequest {
@@ -253,14 +254,14 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setTool(null)
     setDraft('')
   }
-  const fail = (q: string, message: string) => {
+  const fail = (q: string, message: Message) => {
     const current = turn.current
     const id = current?.id ?? ++turnSeq.current
     if (failedTurns.current.has(id)) return
     failedTurns.current.add(id)
     const continueQueue = !!current && sameConsentTarget(scope.current, current.target) && !!queueRef.current.some((item) => item.sessionId === current.sessionId && sameConsentTarget(item.target, current.target))
     if (current) current.completed = continueQueue
-    setMsgs((cur) => [...cur, { id, role: 'assistant', content: message, citations: [], tools: [] }])
+    setMsgs((cur) => [...cur, { id, role: 'assistant', content: msgText(message), citations: [], tools: [] }])
     if (current) {
       const failed = { text: q, context: current.context, attachments: current.attachments, images: current.images }
       const composing = composerRef.current
@@ -348,7 +349,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         if (e.code !== 'ai_cancelled') announceAgent('error', alertTitle.current)
         // Câu theo mã lỗi (dịch theo ngôn ngữ) + thông điệp ngắn của provider để người dùng biết phải sửa gì.
         // Mã lạ dùng `errorText` để câu Việt của main (kể cả `ai_context_small` kèm số token) dịch được ở EN.
-        const text = vi.chat.errors[e.code] || errorText({ message: e.message })
+        const text = msgText(errorMessage({ code: e.code, message: e.message }))
         fail(t.q, `${text}${e.detail ? ` — ${e.detail}` : ''}`)
       }
     })
@@ -497,7 +498,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       if (queued && (!sameConsentTarget(selected, queued.target) || settings.model !== queued.model || queued.sessionId !== sessionIdRef.current))
         throw new Error(tr('Phiên hoặc model đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.'))
       const target = applySettings(settings)
-      if (!target) throw new Error(vi.chat.notConfigured)
+      if (!target) throw msgError('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')
       const allowed = await window.nexgraph.ai.hasConsent(projectId, target)
       if (!isCurrent(id)) {
         if (queued && mounted.current) updateQueue((items) => [queued, ...items])
@@ -556,7 +557,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const current = applySettings(settings)
       if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error(tr('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.'))
       if (!sameConsentTarget(current, pending.target) || settings.model !== pending.model)
-        throw new Error(vi.chat.errors.ai_provider_changed)
+        throw msgError('Nhà cung cấp hoặc model AI đã thay đổi. Hãy kiểm tra lại rồi gửi câu hỏi.')
       await window.nexgraph.ai.grantConsent(projectId, pending.target)
       if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error(tr('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.'))
       if (isCurrent(id)) run({ text: pending.question, context: pending.context, attachments: pending.attachments ?? [], images: pending.images ?? [] }, pending.target, pending.model, !pending.queued)

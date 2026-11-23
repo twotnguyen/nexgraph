@@ -309,4 +309,14 @@ export const uiEnOthers: Record<string, string> = {
   'Group By: Directory': 'Group By: Directory',
   'so với {base}': 'against {base}',
   'Base để so sánh': 'Base to compare',
+  // Lỗi/thông báo giữ khoá `Msg` trong state (I1) — dịch lúc render.
+  'Đang tải mã nguồn…': 'Downloading source code…',
+  'Đã xuất {file}': 'Exported {file}',
+  'Đã có ghi nhớ này.': 'This memory already exists.',
+  'Không lưu được: {error}': 'Could not save: {error}',
+  'Không chạy được: {error}': 'Could not run: {error}',
+  'Không tải được: {error}': 'Could not load: {error}',
+  'Không lưu được chuỗi kết nối: {error}': 'Could not save the connection string: {error}',
+  'Mô hình chỉ có {n} token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.':
+    'The model has only {n} context tokens — not enough for the system prompt and tools. Choose a larger model.',
 }

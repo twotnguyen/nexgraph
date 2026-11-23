@@ -68,18 +68,29 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
     expect(hits, 'dịch lúc render (vi.*/tr()), không lưu chuỗi đã dịch vào state/ref').toEqual([])
   })
 
-  it('không gọi setX(tr(...)) — chốt chuỗi dịch vào state', () => {
+  it('không gọi setX(tr(...)/vi.*/en.*) — chốt chuỗi dịch vào state', () => {
     const hits: string[] = []
     for (const file of files) {
       const text = readFileSync(file, 'utf8')
       for (const match of text.matchAll(/(?<![\w.$])set[A-Z]\w*\s*\(/g)) {
         const argument = callArgument(text, match.index + match[0].length - 1)
-        if (/^\s*tr\(/.test(argument)) {
+        if (/^\s*(tr\(|(vi|en)\.)/.test(argument)) {
           hits.push(`${relative(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 70)}`)
         }
       }
     }
     expect(hits, 'state giữ khoá/dữ liệu rồi dịch lúc render (msg/msgText), không chốt chuỗi đã dịch').toEqual([])
+  })
+
+  it('không ném new Error(vi.*/en.*) — lỗi mang khoá Msg để chỗ bắt dịch lúc render', () => {
+    const hits: string[] = []
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8')
+      for (const match of text.matchAll(/new\s+Error\s*\(\s*(vi|en)\./g)) {
+        hits.push(`${relative(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}`)
+      }
+    }
+    expect(hits, 'dùng msgError(khoá) (state/messages) để chỗ bắt giữ khoá và dịch lúc render').toEqual([])
   })
 
   it('không có const cấp module giữ chuỗi đã dịch (trừ getter/hàm đọc lúc gọi)', () => {

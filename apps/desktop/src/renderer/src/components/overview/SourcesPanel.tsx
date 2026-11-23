@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SourceItem } from '@shared/graph-types'
 import { waitJob } from '../../state/waitJob'
 import { vi } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
@@ -10,7 +11,7 @@ export function SourcesPanel({ projectId }: { projectId: string }) {
   const [items, setItems] = useState<SourceItem[] | null>(null)
   const [url, setUrl] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
 
   const load = () => window.nexgraph.sources.list(projectId).then(setItems, (e) => setError(errMessage(e)))
   useEffect(() => { void load() }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -23,7 +24,7 @@ export function SourcesPanel({ projectId }: { projectId: string }) {
       await action()
       await load()
     } catch (e) {
-      setError(vi.sources.failed(errMessage(e)))
+      setError(msg('Không tải được: {error}', { error: errMessage(e) }))
     } finally {
       setBusy(false)
     }
@@ -42,7 +43,7 @@ export function SourcesPanel({ projectId }: { projectId: string }) {
         <input aria-label={vi.sources.urlLabel} type="url" value={url} placeholder="https://" disabled={busy} onChange={(e) => setUrl(e.target.value)} />
         <button type="submit" className="primary" disabled={busy || !url.trim()}>{busy ? vi.sources.adding : vi.sources.add}</button>
       </form>
-      {error && <p role="alert" className="inline-message error">{error}</p>}
+      {error && <p role="alert" className="inline-message error">{msgText(error)}</p>}
       {items?.length === 0 && <p className="muted">{vi.sources.empty}</p>}
       {items && items.length > 0 && (
         <ul className="recent">

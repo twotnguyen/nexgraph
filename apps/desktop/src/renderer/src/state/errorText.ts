@@ -1,5 +1,4 @@
-import { tr } from '../strings'
-import { getLocale } from './locale'
+import { type Message, MsgError, msg, msgText } from './messages'
 
 /** Lỗi IPC tiếng Việt phổ biến: chỉ những câu có bản dịch mới đổi theo ngôn ngữ. */
 const knownErrors: Record<string, true> = {
@@ -111,22 +110,33 @@ const knownErrors: Record<string, true> = {
 }
 
 /**
- * Câu do main dựng kèm số liệu (không thể đặt khoá từ điển): dịch theo mẫu khi giao diện English,
- * giữ nguyên câu gốc khi tiếng Việt. `$1` là phần số/định danh giữ lại.
+ * Câu do main dựng kèm số liệu (không thể đặt khoá từ điển): đổi thành khoá + biến để dịch
+ * lúc render như mọi `Msg` khác.
  */
-const dynamicErrors: { re: RegExp; en: string }[] = [
+const dynamicErrors: { re: RegExp; key: string }[] = [
   {
     re: /^Mô hình chỉ có (\d+) token ngữ cảnh, không đủ cho system prompt \+ công cụ — chọn mô hình lớn hơn\.$/,
-    en: 'The model has only $1 context tokens — not enough for the system prompt and tools. Choose a larger model.'
+    key: 'Mô hình chỉ có {n} token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.'
   }
 ]
 
-/** Câu lỗi để hiển thị: lỗi IPC qua contextBridge là object có `message` nhưng không `instanceof Error` ở renderer. */
-export const errorText = (e: unknown): string => {
-  const text = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
-  if (knownErrors[text] === true) return tr(text)
-  if (getLocale() === 'en') {
-    for (const rule of dynamicErrors) if (rule.re.test(text)) return text.replace(rule.re, rule.en)
+const rawText = (e: unknown): string => e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
+
+/**
+ * Lỗi dưới dạng `Message` để state giữ khoá và dịch lúc render (I1): lỗi do renderer ném
+ * bằng `msgError` giữ nguyên khoá; câu Việt của main tra `knownErrors`/mẫu động thành khoá;
+ * còn lại là câu động (engine) — `tr()` trả nguyên văn như trước.
+ */
+export function errorMsg(e: unknown): Message {
+  if (e instanceof MsgError) return e.msg
+  const text = rawText(e)
+  if (knownErrors[text] === true) return msg(text)
+  for (const rule of dynamicErrors) {
+    const match = rule.re.exec(text)
+    if (match) return msg(rule.key, { n: match[1] })
   }
-  return text
+  return msg(text)
 }
+
+/** Câu lỗi để hiển thị: lỗi IPC qua contextBridge là object có `message` nhưng không `instanceof Error` ở renderer. */
+export const errorText = (e: unknown): string => msgText(errorMsg(e))

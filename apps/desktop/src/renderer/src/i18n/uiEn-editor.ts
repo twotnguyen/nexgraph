@@ -259,4 +259,10 @@ export const uiEnEditor: Record<string, string> = {
   'Thụt lề': 'Indentation',
   'Thụt lề: {n}': 'Indent: {n}',
   'Đã chọn {n}': '{n} selected',
+  // Lỗi editor giữ khoá `Msg` trong state (I1) — dịch lúc render.
+  'Tệp không còn tồn tại': 'The file no longer exists',
+  'Tệp nằm ngoài thư mục project': 'The file is outside the project folder',
+  'Không đọc được tệp': 'Could not read the file',
+  'Không lưu được tệp': 'Could not save the file',
+  'Tệp chỉ đọc nên không lưu được': 'The file is read-only and cannot be saved',
 }
