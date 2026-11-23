@@ -18,7 +18,7 @@ def _disk_changes(store: GraphStore, root: Path, sources_dir: Path | None = None
         f.rel_path: f
         for f in discover(root, subdir=store.last_scope(), exclude=store.last_exclude(),
                           include_docs=docs, include_media=media, include_config=store.last_config_flag(),
-                          sources_dir=sources_dir)
+                          include_images=store.last_image_flag(), sources_dir=sources_dir)
     }
     changed = len(disk.keys() ^ known.keys())
     now = time.time()

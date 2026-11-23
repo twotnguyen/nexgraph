@@ -182,8 +182,8 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
     path = f.location(root)
     try:
         sha = sha256_file(path)
-        # Media chỉ cần mã băm (đã đọc theo luồng); không nạp tệp tới 500 MB vào RAM.
-        source = None if f.oversized or f.language == "media" else path.read_bytes()
+        # Media/ảnh chỉ cần mã băm (đã đọc theo luồng); không nạp tệp tới 500 MB vào RAM (ảnh: E10).
+        source = None if f.oversized or f.language in ("media", "image") else path.read_bytes()
         read_error = None
     except OSError as exc:
         sha, source, read_error = "0" * 64, None, f"Không đọc được tệp: {exc}"
@@ -193,7 +193,7 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
                      qualified_name=f.rel_path, file=f.rel_path, is_test=f.is_test)
     if f.oversized:
         return ExtractedFile(rec, [file_node], [], [], {}, [("oversized", f"{f.size} byte vượt giới hạn")])
-    if read_error or (source is None and f.language != "media"):
+    if read_error or (source is None and f.language not in ("media", "image")):
         return ExtractedFile(rec, [file_node], [], [], {}, [("read", read_error or "Không đọc được tệp")])
     if f.language == "image":  # chỉ là nút tệp; nội dung ảnh có khi chạy phân tích AI (W9)
         return ExtractedFile(rec, [file_node], [], [], {}, [])
@@ -226,12 +226,14 @@ class Indexer:
                  cancel: threading.Event, subdir: str | None = None, exclude: list[str] | None = None,
                  include_docs: bool = False, include_media: bool = False, transcript_dir: Path | None = None,
                  include_config: bool = False, workers: int | None = None, force: bool = False,
-                 sources_dir: Path | None = None, sources: ExtraSources | None = None) -> None:
+                 sources_dir: Path | None = None, sources: ExtraSources | None = None,
+                 include_images: bool = False) -> None:
         self.store, self.root, self.on_progress, self.cancel = store, Path(root), on_progress, cancel
         self.sources = sources
         self.subdir, self.exclude = subdir, exclude or []
         self.include_docs, self.include_media, self.transcript_dir = include_docs, include_media, transcript_dir
         self.include_config, self.workers, self.force = include_config, workers, force
+        self.include_images = include_images
         self.sources_dir = sources_dir
         self._file_errors: list[tuple[str, str, str]] = []  # (tệp, loại, chi tiết) để báo cho người dùng
         self._skip_stats: dict[str, int] = {}  # tệp bị discovery bỏ, theo lý do (bundle/dense)
@@ -251,14 +253,14 @@ class Indexer:
         store = self.store
         run_id = store.begin_run(commit_sha=_git_head(self.root), subdir=self.subdir, exclude=self.exclude,
                                  include_docs=self.include_docs, include_media=self.include_media,
-                                 include_config=self.include_config)
+                                 include_config=self.include_config, include_images=self.include_images)
         total = 0
         try:
             files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
                                   include_docs=self.include_docs, include_media=self.include_media,
                                   include_config=self.include_config, sources_dir=self.sources_dir,
                                   unreadable=self._unreadable,
-                                  skip_stats=self._skip_stats))
+                                  skip_stats=self._skip_stats, include_images=self.include_images))
             if self.force:
                 reset_cache_root()
             total = len(files)

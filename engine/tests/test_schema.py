@@ -324,7 +324,7 @@ def test_open_does_not_retry_other_database_errors(tmp_path, monkeypatch):
 def _sql_v6() -> str:
     """graph.sql cắt trước mốc v7, để dựng CSDL đời cũ cho test nâng cấp."""
     sql = load_sql("graph")
-    return sql[:sql.index("-- v7")].replace("PRAGMA user_version = 7;", "PRAGMA user_version = 6;")
+    return sql[:sql.index("-- v7")].replace("PRAGMA user_version = 8;", "PRAGMA user_version = 6;")
 
 
 NEW_KINDS = ", 'type', 'variable', 'table', 'resource', 'config_key'"
@@ -377,10 +377,11 @@ def test_v5_run_table_gets_config_column(tmp_path):
     c5 = sqlite3.connect(path)
     sql = _sql_v6().replace(NEW_KINDS, "").replace("PRAGMA user_version = 6;", "PRAGMA user_version = 5;")
     line = next(l for l in sql.splitlines() if l.strip().startswith("gom_cau_hinh"))
-    c5.executescript(sql.replace(line + "\n", ""))
+    img = next(l for l in sql.splitlines() if l.strip().startswith("gom_anh"))
+    c5.executescript(sql.replace(line + "\n", "").replace(img + "\n", ""))  # v5 chưa có cột cấu hình lẫn cột ảnh
     c5.close()
     cols = [r[1] for r in open_graph_db(path).execute("PRAGMA table_info(lan_lap_chi_muc)")]
-    assert cols[-1] == "gom_cau_hinh"
+    assert "gom_cau_hinh" in cols and cols[-1] == "gom_anh"  # v8 thêm cột ảnh sau cột cấu hình
 
 
 V7_TABLES = {"nhan_cum", "ky_uc", "bo_nho_dem_ngu_nghia"}
@@ -389,7 +390,7 @@ V7_TABLES = {"nhan_cum", "ky_uc", "bo_nho_dem_ngu_nghia"}
 def test_v7_semantic_and_memory_tables(tmp_path):
     # W9/W10: nhãn cụm do AI đặt, ký ức (đánh giá câu trả lời + memory tay), cache ngữ nghĩa.
     c = open_graph_db(tmp_path / "g.db")
-    assert c.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 7
+    assert c.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 8
     tables = {r["name"] for r in c.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     assert V7_TABLES <= tables
     c.execute("INSERT INTO nhan_cum VALUES ('3', 'Thanh toán', ?, 'llm', 0)", ("a" * 64,))
@@ -413,18 +414,41 @@ def test_v6_upgrades_to_v7_keeping_data(tmp_path):
     c6 = sqlite3.connect(path)
     sql = load_sql("graph")
     cut = sql.index("-- v7")
-    c6.executescript(sql[:cut].replace("PRAGMA user_version = 7;", "PRAGMA user_version = 6;"))
+    c6.executescript(sql[:cut].replace("PRAGMA user_version = 8;", "PRAGMA user_version = 6;"))
     _seed_file(c6)
     _add_node(c6, "a.rs::f#function", "function")
     c6.commit()
     c6.close()
     c7 = open_graph_db(path)
-    assert c7.execute("PRAGMA user_version").fetchone()[0] == 7
-    assert c7.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 7
+    assert c7.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION
+    assert c7.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == GRAPH_SCHEMA_VERSION
     assert c7.execute("SELECT count(*) FROM nut").fetchone()[0] == 1
     ref = open_graph_db(tmp_path / "fresh.db")
     sql_of = lambda c: sorted(r[0] for r in c.execute("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL"))
     assert sql_of(c7) == sql_of(ref)
+
+
+def test_v7_upgrades_to_v8_with_image_flag_column(tmp_path):
+    """E10: v7 → v8 thêm cột `gom_anh` (cờ gồm ảnh) tại chỗ, giữ nguyên dữ liệu lần chạy cũ."""
+    path = tmp_path / "v7.db"
+    c7 = sqlite3.connect(path)
+    sql = load_sql("graph")
+    line = next(l for l in sql.splitlines() if l.strip().startswith("gom_anh"))
+    c7.executescript(sql.replace(line + "\n", "").replace("PRAGMA user_version = 8;", "PRAGMA user_version = 7;"))
+    _seed_file(c7)
+    c7.commit()
+    c7.close()
+
+    c8 = open_graph_db(path)
+    assert c8.execute("PRAGMA user_version").fetchone()[0] == GRAPH_SCHEMA_VERSION == 8
+    assert c8.execute("SELECT phien_ban_schema FROM du_an").fetchone()[0] == 8
+    cols = {r[1] for r in c8.execute("PRAGMA table_info(lan_lap_chi_muc)")}
+    assert "gom_anh" in cols
+    assert c8.execute("SELECT gom_anh FROM lan_lap_chi_muc WHERE ma_lan = 1").fetchone()[0] == 0  # mặc định tắt
+    with pytest.raises(sqlite3.IntegrityError):
+        c8.execute("UPDATE lan_lap_chi_muc SET gom_anh = 2 WHERE ma_lan = 1")
+    assert c8.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert c8.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
 def test_app_v3_ai_per_project_and_upgrades_v2(tmp_path):

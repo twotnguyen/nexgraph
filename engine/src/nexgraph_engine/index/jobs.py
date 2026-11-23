@@ -78,7 +78,7 @@ class JobManager:
     def start_index(self, project_id: str, *, subdir: str | None = None, exclude: list[str] | None = None,
                     include_docs: bool | None = None, include_media: bool | None = None,
                     include_config: bool | None = None, workers: int | None = None, force: bool = False,
-                    sources: ExtraSources | None = None) -> str:
+                    sources: ExtraSources | None = None, include_images: bool | None = None) -> str:
         with self._lock:
             self._prune_finished_locked()
             info = self._registry.get(project_id)
@@ -94,7 +94,7 @@ class JobManager:
                                   "files_done": 0, "files_total": 0, "message": None, "result": None}
             cancel = self._cancels[job_id] = threading.Event()
             thread = threading.Thread(target=self._run, args=(job_id, info, cancel, subdir, exclude, include_docs, include_media,
-                                                                 include_config, workers, force, sources), daemon=True,
+                                                                 include_config, workers, force, sources, include_images), daemon=True,
                                       name=f"index-{job_id[:8]}")
             self._threads.append(thread)
         self._bus.publish({"type": "job_progress", **self._jobs[job_id]})
@@ -279,7 +279,8 @@ class JobManager:
     def _run(self, job_id: str, info: ProjectInfo, cancel: threading.Event, subdir: str | None,
              exclude: list[str] | None = None, include_docs: bool | None = None,
              include_media: bool | None = None, include_config: bool | None = None,
-             workers: int | None = None, force: bool = False, sources: ExtraSources | None = None) -> None:
+             workers: int | None = None, force: bool = False, sources: ExtraSources | None = None,
+             include_images: bool | None = None) -> None:
         lock = self._locks.get(info.project_id) if self._locks else None
         if lock is not None:
             lock.acquire()  # đợi lần refresh hiện tại của project xong
@@ -313,6 +314,7 @@ class JobManager:
                     include_docs=last_docs if include_docs is None else include_docs,
                     include_media=last_media if include_media is None else include_media,
                     include_config=store.last_config_flag() if include_config is None else include_config,
+                    include_images=store.last_image_flag() if include_images is None else include_images,
                     workers=workers, force=force, **({"sources": sources} if sources is not None else {}),
                     transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id,
                     sources_dir=sources_root(self._registry.app_data_dir, info.project_id),

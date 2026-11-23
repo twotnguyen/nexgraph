@@ -52,13 +52,13 @@ class GraphStore:
     def begin_run(self, files_total: int = 0, commit_sha: str | None = None, *,
                   kind: Literal["day_du", "tang_dan"] = "day_du", subdir: str | None = None,
                   exclude: list[str] | None = None, include_docs: bool = False, include_media: bool = False,
-                  include_config: bool = False) -> int:
+                  include_config: bool = False, include_images: bool = False) -> int:
         pid = self.project_id()
         cur = self.conn.execute(
             "INSERT INTO lan_lap_chi_muc (ma_du_an, loai, trang_thai, bat_dau_luc, so_tep_tong, commit_sha, thu_muc_con,"
-            " mau_bo_qua, gom_tai_lieu, gom_media, gom_cau_hinh) VALUES (?, ?, 'cho', ?, ?, ?, ?, ?, ?, ?, ?)",
+            " mau_bo_qua, gom_tai_lieu, gom_media, gom_cau_hinh, gom_anh) VALUES (?, ?, 'cho', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (pid, kind, int(time.time()), files_total, commit_sha, subdir, json.dumps(exclude) if exclude else None,
-             int(include_docs), int(include_media), int(include_config)),
+             int(include_docs), int(include_media), int(include_config), int(include_images)),
         )
         self._commit()
         return int(cur.lastrowid)
@@ -90,6 +90,13 @@ class GraphStore:
             "SELECT gom_cau_hinh FROM lan_lap_chi_muc WHERE loai = 'day_du'"
             " AND trang_thai IN ('cho', 'cau_truc', 'phan_giai', 'hoan_tat') ORDER BY ma_lan DESC LIMIT 1").fetchone()
         return bool(row["gom_cau_hinh"]) if row else False
+
+    def last_image_flag(self) -> bool:
+        """Lần lập chỉ mục đầy đủ gần nhất có gồm ảnh cục bộ không (E10); refresh dùng lại."""
+        row = self.conn.execute(
+            "SELECT gom_anh FROM lan_lap_chi_muc WHERE loai = 'day_du'"
+            " AND trang_thai IN ('cho', 'cau_truc', 'phan_giai', 'hoan_tat') ORDER BY ma_lan DESC LIMIT 1").fetchone()
+        return bool(row["gom_anh"]) if row else False
 
     # --- kiểu biến và mốc tệp (lược đồ v2) -------------------------------------------------
     def add_bindings(self, bindings: dict[str, dict[str, str]]) -> None:
