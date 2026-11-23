@@ -160,7 +160,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
             }
           })
         : [],
-    [view, highlights, center, near, overlay]
+    [view, highlights, center, near, overlay, locale]
   )
   const edges = useMemo<Edge[]>(
     () => (view && hover ? view.edges.map((e) => (e.source === hover || e.target === hover ? { ...e, className: 'lit' } : { ...e, className: 'dim' })) : view?.edges ?? []),

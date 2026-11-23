@@ -1,5 +1,7 @@
 export type BufferExcerpt = { id: string; file: string; startLine: number; endLine: number; label?: string }
-export type MultiBufferRequest = { id: string; title: string; excerpts: BufferExcerpt[] }
+import type { Message } from './messages'
+
+export type MultiBufferRequest = { id: string; title: Message; excerpts: BufferExcerpt[] }
 
 let pending: MultiBufferRequest | null = null
 const listeners = new Set<() => void>()

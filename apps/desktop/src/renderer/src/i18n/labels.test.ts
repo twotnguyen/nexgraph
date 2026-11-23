@@ -68,6 +68,20 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
     expect(hits, 'dịch lúc render (vi.*/tr()), không lưu chuỗi đã dịch vào state/ref').toEqual([])
   })
 
+  it('không gọi setX(tr(...)) — chốt chuỗi dịch vào state', () => {
+    const hits: string[] = []
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8')
+      for (const match of text.matchAll(/(?<![\w.$])set[A-Z]\w*\s*\(/g)) {
+        const argument = callArgument(text, match.index + match[0].length - 1)
+        if (/^\s*tr\(/.test(argument)) {
+          hits.push(`${relative(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 70)}`)
+        }
+      }
+    }
+    expect(hits, 'state giữ khoá/dữ liệu rồi dịch lúc render (msg/msgText), không chốt chuỗi đã dịch').toEqual([])
+  })
+
   it('không có const cấp module giữ chuỗi đã dịch (trừ getter/hàm đọc lúc gọi)', () => {
     const hits: string[] = []
     for (const file of files) {

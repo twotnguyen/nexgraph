@@ -22,6 +22,7 @@ import { matchProfile, useAgentProfiles, type AgentProfile } from '../../state/a
 import { ContextRing } from './ContextRing'
 import { SavedPrompts } from './SavedPrompts'
 import { announceAgent } from '../../state/agentNotify'
+import { msg, msgText, type Message } from '../../state/messages'
 
 interface Props {
   id?: string
@@ -143,14 +144,14 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const [dismissedCompletion, setDismissedCompletion] = useState('')
   const [completionIndex, setCompletionIndex] = useState(0)
   const [projectFiles, setProjectFiles] = useState<string[] | null>(null)
-  const [fileListError, setFileListError] = useState('')
+  const [fileListError, setFileListError] = useState<Message>('')
   const [queueWake, setQueueWake] = useState(0)
   const [connect, setConnect] = useState(false)
   const [savedOpen, setSavedOpen] = useState(false)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [tool, setTool] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [consent, setConsent] = useState<PendingConsent | null>(null)
   const [checking, setChecking] = useState(false)
   const [openTools, setOpenTools] = useState<number | string | null>(null)
@@ -299,7 +300,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       modeRef.current = m
       setMode(m)
     }).catch(() => {
-      if (alive) setError(vi.agent.modeFailed)
+      if (alive) setError(msg('Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.'))
     }).finally(() => {
       if (!alive) return
       modePending.current = false
@@ -414,7 +415,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       modeRef.current = null
       setMode(null)
       setApprovals([])
-      setError(vi.agent.modeFailed)
+      setError(msg('Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.'))
     } finally {
       modePending.current = false
       if (mounted.current) setChangingMode(false)
@@ -432,7 +433,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     try {
       await applyTools(profile?.disabledTools ?? [])
     } catch {
-      setError(vi.agent.modeFailed)
+      setError(msg('Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.'))
       return
     }
     await pickMode(m)
@@ -532,11 +533,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       return
     }
     const selectedModel = models.find((model) => model.provider === cfg?.provider && model.id === cfg?.model)
-    if (value.images.length && selectedModel?.supportsImages === false) { setError(tr('Model hiện tại không nhận ảnh. Hãy đổi sang model hỗ trợ hình ảnh.')); return }
+    if (value.images.length && selectedModel?.supportsImages === false) { setError(msg('Model hiện tại không nhận ảnh. Hãy đổi sang model hỗ trợ hình ảnh.')); return }
     if (value.images.some((image) => cfg?.runtime === 'antigravity-cli') && !window.confirm(tr('Gemini có thể không nhận ảnh trong phiên bản CLI này. Nếu không hỗ trợ, lượt gửi sẽ báo lỗi rõ ràng. Tiếp tục?'))) return
     if (busy || activeRun.current || queueRef.current.some((item) => item.sessionId === work.sessionId && sameConsentTarget(item.target, scope.current))) {
       const target = scope.current
-      if (!target || !cfg?.model) { setError(vi.chat.notConfigured); return }
+      if (!target || !cfg?.model) { setError(msg('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')); return }
       updateQueue((items) => [...items, queuePrompt(value, target, cfg.model, turn.current?.sessionId ?? sessionIdRef.current)])
       setComposer({ text: '', attachments: [], images: [] })
       if (!busy && !activeRun.current) { queueReady.current = true; setQueueWake((count) => count + 1) }
@@ -671,7 +672,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
 
   const executeSlash = (name: string, erase = true) => {
     if (['new', 'clear', 'model', 'resume', 'login'].includes(name) && (busy || !!activeRun.current || checking || work.pending || work.loading)) {
-      setError(tr('Dừng trợ lý trước khi đổi phiên hoặc model.'))
+      setError(msg('Dừng trợ lý trước khi đổi phiên hoặc model.'))
       return false
     }
     if (erase) setComposer({ ...composerRef.current, text: '' })
@@ -679,7 +680,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (name === 'new' || name === 'clear') { void work.create(); setView('chat') }
     else if (name === 'resume') { setView('history'); void work.refresh().catch((e) => setError(errorMessage(e))) }
     else if (name === 'model') {
-      if (!modelSelect.current) setError(tr('Chưa có danh sách model. Hãy kết nối AI trước.'))
+      if (!modelSelect.current) setError(msg('Chưa có danh sách model. Hãy kết nối AI trước.'))
       else { modelSelect.current.focus(); modelSelect.current.showPicker?.() }
     } else if (name === 'stop') stop()
     else if (name === 'login') setConnect(true)
@@ -707,7 +708,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (completion?.kind !== 'mention' || projectFiles !== null || fileListError) return
     let live = true
     const load = window.nexgraph.fs.files
-    if (!load) { setFileListError(tr('Không liệt kê được tệp ở chế độ này.')); return }
+    if (!load) { setFileListError(msg('Không liệt kê được tệp ở chế độ này.')); return }
     void load(projectId).then(({ files }) => { if (live) setProjectFiles(files) }).catch((e) => { if (live) setFileListError(errorMessage(e)) })
     return () => { live = false }
   }, [completion?.kind, projectFiles, fileListError, projectId])
@@ -725,7 +726,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const file = fileRows[index]
       if (!file) return
       if (!attachments.some((item) => item.kind === 'file' && item.file === file)) {
-        if (attachments.length >= 12) { setError(tr('Mỗi lượt hỗ trợ tối đa 12 mục ngữ cảnh.')); return }
+        if (attachments.length >= 12) { setError(msg('Mỗi lượt hỗ trợ tối đa 12 mục ngữ cảnh.')); return }
         setAttachments((current) => [...current, { kind: 'file', file }])
       }
     }
@@ -804,7 +805,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       {view === 'settings' && <div className="agent-settings-view"><WorkbenchSettings projectId={projectId} work={work} busy={busy || checking} mode={mode} runtime={cfg?.runtime} onSuggest={(suggestion) => { setText(suggestion); setView('chat'); input.current?.focus() }} /></div>}
       <div className="agent-thread" hidden={view !== 'chat'}>
         {toolsUnavailable && <p className="agent-notice">{tr('Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.')}</p>}
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <p role="alert" className="error">{msgText(error)}</p>}
         <div className="msgs" ref={messages} onScroll={(event) => {
           const el = event.currentTarget
           followMessages.current = el.scrollHeight - el.clientHeight - el.scrollTop < 36
@@ -889,7 +890,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
             {completion && <div id="agent-completions" className="agent-completions" role="listbox" aria-label={completion.kind === 'command' ? tr('Lệnh') : tr('Tệp trong dự án')}>
               {completion.kind === 'command' ? commandRows.map((command, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={command.name} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><b>/{command.name}</b><span>{command.detail}</span></button>)
                 : fileRows.map((file, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={file} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><FileTypeIcon name={file} /><b>{file.slice(file.lastIndexOf('/') + 1)}</b><span>{file.slice(0, file.lastIndexOf('/') + 1)}</span></button>)}
-              {!completionCount && <div className="agent-completion-empty">{completion.kind === 'command' ? tr('Không có lệnh khớp') : fileListError || (projectFiles ? tr('Không có tệp khớp') : tr('Đang liệt kê tệp…'))}</div>}
+              {!completionCount && <div className="agent-completion-empty">{completion.kind === 'command' ? tr('Không có lệnh khớp') : msgText(fileListError) || (projectFiles ? tr('Không có tệp khớp') : tr('Đang liệt kê tệp…'))}</div>}
             </div>}
             {(attachments.length > 0 || fileContext || images.length > 0 || stagingImages) && <div className="agent-attachments">
               {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{item.kind === 'file' ? '@' : ''}{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={checking || stopping} aria-label={tr('Gỡ {name}', { name: contextLabel(item) })} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={11} /></button></div>)}

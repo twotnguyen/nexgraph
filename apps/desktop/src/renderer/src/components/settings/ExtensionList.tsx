@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { installExtension, removeExtension, useExtensions } from '../../state/extensions'
 import { errorText } from '../../state/errorText'
 import { tr } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 
 /** Trang Extension trong Cài đặt: danh sách đã cài (theme, lệnh), nút cài từ thư mục, gỡ, lỗi manifest. */
 export function ExtensionList() {
   const { extensions, errors, error } = useExtensions()
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
+  const [message, setMessage] = useState<Message | null>(null)
   const act = async (work: () => Promise<unknown>) => {
     setBusy(true)
     setMessage(null)
@@ -18,9 +19,9 @@ export function ExtensionList() {
       <div className="row">
         <button type="button" className="primary" disabled={busy || !window.nexgraph.extensions} onClick={() => void act(async () => {
           const ext = await installExtension()
-          if (ext) setMessage(tr('Đã cài {name} {version}', { name: ext.name, version: ext.version }))
+          if (ext) setMessage(msg('Đã cài {name} {version}', { name: ext.name, version: ext.version }))
         })}>{tr('Cài từ thư mục…')}</button>
-        {message && <span role="status" className="muted">{message}</span>}
+        {message && <span role="status" className="muted">{msgText(message)}</span>}
       </div>
       {error && <p role="alert" className="error">{error}</p>}
       {extensions.length === 0 && <p className="muted">{tr('Chưa cài extension nào.')}</p>}

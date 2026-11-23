@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } fr
 import type { GraphNode, NodeKind } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
 import { errorText } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { runCommand } from '../../state/commands'
 import { useChanges } from '../../state/useChanges'
 import { useDiagnostics } from '../../state/diagnostics'
@@ -57,7 +58,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const [focused, setFocused] = useState<string | null>(null)
   const [errors, setErrors] = useState<Map<string, string>>(new Map())
   const [edit, setEdit] = useState<Editing | null>(null)
-  const [operationError, setOperationError] = useState<string | null>(null)
+  const [operationError, setOperationError] = useState<Message | null>(null)
   const [working, setWorking] = useState(false)
   const [menu, setMenu] = useState<TreeMenu | null>(null)
   const [clipboard, setClipboard] = useState<Clipboard | undefined>(() => clipboards.get(projectId))
@@ -279,7 +280,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const hasDirty = (path: string) => [...(dirtyFiles ?? [])].some((file) => insidePath(file, path))
   const allowRename = (path: string) => {
     if (!hasDirty(path)) return true
-    setOperationError(tr('Hãy lưu các tệp đang sửa trước khi đổi tên hoặc di chuyển.'))
+    setOperationError(msg('Hãy lưu các tệp đang sửa trước khi đổi tên hoặc di chuyển.'))
     return false
   }
   const run = async (action: () => Promise<void>) => {
@@ -314,7 +315,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const submitEdit = async () => {
     if (!edit || working) return
     const name = edit.value.trim()
-    if (!name) { setOperationError(tr('Tên tệp hoặc thư mục không được để trống.')); return }
+    if (!name) { setOperationError(msg('Tên tệp hoặc thư mục không được để trống.')); return }
     const target = childPath(edit.parent, name)
     const old = entryPath(edit.node)
     if (edit.kind === 'rename' && old === target) { setEdit(null); return }
@@ -369,7 +370,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const trash = (node: TreeNode) => {
     const path = entryPath(node)
     if (!path || !fs.trash) return
-    if (hasDirty(path)) { setOperationError(tr('Hãy lưu các tệp đang sửa trước khi chuyển vào Thùng rác.')); return }
+    if (hasDirty(path)) { setOperationError(msg('Hãy lưu các tệp đang sửa trước khi chuyển vào Thùng rác.')); return }
     if (!window.confirm(tr('Chuyển “{name}” vào Thùng rác?', { name: node.label }))) return
     void run(async () => {
       await fs.trash!(projectId, path)
@@ -491,7 +492,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
         </div>
       )}
       {renderError(ROOT)}
-      {operationError && <div className="tree-error" role="alert">{operationError}</div>}
+      {operationError && <div className="tree-error" role="alert">{msgText(operationError)}</div>}
       {!errors.has(ROOT) && !loaded.has(ROOT) && <p role="status" className="muted">{list ? tr('Đang đọc thư mục…') : vi.tree.loading}</p>}
       {loaded.has(ROOT) && rows.length === 0 && !edit && <p className="muted">{list ? tr('Thư mục trống.') : tr('Chưa có tệp trong phạm vi chỉ mục.')}</p>}
       <div ref={tree} role="tree" aria-label={vi.tree.label} tabIndex={items.length ? undefined : 0}

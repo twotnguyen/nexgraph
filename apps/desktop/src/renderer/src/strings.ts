@@ -1494,7 +1494,8 @@ export const uiEn: Record<string, string> = {
   'Dấu trang': 'Bookmarks',
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.
-  'Luồng {id}': 'Flow {id}'
+  'Luồng {id}': 'Flow {id}',
+  'Đã chia {n} cụm': 'Split into {n} clusters'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}. */
