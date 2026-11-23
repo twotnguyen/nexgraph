@@ -39,4 +39,23 @@ describe('SemanticUsageStore', () => {
     const store = new SemanticUsageStore()
     await expect(store.wait('job-khac', 20)).resolves.toBeNull()
   })
+
+  it('wait hết hạn xoá luôn entry rỗng khỏi map waiter', async () => {
+    const store = new SemanticUsageStore()
+    await expect(store.wait('job-don', 20)).resolves.toBeNull()
+    expect(waitersOf(store).size).toBe(0)
+    // set() sau khi waiter đã hết hạn không được làm sống lại entry rỗng.
+    store.set('job-don', 5, 6)
+    expect(waitersOf(store).size).toBe(0)
+    expect(store.get('job-don')).toEqual({ input_tokens: 5, output_tokens: 6 })
+  })
+
+  it('nhiều waiter cùng job: hết hạn xong map vẫn sạch', async () => {
+    const store = new SemanticUsageStore()
+    await Promise.all([store.wait('job-nhieu', 20), store.wait('job-nhieu', 20)])
+    expect(waitersOf(store).size).toBe(0)
+  })
 })
+
+const waitersOf = (store: SemanticUsageStore): Map<string, Set<unknown>> =>
+  (store as unknown as { waiters: Map<string, Set<unknown>> }).waiters

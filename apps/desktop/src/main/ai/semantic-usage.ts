@@ -44,7 +44,10 @@ export class SemanticUsageStore {
         if (settled) return
         settled = true
         clearTimeout(timer)
-        this.waiters.get(jobId)?.delete(finish)
+        const waiting = this.waiters.get(jobId)
+        waiting?.delete(finish)
+        // Không để lại Set rỗng: map tăng theo số job hết hạn dù không còn ai chờ.
+        if (waiting && waiting.size === 0) this.waiters.delete(jobId)
         resolve(usage)
       }
       timer = setTimeout(() => finish(null), timeoutMs)
