@@ -5,7 +5,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Literal
 
-GRAPH_SCHEMA_VERSION = 7
+GRAPH_SCHEMA_VERSION = 8
 APP_SCHEMA_VERSION = 3
 GLOBAL_SCHEMA_VERSION = 1  # <data_dir>/global.db (W8)
 MIN_SQLITE = (3, 43, 0)  # FTS5 contentless_delete
@@ -38,6 +38,8 @@ def _migrate(conn: sqlite3.Connection, sql_name: Literal["graph", "app", "global
             if sql_name == "graph" and v == 5:
                 _widen_node_kinds(conn)
                 _add_config_column(conn)
+            if sql_name == "graph" and v == 7:
+                _add_image_column(conn)
             script = resources.files("nexgraph_engine.schema").joinpath(f"{prefix}_{v}_to_{v + 1}.sql")
             for stmt in _split_statements(script.read_text(encoding="utf-8")):
                 conn.execute(stmt)
@@ -82,6 +84,14 @@ def _add_config_column(conn: sqlite3.Connection) -> None:
     if cols and "gom_cau_hinh" not in cols:
         conn.execute("ALTER TABLE lan_lap_chi_muc ADD COLUMN gom_cau_hinh INTEGER NOT NULL DEFAULT 0"
                      " CHECK (gom_cau_hinh IN (0, 1))")
+
+
+def _add_image_column(conn: sqlite3.Connection) -> None:
+    """v7 → v8: cờ "gồm ảnh" tách khỏi `gom_media` (E10). Bỏ qua nếu cột đã có (CSDL dựng từ graph.sql mới)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(lan_lap_chi_muc)")}
+    if cols and "gom_anh" not in cols:
+        conn.execute("ALTER TABLE lan_lap_chi_muc ADD COLUMN gom_anh INTEGER NOT NULL DEFAULT 0"
+                     " CHECK (gom_anh IN (0, 1))")
 
 
 def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app", "global"]) -> None:

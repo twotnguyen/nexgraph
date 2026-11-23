@@ -54,7 +54,7 @@ Hợp đồng này để P1 (engine) và P2/P3 (desktop, AI) làm song song. Có
 | `GET /v1/selftest` | 1 | `{ok:bool, nodes:int}`: extract fixture đóng gói sẵn, kiểm bản đóng gói |
 | `POST /v1/projects` `{path}` | 2 | `{project_id, path, name, is_git:bool, storage, last_indexed_at, last_index_commit}` (hai trường cuối thêm ở F10 để app mở dự án đã index vào trang Tổng quan) |
 | `GET /v1/projects` | 2 | `[{project_id, path, last_indexed_at, last_index_commit}]` |
-| `POST /v1/projects/{pid}/index` `{subdir?, exclude?, include_docs?, include_media?}` | 2 (thân mở rộng F10-1, F10-6a) | `{job_id}`; ba tuỳ chọn cuối lưu theo lần index, refresh dùng lại; bỏ trống `include_*` = giữ giá trị lần index trước |
+| `POST /v1/projects/{pid}/index` `{subdir?, exclude?, include_docs?, include_media?, include_config?, include_images?}` | 2 (thân mở rộng F10-1, F10-6a, W2, E10) | `{job_id}`; các tuỳ chọn `include_*` lưu theo lần index, refresh dùng lại; bỏ trống `include_*` = giữ giá trị lần index trước. `include_images` (E10) = ảnh cục bộ (`.png/.jpg/.jpeg/.gif/.webp/.svg`) vào graph dưới dạng nút tệp `image`, tách khỏi `include_media` (audio/video); `include_media=true` vẫn bao gồm ảnh |
 | `GET /v1/jobs/{job_id}` · `DELETE` (huỷ) | 2 | `{state:"queued"\|"structure"\|"resolve"\|"done"\|"error"\|"cancelled", files_done, files_total, message?}` |
 | `GET /v1/events` (SSE) | 2 | `job_progress`, `graph_updated {pid}`, `changes_updated {pid}` |
 | `GET /v1/projects/{pid}/stats` | 2 | đếm node/edge theo kind/type, ngôn ngữ |
