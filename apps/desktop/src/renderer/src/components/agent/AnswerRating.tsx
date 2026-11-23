@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Citation, RatingOutcome } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 
 /** Ba nút đánh giá dưới một câu trả lời của agent; lưu vào bộ nhớ làm việc của dự án qua engine. */
 export function AnswerRating({ projectId, question, answer, citations }: {
@@ -11,7 +12,7 @@ export function AnswerRating({ projectId, question, answer, citations }: {
 }) {
   const [state, setState] = useState<'idle' | 'correcting' | 'saving' | 'saved'>('idle')
   const [correction, setCorrection] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
 
   const save = async (outcome: RatingOutcome) => {
     setState('saving')
@@ -23,7 +24,7 @@ export function AnswerRating({ projectId, question, answer, citations }: {
       })
       setState('saved')
     } catch (e) {
-      setError(vi.memory.failed(e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)))
+      setError(msg('Không lưu được: {error}', { error: e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e) }))
       setState(outcome === 'da_sua' ? 'correcting' : 'idle')
     }
   }
@@ -43,7 +44,7 @@ export function AnswerRating({ projectId, question, answer, citations }: {
           <button type="button" disabled={!correction.trim()} onClick={() => void save('da_sua')}>{vi.memory.save}</button>
         </span>
       )}
-      {error && <span role="alert" className="error">{error}</span>}
+      {error && <span role="alert" className="error">{msgText(error)}</span>}
     </span>
   )
 }

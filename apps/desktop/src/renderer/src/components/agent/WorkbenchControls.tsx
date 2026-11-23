@@ -4,6 +4,7 @@ import { Icon } from '../common/icons'
 import { tr } from '../../strings'
 import type { AgentInspection, AgentWorkbench } from './useAgentWorkbench'
 import './agent-history.css'
+import { msgText } from '../../state/messages'
 
 const messageOf = (e: unknown): string => e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
 const pinText = (pinned: boolean): string => pinned ? tr('Bỏ ghim') : tr('Ghim')
@@ -30,7 +31,7 @@ export function WorkbenchHistory({ work, busy, onPicked }: { work: AgentWorkbenc
     <label className="agent-history-search"><Icon name="search" size={15} />
       <input type="search" aria-label={tr('Tìm cuộc trò chuyện')} placeholder={tr('Tìm cuộc trò chuyện…')} value={query} onChange={(event) => setQuery(event.target.value)} />
     </label>
-    {work.error && <p role="alert" className="error">{work.error}</p>}
+    {work.error && <p role="alert" className="error">{msgText(work.error)}</p>}
     {work.sessions.length === 0 ? <div className="agent-history-empty">
       <Icon name="chat" size={28} />
       <strong>{tr('Chưa có cuộc trò chuyện')}</strong>
@@ -125,9 +126,9 @@ export function WorkbenchStatus({ projectId, work, busy, onInspect }: { projectI
   useEffect(() => setLocalError(''), [projectId])
   const taskLabels = { running: tr('Đang thực hiện'), waiting_approval: tr('Chờ duyệt'), completed: tr('Hoàn tất'), failed: tr('Thất bại'), cancelled: tr('Đã dừng') }
   return <>
-    {work.error && <p role="alert" className="error">{work.error}</p>}
+    {work.error && <p role="alert" className="error">{msgText(work.error)}</p>}
     {localError && <p role="alert" className="error">{localError}</p>}
-    {work.notice && <p role="status" className="agent-notice">{work.notice}</p>}
+    {work.notice && <p role="status" className="agent-notice">{msgText(work.notice)}</p>}
     {work.notice && work.noticeDetail && <details className="agent-notice-detail"><summary>{tr('Chi tiết kỹ thuật')}</summary><pre>{work.noticeDetail}</pre></details>}
     {work.task && <div className="agent-task-status" role="status"><span>{taskLabels[work.task.status]}{work.task.turnsKnown === false ? ' · Antigravity CLI' : tr(' · {turns}/{max} lượt', { turns: work.task.turns, max: work.task.limits.maxTurns })}</span>
       {!busy && !!work.task.checkpointIds?.length && <>

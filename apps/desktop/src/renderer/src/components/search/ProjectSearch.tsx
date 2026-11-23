@@ -3,6 +3,7 @@ import type { TextSearchQuery, TextSearchResult } from '@shared/api'
 import { useCommand } from '../../state/commands'
 import { useDebounced } from '../../state/useDebounced'
 import { tr } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import './project-search.css'
@@ -27,7 +28,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
   const [result, setResult] = useState<TextSearchResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, setStatus] = useState<Message | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [runs, setRuns] = useState(0)
   const input = useRef<HTMLInputElement>(null)
@@ -87,7 +88,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
       const done = await api.replaceText(projectId, debounced, replacement, files)
       const skipped = done.skipped.length + held
       const skippedText = skipped ? tr('; bỏ qua {count} tệp đang sửa hoặc vừa đổi', { count: skipped }) : ''
-      setStatus(tr('Đã thay {count} chỗ trong {files} tệp{skipped}.', { count: done.replacements, files: done.files, skipped: skippedText }))
+      setStatus(msg('Đã thay {count} chỗ trong {files} tệp{skipped}.', { count: done.replacements, files: done.files, skipped: skippedText }))
       setRuns((n) => n + 1)
     } catch (e) {
       setError(message(e))
@@ -103,7 +104,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
     await replace([file], count)
   }
   const allCollapsed = !!result?.files.length && result.files.every((f) => collapsed.has(f.file))
-  const summary = error ?? status ?? (busy ? tr('Đang tìm…') : result ? (total ? tr('{count} kết quả trong {files} tệp{truncated}', { count: total, files: result.files.length, truncated: result.truncated ? ` — ${tr('Đạt giới hạn')}` : '' }) : tr('Không có kết quả')) : '')
+  const summary = error || msgText(status) || (busy ? tr('Đang tìm…') : result ? (total ? tr('{count} kết quả trong {files} tệp{truncated}', { count: total, files: result.files.length, truncated: result.truncated ? ` — ${tr('Đạt giới hạn')}` : '' }) : tr('Không có kết quả')) : '')
 
   return (
     <div className="project-search">

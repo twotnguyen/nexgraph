@@ -159,7 +159,25 @@ vi.doMock('monaco-editor/editor/editor.api.js', () => {
   })
   const editor = {
     create: (_el: HTMLElement, options: EditorOptions) => fake.createEditorMock(options),
-    createDiffEditor: (_el: HTMLElement, options: EditorOptions) => { fake.diffOptions.push(options); return { setModel: vi.fn(), dispose: vi.fn() } },
+    createDiffEditor: (el: HTMLElement, options: EditorOptions) => {
+      fake.diffOptions.push(options)
+      // Hai editor con thật của Monaco: mỗi editor có cây DOM .monaco-editor riêng và
+      // Monaco gắn node widget tràn vào chính cây đó khi không cấp host bên ngoài.
+      const child = () => {
+        const root = document.createElement('div')
+        root.className = 'monaco-editor'
+        const content = document.createElement('div')
+        content.className = 'overflowingContentWidgets'
+        const overlay = document.createElement('div')
+        overlay.className = 'overflowingOverlayWidgets'
+        root.append(content, overlay)
+        el.appendChild(root)
+        return { getDomNode: () => root, dispose: vi.fn(), updateOptions: vi.fn() }
+      }
+      let original: ReturnType<typeof child> | undefined
+      let modified: ReturnType<typeof child> | undefined
+      return { setModel: vi.fn(), dispose: vi.fn(), getOriginalEditor: () => (original ??= child()), getModifiedEditor: () => (modified ??= child()) }
+    },
     createModel: fake.createModel,
     getModel: (uri: { toString(): string }) => fake.models.get(uri.toString()),
     getModels: () => [...fake.models.values()],
@@ -311,15 +329,22 @@ describe('E3 editor handles', () => {
 
     const diffEl = el()
     const diff = createDiffEditor(diffEl, { before: 'a', after: 'b', language: 'typescript' })
-    const diffHost = fake.diffOptions.at(-1)?.overflowWidgetsDomNode as HTMLElement
-    expect(diffHost).toBeInstanceOf(HTMLElement)
-    expect(diffHost.parentElement).toBe(diffEl)
+    // Diff có hai editor con: mỗi con một host riêng, không dùng chung host của diff.
+    expect(fake.diffOptions.at(-1)?.overflowWidgetsDomNode).toBeUndefined()
+    const diffHosts = [...diffEl.querySelectorAll<HTMLElement>('.ne-overflow-widgets')]
+    expect(diffHosts).toHaveLength(2)
+    for (const diffHost of diffHosts) {
+      expect(diffHost.parentElement?.className).toBe('monaco-editor')
+      expect(diffHost.querySelectorAll('.overflowingContentWidgets')).toHaveLength(1)
+      expect(diffHost.querySelectorAll('.overflowingOverlayWidgets')).toHaveLength(1)
+    }
+    expect(new Set(diffHosts.map((node) => node.parentElement)).size).toBe(2)
 
     diff.dispose()
     handle.dispose()
     mirror.dispose()
     expect(host.parentElement).toBeNull()
-    expect(diffHost.parentElement).toBeNull()
+    expect(diffEl.querySelectorAll('.ne-overflow-widgets')).toHaveLength(0)
   })
 })
 

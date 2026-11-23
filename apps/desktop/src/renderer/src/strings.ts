@@ -1,6 +1,6 @@
 // Chuỗi giao diện: mặc định tiếng Việt, bản Anh trong enStrings (spec §5.9).
 import type { PathConfidence } from '@shared/graph-types'
-import { formatNumber, getLocale } from './state/locale'
+import { formatNumber, getLocale, plural, pluralOf } from './state/locale'
 import { uiEnScreens } from './i18n/uiEn-screens'
 import { uiEnAgent } from './i18n/uiEn-agent'
 import { uiEnEditor } from './i18n/uiEn-editor'
@@ -132,7 +132,8 @@ const viStrings = {
     back: '← Dự án',
     statusLabel: 'Trạng thái graph',
     loading: 'Đang tải số liệu…',
-    stats: (files: string, nodes: string, edges: string) => `${files} tệp · ${nodes} node · ${edges} cạnh`,
+    stats: (files: number, nodes: number, edges: number) =>
+      `${formatNumber(files)} tệp · ${formatNumber(nodes)} node · ${formatNumber(edges)} cạnh`,
     lastIndexed: (when: string) => `Index lần cuối: ${when}`,
     stale: 'Graph cũ hơn mã nguồn',
     genericLanguages: (langs: string) => `Ngôn ngữ ở mức chung (cấu trúc và lời gọi; lời gọi xuyên tệp chỉ khi bộ trích xuất nối được, chưa suy kiểu biến): ${langs}`,
@@ -418,7 +419,8 @@ const viStrings = {
   },
   code: {
     open: 'Mở mã',
-    viewNode: 'Xem nút'
+    viewNode: 'Xem nút',
+    truncated: 'Đã cắt bớt — mở tệp để xem đầy đủ'
   },
   editor: {
     close: 'Đóng',
@@ -513,7 +515,7 @@ const viStrings = {
       `+${files.reduce((n, f) => n + f.count, 0)} trong ${files.length} tệp: ${files.map((f) => `${f.file ?? '(ngoài tệp)'} (${f.count})`).join(', ')}`,
     readSection: 'Đọc mục',
     sectionStale: 'Tệp đã đổi sau lần index: nội dung có thể lệch dòng.',
-    sectionTruncated: (file: string, start: number, end: number) => `Đã cắt ở 8.000 ký tự. Mở ${file} dòng ${start}–${end} để đọc hết.`
+    sectionTruncated: (file: string, start: number, end: number) => `Đã cắt bớt — mở tệp để xem đầy đủ (${file}:${start}–${end})`
   },
   graph: {
     backToRoot: 'Về gốc',
@@ -808,9 +810,9 @@ const enStrings: typeof viStrings = {
   large: {
     scanning: 'Checking project size…',
     message: (files: number, threshold: number) =>
-      `This project has ${formatNumber(files)} code files, exceeding the threshold of ${formatNumber(threshold)}. A full index may take a lot of time and memory.`,
+      `This project has ${formatNumber(files)} ${plural(files, 'code file', 'code files')}, exceeding the threshold of ${formatNumber(threshold)}. A full index may take a lot of time and memory.`,
     hint: 'Choose a subfolder to index, or index everything:',
-    files: (n: number) => `${formatNumber(n)} files`,
+    files: (n: number) => `${formatNumber(n)} ${plural(n, 'file', 'files')}`,
     all: 'Index everything',
     cancel: 'Cancel',
     subdir: (path: string) => `Subfolder: ${path}`
@@ -830,7 +832,8 @@ const enStrings: typeof viStrings = {
     back: '← Projects',
     statusLabel: 'Graph status',
     loading: 'Loading statistics…',
-    stats: (files: string, nodes: string, edges: string) => `${files} files · ${nodes} nodes · ${edges} edges`,
+    stats: (files: number, nodes: number, edges: number) =>
+      `${formatNumber(files)} ${plural(files, 'file', 'files')} · ${formatNumber(nodes)} ${plural(nodes, 'node', 'nodes')} · ${formatNumber(edges)} ${plural(edges, 'edge', 'edges')}`,
     lastIndexed: (when: string) => `Last indexed: ${when}`,
     stale: 'Graph is older than the source code',
     genericLanguages: (langs: string) => `Languages handled at a generic level (structure and calls; cross-file calls only when the extractor links them, no variable type inference): ${langs}`,
@@ -843,7 +846,7 @@ const enStrings: typeof viStrings = {
     recluster: 'Re-cluster',
     reclusterDesc: 'Recompute communities on the current graph without rereading code.',
     reclustering: 'Re-clustering…',
-    clusters: (n: number) => `Split into ${n} clusters`,
+    clusters: (n: number) => `Split into ${n} ${plural(n, 'cluster', 'clusters')}`,
     view: 'View',
     archDesc: 'Block map and dependency arrows.',
     flowsDesc: 'Execution flows from entry points, step by step.',
@@ -903,19 +906,21 @@ const enStrings: typeof viStrings = {
   map: {
     root: 'Root',
     breadcrumb: 'Map path',
-    status: (nodes: number, files: number) => `Showing ${formatNumber(nodes)} nodes for ${formatNumber(files)} files`,
+    status: (nodes: number, files: number) =>
+      `Showing ${formatNumber(nodes)} ${plural(nodes, 'node', 'nodes')} for ${formatNumber(files)} ${plural(files, 'file', 'files')}`,
     truncated: 'Weakest edges omitted',
     edgeTypes: 'Edge types',
     minWeight: 'Minimum weight',
-    nodeMeta: (files: number, symbols: number) => `${formatNumber(files)} files · ${formatNumber(symbols)} symbols`,
+    nodeMeta: (files: number, symbols: number) =>
+      `${formatNumber(files)} ${plural(files, 'file', 'files')} · ${formatNumber(symbols)} ${plural(symbols, 'symbol', 'symbols')}`,
     community: (n: number) => `Cluster ${n}`,
     drill: 'Zoom in',
     openGraph: 'Open in Graph',
     openArch: 'Open in Architecture',
-    edgeTitle: (from: string, to: string, n: number) => `${from} → ${to} · ${n} relations`,
-    cycles: (n: number) => `${n} dependency cycles`,
+    edgeTitle: (from: string, to: string, n: number) => `${from} → ${to} · ${n} ${plural(n, 'relation', 'relations')}`,
+    cycles: (n: number) => `${n} ${plural(n, 'dependency cycle', 'dependency cycles')}`,
     noCycles: 'No dependency cycles between files',
-    cycleItem: (size: number) => `${size} files in import cycle`,
+    cycleItem: (size: number) => `${size} ${plural(size, 'file', 'files')} in import cycle`,
     empty: 'No files have been indexed in this project yet.',
     noWebgl: 'WebGL is unavailable on this machine, so the map cannot be drawn. Use the Architecture tab instead.'
   },
@@ -946,7 +951,7 @@ const enStrings: typeof viStrings = {
     outsideRepo: 'core.hooksPath points outside the repository, so NexGraph will not write there. Unset core.hooksPath or add the update command to the hook yourself.'
   },
   tour: {
-    title: (name: string, n: number) => `Tour of ${name} · ${n} steps`,
+    title: (name: string, n: number) => `Tour of ${name} · ${n} ${plural(n, 'step', 'steps')}`,
     prev: 'Previous step', next: 'Next step', restart: 'Restart tour',
     empty: 'Not enough data to build a tour. Index a project with function calls.',
     open: { flow: 'Open flow', node: 'View in Graph', community: 'Open in Architecture' }
@@ -973,7 +978,7 @@ const enStrings: typeof viStrings = {
     notConfigured: 'The AI assistant is not configured. All other features still work.',
     openSettings: 'Open Settings',
     thinking: 'Querying the graph…', usingTool: (name: string) => `Calling ${name}…`,
-    verified: (ok: number, all: number) => `${ok}/${all} citations verified`,
+    verified: (ok: number, all: number) => `${ok}/${all} ${plural(all, 'citation', 'citations')} verified`,
     noCitations: 'The answer has no citations',
     unverified: 'unverified',
     reason: { file_not_found: 'File is not in the indexed project', out_of_range: 'Line range does not exist in the file' },
@@ -998,14 +1003,14 @@ const enStrings: typeof viStrings = {
     search: 'Search flows by function name, route, step…',
     kindAll: 'All',
     kinds: { main: 'main', route: 'route', cli: 'CLI', event: 'event', root: 'root' },
-    meta: (steps: number, files: number) => `${steps} steps · ${files} files`,
+    meta: (steps: number, files: number) => `${steps} ${plural(steps, 'step', 'steps')} · ${files} ${plural(files, 'file', 'files')}`,
     criticality: (pct: number) => `Importance ${pct}%`,
-    shown: (n: number, total: number) => `Showing ${n}/${total} flows`,
+    shown: (n: number, total: number) => `Showing ${n}/${total} ${plural(total, 'flow', 'flows')}`,
     more: 'Show more',
     empty: 'No flows found. Flows are built from function calls that could be linked.',
     noMatch: 'No matching flows.',
     pick: 'Select a flow from the list on the left.',
-    truncated: (n: number) => `truncated at ${n} steps`,
+    truncated: (n: number) => `truncated at ${n} ${plural(n, 'step', 'steps')}`,
     step: (i: number, n: number) => `Step ${i}/${n}`,
     first: 'First',
     prev: 'Previous',
@@ -1039,19 +1044,19 @@ const enStrings: typeof viStrings = {
     questionsHint: 'Click to ask the graph with this question.',
     cycles: (n: number) => `Import cycles (${n})`,
     noCycles: 'No import cycles between files.',
-    cycleMore: (n: number) => `+${n} more files in the cycle`,
+    cycleMore: (n: number) => `+${n} more ${plural(n, 'file', 'files')} in the cycle`,
     freshness: 'Graph freshness',
     freshOk: 'The graph matches the current source code.',
     stale: (changed: number | null) =>
-      changed ? `Graph is older than the source code: ${changed} files changed after indexing. Re-index.` : 'Graph is older than the source code: HEAD changed after indexing. Re-index.',
+      changed ? `Graph is older than the source code: ${changed} ${plural(changed, 'file', 'files')} changed after indexing. Re-index.` : 'Graph is older than the source code: HEAD changed after indexing. Re-index.',
     commits: (index: string, head: string) => `Indexed at commit ${index} · current HEAD ${head}`,
     gaps: 'Knowledge gaps',
-    isolated: (n: number) => `${n} nodes have no connections (outside their containing file):`,
-    ambiguousEdges: (n: number) => `${n} uncertain edges (AMBIGUOUS).`,
+    isolated: (n: number) => `${n} ${plural(n, 'node has', 'nodes have')} no connections (outside their containing file):`,
+    ambiguousEdges: (n: number) => `${n} uncertain ${plural(n, 'edge', 'edges')} (AMBIGUOUS).`,
     noGaps: 'No isolated nodes or uncertain edges.',
     benchmark: 'Token reduction',
     benchmarkText: (corpus: string, graph: string, ratio: string) =>
-      `Reading all source: ~${corpus} tokens. Querying via graph: ~${graph} tokens per question. A ${ratio}x reduction.`
+      `Reading all source: ~${corpus} ${pluralOf(corpus, 'token', 'tokens')}. Querying via graph: ~${graph} ${pluralOf(graph, 'token', 'tokens')} per question. A ${ratio}x reduction.`
   },
   tree: {
     label: 'Project tree',
@@ -1094,7 +1099,8 @@ const enStrings: typeof viStrings = {
     saved: 'Saved:',
     reveal: 'Open folder',
     truncated: 'Large project: only the 5,000 most important nodes are exported.',
-    pushed: (nodes: number, edges: number) => `Pushed ${formatNumber(nodes)} nodes and ${formatNumber(edges)} edges.`
+    pushed: (nodes: number, edges: number) =>
+      `Pushed ${formatNumber(nodes)} ${plural(nodes, 'node', 'nodes')} and ${formatNumber(edges)} ${plural(edges, 'edge', 'edges')}.`
   },
   arch: {
     root: 'Project',
@@ -1107,7 +1113,7 @@ const enStrings: typeof viStrings = {
     close: 'Close',
     loading: 'Loading…',
     noEvidence: 'No evidence',
-    files: (n: number) => `${n} files`
+    files: (n: number) => `${n} ${plural(n, 'file', 'files')}`
   },
   activity: {
     tour: 'Tour',
@@ -1116,7 +1122,8 @@ const enStrings: typeof viStrings = {
   },
   code: {
     open: 'Open code',
-    viewNode: 'View node'
+    viewNode: 'View node',
+    truncated: 'Truncated — open the file to see it in full'
   },
   editor: {
     close: 'Close',
@@ -1134,7 +1141,7 @@ const enStrings: typeof viStrings = {
     reloadDiscards: 'Reloading discards unsaved changes in the tab.',
     reload: 'Reload',
     keepMine: 'Keep my version',
-    confirmLeave: (n: number) => `${n} files have unsaved changes. Leave the project and discard them?`,
+    confirmLeave: (n: number) => `${n} ${plural(n, 'file has', 'files have')} unsaved changes. Leave the project and discard them?`,
     confirmClose: (name: string) => `${name} has unsaved changes. Close and discard them?`
   },
   changes: {
@@ -1153,7 +1160,7 @@ const enStrings: typeof viStrings = {
     noneImpacted: 'No affected nodes',
     noneTests: 'No related tests found',
     noneGaps: 'Every changed function has a test',
-    hops: (n: number) => `${n} steps`,
+    hops: (n: number) => `${n} ${plural(n, 'step', 'steps')}`,
     openCode: 'Open code',
     tag: { changed: 'changed', impacted: 'impacted', test: 'test', gap: 'no test' }
   },
@@ -1168,11 +1175,11 @@ const enStrings: typeof viStrings = {
     askHint: 'Enter to ask. Returns the relevant graph area; does not call AI.',
     asking: 'Searching…',
     seeds: 'Starting points',
-    askNodes: (n: number, e: number) => `${n} nodes, ${e} relevant edges`,
+    askNodes: (n: number, e: number) => `${n} ${plural(n, 'node', 'nodes')}, ${e} relevant ${plural(e, 'edge', 'edges')}`,
     showOnGraph: 'View on graph',
     askTruncated: 'Truncated to a 2,000-token budget',
     askNone: 'No nodes matching the question were found',
-    askAmbiguous: (n: number) => `The question matches ${n} nodes with the same name in different files. Pick a node:`
+    askAmbiguous: (n: number) => `The question matches ${n} ${plural(n, 'node', 'nodes')} with the same name in different files. Pick a node:`
   },
   nodeMenu: {
     findPath: 'Find path to…',
@@ -1184,7 +1191,8 @@ const enStrings: typeof viStrings = {
     pickingLabel: 'Target selection mode',
     cancel: 'Cancel',
     noLink: 'No direct link found in the graph',
-    partial: (nodes: number, missing: number) => `Highlighted ${nodes} cited nodes · ${missing} ${missing === 1 ? 'pair has' : 'pairs have'} no direct link`,
+    partial: (nodes: number, missing: number) =>
+      `Highlighted ${nodes} ${plural(nodes, 'cited node', 'cited nodes')} · ${missing} ${missing === 1 ? 'pair has' : 'pairs have'} no direct link`,
     found: (hops: number, c: PathConfidence | null = null) => {
       const steps = `${hops} ${hops === 1 ? 'step' : 'steps'}`
       if (!c) return `Path of ${steps}`
@@ -1206,18 +1214,21 @@ const enStrings: typeof viStrings = {
     none: 'No connections',
     out: (type: string, n: number) => `${type} → (${n})`,
     in: (type: string, n: number) => `← ${type} (${n})`,
-    summary: (degree: number, community: string | null) => (community ? `${degree} connections · cluster ${community}` : `${degree} connections`),
+    summary: (degree: number, community: string | null) => (community
+      ? `${degree} ${plural(degree, 'connection', 'connections')} · cluster ${community}`
+      : `${degree} ${plural(degree, 'connection', 'connections')}`),
     more: (files: { file: string | null; count: number }[]) =>
-      `+${files.reduce((n, f) => n + f.count, 0)} in ${files.length} files: ${files.map((f) => `${f.file ?? '(outside file)'} (${f.count})`).join(', ')}`,
+      `+${files.reduce((n, f) => n + f.count, 0)} in ${files.length} ${plural(files.length, 'file', 'files')}: ${files.map((f) => `${f.file ?? '(outside file)'} (${f.count})`).join(', ')}`,
     readSection: 'Read section',
     sectionStale: 'The file changed after indexing: line numbers may be off.',
-    sectionTruncated: (file: string, start: number, end: number) => `Truncated at 8,000 characters. Open ${file} lines ${start}–${end} to read the rest.`
+    sectionTruncated: (file: string, start: number, end: number) => `Truncated — open the file to see it in full (${file}:${start}–${end})`
   },
   graph: {
     backToRoot: 'Back to root',
     nothingSelected: 'Select a node to see its details',
     truncated: 'Truncated; narrow it down by selecting another node',
-    truncatedOf: (shown: number, total: number) => `Showing ${shown}/${total} neighbouring nodes. Use Search or Tree to reach the node you need.`,
+    truncatedOf: (shown: number, total: number) =>
+      `Showing ${shown}/${total} ${plural(total, 'neighbouring node', 'neighbouring nodes')}. Use Search or Tree to reach the node you need.`,
     isTest: 'Test code',
     aiInferred: 'Inferred by AI: no evidence in the source code yet'
   },
@@ -1258,7 +1269,7 @@ const enStrings: typeof viStrings = {
     contested: 'Conflicting ratings',
     deadEnds: 'Known dead ends',
     corrections: 'Corrected answers',
-    times: (n: number) => `${n} times`,
+    times: (n: number) => `${n} ${plural(n, 'time', 'times')}`,
     verdict: (v: string): string => v === 'useful' ? 'leaning helpful' : v === 'dead end' ? 'leaning dead end' : 'mixed',
     nodeTitle: 'Memory',
     nodeLesson: { preferred: 'Trusted source by ratings', tentative: 'Rated helpful only once', contested: 'Conflicting ratings' } as Record<string, string>,
@@ -1268,7 +1279,7 @@ const enStrings: typeof viStrings = {
     textLabel: 'Memory content',
     add: 'Add memory',
     duplicate: 'This memory already exists.',
-    missingNodes: (n: number) => `${n} nodes are no longer in the graph`
+    missingNodes: (n: number) => `${n} ${plural(n, 'node is', 'nodes are')} no longer in the graph`
   },
   globalGraph: {
     title: 'Global graph',
@@ -1280,7 +1291,7 @@ const enStrings: typeof viStrings = {
     view: 'View together',
     viewHint: 'Select at least two projects to view them together.',
     readOnly: 'Read-only: merges the indexed graphs of the selected projects.',
-    crossEdges: (n: number) => `${n} cross-repo edges`,
+    crossEdges: (n: number) => `${n} cross-repo ${plural(n, 'edge', 'edges')}`,
     search: 'Search the global graph',
     searchPlaceholder: 'Function, class or file name…',
     noHits: 'Nothing found in the projects being viewed.',
@@ -1305,7 +1316,7 @@ const enStrings: typeof viStrings = {
     colCi: 'CI',
     colAge: 'Updated',
     colImpact: 'Affected nodes',
-    days: (n: number) => (n === 0 ? 'today' : `${n} days ago`),
+    days: (n: number) => (n === 0 ? 'today' : `${n} ${plural(n, 'day', 'days')} ago`),
     status: {
       'WRONG-BASE': 'Wrong base branch', 'CI-FAIL': 'CI failing', 'CHANGES-REQ': 'Changes requested', DRAFT: 'Draft',
       STALE: 'Stale (≥ 14 days)', PENDING: 'CI running', APPROVED: 'Approved', READY: 'Ready',
@@ -1315,15 +1326,15 @@ const enStrings: typeof viStrings = {
     conflictsHint: 'Two PRs change the same file or symbol. Merge them one at a time and recheck.',
     conflict: (a: number, b: number) => `#${a} and #${b}`,
     conflictFiles: (files: string) => `same files: ${files}`,
-    conflictNodes: (n: number) => `${n} symbols changed by both`,
-    conflictRelated: (n: number) => `${n} shared nodes in the impact area`,
+    conflictNodes: (n: number) => `${n} ${plural(n, 'symbol', 'symbols')} changed by both`,
+    conflictRelated: (n: number) => `${n} shared ${plural(n, 'node', 'nodes')} in the impact area`,
     conflictsTruncated: 'Only the most notable conflicting pairs are shown.',
     select: (n: number) => `Review PR #${n}`,
     detailLoading: (n: number) => `Reading diff of PR #${n}…`,
     review: (n: number) => `Local review: PR #${n}`,
     meta: (author: string, branch: string, base: string) => `${author} · ${branch} → ${base}`,
     changedFiles: (n: number) => `Changed files (${n})`,
-    impacted: (n: number) => `Impact area (${n} nodes)`,
+    impacted: (n: number) => `Impact area (${n} ${plural(n, 'node', 'nodes')})`,
     noImpact: 'The changes do not touch any node on the graph.',
     testGaps: 'Changed symbols without tests',
     staleDocs: 'Documentation may be stale',
@@ -1380,23 +1391,25 @@ const enStrings: typeof viStrings = {
     } as Record<string, string>,
     provider: (model: string) => `Model: ${model}`,
     estimating: 'Estimating…',
-    estimate: (files: number, chunks: number, cached: number) => `${files} files · ${chunks} chunks (${cached} chunks already cached)`,
+    estimate: (files: number, chunks: number, cached: number) =>
+      `${files} ${plural(files, 'file', 'files')} · ${chunks} ${plural(chunks, 'chunk', 'chunks')} (${cached} ${plural(cached, 'chunk', 'chunks')} already cached)`,
     tokens: (input: string, output: string) => `Estimated ${input} input tokens, ${output} output tokens`,
     noFiles: 'Nothing to send. Enable "Include documents" (or audio/images) in Index options and index again.',
     filesLabel: 'Files to send',
-    more: (n: number) => `… and ${n} more files`,
+    more: (n: number) => `… and ${n} more ${plural(n, 'file', 'files')}`,
     run: 'Agree and run',
     runLocal: 'Run merge on this machine',
-    running: (done: number, total: number) => `Analysing ${done}/${total} chunks…`,
+    running: (done: number, total: number) => `Analysing ${done}/${total} ${plural(total, 'chunk', 'chunks')}…`,
     waiting: 'Waiting for the model to respond…',
     cancel: 'Cancel',
     close: 'Close',
-    done: (nodes: number, edges: number) => `Done: added ${nodes} nodes and ${edges} AI-inferred relations.`,
-    labelsDone: (n: number) => `Done: named ${n} clusters.`,
+    done: (nodes: number, edges: number) =>
+      `Done: added ${nodes} ${plural(nodes, 'node', 'nodes')} and ${edges} AI-inferred ${plural(edges, 'relation', 'relations')}.`,
+    labelsDone: (n: number) => `Done: named ${n} ${plural(n, 'cluster', 'clusters')}.`,
     triageItem: (n: number, priority: number, action: string) => `#${n} · priority ${priority}: ${action}`,
     triageEmpty: 'AI did not return any ordering.',
-    merged: (n: number) => `Done: merged ${n} duplicate concepts.`,
-    failedChunks: (n: number) => `${n} failed chunks (model returned malformed results or could not be called).`,
+    merged: (n: number) => `Done: merged ${n} duplicate ${plural(n, 'concept', 'concepts')}.`,
+    failedChunks: (n: number) => `${n} failed ${plural(n, 'chunk', 'chunks')} (model returned malformed results or could not be called).`,
     cost: (input: string, output: string) => `Used ${input} input tokens, ${output} output tokens.`,
     failed: (message: string) => `Could not run: ${message}`
   }
@@ -1496,14 +1509,25 @@ export const uiEn: Record<string, string> = {
   'Dấu trang': 'Bookmarks',
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.
-  'Luồng {id}': 'Flow {id}'
+  'Luồng {id}': 'Flow {id}',
+  'Đã chia {n} cụm': 'Split into {n} {n, plural, one {cluster} other {clusters}}'
 }
 
-/** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}. */
+/** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}.
+ *  Bản Anh có thể dùng `{count, plural, one {file} other {files}}` cho danh từ đếm được. */
 export function tr(text: string, vars?: Record<string, string | number>): string {
   const translated = getLocale() === 'en' ? uiEn[text] ?? text : text
-  return translated.replace(/\{(\w+)\}/g, (match, name: string) => vars && name in vars ? String(vars[name]) : match)
+  return translated
+    .replace(/\{(\w+),\s*plural,\s*one\s*\{([^{}]*)\}\s*other\s*\{([^{}]*)\}\}/g, (match, name: string, one: string, other: string) =>
+      vars && name in vars ? plural(Number(vars[name]), one, other) : match)
+    .replace(/\{(\w+)\}/g, (match, name: string) => vars && name in vars ? String(vars[name]) : match)
 }
+
+/**
+ * Từ điển tiếng Việt gốc. Chỉ dùng để lấy **khoá** VI cho `msg()` khi câu nằm sau một mã
+ * (ví dụ `chat.errors[code]`): `vi` trả câu theo ngôn ngữ hiện tại nên không dùng làm khoá được.
+ */
+export const viSource: typeof viStrings = viStrings
 
 /** Giữ nguyên import `vi` của 43 file cũ: dictionary được chọn lúc đọc thuộc tính. */
 export const vi: typeof viStrings = new Proxy(viStrings, {
