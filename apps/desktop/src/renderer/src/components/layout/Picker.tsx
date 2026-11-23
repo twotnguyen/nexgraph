@@ -20,7 +20,8 @@ interface PickerProps<T> {
   onPick: (item: T) => void
   onCancel: () => void
   onSecondary?: (item: T) => void
-  footer?: (item: T, pick: () => void) => ReactNode
+  /** Chân picker; mục đang chọn có thể chưa có (danh sách rỗng) — khi đó chân vẫn hiện để còn nút như "Quay lại". */
+  footer?: (item: T | undefined, pick: () => void) => ReactNode
   inputRef?: Ref<HTMLInputElement>
   error?: string | null
   /** Gọi khi mục đang chọn đổi (rê chuột hoặc mũi tên): dùng để xem trước. */
@@ -64,6 +65,7 @@ export function Picker<T>({ label, placeholder, items, itemKey, itemText, render
   }
 
   const optionId = (item: T) => `${listId}-${encodeURIComponent(itemKey(item))}`
+  const footerContent = footer?.(active?.item, () => { if (active) onPick(active.item) })
   return (
     <div className="picker-layer" onPointerDown={(event) => { if (event.target === event.currentTarget) onCancel() }}>
       <div className={`picker${className ? ` ${className}` : ''}`} role="dialog" aria-modal="true" aria-label={label} onKeyDown={onKey}>
@@ -80,7 +82,7 @@ export function Picker<T>({ label, placeholder, items, itemKey, itemText, render
           </ul>
         )}
         {error && <p id={`${listId}-error`} className="picker-error" role="alert">{error}</p>}
-        {footer && active && <div className="picker-footer">{footer(active.item, () => onPick(active.item))}</div>}
+        {footerContent ? <div className="picker-footer">{footerContent}</div> : null}
       </div>
     </div>
   )

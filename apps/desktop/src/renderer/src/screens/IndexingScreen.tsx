@@ -82,6 +82,7 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
           ) : <div className="phase-head phase-next"><span>{vi.indexing.phase2}</span><span>{tr('Đang chờ')}</span></div>}
         </>}
         {message && <p role="alert" className="inline-message error">{vi.indexing.error(message)}</p>}
+        {completed && job?.message && <p role="status" className="inline-message">{job.message}</p>}
         {state === 'cancelled' && <p role="status" className="muted">{tr('Bạn có thể thử lại hoặc quay về dự án.')}</p>}
         {rebuild && !completed && <p role="status" className="inline-message">{vi.indexing.existingGraph}</p>}
       </section>

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
@@ -10,6 +12,7 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectPathError
 
 router = APIRouter(prefix="/v1")
+logger = logging.getLogger(__name__)
 
 
 class OpenBody(BaseModel):
@@ -48,6 +51,7 @@ def _last_run(info: ProjectInfo) -> tuple[int | None, str | None]:
         finally:
             conn.close()
     except Exception:
+        logger.warning("Không đọc được lần lập chỉ mục cuối trong %s", info.graph_db, exc_info=True)
         return None, None
     return run if run else (None, None)
 

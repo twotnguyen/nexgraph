@@ -388,10 +388,12 @@ def test_images_send_base64(api, copy_fixture, llm):
     pid = index_docs(api, root, include_media=True)
     enable(api, pid)
     llm.reply = lambda body: fragment("docs/so-do.png", "Sơ đồ hệ thống")
+    # docs_app còn ảnh fixture khác (checklist QA-18) nên số khối lấy theo ước tính, không ghim 1.
+    expected = api.post(f"/v1/projects/{pid}/semantic/estimate", json={"targets": "images"}).json()["chunks"]
     job = wait_job(api, run(api, pid, "images", direct(llm)))
-    assert job["state"] == "done" and job["result"]["chunks"]["done"] == 1, job
-    content = llm.requests[0]["messages"][1]["content"]
-    assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+    assert job["state"] == "done" and job["result"]["chunks"]["done"] == expected, job
+    sent = next(r["messages"][1]["content"] for r in llm.requests if "docs/so-do.png" in r["messages"][1]["content"][0]["text"])
+    assert sent[1]["image_url"]["url"].startswith("data:image/png;base64,")
     conn = graph(api, pid)
     assert conn.execute("SELECT nguon_goc FROM nut WHERE nhan = 'Sơ đồ hệ thống'").fetchone()[0] == "llm"
     conn.close()
@@ -412,6 +414,18 @@ def test_dedup_merges_duplicate_concepts(api, copy_fixture, llm):
     conn = graph(api, pid)
     assert conn.execute("SELECT count(*) FROM nut WHERE nhan = 'Xác thực người dùng'").fetchone()[0] == 1
     conn.close()
+
+
+def test_dedup_runs_without_ai_enabled(api, copy_fixture, llm):
+    """AI-08: dedup chạy trên máy, không gửi gì — không được đòi bật AI/model/consent."""
+    pid = index_docs(api, copy_fixture("docs_app"))
+    assert api.get(f"/v1/projects/{pid}/ai").json()["enabled"] is False
+    r = api.post(f"/v1/projects/{pid}/semantic", json={"targets": "dedup", "transport": {"kind": "app", "model_label": ""}})
+    assert r.status_code == 202, r.text
+    job = wait_job(api, r.json()["job_id"])
+    assert job["state"] == "done", job
+    assert job["result"]["merged"] == 0
+    assert llm.requests == []
 
 
 def test_pr_triage_returns_result_without_graph_write(api, docs_pid, llm):
