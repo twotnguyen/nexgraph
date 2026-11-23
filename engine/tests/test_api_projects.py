@@ -1,6 +1,10 @@
+import sqlite3
 import threading
 
+import pytest
+
 from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.schema.db import SchemaVersionError
 import time
 
 
@@ -151,3 +155,27 @@ def test_unreadable_graph_db_is_reported_not_treated_as_new_project(api, copy_fi
     listed = next(p for p in api.get("/v1/projects").json() if p["project_id"] == pid)
     assert listed["last_indexed_at"] is None
     assert "Không đọc được lần lập chỉ mục cuối" in listed["last_index_error"]
+
+
+@pytest.mark.parametrize(("exc", "reported"), [
+    (sqlite3.OperationalError("database is locked"), False),
+    (sqlite3.OperationalError("database table is locked: du_an"), False),
+    (sqlite3.OperationalError("no such table: du_an"), False),
+    (SchemaVersionError("CSDL phiên bản 9, ứng dụng chỉ hỗ trợ đến 7"), False),
+    (sqlite3.DatabaseError("file is not a database"), True),
+])
+def test_last_index_error_only_for_real_read_failures(api, copy_fixture, monkeypatch, exc, reported):
+    """F6: CSDL đang bận/schema mới hơn chỉ là tạm thời — không báo như thể mất đồ thị."""
+    root = copy_fixture("bookstore_app")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+
+    def boom(*_args, **_kwargs):
+        raise exc
+
+    monkeypatch.setattr("nexgraph_engine.api.routes_projects.open_graph_db", boom)
+    listed = next(p for p in api.get("/v1/projects").json() if p["project_id"] == pid)
+    if reported:
+        assert "Không đọc được lần lập chỉ mục cuối" in listed["last_index_error"]
+    else:
+        assert listed["last_index_error"] is None and listed["last_indexed_at"] is None

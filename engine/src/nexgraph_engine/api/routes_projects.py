@@ -1,4 +1,5 @@
 import logging
+import sqlite3
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
@@ -7,7 +8,9 @@ from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.index.extra_sources import ExtraSources
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.index import scan as scan_module
-from nexgraph_engine.schema.db import SchemaVersionError, open_graph_db
+from nexgraph_engine.schema.db import (
+    SchemaOutdatedError, SchemaVersionError, UnsupportedSqliteError, open_graph_db,
+)
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectGraphUnreadable, ProjectInfo, ProjectPathError
 
@@ -40,6 +43,20 @@ class IndexBody(BaseModel):
     sources: SourcesBody | None = None
 
 
+def _transient_read_error(exc: BaseException) -> bool:
+    """Lỗi đọc chỉ là tạm thời: CSDL đang bị tiến trình khác giữ, chưa có bảng, hoặc schema mới hơn app.
+
+    Không phải lỗi đọc thật (file hỏng) nên không được hiện "Không đọc được lần lập chỉ mục cuối"
+    như thể đồ thị đã mất (F6 của review PR #41).
+    """
+    if isinstance(exc, (SchemaVersionError, SchemaOutdatedError, UnsupportedSqliteError)):
+        return True
+    if not isinstance(exc, sqlite3.DatabaseError):
+        return True  # OSError khi mở tệp… cũng chỉ là tạm thời với người dùng
+    text = str(exc).lower()
+    return "locked" in text or "busy" in text or "no such table" in text
+
+
 def _last_run(info: ProjectInfo) -> tuple[int | None, str | None, str | None]:
     """(thời điểm, commit, lỗi đọc) — lỗi đọc phải đến người dùng, không chỉ ghi log (ENG-07/M3)."""
     if not info.graph_db.exists():
@@ -52,6 +69,9 @@ def _last_run(info: ProjectInfo) -> tuple[int | None, str | None, str | None]:
         finally:
             conn.close()
     except Exception as exc:
+        if _transient_read_error(exc):
+            logger.info("Bỏ qua lần đọc trạng thái lập chỉ mục tạm thời của %s: %s", info.graph_db, exc)
+            return None, None, None
         logger.warning("Không đọc được lần lập chỉ mục cuối trong %s", info.graph_db, exc_info=True)
         return None, None, (f"Không đọc được lần lập chỉ mục cuối trong {info.graph_db} "
                             f"({type(exc).__name__}: {exc})")
