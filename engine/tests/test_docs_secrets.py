@@ -126,6 +126,44 @@ def test_document_shapes_without_secret_are_kept(line):
     assert redact_doc_secrets(line) == line
 
 
+def test_markdown_table_value_column_is_redacted():
+    """MIN-52(1): bảng markdown có cột tên khoá nhạy cảm + cột giá trị phải che ô giá trị."""
+    rows = [
+        "| API_KEY | TblA8Zx2Nq7Vb4Xc9Mp5Rt1 |",
+        "| `SECRET_KEY` | TblS3Wn8Qa4Zc7Vb2Xm9Lp6 |",
+        "| DATABASE_PASSWORD | TblD7Kx2Nq9Vb4Zc8Rt5Wm3 |",
+        "| Biến | Giá trị |\n|---|---|\n| GITHUB_TOKEN | ghp_" + "a" * 36 + " |",
+    ]
+    for row in rows:
+        out = redact_doc_secrets(row)
+        assert "[redacted]" in out, out
+        assert out.count("|") == row.count("|"), (row, out)
+        assert out.count("\n") == row.count("\n"), (row, out)
+        assert out == redact_doc_secrets(out)  # idempotent
+
+
+@pytest.mark.parametrize("row", [
+    "| API_KEY | xxx |",           # placeholder trong đề bài: giữ nguyên
+    "| API_KEY | *** |",
+    "| MAX_TOKENS | 8192 |",
+    "| PRIMARY_KEY | id |",
+    "| Biến | Giá trị |",
+    "|---|---|",
+    "| API_KEY | required |",
+])
+def test_markdown_table_without_secret_is_kept(row):
+    assert redact_doc_secrets(row) == row
+
+
+def test_prose_with_verb_refresh_is_not_a_secret():
+    """MIN-52(4): 'Token: refresh tokens rotate' là câu văn, không phải giá trị bí mật."""
+    text = "Token: refresh tokens rotate"
+    assert redact_doc_secrets(text) == text
+    # Nhưng token thật sau nhãn Token vẫn bị che (không nới luật quá mức).
+    real = "Token: Tok8Xq2Lm5Rt9"
+    assert real.split(": ")[1] not in redact_doc_secrets(real)
+
+
 def test_pem_block_keeps_line_count():
     """Minor 1 (review #52): che PEM theo từng dòng để heading sau khối không lệch số dòng."""
     body = "\n".join(["MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "A" * 20] * 3)

@@ -45,7 +45,10 @@ _TYPE_WORDS = frozenset({"string", "number", "boolean", "any", "unknown", "void"
                          "true", "false", "none", "str", "int", "bool", "float", "never", "object"})
 # Tên biến được nhắc làm giá trị (`NEXGRAPH_TOKEN: token`) — tham chiếu, không phải bí mật.
 _REFERENCE_WORDS = frozenset({"token", "secret", "password", "passwd", "pwd", "value", "key",
-                              "credentials", "credential", "apikey", "env"})
+                              "credentials", "credential", "apikey", "env",
+                              # MIN-52(4): câu văn kiểu "Token: refresh tokens rotate" không phải secret.
+                              "refresh", "rotate", "rotated", "refreshed", "renew", "expires", "expired",
+                              "required", "optional", "enabled", "disabled", "missing", "revoked"})
 # Định danh viết hoa (`BUDGET`, `MAX_TOKENS_VALUE`) là hằng/tham chiếu; số ≤ 6 chữ số là cổng/giới hạn.
 _CONSTANT = re.compile(r"^[A-Z][A-Z0-9_]*$")
 _SMALL_NUMBER = re.compile(r"^\d{1,6}$")
@@ -91,6 +94,35 @@ def _redact_pem_blocks(text: str) -> str:
     return _PEM_BLOCK.sub(repl, text)
 
 
+# Dòng bảng markdown: `| TÊN_KHOÁ | giá trị |`. Chỉ che ô thứ hai khi ô đầu là tên khoá nhạy cảm và giá trị
+# trông như secret (MIN-52(1); `| API_KEY | xxx |` placeholder và `| MAX_TOKENS | 8192 |` giữ nguyên).
+_TABLE_ROW = re.compile(r"(?m)^(?P<lead>[ \t]*)\|(?P<key>[^|\n]+)\|(?P<value>[^|\n]*)\|")
+# Ô tên khoá phải là một định danh (`API_KEY`, `db.password`, `Stripe secret key`), không phải câu mô tả.
+_TABLE_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\- ]*$")
+
+
+def _redact_table_cells(text: str) -> str:
+    """Che cột giá trị của bảng markdown khi cột tên khoá là tên nhạy cảm (MIN-52)."""
+    def repl(match: re.Match[str]) -> str:
+        key = match["key"].strip().strip("`*_\"'")
+        if not _TABLE_KEY.match(key) or not _key_rule(key):
+            return match.group(0)
+        raw = match["value"]
+        cell = raw.strip()
+        if not cell:
+            return match.group(0)
+        quote = cell[0] if cell[:1] in ("'", '"', "`") else ""
+        value = cell[1:-1] if quote and cell.endswith(quote) and len(cell) > 1 else cell
+        # Ô giá trị của bảng secret là một token; câu văn (có khoảng trắng) là mô tả, không che.
+        if any(ch.isspace() for ch in value.strip()) or not _looks_like_secret(value):
+            return match.group(0)
+        lead = raw[:len(raw) - len(raw.lstrip())]
+        trail = raw[len(raw.rstrip()):]
+        return f"{match['lead']}|{match['key']}|{lead}{quote}{REDACTED}{quote}{trail}|"
+
+    return _TABLE_ROW.sub(repl, text)
+
+
 def redact_doc_secrets(text: str) -> str:
     """Trả `text` đã che token theo hình dạng, khối PEM và `KEY[:=]value` của tên khoá nhạy cảm."""
     text = redact_secrets(_redact_pem_blocks(text))
@@ -110,4 +142,5 @@ def redact_doc_secrets(text: str) -> str:
             return match.group(0)
         return f"{key}{match.group('close')}{match.group('sep')}{quote}{REDACTED}{quote}"
 
-    return _ASSIGN.sub(repl, text)
+    text = _ASSIGN.sub(repl, text)
+    return _redact_table_cells(text)
