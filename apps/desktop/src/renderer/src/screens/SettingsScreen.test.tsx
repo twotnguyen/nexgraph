@@ -202,6 +202,17 @@ describe('SettingsScreen', () => {
     expect(status).not.toHaveTextContent('Không kết nối được')
   })
 
+  it('MIN-46 M3: kết nối được nhưng cửa sổ ngữ cảnh quá nhỏ thì cảnh báo ngay kèm số token', async () => {
+    const test = vi.fn(async () => ({ ok: true, message: 'Kết nối được', contextWarning: 6000 }))
+    installNexgraph({ auth: { test } })
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Kiểm tra kết nối' }))
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('Kết nối được')
+    expect(status).toHaveTextContent('Mô hình chỉ có 6.000 token ngữ cảnh')
+    expect(status).toHaveTextContent('chọn mô hình lớn hơn')
+  })
+
   it('EN: kết quả kiểm tra kết nối dịch câu theo ngôn ngữ, giữ chi tiết của provider', async () => {
     setLocale('en')
     installNexgraph({ auth: { test: vi.fn(async () => ({ ok: false, message: 'Không tìm thấy mô hình ở nhà cung cấp. Kiểm tra tên mô hình trong Cài đặt.', detail: 'The model `x` does not exist' })) } })

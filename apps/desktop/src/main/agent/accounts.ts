@@ -8,6 +8,7 @@ import { normalizeConsentTarget, sameConsentTarget, type AiConsentTarget, type A
 import { readJson, writeJson, type SecretStore } from '../ai/settings'
 import { AgentError, classifyProviderError, loadPi, rememberSecret, scrub } from './session'
 import { createOpenAiOAuth, revokeOpenAiSession, type OpenAiRegistration } from './openai-auth'
+import { contextTooSmall } from './context-window'
 
 // pi-coding-agent không tái xuất các kiểu auth; suy ra từ chữ ký login() công khai.
 type AuthInteraction = Parameters<ModelRuntime['login']>[2]
@@ -440,7 +441,7 @@ export class AccountService {
     return !cost ? 'unknown' : cost.input === 0 && cost.output === 0 ? 'free' : 'known'
   }
 
-  /** Cùng quy tắc với listProviders: model tuỳ chỉnh chưa khai báo contextWindow thì Pi chỉ có giá trị mặc định 4096, không phải số thật. */
+  /** Cùng quy tắc với listProviders: model tuỳ chỉnh chưa khai báo contextWindow thì cửa sổ chỉ là mặc định 128000, không phải số thật. */
   selectedModelWindowKnown(): boolean {
     const selected = this.getSelectedModel()
     const custom = selected && this.customs().find((p) => p.id === selected.provider)
@@ -473,8 +474,11 @@ export class AccountService {
     // Key của máy chủ cũ không được tự chuyển sang origin khác.
     if (previous && new URL(previous.baseUrl).origin !== origin) await this.removeApiKey(p.id)
     // Ô context window để trống: thử lấy `context_length` thật của model từ nhà cung cấp (không chặn lưu khi lỗi).
-    const contextWindow = p.contextWindow ?? (p.kind === 'ollama' ? undefined
-      : await discoverContextWindow(baseUrl, p.model.trim(), apiKey?.trim() || (this.deps.secrets.get(p.id) ?? undefined)))
+    // `/models` lỗi hoặc không khai báo thì giữ giá trị đã lưu của CÙNG model — không xoá về mặc định 128k.
+    const discovered = p.contextWindow !== undefined ? undefined
+      : p.kind === 'ollama' ? undefined
+        : await discoverContextWindow(baseUrl, p.model.trim(), apiKey?.trim() || (this.deps.secrets.get(p.id) ?? undefined))
+    const contextWindow = p.contextWindow ?? discovered ?? (previous?.model === p.model.trim() ? previous?.contextWindow : undefined)
     const custom: CustomProvider = {
       id: p.id, label: p.label.trim(), baseUrl, model: p.model.trim(),
       ...(p.kind ? { kind: p.kind } : {}),
@@ -775,10 +779,12 @@ export class AccountService {
    * nên dùng một bản model có cửa sổ đủ rộng và `maxTokens` nhỏ nhưng hợp lệ (>= 16). Trước đây cửa sổ 4096 làm SDK
    * kẹp `max_completion_tokens` còn 1 và provider thật trả 400 ngay ở bước kiểm tra.
    */
-  async test(): Promise<{ ok: boolean; message: string; detail?: string; capabilities?: { streaming: boolean; tools: boolean } }> {
+  async test(): Promise<{ ok: boolean; message: string; detail?: string; capabilities?: { streaming: boolean; tools: boolean }; contextWarning?: number }> {
     const sel = this.getSelectedModel()
     const model = sel && this.modelRuntime.getModel(sel.provider, sel.id)
     if (!model) return { ok: false, message: 'Chưa chọn model hoặc model không còn' }
+    // Cửa sổ ngữ cảnh nhỏ hơn system prompt + công cụ: kết nối được nhưng chat sẽ luôn hỏng, phải cảnh báo ngay.
+    const window = model.contextWindow
     const selection = this.consentSelection()
     try {
       if (BLOCKED_OAUTH.has(model.provider) && this.modelRuntime.isUsingOAuth(model.provider))
@@ -798,7 +804,7 @@ export class AccountService {
       if (result.stopReason === 'error' || result.stopReason === 'aborted') throw new Error(result.errorMessage ?? 'Kiểm tra bị gián đoạn')
       const tools = result.content.some((part) => part.type === 'toolCall' && part.name === 'nexgraph_connection_check' && part.arguments.value === marker)
       return { ok: true, message: tools ? 'Kết nối được và gọi công cụ thành công' : 'Kết nối được; model chưa xác nhận gọi công cụ',
-        capabilities: { streaming, tools } }
+        capabilities: { streaming, tools }, ...(contextTooSmall(window) ? { contextWarning: window } : {}) }
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e)
       // Lỗi 4xx nói rõ sai key / sai model / yêu cầu không hợp lệ, kèm thông điệp ngắn của provider.

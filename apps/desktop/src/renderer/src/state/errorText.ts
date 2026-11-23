@@ -1,4 +1,5 @@
 import { tr } from '../strings'
+import { getLocale } from './locale'
 
 /** Lỗi IPC tiếng Việt phổ biến: chỉ những câu có bản dịch mới đổi theo ngôn ngữ. */
 const knownErrors: Record<string, true> = {
@@ -89,11 +90,42 @@ const knownErrors: Record<string, true> = {
   'Không mở được cổng công cụ Gemini': true,
   'Kết nối Google đã thay đổi. Hãy kiểm tra và xác nhận lại trước khi gửi mã nguồn.': true,
   'Yêu cầu không được phép trong kết nối NexGraph': true,
-  'Không hỗ trợ': true
+  'Không hỗ trợ': true,
+  'Quyền thực thi không hợp lệ': true,
+  'Ngân sách phải là số nguyên dương và thời gian phải nằm trong giới hạn bộ đếm của hệ thống': true,
+  'Chế độ trợ lý không hợp lệ': true,
+  'Đã đổi chế độ': true,
+  'Không thể tách hội thoại': true,
+  'Tệp đang có bản nháp chưa lưu trong trình soạn thảo. Lưu hoặc đóng bản nháp trước khi trợ lý sửa.': true,
+  'Mã tác vụ không hợp lệ': true,
+  'Tác vụ không thuộc hội thoại của tài khoản và dự án hiện tại': true,
+  'Không tìm thấy hội thoại của tác vụ': true,
+  'Không xác định được mô hình và khả năng nhận ảnh. Hãy chọn mô hình hỗ trợ ảnh.': true,
+  'Chưa cấu hình trợ lý AI': true,
+  'Chưa đồng ý gửi dữ liệu tới nhà cung cấp AI': true,
+  'Mô hình đang chọn không hỗ trợ ảnh hoặc chưa xác định được khả năng nhận ảnh.': true,
+  'Không khởi động được tác vụ': true,
+  'Đã đóng dự án': true,
+  'Đã đổi hội thoại': true,
 }
+
+/**
+ * Câu do main dựng kèm số liệu (không thể đặt khoá từ điển): dịch theo mẫu khi giao diện English,
+ * giữ nguyên câu gốc khi tiếng Việt. `$1` là phần số/định danh giữ lại.
+ */
+const dynamicErrors: { re: RegExp; en: string }[] = [
+  {
+    re: /^Mô hình chỉ có (\d+) token ngữ cảnh, không đủ cho system prompt \+ công cụ — chọn mô hình lớn hơn\.$/,
+    en: 'The model has only $1 context tokens — not enough for the system prompt and tools. Choose a larger model.'
+  }
+]
 
 /** Câu lỗi để hiển thị: lỗi IPC qua contextBridge là object có `message` nhưng không `instanceof Error` ở renderer. */
 export const errorText = (e: unknown): string => {
   const text = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
-  return knownErrors[text] === true ? tr(text) : text
+  if (knownErrors[text] === true) return tr(text)
+  if (getLocale() === 'en') {
+    for (const rule of dynamicErrors) if (rule.re.test(text)) return text.replace(rule.re, rule.en)
+  }
+  return text
 }

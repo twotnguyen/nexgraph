@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
+import { errorText } from '../../state/errorText'
 import { Icon } from '../common/icons'
 import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -343,7 +344,9 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       } else if (e.type === 'error') {
         if (e.code !== 'ai_cancelled') announceAgent('error', alertTitle.current)
         // Câu theo mã lỗi (dịch theo ngôn ngữ) + thông điệp ngắn của provider để người dùng biết phải sửa gì.
-        fail(t.q, `${vi.chat.errors[e.code] || e.message}${e.detail ? ` — ${e.detail}` : ''}`)
+        // `ai_context_small`: câu của main có số token thật của model nên phải giữ, dịch theo mẫu qua errorText.
+        const text = e.code === 'ai_context_small' ? errorText({ message: e.message }) : vi.chat.errors[e.code] || e.message
+        fail(t.q, `${text}${e.detail ? ` — ${e.detail}` : ''}`)
       }
     })
     return () => {

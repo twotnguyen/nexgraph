@@ -123,6 +123,21 @@ describe('lỗi provider trong chat', () => {
     act(() => emitAgent(pid, { type: 'error', code: 'ai_context_window', message: 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi' }))
     expect((await screen.findAllByText(/Ngữ cảnh vượt giới hạn mô hình/)).length).toBeGreaterThan(0)
   })
+
+  it('MIN-46 M3: model có cửa sổ nhỏ hiện đúng số token của main, không dùng câu "tăng context window"', async () => {
+    const { emitAgent } = await startTurn()
+    const message = 'Mô hình chỉ có 6000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.'
+    act(() => emitAgent(pid, { type: 'error', code: 'ai_context_small', message }))
+    expect((await screen.findAllByText(/Mô hình chỉ có 6000 token ngữ cảnh/)).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/tăng context window/)).not.toBeInTheDocument()
+  })
+
+  it('MIN-46 M3 EN: câu ngữ cảnh nhỏ dịch theo mẫu, giữ số token', async () => {
+    setLocale('en')
+    const { emitAgent } = await startTurn()
+    act(() => emitAgent(pid, { type: 'error', code: 'ai_context_small', message: 'Mô hình chỉ có 6000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.' }))
+    expect((await screen.findAllByText(/The model has only 6000 context tokens/)).length).toBeGreaterThan(0)
+  })
 })
 
 describe('vòng context', () => {

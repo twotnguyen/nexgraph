@@ -365,7 +365,8 @@ export interface NexGraphApi {
     models(): Promise<ModelInfo[]>
     selectModel(provider: string, id: string): Promise<void>
     /** Gọi provider thật với model đang chọn. */
-    test(): Promise<{ ok: boolean; message: string; detail?: string; capabilities?: { streaming: boolean; tools: boolean } }>
+    /** `contextWarning`: số token cửa sổ ngữ cảnh của model khi quá nhỏ để chạy trợ lý. */
+    test(): Promise<{ ok: boolean; message: string; detail?: string; capabilities?: { streaming: boolean; tools: boolean }; contextWarning?: number }>
     discoverLocal(baseUrl?: string): Promise<LocalModelInfo[]>
     connectLocal(baseUrl: string, modelId: string): Promise<void>
     onEvent(cb: (e: AuthEventView) => void): () => void
