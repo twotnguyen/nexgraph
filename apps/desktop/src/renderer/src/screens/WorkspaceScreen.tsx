@@ -822,9 +822,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [terminalNew, setTerminalNew] = useState(0)
   const [taskPicker, setTaskPicker] = useState(false)
   const [taskHistory, setTaskHistory] = useState(() => readTaskHistory(project.project_id))
-  const [taskRequest, setTaskRequest] = useState<{ seq: number; task: TaskDefinition } | null>(null)
+  const [taskRequest, setTaskRequest] = useState<{ seq: number; task?: TaskDefinition; command?: string } | null>(null)
   const taskSequence = useRef(0)
-  const lastTask = useRef<TaskDefinition | null>(null)
+  const lastTask = useRef<{ task?: TaskDefinition; command?: string } | null>(null)
   const taskProject = useRef(project.project_id)
   taskProject.current = project.project_id
   useEffect(() => {
@@ -832,9 +832,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setTaskRequest(null)
     setTaskHistory(readTaskHistory(project.project_id))
   }, [project.project_id])
-  const queueTask = (task: TaskDefinition) => {
-    lastTask.current = task
-    setTaskRequest({ seq: ++taskSequence.current, task })
+  const queueTask = (request: { task?: TaskDefinition; command?: string }) => {
+    lastTask.current = request
+    setTaskRequest({ seq: ++taskSequence.current, ...request })
     setTerminal('open')
   }
   const runTask = async (task: TaskDefinition, oneshot: boolean) => {
@@ -845,10 +845,16 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     const file = activeFile
     const line = editor && editor.file === file ? editor.handle.getPosition?.()?.line : undefined
     try {
+      // REV-13: lệnh gõ tay không phải task của dự án nên không xin chữ ký; gõ vào shell như người dùng.
+      if (oneshot) {
+        setTaskHistory(rememberTask(pid, task, true))
+        queueTask({ command: task.command })
+        return
+      }
       const resolved = await api.resolve(pid, task, { file, line })
       if (taskProject.current !== pid) return
       setTaskHistory(rememberTask(pid, task, oneshot))
-      queueTask(resolved)
+      queueTask({ task: resolved })
     } catch (e) {
       if (taskProject.current === pid) setFeedback(errorText(e))
     }
@@ -858,9 +864,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     const recent = taskHistory[0]
     if (!recent) return setTaskPicker(true)
     try {
-      const task = recent.oneshot ? { label: recent.label, command: recent.command, type: 'shell' as const }
-        : (await window.nexgraph.tasks?.list(project.project_id))?.find((item) => item.label === recent.label && item.command === recent.command)
-      if (task) await runTask(task, recent.oneshot)
+      if (recent.oneshot) return queueTask({ command: recent.command })
+      const task = (await window.nexgraph.tasks?.list(project.project_id))?.find((item) => item.label === recent.label && item.command === recent.command)
+      if (task) await runTask(task, false)
       else setTaskPicker(true)
     } catch (e) { setFeedback(errorText(e)) }
   }

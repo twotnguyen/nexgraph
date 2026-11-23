@@ -18,7 +18,8 @@ vi.mock('electron', () => ({
     webContents = {
       on: vi.fn((name: string, cb: (...args: unknown[]) => void) => h.webEvents.set(name, cb)),
       send: vi.fn(), getURL: () => 'file:///C:/NexGraph/index.html',
-      setWindowOpenHandler: vi.fn((handler: (details: { url: string }) => { action: string }) => { h.openHandler = handler })
+      setWindowOpenHandler: vi.fn((handler: (details: { url: string }) => { action: string }) => { h.openHandler = handler }),
+      session: { setPermissionRequestHandler: vi.fn(), setPermissionCheckHandler: vi.fn() }
     }
     once = vi.fn()
     isDestroyed() { return false }

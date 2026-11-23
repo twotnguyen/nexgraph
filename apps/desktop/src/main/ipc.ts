@@ -1,4 +1,5 @@
 import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'electron'
+import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -39,6 +40,8 @@ import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
 import { ensureTasksFile, listTasks, resolveTask } from './tasks'
+import { createTaskSigner, taskContentKey } from './tasks/signature'
+import { UserError } from './user-error'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
 import { gitApplyHunk, gitHunks } from './git/hunks'
@@ -59,6 +62,8 @@ let agents: AgentRouter | null = null
 let geminiConnection: GeminiConnectionManager | null = null
 let editors: EditorStateRegistry | null = null
 let terminals: TerminalManager | null = null
+/** Khoá ký task sống theo phiên app: task renderer gửi lại phải do chính main cấp (REV-13). */
+const taskSigner = createTaskSigner(randomBytes(32))
 let debugManager: DebugManager | null = null
 let collab: CollabHub | null = null
 
@@ -329,7 +334,22 @@ export function registerIpc(
     exit: (id, code) => getWindow()?.webContents.send('terminal:event', { id, type: 'exit', code })
   })
   const term = terminals
-  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => term.create(await rootOf(pid), Number(cols), Number(rows), task))
+  // REV-13: task chỉ được chạy khi chính main ký — và main chỉ ký task khai trong tệp của dự án
+  // (`tasks:resolve`). Chữ ký gắn projectId + root nên không replay sang dự án khác.
+  // Đây là rào chắn cho *task*, không phải sandbox: terminal không task vẫn mở shell của người dùng.
+  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => {
+    const root = await rootOf(pid)
+    let approved: TaskDefinition | undefined
+    if (task !== undefined) {
+      validateTask(task)
+      if (!taskSigner.verify({ projectId: pid, root }, task)) {
+        throw new UserError('unapproved_task', 'Task không do NexGraph cấp, hãy chọn lại trong danh sách tác vụ.')
+      }
+      // Chỉ chuyển các trường đã ký; bỏ mọi thuộc tính lạ renderer gắn thêm.
+      approved = { label: task.label, command: task.command, type: task.type, args: task.args, cwd: task.cwd, env: task.env }
+    }
+    return term.create(root, Number(cols), Number(rows), approved)
+  })
   on('terminal:write', async (id: number, data: string) => { if (typeof data === 'string') term.write(Number(id), data) })
   on('terminal:resize', async (id: number, cols: number, rows: number) => term.resize(Number(id), Number(cols), Number(rows)))
   on('terminal:kill', async (id: number) => term.kill(Number(id)))
@@ -341,7 +361,12 @@ export function registerIpc(
     if (!context || typeof context !== 'object' ||
       (context.file !== undefined && typeof context.file !== 'string') ||
       (context.line !== undefined && (!Number.isInteger(context.line) || context.line < 1))) throw new FsError('bad_param', 'Ngữ cảnh task không hợp lệ')
-    return resolveTask(await rootOf(pid), task, context)
+    const root = await rootOf(pid)
+    // Main tự đọc task của đúng dự án rồi so nội dung: renderer gửi task tự chế (command/args/env
+    // tuỳ ý, lệnh gõ tay, hay task của dự án khác) không xin được chữ ký. Dùng bản của main để ký.
+    const declared = (await listTasks(root)).find((candidate) => taskContentKey(candidate) === taskContentKey(task))
+    if (!declared) throw new UserError('unapproved_task', 'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.')
+    return taskSigner.sign({ projectId: pid, root }, resolveTask(root, declared, context))
   })
   on('git:status', async (pid: string) => gitStatus(await rootOf(pid)))
   on('git:stage', async (pid: string, files: string[]) => gitStage(await rootOf(pid), files))

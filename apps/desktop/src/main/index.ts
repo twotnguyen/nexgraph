@@ -14,6 +14,7 @@ import { EngineSupervisor } from './engine/supervisor'
 import { runSmoke } from './smoke'
 import { externalWebUrl, isSameDocument } from './external-links'
 import { accountDevHooks } from './dev-hooks'
+import { installPermissionHandlers } from './security/permissions'
 
 // Kiểm bản cài dùng kho tài khoản riêng, không đọc/ghi cấu hình AI thật của người dùng.
 if (process.env.NEXGRAPH_USER_DATA_DIR) {
@@ -69,6 +70,8 @@ async function createWindow(show = true): Promise<void> {
     }
   })
   const win = mainWindow
+  // REV-17: từ chối mặc định mọi quyền (camera, vị trí, thông báo, USB…); app không dùng quyền nào.
+  installPermissionHandlers(win.webContents.session)
   const openExternal = (raw: string) => {
     const url = externalWebUrl(raw)
     if (url) void shell.openExternal(url).catch(() => {})

@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import { getHealth } from '../src/main/engine/client'
-import { EngineStartError, startEngine, type EngineCommand } from '../src/main/engine/launcher'
+import { EngineStartError, engineEnv, startEngine, type EngineCommand } from '../src/main/engine/launcher'
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>()
@@ -28,7 +28,7 @@ const fake = (): EngineCommand => ({
   args: [fileURLToPath(new URL('./fixtures/fake-engine.mjs', import.meta.url))]
 })
 const run = (mode: string, extra: Partial<Parameters<typeof startEngine>[1]> = {}) =>
-  startEngine(fake(), { dataDir: tmp(), env: { ...process.env, FAKE_MODE: mode }, ...extra })
+  startEngine(fake(), { dataDir: tmp(), env: { FAKE_MODE: mode }, ...extra })
 const authedHealth = async (h: { baseUrl: string; token: string }) =>
   (await (await fetch(`${h.baseUrl}/v1/health`, { headers: { Authorization: `Bearer ${h.token}` } })).json()) as {
     argv: string[]
@@ -58,6 +58,69 @@ describe('startEngine', () => {
   it('ignores noise before ready', async () => {
     const h = await run('ok')
     await h.stop()
+  })
+
+  it('không chuyển PYTHONPATH/PYTHONHOME của tiến trình cha sang engine', async () => {
+    // DSK-01: máy dev có PYTHONPATH của công cụ khác thì engine chết ngay ở import (pydantic_core).
+    const h = await run('ok', {
+      env: { FAKE_MODE: 'ok', PYTHONPATH: '/x/site-packages', PYTHONHOME: '/x/venv' }
+    })
+    try {
+      const env = (vi.mocked(spawn).mock.calls.at(-1)![2] as { env: NodeJS.ProcessEnv }).env
+      expect(env.PYTHONPATH).toBeUndefined()
+      expect(env.PYTHONHOME).toBeUndefined()
+      expect(env.PYTHONNOUSERSITE).toBe('1')
+      expect(env.NEXGRAPH_TOKEN).toMatch(/^[0-9a-f]{64}$/)
+      expect(env.FAKE_MODE).toBe('ok')
+      expect(env.PATH ?? env.Path).toBe(process.env.PATH ?? process.env.Path)
+    } finally {
+      await h.stop()
+    }
+  })
+
+  it('engineEnv chỉ chuyển biến hệ thống và thứ engine cần, bỏ credential của tiến trình cha', () => {
+    // REV-14/least-privilege: engine parse mã của dự án (không tin được) nên không được nhận
+    // AWS_*, token npm, SSH agent…; giữ PATH/HOME/proxy/CA và GH_TOKEN vì `gh pr` đọc env.
+    const dirty: NodeJS.ProcessEnv = {
+      PATH: '/usr/local/bin:/usr/bin', HOME: '/Users/thử', LANG: 'vi_VN.UTF-8',
+      ProgramFiles: 'C:\\Program Files',
+      GH_TOKEN: 'ghp_thử', GITHUB_TOKEN: 'ghp_thử', GH_HOST: 'github.com',
+      HTTPS_PROXY: 'http://proxy.nội.bộ:3128', NO_PROXY: 'localhost', SSL_CERT_FILE: '/etc/ca.pem',
+      NEXGRAPH_SKIP_HOOK: '1', NEXGRAPH_TOKEN: 'token-cũ',
+      AWS_ACCESS_KEY_ID: 'AKIA-thử', AWS_SECRET_ACCESS_KEY: 'bí-mật', SSH_AUTH_SOCK: '/tmp/ssh.sock',
+      NPM_TOKEN: 'npm_thử', OPENAI_API_KEY: 'sk-thử', PYTHONPATH: '/x/site-packages',
+      PYTHONHOME: '/x/venv', NODE_OPTIONS: '--require /tmp/chèn.js', LD_PRELOAD: '/tmp/chèn.so'
+    }
+    const env = engineEnv(dirty, { NEXGRAPH_TOKEN: 'token-mới' })
+    for (const key of ['PATH', 'HOME', 'LANG', 'ProgramFiles', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_HOST',
+      'HTTPS_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'NEXGRAPH_SKIP_HOOK']) {
+      expect(env[key], key).toBe(dirty[key])
+    }
+    expect(env.NEXGRAPH_TOKEN).toBe('token-mới')
+    expect(env.PYTHONNOUSERSITE).toBe('1')
+    expect(env.PYTHONUTF8).toBe('1')
+    for (const key of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'SSH_AUTH_SOCK', 'NPM_TOKEN',
+      'OPENAI_API_KEY', 'PYTHONPATH', 'PYTHONHOME', 'NODE_OPTIONS', 'LD_PRELOAD']) {
+      expect(env, key).not.toHaveProperty(key)
+    }
+  })
+
+  it('startEngine không chuyển credential từ môi trường của app sang engine', async () => {
+    vi.stubEnv('AWS_SECRET_ACCESS_KEY', 'bí-mật-của-máy')
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/ssh-agent-của-máy')
+    try {
+      const h = await run('ok')
+      try {
+        const env = (vi.mocked(spawn).mock.calls.at(-1)![2] as { env: NodeJS.ProcessEnv }).env
+        expect(env).not.toHaveProperty('AWS_SECRET_ACCESS_KEY')
+        expect(env).not.toHaveProperty('SSH_AUTH_SOCK')
+        expect(env.PATH ?? env.Path).toBe(process.env.PATH ?? process.env.Path)
+      } finally {
+        await h.stop()
+      }
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('passes unicode data dir intact', async () => {
