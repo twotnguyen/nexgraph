@@ -399,6 +399,60 @@ def test_stalled_workers_fall_back_without_repeating_completed_files(tmp_path, i
     assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
 
 
+def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project, monkeypatch):
+    """Lô quá hạn chỉ đẩy tệp của lô đó sang đường từng-tệp; phần còn lại vẫn chạy N worker (PERF-L mục 1).
+
+    Trước bản sửa, một lô quá hạn làm cả dự án rơi xuống 1 worker: 4.954/5.658 tệp của open-design
+    chạy từng tệp một (534 s thay vì 177 s).
+    """
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    slow = "m2.py"  # nằm trong lô đầu (m0..m15)
+    batches: list[list[str]] = []
+    per_file: list[str] = []
+    pools: list[int] = []
+
+    class SlowBatchPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            pools.append(max_workers)
+
+        def submit(self, fn, *args):
+            future = Future()
+            target = args[1]
+            if isinstance(target, list):
+                batches.append([f.rel_path for f in target])
+                if any(f.rel_path == slow for f in target):
+                    return future  # lô chứa tệp chậm: quá hạn, không bao giờ xong
+                future.set_result(fn(*args))
+            else:
+                per_file.append(target.rel_path)
+                future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 40)
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", SlowBatchPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    store, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert graph_state(store) == graph_state(serial)
+    # Chỉ tệp của lô quá hạn đi đường từng-tệp, không phải toàn bộ phần còn lại.
+    assert len(batches[0]) == 16
+    assert sorted(per_file) == sorted(batches[0])
+    # Pool mới sau lô quá hạn vẫn giữ 2 worker (không hạ xuống 1).
+    assert pools.count(2) >= 2 and max(pools) == 2
+    assert {name for b in batches for name in b} == {f"m{i}.py" for i in range(40)}  # vẫn chạy theo lô
+    assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
+
+
 def test_hung_file_in_sequential_fallback_is_skipped_with_a_report(tmp_path, index_project, monkeypatch):
     """Worker song song gián đoạn, rồi tệp treo trong fallback: chỉ tệp đó bị bỏ qua, có báo, các tệp khác vẫn vào đồ thị."""
     from concurrent.futures import Future

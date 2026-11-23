@@ -284,7 +284,10 @@ class Indexer:
         if IS_WINDOWS:
             workers = min(workers, 61)  # giới hạn ProcessPoolExecutor trên Windows
 
-        def _consume(i: int, f: DiscoveredFile, x: ExtractedFile) -> None:
+        consumed = 0
+
+        def _consume(f: DiscoveredFile, x: ExtractedFile) -> None:
+            nonlocal consumed
             store.add_file(run_id, x.rec)
             store.add_nodes(x.nodes)
             store.add_edges(x.edges)
@@ -305,32 +308,52 @@ class Indexer:
                                       label=parent.rsplit("/", 1)[-1], qualified_name=parent)])
                 contains.append((directory_node_id(grand) if grand else REPOSITORY_ID, directory_node_id(parent)))
                 parent = grand
-            if i % COMMIT_EVERY == 0:
+            consumed += 1
+            if consumed % COMMIT_EVERY == 0:
                 store.commit()
-            self.on_progress(ProgressEvent("structure", i, total))
+            self.on_progress(ProgressEvent("structure", consumed, total))
 
-        consumed = 0
+        # Lô quá hạn/pool hỏng KHÔNG hạ cả dự án xuống một worker (hồi quy PERF-L: một tệp 846 KB vượt hạn
+        # 20 s làm 87,5 % tệp của open-design chạy từng tệp, 534 s thay vì 177 s). Chỉ tệp của lô quá hạn đi
+        # đường từng-tệp có hạn riêng; phần còn lại chạy lại bằng pool MỚI cùng số worker.
+        pending = list(range(0, total, EXTRACTION_BATCH_SIZE))
+        suspects: list[int] = []
+        stalled_streak = 0  # số lần liên tiếp chưa xong lô nào; >= 2 thì coi là treo thật
+        gave_up = False
         if workers > 1:
-            executor: ProcessPoolExecutor | None = None
-            batches = []
-            try:
-                executor = ProcessPoolExecutor(max_workers=workers)
-                batches = [executor.submit(_extract_batch, self.root, files[offset:offset + EXTRACTION_BATCH_SIZE],
-                                           self.transcript_dir) for offset in range(0, total, EXTRACTION_BATCH_SIZE)]
-            except (BrokenProcessPool, OSError, RuntimeError):
-                # Worker có thể không khởi động được hoặc bị hệ điều hành chặn; các tệp chưa xong
-                # sẽ được đọc tiếp ở nhánh fallback tuần tự bên dưới.
-                logger.warning("Bộ trích xuất song song gián đoạn; đọc tiếp tuần tự", exc_info=True)
-                if executor is not None:
-                    _kill_pool(executor)
-                executor, batches = None, []
-            if executor is not None:
+            while pending and not self.cancel.is_set():
+                executor: ProcessPoolExecutor | None = None
+                futures = {}
                 try:
-                    for batch in batches:
+                    executor = ProcessPoolExecutor(max_workers=workers)
+                    futures = {offset: executor.submit(_extract_batch, self.root,
+                                                       files[offset:offset + EXTRACTION_BATCH_SIZE],
+                                                       self.transcript_dir) for offset in pending}
+                except (BrokenProcessPool, OSError, RuntimeError):
+                    # Worker có thể không khởi động được hoặc bị hệ điều hành chặn.
+                    logger.warning("Bộ trích xuất song song gián đoạn; thử lại rồi đọc từng tệp", exc_info=True)
+                    if executor is not None:
+                        _kill_pool(executor)
+                    stalled_streak += 1
+                    if stalled_streak >= 2:
+                        gave_up = True
+                        break
+                    continue
+                broken = False
+                try:
+                    for offset in list(pending):
+                        batch = futures[offset]
                         deadline = time.monotonic() + WORKER_PROGRESS_TIMEOUT_SECONDS
                         while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
                             wait((batch,), timeout=0.2)
-                        if not batch.done() or self.cancel.is_set():
+                        if self.cancel.is_set():
+                            return False
+                        if not batch.done():
+                            # Quá hạn: coi tệp của lô là nghi treo, đẩy sang đường từng-tệp rồi làm lại pool.
+                            suspects.extend(range(offset, min(offset + EXTRACTION_BATCH_SIZE, total)))
+                            pending.remove(offset)
+                            stalled_streak += 1
+                            broken = True
                             break
                         try:
                             extracted_batch = batch.result()
@@ -338,37 +361,45 @@ class Indexer:
                             # Chỉ lỗi của pool bị bắt ở đây; lỗi trong `_consume`/`on_progress` phải nổi lên.
                             if self.cancel.is_set():
                                 return False
-                            _kill_pool(executor)
-                            executor = None
                             self.on_progress(ProgressEvent(
                                 "structure", consumed, total,
-                                "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
+                                "Không dùng được tiến trình trích xuất; đang làm lại pool cho phần còn lại."))
+                            stalled_streak += 1
+                            broken = True
                             break
                         # Ngoài `try` của pool: lỗi của callback/ghi CSDL không được nuốt (Minor #27 N2).
-                        for extracted in extracted_batch:
+                        for k, extracted in enumerate(extracted_batch):
                             if self.cancel.is_set():
                                 return False
-                            _consume(consumed + 1, files[consumed], extracted)
-                            consumed += 1
+                            _consume(files[offset + k], extracted)
+                        pending.remove(offset)
+                        stalled_streak = 0
                 finally:
-                    if executor is not None and consumed < total:
-                        # Python 3.12 chưa có terminate_workers() trên executor.
-                        for process in list((executor._processes or {}).values()):
-                            with suppress(OSError):
-                                process.terminate()
-                    if executor is not None:
+                    if broken:
+                        _kill_pool(executor)  # dừng tiến trình con đang treo trước khi làm pool mới
+                    else:
                         executor.shutdown(wait=False, cancel_futures=True)
-            if consumed < total and not self.cancel.is_set():
-                self.on_progress(ProgressEvent("structure", consumed, total,
-                                               "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
+                if stalled_streak >= 2:
+                    gave_up = True
+                    break
+            if gave_up and pending:
+                # Hai lần liên tiếp không tiến triển: treo thật, phần còn lại đi đường từng-tệp.
+                for offset in list(pending):
+                    suspects.extend(range(offset, min(offset + EXTRACTION_BATCH_SIZE, total)))
+                    pending.remove(offset)
 
-        # Nếu worker song song treo/gãy, đọc tiếp từ tệp đầu tiên chưa ghi. Mỗi tệp chạy trong tiến trình con
-        # để tệp treo không treo cả engine; chỉ khi không dùng được tiến trình con mới đọc trong tiến trình chính.
+        remaining = [i for offset in pending for i in range(offset, min(offset + EXTRACTION_BATCH_SIZE, total))]
+        todo = suspects + remaining
+        if todo and not self.cancel.is_set():
+            self.on_progress(ProgressEvent("structure", consumed, total,
+                                           "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
+
+        # Mỗi tệp còn lại chạy trong tiến trình con để tệp treo không treo cả engine; chỉ khi không dùng được
+        # tiến trình con mới đọc trong tiến trình chính.
         executor: ProcessPoolExecutor | None = None
         isolated = workers > 1
         try:
-            i = consumed
-            while i < total:
+            for i in todo:
                 if self.cancel.is_set():
                     return False
                 f = files[i]
@@ -380,7 +411,7 @@ class Indexer:
                     except (BrokenProcessPool, OSError):
                         isolated = False
                         self.on_progress(ProgressEvent(
-                            "structure", i, total,
+                            "structure", consumed, total,
                             "Không tạo được tiến trình trích xuất; đang đọc trong tiến trình chính."))
                 if pool is not None:
                     try:
@@ -391,7 +422,7 @@ class Indexer:
                         _kill_pool(pool)
                         executor, isolated = None, False
                         self.on_progress(ProgressEvent(
-                            "structure", i, total,
+                            "structure", consumed, total,
                             "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
                     else:
                         deadline = time.monotonic() + FILE_EXTRACT_TIMEOUT_SECONDS
@@ -404,22 +435,21 @@ class Indexer:
                                 _kill_pool(pool)
                                 executor, isolated = None, False
                                 self.on_progress(ProgressEvent(
-                                    "structure", i, total,
+                                    "structure", consumed, total,
                                     "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
                         else:  # quá hạn hoặc bị huỷ: dừng tiến trình con, bỏ qua tệp và đi tiếp
                             _kill_pool(pool)
                             executor = None
                             if self.cancel.is_set():
                                 return False
+                            consumed += 1
                             self.on_progress(ProgressEvent(
-                                "structure", i + 1, total,
+                                "structure", consumed, total,
                                 f"Bỏ qua {f.rel_path}: trích xuất quá {FILE_EXTRACT_TIMEOUT_SECONDS:g} giây"))
-                            i += 1
                             continue
                 if x is None:
                     x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
-                _consume(i + 1, f, x)
-                i += 1
+                _consume(f, x)
         finally:
             if executor is not None:
                 executor.shutdown(wait=False, cancel_futures=True)
