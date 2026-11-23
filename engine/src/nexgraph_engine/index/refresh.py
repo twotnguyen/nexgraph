@@ -7,6 +7,7 @@ Kết quả phải bằng một lần lập chỉ mục đầy đủ trên cây 
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -26,6 +27,7 @@ from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, FileRec, Node
 
 _RESOLVABLE_KINDS = [k.value for k in (*TYPE_KINDS, NodeKind.FUNCTION)]
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -100,74 +102,86 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
 
     run_id = store.begin_run(files_total=len(added) + len(removed) + len(modified), commit_sha=_git_head(root),
                              kind="tang_dan", subdir=scope)
+    warnings: list[str] = []
     try:
-        store.set_run_state(run_id, "cau_truc")
-        known_labels = {r[0] for r in store.conn.execute("SELECT DISTINCT nhan FROM nut")}
-        # Ký hiệu bị xoá/đổi tên có thể làm một tên từng mơ hồ trở nên duy nhất: phân giải lại cả các tên này.
-        gone = [*removed, *modified]
-        old_labels = {r[0] for chunk in (gone[i:i + 400] for i in range(0, len(gone), 400)) for r in store.conn.execute(
-            "SELECT DISTINCT n.nhan FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
-            f" WHERE t.duong_dan_tuong_doi IN ({','.join('?' * len(chunk))})", chunk)}
-        sig_before = store.file_graph_signature()
-        extracted: dict[str, ExtractedFile] = {p: extract_file(root, disk[p], transcript_dir=transcript_dir) for p in (*added, *modified)}
-        dependents = _dependents(store, added, removed, modified, extracted, disk)
-        for p in dependents:
-            extracted[p] = extract_file(root, disk[p], transcript_dir=transcript_dir)
+        # REV-10 không cần chép CSDL: cả lần refresh là MỘT giao dịch trên CSDL thật. Lỗi giữa chừng
+        # (hoặc tiến trình bị kill) thì SQLite rollback journal/WAL, đồ thị đã công bố còn nguyên.
+        with store.atomic():
+            store.set_run_state(run_id, "cau_truc")
+            known_labels = {r[0] for r in store.conn.execute("SELECT DISTINCT nhan FROM nut")}
+            # Ký hiệu bị xoá/đổi tên có thể làm một tên từng mơ hồ trở nên duy nhất: phân giải lại cả các tên này.
+            gone = [*removed, *modified]
+            old_labels = {r[0] for chunk in (gone[i:i + 400] for i in range(0, len(gone), 400)) for r in store.conn.execute(
+                "SELECT DISTINCT n.nhan FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
+                f" WHERE t.duong_dan_tuong_doi IN ({','.join('?' * len(chunk))})", chunk)}
+            sig_before = store.file_graph_signature()
+            extracted: dict[str, ExtractedFile] = {p: extract_file(root, disk[p], transcript_dir=transcript_dir) for p in (*added, *modified)}
+            dependents = _dependents(store, added, removed, modified, extracted, disk)
+            for p in dependents:
+                extracted[p] = extract_file(root, disk[p], transcript_dir=transcript_dir)
 
-        before_flows = flows_before(store, [*removed, *modified, *dependents])
-        for p in removed:
-            store.remove_file(p)
-        for p in (*modified, *dependents):
-            x = extracted[p]
-            store.replace_file(run_id, x.rec, x.nodes, x.edges, x.refs, x.bindings, x.errors)
-        for p in added:
-            x = extracted[p]
-            store.add_file(run_id, x.rec)
-            store.add_nodes(x.nodes)
-            store.add_edges(x.edges)
-            store.add_unresolved(x.refs)
-            store.add_bindings(x.bindings)
-            for kind, detail in x.errors:
-                store.add_file_error(p, kind, detail)
-            _link_directories(store, p)
-        _prune_directories(store, removed)
+            before_flows = flows_before(store, [*removed, *modified, *dependents])
+            for p in removed:
+                store.remove_file(p)
+            for p in (*modified, *dependents):
+                x = extracted[p]
+                store.replace_file(run_id, x.rec, x.nodes, x.edges, x.refs, x.bindings, x.errors)
+            for p in added:
+                x = extracted[p]
+                store.add_file(run_id, x.rec)
+                store.add_nodes(x.nodes)
+                store.add_edges(x.edges)
+                store.add_unresolved(x.refs)
+                store.add_bindings(x.bindings)
+                for kind, detail in x.errors:
+                    store.add_file_error(p, kind, detail)
+                _link_directories(store, p)
+            _prune_directories(store, removed)
 
-        store.set_run_state(run_id, "phan_giai")
-        tails = ({n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels) | old_labels
-        # Tham chiếu Dart `mixin:X`/`on:X` (dart/extractor.py) không có dấu chấm nên phải khớp nguyên tiền tố.
-        store.requeue_failed_refs(tails={*tails, *(f"{p}{t}" for t in tails for p in ("mixin:", "on:"))}, imports=bool(added))
-        pubspec = root / "pubspec.yaml"
-        resolved_edges: list[Edge] = []
-        # Chỉ chạy lô khi có tệp mức chung đổi; lô gồm cả tệp không đổi vì cạnh từ chúng tới tệp vừa sửa đã mất
-        # cùng nút cũ (W2).
-        changed_langs = [disk[p].language for p in (*added, *modified)] + [known[p].language for p in removed]
-        if any(is_batch_language(lang) for lang in changed_langs):
-            resolved_edges += add_batch_calls(store, root, [(rel, rec.language) for rel, rec in real_file_records(store).items()
-                                                            if is_batch_language(rec.language)])
-        resolve_references(store, package_name=_package_name(
-            pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None), created_out=resolved_edges)
-        derive_tested_by(store)
-        warnings: list[str] = []
-        try:
-            new_calls = [(store.pk_of(e.source), store.pk_of(e.target)) for e in resolved_edges if e.type == EdgeType.CALLS]
-            update_flows(store, root, before_flows, [*added, *modified, *dependents], new_calls)
-        except Exception as exc:
-            # Không nuốt lỗi rồi giữ luồng cũ: dựng lại toàn bộ để đúng như một lần index đầy đủ.
-            store.conn.rollback()
-            warnings.append(f"update_flows lỗi ({type(exc).__name__}: {exc}); đã dựng lại toàn bộ luồng")
-            rebuild_flows(store, root)  # nếu lỗi ở đây thì handler bên ngoài đánh dấu lần chạy là 'loi'
-        if store.file_graph_signature() != sig_before:
+            store.set_run_state(run_id, "phan_giai")
+            tails = ({n.label for p in (*added, *modified) for n in extracted[p].nodes} - known_labels) | old_labels
+            # Tham chiếu Dart `mixin:X`/`on:X` (dart/extractor.py) không có dấu chấm nên phải khớp nguyên tiền tố.
+            store.requeue_failed_refs(tails={*tails, *(f"{p}{t}" for t in tails for p in ("mixin:", "on:"))}, imports=bool(added))
+            pubspec = root / "pubspec.yaml"
+            resolved_edges: list[Edge] = []
+            # Chỉ chạy lô khi có tệp mức chung đổi; lô gồm cả tệp không đổi vì cạnh từ chúng tới tệp vừa sửa đã mất
+            # cùng nút cũ (W2).
+            changed_langs = [disk[p].language for p in (*added, *modified)] + [known[p].language for p in removed]
+            if any(is_batch_language(lang) for lang in changed_langs):
+                resolved_edges += add_batch_calls(store, root, [(rel, rec.language) for rel, rec in real_file_records(store).items()
+                                                                if is_batch_language(rec.language)])
+            resolve_references(store, package_name=_package_name(
+                pubspec.read_text(encoding="utf-8", errors="replace") if pubspec.is_file() else None), created_out=resolved_edges)
+            derive_tested_by(store)
             try:
-                detect_communities(store)
-            except Exception as exc:  # cộng đồng chỉ là phần phụ, nhưng phải báo là giữ cụm cũ
-                store.conn.rollback()
-                warnings.append(f"detect_communities lỗi ({type(exc).__name__}: {exc}); giữ cụm cũ")
-        # RB: thong_bao_loi chỉ được set khi trang_thai = 'loi' -> cảnh báo đi qua RefreshResult.warnings
-        # và phản hồi POST /refresh, không ghi giả vào cột lỗi của lần chạy.
-        store.set_run_state(run_id, "hoan_tat", files_done=len(added) + len(removed) + len(modified))
+                store.savepoint("luong")
+                new_calls = [(store.pk_of(e.source), store.pk_of(e.target)) for e in resolved_edges if e.type == EdgeType.CALLS]
+                update_flows(store, root, before_flows, [*added, *modified, *dependents], new_calls)
+                store.release("luong")
+            except Exception as exc:
+                # Không nuốt lỗi rồi giữ luồng cũ: bỏ riêng phần luồng (savepoint) rồi dựng lại toàn bộ
+                # để đúng như một lần index đầy đủ; phần cấu trúc đã ghi vẫn giữ.
+                store.rollback_to("luong")
+                warnings.append(f"update_flows lỗi ({type(exc).__name__}: {exc}); đã dựng lại toàn bộ luồng")
+                rebuild_flows(store, root)  # nếu lỗi ở đây thì handler bên ngoài đánh dấu lần chạy là 'loi'
+            if store.file_graph_signature() != sig_before:
+                try:
+                    store.savepoint("cum")
+                    detect_communities(store)
+                    store.release("cum")
+                except Exception as exc:  # cộng đồng chỉ là phần phụ, nhưng phải báo là giữ cụm cũ
+                    store.rollback_to("cum")
+                    warnings.append(f"detect_communities lỗi ({type(exc).__name__}: {exc}); giữ cụm cũ")
+            # RB: thong_bao_loi chỉ được set khi trang_thai = 'loi' -> cảnh báo đi qua RefreshResult.warnings
+            # và phản hồi POST /refresh, không ghi giả vào cột lỗi của lần chạy.
+            store.set_run_state(run_id, "hoan_tat", files_done=len(added) + len(removed) + len(modified))
     except BaseException as exc:
-        store.conn.rollback()
-        store.set_run_state(run_id, "loi", error=f"{type(exc).__name__}: {exc}")
+        # `atomic()` đã rollback toàn bộ: đồ thị cũ còn nguyên. Chỉ ghi lại lần chạy lỗi bằng một giao dịch nhỏ
+        # (dòng lần chạy nằm ngoài giao dịch nên không bị rollback).
+        try:
+            store.set_run_state(run_id, "loi", error=f"{type(exc).__name__}: {exc}")
+        except Exception:  # CSDL hỏng/đầy đĩa: lỗi gốc mới là thứ cần báo
+            logger.warning("Không ghi được trạng thái lỗi của lần chạy %s", run_id, exc_info=True)
         raise
     return RefreshResult(len(added), len(modified), len(removed), len(disk) - len(added) - len(modified),
                          time.time() - t0, tuple(warnings))

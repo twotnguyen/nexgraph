@@ -6,6 +6,7 @@ import sqlite3
 import time
 import uuid
 from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from typing import Literal
 
 from nexgraph_engine.index.keywords import search_keywords
@@ -29,6 +30,7 @@ class GraphStore:
         self.conn = conn
         self._file_pk: dict[str, int] = {}
         self._node_pk: dict[str, int] = {}
+        self._atomic_depth = 0  # >0: đang trong `atomic()`, các commit bên trong chỉ là mốc
 
     # --- dự án và lần lập chỉ mục ---------------------------------------------------
     def init_project(self, name: str, has_git: bool, project_id: str | None = None) -> str:
@@ -40,7 +42,7 @@ class GraphStore:
             "INSERT INTO du_an (ma_du_an, ten, co_git, phien_ban_schema, tao_luc) VALUES (?, ?, ?, ?, ?)",
             (pid, name[:255] or "project", int(has_git), GRAPH_SCHEMA_VERSION, int(time.time())),
         )
-        self.conn.commit()
+        self._commit()
         return pid
 
     def project_id(self) -> str | None:
@@ -58,7 +60,7 @@ class GraphStore:
             (pid, kind, int(time.time()), files_total, commit_sha, subdir, json.dumps(exclude) if exclude else None,
              int(include_docs), int(include_media), int(include_config)),
         )
-        self.conn.commit()
+        self._commit()
         return int(cur.lastrowid)
 
     def last_scope(self) -> str | None:
@@ -131,7 +133,7 @@ class GraphStore:
         if state == "loi":
             sets.append("thong_bao_loi = ?"); args.append(error or "lỗi không rõ")
         self.conn.execute(f"UPDATE lan_lap_chi_muc SET {', '.join(sets)} WHERE ma_lan = ?", (*args, run_id))
-        self.conn.commit()
+        self._commit()
 
     def abort_stale_runs(self) -> int:
         """Đánh dấu lỗi các lần còn ở trạng thái đang chạy (engine từng thoát giữa chừng), để không chặn RB19."""
@@ -139,7 +141,7 @@ class GraphStore:
             "UPDATE lan_lap_chi_muc SET trang_thai = 'loi', ket_thuc_luc = max(bat_dau_luc, ?),"
             " thong_bao_loi = 'Bị gián đoạn: engine thoát trước khi lập chỉ mục xong'"
             " WHERE trang_thai IN ('cho', 'cau_truc', 'phan_giai')", (int(time.time()),))
-        self.conn.commit()
+        self._commit()
         return cur.rowcount
 
     def last_completed_run(self) -> tuple[int, str | None] | None:
@@ -165,12 +167,67 @@ class GraphStore:
                 " WHERE trang_thai = 'hoan_tat')", (sha,))
 
     def commit(self) -> None:
-        self.conn.commit()
+        """Commit ngay; trong `atomic()` chỉ ghi nhận mốc (giao dịch đóng ở cuối khối)."""
+        self._commit()
+
+    def _commit(self) -> None:
+        """Commit thật khi ngoài `atomic()`; trong giao dịch thì để cuối khối commit một lần."""
+        if not self._atomic_depth:
+            self.conn.commit()
+
+    @contextmanager
+    def atomic(self) -> Iterator[None]:
+        """Một giao dịch SQLite cho cả khối: lỗi hoặc tiến trình bị kill thì đồ thị cũ còn nguyên.
+
+        Dùng cho refresh tăng dần trên CSDL thật (REV-10) thay vì chép CSDL sang bản staging:
+        `commit()` bên trong chỉ là mốc, chỉ COMMIT một lần ở cuối; lỗi bất kỳ thì ROLLBACK.
+        `kill -9` để SQLite tự phục hồi journal/WAL khi mở lại.
+        """
+        if self._atomic_depth:
+            raise RuntimeError("GraphStore.atomic() không lồng nhau; dùng savepoint() cho từng bước")
+        conn = self.conn
+        if conn.in_transaction:  # giao dịch ngầm còn dở: đóng trước để tự quản lý BEGIN
+            conn.commit()
+        previous = conn.isolation_level
+        conn.isolation_level = None
+        self._atomic_depth = 1
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+            if conn.in_transaction:
+                conn.execute("COMMIT")
+        finally:
+            self._atomic_depth = 0
+            conn.isolation_level = previous
+
+    def savepoint(self, name: str) -> None:
+        """Mốc lùi riêng một bước trong giao dịch hiện tại (ví dụ phần phụ lỗi thì bỏ, không mất cả refresh)."""
+        if not name.isidentifier():
+            raise ValueError(name)
+        self.conn.execute(f"SAVEPOINT {name}")
+
+    def rollback_to(self, name: str) -> None:
+        """Bỏ các ghi từ `savepoint(name)` tới giờ, giữ nguyên phần trước đó của giao dịch."""
+        if not name.isidentifier():
+            raise ValueError(name)
+        self.conn.execute(f"ROLLBACK TO {name}")
+        self.conn.execute(f"RELEASE {name}")
+
+    def release(self, name: str) -> None:
+        """Giữ các ghi từ `savepoint(name)` (gộp vào giao dịch ngoài)."""
+        if not name.isidentifier():
+            raise ValueError(name)
+        self.conn.execute(f"RELEASE {name}")
 
     def clear_graph(self) -> None:
         for table in ("canh", "nut", "tep", "khoi_kien_truc", "luong"):
             self.conn.execute(f"DELETE FROM {table}")
-        self.conn.commit()
+        self._commit()
         self._file_pk.clear()
         self._node_pk.clear()
 

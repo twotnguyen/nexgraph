@@ -133,4 +133,14 @@ describe('ProjectsScreen', () => {
     await userEvent.click(view)
     expect(onOpenGlobal).toHaveBeenCalledWith(['pa', 'pb'])
   })
+
+  it('cảnh báo khi không đọc được lần lập chỉ mục cuối của dự án', async () => {
+    installNexgraph({ project: { list: vi.fn(async () => [project({
+      name: 'Hỏng', last_indexed_at: null, last_index_error: 'Không đọc được lần lập chỉ mục cuối (DatabaseError: bad)'
+    })]) } })
+    render(<ProjectsScreen engineReady onOpened={() => {}} />)
+    const row = await screen.findByRole('button', { name: /^Hỏng/ })
+    expect(row).toHaveTextContent('Không đọc được lần lập chỉ mục cuối')
+    expect(row.querySelector('[role="status"]')).toHaveAttribute('title', 'Không đọc được lần lập chỉ mục cuối (DatabaseError: bad)')
+  })
 })

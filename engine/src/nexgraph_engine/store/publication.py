@@ -16,6 +16,14 @@ class GraphWriteBusy(RuntimeError):
     """Một tiến trình khác đang ghi đồ thị."""
 
 
+def is_busy_error(exc: BaseException) -> bool:
+    """SQLite báo bận (khoá ghi) — khác lỗi thật như đầy đĩa hay CSDL hỏng."""
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+    text = str(exc).lower()
+    return "locked" in text or "busy" in text
+
+
 @contextmanager
 def graph_writer(path: Path) -> Iterator[Path]:
     """Khóa ghi dùng chung giữa app và lệnh refresh; đóng tệp sẽ nhả khóa."""
@@ -50,6 +58,25 @@ def backup_graph(source: sqlite3.Connection, target: sqlite3.Connection, *, time
     # Caller sở hữu kết nối đích. Để callback giới hạn thời gian chờ SQLite.
     target.execute("PRAGMA busy_timeout = 0")
     source.backup(target, pages=256, progress=check, sleep=0.05)
+
+
+WAL_SIZE_LIMIT = 64 * 1024 * 1024  # WAL còn lại sau checkpoint (F7); đủ cho lô ghi bình thường
+
+
+def publish_stage(stage: sqlite3.Connection, live_path: Path, *, timeout: float = 30) -> None:
+    """Xuất bản bản staging đè lên CSDL thật; lỗi giữa chừng để nguyên bản đã công bố.
+
+    Publish ghi toàn bộ staging vào WAL của bản thật nên đỉnh đĩa ~2× CSDL (F7 của review PR #41):
+    đặt `journal_size_limit` rồi cắt WAL ngay sau khi xong. Refresh tăng dần không đi qua đây nữa
+    (một giao dịch trên CSDL thật), nên rủi ro này chỉ còn ở lập chỉ mục đầy đủ.
+    """
+    with closing(sqlite3.connect(f"{live_path.as_uri()}?mode=rw", uri=True)) as live:
+        live.execute(f"PRAGMA journal_size_limit = {WAL_SIZE_LIMIT}")
+        backup_graph(stage, live, timeout=timeout)
+        try:
+            live.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.OperationalError:
+            pass  # còn độc giả đang mở: checkpoint sau (hoặc lần publish sau) sẽ cắt
 
 
 @contextmanager

@@ -8,7 +8,7 @@ import pytest
 
 from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION, open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.publication import backup_graph, graph_writer, stage_graph
+from nexgraph_engine.store.publication import backup_graph, graph_writer, publish_stage, stage_graph
 
 PROJECT_ID = "00000000-0000-0000-0000-000000000001"
 
@@ -87,3 +87,15 @@ sys.exit(1)
     with stage_graph(graph) as (_live_path, stage):
         assert stage.execute("SELECT ten FROM du_an").fetchone()[0] == "active"
     assert not scratch.exists()
+
+
+def test_publish_truncates_wal_of_live_graph(graph):
+    """F7: publish ghi cả CSDL vào WAL của bản thật — xong phải cắt WAL, không giữ thêm một bản CSDL trên đĩa."""
+    wal = graph.with_name(graph.name + "-wal")
+    with closing(sqlite3.connect(graph)) as bystander:  # còn kết nối mở nên WAL không tự bị xoá khi publish đóng
+        bystander.execute("SELECT count(*) FROM sqlite_master").fetchone()
+        with stage_graph(graph) as (live_path, stage):
+            stage.execute("UPDATE du_an SET ten = 'next'")
+            stage.commit()
+            publish_stage(stage, live_path)
+        assert wal.exists() and wal.stat().st_size == 0
