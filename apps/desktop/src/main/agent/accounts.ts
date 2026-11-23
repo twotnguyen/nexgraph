@@ -470,7 +470,8 @@ export class AccountService {
     rememberSecret(key.trim())
     this.deps.secrets.set(providerId, key.trim())
     await this.modelRuntime.setRuntimeApiKey(providerId, key.trim())
-    await this.refreshModelCatalog(providerId)
+    // Refresh catalog chạy nền: mạng chậm không được giữ nút "Lưu key"/ô key ở trạng thái bận.
+    void this.refreshModelCatalog(providerId)
     this.accountGeneration(providerId, true)
   }
 

@@ -620,8 +620,31 @@ describe('AccountService', () => {
       const { svc } = await make()
       const fetchSpy = catalogHit()
       await svc.setApiKey('opencode-go', 'oc_sk_test_catalog')
-      expect(String(fetchSpy.mock.calls[0]?.[0])).toContain('https://pi.dev/api/models/providers/opencode-go')
-      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-moi')).toBe(true)
+      await vi.waitFor(() => expect(String(fetchSpy.mock.calls[0]?.[0])).toContain('https://pi.dev/api/models/providers/opencode-go'))
+      await vi.waitFor(async () => expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-moi')).toBe(true))
+    })
+
+    it('lưu key không chờ refresh catalog: mạng treo vẫn trả về ngay, catalog cập nhật ở nền', async () => {
+      const { svc } = await make()
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        await gate
+        return new Response(JSON.stringify({ models: [{
+          id: 'go-catalog-nen', name: 'Go catalog nền', api: 'openai-completions',
+          baseUrl: 'https://opencode.ai/inference/go/openai/v1', reasoning: false, input: ['text'],
+          cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 1024
+        }] }), { status: 200, headers: { 'content-type': 'application/json', 'last-modified': 'Wed, 01 Jan 2031 00:00:00 GMT' } })
+      })
+      const outcome = await Promise.race([
+        svc.setApiKey('opencode-go', 'oc_sk_test_nen').then(() => 'đã lưu'),
+        new Promise<string>((resolve) => setTimeout(() => resolve('bị chặn'), 300))
+      ])
+      expect(outcome).toBe('đã lưu')
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(true)
+      release()
+      await vi.waitFor(async () => expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-nen')).toBe(true))
+      expect(fetchSpy).toHaveBeenCalled()
     })
   })
 
