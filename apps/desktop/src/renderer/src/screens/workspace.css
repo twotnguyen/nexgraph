@@ -426,6 +426,13 @@
   box-shadow: var(--ws-float-shadow);
 }
 .workspace-shell .react-flow__controls-button { border-bottom-color: var(--color-border); }
+/* Attribution của React Flow (MIT): hiện đúng giấy phép, nền mờ để không che node khi nằm đè canvas. */
+.workspace-shell .react-flow__attribution {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+}
+.workspace-shell .react-flow__attribution a { color: var(--color-muted); }
 
 .workspace-shell :is(.legend, .map-status) {
   border: 1px solid var(--color-border);

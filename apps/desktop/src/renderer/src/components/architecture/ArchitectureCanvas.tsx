@@ -117,7 +117,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
       )}
       {laid && laid.view.blocks.length > 0 && (
         <ReactFlow className="dot-graph show-edge-labels" colorMode={theme} key={current ?? 'root'} nodes={laid.nodes} edges={laid.edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes} minZoom={0.2} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
-                   nodesDraggable={false} proOptions={{ hideAttribution: true }}>
+                   nodesDraggable={false}>
           <Background />
           <Controls showInteractive={false} />
           <AutoFit />

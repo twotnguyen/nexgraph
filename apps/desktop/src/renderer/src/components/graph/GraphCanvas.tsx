@@ -188,7 +188,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
       {view && view.raw.size > 0 && (
         <ReactFlow className="dot-graph" colorMode={theme} key={overlay ? 'overlay' : center} nodes={nodes} edges={edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes}
           onNodeMouseEnter={(_, n) => setHover(n.id)} onNodeMouseLeave={() => setHover(null)} onNodeClick={onNodeClick} onNodeContextMenu={onContextMenu}
-          nodesDraggable={false} minZoom={0.2} proOptions={{ hideAttribution: true }}>
+          nodesDraggable={false} minZoom={0.2}>
           <Background />
           <Controls showInteractive={false} />
           <AutoFit />

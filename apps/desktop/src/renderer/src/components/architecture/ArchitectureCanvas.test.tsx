@@ -42,6 +42,14 @@ function setup(over: Partial<NexGraphApi['graph']> = {}, onParentChange?: (paren
 const nodeByText = (text: string) => screen.getByText(text, { selector: '.react-flow__node b' })
 
 describe('ArchitectureCanvas', () => {
+  it('hiện attribution của React Flow đúng giấy phép', async () => {
+    setup()
+    await screen.findByText('lib', { selector: '.react-flow__node b' })
+    const attribution = document.querySelector('.react-flow__attribution')
+    expect(attribution).not.toBeNull()
+    expect(attribution).toHaveTextContent('React Flow')
+  })
+
   it('mở tệp từ bản đồ tại thư mục chứa và chọn đúng khối tệp', async () => {
     const architecture = vi.fn(async () => CHILD('dir:lib'))
     installNexgraph({ graph: { architecture } })

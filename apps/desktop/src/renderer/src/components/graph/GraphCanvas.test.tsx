@@ -91,6 +91,14 @@ describe('GraphCanvas', () => {
     act(() => setLocale('en'))
     expect(await screen.findByRole('button', { name: 'Back to root' })).toBeInTheDocument()
   })
+
+  it('hiện attribution của React Flow đúng giấy phép', async () => {
+    renderCanvas(vi.fn(async () => hood(['.#repository', 'a'])))
+    await screen.findByText('a')
+    const attribution = document.querySelector('.react-flow__attribution')
+    expect(attribution).not.toBeNull()
+    expect(attribution).toHaveTextContent('React Flow')
+  })
 })
 
 describe('NodeInspector', () => {
