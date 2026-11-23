@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { NexGraphApi } from '../src/shared/api'
+import { addDataDirOwner, prepareDataDir } from './data-dir'
 
 /**
  * E2E Electron tối thiểu cho NexGraph (QA-14).
@@ -20,7 +21,6 @@ const APP_DIR = join(__dirname, '..')
 const PROJECT_NAME = 'ng-e2e-Đồ án'
 
 /** `electron` export đường dẫn binary; cần require vì package.json của desktop không phải ESM. */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const electronPath = require('electron') as string
 
 const FIXTURE: Record<string, string> = {
@@ -50,6 +50,7 @@ function cleanEnv(): NodeJS.ProcessEnv {
   return env
 }
 
+// biome-ignore lint/correctness/noEmptyPattern: Playwright bắt buộc tham số đầu là object destructuring; spec không dùng fixture nào.
 test('mở dự án → index → tìm → Kiến trúc → Luồng → mở tệp → sửa → vùng ảnh hưởng', async ({}, testInfo) => {
   const root = mkdtempSync(join(tmpdir(), 'ng-e2e-'))
   const projectDir = join(root, PROJECT_NAME)
@@ -58,16 +59,27 @@ test('mở dự án → index → tìm → Kiến trúc → Luồng → mở t�
   const projectPath = realpathSync(projectDir)
   for (const [name, text] of Object.entries(FIXTURE)) writeFileSync(join(projectDir, name), text)
 
+  // `NEXGRAPH_E2E_DATA_DIR` cho phép dùng lại một thư mục giữa các lượt: dọn sạch đầu mỗi lượt để lượt sau
+  // giống hệt lượt đầu. Không dọn thì dự án cũ còn trong kho engine, app mở ở “Chào mừng trở lại NexGraph”
+  // và assert heading dưới đỏ ngay lượt thứ 2. Lưu ý: thư mục này **bị xoá mỗi lượt**, chỉ dùng cho E2E;
+  // `prepareDataDir` từ chối xoá thư mục ngoài tmpdir khi không có marker do chính E2E tạo (e2e/data-dir.ts).
+  const engineDataDir = process.env.NEXGRAPH_E2E_DATA_DIR ?? join(root, 'engine-data')
+  await prepareDataDir(engineDataDir, { pids: [process.pid] })
+
   const app = await electron.launch({
     executablePath: electronPath,
     args: [APP_DIR],
     timeout: 90_000,
     env: {
       ...cleanEnv(),
-      NEXGRAPH_DATA_DIR: process.env.NEXGRAPH_E2E_DATA_DIR ?? join(root, 'engine-data'),
+      NEXGRAPH_DATA_DIR: engineDataDir,
       NEXGRAPH_USER_DATA_DIR: join(root, 'user-data')
     }
   })
+
+  // Ghi PID Electron vào marker: lượt sau chờ cả cây engine của lượt này thoát trước khi xoá dữ liệu.
+  const appPid = app.process().pid
+  if (appPid !== undefined) addDataDirOwner(engineDataDir, appPid)
 
   try {
     const page = await app.firstWindow()
