@@ -201,3 +201,10 @@ def test_user_selected_package_inside_a_default_skip_dir_is_indexed(tmp_path):
     write(tmp_path, "lib/c.py")
     assert rels(tmp_path) == ["lib/c.py"]
     assert rels(tmp_path, subdir="dist/pkg") == ["dist/pkg/a.py"]
+
+
+def test_vendor_and_third_party_dirs_are_skipped_unless_chosen(tmp_path):
+    for rel in ("vendor/lib/x.php", "third_party/y.js", "src/a.ts"):
+        write(tmp_path, rel)
+    assert rels(tmp_path) == ["src/a.ts"]
+    assert rels(tmp_path, subdir="vendor/lib") == ["vendor/lib/x.php"]

@@ -20,7 +20,8 @@ from nexgraph_engine.docs import media as _media
 # `.git`/`.nexgraph` không bao giờ lập chỉ mục; các mục còn lại (và thư mục ẩn nói chung) chỉ bị bỏ mặc định —
 # người dùng chọn rõ một package trong đó (monorepo) thì vẫn đi vào.
 ALWAYS_SKIP_DIRS = frozenset({".git", ".nexgraph"})
-SKIP_DIRS = frozenset({"build", ".dart_tool", "node_modules", "dist", "__pycache__", ".venv", "venv"})
+SKIP_DIRS = frozenset({"build", ".dart_tool", "node_modules", "dist", "__pycache__", ".venv", "venv",
+                       "vendor", "third_party"})
 GENERATED_SUFFIXES = (".g.dart", ".freezed.dart", ".gr.dart", ".config.dart", ".mocks.dart",
                       "_generated.dart", ".pb.dart")
 # Tệp đã rút gọn/nhúng: không có cấu trúc đọc được, chỉ làm phình đồ thị (spec §5.5).
