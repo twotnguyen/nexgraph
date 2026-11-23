@@ -971,13 +971,29 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     expect(screen.queryByRole('dialog', { name: 'Chạy task' })).toBeNull()
   })
 
+  it('BUG-UI-01: chia đôi editor ngay từ thẻ xem trước vừa bấm trong cây', async () => {
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    // Bấm cây mở thẻ xem trước; lệnh chia đôi phải chạy ngay, không cần bấm thêm vào thẻ.
+    expect(screen.getByRole('tab', { name: 'Xem trước a.ts' })).toHaveAttribute('aria-selected', 'true')
+    const canvas = () => document.querySelector('.canvas-wrap') as HTMLElement
+    expect(canvas().getAttribute('data-split')).toBeNull()
+
+    act(() => { expect(runCommand('editor.split_up')).toBe(true) })
+    expect(canvas().getAttribute('data-split')).toBe('up')
+    expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    // Bấm lại đúng hướng đang chia thì bỏ chia đôi.
+    act(() => { expect(runCommand('editor.split_up')).toBe(true) })
+    expect(canvas().getAttribute('data-split')).toBeNull()
+  })
+
   it('chia đôi trên rồi sang phải đổi trục, terminal vẫn nằm ngoài khung chia đôi', async () => {
     const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
     installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
     render(<WorkspaceScreen project={project()} />)
     await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
-    // Bấm cây mở thẻ xem trước; bấm thẻ tệp để có editor đang hoạt động (lệnh chia đôi cần tệp đang mở).
-    await userEvent.click(await screen.findByRole('tab', { name: 'a.ts' }))
     const canvas = () => document.querySelector('.canvas-wrap') as HTMLElement
     expect(canvas().getAttribute('data-split')).toBeNull()
 

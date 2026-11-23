@@ -797,7 +797,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       else setSplitSide(direction)
       return
     }
-    if (activeFile) { setSplitSide(direction); setSide(activeFile) }
+    // Thẻ xem trước (`preview:`) không có `activeFile`; chia đôi phải dùng tệp đang xem.
+    const current = activeFile ?? previewFile
+    if (current) { setSplitSide(direction); setSide(current) }
   }
   useCommand('editor.split_right', () => splitTo('right'))
   useCommand('editor.split_up', () => splitTo('up'))
@@ -872,7 +874,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setFindFocus((n) => n + 1)
   })
   const previewSideShown = !!activeFile && previewSide === activeFile
-  const sideShown = previewSideShown || (side !== null && activeFile !== undefined && files.some((f) => f.file === side))
+  // Thẻ xem trước (`preview:`) không có `activeFile` nhưng vẫn là một tệp đang xem — chia đôi phải hiện.
+  const sideShown = previewSideShown || (side !== null && (activeFile ?? previewFile) !== undefined && files.some((f) => f.file === side))
   useCommand('notifications.toggle', toggleNotifications)
   useCommand('notification.clear', clearNotifications)
   useCommand('dock.right', () => {
