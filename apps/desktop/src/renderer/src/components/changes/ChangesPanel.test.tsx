@@ -59,6 +59,31 @@ describe('ChangesPanel', () => {
     expect(screen.getByText('Danh sách đã bị cắt bớt')).toBeInTheDocument()
   })
 
+  it('hiện vùng ảnh hưởng và test khi xem impact của một node, dù không có tệp nào đổi (A3 #1)', () => {
+    const impactView = emptyChanges({
+      base: 'last_index', base_commit: null,
+      note: 'Ảnh hưởng nếu sửa helper',
+      changed_files: [],
+      changed_nodes: [gnode('n:helper', 'helper')],
+      impacted: [{ node: gnode('n:main', 'main', { file: 'main.py', line_start: 7 }), score: 0.8, hops: 1 }],
+      tests: [gnode('n:t', 'test_main calls helper', { kind: 'test', is_test: true, file: 'tests/test_main.py' })]
+    })
+    render(<ChangesPanel {...base} changes={impactView} />)
+    expect(screen.queryByText('Chưa có thay đổi')).not.toBeInTheDocument()
+    expect(screen.getByText('Ảnh hưởng nếu sửa helper')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Nút đang xét' })).toHaveTextContent('helper')
+    expect(within(screen.getByRole('region', { name: 'Vùng ảnh hưởng' })).getByText('main')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Test liên quan' })).getByText('test_main calls helper')).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Chưa có test' })).not.toBeInTheDocument()
+  })
+
+  it('nói rõ khi node không ảnh hưởng tới đâu và không có test', () => {
+    const lonely = emptyChanges({ changed_files: [], changed_nodes: [gnode('n:x', 'lonely')], impacted: [], tests: [] })
+    render(<ChangesPanel {...base} changes={lonely} />)
+    expect(within(screen.getByRole('region', { name: 'Vùng ảnh hưởng' })).getByText('Không có nút nào bị ảnh hưởng')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Test liên quan' })).getByText('Không tìm thấy test liên quan')).toBeInTheDocument()
+  })
+
   it('reload button, loading state and error state', async () => {
     const onReload = vi.fn()
     const { rerender } = render(<ChangesPanel {...base} onReload={onReload} changes={null} loading />)

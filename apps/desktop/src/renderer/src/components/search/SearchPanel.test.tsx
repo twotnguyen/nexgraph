@@ -61,6 +61,33 @@ describe('SearchPanel', () => {
     expect(screen.queryByText('login')).not.toBeInTheDocument()
   })
 
+  it('Tìm symbol mở tệp tại dòng của symbol, vẫn xem được trên graph (A3 #2)', async () => {
+    installNexgraph({ graph: { search: vi.fn(async () => [hit('lib/a.dart::AuthService.login#method', 1, { line_start: 42 })]) } })
+    const onOpen = vi.fn()
+    const onOpenCode = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={onOpen} onOpenCode={onOpenCode} />)
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'login')
+    await tick(250)
+    await user.click(await screen.findByRole('button', { name: /login/ }))
+    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 42, 1)
+    expect(onOpen).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Xem trên graph' }))
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'lib/a.dart::AuthService.login#method' }))
+  })
+
+  it('Enter mở tệp:dòng của kết quả đầu tiên khi có onOpenCode', async () => {
+    installNexgraph({ graph: { search: vi.fn(async () => [hit('lib/a.dart::A.one#method', 1, { line_start: 7 })]) } })
+    const onOpenCode = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={vi.fn()} onOpenCode={onOpenCode} />)
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'one')
+    await tick(250)
+    await screen.findByText('one')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), '{Enter}')
+    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 7, 1)
+  })
+
   it('shows label, kind and file:line, and opens a result on click', async () => {
     const { onOpen, user } = setup()
     await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'login')

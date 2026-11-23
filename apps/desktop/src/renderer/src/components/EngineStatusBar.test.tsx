@@ -40,6 +40,19 @@ describe('EngineStatusBar', () => {
     expect(onRestart).toHaveBeenCalled()
   })
 
+  it('hiện nút "Khởi động lại engine" khi đã hết lượt tự thử (A1 F2)', async () => {
+    const onRestart = vi.fn()
+    render(<EngineStatusBar status={{ state: 'error', message: 'engine thoát (exit SIGKILL)', restartable: true }} onRestart={onRestart} />)
+    const restart = screen.getByRole('button', { name: 'Khởi động lại engine' })
+    await userEvent.click(restart)
+    expect(onRestart).toHaveBeenCalledOnce()
+  })
+
+  it('hiện số lần đang tự khởi động lại', () => {
+    render(<EngineStatusBar status={{ state: 'starting', attempt: 3 }} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: đang khởi động lại (lần 3)…')).toBeInTheDocument()
+  })
+
   it('dịch thông báo engine thoát sang tiếng Anh bằng messageKey', () => {
     setLocale('en')
     render(<EngineStatusBar status={{ state: 'error', message: 'engine thoát (exit 5)',
