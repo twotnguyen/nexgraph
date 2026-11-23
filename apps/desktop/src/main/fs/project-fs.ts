@@ -42,16 +42,6 @@ export function isProtectedRel(relPath: string): boolean {
     PROTECTED_PREFIXES.some((prefix) => name.startsWith(prefix)))
 }
 
-/**
- * Tệp khai task chỉ được ghi qua luồng duyệt của agent (`extension.ts` → `writeProjectFile`), không qua `fs:write`
- * của renderer: renderer bị chiếm không được tự khai task rồi xin chữ ký (rereview-38 M2). ADR 0016.
- */
-const RENDERER_WRITE_DENIED = new Set(['.vscode/tasks.json'])
-
-const normalizeRel = (relPath: string): string => relPath.toLowerCase().replace(/\\/g, '/').replace(/^(\.\/)+/, '')
-
-export const isRendererWriteDenied = (relPath: string): boolean => RENDERER_WRITE_DENIED.has(normalizeRel(relPath))
-
 /** `realpath` của tổ tiên gần nhất còn tồn tại, rồi nối phần chưa tồn tại: symlink ở bất kỳ cấp nào đều bị lộ ra.
  * ENOENT không có nghĩa là "chưa có": lstat để phát hiện symlink treo (đích không tồn tại) — bỏ qua nó sẽ để ghi tạo tệp ngoài dự án qua symlink. */
 function realpathLoose(p: string): string {
@@ -402,9 +392,6 @@ export function fsHandlers(listProjects: ProjectLookup): {
   return {
     list: async (pid, directory) => listProjectDirectory(await rootOf(pid), directory),
     read: async (pid, relPath) => readProjectFile(await rootOf(pid), relPath),
-    write: async (pid, relPath, text, opts) => {
-      if (isRendererWriteDenied(relPath)) throw protectedPath(relPath)
-      return writeProjectFile(await rootOf(pid), relPath, text, opts)
-    }
+    write: async (pid, relPath, text, opts) => writeProjectFile(await rootOf(pid), relPath, text, opts)
   }
 }
