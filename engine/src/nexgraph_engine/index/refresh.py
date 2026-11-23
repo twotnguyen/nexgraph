@@ -90,14 +90,16 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
             touched.append(f)
     modified.sort()
 
-    for f in touched:
-        # Băm ngay sau lần ghi (cùng giây) thì chưa chắc là bản cuối: ghi mtime 0 để lần sau băm lại (như git).
-        mtime = f.mtime if now - f.mtime >= RACY_SECONDS else 0
-        store.touch_file(known[f.rel_path].__class__(f.rel_path, f.language, f.size, mtime,
-                                                     known[f.rel_path].sha256, f.is_test))
+    def _touch_touched() -> None:
+        for f in touched:
+            # Băm ngay sau lần ghi (cùng giây) thì chưa chắc là bản cuối: ghi mtime 0 để lần sau băm lại (như git).
+            mtime = f.mtime if now - f.mtime >= RACY_SECONDS else 0
+            store.touch_file(known[f.rel_path].__class__(f.rel_path, f.language, f.size, mtime,
+                                                         known[f.rel_path].sha256, f.is_test))
     if not (added or removed or modified):
-        store.set_last_run_commit(_git_head(root))
-        store.commit()
+        with store.atomic():  # N2: mtime=0 cũng phải nằm trong giao dịch, không commit lẻ trước BEGIN
+            _touch_touched()
+            store.set_last_run_commit(_git_head(root))
         return RefreshResult(0, 0, 0, len(disk), time.time() - t0)
 
     run_id = store.begin_run(files_total=len(added) + len(removed) + len(modified), commit_sha=_git_head(root),
@@ -107,6 +109,7 @@ def refresh_project(store: GraphStore, root: Path, *, transcript_dir: Path | Non
         # REV-10 không cần chép CSDL: cả lần refresh là MỘT giao dịch trên CSDL thật. Lỗi giữa chừng
         # (hoặc tiến trình bị kill) thì SQLite rollback journal/WAL, đồ thị đã công bố còn nguyên.
         with store.atomic():
+            _touch_touched()
             store.set_run_state(run_id, "cau_truc")
             known_labels = {r[0] for r in store.conn.execute("SELECT DISTINCT nhan FROM nut")}
             # Ký hiệu bị xoá/đổi tên có thể làm một tên từng mơ hồ trở nên duy nhất: phân giải lại cả các tên này.
