@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { relPosix } from './scanPaths'
 
 /**
  * Nhãn dịch phải được đọc lúc render (`vi.*` là Proxy, `tr()` đọc `getLocale()`).
@@ -91,7 +92,7 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
       for (const match of text.matchAll(/use(State|Ref)(?:<[^>]*>)?\(/g)) {
         const argument = callArgument(text, match.index + match[0].length - 1)
         if (TRANSLATED.test(argument)) {
-          hits.push(`${relative(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — use${match[1]}(... ${argument.trim().slice(0, 80)}`)
+          hits.push(`${relPosix(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — use${match[1]}(... ${argument.trim().slice(0, 80)}`)
         }
       }
     }
@@ -105,7 +106,7 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
       for (const match of text.matchAll(/(?<![\w.$])set[A-Z]\w*\s*\(/g)) {
         const argument = callArgument(text, match.index + match[0].length - 1)
         if (/^\s*(tr\(|(vi|en)\.)/.test(argument)) {
-          hits.push(`${relative(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 70)}`)
+          hits.push(`${relPosix(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 70)}`)
         }
       }
     }
@@ -122,7 +123,7 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
         // `msg(...)`/`msgError(...)` chỉ giữ khoá + biến nên phần bên trong hợp lệ.
         const plain = stripCalls(argument, ['msg', 'msgError'])
         if (!AT_CALL.test(plain) && !(RAW_ERROR.test(plain) && !argument.includes('errorMsg('))) continue
-        const rel = relative(ROOT, file)
+        const rel = relPosix(ROOT, file)
         if (ALLOWED.some((rule) => rule.file === rel && argument.includes(rule.contains))) continue
         hits.push(`${rel}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 90).replace(/\s+/g, ' ')}`)
       }
@@ -135,7 +136,7 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
     for (const file of files) {
       const text = readFileSync(file, 'utf8')
       for (const match of text.matchAll(/new\s+Error\s*\(\s*(vi|en)\./g)) {
-        hits.push(`${relative(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}`)
+        hits.push(`${relPosix(ROOT, file)}:${text.slice(0, match.index).split('\n').length} — ${match[0]}`)
       }
     }
     expect(hits, 'dùng msgError(khoá) (state/messages) để chỗ bắt giữ khoá và dịch lúc render').toEqual([])
@@ -150,9 +151,16 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
         // Getter (`get title() { return tr(...) }`) và hàm (`() => tr(...)`) đọc lúc gọi nên hợp lệ.
         const initializer = statement.code.slice(statement.code.indexOf('='))
         if (/\bget\s+\w+\s*\(|=>|\bfunction\b/.test(initializer)) continue
-        hits.push(`${relative(ROOT, file)}:${statement.line} — ${statement.code.split('\n')[0].slice(0, 100)}`)
+        hits.push(`${relPosix(ROOT, file)}:${statement.line} — ${statement.code.split('\n')[0].slice(0, 100)}`)
       }
     }
     expect(hits, 'nhãn cấp module đọc lúc render, hoặc dùng getter/hàm như agentProfiles/useTheme').toEqual([])
+  })
+
+  it('đường dẫn ngoại lệ viết "/" và khớp relPosix(ROOT, …) trên mọi hệ điều hành', () => {
+    // Review #57 C1: `relative()` trả `\` trên Windows; luật ở đây so bằng relPosix nên ALLOWED
+    // phải viết `/`, nếu không CI windows lại đỏ dù mã đúng.
+    const wrong = ALLOWED.filter((rule) => rule.file.includes('\\') || relPosix(ROOT, join(ROOT, rule.file)) !== rule.file)
+    expect(wrong.map((rule) => rule.file), 'ALLOWED[].file phải dùng "/" và khớp relPosix').toEqual([])
   })
 })
