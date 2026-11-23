@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from graphify.security import redact_secrets
+from nexgraph_engine.docs.secrets import redact_doc_secrets
 
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
@@ -157,7 +157,7 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
             else:
                 text = doc_text(path, f.language)
             # Che secret ngay khi vào đồ thị: tiêu đề/mục chép vào nhãn nút, và cùng chữ này được gửi LLM (GFY-08).
-            x: FileExtraction = extract_document(f.rel_path, redact_secrets(text), file_id=file_node.id)
+            x: FileExtraction = extract_document(f.rel_path, redact_doc_secrets(text), file_id=file_node.id)
         elif f.language == "dart":
             x = extract_dart(f.rel_path, source, is_test=f.is_test)
         else:
