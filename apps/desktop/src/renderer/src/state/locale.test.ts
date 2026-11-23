@@ -16,6 +16,13 @@ afterEach(() => {
 })
 
 describe('locale', () => {
+  it('document.documentElement.lang theo ngôn ngữ UI (screen reader đọc đúng)', () => {
+    setLocale('en')
+    expect(document.documentElement.lang).toBe('en')
+    setLocale('vi')
+    expect(document.documentElement.lang).toBe('vi')
+  })
+
   it('mặc định tiếng Việt và đọc giá trị hợp lệ từ localStorage', () => {
     localStorage.removeItem(KEY)
     expect(getLocale()).toBe('vi')

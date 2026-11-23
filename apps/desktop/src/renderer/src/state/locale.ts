@@ -20,8 +20,14 @@ export function getLocale(): Locale {
   return last
 }
 
+/** `lang` của tài liệu để screen reader/ngữ âm đọc đúng ngôn ngữ UI (MIN-45b). */
+function applyDocumentLang(locale: Locale): void {
+  if (typeof document !== 'undefined') document.documentElement.lang = locale
+}
+
 export function setLocale(locale: Locale): void {
   last = locale
+  applyDocumentLang(locale)
   try {
     localStorage.setItem(STORAGE_KEY, locale)
     memory = null
@@ -60,3 +66,6 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
 export function formatDate(value: number | Date | string, options?: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(localeTag(), options).format(typeof value === 'string' ? new Date(value) : value)
 }
+
+// index.html để lang="vi" tĩnh: đặt lại ngay khi nạp để lần mở sau dùng đúng ngôn ngữ đã lưu.
+if (typeof document !== 'undefined') applyDocumentLang(getLocale())
