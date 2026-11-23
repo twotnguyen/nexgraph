@@ -50,6 +50,10 @@ BATCH_DEADLINE_SECONDS_PER_MB = 60   # cộng thêm theo khối lượng: 60 s m
 # byte thật sự phải parse (đo PERF-L: ~20–25 ms/KB ⇒ 60 s/MB là biên rộng ~2,4×), vượt mức đó thì chờ
 # thêm không còn ích gì bằng đưa các tệp nghi treo sang đường từng-tệp có hạn riêng.
 MAX_BATCH_DEADLINE_SECONDS = 300
+# Ngôn ngữ chỉ băm để lấy FileRec rồi trả nút tệp, KHÔNG parse nội dung (extract_file). Byte của chúng
+# không được cộng vào hạn lô parser (review-64 I1: PNG 6,7 MB kéo lô 15 tệp mã từ 20 s lên 300 s).
+# `media` không có ở đây vì luôn chạy đơn luồng (`index_workers`) nên không đi qua hạn lô.
+HASH_ONLY_LANGUAGES = frozenset({"image"})
 FILE_EXTRACT_TIMEOUT_SECONDS = 60  # fallback tuần tự: quá hạn một tệp thì bỏ qua tệp đó
 IS_WINDOWS = os.name == "nt"
 
@@ -133,12 +137,14 @@ def batch_timeout_seconds(batch: Sequence[DiscoveredFile]) -> float:
     lớn: `apps/daemon/src/server.ts` 846 KB một mình ~21 s, nên cả lô vượt hạn oan. Nền 20 s giữ nguyên hành
     vi với lô nhỏ; cộng 60 s mỗi MB để lô 1 MB có hạn ~60 s (open-design không còn kích hoạt nhầm).
 
-    Tệp `oversized` bị loại khỏi phép tính: `extract_file` chỉ băm rồi trả về, không parse, nên cộng byte
-    của nó chỉ làm hạn dài vô ích (lô 104,8 MB của codebase-memory-mcp: hạn 105 phút cho 0,4 MB thật).
-    Trần `MAX_BATCH_DEADLINE_SECONDS` chặn nốt phần đuôi: chờ quá 300 s không còn ích gì bằng đưa tệp nghi
-    treo sang đường từng-tệp.
+    Chỉ cộng byte tệp thật sự phải parse. Tệp `oversized` và ảnh (`HASH_ONLY_LANGUAGES`) chỉ được băm rồi
+    trả về nút tệp, không parse — cộng byte của chúng chỉ làm hạn dài vô ích (lô 104,8 MB của
+    codebase-memory-mcp: hạn 105 phút cho 0,4 MB thật; lô 15 tệp mã + 1 PNG 6,7 MB: 300 s thay vì 20 s —
+    review-64 I1). Trần `MAX_BATCH_DEADLINE_SECONDS` chặn nốt phần đuôi: chờ quá 300 s không còn ích gì
+    bằng đưa tệp nghi treo sang đường từng-tệp.
     """
-    parsed_mb = sum(f.size for f in batch if not f.oversized) / 1_000_000
+    parsed_mb = sum(f.size for f in batch
+                    if not f.oversized and f.language not in HASH_ONLY_LANGUAGES) / 1_000_000
     return max(WORKER_PROGRESS_TIMEOUT_SECONDS,
                min(BATCH_DEADLINE_SECONDS_PER_MB * parsed_mb, MAX_BATCH_DEADLINE_SECONDS))
 
