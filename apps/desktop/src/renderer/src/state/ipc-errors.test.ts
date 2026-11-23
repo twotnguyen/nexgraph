@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { uiEn } from '../strings'
@@ -17,6 +18,19 @@ const BOUNDARY = ['ipc.ts', 'ipc-result.ts', 'engine/api.ts', 'agent/session.ts'
 const VIETNAMESE = /[ÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴàáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]/
 /** Lời gọi dựng lỗi/thông báo đi ra renderer. */
 const ERROR_CALL = /(?:new\s+\w*Error|fail|Object\.assign\(new Error)\s*\(/g
+/** Lời gọi lỗi có mã: `new UserError('code', 'câu')`, `fail('code', …)`. */
+const CODED_CALL = /(?:new\s+\w*Error|fail)\s*\(\s*'([a-z][a-z0-9_]+)'\s*,\s*[`']/g
+
+/** Mọi tệp main (đệ quy): mã lỗi có câu Việt ở đâu cũng phải dịch được ở renderer. */
+function mainSources(dir = MAIN): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry)
+    if (statSync(path).isDirectory()) out.push(...mainSources(path))
+    else if (entry.endsWith('.ts') && !/\.(test|spec)\.ts$/.test(entry) && !/^smoke/.test(entry)) out.push(path)
+  }
+  return out
+}
 
 function callArgument(text: string, at: number): string {
   let depth = 0
@@ -49,6 +63,35 @@ describe('câu lỗi main trả qua IPC dịch được ở renderer', () => {
       }
     }
     expect(hits, 'thêm mã lỗi (code) để renderer dịch qua codeErrors; câu Việt trần không dịch được').toEqual([])
+  })
+
+
+  it('mọi mã lỗi main có câu Việt cố định đều có bản Anh (I3)', () => {
+    const missing: string[] = []
+    for (const file of mainSources()) {
+      const name = file.slice(MAIN.length).replace(/\\/g, '/')
+      if (ALLOWED.some((rule) => rule.file === name)) continue
+      const text = readFileSync(file, 'utf8')
+      for (const match of text.matchAll(CODED_CALL)) {
+        const [code] = [match[1]]
+        const message = callArgument(text, match.index + match[0].length - 1)
+        if (!VIETNAMESE.test(message)) continue
+        const key = codeErrors[code]
+        const line = text.slice(0, match.index).split('\n').length
+        if (key === undefined) missing.push(`${name}:${line} — ${code} chưa có trong codeErrors`)
+        else if (uiEn[key] === undefined) missing.push(`${name}:${line} — ${code} → thiếu bản Anh cho "${key}"`)
+      }
+    }
+    expect(missing, 'thêm codeErrors + uiEn cho mã lỗi mới; câu Việt trần không dịch được ở UI English').toEqual([])
+  })
+
+  it('filesystem_error (câu có biến) dịch được sang EN, VI giữ câu cụ thể', () => {
+    setLocale('en')
+    expect(errorText({ code: 'filesystem_error', message: 'Không thể tạo tệp: không có quyền truy cập' }))
+      .toBe('Could not complete the file operation: check permissions and the path.')
+    setLocale('vi')
+    expect(errorText({ code: 'filesystem_error', message: 'Không thể tạo tệp: không có quyền truy cập' }))
+      .toBe('Không thể tạo tệp: không có quyền truy cập')
   })
 
   it('mỗi mã lỗi trong codeErrors có bản Anh', () => {

@@ -91,6 +91,9 @@ describe('errorText', () => {
   it('câu lạ đi nguyên văn, không nuốt lỗi', () => {
     setLocale('en')
     expect(errorText(new Error('một lỗi lạ'))).toBe('một lỗi lạ')
-    expect(errorText({ code: 'bad_param', message: 'Endpoint không hợp lệ' })).toBe('Endpoint không hợp lệ')
+    // Mã lạ: không có bản dịch thì giữ câu gốc, kể cả câu Việt.
+    expect(errorText({ code: 'something_new', message: 'Endpoint không hợp lệ' })).toBe('Endpoint không hợp lệ')
+    // Mã có trong codeErrors (I3): UI English dịch câu Việt cố định của main.
+    expect(errorText({ code: 'bad_param', message: 'Endpoint không hợp lệ' })).toBe('Invalid parameter.')
   })
 })
