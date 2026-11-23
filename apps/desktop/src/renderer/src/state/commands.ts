@@ -76,6 +76,10 @@ export const COMMANDS: CommandDef[] = [
   { id: 'editor.diagnostics', category: 'Editor', title: 'Hiện lỗi trong dự án', key: 'mod+shift+m' },
   { id: 'editor.rename', category: 'Editor', title: 'Đổi tên ký hiệu', key: 'f2' },
   { id: 'editor.implementation', category: 'Editor', title: 'Đi đến phần triển khai', key: 'shift+f12' },
+  // Wu: ⌃F12 khai báo, ⌘F12 định nghĩa kiểu. Ngoài macOS ⌃ thành mod nên khai báo thêm ⌥ để không trùng ⌘F12.
+  { id: 'editor.declaration', category: 'Editor', title: 'Đi đến khai báo', key: 'ctrl+alt+f12' },
+  // ⌘F12 thuộc editor.implementation trong base VS Code và editor.document_symbols trong base JetBrains: chọn base đó thì lệnh này mất phím như các lệnh khác.
+  { id: 'editor.type_definition', category: 'Editor', title: 'Đi đến định nghĩa kiểu', key: 'mod+f12' },
   { id: 'editor.references', category: 'Editor', title: 'Tìm tham chiếu', key: 'alt+shift+f12' },
   { id: 'editor.next_diagnostic', category: 'Editor', title: 'Lỗi tiếp theo', key: 'f8' },
   { id: 'editor.previous_diagnostic', category: 'Editor', title: 'Lỗi trước đó', key: 'shift+f8' },
