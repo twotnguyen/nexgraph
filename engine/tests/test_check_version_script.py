@@ -190,3 +190,8 @@ def test_tag_khong_hop_le_thi_fail(tmp_path):
     root = make_tree(tmp_path, npm="0.1.2", desktop="0.1.2", pyproject="0.1.2", engine="0.1.2")
     res = run_check(root, "v1.2")
     assert res.returncode != 0
+    out = res.stdout + res.stderr
+    # Khẳng định chẩn đoán chứ không chỉ mã thoát: thiếu script cũng làm Node trả mã khác 0.
+    assert "không hợp lệ" in out
+    assert "v1.2" in out
+    assert "vX.Y.Z" in out
