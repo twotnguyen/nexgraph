@@ -257,6 +257,20 @@ describe('AgentPanel', () => {
     expect(screen.getByRole('button', { name: 'Gửi' })).toBeInTheDocument()
   })
 
+  it('tin lỗi kết nối không có dòng trích dẫn/nút đánh giá và câu lỗi chỉ hiện một lần (A1 F5)', async () => {
+    let emit: (pid: string, e: AgentEvent) => void = () => {}
+    emit = installNexgraph({ ...consented(), agent: { prompt: replying(() => emit,
+      { type: 'error', code: 'ai_unreachable', message: 'x' }) } }).emitAgent
+    render(<AgentPanel {...props()} />)
+    await ask('hỏi gì đó')
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts).toHaveLength(1) // không thêm <p role=alert> trùng với bubble
+    expect(alerts[0]).toHaveTextContent('Không kết nối được tới nhà cung cấp AI.')
+    expect(screen.queryByText('Câu trả lời không có trích dẫn nào')).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Đánh giá câu trả lời' })).toBeNull()
+    expect(screen.getAllByText('Không kết nối được tới nhà cung cấp AI.')).toHaveLength(1)
+  })
+
   it('xung đột khi ghi vẫn hiện sau câu trả lời và được xóa khi gửi câu hỏi mới', async () => {
     let settle!: () => void // prompt() thật settle ngay sau `done`, khi main dọn xong lượt
     const prompt = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve })).mockResolvedValue(undefined)

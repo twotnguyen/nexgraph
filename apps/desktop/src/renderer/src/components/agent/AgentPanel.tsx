@@ -44,7 +44,7 @@ interface Props {
 }
 
 type FileContext = { file: string; line: number; lineEnd?: number }
-type Msg = { id: number | string; role: 'user'; content: string; context?: FileContext } | { id: number | string; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
+type Msg = { id: number | string; role: 'user'; content: string; context?: FileContext } | { id: number | string; role: 'assistant'; content: string; citations: Citation[]; tools: string[]; error?: boolean }
 type ImageAttachment = { id: number; name: string; mimeType: string; dataUrl: string }
 type ComposerDraft = { text: string; context?: FileContext; attachments: AgentContextItem[]; images: ImageAttachment[] }
 type QueuedPrompt = ComposerDraft & { id: number; target: AiConsentTarget; model: string; sessionId: string | null }
@@ -259,7 +259,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     failedTurns.current.add(id)
     const continueQueue = !!current && sameConsentTarget(scope.current, current.target) && !!queueRef.current.some((item) => item.sessionId === current.sessionId && sameConsentTarget(item.target, current.target))
     if (current) current.completed = continueQueue
-    setMsgs((cur) => [...cur, { id, role: 'assistant', content: message, citations: [], tools: [] }])
+    // Tin lỗi là một bubble riêng: không đánh giá/trích dẫn, và câu lỗi chỉ hiện một lần (A1 F5).
+    setMsgs((cur) => [...cur, { id, role: 'assistant', content: message, citations: [], tools: [], error: true }])
     if (current) {
       const failed = { text: q, context: current.context, attachments: current.attachments, images: current.images }
       const composing = composerRef.current
@@ -268,7 +269,6 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         updateQueue((items) => [...items, queuePrompt(failed, current.target, current.model, current.sessionId)])
       else setComposer(failed)
     }
-    setError(message)
     end()
   }
 
@@ -293,6 +293,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     refresh()
     void window.nexgraph.auth.models().then((items) => { if (alive) setModels(items) }).catch(() => {})
     window.addEventListener('focus', refresh)
+    // Đổi model trong Cài đặt không làm panel chat đang mở biết (A1 F3): main bắn khi danh sách model đổi (#37).
     window.nexgraph.agent.getMode(projectId).then((m) => {
       if (!alive) return
       if (m === 'edit') editWarned.current = true // phiên đã ở Sửa từ trước thì không hỏi lại
@@ -834,9 +835,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
               {m.context && <span className="agent-sent-file mono" title={fileReference(m.context)}>{fileReference(m.context)}</span>}
             </div>
           ) : (
-            <div key={`assistant-${m.id}`} className="ai">
-              <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />
-              <div className="foot muted">
+            <div key={`assistant-${m.id}`} className={m.error ? 'ai error' : 'ai'} role={m.error ? 'alert' : undefined}>
+              {/* Tin lỗi là chữ thuần: không markdown/trích dẫn, để câu lỗi đọc được một mạch (A1 F5). */}
+              {m.error ? <span className="error-text">{m.content}</span>
+                : <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />}
+              {!m.error && <div className="foot muted">
                 {m.citations.length === 0 ? <span>{vi.chat.noCitations}</span>
                   : <span>{vi.chat.verified(m.citations.filter((c) => c.valid).length, m.citations.length)}</span>}
                 {m.citations.some((c) => c.valid) && (
@@ -846,7 +849,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
                   <button type="button" className="link" onClick={() => setOpenTools(openTools === m.id ? null : m.id)}>{vi.chat.tools(m.tools.length)}</button>
                 )}
                 {questionBefore(msgs, i) && <AnswerRating projectId={projectId} question={questionBefore(msgs, i)} answer={m.content} citations={m.citations} />}
-              </div>
+              </div>}
               {openTools === m.id && (
                 <ul className="tool-list mono">
                   {m.tools.map((t, k) => <li key={`${m.id}-${k}`}>{t}</li>)}
