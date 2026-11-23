@@ -23,7 +23,7 @@ const report = (over: Partial<GraphReport> = {}): GraphReport => ({
   ...over
 })
 
-const props = () => ({ projectId: 'p1', onOpenNode: vi.fn(), onAsk: vi.fn(), onExportMarkdown: vi.fn() })
+const props = () => ({ projectId: 'p1', onOpenNode: vi.fn(), onAsk: vi.fn(), onExportMarkdown: vi.fn(), onExportCommunity: vi.fn() })
 
 describe('ReportView', () => {
   afterEach(() => setLocale('vi'))
@@ -64,6 +64,21 @@ describe('ReportView', () => {
     expect(p.onAsk).toHaveBeenCalledWith('Vì sao helper được gọi nhiều?')
     await userEvent.click(screen.getByRole('button', { name: 'Xuất Markdown' }))
     expect(p.onExportMarkdown).toHaveBeenCalled()
+  })
+
+  it('mỗi dòng cộng đồng có nút xuất đúng id và nhãn của cộng đồng đó', async () => {
+    installNexgraph({ graph: { report: vi.fn(async () => report({
+      communities: [
+        { id: 'com:0', label: 'Xác thực', size: 7, cohesion: 0.42 },
+        { id: 'com:3', label: 'Thanh toán', size: 4, cohesion: 0.7 }
+      ]
+    })) } })
+    const p = props()
+    render(<ReportView {...p} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Xuất cộng đồng Xác thực' }))
+    expect(p.onExportCommunity).toHaveBeenCalledWith('com:0', 'Xác thực')
+    await userEvent.click(screen.getByRole('button', { name: 'Xuất cộng đồng Thanh toán' }))
+    expect(p.onExportCommunity).toHaveBeenLastCalledWith('com:3', 'Thanh toán')
   })
 
   it('ẩn mục benchmark khi null và hiện lỗi engine', async () => {

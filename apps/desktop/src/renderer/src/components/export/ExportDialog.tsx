@@ -18,6 +18,8 @@ interface Props {
   projectId: string
   projectName: string
   scope: ExportScope
+  /** Nhãn hiển thị của phạm vi cộng đồng (tên cộng đồng); thiếu thì dùng id `com:<n>`. */
+  scopeLabel?: string
   /** Định dạng chọn sẵn khi mở (mặc định HTML). */
   initialFormat?: ExportFormat
   onClose: () => void
@@ -27,7 +29,7 @@ interface Props {
 const nextFrame = () => new Promise<void>((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => r()) : setTimeout(r, 16)))
 
 
-export function ExportDialog({ projectId, projectName, scope: initialScope, initialFormat = 'html', onClose }: Props) {
+export function ExportDialog({ projectId, projectName, scope: initialScope, scopeLabel: initialScopeLabel, initialFormat = 'html', onClose }: Props) {
   const [choice, setChoice] = useState<Choice>(initialFormat)
   const [scope, setScope] = useState<ExportScope>(initialScope)
   const [busy, setBusy] = useState(false)
@@ -99,7 +101,7 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
 
   const isPush = choice === 'neo4j' || choice === 'falkordb'
   const scopeLabel = initialScope.kind === 'node' ? vi.export.scopeNode(initialScope.value)
-    : initialScope.kind === 'community' ? vi.export.scopeCommunity(initialScope.value) : null
+    : initialScope.kind === 'community' ? vi.export.scopeCommunity(initialScopeLabel ?? initialScope.value) : null
 
   if (capturing) return null
   return (

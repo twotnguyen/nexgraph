@@ -775,6 +775,21 @@ describe('WorkspaceScreen: editor tabs', () => {
     expect(await within(await flowEl()).findByText('run')).toBeInTheDocument()
   })
 
+  it('tab Báo cáo: nút xuất ở dòng cộng đồng mở hộp thoại với phạm vi cộng đồng và xuất đúng scope', async () => {
+    const report = vi.fn(async () => ({ god_nodes: [], communities: [{ id: 'com:0', label: 'Xác thực', size: 7, cohesion: 0.42 }], surprising: [], cycles: { cycles: [], total: 0 }, freshness: { indexed_at: null, index_commit: null, head_commit: null, changed_files: 0, stale: false }, gaps: { isolated: { total: 0, nodes: [] }, ambiguous_edges: { total: 0, edges: [] } }, benchmark: null, truncated: false, questions: [] }))
+    const run = vi.fn(async () => ({ files: ['/Đồ án/xuất/demo-graph.json'], truncated: false }))
+    installNexgraph({ graph: { report }, exporter: { run } })
+    render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+    await userEvent.click(screen.getByRole('tab', { name: 'Báo cáo' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Xuất cộng đồng Xác thực' }))
+    expect(screen.getByRole('dialog', { name: 'Xuất đồ thị: demo' })).toBeInTheDocument()
+    const scopeGroup = screen.getByRole('group', { name: 'Phạm vi' })
+    expect(within(scopeGroup).getByRole('radio', { name: 'Cộng đồng Xác thực' })).toBeChecked()
+    expect(within(scopeGroup).getByRole('radio', { name: 'Toàn bộ dự án' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Chọn thư mục và xuất' }))
+    expect(run).toHaveBeenCalledWith('p1', 'html', { kind: 'community', value: 'com:0' }, 'vi')
+  })
+
   it('câu hỏi gợi ý lỗi hoặc không khớp vẫn báo trên tab Graph', async () => {
     const ask = vi.fn().mockRejectedValueOnce({ code: 'bad_param', message: 'Câu hỏi không có từ nào tìm được' })
       .mockResolvedValueOnce({ seeds: [], nodes: [], edges: [], truncated: false })
