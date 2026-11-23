@@ -21,6 +21,16 @@ REPO = Path(__file__).resolve().parents[2]
     "max_tokens=4096",
     "GITHUB_TOKEN_EXPIRES=3600",
     "The token is rotated nightly",
+    # Tên kết thúc bằng KEY nhưng là khái niệm kỹ thuật: khoá chính/ngoại của SQL, khoá sắp xếp, khoá công khai.
+    "PRIMARY_KEY = user_id",
+    "PRIMARY_KEY=user_id",
+    "FOREIGN_KEY = user_id",
+    "FOREIGN_KEY=user_id",
+    "SORT_KEY=created_at",
+    "SORT_KEY: created_at",
+    "PUBLIC_KEY=abcd1234",
+    "cache_key = user_id",
+    "KEYBOARD=us-layout",
 ])
 def test_technical_text_is_not_redacted(line):
     assert redact_doc_secrets(line) == line
@@ -37,6 +47,16 @@ def test_technical_text_is_not_redacted(line):
     ("PRIVATE_KEY=abcd1234", "abcd1234"),
     ("CLIENT_SECRET=abcd1234", "abcd1234"),
     ("password = \"correct horse\"", "correct horse"),
+    # Review #52 Important 1: `SECRET_KEY`/`SECRET_KEY_BASE`/`*_KEY` là tên phổ biến nhất trong .env và tài liệu cấu hình.
+    ("SECRET_KEY=django-insecure-a1b2c3d4e5", "django-insecure-a1b2c3d4e5"),
+    ("SECRET_KEY_BASE=9f8e7d6c5b4a3210", "9f8e7d6c5b4a3210"),
+    ("secret_key_base: 0f1e2d3c4b5a69788796a5b4c3d2e1f0", "0f1e2d3c4b5a69788796a5b4c3d2e1f0"),
+    ("MASTER_KEY=abcd1234", "abcd1234"),
+    ("ENCRYPTION_KEY=abcd1234", "abcd1234"),
+    ("SIGNING_KEY=abcd1234", "abcd1234"),
+    ("AUTH_KEY=abcd1234", "abcd1234"),
+    ("secretKey = \"abcd1234\"", "abcd1234"),
+    ("SOME_RANDOM_KEY=0f1e2d3c4b5a69788796a5b4c3d2e1f0", "0f1e2d3c4b5a69788796a5b4c3d2e1f0"),
 ])
 def test_sensitive_env_values_are_redacted(line, secret):
     out = redact_doc_secrets(line)

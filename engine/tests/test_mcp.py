@@ -421,6 +421,32 @@ def test_get_section_returns_masked_text_for_document_that_only_contains_secret(
     assert blocked.isError is True and "loại khỏi ngữ cảnh AI" in blocked.content[0].text
 
 
+def test_get_section_masks_secret_key_env_lines(api, tmp_path):
+    """Review #52 Important 1: `docs/secrets.md` chứa `SECRET_KEY=…` phải trả bản che qua MCP get_section."""
+    secret_key = "django-insecure-" + "e6b" + "0123456789abcdef"
+    key_base = "9f8e7d6c5b4a3210" + "0f1e2d3c4b5a6978"
+    env_lines = ["SECRET_" + "KEY=" + secret_key, "SECRET_" + "KEY_BASE=" + key_base]
+    root = tmp_path / "secret key proj"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secrets.md").write_text(
+        "# Khoá\n\n## Production\n\n" + "\n".join(env_lines) + "\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    job = None
+    import time
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    server = build_server(root, tmp_path / "appdata")
+    out = payload(call(server, "get_section", {"node_id": "docs/secrets.md::Production#document"}))
+    assert out["text"].startswith("## Production")
+    assert secret_key not in out["text"] and key_base not in out["text"]
+    assert "[redacted]" in out["text"]
+
+
 LOGIN = "lib/services/auth_service.dart::AuthService.login#method"
 
 

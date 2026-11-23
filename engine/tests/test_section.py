@@ -141,6 +141,29 @@ def test_section_route(api, tmp_path):
     assert api.get(f"/v1/projects/{p['project_id']}/section", params={"node": "app.py::main#function"}).status_code == 400
 
 
+def test_section_route_masks_secret_key_document(api, tmp_path):
+    """Review #52 Important 1: `/section` cho `docs/secrets.md` chứa `SECRET_KEY=…` không được lộ giá trị."""
+    value = "django-insecure-" + "e6broute" + "0123456789abcdef"
+    root = tmp_path / "secret key route"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secrets.md").write_text(
+        "# Khoá\n\n## Production\n\n" + "SECRET_" + "KEY=" + value + "\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    job = None
+    import time
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    got = api.get(f"/v1/projects/{p['project_id']}/section",
+                  params={"node": "docs/secrets.md::Production#document"})
+    assert got.status_code == 200, got.text
+    assert value not in got.json()["text"] and "[redacted]" in got.json()["text"]
+
+
 def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
     """REV-21: section dài hơn MAX_CODE_LINES bị cắt ngầm phải báo truncated, không im lặng."""
     root = tmp_path / "proj"
