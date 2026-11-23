@@ -71,6 +71,13 @@ describe('IndexingScreen', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('boom')
   })
 
+  it('keeps the engine warning visible when the index finished with file errors', async () => {
+    const h = setup()
+    emit(h, progress('done', 100, 100, { message: '2 tệp không đọc được hoặc lỗi trích xuất (ví dụ b.py: Không đọc được tệp)' }))
+    expect(await screen.findByText(/2 tệp không đọc được/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Bắt đầu khám phá' })).toBeEnabled()
+  })
+
   it('cancel button calls index.cancel with the job id', async () => {
     const h = setup()
     await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())

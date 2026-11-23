@@ -26,6 +26,8 @@ vi.mock('../components/map/MapView', () => ({
 const revealLines = vi.hoisted(() => vi.fn())
 vi.mock('../components/editor/monaco', () => ({
   languageFor: () => 'dart',
+  // Khung chia đôi dùng view thứ hai trên cùng model; jsdom chỉ cần handle đủ hàm.
+  createMirror: () => ({ setVim: () => {}, setReadOnly: () => {}, onDisposeModel: () => {}, dispose: () => {} }),
   createEditor: (el: HTMLElement, opts: { value: string }) => {
     const ta = document.createElement('textarea')
     ta.value = opts.value
@@ -967,6 +969,31 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     act(() => { expect(runCommand('picker.reopen')).toBe(true) })
     expect(await screen.findByRole('dialog', { name: 'Tìm tệp' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Chạy task' })).toBeNull()
+  })
+
+  it('chia đôi trên rồi sang phải đổi trục, terminal vẫn nằm ngoài khung chia đôi', async () => {
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    // Bấm cây mở thẻ xem trước; bấm thẻ tệp để có editor đang hoạt động (lệnh chia đôi cần tệp đang mở).
+    await userEvent.click(await screen.findByRole('tab', { name: 'a.ts' }))
+    const canvas = () => document.querySelector('.canvas-wrap') as HTMLElement
+    expect(canvas().getAttribute('data-split')).toBeNull()
+
+    act(() => { expect(runCommand('editor.split_up')).toBe(true) })
+    expect(canvas().getAttribute('data-split')).toBe('up')
+    expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    act(() => { expect(runCommand('terminal.toggle')).toBe(true) })
+    const terminal = screen.getByRole('region', { name: 'Terminal' })
+
+    act(() => { expect(runCommand('editor.split_right')).toBe(true) })
+    expect(canvas().getAttribute('data-split')).toBe('right')
+    // Terminal là anh em của khung chia đôi trong cột center, không nằm trong canvas-wrap:
+    // đổi trục chia đôi không được kéo terminal theo (lỗi cũ: terminal dính trục dọc).
+    expect(canvas().contains(terminal)).toBe(false)
+    expect(terminal.parentElement?.classList.contains('center')).toBe(true)
+    expect(canvas().querySelectorAll('.code-viewer.editor-tab')).toHaveLength(2)
   })
 
   it('các lệnh bố cục, tiêu điểm và chia đôi 4 hướng đều có handler', () => {
