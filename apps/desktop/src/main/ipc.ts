@@ -899,6 +899,23 @@ export function registerIpc(
     await rootOf(pid)
     return agent.setMode(pid, mode)
   })
+  /**
+   * `agent:close` do renderer gọi khi RỜI màn dự án (WorkspaceScreen unmount) — không phải lệnh
+   * đóng phiên của dự án. Cửa sổ không phải chủ chỉ rời màn, không được giết phiên đang sống của
+   * cửa sổ kia (bản dev còn gọi cleanup này hai lần khi mount; đóng theo yêu cầu của cửa sổ lạ
+   * cũng không được).
+   */
+  const agentClose = (channel: string, fn: (pid: string) => Promise<unknown>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const pid = args[0]
+      const sender = event?.sender as WebContents | undefined
+      if (typeof pid !== 'string' || !sender) return fn(pid)
+      const owner = agentOwners.ownerOf(pid)
+      if (owner && owner !== sender) return undefined
+      const result = await fn(pid)
+      agentOwners.forget(pid)
+      return result
+    }))
   agentOn('agent:get-mode', async (pid: string) => agent.getMode(pid))
   agentOn('agent:set-disabled-tools', async (pid: string, tools: string[]) => {
     await rootOf(pid)
@@ -912,7 +929,7 @@ export function registerIpc(
     if (allow === true) await editorStates.wait(pid)
     return agent.approve(pid, id, allow === true)
   }, 'owner')
-  agentOn('agent:close', async (pid: string) => {
+  agentClose('agent:close', async (pid: string) => {
     editorStates.clear(pid)
     return agent.close(pid)
   })

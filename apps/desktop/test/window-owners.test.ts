@@ -37,6 +37,18 @@ describe('WindowOwners', () => {
     expect(owners.size).toBe(1)
   })
 
+  it('forget bỏ chủ của đúng một khoá, khoá khác giữ nguyên', () => {
+    const owners = new WindowOwners<object>()
+    const a = {}
+    const b = {}
+    owners.claim('p1', a)
+    owners.claim('p2', b)
+    owners.forget('p1')
+    expect(owners.ownerOf('p1')).toBeUndefined()
+    expect(owners.ownerOf('p2')).toBe(b)
+    expect(owners.size).toBe(1)
+  })
+
   it('release một cửa sổ không sở hữu gì không đổi trạng thái', () => {
     const owners = new WindowOwners<object>()
     const a = {}

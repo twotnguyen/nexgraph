@@ -30,7 +30,7 @@ vi.mock('electron', () => ({
 vi.mock('../src/main/engine/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/engine/api')>()
   class FakeEngineApi {
-    listProjects() { return [{ project_id: 'p1', path: h.root }] }
+    listProjects() { return ['p1', 'p2', 'p3', 'p4'].map((project_id) => ({ project_id, path: h.root })) }
   }
   return { ...actual, EngineApi: FakeEngineApi }
 })
@@ -145,5 +145,22 @@ describe('cùng dự án ở hai cửa sổ', () => {
     expect(await invokeAs({ sender: b }, 'agent:prompt', 'p3', 'hỏi từ B', undefined, undefined)).toMatchObject({ ok: true })
     expect(b.sent).toEqual([['agent:event', { projectId: 'p3', event: { type: 'text', delta: 'stream của B' } }]])
     expect(a.sent).toEqual([])
+  })
+
+  it('(d) cửa sổ không phải chủ rời màn dự án: không đóng phiên của chủ', async () => {
+    const a = contents('A')
+    const b = contents('B')
+    await invokeAs({ sender: a }, 'agent:set-execution', 'p4', { policy: 'review', allowCommands: true })
+    h.closed.length = 0
+    // B rời màn (WorkspaceScreen unmount) → agent:close của B chỉ là rời màn, không giết phiên A.
+    expect(await invokeAs({ sender: b }, 'agent:close', 'p4')).toMatchObject({ ok: true })
+    expect(h.closed).toEqual([])
+    expect(await invokeAs({ sender: a }, 'agent:get-execution', 'p4'))
+      .toEqual({ ok: true, data: { policy: 'review', allowCommands: true } })
+    // Chủ rời màn thì phiên đóng thật.
+    expect(await invokeAs({ sender: a }, 'agent:close', 'p4')).toMatchObject({ ok: true })
+    expect(h.closed).toEqual(['p4', 'gemini:p4'])
+    expect(await invokeAs({ sender: a }, 'agent:get-execution', 'p4'))
+      .toEqual({ ok: true, data: { policy: 'review', allowCommands: false } })
   })
 })

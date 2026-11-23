@@ -26,6 +26,11 @@ export class WindowOwners<Owner> {
     return this.owners.get(key)
   }
 
+  /** Bỏ chủ của một khoá (phiên của dự án đã đóng); khoá khác giữ nguyên. */
+  forget(key: string): void {
+    this.owners.delete(key)
+  }
+
   /** Bỏ và trả các khoá thuộc `owner`; khoá của cửa sổ khác giữ nguyên. */
   release(owner: Owner): string[] {
     const keys: string[] = []
