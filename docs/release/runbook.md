@@ -92,13 +92,30 @@ Không sửa tag sau khi push; nếu sai, xoá tag trên GitHub rồi làm lại
 
 ## 4. Kiểm Release
 
-CI tạo Release từ tag (`release` job, `needs: [version-check, engine, desktop, package]` sau #60). Job dùng `gh release create … --generate-notes`, kèm `--prerelease` khi tag có dấu `-`, nên body ban đầu là body tự sinh; sau khi job `release` xanh, thay bằng ghi chú đã duyệt:
+CI tạo Release từ tag (`release` job, `needs: [version-check, engine, desktop, package]` sau #60). Job dùng `gh release create … --generate-notes`, kèm `--prerelease` khi tag có dấu `-`, nên body ban đầu là body tự sinh; sau khi job `release` xanh, thay bằng **body phát hành** đã duyệt.
+
+**Hai tệp, hai mục đích — không dán bản nháp.**
+
+- `docs/release/notes-0.2.0.md` là **bản nháp nội bộ**: có khối "Trạng thái", mục "Dự kiến trong bản này — chưa merge", bảng bằng chứng nghiệm thu RC. **Không dán tệp này** — nó chứa "(bản nháp)", "(chưa tạo)" và PR chưa merge, đúng những thứ không được xuất hiện trên Release.
+- `docs/release/notes-0.2.0-alpha.1-body.md` là **body để dán**: không có thông tin nội bộ, chỉ nhắc PR đã merge và nằm trong `ACCEPTED_SHA`.
+
+**Kiểm cuối trước khi dán — việc của lead, sau khi các PR cần thiết đã merge và trước khi Tình tạo tag.** Mọi số PR trong body phải `MERGED`:
 
 ```sh
-gh release edit v<version> --notes-file docs/release/notes-<version>.md
+grep -oE '#[0-9]+' docs/release/notes-0.2.0-alpha.1-body.md | sort -u | tr -d '#' \
+  | while read -r n; do gh pr view "$n" --json number,state --jq '"#\(.number) \(.state)"'; done
 ```
 
-Ví dụ `0.2.0-alpha.1` (và bản `0.2.0` cuối) dùng `docs/release/notes-0.2.0.md`. Tệp nháp còn khối "Trạng thái" ở đầu: bỏ khối đó (hoặc dùng bản đã duyệt không có khối) trước khi chạy, rồi kiểm lại body.
+Kết quả phải toàn `MERGED`; còn `OPEN`/`CLOSED` thì bỏ PR đó khỏi body (hoặc chờ merge rồi thêm mục tính năng/sửa lỗi tương ứng) và kiểm lại. Lead cập nhật body sau khi #49/#60/#61/#62–#64 merge — người tạo tag **không** tự sửa body. Chỉ dán khi lệnh trên sạch.
+
+Rồi thay body và đọc lại ngay sau khi đăng:
+
+```sh
+gh release edit v<version> --notes-file docs/release/notes-0.2.0-alpha.1-body.md
+gh release view v<version> --json body --jq .body | head -30
+```
+
+Bản `0.2.0` cuối dùng body riêng cùng cách (`notes-0.2.0-body.md`), không dùng lại tệp alpha.
 
 Kiểm:
 
@@ -110,7 +127,7 @@ gh release view v<version> --json tagName,assets \
 - `.build.json` của **cả hai** gói có `commit` = `ACCEPTED_SHA` (tag trỏ đúng commit đã nghiệm thu) và `run` trỏ về run của tag; lệch SHA là tag gắn sai chỗ — dừng, xoá tag, làm lại từ mục 3.
 - Đúng **4 asset**: `NexGraph-<version>-macos-arm64.dmg`, `NexGraph-<version>-macos-arm64.build.json`, `NexGraph-<version>-windows-x64.exe`, `NexGraph-<version>-windows-x64.build.json` (v0.1.2 có đúng 4).
 - **Bản alpha:** `gh release view v<version> --json isPrerelease` trả `true`. Nếu `false`, dừng phát hành và kiểm lại tag/workflow; `gh release edit … --prerelease` chỉ là khôi phục.
-- Body là [ghi chú phát hành](notes-0.2.0.md) đã duyệt, không phải body tự sinh.
+- Body là [body phát hành](notes-0.2.0-alpha.1-body.md) đã duyệt, không phải body tự sinh và không phải bản nháp `notes-0.2.0.md`.
 - Gắn run id CI của commit merge vào body hoặc phần thảo luận.
 - Nếu job `release` chạy lại, nó chỉ upload đè tệp (`--clobber`) và giữ nhãn prerelease, không tạo Release trùng.
 
@@ -118,7 +135,7 @@ gh release view v<version> --json tagName,assets \
 
 - Nói rõ bộ cài **chưa ký số**: macOS Gatekeeper (Open Anyway, hoặc `xattr -dr com.apple.quarantine`), Windows SmartScreen, và máy bật Application Control/Code Integrity có thể chặn trước khi cài. Dẫn [README](README.md#mở-bộ-cài-chưa-ký-số).
 - Nói rõ **chỉ có macOS Apple silicon (arm64) và Windows x64**; không có bản Intel hay Windows ARM (R2).
-- Dẫn [ghi chú phát hành](notes-0.2.0.md) và [kế hoạch kiểm thử](test-plan.md) để người dùng biết giới hạn đã biết.
+- Dẫn ghi chú phát hành trên Release (body từ `notes-0.2.0-alpha.1-body.md`) và [kế hoạch kiểm thử](test-plan.md) để người dùng biết giới hạn đã biết.
 
 ## 6. Sau phát hành
 
