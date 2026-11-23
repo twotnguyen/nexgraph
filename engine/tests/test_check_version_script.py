@@ -120,6 +120,31 @@ def test_khong_co_tag_thi_fail(tmp_path):
     assert "tag" in (res.stdout + res.stderr).lower()
 
 
+@pytest.mark.parametrize(
+    ("tag", "suggestion"),
+    [
+        ("v0.2.0a1", "v0.2.0-alpha.1"),
+        ("v0.2.0b2", "v0.2.0-beta.2"),
+        ("v0.2.0rc1", "v0.2.0-rc.1"),
+    ],
+)
+def test_tag_pep440_bi_tu_choi_kem_goi_y_semver(tmp_path, tag, suggestion):
+    # Tag phát hành phải là semver; PEP 440 chỉ dùng trong pyproject/__init__ của engine.
+    root = make_tree(
+        tmp_path,
+        npm="0.2.0-alpha.1",
+        desktop="0.2.0-alpha.1",
+        pyproject="0.2.0a1",
+        engine="0.2.0a1",
+    )
+    res = run_check(root, tag)
+    assert res.returncode != 0, res.stdout + res.stderr
+    out = res.stdout + res.stderr
+    assert "không hợp lệ" in out
+    assert suggestion in out
+    assert "OK: tag" not in res.stdout
+
+
 def test_tag_khong_hop_le_thi_fail(tmp_path):
     root = make_tree(tmp_path, npm="0.1.2", desktop="0.1.2", pyproject="0.1.2", engine="0.1.2")
     res = run_check(root, "v1.2")
