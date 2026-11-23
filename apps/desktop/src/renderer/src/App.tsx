@@ -62,7 +62,7 @@ function ScanStep({ project, onDone }: { project: ProjectSummary; onDone: (scan:
 }
 
 export default function App() {
-  useLocale()
+  const locale = useLocale()
   const [status, setStatus] = useState<EngineStatus>({ state: 'starting' })
   const [screen, setScreen] = useState<Screen>({ name: 'projects' })
   const initialHostCommand = useRef(window.nexgraph?.host?.initialCommand)
@@ -165,6 +165,12 @@ export default function App() {
   }
 
   useEffect(() => installAppMenuBridge(), [])
+  // Nhãn menu hệ thống do main dựng: gửi ngôn ngữ UI mỗi lần đổi để main dựng lại thanh menu.
+  useEffect(() => {
+    const api = window.nexgraph?.menu
+    if (!api?.setLocale) return
+    void api.setLocale(locale).catch(() => {})
+  }, [locale])
   useEffect(() => (window.nexgraph?.host ? undefined : installKeymap()), [])
   useEffect(() => { if (!window.nexgraph?.host) void loadExtensions() }, [])
   useEffect(() => registerFileMenuActions({

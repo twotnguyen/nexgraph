@@ -44,6 +44,8 @@ import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/m
 import { ensureTasksFile, listTasks, resolveTask } from './tasks'
 import { createTaskSigner, taskContentKey } from './tasks/signature'
 import { UserError } from './user-error'
+import { setMenuLocale, getMenuLocale } from './app-menu-locale'
+import { isMenuLocale, pickFileTitle } from './app-menu-labels'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
 import { gitApplyHunk, gitHunks } from './git/hunks'
@@ -191,7 +193,9 @@ export function registerIpc(
   getCommand: () => EngineCommand,
   dataDir: string,
   devHooks?: AccountDevHooks,
-  openWindow?: () => void
+  openWindow?: () => void,
+  /** Dựng lại menu hệ thống sau khi đổi ngôn ngữ (index.ts nối vào appMenu). */
+  rebuildMenu?: (locale: 'vi' | 'en') => void
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
@@ -216,6 +220,12 @@ export function registerIpc(
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
   })
   if (openWindow) on('window:open-new', async () => { openWindow() })
+  // Menu native và hộp thoại của menu File đổi nhãn theo ngôn ngữ UI; renderer gửi khi đổi.
+  on('app-menu:set-locale', async (value?: unknown) => {
+    if (!isMenuLocale(value)) throw new UserError('bad_locale', 'Ngôn ngữ không hợp lệ.')
+    setMenuLocale(value)
+    rebuildMenu?.(value)
+  })
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
   const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),
@@ -246,7 +256,7 @@ export function registerIpc(
   const rootOf = projectRoot(listProjects)
   on('file:pick-open', async (projectId?: string) => {
     const win = getWindow()
-    const opts = { properties: ['openFile' as const], title: 'Chọn tệp để mở' }
+    const opts = { properties: ['openFile' as const], title: pickFileTitle[getMenuLocale()] }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     if (r.canceled || r.filePaths.length === 0) return null
     const path = r.filePaths[0]

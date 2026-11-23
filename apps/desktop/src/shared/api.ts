@@ -171,6 +171,8 @@ export interface NexGraphApi {
   /** Menu hệ thống File/Edit/View do main dựng; renderer đăng ký để chạy lệnh. */
   menu?: {
     onAction(cb: (action: AppMenuAction) => void): () => void
+    /** Đổi nhãn menu native theo ngôn ngữ UI (main dựng lại thanh menu). */
+    setLocale(locale: 'vi' | 'en'): Promise<void>
   }
   index: {
     scan(projectId: string): Promise<ScanInfo>

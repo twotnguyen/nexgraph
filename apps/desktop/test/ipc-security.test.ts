@@ -312,3 +312,26 @@ describe('IPC: xuất chỉ dùng thư mục đã chọn trong main', () => {
     expect(h.showSaveDialog).toHaveBeenLastCalledWith(h.window, expect.objectContaining({ defaultPath: join('/tmp', 'nexgraph.png') }))
   })
 })
+
+describe('menu hệ thống (PR #49): IPC ngôn ngữ và chọn tệp', () => {
+  it('app-menu:set-locale chỉ nhận vi/en, mã lạ bị từ chối', async () => {
+    expect(await invoke('app-menu:set-locale', 'fr')).toMatchObject({ ok: false, error: { code: 'bad_locale' } })
+    expect(await invoke('app-menu:set-locale', null)).toMatchObject({ ok: false, error: { code: 'bad_locale' } })
+    expect(await invoke('app-menu:set-locale', 'en')).toMatchObject({ ok: true })
+  })
+
+  it('file:pick-open chỉ trả đường dẫn từ hộp thoại; relative chỉ khi nằm trong dự án', async () => {
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [join(root, 'a.ts')] })
+    expect(await invoke('file:pick-open', 'p1')).toMatchObject({ ok: true, data: { path: join(root, 'a.ts'), relative: 'a.ts' } })
+    // Tệp ngoài dự án vẫn mở được (người dùng tự chọn trong hộp thoại) nhưng không có relative.
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/etc/passwd'] })
+    const outside = await invoke('file:pick-open', 'p1')
+    expect(outside).toMatchObject({ ok: true, data: { path: '/etc/passwd' } })
+    expect(dataOf<{ relative?: string }>(outside).relative).toBeUndefined()
+    // projectId lạ: không suy được root nên chỉ trả path, không lỗi.
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/etc/hosts'] })
+    expect(await invoke('file:pick-open', 'nope')).toMatchObject({ ok: true, data: { path: '/etc/hosts' } })
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    expect(await invoke('file:pick-open')).toMatchObject({ ok: true, data: null })
+  })
+})

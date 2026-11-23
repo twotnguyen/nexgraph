@@ -102,7 +102,7 @@ async function createWindow(show = true): Promise<void> {
   else await mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged), () => { void createWindow() })
+registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged), () => { void createWindow() }, (locale) => installAppMenu(() => mainWindow, locale))
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 

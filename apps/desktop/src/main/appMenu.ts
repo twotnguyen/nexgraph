@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu, type MenuItemConstructorOptions } from 'electron'
 import { isMenuLocale, menuLabels, type MenuLocale } from './app-menu-labels'
+import { getMenuLocale, setMenuLocale } from './app-menu-locale'
 
 /**
  * Menu hệ thống (thanh menu của macOS/Windows) thay cho menu mặc định Electron.
@@ -19,9 +20,7 @@ export type MenuBuildOptions = {
 }
 
 /** Nhãn menu đang dùng; renderer gửi qua IPC `app-menu:set-locale` khi người dùng đổi ngôn ngữ. */
-let locale: MenuLocale = 'vi'
-
-export const getMenuLocale = (): MenuLocale => locale
+export { getMenuLocale }
 
 export function buildAppMenu({ locale: lang, isPackaged, platform, send, appName }: MenuBuildOptions): MenuItemConstructorOptions[] {
   const t = menuLabels[lang]
@@ -180,10 +179,10 @@ function send(id: string, getWindow: () => BrowserWindow | null): void {
 }
 
 /** Dựng lại thanh menu (gọi lúc khởi động và mỗi lần đổi ngôn ngữ UI). */
-export function installAppMenu(getWindow: () => BrowserWindow | null, nextLocale: MenuLocale = locale): void {
-  locale = nextLocale
+export function installAppMenu(getWindow: () => BrowserWindow | null, nextLocale: MenuLocale = getMenuLocale()): void {
+  setMenuLocale(nextLocale)
   Menu.setApplicationMenu(Menu.buildFromTemplate(buildAppMenu({
-    locale,
+    locale: nextLocale,
     isPackaged: app.isPackaged,
     platform: process.platform,
     appName: app.getName(),

@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
 }))
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/nexgraph-quit-test', getAppPath: () => '/tmp/nexgraph-quit-test',
+    isPackaged: false, getName: () => 'NexGraph',
     commandLine: { hasSwitch: () => false },
     whenReady: () => Promise.resolve(), quit: h.quit,
     on: (name: string, cb: (event: { preventDefault(): void }) => void) => h.events.set(name, cb) },
