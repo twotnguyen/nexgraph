@@ -29,6 +29,15 @@ def _step(kind: str, title: str, body: str, node: dict | None, flow_id: int | No
     return {"kind": kind, "title": title, "body": body, "node": node, "flow_id": flow_id, "block_id": block_id}
 
 
+def _s(count: int) -> str:
+    """Hậu tố số nhiều tiếng Anh: 1 file, 2 files (M4, review 23/11)."""
+    return "" if count == 1 else "s"
+
+
+def _reaches(count: int) -> str:
+    return "reaches" if count == 1 else "reach"
+
+
 def _community_label(name: str, en: bool) -> str:
     """Nhãn cụm lưu trong CSDL là tiếng Việt (`Cụm quanh X`, `Cộng đồng N`); đổi ở lớp hiển thị."""
     if not en:
@@ -47,7 +56,8 @@ def _entry_and_flows(store: GraphStore, en: bool) -> list[dict]:
     if en:
         title, body = "Entry point", (
             f"{first['nhan']} in {first['tep']} is where the program starts. "
-            f"From here {first['so_buoc']} calls continue through {first['so_tep']} files.")
+            f"From here {first['so_buoc']} call{_s(first['so_buoc'])} "
+            f"continue{'s' if first['so_buoc'] == 1 else ''} through {first['so_tep']} file{_s(first['so_tep'])}.")
     else:
         title, body = "Điểm khởi động", (
             f"{first['nhan']} trong {first['tep']} là nơi chương trình bắt đầu. "
@@ -61,7 +71,8 @@ def _entry_and_flows(store: GraphStore, en: bool) -> list[dict]:
             continue
         used_files.add(r["tep"])
         if en:
-            tail = f"The flow goes through {r['so_buoc']} steps across {r['so_tep']} files and ends at {r['buoc_cuoi']}."
+            tail = (f"The flow goes through {r['so_buoc']} step{_s(r['so_buoc'])} across "
+                    f"{r['so_tep']} file{_s(r['so_tep'])} and ends at {r['buoc_cuoi']}.")
             head = f"Entry point {r['mo_ta_vao']}. " if r["mo_ta_vao"] and r["loai_vao"] in ("route", "cli", "event") else ""
             title = f"Flow {r['ten']}"
         else:
@@ -85,7 +96,8 @@ def _communities(store: GraphStore, en: bool) -> list[dict]:
         label = _community_label(ten, en)
         if en:
             out.append(_step("community", f"Community: {label}",
-                             f"{n_files} files are tightly coupled around {center['nhan']}.",
+                             f"{n_files} file{_s(n_files)} {'is' if n_files == 1 else 'are'} "
+                             f"tightly coupled around {center['nhan']}.",
                              _node(store, center["id_nut"]), block_id=f"com:{k}"))
         else:
             out.append(_step("community", label, f"{n_files} tệp gắn chặt với nhau quanh {center['nhan']}.",
@@ -103,7 +115,8 @@ def _hubs(store: GraphStore, en: bool) -> list[dict]:
     for r in rows:
         if en:
             out.append(_step("hub", f"Hotspot: {r['nhan']}",
-                             f"{r['callers']} callers reach {r['ten_day_du']}. Changes here have wide impact.",
+                             f"{r['callers']} caller{_s(r['callers'])} {_reaches(r['callers'])} "
+                             f"{r['ten_day_du']}. Changes here have wide impact.",
                              _node(store, r["id_nut"])))
         else:
             out.append(_step("hub", f"Điểm nóng: {r['nhan']}",
@@ -122,9 +135,10 @@ def _tests(store: GraphStore, en: bool) -> list[dict]:
         "SELECT n.id_nut FROM canh c JOIN nut n ON n.ma_nut = c.ma_nut_dich WHERE c.loai_canh = 'TESTED_BY'"
         " GROUP BY n.ma_nut ORDER BY count(*) DESC, n.id_nut LIMIT 1").fetchone()
     if en:
-        return [_step("tests", "Tests",
-                      f"{totals[0]} test files, {totals[1]} functions and classes have tests pointing to them.",
-                      _node(store, top[0]))]
+        files = f"{totals[0]} test file{_s(totals[0])}"
+        symbols = (f"{totals[1]} function or class has tests pointing to it." if totals[1] == 1
+                   else f"{totals[1]} functions and classes have tests pointing to them.")
+        return [_step("tests", "Tests", f"{files}, {symbols}", _node(store, top[0]))]
     return [_step("tests", "Kiểm thử", f"{totals[0]} tệp kiểm thử, {totals[1]} hàm và lớp đã có test trỏ tới.",
                   _node(store, top[0]))]
 
