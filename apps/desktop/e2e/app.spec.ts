@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { NexGraphApi } from '../src/shared/api'
-import { prepareDataDir } from './data-dir'
+import { addDataDirOwner, prepareDataDir } from './data-dir'
 
 /**
  * E2E Electron tối thiểu cho NexGraph (QA-14).
@@ -64,7 +64,7 @@ test('mở dự án → index → tìm → Kiến trúc → Luồng → mở t�
   // và assert heading dưới đỏ ngay lượt thứ 2. Lưu ý: thư mục này **bị xoá mỗi lượt**, chỉ dùng cho E2E;
   // `prepareDataDir` từ chối xoá thư mục ngoài tmpdir khi không có marker do chính E2E tạo (e2e/data-dir.ts).
   const engineDataDir = process.env.NEXGRAPH_E2E_DATA_DIR ?? join(root, 'engine-data')
-  await prepareDataDir(engineDataDir)
+  await prepareDataDir(engineDataDir, { pids: [process.pid] })
 
   const app = await electron.launch({
     executablePath: electronPath,
@@ -76,6 +76,10 @@ test('mở dự án → index → tìm → Kiến trúc → Luồng → mở t�
       NEXGRAPH_USER_DATA_DIR: join(root, 'user-data')
     }
   })
+
+  // Ghi PID Electron vào marker: lượt sau chờ cả cây engine của lượt này thoát trước khi xoá dữ liệu.
+  const appPid = app.process().pid
+  if (appPid !== undefined) addDataDirOwner(engineDataDir, appPid)
 
   try {
     const page = await app.firstWindow()
