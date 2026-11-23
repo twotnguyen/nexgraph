@@ -204,6 +204,27 @@ def test_index_job_also_honours_finished_ttl(env):
         manager.shutdown()
 
 
+def test_long_running_job_is_not_evicted_when_it_finishes(env):
+    """F3: prune theo thời điểm xong — job dài xong sau nhiều job ngắn vẫn tra được kết quả."""
+    registry, info, bus, _ = env
+    manager = JobManager(registry, bus, max_finished_jobs=2)
+    gate = threading.Event()
+    try:
+        long_id = manager.start_task(None, "long", lambda ctx: (gate.wait(10), {"ok": True})[1])
+        deadline = time.time() + 10
+        while manager.get(long_id)["state"] != "running" and time.time() < deadline:
+            time.sleep(0.01)
+        for _ in range(3):
+            quick = manager.start_task(None, "quick", lambda ctx: {"ok": True})
+            assert wait_done(manager, quick)["state"] == "done"
+        gate.set()
+        assert wait_done(manager, long_id)["state"] == "done"
+        assert manager.get(long_id)["result"] == {"ok": True}
+    finally:
+        gate.set()
+        manager.shutdown()
+
+
 def test_app_shutdown_stops_job_manager(tmp_path, monkeypatch):
     """REV-19: engine tắt phải gọi shutdown() (huỷ + join job nền), không chỉ trong test."""
     from fastapi.testclient import TestClient

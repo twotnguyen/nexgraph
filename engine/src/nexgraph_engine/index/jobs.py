@@ -134,7 +134,7 @@ class JobManager:
             job.update(fields)
             if job["state"] not in ACTIVE and fields.get("state") not in (None, "running", "waiting_llm"):
                 job["finished_at"] = time.time()
-                self._prune_finished_locked()
+                self._prune_finished_locked(keep=job_id)
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
 
@@ -144,16 +144,28 @@ class JobManager:
         self._cancels.pop(job_id, None)
         self._publishing.discard(job_id)
 
-    def _prune_finished_locked(self) -> None:
-        """Caller giữ `_lock`: dọn job đã xong quá TTL hoặc vượt giới hạn, rồi bỏ luồng đã chết (REV-19)."""
+    def _prune_finished_locked(self, keep: str | None = None) -> None:
+        """Caller giữ `_lock`: dọn job đã xong quá TTL hoặc vượt giới hạn, theo thời điểm xong (REV-19).
+
+        `keep`: job vừa chuyển trạng thái kết thúc trong lần này — luôn giữ để client còn đọc kết quả
+        (cắt theo thứ tự tạo từng xoá ngay job dài vừa xong khi có nhiều job ngắn xong trước — F3).
+        """
         now = time.time()
         finished = [(job_id, job) for job_id, job in self._jobs.items() if job["state"] not in ACTIVE]
         for job_id, job in finished:
-            if now - job.get("finished_at", now) >= self._finished_ttl:
+            if job_id != keep and now - job.get("finished_at", now) >= self._finished_ttl:
                 self._forget_locked(job_id)
         finished = [(job_id, job) for job_id, job in self._jobs.items() if job["state"] not in ACTIVE]
-        for job_id, _job in finished[:max(0, len(finished) - self._max_finished)]:
-            self._forget_locked(job_id)
+        excess = len(finished) - self._max_finished
+        if excess > 0:
+            # Job xong lâu nhất bị bỏ trước; job vừa xong không bao giờ bị bỏ trong chính lần prune này.
+            for job_id, _job in sorted(finished, key=lambda item: item[1].get("finished_at") or 0.0):
+                if excess <= 0:
+                    break
+                if job_id == keep:
+                    continue
+                self._forget_locked(job_id)
+                excess -= 1
         self._threads = [thread for thread in self._threads if thread.is_alive()]
 
     def _run_task(self, job_id: str, project_id: str | None, work: Callable[[TaskContext], dict],
@@ -239,7 +251,7 @@ class JobManager:
                 # F2: job index cũng phải có `finished_at`, nếu không TTL 1 h không bao giờ áp cho nó.
                 job["finished_at"] = time.time()
                 self._publishing.discard(job_id)
-                self._prune_finished_locked()
+                self._prune_finished_locked(keep=job_id)
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
         if e.state == "done":  # đồ thị mới đã được xuất bản
