@@ -59,6 +59,12 @@ export function plural(count: number, one: string, other: string): string {
   return rules.select(count) === 'one' ? one : other
 }
 
+/** Như `plural` nhưng nhận số đã định dạng ("12,000"): bỏ dấu phân cách rồi chọn dạng. */
+export function pluralOf(count: string | number, one: string, other: string): string {
+  const value = typeof count === 'number' ? count : Number(count.replace(/[^\d.-]/g, ''))
+  return Number.isFinite(value) ? plural(value, one, other) : other
+}
+
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
   return new Intl.NumberFormat(localeTag(), options).format(value)
 }

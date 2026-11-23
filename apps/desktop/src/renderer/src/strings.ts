@@ -1,6 +1,6 @@
 // Chuỗi giao diện: mặc định tiếng Việt, bản Anh trong enStrings (spec §5.9).
 import type { PathConfidence } from '@shared/graph-types'
-import { formatNumber, getLocale, plural } from './state/locale'
+import { formatNumber, getLocale, plural, pluralOf } from './state/locale'
 import { uiEnScreens } from './i18n/uiEn-screens'
 import { uiEnAgent } from './i18n/uiEn-agent'
 import { uiEnEditor } from './i18n/uiEn-editor'
@@ -845,7 +845,7 @@ const enStrings: typeof viStrings = {
     recluster: 'Re-cluster',
     reclusterDesc: 'Recompute communities on the current graph without rereading code.',
     reclustering: 'Re-clustering…',
-    clusters: (n: number) => `Split into ${n} clusters`,
+    clusters: (n: number) => `Split into ${n} ${plural(n, 'cluster', 'clusters')}`,
     view: 'View',
     archDesc: 'Block map and dependency arrows.',
     flowsDesc: 'Execution flows from entry points, step by step.',
@@ -977,7 +977,7 @@ const enStrings: typeof viStrings = {
     notConfigured: 'The AI assistant is not configured. All other features still work.',
     openSettings: 'Open Settings',
     thinking: 'Querying the graph…', usingTool: (name: string) => `Calling ${name}…`,
-    verified: (ok: number, all: number) => `${ok}/${all} citations verified`,
+    verified: (ok: number, all: number) => `${ok}/${all} ${plural(all, 'citation', 'citations')} verified`,
     noCitations: 'The answer has no citations',
     unverified: 'unverified',
     reason: { file_not_found: 'File is not in the indexed project', out_of_range: 'Line range does not exist in the file' },
@@ -1055,7 +1055,7 @@ const enStrings: typeof viStrings = {
     noGaps: 'No isolated nodes or uncertain edges.',
     benchmark: 'Token reduction',
     benchmarkText: (corpus: string, graph: string, ratio: string) =>
-      `Reading all source: ~${corpus} tokens. Querying via graph: ~${graph} tokens per question. A ${ratio}x reduction.`
+      `Reading all source: ~${corpus} ${pluralOf(corpus, 'token', 'tokens')}. Querying via graph: ~${graph} ${pluralOf(graph, 'token', 'tokens')} per question. A ${ratio}x reduction.`
   },
   tree: {
     label: 'Project tree',
@@ -1267,7 +1267,7 @@ const enStrings: typeof viStrings = {
     contested: 'Conflicting ratings',
     deadEnds: 'Known dead ends',
     corrections: 'Corrected answers',
-    times: (n: number) => `${n} times`,
+    times: (n: number) => `${n} ${plural(n, 'time', 'times')}`,
     verdict: (v: string): string => v === 'useful' ? 'leaning helpful' : v === 'dead end' ? 'leaning dead end' : 'mixed',
     nodeTitle: 'Memory',
     nodeLesson: { preferred: 'Trusted source by ratings', tentative: 'Rated helpful only once', contested: 'Conflicting ratings' } as Record<string, string>,
@@ -1314,7 +1314,7 @@ const enStrings: typeof viStrings = {
     colCi: 'CI',
     colAge: 'Updated',
     colImpact: 'Affected nodes',
-    days: (n: number) => (n === 0 ? 'today' : `${n} days ago`),
+    days: (n: number) => (n === 0 ? 'today' : `${n} ${plural(n, 'day', 'days')} ago`),
     status: {
       'WRONG-BASE': 'Wrong base branch', 'CI-FAIL': 'CI failing', 'CHANGES-REQ': 'Changes requested', DRAFT: 'Draft',
       STALE: 'Stale (≥ 14 days)', PENDING: 'CI running', APPROVED: 'Approved', READY: 'Ready',
@@ -1403,7 +1403,7 @@ const enStrings: typeof viStrings = {
     close: 'Close',
     done: (nodes: number, edges: number) =>
       `Done: added ${nodes} ${plural(nodes, 'node', 'nodes')} and ${edges} AI-inferred ${plural(edges, 'relation', 'relations')}.`,
-    labelsDone: (n: number) => `Done: named ${n} clusters.`,
+    labelsDone: (n: number) => `Done: named ${n} ${plural(n, 'cluster', 'clusters')}.`,
     triageItem: (n: number, priority: number, action: string) => `#${n} · priority ${priority}: ${action}`,
     triageEmpty: 'AI did not return any ordering.',
     merged: (n: number) => `Done: merged ${n} duplicate ${plural(n, 'concept', 'concepts')}.`,
@@ -1508,7 +1508,7 @@ export const uiEn: Record<string, string> = {
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.
   'Luồng {id}': 'Flow {id}',
-  'Đã chia {n} cụm': 'Split into {n} clusters'
+  'Đã chia {n} cụm': 'Split into {n} {n, plural, one {cluster} other {clusters}}'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}.
