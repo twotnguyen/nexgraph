@@ -23,6 +23,13 @@ from nexgraph_engine.bridge.to_nx import Scope, build_nx
 from nexgraph_engine.flows.query import flows_for_nodes
 from nexgraph_engine.query.common import edges_between, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
+from nexgraph_engine.query.terms import (
+    NO_MATCH_SUGGESTION,
+    drop_vi_stopwords,
+    has_vietnamese,
+    has_words,
+    seed_matches,
+)
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.search import build_match_query
 
@@ -35,6 +42,12 @@ def _cost(label: str, qname: str, file: str | None) -> int:
     return max(1, (len(label) + len(qname) + len(file or "")) // 4)  # ~4 ký tự một token, như Graphify
 
 
+def _node_matches(G, node_id: str, terms: list[str]) -> bool:
+    data = G.nodes[node_id]
+    return seed_matches(data.get("label", ""), data.get("qualified_name", "") or data.get("qname", ""),
+                        data.get("source_file", ""), terms)
+
+
 def _seed_ids(G, question: str) -> tuple[list[str], list[str]]:
     """(hạt giống, ứng viên trùng tên). Câu hỏi là đúng tên của nhiều nút ở nhiều tệp thì không chọn bừa."""
     if _query_name_refusal(G, question):
@@ -42,12 +55,21 @@ def _seed_ids(G, question: str) -> tuple[list[str], list[str]]:
         source_exact, exact, _, _ = _find_node_tiers(G, question)
         return [], find_node_ambiguity(G, question) or source_exact or exact
     terms = _query_terms(question)
+    vietnamese = has_vietnamese(question)
+    if vietnamese:
+        terms = drop_vi_stopwords(terms, question)
+        if not terms:
+            return [], []
     qs = _score_query(G, terms, collect_per_term_seeds=True, path_weight=_query_path_weight(terms))
     best = qs.best_seed_by_term
     intent = {t for t in best if t in _RELATIONAL_INTENT_TERMS}
     if intent and any(t not in _RELATIONAL_INTENT_TERMS for t in terms):  # "calls", "uses"… không làm hạt giống
         best = {t: nid for t, nid in best.items() if t not in intent}
-    return _pick_seeds(qs.ranked, G=G, best_seed_by_term=best, term_order=qs.term_order), []
+    seeds = _pick_seeds(qs.ranked, G=G, best_seed_by_term=best, term_order=qs.term_order)
+    if vietnamese:
+        # Chỉ nhận hạt giống khớp theo ranh giới từ/định danh: bỏ kiểu `thế` → `the` trong `other`.
+        seeds = [node_id for node_id in seeds if _node_matches(G, node_id, terms)]
+    return seeds, []
 
 
 def _hubs(G) -> set[str]:
@@ -56,9 +78,16 @@ def _hubs(G) -> set[str]:
     return {n for n, d in G.degree() if d >= threshold}
 
 
+def _no_match() -> dict:
+    return {"seeds": [], "nodes": [], "edges": [], "flows": [], "truncated": False, "ambiguous": [],
+            "suggestion": NO_MATCH_SUGGESTION}
+
+
 def ask_graph(store: GraphStore, question: str, depth: int = 2, budget: int = 2000,
               mode: Literal["bfs", "dfs"] = "bfs") -> dict:
     if build_match_query(question) is None:
+        if has_words(question):  # toàn từ dừng: gợi ý cách hỏi, không ném lỗi cụt
+            return _no_match()
         raise ValueError("Câu hỏi không có từ nào tìm được")
     # shortcut: dựng lại đồ thị cầu nối mỗi câu hỏi (~9 ms/1.000 cạnh); repo trên ~100.000 cạnh thì cache G theo lần index.
     G = build_nx(store, Scope(limit=10**9)).G
@@ -66,6 +95,8 @@ def ask_graph(store: GraphStore, question: str, depth: int = 2, budget: int = 20
     if rivals:
         return {"seeds": [], "nodes": [], "edges": [], "flows": [], "truncated": False,
                 "ambiguous": [node_json(n) for n in (store.get_node(r) for r in rivals) if n is not None]}
+    if not seed_ids:
+        return _no_match()
     seeds = [n for n in (store.get_node(i) for i in seed_ids) if n is not None]
     hubs = _hubs(G) - set(seed_ids)
     conn = store.conn
