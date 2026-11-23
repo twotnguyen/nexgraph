@@ -32,6 +32,24 @@ def test_report_community_labels_follow_lang(copy_fixture, index_project):
     assert any(name.startswith("Cụm quanh ") for name in stored)
 
 
+def test_report_questions_use_translated_labels(copy_fixture, index_project, monkeypatch):
+    """P3 Minor i18n: `suggest_questions` phải nhận nhãn đã dịch như danh sách communities (không phải `Khác`)."""
+    import graphify.analyze as analyze
+
+    seen: dict = {}
+
+    def fake_suggest_questions(G, communities, labels, top_n=7):
+        seen.update(labels)
+        return []
+
+    monkeypatch.setattr(analyze, "suggest_questions", fake_suggest_questions)
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+    report_json(store, root, lang="en")
+    assert seen, "report phải gọi suggest_questions"
+    assert all("Cụm" not in label and "Cộng đồng" not in label and label != "Khác" for label in seen.values())
+
+
 def test_report_markdown_has_sections(copy_fixture, index_project):
     store, _, _ = index_project(copy_fixture("py_mini"))
     md = report_markdown(store, "py_mini")

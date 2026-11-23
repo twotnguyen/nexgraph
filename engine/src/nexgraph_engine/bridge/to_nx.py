@@ -137,6 +137,19 @@ def build_nx(store: GraphStore, scope: Scope = Scope(), keep_file: Callable[[str
     return BridgeGraph(G=G, communities=communities, labels=labels, cohesion=cohesion, truncated=truncated)
 
 
-def write_graph_json(bg: BridgeGraph, path: Path) -> None:
+def write_graph_json(bg: BridgeGraph, path: Path, *, project_name: str | None = None,
+                     built_at_commit: str | None = None) -> None:
+    """Ghi graph.json kiểu Graphify; `project_name`/`built_at_commit` để callflow không lấy tên thư mục tạm.
+
+    `to_json` của bản vendor chỉ nhận commit (đọc từ thư mục đích — với tệp tạm thì ra `None`); tên dự án
+    phải thêm ở tầng NexGraph vì `load_graph` của callflow đọc khoá `project_name` cấp đầu (A3b-P1 F1).
+    """
+    import json
+
     from graphify.export import to_json
-    to_json(bg.G, bg.communities, str(path), force=True, community_labels=bg.labels)
+    to_json(bg.G, bg.communities, str(path), force=True, community_labels=bg.labels,
+            built_at_commit=built_at_commit)
+    if project_name:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["project_name"] = project_name
+        path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")

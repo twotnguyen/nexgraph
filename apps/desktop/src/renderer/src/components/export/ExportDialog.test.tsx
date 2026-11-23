@@ -1,11 +1,25 @@
 // @vitest-environment jsdom
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
+import type { ExportScope } from '@shared/graph-types'
 import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../../test-utils'
 import { ExportDialog } from './ExportDialog'
 
 const props = { projectId: 'p1', projectName: 'demo', scope: { kind: 'all' } as const, onClose: () => {} }
+
+/** Mô phỏng chỗ dùng thật: một nút mở hộp thoại, hộp thoại nằm cạnh nút đó. */
+function Opener({ scope }: { scope: ExportScope }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)}>Xuất cộng đồng go</button>
+      <button type="button">Xuất cộng đồng java</button>
+      {open && <ExportDialog projectId="p1" projectName="demo" scope={scope} scopeLabel="go" onClose={() => setOpen(false)} />}
+    </>
+  )
+}
 
 describe('ExportDialog', () => {
   it('xuất HTML vào thư mục đã chọn và cho mở thư mục', async () => {
@@ -80,5 +94,47 @@ describe('ExportDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Đẩy lên server' }))
     expect(api.exporter.push).toHaveBeenLastCalledWith('p1', { target: 'neo4j', uri: 'bolt://localhost:7687', user: 'neo4j', password: 'secret', scope: { kind: 'all' } })
     expect(await screen.findByText(/10 node, 20 cạnh/)).toBeInTheDocument()
+  })
+
+  it('đổi cộng đồng khi hộp thoại đang mở thì nhãn và phạm vi xuất theo cộng đồng mới (review #63, Important 2)', async () => {
+    const { api } = installNexgraph()
+    const { rerender } = render(<ExportDialog {...props} scope={{ kind: 'community', value: 'com:0' }} scopeLabel="go" />)
+    expect(screen.getByRole('radio', { name: 'Cộng đồng go' })).toBeChecked()
+    rerender(<ExportDialog {...props} scope={{ kind: 'community', value: 'com:1' }} scopeLabel="java" />)
+    expect(screen.getByRole('radio', { name: 'Cộng đồng java' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Toàn bộ dự án' })).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Chọn thư mục và xuất' }))
+    expect(api.exporter.run).toHaveBeenCalledWith('p1', 'html', { kind: 'community', value: 'com:1' }, 'vi')
+  })
+
+  it('mở thì đưa focus vào hộp thoại, Tab không thoát ra sau lưng (review #63, Important 2)', async () => {
+    render(<Opener scope={{ kind: 'community', value: 'com:0' }} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Xuất cộng đồng go' }))
+    const dialog = screen.getByRole('dialog', { name: 'Xuất đồ thị: demo' })
+    expect(dialog.contains(document.activeElement)).toBe(true)
+
+    const controls = dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')
+    const first = controls[0]
+    const last = controls[controls.length - 1]
+    last.focus()
+    await userEvent.tab()
+    expect(document.activeElement).toBe(first)
+    await userEvent.tab({ shift: true })
+    expect(document.activeElement).toBe(last)
+
+    // Như ca QA: focus lạc ra nút bên ngoài rồi bấm Tab — phải quay lại trong hộp thoại.
+    screen.getByRole('button', { name: 'Xuất cộng đồng java' }).focus()
+    await userEvent.tab()
+    expect(dialog.contains(document.activeElement)).toBe(true)
+  })
+
+  it('Escape đóng hộp thoại và trả focus về nút đã mở (review #63, Minor 3)', async () => {
+    render(<Opener scope={{ kind: 'community', value: 'com:0' }} />)
+    const opener = screen.getByRole('button', { name: 'Xuất cộng đồng go' })
+    await userEvent.click(opener)
+    expect(screen.getByRole('dialog', { name: 'Xuất đồ thị: demo' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Xuất đồ thị: demo' })).toBeNull()
+    expect(document.activeElement).toBe(opener)
   })
 })

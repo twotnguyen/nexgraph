@@ -80,16 +80,19 @@ def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = Non
     lang = check_lang(lang, "en")  # lang sai phải ném ValueError như build_tour (M3, review 23/11)
     from graphify.analyze import suggest_questions, surprising_connections
     bg = build_nx(store, keep_file=source.allows if source else None)
-    communities = [{"id": f"com:{cid}", "label": community_label(bg.labels[cid], lang), "size": len(members),
+    labels = {cid: community_label(name, lang) for cid, name in bg.labels.items()}
+    communities = [{"id": f"com:{cid}", "label": labels[cid], "size": len(members),
                     "cohesion": bg.cohesion[cid]}
                    for cid, members in sorted(bg.communities.items()) if cid != OTHER_COMMUNITY]
     surprising = translate_surprising(
         [{"source": s["source"], "target": s["target"], "source_files": s.get("source_files", []),
           "relation": s.get("relation", ""), "why": s.get("why") or s.get("note", "")}
          for s in surprising_connections(bg.G, bg.communities, top_n=5)], lang)
+    # `suggest_questions` nhận nhãn đã dịch như danh sách `communities`; nhãn thô trong CSDL là tiếng Việt
+    # (`Khác`, `Cụm quanh X`) nên câu hỏi EN từng lộ `Should \`Khác\` be split...` (A3b-P3 Minor i18n).
     questions = translate_questions(
         [{"question": q["question"], "why": q.get("why", "")}
-         for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)], lang)
+         for q in suggest_questions(bg.G, bg.communities, labels, top_n=7)], lang)
     warnings: list[str] = []
     return {"god_nodes": _god_nodes(store, bg), "communities": communities, "surprising": surprising,
             "questions": questions, "benchmark": _benchmark(bg, warnings, lang), "truncated": bg.truncated,
@@ -115,17 +118,32 @@ def audit_json(store: GraphStore) -> dict:
             "parse_errors": {"total": sum(by_kind.values()), "by_kind": by_kind, "files": files}}
 
 
-def report_markdown(store: GraphStore, project_name: str, source: SourcePolicy | None = None) -> str:
+def report_markdown(store: GraphStore, project_name: str, source: SourcePolicy | None = None, *,
+                    lang: str = "en") -> str:
     return render_report_markdown(build_nx(store, keep_file=source.allows if source else None), project_name,
-                                  store.stats()["files"])
+                                  store.stats()["files"], lang=lang)
 
 
-def render_report_markdown(bg: BridgeGraph, project_name: str, files: int) -> str:
+def render_report_markdown(bg: BridgeGraph, project_name: str, files: int, *, lang: str = "en") -> str:
+    """`lang="vi"` dịch báo cáo như tab Báo cáo (A3b-P1 F4); `en` giữ nguyên chuỗi Graphify.
+
+    Câu hỏi gợi ý/lý do dịch bằng `report/i18n.py` như route `/report`; tiêu đề mục và câu khung dịch
+    bằng `report/markdown_i18n.py`. Nhãn cụm lưu tiếng Việt nên được dịch trước khi sinh câu hỏi.
+    """
     from graphify.analyze import god_nodes, suggest_questions, surprising_connections
     from graphify.report import generate
-    md = generate(bg.G, bg.communities, bg.cohesion, bg.labels, god_nodes(bg.G), surprising_connections(bg.G, bg.communities),
+
+    from nexgraph_engine.report.markdown_i18n import localize_markdown
+
+    lang = check_lang(lang, "en")
+    labels = {cid: community_label(name, lang) for cid, name in bg.labels.items()}
+    questions = translate_questions(
+        [{key: q[key] for key in ("type", "question", "why") if key in q}
+         for q in suggest_questions(bg.G, bg.communities, labels)], lang)
+    md = generate(bg.G, bg.communities, bg.cohesion, labels, god_nodes(bg.G),
+                  surprising_connections(bg.G, bg.communities),
                   {"total_files": files, "total_words": 0}, {"input": 0, "output": 0}, project_name,
-                  suggested_questions=suggest_questions(bg.G, bg.communities, bg.labels))
+                  suggested_questions=questions)
     # NexGraph không đếm từ và không gọi LLM: bỏ hai số mà Graphify sẽ in ra như thật.
     lines = []
     for line in md.splitlines():
@@ -134,4 +152,4 @@ def render_report_markdown(bg: BridgeGraph, project_name: str, files: int) -> st
         if line.startswith(f"- {files} files · ~"):
             line = f"- {files} files"
         lines.append(line)
-    return "\n".join(lines) + ("\n" if md.endswith("\n") else "")
+    return localize_markdown("\n".join(lines) + ("\n" if md.endswith("\n") else ""), lang)

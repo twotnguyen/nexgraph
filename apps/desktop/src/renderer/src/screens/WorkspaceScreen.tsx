@@ -357,6 +357,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }, [tabMenu, hidden])
   const chatFile = files.find(({ file }) => file === activeFile)
   const [exportScope, setExportScope] = useState<ExportScope | null>(null)
+  // Nhãn cộng đồng người dùng vừa chọn (P1-F2): ExportScope chỉ có id `com:<n>`, hộp thoại cần tên để hiện.
+  const [exportScopeLabel, setExportScopeLabel] = useState<string | null>(null)
   const [exportFormat, setExportFormat] = useState<ExportFormat>('html')
   const [menu, setMenu] = useState<{ node: GraphNode; x: number; y: number } | null>(null)
   const [pathFrom, setPathFrom] = useState<GraphNode | null>(null)
@@ -458,9 +460,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setOpenSeq((n) => n + 1)
     setTab('arch')
   }
-  const openExport = (scope: ExportScope, format: ExportFormat = 'html') => {
+  const openExport = (scope: ExportScope, format: ExportFormat = 'html', label?: string) => {
     setExportFormat(format)
     setExportScope(scope)
+    setExportScopeLabel(label ?? null)
   }
   const exportCurrent = () => {
     const node = selected?.id ?? (overlay ? null : focus)
@@ -1088,8 +1091,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         {indexNotice && <div role="status" className="ws-index-status muted">{indexNotice}</div>}
         <CollabBar />
         {exportScope && (
-          <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} initialFormat={exportFormat}
-            onClose={() => setExportScope(null)} />
+          <ExportDialog projectId={project.project_id} projectName={project.name} scope={exportScope} scopeLabel={exportScopeLabel ?? undefined} initialFormat={exportFormat}
+            onClose={() => { setExportScope(null); setExportScopeLabel(null) }} />
         )}
         {pathFrom && (
           <div role="status" aria-label={vi.path.pickingLabel} className="pick-banner">
@@ -1229,7 +1232,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           {tab === 'prs' && <PrsView projectId={project.project_id} onOpenNode={openNodeId} />}
           {tab === 'report' && (
             <ReportView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onAsk={(q) => void askOnGraph(q)}
-              onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')} />
+              onExportMarkdown={() => openExport({ kind: 'all' }, 'markdown')}
+              onExportCommunity={(id, label) => openExport({ kind: 'community', value: id }, 'html', label)} />
           )}
           {files.map((f) => (
             <FileView key={f.file} projectId={project.project_id} file={f.file} line={f.line} column={f.column} lineEnd={f.lineEnd} revealRequest={f.seq} active={!hidden && (tab === `file:${f.file}` || tab === `preview:${f.file}` && !isMarkdownFile(f.file))} locked={lockedFiles.has(f.file)}

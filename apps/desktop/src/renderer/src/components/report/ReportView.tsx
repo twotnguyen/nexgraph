@@ -14,13 +14,15 @@ interface Props {
   onOpenNode: (id: string) => void
   onAsk: (question: string) => void
   onExportMarkdown: () => void
+  /** Xuất đúng cộng đồng của dòng được bấm (P1-F2): id phạm vi `com:<n>` và nhãn để hộp thoại hiện. */
+  onExportCommunity: (id: string, label: string) => void
 }
 
 /** Chèn điểm ngắt sau dấu `/` để đường dẫn dài xuống dòng theo đoạn, không bẻ giữa tên tệp. */
 const breakablePath = (file: string) =>
   file.split('/').flatMap((part, index, parts) => index < parts.length - 1 ? [`${part}/`, <wbr key={index} />] : [part])
 
-export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExportMarkdown }: Props) {
+export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExportMarkdown, onExportCommunity }: Props) {
   const [report, setReport] = useState<GraphReport | null>(null)
   const [error, setError] = useState<Message | null>(null)
   const [retry, setRetry] = useState(0)
@@ -73,11 +75,15 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
       <section>
         <h3>{vi.report.communities(report.communities.length)}</h3>
         <table>
-          <thead><tr><th>{vi.report.colName}</th><th>{vi.report.colSize}</th><th>{vi.report.colCohesion}</th></tr></thead>
+          <thead><tr><th>{vi.report.colName}</th><th>{vi.report.colSize}</th><th>{vi.report.colCohesion}</th><th>{vi.report.colExport}</th></tr></thead>
           <tbody>
-            {report.communities.length === 0 && <tr><td colSpan={3} className="muted">{tr('Chưa có dữ liệu nhóm.')}</td></tr>}
+            {report.communities.length === 0 && <tr><td colSpan={4} className="muted">{tr('Chưa có dữ liệu nhóm.')}</td></tr>}
             {report.communities.map((c) => (
-              <tr key={c.id}><td>{c.label}</td><td>{formatNumber(c.size)}</td><td>{c.cohesion.toFixed(2)}</td></tr>
+              <tr key={c.id}>
+                <td>{c.label}</td><td>{formatNumber(c.size)}</td><td>{c.cohesion.toFixed(2)}</td>
+                <td><button type="button" className="link" aria-label={vi.report.exportCommunityNamed(c.label)}
+                  onClick={() => onExportCommunity(c.id, c.label)}>{vi.report.exportCommunity}</button></td>
+              </tr>
             ))}
           </tbody>
         </table>

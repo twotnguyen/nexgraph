@@ -1155,3 +1155,76 @@ def test_progress_callback_runtimeerror_is_not_swallowed(tmp_path, index_project
     assert result.state == "loi"
     duplicates = sorted({p for p in calls if calls.count(p) > 1})
     assert duplicates == [], f"add_file gọi lại cho: {duplicates}"
+
+
+def test_serial_fallback_notice_threshold_both_sides():
+    """E10 mục 2: ngưỡng báo "song song gián đoạn" — > 5 % tệp hoặc > 200 tệp, hoặc pool hỏng thật."""
+    from nexgraph_engine.index.indexer import serial_fallback_is_noticeable
+
+    # open-design (A3b-P3): 16/5.644 tệp = 0,3 % chạy tuần tự ở cuối ⇒ KHÔNG báo người dùng.
+    assert serial_fallback_is_noticeable(16, 5644) is False
+    assert serial_fallback_is_noticeable(280, 5644) is True  # ~5,0 % nhưng > 200 tệp
+    assert serial_fallback_is_noticeable(200, 5644) is False  # đúng 200: chưa vượt ngưỡng số tệp
+    assert serial_fallback_is_noticeable(201, 5644) is True  # > 200 tệp
+    assert serial_fallback_is_noticeable(50, 1000) is False  # đúng 5 %: chưa vượt
+    assert serial_fallback_is_noticeable(51, 1000) is True  # 5,1 %: vượt ngưỡng tỉ lệ
+    assert serial_fallback_is_noticeable(5, 20) is True  # 25 % của dự án nhỏ
+    assert serial_fallback_is_noticeable(1, 20) is False  # đúng 5 %
+    assert serial_fallback_is_noticeable(1, 20, pool_broken=True) is True  # pool hỏng: luôn báo
+    assert serial_fallback_is_noticeable(0, 0, pool_broken=True) is False  # không còn tệp nào: không báo
+
+
+class _OneHungBatchPool:
+    """Pool giả: mọi lô xong ngay trừ lô chứa tệp `hung` (quá hạn) — mô phỏng 1 lô quá hạn của open-design."""
+
+    _processes: dict = {}
+    hung = "m2.py"
+
+    def __init__(self, *, max_workers):
+        self.parallel = max_workers > 1
+
+    def submit(self, fn, *args):
+        from concurrent.futures import Future
+        future = Future()
+        target = args[1]
+        if not self.parallel:
+            future.set_result(fn(*args))  # pool 1 worker của đường từng-tệp
+        elif not any(f.rel_path == self.hung for f in target):
+            future.set_result(fn(*args))
+        return future  # lô chứa tệp chậm: quá hạn, không bao giờ xong
+
+    def shutdown(self, *, wait, cancel_futures):
+        pass
+
+
+def _one_hung_batch(tmp_path, index_project, monkeypatch, n_files: int):
+    from nexgraph_engine.index import indexer
+
+    root = _many_py(tmp_path / "p", n_files)
+    # Tệp lớn nhất để LPT đặt nó vào lô đầu tiên (16 tệp) — mô phỏng một lô quá hạn của open-design.
+    (root / "m2.py").write_text("".join("# " + "y" * 40 + "\n" for _ in range(50)), encoding="utf-8")
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", _OneHungBatchPool)
+    return index_project(root)
+
+
+def test_tiny_serial_portion_is_logged_but_not_shown(tmp_path, index_project, monkeypatch, caplog):
+    """16/400 tệp (4 %) chạy tuần tự: vẫn ghi log + telemetry, nhưng không có banner cho người dùng."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger="nexgraph_engine.index.indexer"):
+        _store, result, events = _one_hung_batch(tmp_path, index_project, monkeypatch, 400)
+    assert result.state == "hoan_tat"
+    assert result.fallback_serial is True and result.serial_files == 16  # có gián đoạn thật
+    assert result.parallel_files == 400 - 16
+    assert [e.message for e in events if e.message and "gián đoạn" in e.message] == []
+    assert any("16/400" in r.getMessage() for r in caplog.records)  # log/telemetry đầy đủ
+
+
+def test_large_serial_portion_warns_the_user(tmp_path, index_project, monkeypatch):
+    """16/240 tệp (6,7 %) chạy tuần tự: vượt ngưỡng ⇒ vẫn báo như trước."""
+    _store, result, events = _one_hung_batch(tmp_path, index_project, monkeypatch, 240)
+    assert result.state == "hoan_tat"
+    assert result.fallback_serial is True and result.serial_files == 16
+    assert any(e.message and "gián đoạn" in e.message for e in events)

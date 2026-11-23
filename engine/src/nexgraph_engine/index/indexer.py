@@ -50,6 +50,10 @@ BATCH_DEADLINE_SECONDS_PER_MB = 60   # cộng thêm theo khối lượng: 60 s m
 # byte thật sự phải parse (đo PERF-L: ~20–25 ms/KB ⇒ 60 s/MB là biên rộng ~2,4×), vượt mức đó thì chờ
 # thêm không còn ích gì bằng đưa các tệp nghi treo sang đường từng-tệp có hạn riêng.
 MAX_BATCH_DEADLINE_SECONDS = 300
+# Ngôn ngữ chỉ băm để lấy FileRec rồi trả nút tệp, KHÔNG parse nội dung (extract_file). Byte của chúng
+# không được cộng vào hạn lô parser (review-64 I1: PNG 6,7 MB kéo lô 15 tệp mã từ 20 s lên 300 s).
+# `media` không có ở đây vì luôn chạy đơn luồng (`index_workers`) nên không đi qua hạn lô.
+HASH_ONLY_LANGUAGES = frozenset({"image"})
 FILE_EXTRACT_TIMEOUT_SECONDS = 60  # fallback tuần tự: quá hạn một tệp thì bỏ qua tệp đó
 IS_WINDOWS = os.name == "nt"
 
@@ -78,6 +82,25 @@ class RunResult:
     # đáng lẽ chạy song song (workers == 1 thì cả lần chạy là tuần tự theo thiết kế nên để 0).
     parallel_files: int = 0
     serial_files: int = 0
+
+
+# E10 mục 2 (A3b-P3): chỉ báo "song song gián đoạn" khi phần đọc từng-tệp đáng kể — 16/5.644 tệp (0,3 %)
+# chạy tuần tự ở cuối không đáng làm người dùng tưởng cả bảng 8 worker đã hỏng. Log/telemetry luôn ghi đủ.
+SERIAL_FALLBACK_NOTICE_MIN_FILES = 200
+SERIAL_FALLBACK_NOTICE_MIN_RATIO = 0.05
+
+
+def serial_fallback_is_noticeable(serial_files: int, total: int, *, pool_broken: bool = False) -> bool:
+    """Phần đọc từng-tệp có đáng hiện banner cho người dùng không.
+
+    `pool_broken`: không tạo/gửi được pool song song (lỗi hệ thống lặp lại) — mọi tệp còn lại phải đi
+    đường từng-tệp nên luôn báo, kể cả dự án nhỏ. Không đổi cơ chế chống treo của #53: chỉ ngưỡng báo.
+    """
+    if serial_files <= 0:
+        return False
+    if pool_broken:
+        return True
+    return serial_files > SERIAL_FALLBACK_NOTICE_MIN_FILES or serial_files > total * SERIAL_FALLBACK_NOTICE_MIN_RATIO
 
 
 def index_workers(n_files: int, include_media: bool, requested: int | None = None) -> int:
@@ -114,12 +137,14 @@ def batch_timeout_seconds(batch: Sequence[DiscoveredFile]) -> float:
     lớn: `apps/daemon/src/server.ts` 846 KB một mình ~21 s, nên cả lô vượt hạn oan. Nền 20 s giữ nguyên hành
     vi với lô nhỏ; cộng 60 s mỗi MB để lô 1 MB có hạn ~60 s (open-design không còn kích hoạt nhầm).
 
-    Tệp `oversized` bị loại khỏi phép tính: `extract_file` chỉ băm rồi trả về, không parse, nên cộng byte
-    của nó chỉ làm hạn dài vô ích (lô 104,8 MB của codebase-memory-mcp: hạn 105 phút cho 0,4 MB thật).
-    Trần `MAX_BATCH_DEADLINE_SECONDS` chặn nốt phần đuôi: chờ quá 300 s không còn ích gì bằng đưa tệp nghi
-    treo sang đường từng-tệp.
+    Chỉ cộng byte tệp thật sự phải parse. Tệp `oversized` và ảnh (`HASH_ONLY_LANGUAGES`) chỉ được băm rồi
+    trả về nút tệp, không parse — cộng byte của chúng chỉ làm hạn dài vô ích (lô 104,8 MB của
+    codebase-memory-mcp: hạn 105 phút cho 0,4 MB thật; lô 15 tệp mã + 1 PNG 6,7 MB: 300 s thay vì 20 s —
+    review-64 I1). Trần `MAX_BATCH_DEADLINE_SECONDS` chặn nốt phần đuôi: chờ quá 300 s không còn ích gì
+    bằng đưa tệp nghi treo sang đường từng-tệp.
     """
-    parsed_mb = sum(f.size for f in batch if not f.oversized) / 1_000_000
+    parsed_mb = sum(f.size for f in batch
+                    if not f.oversized and f.language not in HASH_ONLY_LANGUAGES) / 1_000_000
     return max(WORKER_PROGRESS_TIMEOUT_SECONDS,
                min(BATCH_DEADLINE_SECONDS_PER_MB * parsed_mb, MAX_BATCH_DEADLINE_SECONDS))
 
@@ -182,8 +207,8 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
     path = f.location(root)
     try:
         sha = sha256_file(path)
-        # Media chỉ cần mã băm (đã đọc theo luồng); không nạp tệp tới 500 MB vào RAM.
-        source = None if f.oversized or f.language == "media" else path.read_bytes()
+        # Media/ảnh chỉ cần mã băm (đã đọc theo luồng); không nạp tệp tới 500 MB vào RAM (ảnh: E10).
+        source = None if f.oversized or f.language in ("media", "image") else path.read_bytes()
         read_error = None
     except OSError as exc:
         sha, source, read_error = "0" * 64, None, f"Không đọc được tệp: {exc}"
@@ -193,7 +218,7 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
                      qualified_name=f.rel_path, file=f.rel_path, is_test=f.is_test)
     if f.oversized:
         return ExtractedFile(rec, [file_node], [], [], {}, [("oversized", f"{f.size} byte vượt giới hạn")])
-    if read_error or (source is None and f.language != "media"):
+    if read_error or (source is None and f.language not in ("media", "image")):
         return ExtractedFile(rec, [file_node], [], [], {}, [("read", read_error or "Không đọc được tệp")])
     if f.language == "image":  # chỉ là nút tệp; nội dung ảnh có khi chạy phân tích AI (W9)
         return ExtractedFile(rec, [file_node], [], [], {}, [])
@@ -226,12 +251,14 @@ class Indexer:
                  cancel: threading.Event, subdir: str | None = None, exclude: list[str] | None = None,
                  include_docs: bool = False, include_media: bool = False, transcript_dir: Path | None = None,
                  include_config: bool = False, workers: int | None = None, force: bool = False,
-                 sources_dir: Path | None = None, sources: ExtraSources | None = None) -> None:
+                 sources_dir: Path | None = None, sources: ExtraSources | None = None,
+                 include_images: bool = False) -> None:
         self.store, self.root, self.on_progress, self.cancel = store, Path(root), on_progress, cancel
         self.sources = sources
         self.subdir, self.exclude = subdir, exclude or []
         self.include_docs, self.include_media, self.transcript_dir = include_docs, include_media, transcript_dir
         self.include_config, self.workers, self.force = include_config, workers, force
+        self.include_images = include_images
         self.sources_dir = sources_dir
         self._file_errors: list[tuple[str, str, str]] = []  # (tệp, loại, chi tiết) để báo cho người dùng
         self._skip_stats: dict[str, int] = {}  # tệp bị discovery bỏ, theo lý do (bundle/dense)
@@ -251,14 +278,14 @@ class Indexer:
         store = self.store
         run_id = store.begin_run(commit_sha=_git_head(self.root), subdir=self.subdir, exclude=self.exclude,
                                  include_docs=self.include_docs, include_media=self.include_media,
-                                 include_config=self.include_config)
+                                 include_config=self.include_config, include_images=self.include_images)
         total = 0
         try:
             files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
                                   include_docs=self.include_docs, include_media=self.include_media,
                                   include_config=self.include_config, sources_dir=self.sources_dir,
                                   unreadable=self._unreadable,
-                                  skip_stats=self._skip_stats))
+                                  skip_stats=self._skip_stats, include_images=self.include_images))
             if self.force:
                 reset_cache_root()
             total = len(files)
@@ -514,9 +541,15 @@ class Indexer:
         # Chỉ báo "gián đoạn" khi thật sự có lớp song song bị mất. `workers == 1` (mọi dự án < 200 tệp,
         # mặc định trên Windows) chưa từng có pool song song nên đây không phải gián đoạn — bản trước
         # phát câu này ngay 0/N ở mọi lần index một worker (review-53 I3).
+        # E10 mục 2: phần từng-tệp nhỏ (ví dụ 16/5.644 tệp) chỉ ghi log + telemetry, không hiện banner.
         if workers > 1 and todo and not self.cancel.is_set():
-            self.on_progress(ProgressEvent("structure", consumed, total,
-                                           "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
+            noticeable = serial_fallback_is_noticeable(len(todo), total, pool_broken=gave_up)
+            logger.log(logging.WARNING if noticeable else logging.INFO,
+                       "Đọc từng-tệp %d/%d tệp sau sự cố trích xuất song song (workers=%d, pool hỏng=%s,"
+                       " báo người dùng=%s)", len(todo), total, workers, gave_up, noticeable)
+            if noticeable:
+                self.on_progress(ProgressEvent("structure", consumed, total,
+                                               "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
 
         # Mỗi tệp còn lại chạy trong tiến trình con để tệp treo không treo cả engine; chỉ khi không dùng được
         # tiến trình con mới đọc trong tiến trình chính.
