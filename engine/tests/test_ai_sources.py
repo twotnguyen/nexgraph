@@ -13,41 +13,34 @@ MODEL = {"X-NexGraph-Audience": "model"}
 FAKE_SECRET = "FAKE_GROUP6_PRIVATE_SENTINEL"
 
 
-def test_secret_shaped_document_name_is_readable_only_for_redacted_output(tmp_path):
-    """A3 #4: tên tệp trông như kho bí mật chỉ được miễn khi người gọi trả bản đã che; loại trừ thật vẫn chặn."""
+def test_secret_shaped_document_names_are_blocked_without_exemption(tmp_path):
+    """Quyết định lead (re-review #52 vòng 3): che bằng regex không bao giờ kín nên KHÔNG miễn theo tên tệp.
+
+    Mọi tên trông như kho bí mật — kể cả tài liệu chữ — bị loại khỏi nguồn cho model như trên `main`.
+    """
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "secret.md").write_text("x", encoding="utf-8")
+    (tmp_path / "docs" / "secrets.md").write_text("x", encoding="utf-8")
+    (tmp_path / "SECRETS.txt").write_text("x", encoding="utf-8")
     (tmp_path / "secrets").mkdir()
     (tmp_path / "secrets" / "notes.md").write_text("x", encoding="utf-8")
-    (tmp_path / ".npmrc").write_text("x", encoding="utf-8")
-    strict = SourcePolicy(tmp_path)
-    assert not strict.allows("docs/secret.md")
-    relaxed = SourcePolicy(tmp_path, allow_secret_names=True)
-    assert relaxed.allows("docs/secret.md") and relaxed.resolve("docs/secret.md").name == "secret.md"
-    for blocked in ("secrets/notes.md", ".npmrc"):
-        assert not relaxed.allows(blocked), blocked
-    # Gọi lẻ cũng đổi được chế độ mà không cần dựng policy mới.
-    assert strict.allows("docs/secret.md", allow_secret_names=True)
-    assert not relaxed.allows("docs/secret.md", allow_secret_names=False)
+    policy = SourcePolicy(tmp_path)
+    for name in ("docs/secret.md", "docs/secrets.md", "SECRETS.txt", "secrets/notes.md"):
+        assert not policy.allows(name), name
 
 
-def test_only_text_documents_named_with_secret_are_exempt(tmp_path):
-    """Review #52 Minor 2: chỉ miễn tài liệu chữ (.md/.txt/.rst) có "secret" trong tên.
-
-    `service-account.json`, `secrets.yaml`, `credentials*.json` là khoá thật ở tầng policy — không miễn.
-    """
-    names = ["docs/secret.md", "docs/secrets.md", "notes/my-secret-notes.rst", "docs/secrets.txt",
+def test_document_and_config_names_that_look_like_secret_stores_are_blocked(tmp_path):
+    """Mọi đuôi tài liệu/cấu hình mang tên nhạy cảm đều bị loại, không có danh sách miễn theo đuôi."""
+    names = ["docs/secret.md", "docs/secrets.md", "docs/secrets.txt", "SECRETS.txt",
              "service-account.json", "config/secrets.yaml", "config/secrets.yml", "credentials.json",
              "docs/passwords.txt", "docs/token.md", "docs/secret.md.bak"]
     for name in names:
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("x", encoding="utf-8")
-    relaxed = SourcePolicy(tmp_path, allow_secret_names=True)
-    for name in names[:4]:
-        assert relaxed.allows(name), name
-    for name in names[4:]:
-        assert not relaxed.allows(name), name
+    policy = SourcePolicy(tmp_path)
+    for name in names:
+        assert not policy.allows(name), name
 
 
 def test_ai_sources_obey_parent_nested_and_published_exclusions(tmp_path):

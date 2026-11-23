@@ -394,8 +394,8 @@ def test_get_section_tool(api, tmp_path):
     assert call(server, "get_section", {"node_id": "README.md#file"}).isError is True
 
 
-def test_get_section_returns_masked_text_for_document_that_only_contains_secret(api, tmp_path):
-    """A3 #4: MCP trả bản đã che như UI cho tài liệu chỉ chứa secret; nguồn bị loại trừ thật vẫn từ chối."""
+def test_get_section_refuses_secret_named_document(api, tmp_path):
+    """Quyết định lead (re-review #52 vòng 3): MCP là đường tới model nên tài liệu tên nhạy cảm bị từ chối."""
     token = "sk-" + "live-" + "A3TEST" + "1234567890"
     root = tmp_path / "docs secret"
     (root / "docs").mkdir(parents=True)
@@ -414,21 +414,21 @@ def test_get_section_returns_masked_text_for_document_that_only_contains_secret(
         time.sleep(0.02)
     assert job["state"] == "done", job
     server = build_server(root, tmp_path / "appdata")
-    out = payload(call(server, "get_section", {"node_id": "docs/secret.md::Cấu hình#document"}))
-    assert out["text"].startswith("## Cấu hình") and token not in out["text"]
-    assert "[redacted]" in out["text"]
-    blocked = call(server, "get_section", {"node_id": "secrets/keys.md::Ghi chú#document"})
-    assert blocked.isError is True and "loại khỏi ngữ cảnh AI" in blocked.content[0].text
+    for node in ("docs/secret.md::Cấu hình#document", "secrets/keys.md::Ghi chú#document"):
+        blocked = call(server, "get_section", {"node_id": node})
+        assert blocked.isError is True, node
+        assert "loại khỏi ngữ cảnh AI" in blocked.content[0].text, node
+        assert token not in blocked.content[0].text, node
 
 
 def test_get_section_masks_secret_key_env_lines(api, tmp_path):
-    """Review #52 Important 1: `docs/secrets.md` chứa `SECRET_KEY=…` phải trả bản che qua MCP get_section."""
+    """Review #52 Important 1: tài liệu tên TRUNG TÍNH chứa `SECRET_KEY=…` phải trả bản che qua MCP get_section."""
     secret_key = "django-insecure-" + "e6b" + "0123456789abcdef"
     key_base = "9f8e7d6c5b4a3210" + "0f1e2d3c4b5a6978"
     env_lines = ["SECRET_" + "KEY=" + secret_key, "SECRET_" + "KEY_BASE=" + key_base]
     root = tmp_path / "secret key proj"
     (root / "docs").mkdir(parents=True)
-    (root / "docs" / "secrets.md").write_text(
+    (root / "docs" / "env-notes.md").write_text(
         "# Khoá\n\n## Production\n\n" + "\n".join(env_lines) + "\n", encoding="utf-8")
     p = api.open(root)
     r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
@@ -441,7 +441,7 @@ def test_get_section_masks_secret_key_env_lines(api, tmp_path):
         time.sleep(0.02)
     assert job["state"] == "done", job
     server = build_server(root, tmp_path / "appdata")
-    out = payload(call(server, "get_section", {"node_id": "docs/secrets.md::Production#document"}))
+    out = payload(call(server, "get_section", {"node_id": "docs/env-notes.md::Production#document"}))
     assert out["text"].startswith("## Production")
     assert secret_key not in out["text"] and key_base not in out["text"]
     assert "[redacted]" in out["text"]

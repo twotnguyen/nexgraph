@@ -162,6 +162,13 @@ def test_section_route_masks_secret_key_document(api, tmp_path):
                   params={"node": "docs/secrets.md::Production#document"})
     assert got.status_code == 200, got.text
     assert value not in got.json()["text"] and "[redacted]" in got.json()["text"]
+    # Model: cùng nút nhưng audience=model phải bị từ chối như trên `main` (không miễn theo tên tệp).
+    blocked = api.get(f"/v1/projects/{p['project_id']}/section",
+                      params={"node": "docs/secrets.md::Production#document"},
+                      headers={"X-NexGraph-Audience": "model"})
+    assert blocked.status_code == 403, blocked.text
+    assert blocked.json()["error"]["code"] == "protected_source"
+    assert value not in blocked.text
 
 
 def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
@@ -182,8 +189,12 @@ def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
         store.conn.close()
 
 
-def test_section_masks_document_that_only_contains_secret(tmp_path):
-    """A3 #4: tài liệu chỉ CHỨA secret trả bản đã che như UI; quyền đọc tên tệp do policy quyết định."""
+def test_secret_named_document_is_masked_for_user_and_refused_for_model(tmp_path):
+    """Quyết định lead (re-review #52 vòng 3): không miễn theo tên.
+
+    Đường UI (không truyền policy) vẫn trả bản đã che; đường tới model dùng policy strict nên bị từ chối
+    với mã ổn định `protected_source`.
+    """
     token = "sk-" + "live-" + "A3TEST" + "1234567890"
     root = tmp_path / "proj"
     (root / "docs").mkdir(parents=True)
@@ -194,17 +205,17 @@ def test_section_masks_document_that_only_contains_secret(tmp_path):
     store = _index(root, tmp_path / "g.db")
     try:
         node = _doc(store, "Cấu hình", "docs/secret.md")
-        out = section_json(store, root, node.id, source=SourcePolicy(root, allow_secret_names=True))
+        # UI "Đọc mục": vẫn trả bản đã che dù tên tệp nhạy cảm.
+        out = section_json(store, root, node.id)
         assert token not in out["text"] and "[redacted]" in out["text"]
 
-        # Minor 1 (review #52): policy strict phải là nguồn quyết định, không bị section_json ghi đè.
-        with pytest.raises(ApiError) as strict:
+        # Model: từ chối, mã lỗi ổn định (không phụ thuộc regex che).
+        with pytest.raises(ApiError) as blocked:
             section_json(store, root, node.id, source=SourcePolicy(root))
-        assert strict.value.code == "protected_source"
+        assert blocked.value.code == "protected_source"
 
         with pytest.raises(ApiError) as exc:
-            section_json(store, root, _doc(store, "Khoá", "secrets/notes.md").id,
-                         source=SourcePolicy(root, allow_secret_names=True))
+            section_json(store, root, _doc(store, "Khoá", "secrets/notes.md").id, source=SourcePolicy(root))
         assert exc.value.code == "protected_source"
     finally:
         store.conn.close()

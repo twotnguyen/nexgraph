@@ -2,14 +2,12 @@
 from __future__ import annotations
 
 import os
-import re
 import stat
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from pathspec import GitIgnoreSpec
 
-from graphify.detect import (_AMBIGUOUS_SENSITIVE_DIRS, _CREDENTIAL_STORE_DIRS, _SENSITIVE_PATTERNS,
-                             _is_env_template, _is_sensitive)
+from graphify.detect import _AMBIGUOUS_SENSITIVE_DIRS, _CREDENTIAL_STORE_DIRS, _is_sensitive
 
 from nexgraph_engine.errors import ApiError
 
@@ -18,10 +16,8 @@ MAX_IGNORE_BYTES = 1024 * 1024
 _BLOCKED = {".git", ".nexgraph", ".npmrc", ".netrc", ".dart_tool", "node_modules", "build"}
 _PREFIXES = (".env", "credentials", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa")
 _SUFFIXES = (".pem", ".key")
-# `allow_secret_names` chỉ miễn tài liệu CHỮ có "secret" trong tên (docs/secrets.md). Tệp cấu hình/khoá
-# (`service-account.json`, `secrets.yaml`, `credentials.json`) vẫn bị loại: đó là khoá thật, không phải tài liệu.
-_DOC_SUFFIXES = frozenset({".md", ".markdown", ".rst", ".txt", ".adoc", ".org"})
-_SECRET_IN_NAME = re.compile(r"(?<![a-z0-9])secrets?(?![a-z])", re.IGNORECASE)
+# Không có miễn trừ theo tên: tài liệu `docs/secrets.md` cũng là nguồn bị loại. Che bằng regex không bao giờ kín,
+# nên nó không được làm hàng rào duy nhất cho tệp có tên nhạy cảm (quyết định lead, re-review #52 vòng 3).
 
 
 def protected_source() -> ApiError:
@@ -59,12 +55,8 @@ def _unchanged(before: os.stat_result, after: os.stat_result) -> bool:
 class SourcePolicy:
     """Một chính sách cho mỗi truy vấn. Mẫu người dùng và .gitignore đều có quyền loại trừ."""
 
-    def __init__(self, root: Path, exclude: list[str] | None = None, *, allow_secret_names: bool = False) -> None:
+    def __init__(self, root: Path, exclude: list[str] | None = None) -> None:
         self.root = root.resolve()
-        # `allow_secret_names`: đọc cho đầu ra ĐÃ CHE (get_section/Đọc mục) — tên tệp trông như kho bí mật
-        # (`secret.md`) không bị loại, vì nội dung trả về đã qua redact. Danh sách loại trừ thật (khoá riêng,
-        # thư mục credential store, .env, mẫu người dùng, .gitignore) vẫn chặn.
-        self.allow_secret_names = allow_secret_names
         try:
             self._exclude = GitIgnoreSpec.from_lines(exclude or [])
         except ValueError as exc:
@@ -94,32 +86,15 @@ class SourcePolicy:
             self._gitignore[parent] = GitIgnoreSpec.from_lines(contents.decode("utf-8-sig").splitlines())
         return self._gitignore[parent]
 
-    def _name_only_sensitive(self, parts: tuple[str, ...]) -> bool:
-        """Tệp bị coi là nhạy cảm CHỈ vì tên tệp, không phải vì thư mục cha hay mẫu khoá riêng."""
-        path = Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)
-        if not _is_sensitive(path):
-            return False
-        # Khoá riêng / tệp chứa credential đúng nghĩa (.env, .pem, id_rsa, .npmrc…): danh sách loại trừ thật.
-        if any(pattern.search(path.name) for pattern in _SENSITIVE_PATTERNS) and not _is_env_template(path.name):
-            return False
-        # Cùng thư mục cha, tên trung tính: còn nhạy cảm nghĩa là do thư mục cha, không phải tên tệp.
-        if _is_sensitive(path.with_name("section" + path.suffix)):
-            return False
-        # Chỉ tài liệu chữ có "secret" trong tên mới được miễn; `secrets.yaml`/`service-account.json` vẫn chặn.
-        return path.suffix.lower() in _DOC_SUFFIXES and bool(_SECRET_IN_NAME.search(path.name))
-
-    def _excluded(self, parts: tuple[str, ...], *, directory: bool, allow_secret_names: bool = False) -> bool:
+    def _excluded(self, parts: tuple[str, ...], *, directory: bool) -> bool:
         if _blocked_name(parts):
             return True
         # Tiêu chí tệp bí mật của công cụ tham chiếu (W9 dùng khi chọn tệp gửi model). Đường dẫn tuyệt đối để đọc được
         # shebang của tệp không có đuôi; nhưng nếu chính thư mục chứa dự án mang tên như `secrets/`, `.aws/` thì xét
         # đường dẫn tương đối, kẻo mọi tệp bị chặn (tệp không đuôi khi đó mất bước đọc shebang, nghiêng về chặn).
-        # `allow_secret_names`: chỉ miễn bước đoán theo TÊN tệp — người gọi trả bản đã che nên nội dung không lộ;
-        # thư mục cha nhạy cảm (secrets/, .ssh/) vẫn loại như cũ.
         if parts and not directory and _is_sensitive(
                 Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)):
-            if not (allow_secret_names and self._name_only_sensitive(parts)):
-                return True
+            return True
         # Git không đi vào thư mục đã ẩn, kể cả khi tệp con có mẫu phủ định.
         for end in range(1, len(parts) + 1):
             suffix = "/" if end < len(parts) or directory else ""
@@ -131,8 +106,7 @@ class SourcePolicy:
                     return True
         return False
 
-    def resolve(self, name: str, *, directory: bool = False, allow_secret_names: bool | None = None) -> Path:
-        allow = self.allow_secret_names if allow_secret_names is None else allow_secret_names
+    def resolve(self, name: str, *, directory: bool = False) -> Path:
         lexical = PurePosixPath(name).parts
         if _blocked_name(lexical):
             raise protected_source()
@@ -140,31 +114,29 @@ class SourcePolicy:
         canonical = path.relative_to(self.root).parts
         try:
             directory = directory or path.is_dir()
-            if (self._excluded(lexical, directory=directory, allow_secret_names=allow) or (
-                    canonical != lexical and self._excluded(canonical, directory=directory, allow_secret_names=allow))):
+            if (self._excluded(lexical, directory=directory) or (
+                    canonical != lexical and self._excluded(canonical, directory=directory))):
                 raise protected_source()
         except (OSError, ValueError, RuntimeError) as exc:
             raise protected_source() from exc
         return path
 
-    def allows(self, name: str, *, directory: bool = False, allow_secret_names: bool | None = None) -> bool:
-        allow = self.allow_secret_names if allow_secret_names is None else allow_secret_names
-        key = (name, directory, allow)
+    def allows(self, name: str, *, directory: bool = False) -> bool:
+        key = (name, directory)
         if key not in self._known:
             try:
-                self.resolve(name, directory=directory, allow_secret_names=allow)
+                self.resolve(name, directory=directory)
             except ApiError:
                 self._known[key] = False
             else:
                 self._known[key] = True
         return self._known[key]
 
-    def read(self, name: str, path: Path, *, allow_secret_names: bool | None = None) -> bytes:
+    def read(self, name: str, path: Path) -> bytes:
         """Ràng buộc byte với tệp đã kiểm bằng handle, kể cả nếu đích bị tráo trong lúc mở."""
-        allow = self.allow_secret_names if allow_secret_names is None else allow_secret_names
         try:
             before = path.lstat()
-            if not stat.S_ISREG(before.st_mode) or self.resolve(name, allow_secret_names=allow) != path:
+            if not stat.S_ISREG(before.st_mode) or self.resolve(name) != path:
                 raise protected_source()
             if before.st_size > MAX_MODEL_SOURCE_BYTES:
                 raise ApiError(413, "source_too_large", "Nguồn quá lớn cho ngữ cảnh AI")
@@ -173,12 +145,12 @@ class SourcePolicy:
                 opened = os.fstat(stream.fileno())
                 # Windows có thể báo ctime khác nhau giữa lstat và fstat của cùng tệp.
                 if (_identity(opened) != _identity(before)
-                        or self.resolve(name, allow_secret_names=allow) != path):
+                        or self.resolve(name) != path):
                     raise protected_source()
                 content = stream.read(MAX_MODEL_SOURCE_BYTES + 1)
                 if (len(content) != before.st_size or not _unchanged(opened, os.fstat(stream.fileno()))
                         or not _unchanged(before, path.lstat())
-                        or self.resolve(name, allow_secret_names=allow) != path):
+                        or self.resolve(name) != path):
                     raise protected_source()
                 return content
         except OSError as exc:

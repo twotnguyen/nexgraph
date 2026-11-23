@@ -122,8 +122,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     def src(s: GraphStore) -> Path | None:  # gốc phụ `sources/` (nguồn tải từ URL, W6)
         return sources_root(data_dir, s.project_id())
 
-    async def run(tool_name: str, body: Callable[[GraphStore], Any], guard: tuple[str, ...] = (),
-                  *, redacted: bool = False) -> Any:
+    async def run(tool_name: str, body: Callable[[GraphStore], Any], guard: tuple[str, ...] = ()) -> Any:
         def work() -> Any:
             try:
                 conn = open_graph_db(graph_db, read_only=True)
@@ -133,10 +132,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
                 store = GraphStore(conn)
                 if not store.has_published_graph():
                     raise ToolError("Dự án chưa được lập chỉ mục xong")
-                # `redacted`: công cụ trả bản đã che (get_section) nên tên tệp trông như kho bí mật
-                # không bị loại; danh sách loại trừ thật vẫn chặn (A3 #4).
-                model = ModelGraph(store, root, source=SourcePolicy(root, store.last_exclude(),
-                                                                   allow_secret_names=redacted))
+                model = ModelGraph(store, root, source=SourcePolicy(root, store.last_exclude()))
                 # Như HTTP: hỏi thẳng về nút bị loại khỏi ngữ cảnh AI thì từ chối, kể cả khi láng giềng của nó hiển thị được.
                 if not all(model.allows_node(node_id) for node_id in guard):
                     raise protected_source()
@@ -270,10 +266,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     async def get_section(node_id: str) -> dict:
         """Đọc thân một mục tài liệu (nút document, mỗi heading một nút) từ tệp hiện tại, đã che secret,
         tối đa 8.000 ký tự. stale=true nghĩa là tệp đã đổi sau lần lập chỉ mục."""
-        return await run("get_section", lambda s: section_json(s, root, node_id,
-                                                               source=SourcePolicy(root, s.last_exclude(),
-                                                                                   allow_secret_names=True),
-                                                               sources_dir=src(s)), redacted=True)
+        return await run("get_section", lambda s: section_json(
+            s, root, node_id, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s)))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_callers(node_id: str, depth: int = 1, limit: int = 200) -> dict:
