@@ -13,7 +13,7 @@ import { AgentFileScope } from './agent/file-scope'
 import { GENERATED_DIRS, replaceText, searchText } from './search/text-search'
 import { LspManager } from './lsp/manager'
 import { AgentError, AgentService } from './agent/session'
-import { AccountService } from './agent/accounts'
+import { AccountService, type AccountDevHooks } from './agent/accounts'
 import { validatePromptImages } from './agent/images'
 import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentExecutionSettings, AgentRunLimits, AgentPromptOptions, AgentEditorState } from '../shared/agent-types'
 import { detectProjectCommands } from './agent/process-tools'
@@ -148,12 +148,13 @@ const cancelPendingAuthPrompts = (): void => {
 }
 
 /** Tạo một lần; mỗi handler chờ nó. `ask` giữ cầu nối prompt OAuth ↔ renderer. */
-const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promise<AccountService> =>
+const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHooks?: AccountDevHooks): Promise<AccountService> =>
   (accountsPromise ??= AccountService.create({
     dataDir,
     prefsFile: prefsFile(),
     secrets: new SecretStore(join(app.getPath('userData'), 'ai-key.json'), secretBox),
     openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
+    devHooks,
     notify: (event: AuthEventView) => {
       const win = getWindow()
       win?.webContents.send('auth:login-event', event)
@@ -181,7 +182,8 @@ export function registerIpc(
   getHandle: () => EngineHandle | null,
   getWindow: () => BrowserWindow | null,
   getCommand: () => EngineCommand,
-  dataDir: string
+  dataDir: string,
+  devHooks?: AccountDevHooks
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
@@ -535,7 +537,7 @@ export function registerIpc(
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
 
   const win = (): BrowserWindow | null => getWindow()
-  const acc = (): Promise<AccountService> => accounts(win, dataDir)
+  const acc = (): Promise<AccountService> => accounts(win, dataDir, devHooks)
   // A local connection ID cannot verify a shared native Google account after restart.
   // Keep history local until the user explicitly checks and activates the connection again.
   const startupPrefs = readJson(prefsFile())

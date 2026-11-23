@@ -139,6 +139,11 @@ class SecureCredentialStore {
   }
 }
 
+export type AccountDevHooks = {
+  /** Giả lập `setRuntimeApiKey` lỗi khi Đăng xuất để kiểm nhánh G2. Chỉ được nối khi app chưa đóng gói. */
+  failRestoreKey?: boolean
+}
+
 export type AccountDeps = {
   dataDir: string
   prefsFile: string
@@ -148,6 +153,8 @@ export type AccountDeps = {
   notify(event: AuthEventView): void
   /** Câu hỏi đăng nhập hiện ở renderer; trả về chuỗi nhập, `null` khi renderer huỷ. */
   ask(prompt: AuthPromptView): Promise<string | null>
+  /** Hook kiểm thử do lớp khởi tạo truyền vào; vắng ở bản đóng gói. */
+  devHooks?: AccountDevHooks
 }
 
 export const CUSTOM_MODEL_SPEC = (id: string, metadata?: CustomProvider) => ({
@@ -705,8 +712,8 @@ export class AccountService {
     const savedKey = this.deps.secrets.get(providerId)
     if (!savedKey) return
     try {
-      // Cờ dev để kiểm nhánh lỗi đồng bộ trên app thật (đợt D2); không đặt trong bản phát hành.
-      if (process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY === '1') throw new Error('dev hook: setRuntimeApiKey lỗi')
+      // Chỉ nối khi lớp khởi tạo cấp hook dev (app chưa đóng gói); bản cài không đọc env cho nhánh này.
+      if (this.deps.devHooks?.failRestoreKey) throw new Error('dev hook: setRuntimeApiKey lỗi')
       if ((await this.credentials.read(providerId))?.type === 'oauth') return
       rememberSecret(savedKey)
       await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)

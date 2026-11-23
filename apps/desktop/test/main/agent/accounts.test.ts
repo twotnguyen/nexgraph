@@ -28,14 +28,16 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true })
 })
 
-const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox } = {}) => {
+const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox;
+  devHooks?: { failRestoreKey?: boolean } } = {}) => {
   const prefs = join(base, 'prefs.json')
   const svc = await AccountService.create({
     dataDir: base, prefsFile: prefs,
     secrets: new SecretStore(join(base, 'ai-key.json'), over.secretBox ?? box),
     openExternal: (url) => opens.push(url),
     notify: over.notify ?? (() => {}),
-    ask: over.ask ?? (async () => 'answer')
+    ask: over.ask ?? (async () => 'answer'),
+    ...(over.devHooks ? { devHooks: over.devHooks } : {})
   })
   return { svc, prefs }
 }
@@ -650,14 +652,14 @@ describe('AccountService', () => {
 
   describe('Minor #29: đăng xuất khi đồng bộ credential lỗi', () => {
     /** Phiên OAuth openai + key đã lưu (như test I1); trả hàm logout thật của pi để test tự điều khiển lỗi. */
-    const seeded = async (notify?: (e: unknown) => void) => {
+    const seeded = async (notify?: (e: unknown) => void, devHooks?: { failRestoreKey?: boolean }) => {
       mkdirSync(join(base, 'agent'), { recursive: true })
       writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
         expires: Date.now() + 3_600_000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
       new SecretStore(join(base, 'ai-key.json'), box).set('openai', 'sk-fake-da-luu')
       vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).endsWith('openid-configuration')
         ? Response.json({ revocation_endpoint: 'https://auth.openai.com/oauth/revoke' }) : new Response(null, { status: 200 }))
-      const { svc } = await make({ notify })
+      const { svc } = await make({ notify, ...(devHooks ? { devHooks } : {}) })
       return { svc, realLogout: svc.modelRuntime.logout.bind(svc.modelRuntime) }
     }
 
@@ -687,6 +689,29 @@ describe('AccountService', () => {
       await expect(svc.logout('openai')).resolves.toBeUndefined()
       expect(notify).toHaveBeenCalledWith(expect.objectContaining({
         type: 'info', message: expect.stringContaining('API key')
+      }))
+    })
+
+    it('cờ NEXGRAPH_DEV_FAIL_RESTORE_KEY không có hiệu lực nếu không nối devHooks (bản đóng gói)', async () => {
+      process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY = '1'
+      let svc!: AccountService
+      const notify = vi.fn()
+      try {
+        svc = (await seeded(notify)).svc // không devHooks: đúng như app.isPackaged
+        await svc.logout('openai')
+        expect((await svc.modelRuntime.getAuth('openai'))?.auth.apiKey).toBe('sk-fake-da-luu')
+      } finally {
+        delete process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY
+      }
+      expect(notify).not.toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('chưa nạp lại được API key') }))
+    })
+
+    it('devHooks.failRestoreKey (chỉ nối khi dev) mô phỏng setRuntimeApiKey lỗi khi Đăng xuất', async () => {
+      const notify = vi.fn()
+      const { svc } = await seeded(notify, { failRestoreKey: true })
+      await expect(svc.logout('openai')).resolves.toBeUndefined()
+      expect(notify).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'info', message: expect.stringContaining('chưa nạp lại được API key')
       }))
     })
   })

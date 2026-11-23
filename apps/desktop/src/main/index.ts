@@ -13,6 +13,7 @@ import { runRendererSmoke, runWorkspaceAcceptanceSmoke } from './smoke-desktop'
 import { EngineSupervisor } from './engine/supervisor'
 import { runSmoke } from './smoke'
 import { externalWebUrl, isSameDocument } from './external-links'
+import { accountDevHooks } from './dev-hooks'
 
 // Kiểm bản cài dùng kho tài khoản riêng, không đọc/ghi cấu hình AI thật của người dùng.
 if (process.env.NEXGRAPH_USER_DATA_DIR) {
@@ -97,7 +98,7 @@ async function createWindow(show = true): Promise<void> {
   else await mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir)
+registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged))
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
