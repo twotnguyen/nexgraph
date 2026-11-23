@@ -128,6 +128,7 @@ export function WorkbenchStatus({ projectId, work, busy, onInspect }: { projectI
     {work.error && <p role="alert" className="error">{work.error}</p>}
     {localError && <p role="alert" className="error">{localError}</p>}
     {work.notice && <p role="status" className="agent-notice">{work.notice}</p>}
+    {work.notice && work.noticeDetail && <details className="agent-notice-detail"><summary>{tr('Chi tiết kỹ thuật')}</summary><pre>{work.noticeDetail}</pre></details>}
     {work.task && <div className="agent-task-status" role="status"><span>{taskLabels[work.task.status]}{work.task.turnsKnown === false ? ' · Antigravity CLI' : tr(' · {turns}/{max} lượt', { turns: work.task.turns, max: work.task.limits.maxTurns })}</span>
       {!busy && !!work.task.checkpointIds?.length && <>
         <button type="button" disabled={work.pending || work.loading} onClick={() => {

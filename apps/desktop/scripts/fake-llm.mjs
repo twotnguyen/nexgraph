@@ -82,6 +82,23 @@ function complete(messages, maxTokens, advertised) {
     return { role: 'assistant', content: 'NEXGRAPH_SMOKE_CONTEXT_OK' }
   }
   if (maxTokens === 1) return { role: 'assistant', content: 'pong' }
+  // Kịch bản kiểm UI M1: trích dẫn nằm trong gạch đầu dòng, danh sách số, inline code, code fence.
+  if (question.includes('NEXGRAPH_CITE_MIX')) {
+    return { role: 'assistant', content: [
+      '## Luồng đăng nhập',
+      '',
+      '- service.py:1-2 mở đầu request.',
+      '1. app.py:8-9 gọi login.',
+      '- `flow app/service.py:4-7` là luồng chính.',
+      '',
+      '```py',
+      '# xem service.py:4-7',
+      'return save_session(user)',
+      '```',
+      '',
+      'Xem [[khong-co.ts:1-2]] để đối chiếu.'
+    ].join('\n') }
+  }
   const tools = messages.slice(lastUser).filter((m) => m.role === 'tool')
   if (Object.hasOwn(smokeCalls, question)) return smokePolicy(smokeCalls[question], advertised, tools, lastUser)
   if (tools.length === 0) return toolCall('list_flows', { query: 'login' })
@@ -117,12 +134,22 @@ export function createFakeLlm({ dropRequest } = {}) {
       const send = (status, obj) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)) }
       if (!req.url.endsWith('/chat/completions')) return send(404, {})
       let msg, stream
+      let payload
       try {
-        const payload = JSON.parse(body || '{}')
+        payload = JSON.parse(body || '{}')
         msg = complete(payload.messages ?? [], payload.max_tokens, payload.tools)
         stream = payload.stream
       } catch {
         return send(400, { error: { message: 'Yêu cầu LLM giả hoặc kết quả tool không hợp lệ' } })
+      }
+      // Kịch bản kiểm UI M3: ghi 2 delta rồi cắt socket — dòng "Đang thử lại…" phải là câu dễ hiểu.
+      if (JSON.stringify(payload.messages ?? []).includes('NEXGRAPH_CUT')) {
+        res.writeHead(200, { 'content-type': 'text/event-stream' })
+        const chunk = (content) => `data: ${JSON.stringify({ id: 'x', object: 'chat.completion.chunk', created: 1, model: 'fake', choices: [{ index: 0, delta: { content }, finish_reason: null }] })}\n\n`
+        res.write(chunk('Đang đọc mã. '))
+        res.write(chunk('Nhưng kết nối bị cắt.'))
+        req.socket.destroy()
+        return
       }
       reply(res, stream, msg)
     })
