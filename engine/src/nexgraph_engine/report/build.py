@@ -80,16 +80,19 @@ def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = Non
     lang = check_lang(lang, "en")  # lang sai phải ném ValueError như build_tour (M3, review 23/11)
     from graphify.analyze import suggest_questions, surprising_connections
     bg = build_nx(store, keep_file=source.allows if source else None)
-    communities = [{"id": f"com:{cid}", "label": community_label(bg.labels[cid], lang), "size": len(members),
+    labels = {cid: community_label(name, lang) for cid, name in bg.labels.items()}
+    communities = [{"id": f"com:{cid}", "label": labels[cid], "size": len(members),
                     "cohesion": bg.cohesion[cid]}
                    for cid, members in sorted(bg.communities.items()) if cid != OTHER_COMMUNITY]
     surprising = translate_surprising(
         [{"source": s["source"], "target": s["target"], "source_files": s.get("source_files", []),
           "relation": s.get("relation", ""), "why": s.get("why") or s.get("note", "")}
          for s in surprising_connections(bg.G, bg.communities, top_n=5)], lang)
+    # `suggest_questions` nhận nhãn đã dịch như danh sách `communities`; nhãn thô trong CSDL là tiếng Việt
+    # (`Khác`, `Cụm quanh X`) nên câu hỏi EN từng lộ `Should \`Khác\` be split...` (A3b-P3 Minor i18n).
     questions = translate_questions(
         [{"question": q["question"], "why": q.get("why", "")}
-         for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)], lang)
+         for q in suggest_questions(bg.G, bg.communities, labels, top_n=7)], lang)
     warnings: list[str] = []
     return {"god_nodes": _god_nodes(store, bg), "communities": communities, "surprising": surprising,
             "questions": questions, "benchmark": _benchmark(bg, warnings, lang), "truncated": bg.truncated,
