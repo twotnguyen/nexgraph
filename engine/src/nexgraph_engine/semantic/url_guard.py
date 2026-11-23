@@ -14,6 +14,8 @@ import os
 import socket
 from urllib.parse import urlsplit
 
+from graphify.security import _CGN_NETWORK, _ip_is_blocked
+
 ALLOW_ENV = "NEXGRAPH_ALLOW_HTTP_PROVIDER"
 _LOOPBACK_NAMES = frozenset({"localhost", "localhost.localdomain"})
 
@@ -23,18 +25,18 @@ def _enabled_by_env() -> bool:
 
 
 def _blocked_reason(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str | None:
-    """Lý do chặn, None nếu được phép. Loopback xét trước vì `is_private` của Python gồm cả loopback."""
+    """Lý do chặn, None nếu được phép. Loopback xét trước (R5) vì `_ip_is_blocked` của graphify chặn cả loopback."""
     if ip.is_loopback:
+        return None
+    if not _ip_is_blocked(ip):
         return None
     if ip.is_link_local:
         return "link-local/metadata"
-    if ip.is_unspecified:
+    if ip.is_unspecified or ip.is_multicast or ip.is_reserved:
         return "dải không định tuyến"
-    if ip.is_private:
-        return "mạng nội bộ (RFC1918/ULA)"
-    if ip.is_multicast or ip.is_reserved:
-        return "dải không định tuyến"
-    return None
+    if ip in _CGN_NETWORK:
+        return "mạng nội bộ (CGNAT/Tailscale)"
+    return "mạng nội bộ (RFC1918/ULA)"
 
 
 def _resolve(host: str, port: int) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:

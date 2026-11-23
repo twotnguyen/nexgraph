@@ -38,3 +38,10 @@ def test_scheme_outside_http_is_rejected():
     for url in ("file:///etc/passwd", "ftp://10.0.0.1/x", "gopher://127.0.0.1:9/"):
         with pytest.raises(ValueError):
             check_base_url(url)
+
+
+@pytest.mark.parametrize("url", ["http://100.64.0.1/v1", "http://100.100.100.200/latest/meta-data"])
+def test_cgnat_and_tailscale_range_is_blocked(url):
+    with pytest.raises(ValueError) as exc:
+        check_base_url(url)
+    assert "nội bộ" in str(exc.value)
