@@ -1,5 +1,6 @@
 import { type Message, MsgError, msg, msgText } from './messages'
 import { getLocale } from './locale'
+import { uiEn } from '../strings'
 
 /** Lỗi IPC tiếng Việt phổ biến: chỉ những câu có bản dịch mới đổi theo ngôn ngữ. */
 const knownErrors: Record<string, true> = {
@@ -147,8 +148,38 @@ export const codeErrors: Record<string, string> = {
   agent_busy: 'Trợ lý đang trả lời',
   ai_not_configured: 'Chưa cấu hình trợ lý AI',
   session_not_found: 'Hội thoại không thuộc tài khoản và dự án đang chọn',
-  unapproved_task: 'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.'
+  unapproved_task: 'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.',
+  // Mã của engine (#48/#52): câu engine trả là tiếng Việt (CSDL đồ thị) hoặc tiếng Anh (nguồn URL),
+  // nên renderer dịch theo mã cho cả hai chiều.
+  graph_readonly: 'Không ghi được CSDL đồ thị: tệp đang chỉ đọc hoặc thiếu quyền ghi.',
+  graph_busy: 'Đồ thị đang được cập nhật bởi tiến trình khác. Thử lại sau.',
+  graph_unreadable: 'Không đọc được CSDL đồ thị của dự án.',
+  schema_outdated: 'CSDL đồ thị cũ hơn ứng dụng. Mở lại dự án bằng ứng dụng để nâng cấp.',
+  schema_version: 'Phiên bản CSDL đồ thị không được hỗ trợ.',
+  method_not_allowed: 'Yêu cầu không được phép trong kết nối NexGraph',
+  blocked_url_scheme: 'Nguồn URL dùng giao thức không được hỗ trợ.',
+  blocked_url_credentials: 'URL nguồn không được chứa thông tin đăng nhập.',
+  blocked_url_port: 'Cổng trong URL nguồn không hợp lệ.',
+  blocked_url_host: 'URL nguồn thiếu tên máy chủ.',
+  blocked_cloud_metadata: 'URL nguồn trỏ tới endpoint metadata của cloud nên bị chặn.',
+  blocked_private_ip: 'URL nguồn trỏ tới địa chỉ IP riêng hoặc nội bộ nên bị chặn.',
+  blocked_url: 'URL nguồn không hợp lệ hoặc bị chặn.',
+  dns_failed: 'Không phân giải được tên máy chủ của URL nguồn.',
+  bad_url: 'URL nguồn không hợp lệ.'
 }
+
+/**
+ * Mã mà engine trả **câu tiếng Anh của chính engine** (nguồn URL, #48/#52): UI tiếng Việt phải
+ * dịch sang VI. Các mã khác có thể kèm câu thô của công cụ (`fatal: branch exists`) — giữ nguyên
+ * còn hơn thay bằng câu chung.
+ */
+const englishEngineCodes = new Set([
+  'blocked_url_scheme', 'blocked_url_credentials', 'blocked_url_port', 'blocked_url_host',
+  'blocked_cloud_metadata', 'blocked_private_ip', 'blocked_url', 'dns_failed', 'bad_url'
+])
+
+/** Câu có dấu tiếng Việt: câu tiếng Anh của engine cần dịch sang VI, câu Việt thì giữ nguyên. */
+const VIETNAMESE = /[ÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴàáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]/
 
 const errorCode = (e: unknown): string => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '')
 
@@ -167,10 +198,14 @@ export function errorMsg(e: unknown): Message {
     const match = rule.re.exec(text)
     if (match) return msg(rule.key, { n: match[1] })
   }
-  // Chỉ thay bằng câu theo mã khi UI đang English và câu cụ thể chưa có bản Anh: người dùng
-  // tiếng Việt vẫn thấy đúng câu chi tiết của main, không bị hạ xuống câu chung.
+  // Câu cụ thể của main thắng khi nó đã đúng ngôn ngữ UI: người dùng VI thấy câu chi tiết,
+  // người dùng EN thấy bản Anh nếu có. Chỉ khi câu lệch ngôn ngữ (câu Việt chưa có bản Anh,
+  // hoặc câu tiếng Anh của engine) mới dùng câu chuẩn theo mã lỗi.
   const code = errorCode(e)
-  if (code && codeErrors[code] && getLocale() === 'en') return msg(codeErrors[code])
+  if (code && codeErrors[code]) {
+    const english = getLocale() === 'en'
+    if (english ? uiEn[text] === undefined : englishEngineCodes.has(code) && !VIETNAMESE.test(text)) return msg(codeErrors[code])
+  }
   return msg(text)
 }
 

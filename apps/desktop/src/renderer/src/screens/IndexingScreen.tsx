@@ -44,6 +44,8 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
   const running = state === 'queued' || state === 'structure' || state === 'resolve'
   const preparing = !job && !error || state === 'queued'
   const message = state === 'error' ? job?.message || vi.indexing.failed : msgText(error)
+  // A1 F6: thư mục/tệp không đọc được khi quét đi cùng kết quả job; nói rõ thay vì im lặng.
+  const unreadable = completed ? Number(job?.result?.unreadable_count ?? 0) : 0
   const title = completed ? vi.indexing.titleDone(project.name)
     : state === 'cancelled' ? vi.indexing.titleCancelled(project.name)
     : state === 'error' ? vi.indexing.titleFailed(project.name)
@@ -84,6 +86,9 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
         </>}
         {message && <p role="alert" className="inline-message error">{vi.indexing.error(message)}</p>}
         {completed && job?.message && <p role="status" className="inline-message">{job.message}</p>}
+        {unreadable > 0 && (
+          <p role="status" className="inline-message">{tr('{n} mục không đọc được khi quét — kiểm tra quyền đọc của các mục đó.', { n: unreadable })}</p>
+        )}
         {state === 'cancelled' && <p role="status" className="muted">{tr('Bạn có thể thử lại hoặc quay về dự án.')}</p>}
         {rebuild && !completed && <p role="status" className="inline-message">{vi.indexing.existingGraph}</p>}
       </section>

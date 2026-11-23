@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph, progress, project } from '../test-utils'
+import { setLocale, useLocale } from '../state/locale'
 import { IndexingScreen } from './IndexingScreen'
 
 const setup = (over = {}) => {
@@ -24,6 +25,18 @@ describe('IndexingScreen subdir', () => {
 })
 
 describe('IndexingScreen', () => {
+  it('cảnh báo số mục không đọc được khi quét xong và đổi ngôn ngữ tại chỗ', async () => {
+    const h = installNexgraph()
+    function Harness() { useLocale(); return <IndexingScreen project={project()} onExplore={() => {}} /> }
+    render(<Harness />)
+    await waitFor(() => expect(h.api.index.start).toHaveBeenCalled())
+    emit(h, progress('done', 10, 10, { result: { unreadable_count: 3 } }))
+    expect(await screen.findByText('3 mục không đọc được khi quét — kiểm tra quyền đọc của các mục đó.')).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(await screen.findByText('3 items could not be read during the scan — check read permissions.')).toBeInTheDocument()
+    act(() => setLocale('vi'))
+  })
+
   it('passes explicit document flags through, including false', async () => {
     const h = installNexgraph()
     render(<IndexingScreen project={project()} options={{ exclude: [], includeDocs: false, includeMedia: false }} onExplore={() => {}} />)

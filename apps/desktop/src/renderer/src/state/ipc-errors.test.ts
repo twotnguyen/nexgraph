@@ -64,6 +64,22 @@ describe('câu lỗi main trả qua IPC dịch được ở renderer', () => {
     setLocale('vi')
   })
 
+  it('mã lỗi engine (#48/#52) dịch được cả hai chiều: câu Anh của nguồn URL và câu Việt của CSDL', () => {
+    setLocale('vi')
+    expect(errorText({ code: 'blocked_private_ip', message: 'Blocked private/internal IP: 127.0.0.1' }))
+      .toBe('URL nguồn trỏ tới địa chỉ IP riêng hoặc nội bộ nên bị chặn.')
+    expect(errorText({ code: 'dns_failed', message: 'DNS resolution failed for example.test' }))
+      .toBe('Không phân giải được tên máy chủ của URL nguồn.')
+    setLocale('en')
+    expect(errorText({ code: 'graph_busy', message: 'Đồ thị đang được cập nhật bởi tiến trình khác. Thử lại sau.' }))
+      .toBe('The graph is being updated by another process. Try again later.')
+    expect(errorText({ code: 'graph_readonly', message: 'Không ghi được CSDL đồ thị: tệp đang chỉ đọc hoặc thiếu quyền ghi.' }))
+      .toBe('Could not write the graph database: the file is read-only or write permission is missing.')
+    expect(errorText({ code: 'schema_outdated', message: 'câu cũ khác' }))
+      .toBe('The graph database is older than the app. Reopen the project with the app to upgrade it.')
+    setLocale('vi')
+  })
+
   it('mã lạ vẫn giữ câu gốc của main', () => {
     expect(errorText({ code: 'something_new', message: 'Lỗi mới của engine' })).toBe('Lỗi mới của engine')
   })
