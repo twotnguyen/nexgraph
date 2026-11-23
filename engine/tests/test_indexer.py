@@ -452,8 +452,8 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
     slow_batch = next(b for b in batches if slow in b)
     assert slow_batch is batches[0] and 8 <= len(slow_batch) < 40
     assert sorted(per_file) == sorted(slow_batch)
-    # Pool mới sau lô quá hạn vẫn giữ 2 worker (không hạ xuống 1).
-    assert pools.count(2) >= 2 and max(pools) == 2
+    # Không hạ xuống 1 worker: pool song song luôn 2 worker; pool 1 chỉ xuất hiện SAU ĐÓ cho đường từng-tệp.
+    assert pools[0] == 2 and max(pools) == 2 and 1 not in pools[:-1]
     assert {name for b in batches for name in b} == {f"m{i}.py" for i in range(40)}  # vẫn chạy theo lô
     assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
     # Kết quả tự khai báo đúng: vẫn 2 worker hiệu dụng (không hạ cả dự án), nhưng có cờ báo đã phải
@@ -729,16 +729,15 @@ def test_crashed_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_proje
     crash = "z_crash.py"  # tệp LỚN NHẤT -> LPT đặt vào lô 0
     batches: list[list[str]] = []
     per_file: list[str] = []
-    parallel_pools = 0
+    parallel_pools: list[int] = []
 
     class CrashOneBatchPool:
         _processes = {}
 
         def __init__(self, *, max_workers):
-            nonlocal parallel_pools
             self.parallel = max_workers > 1
             if self.parallel:
-                parallel_pools += 1
+                parallel_pools.append(max_workers)
 
         def submit(self, fn, *args):
             future = Future()
@@ -770,7 +769,7 @@ def test_crashed_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_proje
     assert sorted(per_file) == sorted(crash_batch)  # CHỈ tệp của lô hỏng đi đường từng-tệp
     assert crash_batch is batches[0]
     # Phần còn lại vẫn chạy song song: không pool nào bị hạ xuống 1 worker.
-    assert parallel_pools == 2
+    assert parallel_pools and set(parallel_pools) == {2}
     assert sum(1 for b in batches if crash in b) == 1  # lô hỏng KHÔNG được gửi lại nguyên lô
     assert {f for b in batches for f in b} == {f"m{i}.py" for i in range(40)} | {crash}
     assert result.workers_effective == 2 and result.fallback_serial is True
@@ -832,16 +831,15 @@ def test_two_overdue_batches_do_not_degrade_the_rest(tmp_path, index_project, mo
     hung = {"m2.py", "m3.py"}  # hai tệp LỚN NHẤT -> lô 0 và lô 1
     batches: list[list[str]] = []
     per_file: list[str] = []
-    parallel_pools = 0
+    parallel_pools: list[int] = []
 
     class TwoHungBatchesPool:
         _processes = {}
 
         def __init__(self, *, max_workers):
-            nonlocal parallel_pools
             self.parallel = max_workers > 1
             if self.parallel:
-                parallel_pools += 1
+                parallel_pools.append(max_workers)
 
         def submit(self, fn, *args):
             future = Future()
@@ -875,9 +873,58 @@ def test_two_overdue_batches_do_not_degrade_the_rest(tmp_path, index_project, mo
     over = sorted(batches[0] + batches[1])
     assert sorted(per_file) == over  # chỉ tệp của HAI lô quá hạn đi đường từng-tệp
     assert len(batches) >= 3 and not hung & set(batches[2])  # lô tốt vẫn được gửi vào pool song song
-    assert parallel_pools == 3  # mỗi vòng làm pool MỚI cùng 2 worker, không hạ xuống 1
+    # Mỗi vòng làm pool MỚI cùng 2 worker cho phần còn lại; không vòng nào hạ xuống 1.
+    assert len(parallel_pools) >= 2 and set(parallel_pools) == {2}
     assert result.fallback_serial is True  # có tệp đi đường từng-tệp, và tự khai đúng như vậy
     assert any(e.message and "gián đoạn" in e.message for e in events)
+
+
+def test_batches_finished_before_a_timeout_are_not_read_again(tmp_path, index_project, monkeypatch):
+    """Lô đã xong trước khi một lô khác quá hạn được dùng lại, không đọc lại (review-53 Minor 1).
+
+    Đo thật trên 241 tệp: bỏ pool mà không `_consume` các future đã xong ⇒ 466 lượt đọc (1,94×), mất thêm
+    ~80–100 s trên open-design khi có treo thật.
+    """
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    hung = "m7.py"
+    submitted: list[tuple[str, ...]] = []
+
+    class OneHungBatchPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            self.parallel = max_workers > 1
+
+        def submit(self, fn, *args):
+            future = Future()
+            target = args[1]
+            if not self.parallel:
+                future.set_result(fn(*args))
+                return future
+            submitted.append(tuple(f.rel_path for f in target))
+            if any(f.rel_path == hung for f in target):
+                return future  # treo
+            future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 40)
+    (root / hung).write_text("# " + "s" * 300_000 + "\n\ndef s():\n    return 1\n", encoding="utf-8")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", OneHungBatchPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(indexer, "BATCH_DEADLINE_SECONDS_PER_MB", 0)
+    store, result, _events = index_project(root)
+
+    assert result.state == "hoan_tat" and graph_state(store) == graph_state(serial)
+    assert len(submitted) == len(set(submitted)) == 3  # 3 lô, mỗi lô gửi đúng MỘT lần
+    assert store.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 40
 
 
 def test_single_worker_index_has_no_interruption_message(tmp_path, index_project, monkeypatch):

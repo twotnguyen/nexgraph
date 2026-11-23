@@ -457,6 +457,23 @@ class Indexer:
                         _kill_pool(executor)  # dừng tiến trình con đang treo trước khi làm pool mới
                     else:
                         executor.shutdown(wait=False, cancel_futures=True)
+                if broken:
+                    # Nhặt kết quả các lô ĐÃ XONG trong pool vừa bỏ thay vì đọc lại từ đầu (review-53
+                    # Minor 1: đo thật 241 tệp → 466 lượt đọc = 1,94×, mất thêm ~80–100 s ở open-design).
+                    for b in list(pending):
+                        finished = futures.get(b)
+                        if finished is None or not finished.done() or finished.cancelled():
+                            continue
+                        try:
+                            extracted_batch = finished.result()
+                        except (BrokenProcessPool, OSError, RuntimeError):
+                            continue  # pool hỏng: lô này được gửi lại ở vòng sau
+                        for k, extracted in enumerate(extracted_batch):
+                            if self.cancel.is_set():
+                                return False
+                            _consume(files[batches[b][k]], extracted)
+                        pending.remove(b)
+                        batch_files += len(batches[b])
             if gave_up and pending:
                 # Lỗi hệ thống lặp lại (không tạo/gửi được pool): phần còn lại đi đường từng-tệp.
                 for b in list(pending):
