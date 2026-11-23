@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.api.routes_projects import _summary
 from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
-from nexgraph_engine.sources import ingest_url, list_sources, remove_source, sources_root
+from nexgraph_engine.sources import ingest_url, list_sources, remove_source, sources_root, url_error
 from nexgraph_engine.sources.clone import MAX_CLONE_DEPTH, clone_repo, parse_repo_url, remove_tree
 
 router = APIRouter(prefix="/v1")
@@ -62,7 +62,7 @@ def add_source(project_id: str, body: SourceBody, request: Request):
     try:
         validate_url(url)  # chặn sớm file://, ftp://, IP nội bộ trước khi tạo job
     except ValueError as exc:
-        raise ApiError(400, "bad_url", str(exc)) from exc
+        raise url_error(exc) from exc
 
     def work(ctx) -> dict:
         ctx.progress(0, 2, "Đang tải nội dung")

@@ -53,12 +53,24 @@ def project(api, copy_fixture):
     return root, pid
 
 
-@pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://example.com/x", "http://127.0.0.1/x",
-                                 "http://169.254.169.254/latest/meta-data", "http://[::1]/x", "not a url"])
-def test_blocked_urls_rejected_before_job(api, project, url):
+@pytest.mark.parametrize("url,code", [
+    ("file:///etc/passwd", "blocked_url_scheme"),
+    ("ftp://example.com/x", "blocked_url_scheme"),
+    ("not a url", "blocked_url_scheme"),
+    ("https://user:pass@example.com/x", "blocked_url_credentials"),
+    ("https://metadata.google.internal/x", "blocked_cloud_metadata"),
+    ("http://127.0.0.1/x", "blocked_private_ip"),
+    ("http://169.254.169.254/latest/meta-data", "blocked_private_ip"),
+    ("http://[::1]/x", "blocked_private_ip"),
+])
+def test_blocked_urls_rejected_before_job(api, project, url, code):
+    """A3 #8: lỗi chặn URL có mã ổn định để desktop dịch, message cũ giữ nguyên."""
     _, pid = project
     r = api.post(f"/v1/projects/{pid}/sources", json={"url": url})
-    assert r.status_code == 400 and r.json()["error"]["code"] == "bad_url"
+    assert r.status_code == 400
+    error = r.json()["error"]
+    assert error["code"] == code, error
+    assert error["message"].startswith("Blocked "), error
     assert api.get(f"/v1/projects/{pid}/sources").json() == []
 
 
