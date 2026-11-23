@@ -44,7 +44,7 @@ describe('EngineSupervisor', () => {
       await sup.startEngine()
       expect(sup.getStatus().state).toBe('ready')
       a.crash(9)
-      expect(sup.getStatus()).toEqual({ state: 'starting', attempt: 1 })
+      expect(sup.getStatus()).toMatchObject({ state: 'starting', attempt: 1 })
       await vi.advanceTimersByTimeAsync(1000)
       expect(start).toHaveBeenCalledTimes(2)
       expect(sup.getStatus()).toEqual({ state: 'ready', engineVersion: '9.9.9', vendorCommit: 'abc' })
@@ -60,11 +60,11 @@ describe('EngineSupervisor', () => {
       const start = vi.fn(async () => { throw new EngineStartError('hỏng', 1, 'boom: engine chết ngay') })
       const { sup, seen } = setup(start, { maxRestarts: 3, windowMs: 60_000 })
       await sup.startEngine() // lần 1 lỗi -> hẹn 1 s
-      expect(sup.getStatus()).toEqual({ state: 'starting', attempt: 1 })
+      expect(sup.getStatus()).toMatchObject({ state: 'starting', attempt: 1 })
       await vi.advanceTimersByTimeAsync(1000) // lần 2 lỗi -> hẹn 2 s
       await vi.advanceTimersByTimeAsync(2000) // lần 3 lỗi -> hẹn 4 s
       expect(start).toHaveBeenCalledTimes(3)
-      expect(sup.getStatus()).toEqual({ state: 'starting', attempt: 3 })
+      expect(sup.getStatus()).toMatchObject({ state: 'starting', attempt: 3 })
       await vi.advanceTimersByTimeAsync(4000) // lần 4 lỗi -> hết lượt
       expect(start).toHaveBeenCalledTimes(4)
       expect(sup.getStatus()).toEqual({ state: 'error', message: 'boom: engine chết ngay', restartable: true })
@@ -102,6 +102,62 @@ describe('EngineSupervisor', () => {
       expect(sup.getStatus()).toMatchObject({ state: 'error', restartable: true })
       await vi.advanceTimersByTimeAsync(60_000)
       expect(start).toHaveBeenCalledTimes(3) // đã dừng, không spawn thêm
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('health lỗi sau khi engine đã lên thì dừng engine trước khi thử lại, không để mồ côi (review-50 M3)', async () => {
+    vi.useFakeTimers()
+    try {
+      const a = fakeHandle()
+      const b = fakeHandle()
+      const start = vi.fn().mockResolvedValueOnce(a.handle).mockResolvedValueOnce(b.handle)
+      const { sup } = setup(start)
+      vi.mocked(fetch).mockRejectedValueOnce(new Error('health down'))
+      await sup.startEngine()
+      // Engine đã spawn và in ready nhưng health lỗi: phải stop trước khi bỏ handle.
+      expect(a.handle.stop).toHaveBeenCalledTimes(1)
+      expect(sup.getStatus()).toMatchObject({ state: 'starting', attempt: 1 })
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(start).toHaveBeenCalledTimes(2)
+      expect(sup.getStatus().state).toBe('ready')
+      expect(sup.getHandle()).toBe(b.handle)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('mỗi engine lỗi health đều bị dừng: tối đa một engine sống qua các lần thử (review-50 M3)', async () => {
+    vi.useFakeTimers()
+    try {
+      const handles = Array.from({ length: 3 }, () => fakeHandle())
+      const start = vi.fn()
+      for (const h of handles) start.mockResolvedValueOnce(h.handle)
+      const { sup } = setup(start, { maxRestarts: 2, windowMs: 60_000 })
+      vi.mocked(fetch).mockRejectedValueOnce(new Error('health 1'))
+        .mockRejectedValueOnce(new Error('health 2'))
+        .mockRejectedValueOnce(new Error('health 3'))
+      await sup.startEngine()
+      await vi.advanceTimersByTimeAsync(1000)
+      await vi.advanceTimersByTimeAsync(2000)
+      expect(start).toHaveBeenCalledTimes(3)
+      for (const h of handles) expect(h.handle.stop).toHaveBeenCalledTimes(1)
+      expect(sup.getStatus()).toMatchObject({ state: 'error', restartable: true })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('trạng thái lúc tự thử lại giữ lý do chết ngắn (review-50 M5)', async () => {
+    vi.useFakeTimers()
+    try {
+      const a = fakeHandle()
+      const { sup } = setup(vi.fn(async () => a.handle))
+      await sup.startEngine()
+      a.crash(9)
+      expect(sup.getStatus()).toEqual({ state: 'starting', attempt: 1, message: 'engine thoát (exit 9)',
+        messageKey: 'engine thoát (exit {code})', messageVars: { code: 9 } })
     } finally {
       vi.useRealTimers()
     }

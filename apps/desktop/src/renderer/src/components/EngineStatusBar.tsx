@@ -25,7 +25,11 @@ export function EngineStatusBar({ status, onRestart }: Props) {
         aria-label={status.state === 'error' ? tr('Khởi động lại') : undefined} onClick={onRestart}>
         <span role="status">
           {status.state === 'starting' && (status.attempt
-            ? tr('Engine: đang khởi động lại (lần {n})…', { n: status.attempt })
+            ? status.message || status.messageKey
+              // Đang thử lại mà không nói vì sao thì người dùng chỉ thấy lặp "đang khởi động lại" (M5).
+              ? tr('Engine: đang khởi động lại (lần {n}) — {reason}…', { n: status.attempt,
+                reason: status.messageKey ? tr(status.messageKey, status.messageVars) : status.message ?? '' })
+              : tr('Engine: đang khởi động lại (lần {n})…', { n: status.attempt })
             : tr('Engine: đang khởi động…'))}
           {status.state === 'ready' && tr('Engine: sẵn sàng (v{version})', { version: status.engineVersion })}
           {status.state === 'error' && tr('Engine: lỗi — {message}', {

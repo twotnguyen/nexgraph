@@ -53,6 +53,20 @@ describe('EngineStatusBar', () => {
     expect(screen.getByText('Engine: đang khởi động lại (lần 3)…')).toBeInTheDocument()
   })
 
+  it('hiện lý do chết khi đang tự khởi động lại, dịch được sang tiếng Anh (review-50 M5)', () => {
+    const status = { state: 'starting' as const, attempt: 2, message: 'engine thoát (exit SIGKILL)',
+      messageKey: 'engine thoát (exit {code})', messageVars: { code: 'SIGKILL' } }
+    render(<EngineStatusBar status={status} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: đang khởi động lại (lần 2) — engine thoát (exit SIGKILL)…')).toBeInTheDocument()
+  })
+
+  it('lý do chết ở trạng thái thử lại cũng dịch sang tiếng Anh (review-50 M5)', () => {
+    setLocale('en')
+    render(<EngineStatusBar status={{ state: 'starting', attempt: 1, message: 'engine thoát (exit 9)',
+      messageKey: 'engine thoát (exit {code})', messageVars: { code: 9 } }} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: restarting (attempt 1) — engine exited (exit 9)…')).toBeInTheDocument()
+  })
+
   it('dịch thông báo engine thoát sang tiếng Anh bằng messageKey', () => {
     setLocale('en')
     render(<EngineStatusBar status={{ state: 'error', message: 'engine thoát (exit 5)',
