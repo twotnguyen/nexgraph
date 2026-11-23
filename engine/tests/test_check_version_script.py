@@ -230,3 +230,35 @@ def test_tag_khong_hop_le_thi_fail(tmp_path):
     assert "không hợp lệ" in out
     assert "v1.2" in out
     assert "vX.Y.Z" in out
+
+
+@pytest.mark.parametrize(
+    ("tag", "version"),
+    [
+        # SemVer: numeric identifier không được có số 0 thừa (pre-release lẫn core).
+        ("v0.2.0-alpha.01", "0.2.0-alpha.01"),
+        ("v01.2.3", "01.2.3"),
+    ],
+)
+def test_tu_choi_so_0_thua_theo_semver(tmp_path, tag, version):
+    # Manifest khớp y nguyên tag: parser cũ (regex \d+) cho qua, exit 0.
+    root = make_tree(tmp_path, npm=version, desktop=version, pyproject=version, engine=version)
+    res = run_check(root, tag)
+    assert res.returncode != 0, res.stdout + res.stderr
+    out = res.stdout + res.stderr
+    assert "không hợp lệ" in out
+    assert tag in out
+    assert "OK: tag" not in res.stdout
+
+
+def test_so_npm_nguyen_van_khong_trim(tmp_path):
+    # Hai nguồn npm có khoảng trắng thừa: phải so nguyên văn với tag (bỏ đúng `v`),
+    # không trim — trước đây trim nên vẫn báo 4/4 OK.
+    root = make_tree(tmp_path, npm=" 0.2.0 ", desktop=" 0.2.0 ", pyproject="0.2.0", engine="0.2.0")
+    res = run_check(root, "v0.2.0")
+    assert res.returncode != 0, res.stdout + res.stderr
+    out = res.stdout + res.stderr
+    assert "package.json" in out
+    assert "apps/desktop/package.json" in out
+    assert out.count("LỆCH") == 2
+    assert "OK: tag" not in res.stdout

@@ -70,10 +70,14 @@ function findTomlPython() {
 }
 
 /** Tag phát hành: semver của dự án, pre-release luôn có `-` (PEP 440 không dùng cho tag). */
-const RELEASE_TAG = /^v(\d+\.\d+\.\d+(?:-(?:alpha|beta|rc)\.\d+)?)$/;
+const SEMVER_NUMBER = '(?:0|[1-9]\\d*)';
+const RELEASE_TAG = new RegExp(
+  `^v(${SEMVER_NUMBER}\\.${SEMVER_NUMBER}\\.${SEMVER_NUMBER}(?:-(?:alpha|beta|rc)\\.${SEMVER_NUMBER})?)$`,
+);
 
 const TAG_FORMAT =
-  'tag phải có dạng vX.Y.Z (bản cuối) hoặc vX.Y.Z-alpha.N / vX.Y.Z-beta.N / vX.Y.Z-rc.N';
+  'tag phải có dạng vX.Y.Z (bản cuối) hoặc vX.Y.Z-alpha.N / vX.Y.Z-beta.N / vX.Y.Z-rc.N; ' +
+  'theo SemVer, số không được có 0 thừa (alpha.1, không phải alpha.01)';
 
 /** Chuẩn hoá version về dạng so sánh được: bỏ tiền tố `v`, semver pre-release -> PEP 440. */
 export function normalizeVersion(raw) {
@@ -202,7 +206,9 @@ function main() {
       continue;
     }
     const expected = source.format === 'npm' ? expectedNpm : expectedPython;
-    const normalized = source.format === 'npm' ? String(raw).trim() : normalizeVersion(raw);
+    // Nguồn npm so nguyên văn với tag (chỉ bỏ đúng một `v` ở tag) — không trim:
+    // " 0.2.0 " không được coi là khớp 0.2.0.
+    const normalized = source.format === 'npm' ? String(raw) : normalizeVersion(raw);
     const ok = normalized === expected;
     if (!ok) failed += 1;
     rows.push({ file: source.file, raw, normalized, ok, error: null });
