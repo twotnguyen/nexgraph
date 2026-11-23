@@ -236,7 +236,10 @@ class JobManager:
             if e.files_total or e.state in ("done", "structure"):
                 job["files_total"] = e.files_total
             if e.state in ("done", "cancelled", "error"):
+                # F2: job index cũng phải có `finished_at`, nếu không TTL 1 h không bao giờ áp cho nó.
+                job["finished_at"] = time.time()
                 self._publishing.discard(job_id)
+                self._prune_finished_locked()
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
         if e.state == "done":  # đồ thị mới đã được xuất bản

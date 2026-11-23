@@ -190,6 +190,20 @@ def test_finished_jobs_are_pruned_by_ttl(env, monkeypatch):
         manager.shutdown()
 
 
+def test_index_job_also_honours_finished_ttl(env):
+    """F2: TTL 1 h áp cho mọi job đã xong, kể cả job index (trước chỉ job `start_task` có `finished_at`)."""
+    registry, info, bus, _ = env
+    manager = JobManager(registry, bus, finished_job_ttl_seconds=0.15)
+    try:
+        job_id = manager.start_index(info.project_id)
+        assert wait_done(manager, job_id)["state"] == "done"
+        assert manager.get(job_id)["finished_at"] > 0
+        time.sleep(0.3)
+        assert manager.get(job_id) is None
+    finally:
+        manager.shutdown()
+
+
 def test_app_shutdown_stops_job_manager(tmp_path, monkeypatch):
     """REV-19: engine tắt phải gọi shutdown() (huỷ + join job nền), không chỉ trong test."""
     from fastapi.testclient import TestClient
