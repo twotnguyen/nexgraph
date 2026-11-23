@@ -180,6 +180,44 @@ def test_graphifyrc_language_overrides_are_honoured(tmp_path):
     assert [n.label for n in extract_generic(tmp_path, "a.inc", "php", is_test=False).nodes] == ["run"]
 
 
+def test_next_static_and_bundle_files_are_skipped(tmp_path):
+    """Bundle Next.js băm tên lọt lưới E3 (#36) bị bỏ (PERF-L mục 3)."""
+    for rel in ("plugins/site/_next/static/chunks/1098c2541054fc77.js",
+                "plugins/site/_next/static/css/abc123.css",
+                "lib/vendor.bundle.js", "lib/app.min.js", "lib/app.js"):
+        write(tmp_path, rel)
+    assert rels(tmp_path) == ["lib/app.js"]
+
+
+def test_dense_js_and_css_files_are_skipped_by_bytes_per_line(tmp_path):
+    """JS/CSS có byte/dòng > 500 bị bỏ; tệp lớn nhưng nhiều dòng và tệp nhỏ vẫn giữ (PERF-L mục 3)."""
+    write(tmp_path, "lib/dense.js", "var x=" + ",".join("1" for _ in range(60_000)) + ";\n")  # ~180 KB, 1 dòng
+    write(tmp_path, "lib/dense.css", ".a{color:#fff}" * 20_000 + "\n")                         # ~260 KB, 1 dòng
+    write(tmp_path, "lib/normal.js", "".join(f"const v{i} = {i};\n" for i in range(10_000)))   # 140 KB, 10.000 dòng
+    write(tmp_path, "lib/small.js", "var a=1;var b=2;\n" * 20)                                 # < 64 KB: không đoán
+    write(tmp_path, "lib/long_line.py", 'x = "' + "a" * 400_000 + '"\n')                        # Python: không áp dụng
+    assert rels(tmp_path) == ["lib/long_line.py", "lib/normal.js", "lib/small.js"]
+
+
+def test_discover_reports_skipped_file_counts(tmp_path):
+    """Số tệp bị bỏ theo lý do để kết quả job báo cho người dùng (PERF-L mục 3)."""
+    write(tmp_path, "plugins/site/_next/static/chunks/a.js")
+    write(tmp_path, "lib/x.bundle.js")
+    write(tmp_path, "lib/dense.js", "var x=" + ",".join("1" for _ in range(60_000)) + ";\n")
+    write(tmp_path, "lib/keep.js", "function a() {}\n")
+    stats: dict[str, int] = {}
+    assert [f.rel_path for f in discover(tmp_path, skip_stats=stats)] == ["lib/keep.js"]
+    assert stats == {"bundle": 2, "dense": 1}
+
+
+def test_explicitly_chosen_next_static_package_is_indexed(tmp_path):
+    """Chọn rõ một package trong `_next/static` (monorepo) thì vẫn lập chỉ mục, như mọi thư mục bị bỏ khác."""
+    write(tmp_path, "apps/site/_next/static/chunks/a.js")
+    write(tmp_path, "apps/site/src/b.js")
+    assert rels(tmp_path) == ["apps/site/src/b.js"]
+    assert rels(tmp_path, subdir="apps/site/_next/static") == ["apps/site/_next/static/chunks/a.js"]
+
+
 def test_skips_default_build_dependency_and_minified_paths(tmp_path):
     for rel in ("dist/app.js", "__pycache__/mod.py", ".venv/lib/x.py", "venv/lib/y.py",
                 "lib/app.min.js", "lib/app.min.css", "lib/vendor.bundle.js", "lib/keep.js"):

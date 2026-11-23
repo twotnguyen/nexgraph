@@ -64,6 +64,7 @@ class RunResult:
     edges: int
     unresolved: int
     seconds: float
+    files_skipped: int = 0  # tệp sinh tự động bị discovery bỏ (bundle/dense) — PERF-L mục 3
 
 
 def index_workers(n_files: int, include_media: bool, requested: int | None = None) -> int:
@@ -196,6 +197,7 @@ class Indexer:
         self.include_config, self.workers, self.force = include_config, workers, force
         self.sources_dir = sources_dir
         self._file_errors: list[tuple[str, str, str]] = []  # (tệp, loại, chi tiết) để báo cho người dùng
+        self._skip_stats: dict[str, int] = {}  # tệp bị discovery bỏ, theo lý do (bundle/dense)
 
     def run(self) -> RunResult:
         t0 = time.time()
@@ -207,7 +209,8 @@ class Indexer:
         try:
             files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
                                   include_docs=self.include_docs, include_media=self.include_media,
-                                  include_config=self.include_config, sources_dir=self.sources_dir))
+                                  include_config=self.include_config, sources_dir=self.sources_dir,
+                                  skip_stats=self._skip_stats))
             if self.force:
                 reset_cache_root()
             total = len(files)
@@ -282,7 +285,11 @@ class Indexer:
     def _result(self, run_id: int, state: RunState, t0: float) -> RunResult:
         s = self.store.stats()
         return RunResult(run_id, state, sum(s["nodes_by_kind"].values()), sum(s["edges_by_type"].values()),
-                         s["unresolved"], time.time() - t0)
+                         s["unresolved"], time.time() - t0, sum(self._skip_stats.values()))
+
+    def skipped_files(self) -> dict[str, int]:
+        """Số tệp discovery đã bỏ theo lý do (`bundle`, `dense`) — vào kết quả job (PERF-L mục 3)."""
+        return dict(self._skip_stats)
 
     def _structure(self, run_id: int, files: list[DiscoveredFile]) -> bool:
         store, root = self.store, self.root

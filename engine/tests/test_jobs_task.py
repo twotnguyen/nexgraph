@@ -126,7 +126,9 @@ def test_unknown_project_rejected(env):
 def test_index_job_has_kind_and_result(api, copy_fixture):
     p = api.open(copy_fixture("py_mini"))
     job = api.index(p["project_id"])
-    assert job["kind"] == "index" and job["result"] is None
+    # Hợp đồng đổi ở PERF-L mục 3: job index có `result` chứa số liệu lần chạy (trước đây luôn None),
+    # để UI/bench biết đã bỏ bao nhiêu tệp sinh tự động và chạy với bao nhiêu worker.
+    assert job["kind"] == "index" and job["result"]["files_skipped"] == 0
 
 
 def test_project_task_can_refresh_now(api, copy_fixture):

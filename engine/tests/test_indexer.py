@@ -453,6 +453,21 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
     assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
 
 
+def test_index_reports_skipped_bundle_files(tmp_path, index_project):
+    """Số tệp bị bỏ vì là bundle/rút gọn nằm trong RunResult để kết quả job báo được (PERF-L mục 3)."""
+    root = _many_py(tmp_path / "p", 20)
+    (root / "plugins/site/_next/static/chunks").mkdir(parents=True)
+    (root / "plugins/site/_next/static/chunks/abc123.js").write_text("var a=1;\n" * 5)
+    (root / "lib").mkdir()
+    (root / "lib/vendor.min.js").write_text("var a=1;\n")
+    (root / "lib/dense.js").write_text("var x=" + ",".join("1" for _ in range(60_000)) + ";\n")
+    store, result, _ = index_project(root)
+    assert result.state == "hoan_tat"
+    assert result.files_skipped == 3
+    assert store.get_node("plugins/site/_next/static/chunks/abc123.js#file") is None
+    assert store.get_node("lib/dense.js#file") is None
+
+
 def test_batch_deadline_scales_with_batch_bytes():
     """Hạn chờ một lô theo khối lượng: nền 20 s cho lô nhỏ, +60 s mỗi MB (PERF-L mục 2)."""
     from nexgraph_engine.index.indexer import DiscoveredFile, batch_timeout_seconds

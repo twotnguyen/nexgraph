@@ -48,6 +48,21 @@ def test_index_then_stats_nonzero(api, copy_fixture):
     assert api.open(listed["path"])["last_indexed_at"] == listed["last_indexed_at"]  # mở lại: app biết đã index
 
 
+def test_index_job_result_reports_skipped_bundle_files(api, tmp_path):
+    """Kết quả job JSON có số tệp bị bỏ vì sinh tự động (PERF-L mục 3)."""
+    root = tmp_path / "proj"
+    (root / "lib").mkdir(parents=True)
+    (root / "lib/a.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    (root / "plugins/site/_next/static/chunks").mkdir(parents=True)
+    (root / "plugins/site/_next/static/chunks/x.js").write_text("var a=1;\n" * 5, encoding="utf-8")
+    (root / "lib/vendor.min.js").write_text("var a=1;\n", encoding="utf-8")
+    p = api.open(root)
+    job = api.index(p["project_id"])
+    assert job["state"] == "done"
+    assert job["result"]["files_skipped"] == 2
+    assert job["result"]["skipped"] == {"bundle": 2}
+
+
 def test_remove_registered_project_keeps_source_and_published_graph(api, copy_fixture):
     root = copy_fixture("bookstore_app")
     source = root / "lib/main.dart"
