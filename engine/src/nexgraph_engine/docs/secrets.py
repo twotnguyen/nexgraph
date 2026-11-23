@@ -1,10 +1,15 @@
-"""Che secret trong chữ tài liệu: mẫu token của graphify + mẫu `KEY=value` tên nhạy cảm (GFY-08).
+"""Che secret trong chữ tài liệu: mẫu token của graphify + mẫu `KEY[:=]value` tên nhạy cảm (GFY-08).
 
 `graphify.security.redact_secrets` chỉ bắt hình dạng token của nhà cung cấp (AKIA…, ghp_…, sk-…).
-Tài liệu hay dán nguyên khối `.env` nên thêm mẫu `DB_PASSWORD=***`, `API_KEY: "abc"`. Chỉ che khi
-**tên khoá** nhạy cảm đúng nghĩa (PASSWORD/SECRET/TOKEN/API_KEY… đứng độc lập hoặc làm hậu tố, không
-phải `TOKENS`, `token_budget`) **và** giá trị trông như giá trị cấu hình, để `token = compute()`,
-`token: string`, `token_budget = BUDGET`, `MAX_TOKENS=8192` trong tài liệu kỹ thuật không bị che nhầm.
+Tài liệu hay dán nguyên khối `.env`, JSON cấu hình hoặc câu văn có backtick nên thêm mẫu tìm `TÊN_KHOÁ[:=]giá trị`
+**không neo đầu dòng**: dòng `.env`/`export`, YAML, JSON `"key": "value"`, gạch đầu dòng `- `, cả dòng bọc
+ngoặc kép/đơn/ngoặc vuông, và câu văn kiểu ``Đặt `API_KEY=…` trong tệp``. Chỉ che khi **tên khoá** nhạy cảm
+(PASSWORD/SECRET/TOKEN/PWD/CREDENTIAL(S)/KEY đứng độc lập hoặc làm hậu tố, không phải `TOKENS`, `token_budget`)
+**và** giá trị trông như giá trị cấu hình, để `token = compute()`, `token: string`, `token_budget = BUDGET`,
+`MAX_TOKENS=8192` trong tài liệu kỹ thuật không bị che nhầm. Tên kết thúc bằng `KEY` bị coi là nhạy cảm trừ
+danh sách trắng khái niệm kỹ thuật (`PRIMARY_KEY`, `FOREIGN_KEY`, `SORT_KEY`, `CACHE_KEY`…); tên `KEY` trần
+chỉ che khi đứng ở vị trí gán cấu hình (đầu dòng/bullet/ngoặc), không che tham số `key=` trong code.
+Khối PEM được che **từng dòng** trước khi gọi `redact_secrets` để heading sau khối không lệch số dòng (Minor 1).
 """
 from __future__ import annotations
 
@@ -12,45 +17,178 @@ import re
 
 from graphify.security import redact_secrets
 
+REDACTED = "[redacted]"
 # Hậu tố tên khoá nhạy cảm, so sau khi bỏ mọi ký tự không phải chữ/số: `DB_PASSWORD` → `DBPASSWORD`.
 # `TOKENS` không khớp `TOKEN` (khác ký tự cuối), `token_budget` → `TOKENBUDGET` cũng không khớp.
-_SENSITIVE_SUFFIXES = ("PASSWORD", "PASSWD", "PASSPHRASE", "SECRET", "TOKEN", "APIKEY", "ACCESSKEY",
-                       "PRIVATEKEY", "CREDENTIAL", "CREDENTIALS")
-_ENV_LINE = re.compile(
-    r"(?im)^([ \t]*(?:export[ \t]+)?)([A-Za-z_][A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*)"
-    r"(\"[^\"\n]*\"|'[^'\n]*'|[^\s#'\"]+)([ \t]*(?:#.*)?)$")
-# Giá trị có ký tự cú pháp là code/biểu thức, không phải giá trị cấu hình.
-_OBVIOUS_CODE = re.compile(r"[(){}[\]<>]|=>|::|^\$|^%")
+_SENSITIVE_SUFFIXES = ("PASSWORD", "PASSWD", "PWD", "PASSPHRASE", "SECRET", "TOKEN",
+                       "CREDENTIALS", "CREDENTIAL", "KEYBASE", "KEY")
+# Tên kết thúc bằng KEY nhưng là khái niệm kỹ thuật (SQL, sắp xếp, cache, khoá công khai): giữ nguyên.
+# Từ tiếng Anh thường gặp (monkey, turkey…) cũng nằm đây để không che nhầm câu văn.
+_NON_SECRET_KEY_COMPOUNDS = frozenset({
+    "PRIMARYKEY", "FOREIGNKEY", "SORTKEY", "SORTINGKEY", "PARTITIONKEY", "CLUSTERKEY", "SHARDKEY",
+    "GROUPKEY", "GROUPINGKEY", "CACHEKEY", "HASHKEY", "INDEXKEY", "ROWKEY", "MAPKEY", "DICTKEY",
+    "LOOKUPKEY", "CANDIDATEKEY", "COMPOSITEKEY", "UNIQUEKEY", "PUBLICKEY", "KEYBOARDKEY", "HOTKEY",
+    "SHORTCUTKEY", "NODEKEY", "FIELDKEY", "OBJECTKEY", "ARRAYKEY", "JOINKEY", "MERGEKEY", "BRANCHKEY",
+    "ROUTINGKEY", "MONKEY", "TURKEY", "HOCKEY", "DONKEY", "WHISKEY", "JOCKEY",
+})
+_KEY = r"[A-Za-z_][A-Za-z0-9_.-]*"
+_VALUE = r'"[^"\n]*"|\'[^\'\n]*\'|`[^`\n]*`|[^\s,;}\]\)"\'`]+'
+_CLOSE = "[" + '"' + "'" + "]?"
+# Tên khoá + dấu đóng ngoặc (nếu JSON kiểu `"key":`) + `:`/`=` + giá trị. Không neo `^`: dạng JSON, bullet,
+# câu văn đều khớp. `(?![=>])` để `==`/`=>` của code không bị nhận là phép gán cấu hình.
+_ASSIGN = re.compile(
+    rf"(?<![A-Za-z0-9_.-])(?P<key>{_KEY})(?P<close>{_CLOSE})"
+    r"(?P<sep>[ \t]*(?::=|:|=)(?![=>])[ \t]*)(?P<value>" + _VALUE + ")")
+# Giá trị có ký tự cú pháp là code/biểu thức (kể cả `|` của union type), không phải giá trị cấu hình.
+_OBVIOUS_CODE = re.compile(r"[(){}[\]<>|]|=>|::|^\$|^%")
 _TYPE_WORDS = frozenset({"string", "number", "boolean", "any", "unknown", "void", "null", "undefined",
                          "true", "false", "none", "str", "int", "bool", "float", "never", "object"})
-# Định danh viết hoa (`BUDGET`, `MAX_TOKENS_VALUE`) và số thuần (`8192`) là hằng/tham chiếu, không phải bí mật.
-_CONSTANT = re.compile(r"^(?:[A-Z][A-Z0-9_]*|\d+)$")
-_PLACEHOLDER = re.compile(r"^[xX*.\-]+$")
+# Tên biến được nhắc làm giá trị (`NEXGRAPH_TOKEN: token`) — tham chiếu, không phải bí mật.
+_REFERENCE_WORDS = frozenset({"token", "secret", "password", "passwd", "pwd", "value", "key",
+                              "credentials", "credential", "apikey", "env",
+                              # MIN-52(4): câu văn kiểu "Token: refresh tokens rotate" không phải secret.
+                              "refresh", "rotate", "rotated", "refreshed", "renew", "expires", "expired",
+                              "required", "optional", "enabled", "disabled", "missing", "revoked"})
+# Định danh viết hoa (`BUDGET`, `MAX_TOKENS_VALUE`) là hằng/tham chiếu; số ≤ 6 chữ số là cổng/giới hạn.
+_CONSTANT = re.compile(r"^[A-Z][A-Z0-9_]*$")
+_SMALL_NUMBER = re.compile(r"^\d{1,6}$")
+_PLACEHOLDER = re.compile(r"^[xX*.\-…]+$")
+# Giá trị minh hoạ trong tài liệu: `fake-key`, `your-token`, `sk-…`…
+_PLACEHOLDER_HINTS = ("fake", "dummy", "example", "placeholder", "sample", "changeme", "redacted",
+                      "your-", "your_", "…")
+# `ApiKeyCredential`, `OAuthCredential`: tên kiểu/lớp trong code, không phải khoá.
+_TYPE_NAME = re.compile(r"^[A-Z][A-Za-z]*[a-z][A-Z][A-Za-z]*$")
+# `key=` trần chỉ là cấu hình khi đứng đầu dòng/bullet/sau `export`/ngoặc mở; `sorted(x, key=y)` thì không.
+_BARE_KEY_PREFIX = re.compile(r"^[ \t]*(?:[-*+>][ \t]+)?(?:export[ \t]+)?[`" + '"' + r"'\[" + r"]*$")
+# Khối PEM: che cả khối kể cả khi thiếu dòng END (bị cắt), giữ nguyên số dòng.
+_PEM_BLOCK = re.compile(
+    r"(?ms)^[ \t]*-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----"
+    r"(?:.*?^[ \t]*-----END [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----|.*)")
 
-
-def _is_sensitive_key(key: str) -> bool:
+def _key_rule(key: str) -> bool:
     compact = re.sub(r"[^A-Z0-9]", "", key.upper())
+    if compact in _NON_SECRET_KEY_COMPOUNDS:
+        return False
     return any(compact.endswith(suffix) for suffix in _SENSITIVE_SUFFIXES)
 
 
 def _looks_like_secret(value: str) -> bool:
-    if len(value) < 4 or _PLACEHOLDER.match(value) or _CONSTANT.match(value):
+    lowered = value.lower()
+    if (len(value) < 4 or _PLACEHOLDER.match(value) or _CONSTANT.match(value)
+            or _SMALL_NUMBER.match(value) or lowered in _TYPE_WORDS or lowered in _REFERENCE_WORDS
+            or _TYPE_NAME.match(value)):
         return False
-    return not (_OBVIOUS_CODE.search(value) or value.lower() in _TYPE_WORDS)
+    if any(hint in lowered for hint in _PLACEHOLDER_HINTS):
+        return False
+    return not _OBVIOUS_CODE.search(value)
+
+
+def _redact_pem_blocks(text: str) -> str:
+    """Thay mỗi dòng trong khối PEM bằng `[redacted]`, giữ nguyên số dòng để số dòng của tài liệu không lệch."""
+    def repl(match: re.Match[str]) -> str:
+        block = match.group(0)
+        trailing_newline = block.endswith("\n")
+        body = block[:-1] if trailing_newline else block
+        line_count = body.count("\n") + 1
+        return "\n".join([REDACTED] * line_count) + ("\n" if trailing_newline else "")
+    return _PEM_BLOCK.sub(repl, text)
+
+
+# Dòng bảng markdown: `| TÊN_KHOÁ | giá trị |`. Chỉ che ô thứ hai khi ô đầu là tên khoá nhạy cảm và giá trị
+# trông như secret (MIN-52(1); `| API_KEY | xxx |` placeholder và `| MAX_TOKENS | 8192 |` giữ nguyên).
+_TABLE_ROW = re.compile(r"(?m)^(?P<lead>[ \t]*)\|(?P<key>[^|\n]+)\|(?P<value>[^|\n]*)\|")
+# Ô tên khoá phải là một định danh (`API_KEY`, `db.password`, `Stripe secret key`), không phải câu mô tả.
+_TABLE_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\- ]*$")
+# Dòng phân cách header (`|---|---|`, `|:---:|---:|`): dòng ngay trước nó là header, không phải dữ liệu.
+_TABLE_DELIM = re.compile(r"^[ \t]*\|[ \t:|-]+\|[ \t]*$")
+# Cụm nhiều từ (`Stripe secret key`, `Tablet Dikey`) chỉ nhạy cảm khi từ cuối đúng là từ khoá, để
+# "Dikey" (từ tiếng Thổ Nhĩ Kỳ, kết thúc bằng KEY) không bị coi là tên khoá.
+_TABLE_KEY_WORDS = frozenset({"KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "PWD", "PASSPHRASE",
+                              "CREDENTIAL", "CREDENTIALS"})
+# Một từ chữ thuần ngắn (`Histogram`, `Mandatory`, `Default`) là mô tả/loại, không phải secret.
+_WORD_ONLY = re.compile(r"^[A-Za-z][A-Za-z'’-]*$")
+# Số + đơn vị (`768–1023px`, `2.5s`), và đường dẫn tệp (`docs/api.md`): giá trị kỹ thuật, không phải bí mật.
+_VALUE_WITH_UNIT = re.compile(r"^[\d.,:–\-/]+[ \t]*[A-Za-z]{1,3}$")
+_VALUE_PATH = re.compile(r"^[\w.@-]+(?:/[\w.@-]+)+\.(?:md|py|tsx?|jsx?|json|ya?ml|toml|txt|sh|go|rs|java|rb|css|html?)$")
+
+
+
+def _table_key_rule(key: str) -> bool:
+    """Tên khoá trong ô 1 của bảng: định danh (`API_KEY`) hoặc cụm từ khoá (`Stripe secret key`)."""
+    if " " in key or "\t" in key:
+        words = key.split()
+        if not words or re.sub(r"[^A-Z0-9]", "", words[-1].upper()) not in _TABLE_KEY_WORDS:
+            return False
+    return _key_rule(key)
+
+
+def _looks_like_table_secret(value: str) -> bool:
+    """Ô giá trị của bảng là secret: một token, không phải từ mô tả/loại, số có đơn vị hay đường dẫn."""
+    v = value.strip()
+    if not v or any(ch.isspace() for ch in v):
+        return False
+    if not _looks_like_secret(v) or _VALUE_WITH_UNIT.match(v) or _VALUE_PATH.match(v):
+        return False
+    # Từ chữ thuần ngắn (`Histogram`, `Mandatory`) là mô tả; chuỗi chữ dài (≥ 20) vẫn che vì giống khoá ngẫu nhiên.
+    return not (_WORD_ONLY.match(v) and len(v) < 20)
+
+
+def _is_table_header(text: str, match: re.Match[str]) -> bool:
+    """Dòng header của bảng: dòng ngay sau là dòng phân cách `|---|` (kể cả căn lề `:---:`).
+
+    Xét hết dòng của match (bảng 3+ cột thì match chỉ ăn hai ô đầu), rồi mới lấy dòng kế.
+    """
+    line_end = text.find("\n", match.end())
+    if line_end == -1:
+        return False
+    return bool(_TABLE_DELIM.match(text[line_end + 1:].split("\n", 1)[0].rstrip("\r")))
+
+
+def _redact_table_cells(text: str) -> str:
+    """Che cột giá trị của bảng markdown khi cột tên khoá là tên nhạy cảm (MIN-52).
+
+    Bỏ qua dòng header và ô mô tả: bảng tài liệu có `| Token | Purpose |` hay `| Metric | Histogram |`
+    là dữ liệu thường, che đi là làm hỏng tài liệu đã lập chỉ mục (review #58 Important 1).
+    """
+    def repl(match: re.Match[str]) -> str:
+        if _is_table_header(text, match):
+            return match.group(0)
+        key = match["key"].strip().strip("`*_\"'")
+        if not _TABLE_KEY.match(key) or not _table_key_rule(key):
+            return match.group(0)
+        raw = match["value"]
+        cell = raw.strip()
+        if not cell:
+            return match.group(0)
+        quote = cell[0] if cell[:1] in ("'", '"', "`") else ""
+        value = cell[1:-1] if quote and cell.endswith(quote) and len(cell) > 1 else cell
+        if not _looks_like_table_secret(value):
+            return match.group(0)
+        lead = raw[:len(raw) - len(raw.lstrip())]
+        trail = raw[len(raw.rstrip()):]
+        return f"{match['lead']}|{match['key']}|{lead}{quote}{REDACTED}{quote}{trail}|"
+
+    return _TABLE_ROW.sub(repl, text)
 
 
 def redact_doc_secrets(text: str) -> str:
-    """Trả `text` đã che token theo hình dạng và `KEY=value` của tên khoá nhạy cảm."""
-    text = redact_secrets(text)
+    """Trả `text` đã che token theo hình dạng, khối PEM và `KEY[:=]value` của tên khoá nhạy cảm."""
+    text = redact_secrets(_redact_pem_blocks(text))
 
     def repl(match: re.Match[str]) -> str:
-        if not _is_sensitive_key(match.group(2)):
+        key = match.group("key")
+        if not _key_rule(key):
             return match.group(0)
-        raw = match.group(4)
-        quote = raw[0] if raw[:1] in ("'", '"') else ""
+        if re.sub(r"[^A-Z0-9]", "", key.upper()) == "KEY":
+            line_start = text.rfind("\n", 0, match.start("key")) + 1
+            if not _BARE_KEY_PREFIX.match(text[line_start:match.start("key")]):
+                return match.group(0)
+        raw = match.group("value")
+        quote = raw[0] if raw[:1] in ("'", '"', "`") else ""
         value = raw[1:-1] if quote else raw
         if not _looks_like_secret(value):
             return match.group(0)
-        return f"{match.group(1)}{match.group(2)}{match.group(3)}{quote}[redacted]{quote}{match.group(5)}"
+        return f"{key}{match.group('close')}{match.group('sep')}{quote}{REDACTED}{quote}"
 
-    return _ENV_LINE.sub(repl, text)
+    text = _ASSIGN.sub(repl, text)
+    return _redact_table_cells(text)

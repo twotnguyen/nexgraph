@@ -151,12 +151,74 @@ def test_stdio_cli(indexed):
     assert payload(anyio.run(run))
 
 
-def _stdio_probe(root, data_dir, messages: list[dict]) -> subprocess.CompletedProcess:
+def _stdio_probe(root, data_dir, messages: list[dict], *, args: list[str] | None = None) -> subprocess.CompletedProcess:
+    """Gửi message qua stdin rồi ĐỌC ĐỦ phản hồi theo id TRƯỚC khi đóng stdin.
+
+    `subprocess.run(input=...)` đóng stdin ngay sau khi ghi hết; server thấy EOF và dừng vòng đọc trước
+    khi kịp ghi phản hồi cuối — CI Windows PR #54 đỏ `KeyError: 3` đúng kiểu này. Client thật giữ stdin
+    mở tới khi nhận phản hồi, nên probe phải làm theo (FLAKY-MCP-WIN).
+    """
+    import threading
+    import time
+
     env = {k: v for k, v in os.environ.items() if k != "NEXGRAPH_MCP_KEY"}
-    return subprocess.run(
-        [sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root), "--data-dir", str(data_dir)],
-        input="".join(json.dumps(message) + "\n" for message in messages),
-        capture_output=True, text=True, encoding="utf-8", timeout=60, env=env)
+    command = args or [sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root),
+                       "--data-dir", str(data_dir)]
+    proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, encoding="utf-8", env=env)
+    assert proc.stdin is not None and proc.stdout is not None and proc.stderr is not None
+    stdout, stderr = proc.stdout, proc.stderr
+    out: list[str] = []
+    err: list[str] = []
+    readers = [threading.Thread(target=lambda: out.extend(stdout), daemon=True),
+               threading.Thread(target=lambda: err.extend(stderr), daemon=True)]
+    for reader in readers:
+        reader.start()
+    expected = {item["id"] for message in messages
+                for item in (message if isinstance(message, list) else [message])
+                if isinstance(item, dict) and "id" in item}
+    for message in messages:
+        proc.stdin.write(json.dumps(message) + "\n")
+        proc.stdin.flush()
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        seen = {row["id"] for row in (json.loads(line) for line in list(out) if line.strip()) if "id" in row}
+        if expected <= seen:
+            break
+        if proc.poll() is not None:  # server đã thoát: không còn phản hồi nào đến nữa
+            break
+        time.sleep(0.02)
+    proc.stdin.close()
+    code = proc.wait(timeout=60)
+    for reader in readers:
+        reader.join(5)
+    return subprocess.CompletedProcess(proc.args, code, "".join(out), "".join(err))
+
+
+def test_stdio_probe_keeps_stdin_open_until_every_response_arrives(tmp_path):
+    """FLAKY-MCP-WIN (CI Windows PR #54): server stdio thoát khi stdin EOF, nên probe đóng stdin ngay sau
+    khi ghi sẽ mất phản hồi cuối. Test này dựng server giả trả lời id 3 CHỈ KHI stdin còn mở."""
+    fake = (
+        "import json, sys, threading\n"
+        "lines = [sys.stdin.readline() for _ in range(4)]\n"
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': {}}), flush=True)\n"
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 2, 'error': {'code': -32601, 'message': 'x'}}), flush=True)\n"
+        "closed = threading.Event()\n"
+        "def watch():\n"
+        "    if sys.stdin.readline() == '':\n"
+        "        closed.set()\n"
+        "threading.Thread(target=watch, daemon=True).start()\n"
+        "closed.wait(1.0)\n"
+        "if closed.is_set():\n"
+        "    sys.exit(0)\n"
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 3, 'result': {'tools': [1]}}), flush=True)\n"
+    )
+    messages = [INIT, INITIALIZED,
+                {"jsonrpc": "2.0", "id": 2, "method": "server/discover", "params": {}},
+                {"jsonrpc": "2.0", "id": 3, "method": "tools/list"}]
+    proc = _stdio_probe(tmp_path, tmp_path, messages, args=[sys.executable, "-c", fake])
+    responses = _responses(proc)
+    assert responses[3]["result"]["tools"] == [1]
 
 
 def test_unknown_probe_before_initialize_is_quiet(indexed):
@@ -392,6 +454,127 @@ def test_get_section_tool(api, tmp_path):
     out = payload(call(server, "get_section", {"node_id": hits[0]["node"]["id"]}))
     assert out["text"].startswith("## Setup") and "sk-abcdefghijklmnopqrstuvwx1234" not in out["text"]
     assert call(server, "get_section", {"node_id": "README.md#file"}).isError is True
+
+
+def test_get_section_refuses_secret_named_document(api, tmp_path):
+    """Quyết định lead (re-review #52 vòng 3): MCP là đường tới model nên tài liệu tên nhạy cảm bị từ chối."""
+    token = "sk-" + "live-" + "A3TEST" + "1234567890"
+    root = tmp_path / "docs secret"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secret.md").write_text(
+        f"# Bí mật\n\n## Cấu hình\n\nĐặt `api_key={token}` trong tệp.\n", encoding="utf-8")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "keys.md").write_text("# Khoá\n\n## Ghi chú\n\nkhông chia sẻ.\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    import time
+    job = None
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    server = build_server(root, tmp_path / "appdata")
+    for node in ("docs/secret.md::Cấu hình#document", "secrets/keys.md::Ghi chú#document"):
+        blocked = call(server, "get_section", {"node_id": node})
+        assert blocked.isError is True, node
+        assert "loại khỏi ngữ cảnh AI" in blocked.content[0].text, node
+        assert token not in blocked.content[0].text, node
+
+
+def test_get_section_masks_secret_key_env_lines(api, tmp_path):
+    """Review #52 Important 1: tài liệu tên TRUNG TÍNH chứa `SECRET_KEY=…` phải trả bản che qua MCP get_section."""
+    secret_key = "django-insecure-" + "e6b" + "0123456789abcdef"
+    key_base = "9f8e7d6c5b4a3210" + "0f1e2d3c4b5a6978"
+    env_lines = ["SECRET_" + "KEY=" + secret_key, "SECRET_" + "KEY_BASE=" + key_base]
+    root = tmp_path / "secret key proj"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "env-notes.md").write_text(
+        "# Khoá\n\n## Production\n\n" + "\n".join(env_lines) + "\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    job = None
+    import time
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    server = build_server(root, tmp_path / "appdata")
+    out = payload(call(server, "get_section", {"node_id": "docs/env-notes.md::Production#document"}))
+    assert out["text"].startswith("## Production")
+    assert secret_key not in out["text"] and key_base not in out["text"]
+    assert "[redacted]" in out["text"]
+
+
+DOC_FORMS = {
+    "json": '{"secret_key": "Json4Pq9Xy2Lk6Q"}',
+    "quote": '"ENCRYPTION_KEY=Quote4Pq9Xy2"',
+    "prose": "Đặt `MASTER_KEY=Prose8Kx2Rt5` trong tệp.",
+    "bullet": "- `SECRET_KEY=Dash4Pq9Xy2Lk6Q`",
+    "bracket": "[SIGNING_KEY=Bracket4Pq9Xy2]",
+    "export": "export API_KEY=Export8Kx2Rt5ab",
+    "yaml": "master_key: Yaml8Kx2Rt5abcd",
+    "single": "token = 'Single8Kx2Rt5'",
+}
+
+
+def _index_docs(api, root):
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    assert r.status_code == 202, r.text
+    import time
+    job = None
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    return p["project_id"]
+
+
+def test_model_document_paths_redact_all_document_forms(api, tmp_path):
+    """Review #52 Important 2: /code, /context, MCP read_code/get_context đều che tài liệu tên trung tính."""
+    root = tmp_path / "forms proj"
+    (root / "docs").mkdir(parents=True)
+    body = "# forms\n\n" + "\n\n".join(f"## {key}\n\n{line}" for key, line in DOC_FORMS.items()) + "\n"
+    (root / "docs" / "forms.md").write_text(body, encoding="utf-8")
+    pid = _index_docs(api, root)
+    server = build_server(root, tmp_path / "appdata")
+    values = list(DOC_FORMS.values())
+
+    # MCP read_code: cả tệp, đủ 8 dạng.
+    raw = payload(call(server, "read_code", {"file": "docs/forms.md"}))
+    for value in values:
+        assert value not in raw["text"], value
+    assert "[redacted]" in raw["text"]
+
+    # MCP get_context: hỏi đúng từng mục.
+    for key in DOC_FORMS:
+        pack = json.dumps(payload(call(server, "get_context", {"question": key, "budget": 4000})),
+                          ensure_ascii=False)
+        assert DOC_FORMS[key] not in pack, key
+        assert "[redacted]" in pack, key
+
+    # HTTP /code và /context với audience=model.
+    code = api.get(f"/v1/projects/{pid}/code", params={"file": "docs/forms.md"},
+                   headers={"X-NexGraph-Audience": "model"})
+    assert code.status_code == 200, code.text
+    for value in values:
+        assert value not in code.json()["text"], value
+    assert "[redacted]" in code.json()["text"]
+    for key, line in DOC_FORMS.items():
+        got = api.post(f"/v1/projects/{pid}/context", json={"question": key, "budget": 4000},
+                       headers={"X-NexGraph-Audience": "model"})
+        assert got.status_code == 200, got.text
+        assert line not in got.text and "[redacted]" in got.text, key
+
+    # Đường UI (không header audience) vẫn đọc nguyên văn: đây là tệp của người dùng, không phải ngữ cảnh model.
+    ui = api.get(f"/v1/projects/{pid}/code", params={"file": "docs/forms.md"})
+    assert all(value in ui.json()["text"] for value in values)
 
 
 LOGIN = "lib/services/auth_service.dart::AuthService.login#method"

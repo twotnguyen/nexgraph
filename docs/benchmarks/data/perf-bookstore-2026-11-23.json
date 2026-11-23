@@ -1,0 +1,104 @@
+{
+ "project": "bookstore",
+ "project_commit": null,
+ "nexgraph_commit": "72dc4ec18e9dcc72369652ed8f532a13bd70f2d9",
+ "machine": {
+  "cpu": "Apple M3 Pro",
+  "ncpu": 12,
+  "ram_gb": 18.0,
+  "os": "macOS 15.7.3",
+  "python": "3.12.16"
+ },
+ "date": "2026-11-23",
+ "repeat": 3,
+ "index_repeat": 3,
+ "metrics": {
+  "index_full_ms": {
+   "median": 11.82,
+   "min": 10.72,
+   "max": 16.67,
+   "n": 3
+  },
+  "peak_rss_after_index_mb": 61,
+  "worker_peak_rss_mb": 5,
+  "index_workers": 1,
+  "files": 9,
+  "nodes": 35,
+  "edges": 53,
+  "unresolved": 16,
+  "languages": {
+   "dart": 9
+  },
+  "graph_db_mb": 0.2,
+  "reopen_ms": {
+   "median": 0.68,
+   "min": 0.51,
+   "max": 0.69,
+   "n": 3
+  },
+  "search_build_ms": {
+   "median": 0.06,
+   "min": 0.05,
+   "max": 0.21,
+   "n": 3
+  },
+  "arch_root_ms": {
+   "median": 0.07,
+   "min": 0.06,
+   "max": 0.24,
+   "n": 3
+  },
+  "refresh_one_file_ms": {
+   "median": 4.77,
+   "min": 4.38,
+   "max": 4.96,
+   "n": 3
+  },
+  "rebuild_flows_ms": {
+   "median": 0.29,
+   "min": 0.25,
+   "max": 0.6,
+   "n": 3
+  },
+  "list_flows_auth_ms": {
+   "median": 0.05,
+   "min": 0.04,
+   "max": 0.11,
+   "n": 3
+  },
+  "build_map_400_ms": {
+   "median": 0.1,
+   "min": 0.08,
+   "max": 0.3,
+   "n": 3
+  },
+  "import_cycles_ms": {
+   "median": 0.04,
+   "min": 0.02,
+   "max": 0.4,
+   "n": 3
+  },
+  "build_tour_ms": {
+   "median": 0.16,
+   "min": 0.14,
+   "max": 0.46,
+   "n": 3
+  },
+  "build_context_question": "login",
+  "build_context_login_ms": {
+   "median": 4.77,
+   "min": 4.45,
+   "max": 4.81,
+   "n": 3
+  },
+  "top_degree_node": "lib#directory",
+  "neighbors_top_node_ms": {
+   "median": 0.08,
+   "min": 0.07,
+   "max": 0.2,
+   "n": 3
+  },
+  "peak_rss_total_mb": 62
+ },
+ "copy": "fixture engine/tests/fixtures/bookstore_app của repo NexGraph"
+}

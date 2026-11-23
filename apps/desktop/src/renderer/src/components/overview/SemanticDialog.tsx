@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
 import type { Job, ProjectAiSettings, SemanticEstimate, SemanticResult, SemanticTarget } from '@shared/graph-types'
 import { waitJob } from '../../state/waitJob'
+import { formatNumber } from '../../state/locale'
 import { vi } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
-const num = (n: number) => n.toLocaleString('vi-VN')
+const num = (n: number) => formatNumber(n)
 const SHOWN_FILES = 50
-const TITLE: Partial<Record<SemanticTarget, string>> = { labels: vi.semantic.labelsTitle, pr_triage: vi.semantic.triageTitle }
-const CONSENT: Partial<Record<SemanticTarget, string>> = { labels: vi.semantic.consentLabels, pr_triage: vi.semantic.consentTriage }
+const TITLE_OF = (target: SemanticTarget | undefined): string | undefined =>
+  target === 'labels' ? vi.semantic.labelsTitle : target === 'pr_triage' ? vi.semantic.triageTitle : undefined
+const CONSENT_OF = (target: SemanticTarget | undefined): string | undefined =>
+  target === 'labels' ? vi.semantic.consentLabels : target === 'pr_triage' ? vi.semantic.consentTriage : undefined
 
 interface Props {
   projectId: string
@@ -28,7 +32,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   const [result, setResult] = useState<SemanticResult | null>(null)
   /** Đường A: engine không cộng usage, main đếm token đã dùng và trả qua `semantic.usage`. */
   const [appUsage, setAppUsage] = useState<{ input_tokens: number; output_tokens: number } | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [busy, setBusy] = useState(false)
   const [noCache, setNoCache] = useState(false)
 
@@ -49,7 +53,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
     if (busy) return
     setBusy(true)
     setError(null)
-    try { await fn() } catch (e) { setError(vi.semantic.failed(errMessage(e))) } finally { setBusy(false) }
+    try { await fn() } catch (e) { setError(msg('Không chạy được: {error}', { error: errMessage(e) })) } finally { setBusy(false) }
   }
   const enable = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId, { enabled: true, transport, model: null })))
   const agreeNewModel = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId,
@@ -82,8 +86,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   const usage = result ? (result.usage.input_tokens > 0 || result.usage.output_tokens > 0 ? result.usage : appUsage) : null
   return (
     <div className="modal-backdrop">
-      <div role="dialog" aria-modal="true" aria-label={(fixed && TITLE[fixed]) || vi.semantic.title} className="modal">
-        <h2>{(fixed && TITLE[fixed]) || vi.semantic.title}</h2>
+      <div role="dialog" aria-modal="true" aria-label={(fixed && TITLE_OF(fixed)) || vi.semantic.title} className="modal">
+        <h2>{(fixed && TITLE_OF(fixed)) || vi.semantic.title}</h2>
         {settings && !fixed && (
           <fieldset>
             <legend>{vi.semantic.targetLabel}</legend>
@@ -98,7 +102,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
             <p>{vi.semantic.enableIntro}</p>
             <label><input type="radio" name="transport" checked={transport === 'app'} onChange={() => setTransport('app')} /> {vi.semantic.transportApp}</label>
             <label><input type="radio" name="transport" checked={transport === 'direct'} onChange={() => setTransport('direct')} /> {vi.semantic.transportDirect}</label>
-            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {(fixed && CONSENT[fixed]) || vi.semantic.consent}</label>
+            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {(fixed && CONSENT_OF(fixed)) || vi.semantic.consent}</label>
           </>
         )}
         {local && <p className="muted">{vi.semantic.sends[target]}</p>}
@@ -139,7 +143,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
               <p className="muted">{vi.semantic.cost(num(usage.input_tokens), num(usage.output_tokens))}</p>}
           </div>
         )}
-        {error && <p role="alert" className="inline-message error">{error}</p>}
+        {error && <p role="alert" className="inline-message error">{msgText(error)}</p>}
         <footer>
           {settings?.enabled && !job && <button type="button" className="link" disabled={busy} onClick={() => void disable()}>{vi.semantic.disable}</button>}
           {job ? <button type="button" onClick={cancel}>{vi.semantic.cancel}</button>

@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { GraphNode, NodeKind } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { runCommand } from '../../state/commands'
 import { useChanges } from '../../state/useChanges'
 import { useDiagnostics } from '../../state/diagnostics'
-import { kindStyle } from '../graph/kindStyle'
+import { kindLabel, kindStyle } from '../graph/kindStyle'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import './tree-view.css'
@@ -57,7 +58,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const [focused, setFocused] = useState<string | null>(null)
   const [errors, setErrors] = useState<Map<string, string>>(new Map())
   const [edit, setEdit] = useState<Editing | null>(null)
-  const [operationError, setOperationError] = useState<string | null>(null)
+  const [operationError, setOperationError] = useState<Message | null>(null)
   const [working, setWorking] = useState(false)
   const [menu, setMenu] = useState<TreeMenu | null>(null)
   const [clipboard, setClipboard] = useState<Clipboard | undefined>(() => clipboards.get(projectId))
@@ -279,7 +280,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const hasDirty = (path: string) => [...(dirtyFiles ?? [])].some((file) => insidePath(file, path))
   const allowRename = (path: string) => {
     if (!hasDirty(path)) return true
-    setOperationError(tr('Hãy lưu các tệp đang sửa trước khi đổi tên hoặc di chuyển.'))
+    setOperationError(msg('Hãy lưu các tệp đang sửa trước khi đổi tên hoặc di chuyển.'))
     return false
   }
   const run = async (action: () => Promise<void>) => {
@@ -289,7 +290,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
       await action()
       return true
     } catch (error) {
-      setOperationError(errorText(error))
+      setOperationError(errorMsg(error))
       return false
     } finally {
       setWorking(false)
@@ -314,7 +315,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const submitEdit = async () => {
     if (!edit || working) return
     const name = edit.value.trim()
-    if (!name) { setOperationError(tr('Tên tệp hoặc thư mục không được để trống.')); return }
+    if (!name) { setOperationError(msg('Tên tệp hoặc thư mục không được để trống.')); return }
     const target = childPath(edit.parent, name)
     const old = entryPath(edit.node)
     if (edit.kind === 'rename' && old === target) { setEdit(null); return }
@@ -369,7 +370,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const trash = (node: TreeNode) => {
     const path = entryPath(node)
     if (!path || !fs.trash) return
-    if (hasDirty(path)) { setOperationError(tr('Hãy lưu các tệp đang sửa trước khi chuyển vào Thùng rác.')); return }
+    if (hasDirty(path)) { setOperationError(msg('Hãy lưu các tệp đang sửa trước khi chuyển vào Thùng rác.')); return }
     if (!window.confirm(tr('Chuyển “{name}” vào Thùng rác?', { name: node.label }))) return
     void run(async () => {
       await fs.trash!(projectId, path)
@@ -491,7 +492,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
         </div>
       )}
       {renderError(ROOT)}
-      {operationError && <div className="tree-error" role="alert">{operationError}</div>}
+      {operationError && <div className="tree-error" role="alert">{msgText(operationError)}</div>}
       {!errors.has(ROOT) && !loaded.has(ROOT) && <p role="status" className="muted">{list ? tr('Đang đọc thư mục…') : vi.tree.loading}</p>}
       {loaded.has(ROOT) && rows.length === 0 && !edit && <p className="muted">{list ? tr('Thư mục trống.') : tr('Chưa có tệp trong phạm vi chỉ mục.')}</p>}
       <div ref={tree} role="tree" aria-label={vi.tree.label} tabIndex={items.length ? undefined : 0}
@@ -555,7 +556,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
                   : <span className="tree-label">{n.label}</span>}
                 {status && <span className="tree-git" aria-label={tr('Thay đổi git: {status}', { status })}>{status}</span>}
                 {issues > 0 && <span className="tree-diag" aria-label={tr('{count} vấn đề', { count: issues })}>{issues}</span>}
-                <span className="kind" style={{ color: kindStyle(n.kind).color }}>{n.kind}</span>
+                <span className="kind" style={{ color: kindStyle(n.kind).color }}>{kindLabel(n.kind)}</span>
                 {n.file && n.kind !== 'directory' && !(compact && (folder || file)) && (
                   <button type="button" tabIndex={-1} className="link" aria-label={`${vi.tree.openCode} ${n.label}`}
                     onClick={(e) => { e.stopPropagation(); onOpenCode(n.file as string, n.line_start ?? undefined) }}>{'</>'}</button>

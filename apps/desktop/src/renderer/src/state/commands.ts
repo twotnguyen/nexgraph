@@ -29,7 +29,7 @@ export const COMMANDS: CommandDef[] = [
   { id: 'editor.close_f4', category: 'Thẻ', title: 'Đóng editor', key: 'ctrl+f4' },
   { id: 'window.new', category: 'Ứng dụng', title: 'Cửa sổ mới', key: 'mod+shift+n' },
   { id: 'window.close', category: 'Ứng dụng', title: 'Đóng cửa sổ' },
-  { id: 'theme_selector.toggle', category: 'Giao diện', title: 'Chọn theme', key: 'mod+k mod+t' },
+  { id: 'theme_selector.toggle', category: 'Giao diện', title: 'Chọn chủ đề màu', key: 'mod+k mod+t' },
   { id: 'settings.open', category: 'Ứng dụng', title: 'Mở cài đặt', key: 'mod+,' },
   { id: 'keymap.open', category: 'Ứng dụng', title: 'Mở phím tắt', key: 'mod+k mod+s' },
   { id: 'notification.clear', category: 'Ứng dụng', title: 'Xoá tất cả thông báo' },

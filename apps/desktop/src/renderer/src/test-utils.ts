@@ -31,6 +31,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
   const handlers = new Set<(e: EngineEvent) => void>()
   const agentHandlers = new Set<(pid: string, e: AgentEvent) => void>()
   const geminiHandlers = new Set<(event: GeminiCliEvent) => void>()
+  const watchHandlers = new Set<(failure: { projectId: string; message: string }) => void>()
+  const watchRecoveredHandlers = new Set<(projectId: string) => void>()
   const api = {
     engine: { status: vi.fn(async () => ({ state: 'ready' as const, engineVersion: '0.1.0', vendorCommit: 'x' })),
       restart: vi.fn(async () => {}),
@@ -39,7 +41,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       list: vi.fn(async () => []), remove: vi.fn(async () => {}), ...over.project },
     index: {
       scan: vi.fn(async () => ({ files: 10, by_language: {}, large: false, threshold: 5000, top_dirs: [] })),
-      start: vi.fn(async () => ({ jobId: 'j1' })), status: vi.fn(async () => progress('queued', 0, 0)), cancel: vi.fn(async () => {}),
+      start: vi.fn(async () => ({ jobId: 'j1' })), options: vi.fn(async () => null), status: vi.fn(async () => progress('queued', 0, 0)), cancel: vi.fn(async () => {}),
       refresh: vi.fn(async () => ({ status: 'ok' as const, reason: null, added: 0, changed: 0, removed: 0, seconds: 0 })),
       onEvent: vi.fn((cb: (e: EngineEvent) => void) => { handlers.add(cb); return () => handlers.delete(cb) }),
       ...over.index
@@ -93,7 +95,10 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       onEvent: vi.fn((cb: (pid: string, e: AgentEvent) => void) => { agentHandlers.add(cb); return () => agentHandlers.delete(cb) }), ...over.agent },
     mcp: { config: vi.fn(async () => ({ stdio: '{}' })), plan: vi.fn(), apply: vi.fn(), planRemove: vi.fn(), remove: vi.fn(), startHttp: vi.fn(async () => ({ url: 'http://127.0.0.1:1/mcp', key: 'k' })),
       stopHttp: vi.fn(async () => {}), httpStatus: vi.fn(async () => null), ...over.mcp },
-    watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}), ...over.watch },
+    watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}),
+      onError: vi.fn((cb: (failure: { projectId: string; message: string }) => void) => { watchHandlers.add(cb); return () => watchHandlers.delete(cb) }),
+      onRecovered: vi.fn((cb: (projectId: string) => void) => { watchRecoveredHandlers.add(cb); return () => watchRecoveredHandlers.delete(cb) }),
+      ...over.watch },
     sources: { clone: vi.fn(async () => ({ jobId: 'c1' })), list: vi.fn(async () => []), add: vi.fn(async () => ({ jobId: 's1' })),
       remove: vi.fn(async () => {}), ...over.sources },
     indexSources: { hasDsn: vi.fn(async () => false), saveDsn: vi.fn(async () => {}), pickFile: vi.fn(async () => null), remembered: vi.fn(async () => null), ...over.indexSources },
@@ -111,7 +116,10 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       start: vi.fn(async () => ({ jobId: 'sem1' })), usage: vi.fn(async () => null), cancel: vi.fn(async () => {}), ...over.semantic }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
-  return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }
+  return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)),
+    emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)),
+    emitWatchError: (failure: { projectId: string; message: string }) => watchHandlers.forEach((handler) => handler(failure)),
+    emitWatchRecovered: (projectId: string) => watchRecoveredHandlers.forEach((handler) => handler(projectId)) }
 }
 
 export const progress = (state: JobState, done: number, total: number, extra: Partial<Job> = {}): Extract<EngineEvent, { type: 'job_progress' }> =>

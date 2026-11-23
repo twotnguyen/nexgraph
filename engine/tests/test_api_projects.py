@@ -1,3 +1,4 @@
+import os
 import sqlite3
 import threading
 
@@ -46,6 +47,21 @@ def test_index_then_stats_nonzero(api, copy_fixture):
     (listed,) = api.get("/v1/projects").json()
     assert isinstance(listed["last_indexed_at"], int)
     assert api.open(listed["path"])["last_indexed_at"] == listed["last_indexed_at"]  # mở lại: app biết đã index
+
+
+def test_index_job_result_reports_skipped_bundle_files(api, tmp_path):
+    """Kết quả job JSON có số tệp bị bỏ vì sinh tự động (PERF-L mục 3)."""
+    root = tmp_path / "proj"
+    (root / "lib").mkdir(parents=True)
+    (root / "lib/a.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    (root / "plugins/site/_next/static/chunks").mkdir(parents=True)
+    (root / "plugins/site/_next/static/chunks/x.js").write_text("var a=1;\n" * 5, encoding="utf-8")
+    (root / "lib/vendor.min.js").write_text("var a=1;\n", encoding="utf-8")
+    p = api.open(root)
+    job = api.index(p["project_id"])
+    assert job["state"] == "done"
+    assert job["result"]["files_skipped"] == 2
+    assert job["result"]["skipped"] == {"bundle": 2}
 
 
 def test_remove_registered_project_keeps_source_and_published_graph(api, copy_fixture):
@@ -140,7 +156,28 @@ def test_scan_route(api, copy_fixture):
     body = api.get(f"/v1/projects/{pid}/scan").json()
     assert body["files"] == 9 and body["large"] is False and body["threshold"] == 5000
     assert body["by_language"] == {"dart": 9} and body["top_dirs"][0] == {"path": "lib", "files": 8}
+    assert body["unreadable_paths"] == [] and body["unreadable_count"] == 0
     assert api.get("/v1/projects/nope/scan").status_code == 404
+
+
+@pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                    reason="chmod 000 không chặn được trên Windows/root")
+def test_scan_route_reports_unreadable_directory(api, tmp_path):
+    """A1 F6: quét trước khi index cũng phải nói ra thư mục không đọc được."""
+    root = tmp_path / "proj"
+    (root / "lib").mkdir(parents=True)
+    (root / "lib" / "a.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    secret = root / "secret"
+    secret.mkdir()
+    (secret / "b.py").write_text("def b():\n    return 2\n", encoding="utf-8")
+    secret.chmod(0)
+    try:
+        pid = api.open(root)["project_id"]
+        body = api.get(f"/v1/projects/{pid}/scan").json()
+        assert body["files"] == 1
+        assert body["unreadable_paths"] == ["secret"] and body["unreadable_count"] == 1
+    finally:
+        secret.chmod(0o755)
 
 
 def test_unreadable_graph_db_is_reported_not_treated_as_new_project(api, copy_fixture):

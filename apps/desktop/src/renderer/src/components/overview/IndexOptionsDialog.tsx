@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { IndexOptions } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 import { Icon } from '../common/icons'
 
 interface Props {
@@ -42,7 +43,7 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
   const [manifests, setManifests] = useState(false)
   const [scipText, setScip] = useState('')
   const [mcpText, setMcp] = useState('')
-  const [dsnError, setDsnError] = useState<string | null>(null)
+  const [dsnError, setDsnError] = useState<Message | null>(null)
   useEffect(() => {
     let live = true
     // Lỗi khi dò công cụ không chặn: engine vẫn báo thiếu công cụ theo từng tệp khi index.
@@ -52,6 +53,14 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
       setPgMissing(t.psycopg === false)
     }).catch(() => {})
     window.nexgraph.indexSources.hasDsn(projectId).then((v) => live && setHasDsn(v)).catch(() => {})
+    // Mở lại hộp thoại phải thấy đúng lựa chọn mà nút "Index lại" sẽ dùng (A3 #7).
+    window.nexgraph.index.options(projectId).then((o) => {
+      if (!live || !o) return
+      // Tệp nhớ có thể hỏng tay: sai kiểu thì bỏ trường đó, đừng để ném và mất cả lựa chọn đúng (review-50 M2).
+      setText((Array.isArray(o.exclude) ? o.exclude : []).join('\n')); setDocs(o.includeDocs === true)
+      setMedia(o.includeMedia === true); setConfig(o.includeConfig === true)
+      setWorkers(Number.isInteger(o.workers) ? String(o.workers) : '')
+    }).catch(() => {})
     window.nexgraph.indexSources.remembered(projectId).then((s) => {
       if (!live || !s) return
       setPostgres(!!s.postgres); setCargo(!!s.cargo); setManifests(!!s.manifests)
@@ -81,7 +90,7 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
       try {
         await window.nexgraph.indexSources.saveDsn(projectId, dsn.trim())
       } catch (e) {
-        setDsnError(vi.overview.dsnSaveFailed(e instanceof Error ? e.message : String(e)))
+        setDsnError(msg('Không lưu được chuỗi kết nối: {error}', { error: e instanceof Error ? e.message : String(e) }))
         return
       }
     }
@@ -131,7 +140,7 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
               {hasDsn
                 ? <small className="muted">{vi.overview.dsnSaved} <button type="button" onClick={forgetDsn}>{vi.overview.dsnForget}</button></small>
                 : needDsn && <small className="muted">{vi.overview.needDsn}</small>}
-              {dsnError && <small role="alert" className="error">{dsnError}</small>}
+              {dsnError && <small role="alert" className="error">{msgText(dsnError)}</small>}
             </label>
           )}
           <label><input type="checkbox" checked={cargo} onChange={(e) => setCargo(e.target.checked)} /> {vi.overview.sourceCargo}</label>

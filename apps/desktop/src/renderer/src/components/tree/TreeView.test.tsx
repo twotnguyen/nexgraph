@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood, NodeKind } from '@shared/graph-types'
 import type { LspDiagnosticsEvent, ProjectDirectory } from '@shared/api'
 import { emptyChanges, installNexgraph } from '../../test-utils'
 import { startDiagnostics } from '../../state/diagnostics'
+import { setLocale, useLocale } from '../../state/locale'
 import { TreeView } from './TreeView'
 
 const gnode = (id: string, kind: NodeKind, label: string, line: number | null = null): GraphNode => ({ id, kind, label, qualified_name: label,
@@ -32,6 +34,14 @@ const neighbors = vi.fn(async (_p: string, q: { node: string }) => {
   return hood(gnode(q.node, 'file', q.node), [])
 })
 
+afterEach(() => setLocale('vi'))
+
+/** Cha theo dõi locale như App thật: đổi ngôn ngữ thì cây vẽ lại. */
+function LocaleHost({ render }: { render: () => ReactNode }) {
+  useLocale()
+  return <>{render()}</>
+}
+
 describe('TreeView', () => {
   it('cây mở thư mục khi bấm và gọi neighbors đúng tham số', async () => {
     const { api } = installNexgraph({ graph: { neighbors } })
@@ -41,6 +51,7 @@ describe('TreeView', () => {
     expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['src', 'README.md']) // thư mục trước
     await userEvent.click(screen.getByRole('button', { name: 'Mở src' }))
     expect(await screen.findByRole('treeitem', { name: 'app.py' })).toBeInTheDocument()
+    expect(screen.getAllByText('Tệp').length).toBeGreaterThan(0)
     expect(screen.getByText(/còn nữa, dùng Tìm kiếm/)).toBeInTheDocument()
   })
 
@@ -178,6 +189,20 @@ describe('TreeView', () => {
     expect(trash).not.toHaveBeenCalled()
     expect(confirm).not.toHaveBeenCalled()
     confirm.mockRestore()
+  })
+
+  it('lỗi thao tác đổi ngôn ngữ ngay khi cây còn mở', async () => {
+    const list = vi.fn(async (): Promise<ProjectDirectory> => ({
+      entries: [{ path: 'a.txt', name: 'a.txt', kind: 'file' }], truncated: false
+    }))
+    installNexgraph({ fs: { list, createFile: vi.fn(), rename: vi.fn(), trash: vi.fn() } })
+    render(<LocaleHost render={() => <TreeView projectId="p1" compact onOpenNode={() => {}} onOpenCode={() => {}} dirtyFiles={new Set(['a.txt'])} />} />)
+    const item = await screen.findByRole('treeitem', { name: 'a.txt' })
+    item.focus()
+    fireEvent.keyDown(item, { key: 'F2' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Hãy lưu các tệp đang sửa trước khi đổi tên hoặc di chuyển.')
+    act(() => setLocale('en'))
+    expect(screen.getByRole('alert')).toHaveTextContent('Save modified files before renaming or moving them.')
   })
 
   it('ghép đôi khi double-click và đóng khi middle-click trong cây compact', async () => {

@@ -6,6 +6,7 @@ import type { AgentSessionSnapshot, ProjectCommands } from '@shared/agent-types'
 import { emptyAgentSnapshot, installNexgraph } from '../../test-utils'
 import { useAgentWorkbench } from './useAgentWorkbench'
 import { WorkbenchHistory, WorkbenchSettings, WorkbenchStatus, ago } from './WorkbenchControls'
+import { msgText } from '../../state/messages'
 
 const pending = <T,>() => {
   let resolve!: (value: T) => void
@@ -398,6 +399,6 @@ describe('useAgentWorkbench ordering', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     await act(async () => result.current.rollback())
     expect(result.current.task?.checkpointIds).toEqual(['conflict'])
-    expect(result.current.notice).toContain('b.ts')
+    expect(msgText(result.current.notice)).toContain('b.ts')
   })
 })

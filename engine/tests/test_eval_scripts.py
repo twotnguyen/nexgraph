@@ -76,6 +76,10 @@ def test_bench_all_smoke(fixtures_dir, tmp_path):
                 "build_tour_ms", "build_context_login_ms", "list_flows_auth_ms", "neighbors_top_node_ms", "graph_db_mb", "peak_rss_total_mb"):
         assert key in data["metrics"], key
     assert data["metrics"]["rebuild_flows_ms"]["n"] == 1
+    # PERF-L mục 4: bảng NFR phải biết lần đo chạy với bao nhiêu worker và có rơi về tuần tự không.
+    assert data["metrics"]["workers_effective"] >= 1
+    assert data["metrics"]["fallback_serial"] in (True, False)
+    assert isinstance(data["metrics"]["files_skipped"], int)
     assert data["nexgraph_commit"] and data["machine"]["os"]
 
 

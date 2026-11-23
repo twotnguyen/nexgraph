@@ -1,0 +1,17 @@
+merge: origin/main (ae593ce) vào feat/desktop-native-menu
+
+Giải xung đột:
+- state/commands.ts: giữ cả hai — 6 lệnh mới của Tùng (file.revert, folder.close,
+  editor.close_f4, window.new, window.close) + tiêu đề mới của main
+  "Chọn chủ đề màu" cho theme_selector.toggle; bỏ dòng trùng.
+- strings.ts: giữ toàn bộ khoá i18n menu File của Tùng + khoá plural mới
+  "Đã chia {n} cụm" của main; đổi khoá 'Chọn theme' -> 'Chọn chủ đề màu'
+  theo tiêu đề lệnh mới của main.
+
+Sửa tích hợp tối thiểu để cổng xanh:
+- EditorTab.revert: setError(msg(...)) thay tr(...) — luật i18n #51 (labels.test)
+  cấm chốt chuỗi đã dịch vào state.
+- test/quit-lifecycle.test.ts: mock electron thiếu Menu (appMenu mới import) —
+  thêm Menu.setApplicationMenu/buildFromTemplate vào mock.
+
+Gates: pnpm typecheck xanh; vitest 194 files / 1728 passed; biome lint 0 lỗi.

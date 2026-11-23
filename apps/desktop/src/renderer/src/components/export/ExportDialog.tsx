@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ExportFormat, ExportScope } from '@shared/graph-types'
+import { getLocale } from '../../state/locale'
 import { vi } from '../../strings'
 import { Icon } from '../common/icons'
 
@@ -68,7 +69,8 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
     run(async () => {
       const dir = await window.nexgraph.exporter.pickDir(projectId)
       if (!dir) return null
-      const r = await window.nexgraph.exporter.run(projectId, choice as ExportFormat, scope)
+      // Tệp HTML callflow do engine sinh theo ngôn ngữ UI đang dùng.
+      const r = await window.nexgraph.exporter.run(projectId, choice as ExportFormat, scope, getLocale())
       return { kind: 'files', ...r }
     })
   const savePng = () =>

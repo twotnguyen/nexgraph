@@ -692,6 +692,18 @@ button:disabled {
   font-size: 13px;
 }
 
+/* Kết quả Tìm symbol mở mã; nút phụ mới mở node trên graph nên phải nhỏ, không chiếm cả dòng. */
+.search-hit {
+  display: grid;
+  gap: 2px;
+}
+
+.search-hit > button.link {
+  width: auto;
+  justify-self: start;
+  font-size: 12px;
+}
+
 .placeholder {
   padding: 24px;
 }
@@ -2299,6 +2311,20 @@ button.card:hover:not(:disabled) .card-icon {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 22%, transparent);
 }
 
+/* ≤1100: vùng thẻ chỉ còn ~422px ở 1024×700 (6 thẻ cần ~490px) — thu padding và cho
+   xuống dòng để không thẻ nào bị cắt mất nhãn; thanh không còn cuộn ngang ẩn. */
+@media (max-width: 1100px) {
+  .tabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    padding: 0 6px;
+  }
+
+  .tab {
+    padding: 8px 9px;
+  }
+}
+
 /* Nút trên canvas: nền nhuốm màu loại nút */
 .react-flow__node-default {
   background: color-mix(in srgb, var(--node-c, var(--color-surface)) 9%, var(--color-surface));
@@ -2803,6 +2829,18 @@ dialog.modal::backdrop { background: var(--overlay); }
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
     scroll-behavior: auto !important;
+  }
+  /* Monaco đo kích thước widget tràn bằng getBoundingClientRect() ngay trong task đặt lại kích thước:
+     `.monaco-resizable-hover` được phồng tạm bằng chiều cao editor rồi mới co về kích thước nội dung.
+     Chỉ cần transition-duration > 0 thì lần đọc đầu tiên vẫn trả về kích thước CŨ (đang phồng), Monaco
+     cache lại và đặt `top = neo - chiều cao editor` ⇒ hover lệch đúng một chiều cao editor và bị cắt.
+     Tắt hẳn transition/animation trong cây editor để mọi thay đổi kích thước áp dụng tức thì. */
+  .monaco-editor,
+  .monaco-editor *,
+  .monaco-editor *::before,
+  .monaco-editor *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
   }
 }
 

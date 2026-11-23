@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
+import { useLocale } from '../../state/locale'
 import { EvidencePopover } from '../architecture/EvidencePopover'
 import { CanvasState } from '../common/CanvasState'
 import { CyclesPopover } from './CyclesPopover'
@@ -17,8 +18,8 @@ interface Props {
   onOpenArch?: (blockId: string) => void
 }
 
-interface Crumb { id: string | null; label: string }
-interface EvidenceState { title: string; items: ArchEvidence[]; loading: boolean; error: string | null }
+interface Crumb { id: string | null; label?: string }
+interface EvidenceState { source: string; target: string; weight: number; items: ArchEvidence[]; loading: boolean; error: string | null }
 
 const errMessage = (err: unknown): string =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
@@ -35,7 +36,9 @@ const inNode = (node: MapNode, file: string): boolean => {
 }
 
 export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpenArch }: Props) {
-  const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.map.root }])
+  // Nhãn dịch đọc lúc render (breadcrumb gốc, tiêu đề bằng chứng), không giữ chuỗi đã dịch trong state.
+  useLocale()
+  const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null }])
   const [data, setData] = useState<ProjectMap | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
@@ -89,10 +92,9 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
   }, [activeCycle, cycles, data])
 
   const onEdgeClick = useCallback((source: string, target: string) => {
-    const label = (id: string) => data?.nodes.find((n) => n.id === id)?.label ?? id
     const weight = data?.edges.find((e) => e.source === source && e.target === target)?.weight ?? 0
     const request = ++evidenceRequest.current
-    setEvidence({ title: vi.map.edgeTitle(label(source), label(target), weight), items: [], loading: true, error: null })
+    setEvidence({ source, target, weight, items: [], loading: true, error: null })
     window.nexgraph.graph.archEvidence(projectId, source, target, EVIDENCE_LIMIT)
       .then((items) => request === evidenceRequest.current && setEvidence((cur) => cur && { ...cur, items, loading: false }))
       .catch((e) => request === evidenceRequest.current && setEvidence((cur) => cur && { ...cur, loading: false, error: errMessage(e) }))
@@ -100,6 +102,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
 
   const onNodeClick = useCallback((id: string) => setSelected(data?.nodes.find((n) => n.id === id) ?? null), [data])
   const drill = (n: MapNode) => setCrumbs((c) => [...c, { id: n.id, label: n.label }])
+  const nodeLabel = (id: string): string => data?.nodes.find((n) => n.id === id)?.label ?? id
 
   return (
     <div className="map-view" aria-busy={!data && !error}>
@@ -108,7 +111,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
           {crumbs.map((c, i) => (
             <span key={`${c.id}-${i}`}>
               {i > 0 && ' › '}
-              <button type="button" disabled={i === crumbs.length - 1} onClick={() => setCrumbs(crumbs.slice(0, i + 1))}>{c.label}</button>
+              <button type="button" disabled={i === crumbs.length - 1} onClick={() => setCrumbs(crumbs.slice(0, i + 1))}>{c.label ?? vi.map.root}</button>
             </span>
           ))}
         </nav>
@@ -155,7 +158,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
         </aside>
       )}
       {evidence && (
-        <EvidencePopover title={evidence.title} items={evidence.items} loading={evidence.loading} error={evidence.error}
+        <EvidencePopover title={vi.map.edgeTitle(nodeLabel(evidence.source), nodeLabel(evidence.target), evidence.weight)} items={evidence.items} loading={evidence.loading} error={evidence.error}
           onOpenNode={onOpenNode} onOpenCode={onOpenCode} onClose={() => { evidenceRequest.current += 1; setEvidence(null) }} />
       )}
       </>

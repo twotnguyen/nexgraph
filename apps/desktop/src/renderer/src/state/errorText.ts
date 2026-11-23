@@ -1,4 +1,4 @@
-import { tr } from '../strings'
+import { type Message, MsgError, msg, msgText } from './messages'
 
 /** Lỗi IPC tiếng Việt phổ biến: chỉ những câu có bản dịch mới đổi theo ngôn ngữ. */
 const knownErrors: Record<string, true> = {
@@ -89,11 +89,54 @@ const knownErrors: Record<string, true> = {
   'Không mở được cổng công cụ Gemini': true,
   'Kết nối Google đã thay đổi. Hãy kiểm tra và xác nhận lại trước khi gửi mã nguồn.': true,
   'Yêu cầu không được phép trong kết nối NexGraph': true,
-  'Không hỗ trợ': true
+  'Không hỗ trợ': true,
+  'Engine chưa sẵn sàng.': true,
+  'Quyền thực thi không hợp lệ': true,
+  'Ngân sách phải là số nguyên dương và thời gian phải nằm trong giới hạn bộ đếm của hệ thống': true,
+  'Chế độ trợ lý không hợp lệ': true,
+  'Đã đổi chế độ': true,
+  'Không thể tách hội thoại': true,
+  'Tệp đang có bản nháp chưa lưu trong trình soạn thảo. Lưu hoặc đóng bản nháp trước khi trợ lý sửa.': true,
+  'Mã tác vụ không hợp lệ': true,
+  'Tác vụ không thuộc hội thoại của tài khoản và dự án hiện tại': true,
+  'Không tìm thấy hội thoại của tác vụ': true,
+  'Không xác định được mô hình và khả năng nhận ảnh. Hãy chọn mô hình hỗ trợ ảnh.': true,
+  'Chưa cấu hình trợ lý AI': true,
+  'Chưa đồng ý gửi dữ liệu tới nhà cung cấp AI': true,
+  'Mô hình đang chọn không hỗ trợ ảnh hoặc chưa xác định được khả năng nhận ảnh.': true,
+  'Không khởi động được tác vụ': true,
+  'Đã đóng dự án': true,
+  'Đã đổi hội thoại': true,
+}
+
+/**
+ * Câu do main dựng kèm số liệu (không thể đặt khoá từ điển): đổi thành khoá + biến để dịch
+ * lúc render như mọi `Msg` khác.
+ */
+const dynamicErrors: { re: RegExp; key: string }[] = [
+  {
+    re: /^Mô hình chỉ có (\d+) token ngữ cảnh, không đủ cho system prompt \+ công cụ — chọn mô hình lớn hơn\.$/,
+    key: 'Mô hình chỉ có {n} token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.'
+  }
+]
+
+const rawText = (e: unknown): string => e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
+
+/**
+ * Lỗi dưới dạng `Message` để state giữ khoá và dịch lúc render (I1): lỗi do renderer ném
+ * bằng `msgError` giữ nguyên khoá; câu Việt của main tra `knownErrors`/mẫu động thành khoá;
+ * còn lại là câu động (engine) — `tr()` trả nguyên văn như trước.
+ */
+export function errorMsg(e: unknown): Message {
+  if (e instanceof MsgError) return e.msg
+  const text = rawText(e)
+  if (knownErrors[text] === true) return msg(text)
+  for (const rule of dynamicErrors) {
+    const match = rule.re.exec(text)
+    if (match) return msg(rule.key, { n: match[1] })
+  }
+  return msg(text)
 }
 
 /** Câu lỗi để hiển thị: lỗi IPC qua contextBridge là object có `message` nhưng không `instanceof Error` ở renderer. */
-export const errorText = (e: unknown): string => {
-  const text = e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
-  return knownErrors[text] === true ? tr(text) : text
-}
+export const errorText = (e: unknown): string => msgText(errorMsg(e))

@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentEvent, ApprovalRequest } from '@shared/agent-types'
 import type { GraphEdge, GraphNode } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
+import { setLocale } from '../../state/locale'
 
 // jsdom không chạy Monaco: diff editor thay bằng <textarea> chỉ đọc.
 vi.mock('../editor/monaco', () => ({
@@ -45,6 +46,8 @@ const done: AgentEvent = {
 }
 const editReq: ApprovalRequest = { id: 'r1', tool: 'edit', path: 'lib/auth.dart', before: 'int a = 1;\n', after: 'int a = 2;\n' }
 const writeReq: ApprovalRequest = { id: 'r2', tool: 'write', path: 'lib/new.dart', before: '', after: 'void a() {}\n' }
+
+afterEach(() => { setLocale('vi') })
 
 describe('AgentPanel', () => {
   it('chỉ gửi tệp đã đính kèm và giữ tham chiếu khi người dùng chuyển tệp trước khi gửi', async () => {
@@ -145,6 +148,19 @@ describe('AgentPanel', () => {
     expect(api.agent.approve).toHaveBeenCalledWith('p1', 'r1', true)
   })
 
+  it('MIN-46 M6 EN: lỗi khi gọi approve hiện qua errorText (mã conflict có bản dịch)', async () => {
+    const approve = vi.fn(async () => { throw { code: 'conflict', message: 'Tệp đang có bản nháp chưa lưu trong trình soạn thảo. Lưu hoặc đóng bản nháp trước khi trợ lý sửa.' } })
+    const { emitAgent } = installNexgraph({ ...consented(), agent: { ...editMode(), approve } })
+    render(<AgentPanel {...props()} />)
+    await ask('sửa giúp hàm login')
+    act(() => emitAgent('p1', { type: 'approval', request: editReq }))
+    const card = await screen.findByRole('group', { name: 'Sửa tệp lib/auth.dart' })
+    act(() => setLocale('en'))
+    await userEvent.click(within(card).getByRole('button', { name: 'Duyệt thay đổi' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/The file has an unsaved draft in the editor\. Save or close the draft before the assistant edits it\./)
+    expect(screen.queryByText(/bản nháp chưa lưu/)).not.toBeInTheDocument()
+  })
+
   it('approval write hiện diff kể cả trước đó trống; Từ chối gọi approve(id, false)', async () => {
     const { api, emitAgent } = installNexgraph({ ...consented(), agent: editMode() })
     render(<AgentPanel {...props()} />)
@@ -239,6 +255,56 @@ describe('AgentPanel', () => {
     expect(screen.getByPlaceholderText(/Hỏi về dự án/)).toHaveValue('hỏi gì đó')
     expect(screen.getByPlaceholderText(/Hỏi về dự án/)).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Gửi' })).toBeInTheDocument()
+  })
+
+  it('tin lỗi kết nối không có dòng trích dẫn/nút đánh giá và câu lỗi chỉ hiện một lần (A1 F5)', async () => {
+    let emit: (pid: string, e: AgentEvent) => void = () => {}
+    emit = installNexgraph({ ...consented(), agent: { prompt: replying(() => emit,
+      { type: 'error', code: 'ai_unreachable', message: 'x' }) } }).emitAgent
+    render(<AgentPanel {...props()} />)
+    await ask('hỏi gì đó')
+    const alerts = await screen.findAllByRole('alert')
+    expect(alerts).toHaveLength(1) // không thêm <p role=alert> trùng với bubble
+    expect(alerts[0]).toHaveTextContent('Không kết nối được tới nhà cung cấp AI.')
+    expect(screen.queryByText('Câu trả lời không có trích dẫn nào')).toBeNull()
+    expect(screen.queryByRole('group', { name: 'Đánh giá câu trả lời' })).toBeNull()
+    expect(screen.getAllByText('Không kết nối được tới nhà cung cấp AI.')).toHaveLength(1)
+  })
+
+  it('đổi model trong Cài đặt cập nhật panel chat đang mở ngay, không cần reload (A1 F3)', async () => {
+    let fire: (e: { providerId: string }) => void = () => {}
+    const getSettings = vi.fn(async () => ({ ...target, model: 'm1', hasKey: true }))
+    installNexgraph({
+      ai: { getSettings, hasConsent: vi.fn(async () => true) },
+      auth: { onModelsChanged: vi.fn((cb: (e: { providerId: string }) => void) => { fire = cb; return () => {} }) }
+    })
+    render(<AgentPanel {...props()} />)
+    expect(await screen.findByText('m1')).toBeInTheDocument()
+    // Cài đặt đã đổi model và main báo danh sách model đổi; panel đang mở phải đọc lại cấu hình.
+    getSettings.mockResolvedValue({ ...target, model: 'm2', hasKey: true })
+    act(() => fire({ providerId: 'provider-one' }))
+    expect(await screen.findByText('m2')).toBeInTheDocument()
+    expect(screen.queryByText('m1')).toBeNull()
+  })
+
+  it('models-changed khi đang có lượt: hoãn tới lúc lượt kết thúc rồi cập nhật (MIN-54)', async () => {
+    let fire: (e: { providerId: string }) => void = () => {}
+    const getSettings = vi.fn(async () => ({ ...target, model: 'm1', hasKey: true }))
+    const { emitAgent } = installNexgraph({
+      ai: { getSettings, hasConsent: vi.fn(async () => true) },
+      auth: { onModelsChanged: vi.fn((cb: (e: { providerId: string }) => void) => { fire = cb; return () => {} }) },
+      agent: { prompt: pending() }
+    })
+    render(<AgentPanel {...props()} />)
+    expect(await screen.findByText('m1')).toBeInTheDocument()
+    await ask('hỏi khi đang đổi model')
+    getSettings.mockResolvedValue({ ...target, model: 'm2', hasKey: true })
+    act(() => fire({ providerId: 'provider-one' }))
+    // Lượt đang chạy nên chưa đọc lại cấu hình; event bị bỏ trước đây làm panel giữ model cũ mãi.
+    expect(screen.getByText('m1')).toBeInTheDocument()
+    expect(screen.queryByText('m2')).toBeNull()
+    act(() => emitAgent('p1', done))
+    expect(await screen.findByText('m2')).toBeInTheDocument()
   })
 
   it('xung đột khi ghi vẫn hiện sau câu trả lời và được xóa khi gửi câu hỏi mới', async () => {

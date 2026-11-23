@@ -61,6 +61,49 @@ describe('SearchPanel', () => {
     expect(screen.queryByText('login')).not.toBeInTheDocument()
   })
 
+  it('Tìm symbol mở tệp tại dòng của symbol, vẫn xem được trên graph (A3 #2)', async () => {
+    installNexgraph({ graph: { search: vi.fn(async () => [hit('lib/a.dart::AuthService.login#method', 1, { line_start: 42 })]) } })
+    const onOpen = vi.fn()
+    const onOpenCode = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={onOpen} onOpenCode={onOpenCode} />)
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'login')
+    await tick(250)
+    await user.click(await screen.findByRole('button', { name: /login/ }))
+    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 42, 1)
+    expect(onOpen).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Xem trên graph' }))
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'lib/a.dart::AuthService.login#method' }))
+  })
+
+  it('node nguồn ảo nguon:// chọn trên graph, không mở tab editor chết (review-50 M1)', async () => {
+    const pkg = gnode('nguon://cargo::app#module', { kind: 'module', label: 'app', file: 'nguon://cargo', line_start: 1 })
+    installNexgraph({ graph: { search: vi.fn(async () => [{ node: pkg, score: 1 }]) } })
+    const onOpen = vi.fn()
+    const onOpenCode = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={onOpen} onOpenCode={onOpenCode} />)
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'app')
+    await tick(250)
+    await user.click(await screen.findByRole('button', { name: /app/ }))
+    // Nguồn ảo không phải tệp trên đĩa: mở editor sẽ ra tab "Tệp không còn tồn tại".
+    expect(onOpenCode).not.toHaveBeenCalled()
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'nguon://cargo::app#module' }))
+    expect(screen.queryByRole('button', { name: 'Xem trên graph' })).toBeNull()
+  })
+
+  it('Enter mở tệp:dòng của kết quả đầu tiên khi có onOpenCode', async () => {
+    installNexgraph({ graph: { search: vi.fn(async () => [hit('lib/a.dart::A.one#method', 1, { line_start: 7 })]) } })
+    const onOpenCode = vi.fn()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={vi.fn()} onOpenCode={onOpenCode} />)
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'one')
+    await tick(250)
+    await screen.findByText('one')
+    await user.type(screen.getByLabelText('Tìm trong đồ thị'), '{Enter}')
+    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 7, 1)
+  })
+
   it('shows label, kind and file:line, and opens a result on click', async () => {
     const { onOpen, user } = setup()
     await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'login')
@@ -160,5 +203,17 @@ describe('SearchPanel', () => {
     expect(choices).toHaveLength(2)
     await user.click(choices[1])
     expect(onOpen).toHaveBeenCalledWith(b)
+  })
+
+  it('đang chờ chọn node trùng tên thì không hiện dòng "0 node, 0 cạnh liên quan" (A3 #9)', async () => {
+    const a = gnode('a/helper.py::helper#function', { kind: 'function', label: 'helper', file: 'a/helper.py' })
+    const b = gnode('b/helper.py::helper#function', { kind: 'function', label: 'helper', file: 'b/helper.py' })
+    installNexgraph({ graph: { ask: vi.fn(async () => ({ seeds: [], nodes: [], edges: [], truncated: false, ambiguous: [a, b] })) } })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={vi.fn()} onShowSubgraph={vi.fn()} />)
+    await user.click(screen.getByRole('radio', { name: 'Hỏi graph' }))
+    await user.type(screen.getByLabelText('Câu hỏi cho graph'), 'helper{Enter}')
+    expect(await screen.findByText(/trùng với 2 node/)).toBeInTheDocument()
+    expect(screen.queryByText('0 node, 0 cạnh liên quan')).toBeNull()
   })
 })

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
 import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
-import { tr, vi } from '../../strings'
+import { tr, vi, viSource } from '../../strings'
+import { errorMsg } from '../../state/errorText'
 import { Icon } from '../common/icons'
 import { PopoverMenu, type MenuItem } from '../common/PopoverMenu'
 import { FileTypeIcon } from '../common/FileTypeIcon'
@@ -21,6 +22,7 @@ import { matchProfile, useAgentProfiles, type AgentProfile } from '../../state/a
 import { ContextRing } from './ContextRing'
 import { SavedPrompts } from './SavedPrompts'
 import { announceAgent } from '../../state/agentNotify'
+import { msg, msgError, msgText, type Message } from '../../state/messages'
 
 interface Props {
   id?: string
@@ -43,7 +45,7 @@ interface Props {
 }
 
 type FileContext = { file: string; line: number; lineEnd?: number }
-type Msg = { id: number | string; role: 'user'; content: string; context?: FileContext } | { id: number | string; role: 'assistant'; content: string; citations: Citation[]; tools: string[] }
+type Msg = { id: number | string; role: 'user'; content: string; context?: FileContext } | { id: number | string; role: 'assistant'; content: string; citations: Citation[]; tools: string[]; error?: boolean }
 type ImageAttachment = { id: number; name: string; mimeType: string; dataUrl: string }
 type ComposerDraft = { text: string; context?: FileContext; attachments: AgentContextItem[]; images: ImageAttachment[] }
 type QueuedPrompt = ComposerDraft & { id: number; target: AiConsentTarget; model: string; sessionId: string | null }
@@ -94,8 +96,11 @@ function errorCode(e: unknown): string {
   return e && typeof e === 'object' && 'code' in e ? String(e.code) : ''
 }
 
-function errorMessage(e: unknown): string {
-  return vi.chat.errors[errorCode(e)] || (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
+function errorMessage(e: unknown): Message {
+  // Mã cũ có câu riêng trong `chat.errors`; mã mới (conflict, bad_param, …) dịch câu Việt của main qua `errorMsg`
+  // để không lọt tiếng Việt khi giao diện English (review #47 Minor 6). Khoá VI giữ trong `Msg`, dịch lúc render (I1).
+  const key = viSource.chat.errors[errorCode(e)]
+  return key ? msg(key) : errorMsg(e)
 }
 
 function isFileApproval(value: unknown): value is FileApprovalRequest {
@@ -140,14 +145,14 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const [dismissedCompletion, setDismissedCompletion] = useState('')
   const [completionIndex, setCompletionIndex] = useState(0)
   const [projectFiles, setProjectFiles] = useState<string[] | null>(null)
-  const [fileListError, setFileListError] = useState('')
+  const [fileListError, setFileListError] = useState<Message>('')
   const [queueWake, setQueueWake] = useState(0)
   const [connect, setConnect] = useState(false)
   const [savedOpen, setSavedOpen] = useState(false)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [busy, setBusy] = useState(false)
   const [tool, setTool] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [consent, setConsent] = useState<PendingConsent | null>(null)
   const [checking, setChecking] = useState(false)
   const [openTools, setOpenTools] = useState<number | string | null>(null)
@@ -184,6 +189,10 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const scope = useRef<AiConsentTarget | null>(null)
   const operation = useRef<number | null>(null)
   const operationSeq = useRef(0)
+  // MIN-54: `auth:models-changed` tới khi đang có lượt/ thao tác thì không bỏ — nhớ lại và đọc cấu
+  // hình ngay khi lượt kết thúc, để panel không giữ model cũ tới lần gửi sau.
+  const refreshWanted = useRef(false)
+  const refreshNow = useRef<() => void>(() => {})
   const messages = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
@@ -248,15 +257,18 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setBusy(false)
     setTool(null)
     setDraft('')
+    // models-changed bị hoãn lúc đang chạy: lượt vừa xong thì đọc lại cấu hình ngay.
+    if (refreshWanted.current) refreshNow.current()
   }
-  const fail = (q: string, message: string) => {
+  const fail = (q: string, message: Message) => {
     const current = turn.current
     const id = current?.id ?? ++turnSeq.current
     if (failedTurns.current.has(id)) return
     failedTurns.current.add(id)
     const continueQueue = !!current && sameConsentTarget(scope.current, current.target) && !!queueRef.current.some((item) => item.sessionId === current.sessionId && sameConsentTarget(item.target, current.target))
     if (current) current.completed = continueQueue
-    setMsgs((cur) => [...cur, { id, role: 'assistant', content: message, citations: [], tools: [] }])
+    // Tin lỗi là một bubble riêng: không đánh giá/trích dẫn, và câu lỗi chỉ hiện một lần (A1 F5).
+    setMsgs((cur) => [...cur, { id, role: 'assistant', content: msgText(message), citations: [], tools: [], error: true }])
     if (current) {
       const failed = { text: q, context: current.context, attachments: current.attachments, images: current.images }
       const composing = composerRef.current
@@ -265,7 +277,6 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         updateQueue((items) => [...items, queuePrompt(failed, current.target, current.model, current.sessionId)])
       else setComposer(failed)
     }
-    setError(message)
     end()
   }
 
@@ -275,7 +286,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     let read = 0
     mounted.current = true
     const refresh = () => {
-      if (operation.current !== null || turn.current) return
+      if (operation.current !== null || turn.current) { refreshWanted.current = true; return }
+      refreshWanted.current = false
       const which = ++read
       const beforeSubmit = operationSeq.current
       const stillCurrent = () => alive && which === read && beforeSubmit === operationSeq.current && !turn.current
@@ -287,16 +299,19 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         setError(errorMessage(e))
       })
     }
+    refreshNow.current = refresh
     refresh()
     void window.nexgraph.auth.models().then((items) => { if (alive) setModels(items) }).catch(() => {})
     window.addEventListener('focus', refresh)
+    // Đổi model trong Cài đặt không làm panel chat đang mở biết (A1 F3): main bắn khi danh sách model đổi (#37).
+    const offModels = window.nexgraph.auth.onModelsChanged(() => refresh())
     window.nexgraph.agent.getMode(projectId).then((m) => {
       if (!alive) return
       if (m === 'edit') editWarned.current = true // phiên đã ở Sửa từ trước thì không hỏi lại
       modeRef.current = m
       setMode(m)
     }).catch(() => {
-      if (alive) setError(vi.agent.modeFailed)
+      if (alive) setError(msg('Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.'))
     }).finally(() => {
       if (!alive) return
       modePending.current = false
@@ -343,7 +358,9 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       } else if (e.type === 'error') {
         if (e.code !== 'ai_cancelled') announceAgent('error', alertTitle.current)
         // Câu theo mã lỗi (dịch theo ngôn ngữ) + thông điệp ngắn của provider để người dùng biết phải sửa gì.
-        fail(t.q, `${vi.chat.errors[e.code] || e.message}${e.detail ? ` — ${e.detail}` : ''}`)
+        // Mã lạ dùng `errorText` để câu Việt của main (kể cả `ai_context_small` kèm số token) dịch được ở EN.
+        const text = msgText(errorMessage({ code: e.code, message: e.message }))
+        fail(t.q, `${text}${e.detail ? ` — ${e.detail}` : ''}`)
       }
     })
     return () => {
@@ -351,9 +368,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       projectGeneration.current++
       mounted.current = false
       operation.current = null
+      refreshNow.current = () => {}
       if (turn.current) void window.nexgraph.agent.abort(projectId)
       turn.current = null
       window.removeEventListener('focus', refresh)
+      offModels()
       off()
     }
   }, [projectId])
@@ -386,6 +405,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (!isCurrent(id)) return
     operation.current = null
     setChecking(false)
+    // Thao tác khác cũng chặn refresh (vd kiểm tra kết nối): xong thì đọc lại nếu có models-changed chờ.
+    if (refreshWanted.current) refreshNow.current()
   }
 
   const pickMode = async (m: AgentMode) => {
@@ -409,7 +430,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       modeRef.current = null
       setMode(null)
       setApprovals([])
-      setError(vi.agent.modeFailed)
+      setError(msg('Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.'))
     } finally {
       modePending.current = false
       if (mounted.current) setChangingMode(false)
@@ -427,7 +448,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     try {
       await applyTools(profile?.disabledTools ?? [])
     } catch {
-      setError(vi.agent.modeFailed)
+      setError(msg('Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.'))
       return
     }
     await pickMode(m)
@@ -491,7 +512,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       if (queued && (!sameConsentTarget(selected, queued.target) || settings.model !== queued.model || queued.sessionId !== sessionIdRef.current))
         throw new Error(tr('Phiên hoặc model đã thay đổi. Hãy kiểm tra tin trong hàng đợi trước khi gửi.'))
       const target = applySettings(settings)
-      if (!target) throw new Error(vi.chat.notConfigured)
+      if (!target) throw msgError('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')
       const allowed = await window.nexgraph.ai.hasConsent(projectId, target)
       if (!isCurrent(id)) {
         if (queued && mounted.current) updateQueue((items) => [queued, ...items])
@@ -527,11 +548,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       return
     }
     const selectedModel = models.find((model) => model.provider === cfg?.provider && model.id === cfg?.model)
-    if (value.images.length && selectedModel?.supportsImages === false) { setError(tr('Model hiện tại không nhận ảnh. Hãy đổi sang model hỗ trợ hình ảnh.')); return }
+    if (value.images.length && selectedModel?.supportsImages === false) { setError(msg('Model hiện tại không nhận ảnh. Hãy đổi sang model hỗ trợ hình ảnh.')); return }
     if (value.images.some((image) => cfg?.runtime === 'antigravity-cli') && !window.confirm(tr('Gemini có thể không nhận ảnh trong phiên bản CLI này. Nếu không hỗ trợ, lượt gửi sẽ báo lỗi rõ ràng. Tiếp tục?'))) return
     if (busy || activeRun.current || queueRef.current.some((item) => item.sessionId === work.sessionId && sameConsentTarget(item.target, scope.current))) {
       const target = scope.current
-      if (!target || !cfg?.model) { setError(vi.chat.notConfigured); return }
+      if (!target || !cfg?.model) { setError(msg('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')); return }
       updateQueue((items) => [...items, queuePrompt(value, target, cfg.model, turn.current?.sessionId ?? sessionIdRef.current)])
       setComposer({ text: '', attachments: [], images: [] })
       if (!busy && !activeRun.current) { queueReady.current = true; setQueueWake((count) => count + 1) }
@@ -550,7 +571,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const current = applySettings(settings)
       if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error(tr('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.'))
       if (!sameConsentTarget(current, pending.target) || settings.model !== pending.model)
-        throw new Error(vi.chat.errors.ai_provider_changed)
+        throw msgError('Nhà cung cấp hoặc model AI đã thay đổi. Hãy kiểm tra lại rồi gửi câu hỏi.')
       await window.nexgraph.ai.grantConsent(projectId, pending.target)
       if (pending.queued && pending.queued.sessionId !== sessionIdRef.current) throw new Error(tr('Phiên đã thay đổi. Hãy kiểm tra lại tin trong hàng đợi.'))
       if (isCurrent(id)) run({ text: pending.question, context: pending.context, attachments: pending.attachments ?? [], images: pending.images ?? [] }, pending.target, pending.model, !pending.queued)
@@ -666,7 +687,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
 
   const executeSlash = (name: string, erase = true) => {
     if (['new', 'clear', 'model', 'resume', 'login'].includes(name) && (busy || !!activeRun.current || checking || work.pending || work.loading)) {
-      setError(tr('Dừng trợ lý trước khi đổi phiên hoặc model.'))
+      setError(msg('Dừng trợ lý trước khi đổi phiên hoặc model.'))
       return false
     }
     if (erase) setComposer({ ...composerRef.current, text: '' })
@@ -674,7 +695,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (name === 'new' || name === 'clear') { void work.create(); setView('chat') }
     else if (name === 'resume') { setView('history'); void work.refresh().catch((e) => setError(errorMessage(e))) }
     else if (name === 'model') {
-      if (!modelSelect.current) setError(tr('Chưa có danh sách model. Hãy kết nối AI trước.'))
+      if (!modelSelect.current) setError(msg('Chưa có danh sách model. Hãy kết nối AI trước.'))
       else { modelSelect.current.focus(); modelSelect.current.showPicker?.() }
     } else if (name === 'stop') stop()
     else if (name === 'login') setConnect(true)
@@ -702,7 +723,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (completion?.kind !== 'mention' || projectFiles !== null || fileListError) return
     let live = true
     const load = window.nexgraph.fs.files
-    if (!load) { setFileListError(tr('Không liệt kê được tệp ở chế độ này.')); return }
+    if (!load) { setFileListError(msg('Không liệt kê được tệp ở chế độ này.')); return }
     void load(projectId).then(({ files }) => { if (live) setProjectFiles(files) }).catch((e) => { if (live) setFileListError(errorMessage(e)) })
     return () => { live = false }
   }, [completion?.kind, projectFiles, fileListError, projectId])
@@ -720,7 +741,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       const file = fileRows[index]
       if (!file) return
       if (!attachments.some((item) => item.kind === 'file' && item.file === file)) {
-        if (attachments.length >= 12) { setError(tr('Mỗi lượt hỗ trợ tối đa 12 mục ngữ cảnh.')); return }
+        if (attachments.length >= 12) { setError(msg('Mỗi lượt hỗ trợ tối đa 12 mục ngữ cảnh.')); return }
         setAttachments((current) => [...current, { kind: 'file', file }])
       }
     }
@@ -799,7 +820,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       {view === 'settings' && <div className="agent-settings-view"><WorkbenchSettings projectId={projectId} work={work} busy={busy || checking} mode={mode} runtime={cfg?.runtime} onSuggest={(suggestion) => { setText(suggestion); setView('chat'); input.current?.focus() }} /></div>}
       <div className="agent-thread" hidden={view !== 'chat'}>
         {toolsUnavailable && <p className="agent-notice">{tr('Model này không hỗ trợ gọi công cụ. Hãy đổi model để sửa mã và chạy kiểm thử.')}</p>}
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <p role="alert" className="error">{msgText(error)}</p>}
         <div className="msgs" ref={messages} onScroll={(event) => {
           const el = event.currentTarget
           followMessages.current = el.scrollHeight - el.clientHeight - el.scrollTop < 36
@@ -829,9 +850,11 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
               {m.context && <span className="agent-sent-file mono" title={fileReference(m.context)}>{fileReference(m.context)}</span>}
             </div>
           ) : (
-            <div key={`assistant-${m.id}`} className="ai">
-              <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />
-              <div className="foot muted">
+            <div key={`assistant-${m.id}`} className={m.error ? 'ai error' : 'ai'} role={m.error ? 'alert' : undefined}>
+              {/* Tin lỗi là chữ thuần: không markdown/trích dẫn, để câu lỗi đọc được một mạch (A1 F5). */}
+              {m.error ? <span className="error-text">{m.content}</span>
+                : <CitationText text={m.content} citations={m.citations} onOpen={onOpenCode} />}
+              {!m.error && <div className="foot muted">
                 {m.citations.length === 0 ? <span>{vi.chat.noCitations}</span>
                   : <span>{vi.chat.verified(m.citations.filter((c) => c.valid).length, m.citations.length)}</span>}
                 {m.citations.some((c) => c.valid) && (
@@ -841,7 +864,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
                   <button type="button" className="link" onClick={() => setOpenTools(openTools === m.id ? null : m.id)}>{vi.chat.tools(m.tools.length)}</button>
                 )}
                 {questionBefore(msgs, i) && <AnswerRating projectId={projectId} question={questionBefore(msgs, i)} answer={m.content} citations={m.citations} />}
-              </div>
+              </div>}
               {openTools === m.id && (
                 <ul className="tool-list mono">
                   {m.tools.map((t, k) => <li key={`${m.id}-${k}`}>{t}</li>)}
@@ -884,7 +907,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
             {completion && <div id="agent-completions" className="agent-completions" role="listbox" aria-label={completion.kind === 'command' ? tr('Lệnh') : tr('Tệp trong dự án')}>
               {completion.kind === 'command' ? commandRows.map((command, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={command.name} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><b>/{command.name}</b><span>{command.detail}</span></button>)
                 : fileRows.map((file, index) => <button type="button" role="option" aria-selected={index === selectedCompletion} id={`agent-completion-${index}`} key={file} onMouseDown={(event) => event.preventDefault()} onClick={() => acceptCompletion(index)}><FileTypeIcon name={file} /><b>{file.slice(file.lastIndexOf('/') + 1)}</b><span>{file.slice(0, file.lastIndexOf('/') + 1)}</span></button>)}
-              {!completionCount && <div className="agent-completion-empty">{completion.kind === 'command' ? tr('Không có lệnh khớp') : fileListError || (projectFiles ? tr('Không có tệp khớp') : tr('Đang liệt kê tệp…'))}</div>}
+              {!completionCount && <div className="agent-completion-empty">{completion.kind === 'command' ? tr('Không có lệnh khớp') : msgText(fileListError) || (projectFiles ? tr('Không có tệp khớp') : tr('Đang liệt kê tệp…'))}</div>}
             </div>}
             {(attachments.length > 0 || fileContext || images.length > 0 || stagingImages) && <div className="agent-attachments">
               {attachments.map((item, index) => <div className="agent-attachment" key={`${item.kind}-${index}`}><span className="mono" title={contextLabel(item)}>{item.kind === 'file' ? '@' : ''}{contextLabel(item)}</span><button type="button" className="agent-icon-button" disabled={checking || stopping} aria-label={tr('Gỡ {name}', { name: contextLabel(item) })} onClick={() => setAttachments((current) => current.filter((_, at) => at !== index))}><Icon name="close" size={11} /></button></div>)}

@@ -28,7 +28,9 @@ vi.mock('electron', () => ({
     loadURL = vi.fn(async () => {})
     on(name: string, cb: () => void) { if (name === 'closed') h.closed = cb }
   },
-  dialog: { showMessageBoxSync: vi.fn() }, ipcMain: { handle: vi.fn() }, shell: { openExternal: h.externalOpen }
+  dialog: { showMessageBoxSync: vi.fn() }, ipcMain: { handle: vi.fn() }, shell: { openExternal: h.externalOpen },
+  // appMenu dựng menu hệ thống lúc whenReady; mock đủ để entrypoint nạp được.
+  Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn(() => ({ items: [] })) }
 }))
 vi.mock('../src/main/ipc', () => ({
   registerIpc: vi.fn(), closeAllAgents: h.closeAgents, stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopEditorProcesses: vi.fn()

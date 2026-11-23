@@ -33,7 +33,7 @@ type FakeEditor = {
   focus: Mock
 }
 type FakeKey = { keyCode: number; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean; preventDefault: Mock; stopPropagation: Mock }
-type EditorOptions = { model?: FakeModel; value?: string }
+type EditorOptions = { model?: FakeModel; value?: string; overflowWidgetsDomNode?: HTMLElement }
 type FakeProvider = Record<string, (model: FakeModel, position: { lineNumber: number; column: number }) => Promise<unknown>>
 const fake = vi.hoisted(() => {
   const models = new Map<string, FakeModel>()
@@ -41,16 +41,17 @@ const fake = vi.hoisted(() => {
   const editors: FakeEditor[] = []
   const providers: { name: string; language: string; provider: FakeProvider }[] = []
   const disposable = { dispose() {} }
-  const createModel = vi.fn((value: string, language: string, uri: { toString(): string }): FakeModel => {
+  const createModel = vi.fn((value: string, language: string, uri?: { toString(): string }): FakeModel => {
     let text = value
     let lang = language
     let disposed = false
+    const modelUri = uri ?? { toString: () => `inmemory://${models.size}` }
     const model = {
-      uri,
+      uri: modelUri,
       getValue: () => text,
       setValue: (next: string) => { text = next },
       isDisposed: () => disposed,
-      dispose: vi.fn(() => { disposed = true; models.delete(uri.toString()) }),
+      dispose: vi.fn(() => { disposed = true; models.delete(modelUri.toString()) }),
       onWillDispose: () => disposable,
       getLineCount: () => text.split('\n').length,
       getLineMaxColumn: () => 1,
@@ -60,7 +61,7 @@ const fake = vi.hoisted(() => {
       getLanguageId: () => lang,
       setLanguageId: (id: string) => { lang = id }
     }
-    models.set(uri.toString(), model)
+    models.set(modelUri.toString(), model)
     return model
   })
   const createEditorMock = vi.fn((options: EditorOptions): FakeEditor => {
@@ -91,7 +92,7 @@ const fake = vi.hoisted(() => {
     editors.push(editor)
     return editor
   })
-  return { models, collections, editors, providers, createModel, createEditorMock, disposable, installFontKeys: vi.fn() }
+  return { models, collections, editors, providers, createModel, createEditorMock, diffOptions: [] as EditorOptions[], disposable, installFontKeys: vi.fn() }
 })
 
 const sideEffectModules = [
@@ -158,6 +159,25 @@ vi.doMock('monaco-editor/editor/editor.api.js', () => {
   })
   const editor = {
     create: (_el: HTMLElement, options: EditorOptions) => fake.createEditorMock(options),
+    createDiffEditor: (el: HTMLElement, options: EditorOptions) => {
+      fake.diffOptions.push(options)
+      // Hai editor con thật của Monaco: mỗi editor có cây DOM .monaco-editor riêng và
+      // Monaco gắn node widget tràn vào chính cây đó khi không cấp host bên ngoài.
+      const child = () => {
+        const root = document.createElement('div')
+        root.className = 'monaco-editor'
+        const content = document.createElement('div')
+        content.className = 'overflowingContentWidgets'
+        const overlay = document.createElement('div')
+        overlay.className = 'overflowingOverlayWidgets'
+        root.append(content, overlay)
+        el.appendChild(root)
+        return { getDomNode: () => root, dispose: vi.fn(), updateOptions: vi.fn() }
+      }
+      let original: ReturnType<typeof child> | undefined
+      let modified: ReturnType<typeof child> | undefined
+      return { setModel: vi.fn(), dispose: vi.fn(), getOriginalEditor: () => (original ??= child()), getModifiedEditor: () => (modified ??= child()) }
+    },
     createModel: fake.createModel,
     getModel: (uri: { toString(): string }) => fake.models.get(uri.toString()),
     getModels: () => [...fake.models.values()],
@@ -186,7 +206,7 @@ vi.doMock('monaco-editor/editor/editor.api.js', () => {
 })
 
 // Phải đăng ký các vi.doMock ở trên trước khi nạp monaco.ts (mô-đun có nhiều import phụ).
-const { createEditor, createMirror, continuationFor } = await import('./monaco')
+const { createEditor, createMirror, createDiffEditor, continuationFor } = await import('./monaco')
 
 const el = () => document.createElement('div')
 const opts = (path?: string, language = 'typescript') => ({ value: 'disk', language, readOnly: false, path, projectId: 'p1' })
@@ -238,6 +258,21 @@ describe('E3 editor handles', () => {
     expect(editor.revealRangeInCenter).toHaveBeenCalledWith(range)
   })
 
+  it('revealLines đặt con trỏ ở dòng đầu và tô cả khoảng ở giữa khung nhìn (A1 F4)', () => {
+    const handle = createEditor(el(), opts())
+    handle.revealLines(872, 875)
+    const editor = fake.editors.at(-1)!
+    // Con trỏ phải ở dòng đầu của trích dẫn, không chỉ cuộn tới.
+    expect(editor.setPosition).toHaveBeenCalledWith({ lineNumber: 872, column: 1 })
+    const range = editor.revealRangeInCenter.mock.calls[0][0]
+    expect(range).toMatchObject({ startLineNumber: 872, startColumn: 1, endLineNumber: 875, endColumn: 1 })
+    // Cả khoảng dòng được tô, không phải một dòng.
+    expect(fake.collections[0].set).toHaveBeenCalledWith([
+      { range: expect.objectContaining({ startLineNumber: 872, endLineNumber: 875 }),
+        options: { isWholeLine: true, className: 'editor-hit' } }
+    ])
+  })
+
   it('reuses a live same-Uri model and disposes it only when the last owner leaves', () => {
     const first = createEditor(el(), opts('src/a.ts'))
     first.setValue?.('chưa lưu')
@@ -273,6 +308,43 @@ describe('E3 editor handles', () => {
     expect(fake.editors.at(-1)!.updateOptions).toHaveBeenCalledWith({ readOnly: false })
     handle.dispose()
     mirror.dispose()
+  })
+
+  it('passes a page-anchored overflow widget node to the editor, the mirror and the diff editor', () => {
+    const editorEl = el()
+    const handle = createEditor(editorEl, opts('src/d.ts'))
+    const editorOptions = fake.createEditorMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(editorOptions.fixedOverflowWidgets).toBeUndefined()
+    const host = editorOptions.overflowWidgetsDomNode as HTMLElement
+    expect(host).toBeInstanceOf(HTMLElement)
+    expect(host.parentElement).toBe(editorEl)
+    expect(host.className).toContain('monaco-editor')
+
+    const mirrorEl = el()
+    const mirror = createMirror(mirrorEl, 'src/d.ts', 'p1')!
+    const mirrorOptions = fake.createEditorMock.mock.calls.at(-1)?.[0] as Record<string, unknown>
+    expect(mirrorOptions.overflowWidgetsDomNode).toBeInstanceOf(HTMLElement)
+    expect((mirrorOptions.overflowWidgetsDomNode as HTMLElement).parentElement).toBe(mirrorEl)
+    expect(mirrorOptions.overflowWidgetsDomNode).not.toBe(host)
+
+    const diffEl = el()
+    const diff = createDiffEditor(diffEl, { before: 'a', after: 'b', language: 'typescript' })
+    // Diff có hai editor con: mỗi con một host riêng, không dùng chung host của diff.
+    expect(fake.diffOptions.at(-1)?.overflowWidgetsDomNode).toBeUndefined()
+    const diffHosts = [...diffEl.querySelectorAll<HTMLElement>('.ne-overflow-widgets')]
+    expect(diffHosts).toHaveLength(2)
+    for (const diffHost of diffHosts) {
+      expect(diffHost.parentElement?.className).toBe('monaco-editor')
+      expect(diffHost.querySelectorAll('.overflowingContentWidgets')).toHaveLength(1)
+      expect(diffHost.querySelectorAll('.overflowingOverlayWidgets')).toHaveLength(1)
+    }
+    expect(new Set(diffHosts.map((node) => node.parentElement)).size).toBe(2)
+
+    diff.dispose()
+    handle.dispose()
+    mirror.dispose()
+    expect(host.parentElement).toBeNull()
+    expect(diffEl.querySelectorAll('.ne-overflow-widgets')).toHaveLength(0)
   })
 })
 

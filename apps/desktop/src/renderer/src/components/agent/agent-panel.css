@@ -326,7 +326,7 @@
 .agent-chip:hover:not(:disabled), .agent-model-select:hover:not(:disabled) { background: var(--agent-hover); color: var(--color-text); }
 .agent-chip:disabled { opacity: .4; }
 .agent-model-select { max-width: 248px; cursor: pointer; text-overflow: ellipsis; }
-.agent-model { overflow: hidden; color: var(--color-muted); text-overflow: ellipsis; }
+.agent-model { overflow: hidden; color: var(--color-muted); text-overflow: clip; white-space: normal; height: auto; min-height: 28px; line-height: 1.2; }
 
 .agent-composer-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 24px; padding: 0 6px; color: color-mix(in srgb, var(--color-muted) 80%, transparent); font-size: 11px; }
 .agent-panel .agent-composer-foot .mode { display: inline-flex; flex: none; gap: 1px; border: 0; border-radius: 6px; overflow: visible; }

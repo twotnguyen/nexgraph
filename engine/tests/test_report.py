@@ -16,6 +16,22 @@ def test_report_excludes_tests_and_files(copy_fixture, index_project):
     assert r["truncated"] is False
 
 
+def test_report_community_labels_follow_lang(copy_fixture, index_project):
+    """MIN-51b: nhãn `Cụm quanh X` lưu tiếng Việt — report lang=en phải dịch lúc trả, không đổi dữ liệu lưu."""
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+
+    en = report_json(store, root, lang="en")
+    assert en["communities"]
+    assert all("Cụm" not in c["label"] and "Cộng đồng" not in c["label"] for c in en["communities"])
+    assert any(c["label"].startswith("Cluster around ") for c in en["communities"])
+    # VI giữ nguyên như trước; dữ liệu trong CSDL vẫn là nhãn tiếng Việt.
+    vi = report_json(store, root, lang="vi")
+    assert any(c["label"].startswith("Cụm quanh ") for c in vi["communities"])
+    stored = [r[0] for r in store.conn.execute("SELECT ten FROM khoi_kien_truc")]
+    assert any(name.startswith("Cụm quanh ") for name in stored)
+
+
 def test_report_markdown_has_sections(copy_fixture, index_project):
     store, _, _ = index_project(copy_fixture("py_mini"))
     md = report_markdown(store, "py_mini")
@@ -225,6 +241,31 @@ def test_translate_every_graphify_message():
     assert vi[7]["why"] == "kết nối ngữ nghĩa giữa các tệp"
     assert translate_surprising(surprising, "en") == surprising
 
+
+
+def test_report_warnings_follow_lang(copy_fixture, index_project, monkeypatch):
+    """MIN-45b (1): banner cảnh báo của /report phải theo `lang`, không luôn là câu tiếng Việt."""
+    import graphify.benchmark as benchmark
+
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+
+    monkeypatch.setattr(benchmark, "run_benchmark",
+                        lambda graph_path=None, corpus_words=None, questions=None: {"error": "No matching nodes found"})
+    vi = report_json(store, root, lang="vi")
+    assert vi["benchmark"] is None
+    assert vi["warnings"] == ["Benchmark trả lỗi: No matching nodes found"]
+    en = report_json(store, root, lang="en")
+    assert en["warnings"] == ["Benchmark returned an error: No matching nodes found"]
+
+    def boom(graph_path=None, corpus_words=None, questions=None):
+        raise RuntimeError("không đọc được graph.json")
+
+    monkeypatch.setattr(benchmark, "run_benchmark", boom)
+    assert report_json(store, root, lang="en")["warnings"] == [
+        "Could not run the report benchmark (RuntimeError: không đọc được graph.json)"]
+    assert report_json(store, root, lang="vi")["warnings"] == [
+        "Không chạy được benchmark của báo cáo (RuntimeError: không đọc được graph.json)"]
 
 
 def test_report_json_rejects_unknown_lang(copy_fixture, index_project):

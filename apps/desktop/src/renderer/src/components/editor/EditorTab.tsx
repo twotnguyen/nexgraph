@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import type { FileContent, GitBlameLine, LspDocumentSymbol } from '@shared/api'
 import type { AgentContextItem } from '@shared/agent-types'
 import { vi, tr } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 import { createEditor, languageFor, type EditorHandle } from './monaco'
 import { createAutoSave } from './autoSave'
 import { Icon } from '../common/icons'
@@ -84,10 +85,10 @@ function symbolTrail(symbols: readonly LspDocumentSymbol[], line: number, column
   return trail
 }
 
-function explain(e: { code?: string; message?: string }): string {
-  if (e?.code === 'file_not_found') return vi.editor.missing
-  if (e?.code === 'outside_project') return vi.editor.outside
-  return e?.message ?? vi.editor.failed
+function explain(e: { code?: string; message?: string }): Message {
+  if (e?.code === 'file_not_found') return msg('Tệp không còn tồn tại')
+  if (e?.code === 'outside_project') return msg('Tệp nằm ngoài thư mục project')
+  return msg(e?.message ?? 'Không đọc được tệp')
 }
 
 /** "Tác giả, 3 ngày trước • tóm tắt" như inline blame của Wu; `summary` false thì bỏ phần tóm tắt commit. */
@@ -118,7 +119,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
   const lockedRef = useRef(locked === true)
   lockedRef.current = locked === true
   const [readOnly, setReadOnly] = useState<FileContent['reason'] | boolean>(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [conflict, setConflict] = useState<Conflict | null>(null)
   const [reloading, setReloading] = useState(false)
   const [ready, setReady] = useState(false)
@@ -265,7 +266,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         if (!alive) return
         const err = e as { code?: string; message?: string }
         if (err?.code === 'file_not_found') updateConflict({ disk: null, detail: vi.editor.deletedOnDisk })
-        else if (diskConflict) updateConflict({ disk: null, detail: explain(err) })
+        else if (diskConflict) updateConflict({ disk: null, detail: msgText(explain(err)) })
       }
     }
 
@@ -294,7 +295,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           setError(null)
           updateConflict({ disk: null })
           await readDisk(current)
-        } else setError(vi.editor.saveFailed)
+        } else setError(msg('Không lưu được tệp'))
         settleSave(text, false)
       } finally {
         writing = undefined
@@ -368,7 +369,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
         let expectedVersion: string | null = null
         try {
           const disk = await fs.read(projectId, path)
-          if (disk.readOnly) { if (alive) setError(vi.editor.readOnly); return false }
+          if (disk.readOnly) { if (alive) setError(msg('Tệp chỉ đọc nên không lưu được')); return false }
           if (!window.confirm(tr('Tệp {path} đã tồn tại. Ghi đè?', { path }))) return false
           expectedVersion = disk.version
         } catch (e) {
@@ -383,7 +384,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           savedAsCallback.current?.(file, path)
           return true
         } catch (e) {
-          if (alive) setError((e as { code?: string })?.code === 'conflict' ? tr('Tệp đã thay đổi trong khi đổi tên. Hãy thử lại.') : vi.editor.saveFailed)
+          if (alive) setError((e as { code?: string })?.code === 'conflict' ? msg('Tệp đã thay đổi trong khi đổi tên. Hãy thử lại.') : msg('Không lưu được tệp'))
           return false
         }
       },
@@ -403,7 +404,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           void flush()
           return true
         } catch {
-          if (alive) setError(tr('Không thể khôi phục tệp từ đĩa.'))
+          if (alive) setError(msg('Không thể khôi phục tệp từ đĩa.'))
           return false
         }
       },
@@ -489,7 +490,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           version: open.base.version, dirty: dirty.current }
       })
       void flush()
-    }).catch((e) => { if (alive) { const message = explain(e); setError(message); loadErrorCallback.current?.(file, message) } })
+    }).catch((e) => { if (alive) { const message = explain(e); setError(message); loadErrorCallback.current?.(file, msgText(message)) } })
     return () => {
       alive = false
       clearTimeout(lspTimer)
@@ -625,7 +626,7 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
       </header>
       {!ready && !error && <p role="status" className="ws-editor-loading muted">{tr('Đang mở tệp…')}</p>}
       {error && <div className="ws-editor-error">
-        <p role="alert" className="error">{error}</p>
+        <p role="alert" className="error">{msgText(error)}</p>
         {!ready && <button type="button" onClick={() => setLoadAttempt((n) => n + 1)}>{tr('Thử lại')}</button>}
       </div>}
       {readOnlyNote && <p role="status" className="stale-banner">{readOnlyNote}</p>}

@@ -85,6 +85,7 @@ describe('startEngine', () => {
       PATH: '/usr/local/bin:/usr/bin', HOME: '/Users/thử', LANG: 'vi_VN.UTF-8',
       ProgramFiles: 'C:\\Program Files',
       GH_TOKEN: 'ghp_thử', GITHUB_TOKEN: 'ghp_thử', GH_HOST: 'github.com',
+      GH_CONFIG_DIR: '/Users/thử/.config/gh', XDG_CONFIG_HOME: '/Users/thử/.config',
       HTTPS_PROXY: 'http://proxy.nội.bộ:3128', NO_PROXY: 'localhost', SSL_CERT_FILE: '/etc/ca.pem',
       NEXGRAPH_SKIP_HOOK: '1', NEXGRAPH_TOKEN: 'token-cũ',
       AWS_ACCESS_KEY_ID: 'AKIA-thử', AWS_SECRET_ACCESS_KEY: 'bí-mật', SSH_AUTH_SOCK: '/tmp/ssh.sock',
@@ -93,6 +94,7 @@ describe('startEngine', () => {
     }
     const env = engineEnv(dirty, { NEXGRAPH_TOKEN: 'token-mới' })
     for (const key of ['PATH', 'HOME', 'LANG', 'ProgramFiles', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_HOST',
+      'GH_CONFIG_DIR', 'XDG_CONFIG_HOME',
       'HTTPS_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'NEXGRAPH_SKIP_HOOK']) {
       expect(env[key], key).toBe(dirty[key])
     }

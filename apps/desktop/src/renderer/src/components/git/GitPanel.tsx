@@ -151,7 +151,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
     void act(async () => {
       const settings = await window.nexgraph.ai.getSettings()
       const target = consentTargetForSettings(settings)
-      if (!target || settings.runtime === 'antigravity-cli') throw new Error(tr('Hãy chọn model Pi trong Cài đặt để viết thông điệp commit.'))
+      if (!target || settings.runtime === 'antigravity-cli') throw new Error(tr('Hãy chọn model AI trong Cài đặt để viết thông điệp commit.'))
       if (!await window.nexgraph.ai.hasConsent(projectId, target)) {
         const destination = target.baseUrl ? `\n${target.baseUrl}` : ''
         if (!window.confirm(tr('Gửi diff đã stage của dự án tới {provider} / {model}{destination} để viết thông điệp commit?', { provider: target.provider, model: settings.model, destination }))) return
@@ -267,11 +267,11 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
           <button type="button" className="git-branch" disabled={busy} title={tr('Chọn nhánh')} onClick={() => setShowBranches(true)}><Icon name="branch" size={13} /><span>{status?.branch ?? (status ? tr('HEAD tách rời') : '…')}</span></button>
           {onOpenWorktrees && <button type="button" className="git-icon" disabled={busy} aria-label="Worktree" title="Worktree" onClick={onOpenWorktrees}><Icon name="folder" size={14} /></button>}
           <div className="git-split git-remote">
-            <button type="button" disabled={busy} onClick={() => remote(primaryRemote)}>{status?.behind ? `↓${status.behind} ` : ''}{status?.ahead ? `↑${status.ahead} ` : ''}{primaryRemote === 'pull' ? 'Pull' : primaryRemote === 'fetch' ? 'Fetch' : status?.upstream ? 'Push' : 'Publish'}</button>
+            <button type="button" disabled={busy} onClick={() => remote(primaryRemote)}>{status?.behind ? `↓${status.behind} ` : ''}{status?.ahead ? `↑${status.ahead} ` : ''}{primaryRemote === 'pull' ? tr('Kéo về') : primaryRemote === 'fetch' ? tr('Lấy về') : status?.upstream ? tr('Đẩy lên') : tr('Xuất bản')}</button>
             <PopoverMenu label={tr('Tác vụ remote')} trigger={<Icon name="chevron" size={12} />} buttonClass="git-chevron" items={[
-              { label: 'Fetch', icon: 'refresh', disabled: busy, onSelect: () => remote('fetch') },
-              { label: 'Pull', icon: 'download', disabled: busy, onSelect: () => remote('pull') },
-              { label: 'Push', icon: 'send', disabled: busy, onSelect: () => remote('push') }
+              { label: tr('Lấy về'), icon: 'refresh', disabled: busy, onSelect: () => remote('fetch') },
+              { label: tr('Kéo về'), icon: 'download', disabled: busy, onSelect: () => remote('pull') },
+              { label: tr('Đẩy lên'), icon: 'send', disabled: busy, onSelect: () => remote('push') }
             ]} />
           </div>
         </div>
@@ -286,10 +286,10 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
           <div className="git-commit-row">
             <button type="button" className="git-icon" disabled={!aiEnabled || busy || !status?.staged.length} aria-label={tr('Viết thông điệp commit')} title={aiEnabled ? tr('Viết thông điệp commit bằng AI từ diff đã stage') : tr('Bật “Tạo thông điệp bằng AI” trong Tuỳ chọn commit')} onClick={suggest}><Icon name="spark" size={14} /></button>
             <div className="git-split">
-              <button type="button" disabled={!canCommit} onClick={commit}>{amend ? 'Amend' : 'Commit'}{status?.staged.length ? ' ' + tr('{count} tệp', { count: status.staged.length }) : ''}</button>
+              <button type="button" disabled={!canCommit} onClick={commit}>{amend ? tr('Sửa commit cuối') : tr('Tạo commit')}{status?.staged.length ? ' ' + tr('{count} tệp', { count: status.staged.length }) : ''}</button>
               <PopoverMenu label={tr('Tuỳ chọn commit')} trigger={<Icon name="chevron" size={12} />} buttonClass="git-chevron" className="git-popover-up" items={[
                 { label: `${aiEnabled ? '✓ ' : ''}${tr('Tạo thông điệp bằng AI')}`, icon: aiEnabled ? 'check' : 'spark', onSelect: () => setAiEnabled((v) => !v) },
-                { label: amend ? 'Commit' : 'Amend', icon: 'commit', disabled: busy || (!amend && (!status?.lastCommit || status.lastCommit.pushed)), onSelect: () => { if (!amend && !draft.trim()) setDraft(status?.lastCommit?.message ?? ''); setAmend(!amend) } }
+                { label: amend ? tr('Tạo commit') : tr('Sửa commit cuối'), icon: 'commit', disabled: busy || (!amend && (!status?.lastCommit || status.lastCommit.pushed)), onSelect: () => { if (!amend && !draft.trim()) setDraft(status?.lastCommit?.message ?? ''); setAmend(!amend) } }
               ]} />
             </div>
           </div>

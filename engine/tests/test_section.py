@@ -5,7 +5,9 @@ import pytest
 
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.query.contracts import read_code
 from nexgraph_engine.query.section import section_json
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -140,6 +142,74 @@ def test_section_route(api, tmp_path):
     assert api.get(f"/v1/projects/{p['project_id']}/section", params={"node": "app.py::main#function"}).status_code == 400
 
 
+def test_section_route_masks_secret_key_document(api, tmp_path):
+    """Review #52 Important 1: `/section` cho `docs/secrets.md` chứa `SECRET_KEY=…` không được lộ giá trị."""
+    value = "django-insecure-" + "e6broute" + "0123456789abcdef"
+    root = tmp_path / "secret key route"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secrets.md").write_text(
+        "# Khoá\n\n## Production\n\n" + "SECRET_" + "KEY=" + value + "\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    job = None
+    import time
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    got = api.get(f"/v1/projects/{p['project_id']}/section",
+                  params={"node": "docs/secrets.md::Production#document"})
+    assert got.status_code == 200, got.text
+    assert value not in got.json()["text"] and "[redacted]" in got.json()["text"]
+    # Model: cùng nút nhưng audience=model phải bị từ chối như trên `main` (không miễn theo tên tệp).
+    blocked = api.get(f"/v1/projects/{p['project_id']}/section",
+                      params={"node": "docs/secrets.md::Production#document"},
+                      headers={"X-NexGraph-Audience": "model"})
+    assert blocked.status_code == 403, blocked.text
+    assert blocked.json()["error"]["code"] == "protected_source"
+    assert value not in blocked.text
+
+
+PEM_BODY = ["MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "B" * 24,
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "C" * 24,
+            "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "D" * 24]
+PEM_DOC = ("# Khoá\n\n-----BEGIN RSA PRIVATE KEY-----\n" + "\n".join(PEM_BODY) +
+           "\n-----END RSA PRIVATE KEY-----\n\n## Sau\n\nNội dung sau.\n")
+
+
+def test_section_after_pem_keeps_line_numbers(tmp_path):
+    """Minor 1 (review #52): PEM che theo dòng nên heading sau khối không lệch số dòng khi lập chỉ mục."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "pem.md").write_text(PEM_DOC, encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        node = _doc(store, "Sau", "pem.md")
+        # Dòng thật của "## Sau" trong tệp là 9 (1-based); trước khi sửa, PEM 5 dòng bị gộp còn 1 nên lệch -4.
+        assert node.line_start == PEM_DOC.splitlines().index("## Sau") + 1
+        out = section_json(store, root, node.id)
+        assert out["text"].startswith("## Sau") and "Nội dung sau." in out["text"]
+        assert "PRIVATE KEY" not in out["text"] and "MIIE" not in out["text"]
+    finally:
+        store.conn.close()
+
+
+def test_read_code_slice_starting_inside_pem_is_redacted(tmp_path):
+    """Dải bắt đầu giữa khối PEM (MCP read_code start=…) vẫn không lộ thân base64."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "pem.md").write_text(PEM_DOC, encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        out = read_code(store, root, "pem.md", 4, 6, redact_documents=True)
+        assert all(part not in out["text"] for part in PEM_BODY)
+        assert "[redacted]" in out["text"]
+    finally:
+        store.conn.close()
+
+
 def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
     """REV-21: section dài hơn MAX_CODE_LINES bị cắt ngầm phải báo truncated, không im lặng."""
     root = tmp_path / "proj"
@@ -154,5 +224,52 @@ def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
         assert out["end"] < node.line_end
         assert len(out["text"]) < 8000
         assert out["truncated"] is True
+    finally:
+        store.conn.close()
+
+
+def test_secret_named_document_is_masked_for_user_and_refused_for_model(tmp_path):
+    """Quyết định lead (re-review #52 vòng 3): không miễn theo tên.
+
+    Đường UI (không truyền policy) vẫn trả bản đã che; đường tới model dùng policy strict nên bị từ chối
+    với mã ổn định `protected_source`.
+    """
+    token = "sk-" + "live-" + "A3TEST" + "1234567890"
+    root = tmp_path / "proj"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secret.md").write_text(
+        f"# Bí mật\n\n## Cấu hình\n\nĐặt `api_key={token}` trong tệp.\n", encoding="utf-8")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "notes.md").write_text("# Ghi chú\n\n## Khoá\n\nkhông chia sẻ.\n", encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        node = _doc(store, "Cấu hình", "docs/secret.md")
+        # UI "Đọc mục": vẫn trả bản đã che dù tên tệp nhạy cảm.
+        out = section_json(store, root, node.id)
+        assert token not in out["text"] and "[redacted]" in out["text"]
+
+        # Model: từ chối, mã lỗi ổn định (không phụ thuộc regex che).
+        with pytest.raises(ApiError) as blocked:
+            section_json(store, root, node.id, source=SourcePolicy(root))
+        assert blocked.value.code == "protected_source"
+
+        with pytest.raises(ApiError) as exc:
+            section_json(store, root, _doc(store, "Khoá", "secrets/notes.md").id, source=SourcePolicy(root))
+        assert exc.value.code == "protected_source"
+    finally:
+        store.conn.close()
+
+
+def test_section_redacts_key_value_secret_and_keeps_backticks(tmp_path):
+    """A3 #9: \"Đọc mục\" che cả dạng `KEY=value` và giữ dấu backtick bao quanh giá trị."""
+    value = "abcd" + "1234"
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "conf.md").write_text(f"# Cấu hình\n\n`DB_PASSWORD={value}`\n", encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        out = section_json(store, root, _doc(store, "Cấu hình", "conf.md").id)
+        assert value not in out["text"] and "[redacted]" in out["text"]
+        assert out["text"].count("`") == 2
     finally:
         store.conn.close()

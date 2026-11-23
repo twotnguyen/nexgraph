@@ -4,10 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EngineStatusBar, StatusBarItems } from './EngineStatusBar'
 import { isStatusItemHidden, setStatusBar, setStatusItemHidden } from '../state/layoutPrefs'
+import { setLocale } from '../state/locale'
 import { COMMANDS, registerHandler } from '../state/commands'
 import { STATUS_BAR_ITEMS, getStatusBarItem } from '../state/statusBarRegistry'
 
-afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false); setStatusItemHidden('git', false) }) })
+afterEach(() => { act(() => { setStatusBar(true); setStatusItemHidden('cursor', false); setStatusItemHidden('git', false) }); setLocale('vi') })
 
 const withGlobalHandlers = () => [
   registerHandler('git_panel.toggle', () => {}),
@@ -37,6 +38,40 @@ describe('EngineStatusBar', () => {
     expect(screen.getAllByRole('button', { name: 'Khởi động lại' })).toHaveLength(1)
     await userEvent.click(screen.getByRole('button', { name: 'Khởi động lại' }))
     expect(onRestart).toHaveBeenCalled()
+  })
+
+  it('hiện nút "Khởi động lại engine" khi đã hết lượt tự thử (A1 F2)', async () => {
+    const onRestart = vi.fn()
+    render(<EngineStatusBar status={{ state: 'error', message: 'engine thoát (exit SIGKILL)', restartable: true }} onRestart={onRestart} />)
+    const restart = screen.getByRole('button', { name: 'Khởi động lại engine' })
+    await userEvent.click(restart)
+    expect(onRestart).toHaveBeenCalledOnce()
+  })
+
+  it('hiện số lần đang tự khởi động lại', () => {
+    render(<EngineStatusBar status={{ state: 'starting', attempt: 3 }} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: đang khởi động lại (lần 3)…')).toBeInTheDocument()
+  })
+
+  it('hiện lý do chết khi đang tự khởi động lại, dịch được sang tiếng Anh (review-50 M5)', () => {
+    const status = { state: 'starting' as const, attempt: 2, message: 'engine thoát (exit SIGKILL)',
+      messageKey: 'engine thoát (exit {code})', messageVars: { code: 'SIGKILL' } }
+    render(<EngineStatusBar status={status} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: đang khởi động lại (lần 2) — engine thoát (exit SIGKILL)…')).toBeInTheDocument()
+  })
+
+  it('lý do chết ở trạng thái thử lại cũng dịch sang tiếng Anh (review-50 M5)', () => {
+    setLocale('en')
+    render(<EngineStatusBar status={{ state: 'starting', attempt: 1, message: 'engine thoát (exit 9)',
+      messageKey: 'engine thoát (exit {code})', messageVars: { code: 9 } }} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: restarting (attempt 1) — engine exited (exit 9)…')).toBeInTheDocument()
+  })
+
+  it('dịch thông báo engine thoát sang tiếng Anh bằng messageKey', () => {
+    setLocale('en')
+    render(<EngineStatusBar status={{ state: 'error', message: 'engine thoát (exit 5)',
+      messageKey: 'engine thoát (exit {code})', messageVars: { code: 5 } }} onRestart={() => {}} />)
+    expect(screen.getByText('Engine: error — engine exited (exit 5)')).toBeInTheDocument()
   })
 
   it('clicking the engine item restarts the engine', async () => {

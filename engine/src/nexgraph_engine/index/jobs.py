@@ -9,7 +9,7 @@ from collections.abc import Callable
 
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.extra_sources import ExtraSources
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.index.indexer import Indexer, ProgressEvent, RunResult
 from nexgraph_engine.index.scan import resolve_subdir
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
@@ -136,6 +136,14 @@ class JobManager:
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
 
+    @staticmethod
+    def _job_result(indexer: "Indexer | None", result: RunResult) -> dict:
+        """Số liệu một lần index cho JSON của job: tệp sinh tự động đã bỏ (mục 3) và số worker hiệu dụng (mục 4)."""
+        skipped = indexer.skipped_files() if indexer is not None else {}
+        return {"files_skipped": result.files_skipped, "skipped": skipped,
+                "workers_effective": result.workers_effective, "fallback_serial": result.fallback_serial,
+                "parallel_files": result.parallel_files, "serial_files": result.serial_files}
+
     def _forget_locked(self, job_id: str) -> None:
         """Caller giữ `_lock`: bỏ job đã xong khỏi bộ nhớ (client cũ nhận 404 như job không tồn tại)."""
         self._jobs.pop(job_id, None)
@@ -245,10 +253,12 @@ class JobManager:
             t.join(timeout=10)
 
     # ------------------------------------------------------------------------------------------------
-    def _update(self, job_id: str, e: ProgressEvent) -> None:
+    def _update(self, job_id: str, e: ProgressEvent, *, result: dict | None = None) -> None:
         with self._lock:
             job = self._jobs[job_id]
             job.update(state=e.state, files_done=e.files_done, message=e.message)
+            if result is not None:
+                job["result"] = result
             if e.files_total or e.state in ("done", "structure"):
                 job["files_total"] = e.files_total
             if e.state in ("done", "cancelled", "error"):
@@ -275,6 +285,9 @@ class JobManager:
             lock.acquire()  # đợi lần refresh hiện tại của project xong
         terminal_event: ProgressEvent | None = None
         published = False
+        indexer: Indexer | None = None  # giữ lại để lấy số liệu kết quả (workers_effective, tệp bị bỏ)
+        result: RunResult | None = None
+        index_result: dict | None = None
 
         def on_event(e: ProgressEvent) -> None:
             nonlocal terminal_event
@@ -295,7 +308,7 @@ class JobManager:
                 store = GraphStore(stage)
                 store.abort_stale_runs()
                 last_docs, last_media = store.last_doc_flags()
-                self._indexer_cls(
+                indexer = self._indexer_cls(
                     store, info.path, on_progress=on_event, cancel=cancel, subdir=subdir, exclude=exclude,
                     include_docs=last_docs if include_docs is None else include_docs,
                     include_media=last_media if include_media is None else include_media,
@@ -303,7 +316,12 @@ class JobManager:
                     workers=workers, force=force, **({"sources": sources} if sources is not None else {}),
                     transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id,
                     sources_dir=sources_root(self._registry.app_data_dir, info.project_id),
-                ).run()
+                )
+                result = indexer.run()
+                # (A1 F6) Thư mục/tệp không đọc được khi quét + số liệu PERF-L đi CÙNG một dict kết quả job.
+                unreadable = indexer.unreadable_paths
+                index_result = {**self._job_result(indexer, result),
+                                "unreadable_paths": unreadable, "unreadable_count": len(unreadable)}
 
                 if terminal_event is None:
                     raise RuntimeError("Lập chỉ mục kết thúc mà chưa báo kết quả")
@@ -329,4 +347,4 @@ class JobManager:
             if lock is not None:
                 lock.release()
             if terminal_event is not None:
-                self._update(job_id, terminal_event)
+                self._update(job_id, terminal_event, result=index_result)

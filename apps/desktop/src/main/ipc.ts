@@ -25,11 +25,13 @@ import { applyPlatform, applyUninstall, planPlatform, planUninstall } from './in
 import type { AgentId, IntegrationOptions } from '../shared/integration-types'
 import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } from './mcp-http'
 import { ProjectWatcher } from './watch/project-watcher'
+import { WatchErrorNotifier } from './watch/error-notice'
 import { EditorStateRegistry } from './agent/editor-state'
 import { AgentRouter } from './agent-router'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
+import { IndexOptionsStore } from './index-options'
 import { IndexSourceStore } from './index-sources'
 import { runSemanticJob } from './ai/semantic-runner'
 import { SemanticUsageStore } from './ai/semantic-usage'
@@ -193,6 +195,11 @@ export function registerIpc(
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
+  // UI-REFRESH-ERR: lỗi refresh nền gửi sang renderer (đã gộp lỗi lặp) thay vì chỉ ghi log main.
+  const watchErrors = new WatchErrorNotifier(
+    (failure) => getWindow()?.webContents.send('watch:error', failure),
+    (projectId) => getWindow()?.webContents.send('watch:ok', projectId)
+  )
   const handle = (): EngineHandle => {
     const h = getHandle()
     if (!h) throw new EngineApiError(503, 'engine_unavailable', 'Engine chưa sẵn sàng.')
@@ -213,6 +220,7 @@ export function registerIpc(
   on('project:list', () => api().listProjects())
   const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),
     new SecretStore(join(app.getPath('userData'), 'index-source-secrets.json'), secretBox))
+  const indexOptions = new IndexOptionsStore(join(app.getPath('userData'), 'index-options.json'))
   const removalVersions = new Map<string, symbol>()
   const stopWatch = (pid: string): void => {
     watchStarts.delete(pid)
@@ -222,6 +230,7 @@ export function registerIpc(
   on('project:remove', async (pid: string) => {
     await api().removeProject(pid)
     indexSources.forget(pid)
+    indexOptions.forget(pid)
     removalVersions.set(pid, Symbol())
     stopWatch(pid)
     agents?.close(pid)
@@ -508,9 +517,11 @@ export function registerIpc(
     return fsh.write(pid, relPath, text, opts)
   })
   on('index:scan', (pid: string) => api().scan(pid))
+  on('index:options', async (pid: string) => indexOptions.remembered(pid))
   on('index:start', async (pid: string, opts?: IndexOptions) => {
     try {
-      const resolved = indexSources.resolve(pid, opts)
+      // Lựa chọn dính của dự án (includeDocs…) áp trước, rồi nguồn bổ sung; renderer không phải gửi lại.
+      const resolved = indexSources.resolve(pid, indexOptions.resolve(pid, opts))
       return { jobId: (await api().startIndex(pid, resolved.opts, resolved.postgresDsn)).job_id }
     } catch (error) {
       if (error instanceof EngineApiError && error.code === 'index_running' && error.jobId) return { jobId: error.jobId }
@@ -532,11 +543,16 @@ export function registerIpc(
         root,
         onFlush: async () => {
           const result = await api().refresh(pid)
+          // Refresh chạy được: gỡ cảnh báo cũ ở renderer và cho lần lỗi sau báo lại, không bị gộp với lỗi cũ.
+          watchErrors.recover(pid)
           if (result.status === 'skipped' && (result.reason === 'index_running' || result.reason === 'refresh_running')) {
             return 'retry'
           }
         },
-        onError: (e) => console.warn(`[watch] ${pid}: ${e.message}`)
+        onError: (e) => {
+          console.warn(`[watch] ${pid}: ${e.message}`)
+          watchErrors.report(pid, e)
+        }
       })
       w.start()
       watchers.set(pid, w)
@@ -544,7 +560,10 @@ export function registerIpc(
       if (watchStarts.get(pid) === generation) watchStarts.delete(pid)
     }
   })
-  on('watch:stop', async (pid: string) => stopWatch(pid))
+  on('watch:stop', async (pid: string) => {
+    watchErrors.clear(pid)
+    return stopWatch(pid)
+  })
   // Nguồn bổ sung (W11): DSN chỉ đi một chiều renderer → main; renderer chỉ biết đã có DSN hay chưa.
   on('index-sources:has-dsn', async (pid: string) => indexSources.hasDsn(pid))
   on('index-sources:remembered', async (pid: string) => indexSources.remembered(pid))
@@ -563,7 +582,7 @@ export function registerIpc(
   on('graph:architecture', (pid: string, parent?: string) => api().architecture(pid, parent))
   on('graph:arch-evidence', (pid: string, from: string, to: string, limit?: number) => api().archEvidence(pid, from, to, limit))
   on('engine:tools', () => api().tools())
-  on('graph:report', (pid: string) => api().report(pid))
+  on('graph:report', (pid: string, lang?: 'vi' | 'en') => api().report(pid, lang))
   on('graph:explain', (pid: string, nodeId: string) => api().explain(pid, nodeId))
   on('graph:section', (pid: string, nodeId: string) => api().section(pid, nodeId))
   on('graph:paths', (pid: string, ids: string[], o?: { maxHops?: number; directed?: boolean }) => api().paths(pid, ids, o))
@@ -572,7 +591,7 @@ export function registerIpc(
   on('graph:recluster', (pid: string) => api().recluster(pid))
   on('graph:flows', (pid: string, opts?: FlowQuery) => api().flows(pid, opts))
   on('graph:flow', (pid: string, flowId: number) => api().flow(pid, flowId))
-  on('graph:tour', (pid: string) => api().tour(pid))
+  on('graph:tour', (pid: string, lang?: 'vi' | 'en') => api().tour(pid, lang))
   on('graph:locate', (pid: string, file: string, line: number) => api().locate(pid, file, line))
   on('graph:context', (pid: string, q: string, budget?: number) => api().context(pid, q, budget))
   on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
@@ -841,11 +860,12 @@ export function registerIpc(
     writeJson(file, { ...readJson(file), [exportDirKey(pid)]: r.filePaths[0] })
     return r.filePaths[0]
   })
-  on('export:run', async (pid: string, format: ExportFormat, scope: ExportScope) => {
+  on('export:run', async (pid: string, format: ExportFormat, scope: ExportScope, lang?: 'vi' | 'en') => {
     await rootOf(pid)
     const dir = savedExportDir(pid)
     if (!dir) throw new AgentError('bad_param', 'Chưa chọn thư mục lưu kết quả xuất')
-    return api().exportGraph(pid, format, scope, dir)
+    // Chỉ nhận đúng hai giá trị; tham số lạ của renderer không được chuyển xuống engine.
+    return lang === 'vi' || lang === 'en' ? api().exportGraph(pid, format, scope, dir, lang) : api().exportGraph(pid, format, scope, dir)
   })
   on('export:push', (pid: string, req: PushRequest) => api().pushGraph(pid, req))
   on('export:png', async (pid: string, rect?: { x: number; y: number; width: number; height: number }) => {

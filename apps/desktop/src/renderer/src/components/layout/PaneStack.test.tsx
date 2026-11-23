@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import { setLocale } from '../../state/locale'
 import { PaneStack, PANE_RESIZE_STEP, type PaneSection, type PaneStackState } from './PaneStack'
+
+afterEach(() => setLocale('vi'))
 
 const sections: PaneSection[] = [
   { id: 'console', title: 'Debug console', children: <pre data-testid="pane-body">output</pre> }
@@ -25,6 +28,14 @@ it('bấm header để thu gọn rồi mở rộng section', () => {
   fireEvent.click(expand)
   expect(screen.getByTestId('pane-body')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Thu gọn Debug console' })).toHaveAttribute('aria-expanded', 'true')
+})
+
+it('dịch cả tên section trong aria-label thu gọn/mở rộng, không ghép nửa Việt nửa Anh', () => {
+  setLocale('en')
+  render(<PaneStack sections={[{ id: 'stack', title: 'Ngăn xếp gọi', children: null }]}
+    state={{ collapsed: {}, heights: {} }} onToggle={() => {}} onResize={() => {}} />)
+  expect(screen.getByRole('button', { name: 'Collapse Call stack' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Call stack' })).toBeInTheDocument()
 })
 
 it('đổi chiều cao 24px bằng ArrowUp/ArrowDown và giữ focus trên separator', () => {

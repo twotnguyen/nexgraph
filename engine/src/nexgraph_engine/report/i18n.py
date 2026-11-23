@@ -76,6 +76,37 @@ _WHY_PATTERNS = (
      lambda m: f"Bắc cầu cộng đồng {m['a']} → cộng đồng {m['b']}"),
 )
 
+# Cảnh báo của /report (banner trong tab Báo cáo): câu cố định, chọn theo `lang` (MIN-45b (1)).
+_WARNINGS = {
+    "benchmark_failed": (
+        "Không chạy được benchmark của báo cáo ({detail})",
+        "Could not run the report benchmark ({detail})",
+    ),
+    "benchmark_error": (
+        "Benchmark trả lỗi: {detail}",
+        "Benchmark returned an error: {detail}",
+    ),
+}
+
+
+def warning_text(key: str, lang: str, **params: str) -> str:
+    """Câu cảnh báo của báo cáo theo `lang`; `vi` giữ nguyên câu cũ (tương thích)."""
+    vi, en = _WARNINGS[key]
+    return (vi if lang == "vi" else en).format(**params)
+
+
+def community_label(name: str, lang: str) -> str:
+    """Nhãn cụm lưu trong CSDL là tiếng Việt (`Cụm quanh X`, `Cộng đồng N`, `Khác`); dịch lúc trả (MIN-51b).
+
+    Dữ liệu lưu không đổi — cùng cách `tour/build.py::_community_label` xử lý; `lang="vi"` trả nguyên.
+    """
+    if lang != "en":
+        return name
+    for vi, en in (("Cụm quanh ", "Cluster around "), ("Cộng đồng ", "Community ")):
+        if name.startswith(vi):
+            return en + name[len(vi):]
+    return "Other" if name == "Khác" else name
+
 
 def check_lang(lang: str | None, default: str) -> str:
     """Chuẩn hoá `lang` của route; None giữ hành vi cũ của route đó."""

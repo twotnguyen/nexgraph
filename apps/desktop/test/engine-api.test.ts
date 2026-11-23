@@ -157,6 +157,16 @@ describe('EngineApi: F10 wave 1 routes', () => {
     expect(await echo(api.report('p1'))).toMatchObject({ method: 'GET', path: '/v1/projects/p1/report' })
   })
 
+  it('DESK-LANG: report, tour và export nhận ngôn ngữ giao diện', async () => {
+    // Không có `lang` thì giữ nguyên hành vi cũ (engine tự lấy mặc định).
+    expect(await echo(api.report('p1'))).toMatchObject({ query: {} })
+    expect(await echo(api.tour('p1'))).toMatchObject({ query: {} })
+    expect(await echo(api.report('p1', 'en'))).toMatchObject({ method: 'GET', path: '/v1/projects/p1/report', query: { lang: 'en' } })
+    expect(await echo(api.tour('p1', 'vi'))).toMatchObject({ method: 'GET', path: '/v1/projects/p1/tour', query: { lang: 'vi' } })
+    const e = await echo(api.exportGraph('p1', 'callflow_html', { kind: 'all' }, '/tmp/Đồ án', 'vi'))
+    expect(e.body).toMatchObject({ format: 'callflow_html', lang: 'vi' })
+  })
+
   it('paths posts node ids with snake_case options', async () => {
     const r = await echo(api.paths('p1', ['a#file', 'b#file'], { maxHops: 3, directed: false }))
     expect(r).toMatchObject({ method: 'POST', path: '/v1/projects/p1/paths' })

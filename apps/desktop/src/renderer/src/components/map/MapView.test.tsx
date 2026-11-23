@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MapEdge, MapNode, ProjectMap } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
+import { setLocale } from '../../state/locale'
 import { MapView } from './MapView'
+
+afterEach(() => setLocale('vi'))
 
 vi.mock('./SigmaView', () => ({
   SigmaView: (p: { nodes: MapNode[]; edges: MapEdge[]; visibleEdges?: MapEdge[]; dimmed?: Set<string>; onNodeClick: (id: string) => void;
@@ -137,5 +140,16 @@ describe('MapView', () => {
   it('lỗi tải hiện role=alert với message của lỗi', async () => {
     setup({ map: vi.fn(async () => { throw { code: 'not_indexed', message: 'Chưa lập chỉ mục' } }) })
     expect(await screen.findByRole('alert')).toHaveTextContent('Chưa lập chỉ mục')
+  })
+
+  it('đổi ngôn ngữ áp dụng ngay cho breadcrumb gốc và tiêu đề bằng chứng đang mở', async () => {
+    setup({ archEvidence: vi.fn(async () => []) })
+    const nav = await screen.findByRole('navigation', { name: 'Đường dẫn bản đồ' })
+    expect(nav).toHaveTextContent('Gốc')
+    await userEvent.click((await screen.findAllByTestId('e'))[0])
+    expect(await screen.findByText('app → src · 2 quan hệ')).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(screen.getByRole('navigation', { name: 'Map path' })).toHaveTextContent('Root')
+    expect(await screen.findByText('app → src · 2 relations')).toBeInTheDocument()
   })
 })

@@ -2,11 +2,12 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
 import type { NexGraphApi } from '@shared/api'
 import type { AgentSessionInfo, AgentSessionSnapshot } from '@shared/agent-types'
 import { emptyAgentSnapshot, installNexgraph } from '../../test-utils'
 import { setNotifyPrefs } from '../../state/agentNotify'
-import { setLocale } from '../../state/locale'
+import { setLocale, useLocale } from '../../state/locale'
 import { AgentPanel } from './AgentPanel'
 
 vi.mock('../editor/monaco', () => ({ languageFor: () => 'typescript', createDiffEditor: () => ({ dispose: vi.fn() }) }))
@@ -123,6 +124,29 @@ describe('lỗi provider trong chat', () => {
     act(() => emitAgent(pid, { type: 'error', code: 'ai_context_window', message: 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi' }))
     expect((await screen.findAllByText(/Ngữ cảnh vượt giới hạn mô hình/)).length).toBeGreaterThan(0)
   })
+
+  it('MIN-46 M3: model có cửa sổ nhỏ hiện đúng số token của main, không dùng câu "tăng context window"', async () => {
+    const { emitAgent } = await startTurn()
+    const message = 'Mô hình chỉ có 6000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.'
+    act(() => emitAgent(pid, { type: 'error', code: 'ai_context_small', message }))
+    expect((await screen.findAllByText(/Mô hình chỉ có 6000 token ngữ cảnh/)).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/tăng context window/)).not.toBeInTheDocument()
+  })
+
+  it('MIN-46 M3 EN: câu ngữ cảnh nhỏ dịch theo mẫu, giữ số token', async () => {
+    setLocale('en')
+    const { emitAgent } = await startTurn()
+    act(() => emitAgent(pid, { type: 'error', code: 'ai_context_small', message: 'Mô hình chỉ có 6000 token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.' }))
+    expect((await screen.findAllByText(/The model has only 6000 context tokens/)).length).toBeGreaterThan(0)
+  })
+
+  it('MIN-46 M1/M6 EN: mã conflict không có trong chat.errors vẫn dịch qua errorText', async () => {
+    setLocale('en')
+    const { emitAgent } = await startTurn()
+    act(() => emitAgent(pid, { type: 'error', code: 'conflict', message: 'Tệp đang có bản nháp chưa lưu trong trình soạn thảo. Lưu hoặc đóng bản nháp trước khi trợ lý sửa.' }))
+    expect((await screen.findAllByText(/The file has an unsaved draft in the editor\. Save or close the draft before the assistant edits it\./)).length).toBeGreaterThan(0)
+    expect(screen.queryByText(/bản nháp chưa lưu/)).not.toBeInTheDocument()
+  })
 })
 
 describe('vòng context', () => {
@@ -196,5 +220,28 @@ describe('tin nhắn đã lưu', () => {
     expect(saved).toBeEnabled()
     await userEvent.click(saved)
     expect(dialog()).toBeInTheDocument()
+  })
+})
+
+/** Cha theo dõi locale như App thật: đổi ngôn ngữ thì panel vẽ lại (element mới mỗi lần). */
+function LocaleHost({ render: draw }: { render: () => ReactNode }) {
+  useLocale()
+  return <>{draw()}</>
+}
+
+describe('I1: chuỗi lỗi giữ khoá, dịch lúc render', () => {
+  it('alert "chưa cấu hình trợ lý AI" đổi theo ngôn ngữ sau khi đã hiện', async () => {
+    installNexgraph({
+      ai: { getSettings: vi.fn(async () => ({ ...target, model: '', hasKey: false })), hasConsent: vi.fn(async () => true) },
+      agent: { snapshot: vi.fn(async () => snapshot()), listSessions: vi.fn(async () => [session]), notify }
+    })
+    render(<LocaleHost render={() => <AgentPanel {...props} />} />)
+    const input = await screen.findByRole<HTMLTextAreaElement>('textbox', { name: 'Tin nhắn cho trợ lý AI' })
+    await userEvent.type(input, 'hello{Enter}')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')
+    act(() => setLocale('en'))
+    expect(screen.getByRole('alert')).toHaveTextContent('The AI assistant is not configured. All other features still work.')
+    act(() => setLocale('vi'))
+    expect(screen.getByRole('alert')).toHaveTextContent('Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.')
   })
 })

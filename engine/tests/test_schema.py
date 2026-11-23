@@ -266,6 +266,61 @@ def test_concurrent_first_open_creates_schema_once(tmp_path):
     assert versions == [APP_SCHEMA_VERSION] * 8
 
 
+def test_first_open_retries_journal_mode_when_sqlite_reports_busy(tmp_path, monkeypatch):
+    """FLAKY-SCHEMA (CI Windows, PR #53): `PRAGMA journal_mode = WAL` cần khoá độc quyền và SQLite trả
+    SQLITE_BUSY ngay khi kết nối khác (app + MCP mở lần đầu cùng lúc) đang giữ khoá — phải thử lại."""
+    from nexgraph_engine.schema import db as schema_db
+
+    real_connect = schema_db.sqlite3.connect
+    busy = {"left": 2}
+
+    class BusyOnce:
+        def __init__(self, conn):
+            self._conn = conn
+
+        def execute(self, sql, *args):
+            if sql.replace(" ", "").upper() == "PRAGMAJOURNAL_MODE=WAL" and busy["left"]:
+                busy["left"] -= 1
+                raise sqlite3.OperationalError("database is locked")
+            return self._conn.execute(sql, *args)
+
+        def __getattr__(self, name):
+            return getattr(self._conn, name)
+
+    monkeypatch.setattr(schema_db.sqlite3, "connect", lambda *a, **k: BusyOnce(real_connect(*a, **k)))
+    conn = open_app_db(tmp_path / "app.db")
+
+    assert busy["left"] == 0  # đã thử lại thay vì ném lỗi ở lần đầu
+    assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    conn.close()
+
+
+def test_open_does_not_retry_other_database_errors(tmp_path, monkeypatch):
+    """Chỉ thử lại khi bận; lỗi CSDL khác phải nổi lên ngay, không nuốt."""
+    from nexgraph_engine.schema import db as schema_db
+
+    real_connect = schema_db.sqlite3.connect
+    calls = {"n": 0}
+
+    class Broken:
+        def __init__(self, conn):
+            self._conn = conn
+
+        def execute(self, sql, *args):
+            if sql.replace(" ", "").upper() == "PRAGMAJOURNAL_MODE=WAL":
+                calls["n"] += 1
+                raise sqlite3.OperationalError("no such table: nut")
+            return self._conn.execute(sql, *args)
+
+        def __getattr__(self, name):
+            return getattr(self._conn, name)
+
+    monkeypatch.setattr(schema_db.sqlite3, "connect", lambda *a, **k: Broken(real_connect(*a, **k)))
+    with pytest.raises(sqlite3.OperationalError, match="no such table"):
+        open_app_db(tmp_path / "app.db")
+    assert calls["n"] == 1
+
+
 def _sql_v6() -> str:
     """graph.sql cắt trước mốc v7, để dựng CSDL đời cũ cho test nâng cấp."""
     sql = load_sql("graph")

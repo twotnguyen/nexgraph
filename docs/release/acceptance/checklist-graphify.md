@@ -6,6 +6,8 @@ Phần so sánh tự động nằm ở [graphify-parity.md](graphify-parity.md):
 
 **Ghi lần chạy:** người thử · ngày · commit · bản build (mã nguồn / bộ cài + SHA-256) · máy.
 
+**Lần chạy gần nhất:** 23/11/2026 trên bản RC 0.1.2 (`main` `72dc4ec`, macOS arm64, bộ cài ad-hoc) — kết quả từng mục ở [§ Kết quả A3](#kết-quả-lần-chạy-a3-23112026). Tổng: **32 Đạt / 6 Không đạt / còn lại Không chạy được**; các mục Không đạt đã được đối chiếu với bản sửa merge sau đó (#50, #52, #54) và ghi rõ mục nào chỉ là mô tả checklist sai kỳ vọng.
+
 **Chuẩn bị**
 
 - Dự án thử:
@@ -25,7 +27,7 @@ Ký hiệu: ☐ chưa thử · ☑ đạt · ☒ không đạt (ghi lý do).
 |---|---|---|---|---|---|---|
 | 1.1 | `update` | Trang tổng quan dự án → **Index lại** | Sửa một tệp rồi bấm. Thẻ **Trạng thái graph** cập nhật số tệp · node · cạnh, không báo lỗi. | ☐ | ☐ | |
 | 1.2 | `watch` | Không có công tắc: app tự theo dõi khi workspace của dự án đang mở | Mở workspace (bất kỳ tab nào), thêm một hàm mới vào một tệp rồi lưu. Vài giây sau tìm thấy hàm đó ở **Tìm trong đồ thị**. Đóng workspace thì app ngừng theo dõi. | ☐ | ☐ | |
-| 1.3 | `extract --code-only/--force/--exclude/--max-workers` | **Tuỳ chọn index** | Nhập một dòng vào **Mẫu bỏ qua**, điền **Số tiến trình**, tick **Index lại từ đầu (bỏ bộ nhớ đệm phân tích cú pháp)**, rồi bấm **Index lại với tuỳ chọn này**. Thư mục bị bỏ qua không còn trong tab **Cây**. | ☐ | ☐ | |
+| 1.3 | `extract --code-only/--force/--exclude/--max-workers` | **Tuỳ chọn index** | Nhập một dòng vào **Mẫu bỏ qua**, điền **Số tiến trình**, tick **Index lại từ đầu (bỏ bộ nhớ đệm phân tích cú pháp)**, rồi bấm **Index lại với tuỳ chọn này**. Graph không còn node/cạnh của thư mục bị bỏ qua. Tab **Cây** và **Duyệt tệp** vẫn hiện thư mục đó vì đọc đĩa chứ không đọc graph — **đúng thiết kế**, không phải lỗi. | ☐ | ☐ | A3 23/11: graph đúng 15/15 tệp, hết kotlin; Cây vẫn hiện `kotlin/` (đọc đĩa). |
 | 1.4 | `.graphifyrc language.*` | Tệp `.graphifyrc` ở gốc dự án | Thêm `language.inc = php` (theo gợi ý trong Tuỳ chọn index) rồi index lại. Tệp `.inc` hiện ngôn ngữ PHP. | ☐ | ☐ | Không có bảng sửa trong app |
 | 1.5 | `extract --mode deep` (đường A) | Thẻ **Phân tích ngữ nghĩa bằng AI** → **Bật AI cho dự án** | Trên `docs_app` (đã bật **Gồm tài liệu**): chọn **Dùng tài khoản AI của ứng dụng (model đang chọn trong Cài đặt)**, tick **Tôi đồng ý gửi tài liệu của dự án này tới nhà cung cấp AI đã chọn**. Chọn **Phân tích sâu tài liệu (thêm quan hệ suy luận)**. Màn ước tính hiện **Tệp sẽ gửi** và số token. Bấm **Đồng ý và chạy**: xong có node/cạnh mang nhãn "Suy luận bởi AI". | ☐ | ☐ | |
 | 1.6 | trích xuất ngữ nghĩa (đường B) | Như 1.5, chọn **Engine gọi trực tiếp API tương thích OpenAI (Ollama, nhà cung cấp tuỳ chỉnh có API key)** | Chạy mục **Tài liệu (Markdown, Word, PDF, bản chép lời)** với Ollama cục bộ. Kết quả như 1.5. **Huỷ** giữa chừng: job dừng, không ghi dở. Chạy lại lần hai: các khối đã có kết quả không gọi model nữa. | ☐ | ☐ | |
@@ -33,7 +35,7 @@ Ký hiệu: ☐ chưa thử · ☑ đạt · ☒ không đạt (ghi lý do).
 | 1.8 | `cluster-only` | **Gom cụm lại** | Bấm. Thẻ Kiến trúc vẽ lại cụm, không index lại. | ☐ | ☐ | |
 | 1.9 | `label` | **Đặt tên cụm bằng AI** | AI tắt: tên cụm vẫn sinh theo node trung tâm. AI bật: chỉ gửi tên node, không gửi mã. Tên mới hiện ở Kiến trúc và vẫn giữ sau khi index lại. | ☐ | ☐ | |
 | 1.10 | `hook install/uninstall/status` | Thẻ **Tự cập nhật theo Git** → **Bật** / **Tắt** | Xem trước khối hook, bấm **Bật**, rồi commit một thay đổi. Graph tự cập nhật và `<data_dir>/logs/refresh.log` có dòng mới. Bấm **Tắt**: khối hook biến mất, phần hook sẵn có còn nguyên. | ☐ | ☐ | Windows: xem mục OS |
-| 1.11 | `check-update` | Huy hiệu **Graph cũ hơn mã nguồn** | Đóng workspace (ngừng theo dõi), sửa một tệp bằng trình soạn thảo khác, rồi mở lại trang tổng quan: huy hiệu hiện. Index lại: huy hiệu tắt. | ☐ | ☐ | |
+| 1.11 | `check-update` | Huy hiệu **Graph cũ hơn mã nguồn** | Mở workspace của dự án rồi sửa một tệp bằng trình soạn thảo khác: huy hiệu hiện (app đang theo dõi nhưng chưa kịp/không refresh). Index lại: huy hiệu tắt. Đóng workspace rồi mở lại thì app **tự refresh khi mở**, nên huy hiệu không hiện — hành vi hiện tại, không phải lỗi. | ☐ | ☐ | A3 23/11: đóng workspace rồi mở lại → app tự refresh, huy hiệu không bao giờ thấy; sửa mô tả theo hành vi này. |
 | 1.12 | `--postgres`, `--cargo`, SCIP, MCP ingest, manifest | **Tuỳ chọn index** → **Nguồn bổ sung (nâng cao)** | Bật **Cargo workspace (crate và phụ thuộc giữa các crate)** trên một workspace Rust và **Thêm tệp SCIP…** (JSON). Mỗi nguồn hiện thành một tệp ảo `nguon://…`. Máy chưa có `psycopg` thì ô PostgreSQL bị khoá kèm dòng **Cần cài psycopg vào môi trường engine (bản cài chưa gồm)**. | ☐ | ☐ | |
 
 *Bảng 1. Checklist §3.1 Dựng và cập nhật graph*
@@ -55,15 +57,15 @@ Ký hiệu: ☐ chưa thử · ☑ đạt · ☒ không đạt (ghi lý do).
 | # | graphify | Nơi bấm | Cách thử, kết quả mong đợi | macOS | Windows | Ghi chú |
 |---|---|---|---|---|---|---|
 | 3.1 | `graph.html` | Tab **Graph** | Mở được. Dự án lớn (trên 2.000 node) được gộp, app không treo. | ☐ | ☐ | |
-| 3.2 | `tree` | Tab **Cây** | Thư mục → tệp → lớp → hàm, **Mở**/**Thu gọn** được. **Mở mã** mở đúng dòng. | ☐ | ☐ | |
+| 3.2 | `tree` | Tab **Cây** | Thư mục → tệp → lớp → hàm, **Mở**/**Thu gọn** được. **Mở mã** mở đúng dòng. | ☐ | ☐ | A3 23/11: Cây mới có thư mục → tệp, **chưa có lớp/hàm** (hạn chế đã biết, mở ở đợt F10). |
 | 3.3 | `GRAPH_REPORT.md` | Tab **Báo cáo** | Có node trung tâm, cộng đồng, kết nối bất ngờ, câu hỏi gợi ý, vòng import, **Độ mới của graph**, **Lỗ hổng tri thức**, **Mức giảm token**. Bấm một câu hỏi gợi ý thì chạy Hỏi graph. | ☐ | ☐ | |
-| 3.4 | `query` | **Tìm trong đồ thị** → chế độ **Hỏi graph** | Hỏi "main calls helper" trên `polyglot`: có **Điểm bắt đầu** và **Xem trên graph**. Hỏi "helper": hiện **Câu hỏi trùng với … node cùng tên ở các tệp khác nhau. Chọn một node:**, không chọn bừa. | ☐ | ☐ | |
+| 3.4 | `query` | **Tìm trong đồ thị** → chế độ **Hỏi graph** | Hỏi "main calls helper" trên `polyglot`: có **Điểm bắt đầu** và **Xem trên graph**. Hỏi "helper": hiện **Câu hỏi trùng với … node cùng tên ở các tệp khác nhau. Chọn một node:**, không chọn bừa. | ☐ | ☐ | A3 23/11: đạt; có dòng thừa "0 node, 0 cạnh liên quan" — sửa ở #54. |
 | 3.5 | `explain` | Inspector → **Giải thích** | Hiện số liên kết, cụm và láng giềng nhóm theo loại cạnh; phần vượt gom theo tệp. | ☐ | ☐ | |
 | 3.6 | `path` | Chuột phải node → **Tìm đường tới…** | `main` → `helper` cùng ngôn ngữ: **Đường đi 1 bước · tin cậy: …**, đường được tô. Chiều ngược: **Không tìm thấy liên kết trực tiếp trong graph**. | ☐ | ☐ | |
-| 3.7 | `affected` | Chuột phải node → **Vùng ảnh hưởng nếu sửa** | Khung **Ảnh hưởng nếu sửa …** liệt kê và tô các node phụ thuộc, kèm **Test liên quan** nếu có. | ☐ | ☐ | |
+| 3.7 | `affected` | Chuột phải node → **Vùng ảnh hưởng nếu sửa** | Khung **Ảnh hưởng nếu sửa …** liệt kê và tô các node phụ thuộc, kèm **Test liên quan** nếu có. | ☐ | ☐ | A3 23/11: chỉ hiện "Chưa có thay đổi" khi chưa sửa tệp; mở từ menu node nay hiện node + test — sửa ở #50, chờ chạy lại. |
 | 3.8 | `god-nodes`, `benchmark` | Tab Báo cáo | Node trung tâm không chứa test. Dòng **Mức giảm token** có số lần giảm. | ☐ | ☐ | |
-| 3.9 | `section` / `get_section` | Inspector node tài liệu → **Đọc mục** | Mục có dòng `api_key = "sk-…"` hiện bản đã che. | ☐ | ☐ | |
-| 3.10 | Tìm kiếm | **Tìm trong đồ thị** → **Tìm symbol** | Gõ tên hàm: kết quả mở đúng `tệp:dòng` trong trình soạn thảo. | ☐ | ☐ | |
+| 3.9 | `section` / `get_section` | Inspector node tài liệu → **Đọc mục** | Mục có dòng `api_key = "sk-…"` hiện bản đã che. | ☐ | ☐ | A3 23/11: che đúng nhưng mất dấu backtick đóng — sửa ở #52. |
+| 3.10 | Tìm kiếm | **Tìm trong đồ thị** → **Tìm symbol** | Gõ tên hàm: kết quả mở đúng `tệp:dòng` trong trình soạn thảo. | ☐ | ☐ | A3 23/11: kết quả chọn node trong tab Graph thay vì mở editor — sửa ở #50, chờ chạy lại. |
 
 *Bảng 3. Checklist §3.3 Xem và truy vấn*
 
@@ -104,7 +106,7 @@ Số tool trên `main` tại `83e49b7` (`engine/tests/test_mcp.py`; đối chi�
 | 5.1 | `graphify-mcp` stdio | Thẻ **Trợ lý AI qua MCP** → **Sao chép cấu hình MCP** | Dán cấu hình vào Claude Code. `tools/list` ra đúng 25 tool như trên. `resources/list` ra 6 resource `nexgraph://…`. | ☐ | ☐ | |
 | 5.2 | Kiểm chỉ đọc | MCP | Trong `tools/list`, mọi tool có `readOnlyHint: true`, trừ `remember`. Gọi `remember` chỉ ghi vào CSDL `.nexgraph/`, không đổi tệp dự án. | ☐ | ☐ | |
 | 5.3 | `query_graph`, `get_community`, `god_nodes`, `graph_stats`, `shortest_path` | MCP | Gọi từng tool trên `polyglot`. `shortest_path` `main → helper` có đường. Kết quả dài báo bị cắt. | ☐ | ☐ | |
-| 5.4 | `get_section`, `get_callers`, `tests_for`, `find` | MCP | Gọi được. `get_section` trả bản đã che secret. | ☐ | ☐ | |
+| 5.4 | `get_section`, `get_callers`, `tests_for`, `find` | MCP | Gọi được. `get_section` trả bản đã che secret. Tài liệu có **tên nhạy cảm** (`secret`, `kubeconfig`, `service-account`, `gcp-*.json`) bị **từ chối** thay vì trả bản che — đúng thiết kế bảo mật (#52); UI **Đọc mục** vẫn hiện bản che. | ☐ | ☐ | A3 23/11: gọi `get_section` trên `docs/secret.md` trả "Nguồn bị loại khỏi ngữ cảnh AI"; sửa mô tả checklist theo hành vi đúng. |
 | 5.5 | `global` + MCP chung | `nexgraph-engine mcp --global --data-dir <D>` | Với graph chung ở 6.1: `tools/list` ra 26 tool. `list_repositories` ra hai dự án. `query_graph` với `repository` trả `cross_repo`. Thiếu `--data-dir` thì báo lỗi rõ ràng. | ☐ | ☐ | |
 | 5.6 | HTTP có API key | Công tắc **MCP qua HTTP** | Bật. Có **Hiện key** / **Sao chép key**. Chỉ nghe `127.0.0.1`. Gọi không có key: bị từ chối. | ☐ | ☐ | |
 | 5.7 | Tool PR (`list_prs`, `get_pr_impact`, `triage_prs`, `review_status`) | MCP | Trên kho có `gh`: trả danh sách PR và review. Không có `gh`: báo lỗi rõ ràng. | ☐ | ☐ | |
@@ -176,3 +178,63 @@ Số tool trên `main` tại `83e49b7` (`engine/tests/test_mcp.py`; đối chi�
 | D.2 | Index dự án NestJS mẫu (khoảng 270 tệp) | Thời gian không vượt ngưỡng spec §6.1. Ghi số giây. | ☐ | ☐ | |
 
 *Bảng 11. Kịch bản demo và hiệu năng*
+
+## Kết quả lần chạy A3 (23/11/2026)
+
+**Bản chạy:** NexGraph 0.1.2 dựng từ `main` `72dc4ec`, macOS arm64, app thật + engine đóng gói (CLI và MCP), `--use-mock-keychain --remote-debugging-port=9411`, `NEXGRAPH_DATA_DIR=/tmp/ng-A3/data`. Ảnh và DOM của lượt chạy lưu ngoài repo (không kèm trong tài liệu).
+
+**Kết luận:** **KHÔNG ĐẠT** — 32 Đạt, 6 Không đạt, còn lại Không chạy được (thiếu AI đã cấu hình, Ollama/Docker, model vision, hộp thoại chọn thư mục native cho export, `gh` cho vài mục).
+
+| Mục | Kết quả 23/11 | Ghi chú |
+| --- | --- | --- |
+| 1.1 | Đạt | Index lại: 17 tệp, node 48→49, cạnh 57→59 |
+| 1.2 | Đạt | Thêm hàm trong `go/util.go`, ~8 s sau tìm thấy; đóng workspace thì ngừng theo dõi |
+| 1.3 | Không đạt (mô tả sai) | Mẫu bỏ qua + workers=2 + force đúng ở graph (15/15 tệp, hết kotlin) nhưng Cây vẫn hiện `kotlin/` — Cây đọc đĩa; đã sửa mô tả 1.3 |
+| 1.4 | Đạt | `.graphifyrc language.inc = php` |
+| 1.5 | Không chạy được | Chưa cấu hình AI trong phiên |
+| 1.6 | Không chạy được | Không có Ollama/Docker |
+| 1.7 | Không chạy được | Cần model vision; nút Gộp trùng chưa bấm |
+| 1.8 | Đạt | "Đã chia 8 cụm" |
+| 1.9 | Không chạy được | Phần AI |
+| 1.10 | Đạt | 4 hook, post-commit ghi `refresh.log`; Tắt giữ hook có sẵn |
+| 1.11 | Không đạt (mô tả sai) | Sửa tệp khi đóng workspace: `stale=true`, nhưng mở lại app tự refresh nên huy hiệu không hiện; đã sửa mô tả 1.11 |
+| 1.12 | Đạt | Cargo/SCIP/MCP sinh tệp ảo; PostgreSQL khoá kèm "Cần cài psycopg…" |
+| 2.1 | Đạt | `http://` bị từ chối; clone `octocat/Hello-World`, `jonschlinkert/is-odd`; repo sai báo lỗi |
+| 2.2 | Đạt | `127.0.0.1` bị chặn; `example.com` + PDF nạp được |
+| 2.3 | Đạt | Không có `gws`, `.gdoc` bỏ qua im lặng |
+| 2.4 | Đạt | Heading thành node tài liệu; mục trùng tên đọc đúng; fixture chưa có docx/xlsx |
+| 2.5 | Đạt | Audio/video khoá kèm lý do |
+| 3.1 | Đạt | 8.626 node mở Graph ~2 s |
+| 3.2 | Không đạt | Cây chỉ thư mục→tệp, không có lớp/hàm; hạn chế đã biết (F10) |
+| 3.3 | Đạt | Lỗi i18n: câu hỏi gợi ý/why tiếng Anh trong UI Việt (liên quan #44/#48; chưa chạy lại) |
+| 3.4 | Đạt | Có dòng thừa "0 node, 0 cạnh liên quan" — sửa ở #54 |
+| 3.5 | Đạt | Inspector → Giải thích |
+| 3.6 | Đạt | `main→helper` 1 bước, tin cậy 0,8; chiều ngược không có |
+| 3.7 | Không đạt | "Vùng ảnh hưởng nếu sửa" chỉ hiện "Chưa có thay đổi" — sửa ở #50 |
+| 3.8 | Đạt | Node trung tâm, mức giảm token |
+| 3.9 | Đạt | Che secret đúng; mất dấu backtick đóng — sửa ở #52 |
+| 3.10 | Không đạt | Tìm symbol chọn node trên Graph, không mở `tệp:dòng` — sửa ở #50 |
+| 4.1–4.9 | Không chạy được | Hộp thoại native chọn thư mục; cần đặt trước thư mục xuất rồi gọi `export.run` qua IPC |
+| 5.1 | Đạt | 25 tool, 6 resource |
+| 5.2 | Đạt | 24 `readOnlyHint`, `remember` ghi CSDL |
+| 5.3 | Đạt | Chưa thấy `truncated=true` |
+| 5.4 | Không đạt (mô tả sai) | `get_section` trên `docs/secret.md` trả "Nguồn bị loại khỏi ngữ cảnh AI" thay vì bản che; đúng thiết kế #52, đã sửa mô tả 5.4 |
+| 5.5 | Đạt | `--global` 26 tool, `list_repositories`, `cross_repo`; thiếu `--data-dir` exit 3 kèm thông báo |
+| 5.6 | Đạt một nửa | HTTP `127.0.0.1`, 401 khi thiếu/sai key; chưa gửi bằng key đúng |
+| 5.7 | Đạt | `list_prs`, `get_pr_impact`, `review_status`, `triage_prs` với `gh` thật; nhánh không `gh` chưa thử |
+| 5.8, 5.9 | Không chạy được | Chưa chạy |
+| 6.1 | Đạt | Graph chung hai dự án |
+| 6.2 | Đạt một phần | Xuất gộp chưa bấm |
+| 7.1, 7.3, 7.4 | Không chạy được | Cần AI thật / tab PR chưa mở |
+| 7.2 | Không chạy được | Chỉ thấy trạng thái rỗng |
+| 8.1 | Đạt một phần | Dòng ngôn ngữ mức chung có; Rust `use crate::…` chưa thành cạnh tệp |
+| 8.2 | Không chạy được | Chưa mở `THIRD_PARTY_LICENSES.md` |
+| 8.3–8.6 | Đạt | 6 resource, chấm điểm query, Import Cycles/Freshness/Knowledge Gaps, che secret |
+| 9.1, 9.2 | Không chạy được | Review PR cần `gh` + thao tác |
+| 9.3 | Đạt một phần | `remember`/`recall` qua MCP; Inspector chưa kiểm đủ |
+| 9.4 | Đạt | `get_callers`, `tests_for`, `find`, `trace_flow` |
+| O.1, O.3, O.4 | Chưa kiểm | — |
+| O.2 | Một nửa | Hook chạy khi commit bằng Terminal |
+| D.1, D.2 | Chưa chạy | Kịch bản demo 5 phút và index NestJS; xem biên bản [2026-11-23-macos.md](2026-11-23-macos.md) cho demo `flow_app` |
+
+**Các dòng đã sửa sau A3** (không tính là lỗi sản phẩm còn mở): 3.7 và 3.10 ở #50; 3.4 ở #54; 3.9 và 5.4 ở #52; 1.3 và 1.11 là mô tả checklist sai kỳ vọng, đã sửa trong tài liệu này. Việc còn lại: chạy lại §3.4 export, 1.5/1.6/1.7/1.9 (cần AI/Ollama/vision), 5.6 với key đúng, 5.8/5.9, 7.3/7.4, 8.2, 9.1/9.2 và bước OS trên máy có đủ điều kiện.

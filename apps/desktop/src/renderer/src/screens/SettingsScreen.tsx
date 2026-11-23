@@ -238,7 +238,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
     setTestResult(null)
     try {
       const r = await window.nexgraph.auth.test()
-      setTestResult(r.ok ? vi.accounts.testOk : `${tr(r.message)}${r.detail ? ` — ${r.detail}` : ''}`)
+      // Cửa sổ ngữ cảnh nhỏ hơn system prompt + công cụ: kết nối được nhưng không chat được, cảnh báo ngay tại đây.
+      const warning = r.contextWarning ? ` — ${vi.accounts.contextTooSmall.replace('{n}', formatNumber(r.contextWarning))}` : ''
+      setTestResult(r.ok ? `${vi.accounts.testOk}${warning}` : `${tr(r.message)}${r.detail ? ` — ${r.detail}` : ''}`)
     } catch (e) {
       setTestResult(errorText(e))
     } finally {

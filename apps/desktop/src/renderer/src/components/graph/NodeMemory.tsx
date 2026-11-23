@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import type { MemoryKind, MemoryRecall } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 
 const KINDS: MemoryKind[] = ['lesson', 'decision', 'incident', 'owner']
 const message = (e: unknown) => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
@@ -10,7 +11,7 @@ export function NodeMemory({ projectId, nodeId }: { projectId: string; nodeId: s
   const [data, setData] = useState<MemoryRecall | null>(null)
   const [kind, setKind] = useState<MemoryKind>('lesson')
   const [text, setText] = useState('')
-  const [note, setNote] = useState<string | null>(null)
+  const [note, setNote] = useState<Message | null>(null)
   const [reload, setReload] = useState(0)
 
   useEffect(() => {
@@ -27,11 +28,11 @@ export function NodeMemory({ projectId, nodeId }: { projectId: string; nodeId: s
     setNote(null)
     try {
       const r = await window.nexgraph.memory.add(projectId, kind, text, [nodeId])
-      if (!r.created) setNote(vi.memory.duplicate)
+      if (!r.created) setNote(msg('Đã có ghi nhớ này.'))
       setText('')
       setReload((n) => n + 1)
     } catch (err) {
-      setNote(vi.memory.failed(message(err)))
+      setNote(msg('Không lưu được: {error}', { error: message(err) }))
     }
   }
 
@@ -58,7 +59,7 @@ export function NodeMemory({ projectId, nodeId }: { projectId: string; nodeId: s
         <textarea aria-label={vi.memory.textLabel} rows={2} maxLength={4000} value={text} onChange={(e) => setText(e.target.value)} />
         <button type="submit" disabled={!text.trim()}>{vi.memory.add}</button>
       </form>
-      {note && <p role="status" className="small">{note}</p>}
+      {note && <p role="status" className="small">{msgText(note)}</p>}
     </section>
   )
 }

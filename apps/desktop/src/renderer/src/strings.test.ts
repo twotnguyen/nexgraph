@@ -22,6 +22,12 @@ describe('i18n', () => {
     expect(tr('Không kết nối được tới nhà cung cấp AI.')).toBe('Could not connect to the AI provider.')
   })
 
+  it('EN: ai_provider_error ra cùng một câu ở Cài đặt và chat (MIN-46 M8)', () => {
+    setLocale('en')
+    expect(tr('Nhà cung cấp AI tạm thời gặp lỗi.')).toBe(t.chat.errors.ai_provider_error)
+    expect(t.chat.errors.ai_provider_error).toBe('The AI provider is temporarily unavailable.')
+  })
+
   it('nhãn Context window của nhà cung cấp tuỳ chỉnh có bản tiếng Anh', () => {
     setLocale('vi')
     expect(t.accounts.customContext).toBe('Context window (token)')
@@ -39,12 +45,30 @@ describe('i18n', () => {
     expect(t.indexing.titleDone('demo')).toBe('Indexed: demo')
   })
 
+  it('không lộ thương hiệu "Pi" trong chuỗi người dùng thấy (A1 F1)', () => {
+    setLocale('vi')
+    expect(t.chat.setupTitle).toBe('Thiết lập trợ lý AI')
+    setLocale('en')
+    expect(t.chat.setupTitle).toBe('Set up the AI assistant')
+    // Nhắc tới "Pi" như một sản phẩm khác trong Cài đặt là sai thương hiệu; tên nhà cung cấp kỹ thuật thì giữ.
+    setLocale('vi')
+    const commitHint = 'Hãy chọn model AI trong Cài đặt để viết thông điệp commit.'
+    expect(tr(commitHint)).toBe(commitHint)
+    setLocale('en')
+    expect(tr(commitHint)).toBe('Select an AI model in Settings to write a commit message.')
+  })
+
   it('enStrings có đủ các nhóm của bản tiếng Việt', () => {
     setLocale('vi')
     const groups = Object.keys(t) as (keyof typeof t)[]
     expect(groups).toHaveLength(34)
     setLocale('en')
     for (const group of groups) expect(t[group]).toBeDefined()
+  })
+
+  it('MIN-54: thông báo nguồn ảo có bản tiếng Anh', () => {
+    setLocale('en')
+    expect(tr('Nguồn ảo — chọn node trên đồ thị để xem chi tiết.')).toBe('Virtual source — select the node on the graph to see details.')
   })
 
   it('tr thay biến và giữ nguyên chuỗi khi thiếu bản dịch', () => {

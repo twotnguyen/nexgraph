@@ -18,13 +18,15 @@ class ScanInfo:
     by_language: dict[str, int]
     top_dirs: list[tuple[str, int]]
     large: bool
+    unreadable: list[str]
 
 
 def scan_project(root: Path) -> ScanInfo:
     langs: Counter[str] = Counter()
     dirs: Counter[str] = Counter()
     total = 0
-    for f in discover(root):
+    unreadable: list[str] = []
+    for f in discover(root, unreadable=unreadable):
         total += 1
         langs[f.language] += 1
         parts = f.rel_path.split("/")
@@ -33,7 +35,8 @@ def scan_project(root: Path) -> ScanInfo:
         if len(parts) >= 3:
             dirs[f"{parts[0]}/{parts[1]}"] += 1
     top = sorted(dirs.items(), key=lambda kv: (-kv[1], kv[0]))[:MAX_TOP_DIRS]
-    return ScanInfo(files=total, by_language=dict(langs), top_dirs=top, large=total > LARGE_FILE_COUNT)
+    return ScanInfo(files=total, by_language=dict(langs), top_dirs=top, large=total > LARGE_FILE_COUNT,
+                    unreadable=unreadable)
 
 
 def resolve_subdir(root: Path, subdir: str) -> str:

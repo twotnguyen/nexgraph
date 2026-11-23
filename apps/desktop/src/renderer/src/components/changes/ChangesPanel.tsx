@@ -33,6 +33,12 @@ export function ChangesPanel({ changes, loading, error, onReload, onOpenNode, on
     : changes.base === 'git_head' && changes.base_commit
       ? vi.changes.baseGit(changes.base_commit.slice(0, 7))
       : (changes.note ?? vi.changes.baseIndex)
+  // Xem "Vùng ảnh hưởng nếu sửa" một node không có tệp thay đổi: nút nguồn nằm ở changed_nodes,
+  // nên không được gate cả panel theo changed_files (A3 #1).
+  const hasFiles = !!changes && changes.changed_files.length > 0
+  const hasNodes = !!changes && changes.changed_nodes.length > 0
+  const nodeOnly = hasNodes && !hasFiles
+  const nothing = !!changes && !hasFiles && !hasNodes && changes.impacted.length === 0 && changes.tests.length === 0
 
   return (
     <div className="changes-panel">
@@ -43,29 +49,31 @@ export function ChangesPanel({ changes, loading, error, onReload, onOpenNode, on
       {base && <p className="muted">{base}</p>}
       {loading && <p role="status" className="muted">{vi.changes.loading}</p>}
       {error && <p role="alert" className="error">{error}</p>}
-      {changes && changes.changed_files.length === 0 && <p className="muted">{vi.changes.none}</p>}
+      {nothing && <p className="muted">{vi.changes.none}</p>}
       {changes && changes.truncated && <p className="muted">{vi.changes.truncated}</p>}
-      {changes && changes.changed_files.length > 0 && (
+      {changes && hasFiles && (
+        <section aria-label={vi.changes.changedFiles}>
+          <h4>{vi.changes.changedFiles}</h4>
+          <ul>
+            {changes.changed_files.map((f) => (
+              <li key={f.path}>
+                <span className="status">{f.status}</span> <span className="mono">{f.path}</span>
+                {onOpenCode && f.status !== 'D' && (
+                  <button type="button" className="link" onClick={() => onOpenCode(f.path, undefined)}>{vi.changes.openCode}</button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {changes && hasNodes && (
+        <section aria-label={nodeOnly ? vi.impact.sourceNode : vi.changes.changedNodes}>
+          <h4>{nodeOnly ? vi.impact.sourceNode : vi.changes.changedNodes}</h4>
+          <ul>{changes.changed_nodes.map((n) => nodeRow(n))}</ul>
+        </section>
+      )}
+      {changes && (hasFiles || hasNodes) && (
         <>
-          <section aria-label={vi.changes.changedFiles}>
-            <h4>{vi.changes.changedFiles}</h4>
-            <ul>
-              {changes.changed_files.map((f) => (
-                <li key={f.path}>
-                  <span className="status">{f.status}</span> <span className="mono">{f.path}</span>
-                  {onOpenCode && f.status !== 'D' && (
-                    <button type="button" className="link" onClick={() => onOpenCode(f.path, undefined)}>{vi.changes.openCode}</button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
-          {changes.changed_nodes.length > 0 && (
-            <section aria-label={vi.changes.changedNodes}>
-              <h4>{vi.changes.changedNodes}</h4>
-              <ul>{changes.changed_nodes.map((n) => nodeRow(n))}</ul>
-            </section>
-          )}
           <section aria-label={vi.changes.impacted} style={{ color: HIGHLIGHT_COLORS.impacted }}>
             <h4>{vi.changes.impacted}</h4>
             {changes.impacted.length === 0 && <p className="muted">{vi.changes.noneImpacted}</p>}
@@ -80,11 +88,13 @@ export function ChangesPanel({ changes, loading, error, onReload, onOpenNode, on
             {changes.tests.length === 0 && <p className="muted">{vi.changes.noneTests}</p>}
             <ul>{changes.tests.map((n) => nodeRow(n))}</ul>
           </section>
-          <section aria-label={vi.changes.gaps} style={{ color: HIGHLIGHT_COLORS.gap }}>
-            <h4>{vi.changes.gaps}</h4>
-            {changes.test_gaps.length === 0 && <p className="muted">{vi.changes.noneGaps}</p>}
-            <ul>{changes.test_gaps.map((n) => nodeRow(n))}</ul>
-          </section>
+          {hasFiles && (
+            <section aria-label={vi.changes.gaps} style={{ color: HIGHLIGHT_COLORS.gap }}>
+              <h4>{vi.changes.gaps}</h4>
+              {changes.test_gaps.length === 0 && <p className="muted">{vi.changes.noneGaps}</p>}
+              <ul>{changes.test_gaps.map((n) => nodeRow(n))}</ul>
+            </section>
+          )}
         </>
       )}
     </div>

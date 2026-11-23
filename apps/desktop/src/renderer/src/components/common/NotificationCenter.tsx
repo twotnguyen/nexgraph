@@ -3,7 +3,7 @@ import { tr } from '../../strings'
 import { Icon } from './icons'
 import './notification-center.css'
 
-export interface Notice { id: number; message: string }
+export interface Notice { id: number; message: string; /** Dấu nhận dạng không phụ thuộc ngôn ngữ (msgId) để thu hồi sau khi đổi ngôn ngữ. */ code?: string }
 
 let notices: readonly Notice[] = []
 let nextId = 0
@@ -28,15 +28,20 @@ const publish = (next: readonly Notice[]) => {
 }
 
 /** Hàng đợi dùng chung: mọi nơi có thể đẩy thông báo rồi chuông trên thanh công cụ đọc ra. */
-export function notify(message: string): void {
+export function notify(message: string, code?: string): void {
   if (!message) return
-  publish([...notices, { id: ++nextId, message }].slice(-20))
+  publish([...notices, { id: ++nextId, message, ...(code ? { code } : {}) }].slice(-20))
 }
 export function dismissNotification(id: number): void {
   publish(notices.filter((notice) => notice.id !== id))
 }
 export function clearNotifications(): void {
   if (notices.length) publish([])
+}
+/** Gỡ mọi thông báo có đúng nội dung (hoặc đúng `code`) — dùng khi cảnh báo đã khôi phục. */
+export function withdrawNotification(message: string, code?: string): void {
+  const next = notices.filter((notice) => code ? notice.code !== code : notice.message !== message)
+  if (next.length !== notices.length) publish(next)
 }
 export function toggleNotifications(): void {
   open = !open

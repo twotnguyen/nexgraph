@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, GraphReport } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
+import { setLocale } from '../../state/locale'
 import { ReportView } from './ReportView'
 
 const gnode = (id: string, label: string): GraphNode => ({ id, kind: 'function', label, qualified_name: label, language: 'python',
-  file: 'util.py', line_start: 3, line_end: 9, is_test: false, origin: 'ast', signature: null, community: null })
+  file: 'lib/util.py', line_start: 3, line_end: 9, is_test: false, origin: 'ast', signature: null, community: null })
 
 const report = (over: Partial<GraphReport> = {}): GraphReport => ({
   god_nodes: [{ node: gnode('util.py::helper#function', 'helper'), degree: 12 }],
@@ -25,12 +26,31 @@ const report = (over: Partial<GraphReport> = {}): GraphReport => ({
 const props = () => ({ projectId: 'p1', onOpenNode: vi.fn(), onAsk: vi.fn(), onExportMarkdown: vi.fn() })
 
 describe('ReportView', () => {
+  afterEach(() => setLocale('vi'))
+
+  it('DESK-LANG: báo cáo tải theo ngôn ngữ giao diện và tải lại khi đổi ngôn ngữ', async () => {
+    setLocale('vi')
+    const reportFn = vi.fn(async (_p: string, lang?: 'vi' | 'en') => report({
+      questions: [{ question: lang === 'en' ? 'Why is helper called so often?' : 'Vì sao helper được gọi nhiều?', why: '' }]
+    }))
+    installNexgraph({ graph: { report: reportFn } })
+    render(<ReportView {...props()} />)
+    expect(await screen.findByRole('button', { name: 'Vì sao helper được gọi nhiều?' })).toBeInTheDocument()
+    expect(reportFn).toHaveBeenLastCalledWith('p1', 'vi')
+
+    act(() => setLocale('en'))
+    expect(await screen.findByRole('button', { name: 'Why is helper called so often?' })).toBeInTheDocument()
+    expect(reportFn).toHaveBeenLastCalledWith('p1', 'en')
+  })
+
   it('báo cáo hiện node trung tâm và mở node khi bấm', async () => {
     installNexgraph({ graph: { report: vi.fn(async () => report()) } })
     const p = props()
     render(<ReportView {...p} />)
     await userEvent.click(await screen.findByRole('button', { name: 'helper' }))
     expect(p.onOpenNode).toHaveBeenCalledWith('util.py::helper#function')
+    expect(screen.getByText('Hàm')).toBeInTheDocument()
+    expect(document.querySelectorAll('.report-view wbr').length).toBeGreaterThan(0)
     expect(screen.getByText('Xác thực')).toBeInTheDocument()
     expect(screen.getByText(/login/)).toBeInTheDocument()
     expect(screen.getByText(/50/)).toBeInTheDocument()

@@ -19,6 +19,7 @@ import { addUsage, emptyUsage, messageText, transcript, transcriptUsage, usageFr
 import { TaskExecution } from './process-tools'
 import { CheckpointStore } from './checkpoints'
 import { prepareAgentContext } from './context'
+import { contextTooSmall, smallContextMessage } from './context-window'
 
 /** Module bọc duy nhất nạp pi. */
 export const loadPi = () => import('@earendil-works/pi-coding-agent')
@@ -52,6 +53,16 @@ export const MIN_OUTPUT_TOKENS = 1024
 export const CONTEXT_WINDOW_MESSAGE = 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi.'
 /** Mã/câu lỗi do chính app phát hiện trước khi gửi (không phải chuỗi thô của SDK). */
 export type ProviderFailure = { code: string; message: string; detail?: string }
+
+/**
+ * Lỗi ngữ cảnh trước khi gửi. Cửa sổ dưới `MIN_CONTEXT_WINDOW` là mức thật của model (system prompt + công cụ
+ * không vừa) nên phải chỉ đúng số token và khuyên đổi model, không khuyên "tăng context window".
+ */
+export function contextWindowFailure(window?: number): ProviderFailure {
+  return contextTooSmall(window)
+    ? { code: 'ai_context_small', message: smallContextMessage(window) }
+    : { code: 'ai_context_window', message: CONTEXT_WINDOW_MESSAGE }
+}
 
 /** Trường số token đầu ra trong payload đã dựng của từng API (OpenAI dùng `max_completion_tokens`). */
 export const outputTokensOf = (payload: unknown): number | undefined => {
@@ -156,8 +167,9 @@ export async function createPiSession(spec: SessionSpec): Promise<AgentSession> 
         // SDK tự kẹp maxTokens theo cửa sổ ngữ cảnh (có thể còn 1): chặn trước khi gửi thay vì để provider 400.
         const capped = outputTokensOf(payload)
         if (capped !== undefined && capped < MIN_OUTPUT_TOKENS) {
-          spec.onProviderFailure?.({ code: 'ai_context_window', message: CONTEXT_WINDOW_MESSAGE })
-          throw new AgentError('ai_context_window', CONTEXT_WINDOW_MESSAGE)
+          const failure = contextWindowFailure(requestModel.contextWindow)
+          spec.onProviderFailure?.(failure)
+          throw new AgentError(failure.code, failure.message)
         }
         return options?.onPayload?.(payload, requestModel)
       }

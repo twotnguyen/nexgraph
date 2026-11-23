@@ -7,13 +7,13 @@ import sqlite3
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from nexgraph_engine.docs.secrets import redact_doc_secrets
 
@@ -42,7 +42,14 @@ RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm l�
 
 COMMIT_EVERY = 100
 EXTRACTION_BATCH_SIZE = 16
-WORKER_PROGRESS_TIMEOUT_SECONDS = 20
+WORKER_PROGRESS_TIMEOUT_SECONDS = 20  # hạn nền cho một lô nhỏ (giữ nguyên hành vi cũ)
+BATCH_DEADLINE_SECONDS_PER_MB = 60   # cộng thêm theo khối lượng: 60 s mỗi MB CẦN PARSE của lô
+# Trần hạn lô. Không có trần thì lô chứa tệp lớn đòi 27–105 phút (review-53: lô 104,8 MB của
+# codebase-memory-mcp → 6.290 s) — đúng ca watchdog sinh ra để chặn thì index đứng im, người dùng chỉ
+# thấy "đang phân tích" không nhúc nhích. 300 s = 5 × FILE_EXTRACT_TIMEOUT_SECONDS: đủ cho một lô 5 MB
+# byte thật sự phải parse (đo PERF-L: ~20–25 ms/KB ⇒ 60 s/MB là biên rộng ~2,4×), vượt mức đó thì chờ
+# thêm không còn ích gì bằng đưa các tệp nghi treo sang đường từng-tệp có hạn riêng.
+MAX_BATCH_DEADLINE_SECONDS = 300
 FILE_EXTRACT_TIMEOUT_SECONDS = 60  # fallback tuần tự: quá hạn một tệp thì bỏ qua tệp đó
 IS_WINDOWS = os.name == "nt"
 
@@ -63,6 +70,14 @@ class RunResult:
     edges: int
     unresolved: int
     seconds: float
+    files_skipped: int = 0  # tệp sinh tự động bị discovery bỏ (bundle/dense) — PERF-L mục 3
+    workers_effective: int = 1  # số worker thật sự xử lý phần lớn tệp (PERF-L mục 4)
+    fallback_serial: bool = False  # đã rơi về 1 worker dù chạy được song song
+    # Số tệp theo từng đường — `workers_effective` một mình là số thô (review-53 Minor 2). `parallel_files`
+    # là tệp đọc qua lô song song; `serial_files` là tệp phải đọc từng-tệp VÌ lô quá hạn/pool hỏng khi
+    # đáng lẽ chạy song song (workers == 1 thì cả lần chạy là tuần tự theo thiết kế nên để 0).
+    parallel_files: int = 0
+    serial_files: int = 0
 
 
 def index_workers(n_files: int, include_media: bool, requested: int | None = None) -> int:
@@ -92,8 +107,43 @@ def _extract_one(root: Path, f: DiscoveredFile, transcript_dir: Path | None) -> 
     return extract_file(root, f, transcript_dir=transcript_dir, cancel=None)
 
 
+def batch_timeout_seconds(batch: Sequence[DiscoveredFile]) -> float:
+    """Hạn chờ một lô trích xuất, theo khối lượng CẦN PARSE của lô, có trần (PERF-L mục 2, review-53 I1).
+
+    Hạn cố định 20 s đúng cho lô 16 tệp nhỏ (~150 KB, xong trong 1–2 s) nhưng quá ngắn khi lô chứa một tệp
+    lớn: `apps/daemon/src/server.ts` 846 KB một mình ~21 s, nên cả lô vượt hạn oan. Nền 20 s giữ nguyên hành
+    vi với lô nhỏ; cộng 60 s mỗi MB để lô 1 MB có hạn ~60 s (open-design không còn kích hoạt nhầm).
+
+    Tệp `oversized` bị loại khỏi phép tính: `extract_file` chỉ băm rồi trả về, không parse, nên cộng byte
+    của nó chỉ làm hạn dài vô ích (lô 104,8 MB của codebase-memory-mcp: hạn 105 phút cho 0,4 MB thật).
+    Trần `MAX_BATCH_DEADLINE_SECONDS` chặn nốt phần đuôi: chờ quá 300 s không còn ích gì bằng đưa tệp nghi
+    treo sang đường từng-tệp.
+    """
+    parsed_mb = sum(f.size for f in batch if not f.oversized) / 1_000_000
+    return max(WORKER_PROGRESS_TIMEOUT_SECONDS,
+               min(BATCH_DEADLINE_SECONDS_PER_MB * parsed_mb, MAX_BATCH_DEADLINE_SECONDS))
+
+
 def _extract_batch(root: Path, files: list[DiscoveredFile], transcript_dir: Path | None) -> list[ExtractedFile]:
     return [_extract_one(root, f, transcript_dir) for f in files]
+
+
+def extraction_batches(files: Sequence[DiscoveredFile]) -> list[list[int]]:
+    """Chia lô theo LPT (Longest Processing Time first), cân theo byte (PERF-L mục 4).
+
+    Lô theo thứ tự đường dẫn từng đặt `apps/daemon/src/server.ts` (846 KB, ~21 s) ở lô thứ 45: nó vừa là
+    đường tới hạn của cả lần index vừa là lô dễ vượt hạn watchdog nhất. Ở đây tệp lớn nhất đứng đầu lô 0
+    rồi chia **vòng tròn** sang các lô khác, nên lô đầu nặng nhất chỉ chứa 1 tệp lớn thay vì dồn cả 16 tệp
+    lớn vào một lô (dồn lô làm một worker chạy lâu hơn hẳn phần còn lại — đo trên nexgraph: chậm thêm 5,5 s).
+    """
+    if not files:
+        return []
+    order = sorted(range(len(files)), key=lambda i: files[i].size, reverse=True)
+    count = (len(order) + EXTRACTION_BATCH_SIZE - 1) // EXTRACTION_BATCH_SIZE
+    batches: list[list[int]] = [[] for _ in range(count)]
+    for position, index in enumerate(order):
+        batches[position % count].append(index)  # chia vòng tròn: mỗi lô nhận tệp lớn thứ k×count + lô
+    return batches
 
 
 def _kill_pool(executor: ProcessPoolExecutor) -> None:
@@ -184,6 +234,17 @@ class Indexer:
         self.include_config, self.workers, self.force = include_config, workers, force
         self.sources_dir = sources_dir
         self._file_errors: list[tuple[str, str, str]] = []  # (tệp, loại, chi tiết) để báo cho người dùng
+        self._skip_stats: dict[str, int] = {}  # tệp bị discovery bỏ, theo lý do (bundle/dense)
+        self._workers_effective = 1
+        self._fallback_serial = False
+        self._parallel_files = 0
+        self._serial_files = 0
+        self._unreadable: list[str] = []  # (A1 F6) thư mục/tệp không đọc được khi quét
+
+    @property
+    def unreadable_paths(self) -> list[str]:
+        """Đường dẫn tương đối của thư mục/tệp không đọc được khi quét, không trùng, theo thứ tự gặp."""
+        return list(dict.fromkeys(self._unreadable))
 
     def run(self) -> RunResult:
         t0 = time.time()
@@ -195,7 +256,9 @@ class Indexer:
         try:
             files = list(discover(self.root, subdir=self.subdir, exclude=self.exclude,
                                   include_docs=self.include_docs, include_media=self.include_media,
-                                  include_config=self.include_config, sources_dir=self.sources_dir))
+                                  include_config=self.include_config, sources_dir=self.sources_dir,
+                                  unreadable=self._unreadable,
+                                  skip_stats=self._skip_stats))
             if self.force:
                 reset_cache_root()
             total = len(files)
@@ -253,12 +316,16 @@ class Indexer:
             return self._result(run_id, "loi", t0)
 
     def _failure_message(self) -> str | None:
-        """Câu cảnh báo cho người dùng khi một phần tệp không đọc/trích xuất được."""
-        if not self._file_errors:
-            return None
-        files = list(dict.fromkeys(rel for rel, _k, _d in self._file_errors))
-        first_rel, _kind, detail = self._file_errors[0]
-        return f"{len(files)} tệp không đọc được hoặc lỗi trích xuất (ví dụ {first_rel}: {detail})"
+        """Câu cảnh báo cho người dùng khi một phần tệp không đọc/trích xuất được hoặc bị bỏ qua khi quét."""
+        parts: list[str] = []
+        if self._file_errors:
+            files = list(dict.fromkeys(rel for rel, _k, _d in self._file_errors))
+            first_rel, _kind, detail = self._file_errors[0]
+            parts.append(f"{len(files)} tệp không đọc được hoặc lỗi trích xuất (ví dụ {first_rel}: {detail})")
+        unreadable = self.unreadable_paths
+        if unreadable:
+            parts.append(f"{len(unreadable)} mục không đọc được khi quét (ví dụ {unreadable[0]})")
+        return "; ".join(parts) or None
 
     # ------------------------------------------------------------------------------------------------
     def _finish(self, run_id: int, state: RunState, t0: float, event: ProgressEvent) -> RunResult:
@@ -270,7 +337,13 @@ class Indexer:
     def _result(self, run_id: int, state: RunState, t0: float) -> RunResult:
         s = self.store.stats()
         return RunResult(run_id, state, sum(s["nodes_by_kind"].values()), sum(s["edges_by_type"].values()),
-                         s["unresolved"], time.time() - t0)
+                         s["unresolved"], time.time() - t0, sum(self._skip_stats.values()),
+                         self._workers_effective, self._fallback_serial,
+                         self._parallel_files, self._serial_files)
+
+    def skipped_files(self) -> dict[str, int]:
+        """Số tệp discovery đã bỏ theo lý do (`bundle`, `dense`) — vào kết quả job (PERF-L mục 3)."""
+        return dict(self._skip_stats)
 
     def _structure(self, run_id: int, files: list[DiscoveredFile]) -> bool:
         store, root = self.store, self.root
@@ -284,7 +357,10 @@ class Indexer:
         if IS_WINDOWS:
             workers = min(workers, 61)  # giới hạn ProcessPoolExecutor trên Windows
 
-        def _consume(i: int, f: DiscoveredFile, x: ExtractedFile) -> None:
+        consumed = 0
+
+        def _consume(f: DiscoveredFile, x: ExtractedFile) -> None:
+            nonlocal consumed
             store.add_file(run_id, x.rec)
             store.add_nodes(x.nodes)
             store.add_edges(x.edges)
@@ -305,70 +381,150 @@ class Indexer:
                                       label=parent.rsplit("/", 1)[-1], qualified_name=parent)])
                 contains.append((directory_node_id(grand) if grand else REPOSITORY_ID, directory_node_id(parent)))
                 parent = grand
-            if i % COMMIT_EVERY == 0:
+            consumed += 1
+            if consumed % COMMIT_EVERY == 0:
                 store.commit()
-            self.on_progress(ProgressEvent("structure", i, total))
+            self.on_progress(ProgressEvent("structure", consumed, total))
 
-        consumed = 0
+        # Lô quá hạn/pool hỏng KHÔNG hạ cả dự án xuống một worker (hồi quy PERF-L: một tệp 846 KB vượt hạn
+        # 20 s làm 87,5 % tệp của open-design chạy từng tệp, 534 s thay vì 177 s). Chỉ tệp của lô quá hạn đi
+        # đường từng-tệp có hạn riêng; phần còn lại chạy lại bằng pool MỚI cùng số worker.
+        batches = extraction_batches(files)  # LPT: tệp lớn nhất trước (PERF-L mục 4)
+        pending = list(range(len(batches)))
+        suspects: list[int] = []
+        # `gave_up` chỉ dành cho lỗi HỆ THỐNG: tạo/gửi pool thất bại 2 lần liên tiếp (không spawn được
+        # tiến trình con, fd cạn, chính sách chặn). Lỗi của MỘT lô cụ thể không bao giờ đặt cờ này —
+        # nếu đặt, cả dự án rơi xuống 1 worker, đúng hồi quy PERF-L mà PR này diệt (review-53 I2/I4).
+        pool_failures = 0
+        gave_up = False
+        batch_files = 0
         if workers > 1:
-            executor: ProcessPoolExecutor | None = None
-            batches = []
-            try:
-                executor = ProcessPoolExecutor(max_workers=workers)
-                batches = [executor.submit(_extract_batch, self.root, files[offset:offset + EXTRACTION_BATCH_SIZE],
-                                           self.transcript_dir) for offset in range(0, total, EXTRACTION_BATCH_SIZE)]
-            except (BrokenProcessPool, OSError, RuntimeError):
-                # Worker có thể không khởi động được hoặc bị hệ điều hành chặn; các tệp chưa xong
-                # sẽ được đọc tiếp ở nhánh fallback tuần tự bên dưới.
-                logger.warning("Bộ trích xuất song song gián đoạn; đọc tiếp tuần tự", exc_info=True)
-                if executor is not None:
-                    _kill_pool(executor)
-                executor, batches = None, []
-            if executor is not None:
+            while pending and not self.cancel.is_set():
+                executor: ProcessPoolExecutor | None = None
                 try:
-                    for batch in batches:
-                        deadline = time.monotonic() + WORKER_PROGRESS_TIMEOUT_SECONDS
-                        while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
-                            wait((batch,), timeout=0.2)
-                        if not batch.done() or self.cancel.is_set():
-                            break
-                        try:
-                            extracted_batch = batch.result()
-                        except (BrokenProcessPool, OSError, RuntimeError):
-                            # Chỉ lỗi của pool bị bắt ở đây; lỗi trong `_consume`/`on_progress` phải nổi lên.
-                            if self.cancel.is_set():
-                                return False
-                            _kill_pool(executor)
-                            executor = None
-                            self.on_progress(ProgressEvent(
-                                "structure", consumed, total,
-                                "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
-                            break
-                        # Ngoài `try` của pool: lỗi của callback/ghi CSDL không được nuốt (Minor #27 N2).
-                        for extracted in extracted_batch:
-                            if self.cancel.is_set():
-                                return False
-                            _consume(consumed + 1, files[consumed], extracted)
-                            consumed += 1
-                finally:
-                    if executor is not None and consumed < total:
-                        # Python 3.12 chưa có terminate_workers() trên executor.
-                        for process in list((executor._processes or {}).values()):
-                            with suppress(OSError):
-                                process.terminate()
+                    executor = ProcessPoolExecutor(max_workers=workers)
+                except (BrokenProcessPool, OSError, RuntimeError):
+                    # Worker có thể không khởi động được hoặc bị hệ điều hành chặn.
+                    logger.warning("Bộ trích xuất song song gián đoạn; thử lại rồi đọc từng tệp", exc_info=True)
                     if executor is not None:
+                        _kill_pool(executor)
+                    pool_failures += 1
+                    if pool_failures >= 2:
+                        gave_up = True
+                        break
+                    continue
+                futures: dict[int, Any] = {}
+                started: dict[int, float] = {}
+                crashed = submit_failed = False
+                abandoned = 0
+                try:
+                    while (pending or futures) and not self.cancel.is_set():
+                        # CHỈ nạp tối đa `workers` lô một lúc: một lô treo/crash chỉ làm mất phần đang chạy,
+                        # không phải cả hàng đợi phải gửi lại (review-53 Minor 1: 5 treo từng đọc lại 3,0×).
+                        try:
+                            while pending and len(futures) < workers:
+                                b = pending.pop(0)
+                                try:
+                                    futures[b] = executor.submit(_extract_batch, self.root,
+                                                                 [files[i] for i in batches[b]],
+                                                                 self.transcript_dir)
+                                except (BrokenProcessPool, OSError, RuntimeError):
+                                    pending.insert(0, b)
+                                    raise
+                                started[b] = time.monotonic()
+                        except (BrokenProcessPool, OSError, RuntimeError):
+                            submit_failed = True
+                            break
+                        pool_failures = 0  # gửi được lô: lỗi trước đó không phải lỗi hệ thống lặp lại
+                        wait(list(futures.values()), timeout=0.2)
+                        for b in list(futures):
+                            future = futures[b]
+                            if future.done():
+                                try:
+                                    extracted_batch = future.result()
+                                except (BrokenProcessPool, OSError, RuntimeError):
+                                    # Chỉ lỗi của pool bị bắt ở đây; lỗi trong `_consume`/`on_progress`
+                                    # phải nổi lên (Minor #27 N2).
+                                    if self.cancel.is_set():
+                                        return False
+                                    self.on_progress(ProgressEvent(
+                                        "structure", consumed, total,
+                                        "Không dùng được tiến trình trích xuất; đang làm lại pool cho phần còn lại."))
+                                    # Lô làm chết worker/pool hỏng: chỉ TỆP CỦA LÔ NÀY sang đường từng-tệp
+                                    # (review-53 I2). Các lô đang chạy dở chưa có kết quả: gửi lại sau.
+                                    suspects.extend(batches[b])
+                                    del futures[b]
+                                    crashed = True
+                                    break
+                                # Ngoài `try` của pool: lỗi của callback/ghi CSDL không được nuốt.
+                                for k, extracted in enumerate(extracted_batch):
+                                    if self.cancel.is_set():
+                                        return False
+                                    _consume(files[batches[b][k]], extracted)
+                                del futures[b]
+                                batch_files += len(batches[b])
+                            elif time.monotonic() - started[b] >= batch_timeout_seconds(
+                                    [files[i] for i in batches[b]]):
+                                # Quá hạn: tệp của lô này đi đường từng-tệp. KHÔNG cắt các lô đang chạy —
+                                # chúng vẫn xong trong pool này và được dùng lại (review-53 Minor 1).
+                                suspects.extend(batches[b])
+                                del futures[b]
+                                abandoned += 1
+                        if crashed or submit_failed:
+                            break
+                        if abandoned >= workers:
+                            # Mọi worker đều đang treo: giữ pool chỉ làm các lô sau quá hạn oan.
+                            break
+                finally:
+                    if crashed or submit_failed or abandoned:
+                        _kill_pool(executor)  # dừng tiến trình con đang treo trước khi làm pool mới
+                    else:
                         executor.shutdown(wait=False, cancel_futures=True)
-            if consumed < total and not self.cancel.is_set():
-                self.on_progress(ProgressEvent("structure", consumed, total,
-                                               "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
+                if crashed or submit_failed or abandoned:
+                    # Nhặt kết quả các lô ĐÃ XONG trong pool vừa bỏ; chỉ lô chưa có kết quả mới gửi lại.
+                    for b in list(futures):
+                        finished = futures[b]
+                        if not finished.done() or finished.cancelled():
+                            continue
+                        try:
+                            extracted_batch = finished.result()
+                        except (BrokenProcessPool, OSError, RuntimeError):
+                            continue  # pool hỏng: lô này không có kết quả, gửi lại vòng sau
+                        for k, extracted in enumerate(extracted_batch):
+                            if self.cancel.is_set():
+                                return False
+                            _consume(files[batches[b][k]], extracted)
+                        del futures[b]
+                        batch_files += len(batches[b])
+                    pending = sorted(futures) + pending
+                    futures.clear()
+                if submit_failed:
+                    pool_failures += 1
+                    if pool_failures >= 2:
+                        gave_up = True
+                        break
+            if gave_up and pending:
+                # Lỗi hệ thống lặp lại (không tạo/gửi được pool): phần còn lại đi đường từng-tệp.
+                for b in list(pending):
+                    suspects.extend(batches[b])
+                    pending.remove(b)
 
-        # Nếu worker song song treo/gãy, đọc tiếp từ tệp đầu tiên chưa ghi. Mỗi tệp chạy trong tiến trình con
-        # để tệp treo không treo cả engine; chỉ khi không dùng được tiến trình con mới đọc trong tiến trình chính.
+        remaining = [i for b in pending for i in batches[b]]
+        todo = suspects + remaining
+        # Chỉ báo "gián đoạn" khi thật sự có lớp song song bị mất. `workers == 1` (mọi dự án < 200 tệp,
+        # mặc định trên Windows) chưa từng có pool song song nên đây không phải gián đoạn — bản trước
+        # phát câu này ngay 0/N ở mọi lần index một worker (review-53 I3).
+        if workers > 1 and todo and not self.cancel.is_set():
+            self.on_progress(ProgressEvent("structure", consumed, total,
+                                           "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
+
+        # Mỗi tệp còn lại chạy trong tiến trình con để tệp treo không treo cả engine; chỉ khi không dùng được
+        # tiến trình con mới đọc trong tiến trình chính.
         executor: ProcessPoolExecutor | None = None
         isolated = workers > 1
+        serial_files = 0
         try:
-            i = consumed
-            while i < total:
+            for i in todo:
                 if self.cancel.is_set():
                     return False
                 f = files[i]
@@ -380,7 +536,7 @@ class Indexer:
                     except (BrokenProcessPool, OSError):
                         isolated = False
                         self.on_progress(ProgressEvent(
-                            "structure", i, total,
+                            "structure", consumed, total,
                             "Không tạo được tiến trình trích xuất; đang đọc trong tiến trình chính."))
                 if pool is not None:
                     try:
@@ -391,7 +547,7 @@ class Indexer:
                         _kill_pool(pool)
                         executor, isolated = None, False
                         self.on_progress(ProgressEvent(
-                            "structure", i, total,
+                            "structure", consumed, total,
                             "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
                     else:
                         deadline = time.monotonic() + FILE_EXTRACT_TIMEOUT_SECONDS
@@ -404,25 +560,32 @@ class Indexer:
                                 _kill_pool(pool)
                                 executor, isolated = None, False
                                 self.on_progress(ProgressEvent(
-                                    "structure", i, total,
+                                    "structure", consumed, total,
                                     "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
                         else:  # quá hạn hoặc bị huỷ: dừng tiến trình con, bỏ qua tệp và đi tiếp
                             _kill_pool(pool)
                             executor = None
                             if self.cancel.is_set():
                                 return False
+                            consumed += 1
                             self.on_progress(ProgressEvent(
-                                "structure", i + 1, total,
+                                "structure", consumed, total,
                                 f"Bỏ qua {f.rel_path}: trích xuất quá {FILE_EXTRACT_TIMEOUT_SECONDS:g} giây"))
-                            i += 1
                             continue
                 if x is None:
                     x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
-                _consume(i + 1, f, x)
-                i += 1
+                if workers > 1:  # chỉ đếm là "phải đọc từng-tệp vì sự cố" khi đáng lẽ chạy song song
+                    serial_files += 1
+                _consume(f, x)
         finally:
             if executor is not None:
                 executor.shutdown(wait=False, cancel_futures=True)
+
+        # Số worker THẬT SỰ xử lý phần lớn tệp (bảng NFR cần số này, không phải số cấu hình), và cờ cho
+        # biết đã có tệp phải đi đường từng-tệp vì lô quá hạn/pool hỏng (PERF-L mục 4).
+        self._workers_effective = workers if workers > 1 and batch_files >= serial_files else 1
+        self._fallback_serial = workers > 1 and (bool(suspects) or serial_files > 0)
+        self._parallel_files, self._serial_files = batch_files, serial_files
 
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)
         store.commit()

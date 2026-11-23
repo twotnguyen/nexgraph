@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { StrictMode } from 'react'
+import { StrictMode, type ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, Neighborhood } from '@shared/graph-types'
@@ -43,6 +43,13 @@ vi.mock('../components/editor/monaco', () => ({
 
 import { WorkspaceScreen } from './WorkspaceScreen'
 import { installKeymap, runCommand } from '../state/commands'
+import { setLocale, useLocale } from '../state/locale'
+
+/** App thật đăng ký useLocale rồi dựng lại các màn trong render của nó; test màn lẻ dùng render-prop để giống. */
+function LocaleHost({ render }: { render: () => ReactNode }) {
+  useLocale()
+  return <>{render()}</>
+}
 
 beforeAll(() => {
   class RO { observe() {} unobserve() {} disconnect() {} }
@@ -53,7 +60,7 @@ beforeAll(() => {
 beforeEach(() => localStorage.setItem('nexgraph.chat.dock', 'right'))
 // App cài bộ phân phối phím; ở đây màn được render riêng nên tự cài.
 beforeAll(() => installKeymap())
-afterEach(() => consumePendingMultiBuffer())
+afterEach(() => { consumePendingMultiBuffer(); setLocale('vi') })
 
 const gnode = (id: string, label = id): GraphNode => ({
   id, kind: 'method', label, qualified_name: id, language: 'dart', file: 'lib/a.dart', line_start: 3, line_end: 9,
@@ -117,7 +124,7 @@ describe('WorkspaceScreen', () => {
     installNexgraph({ graph: { tour } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
     await userEvent.click(screen.getByRole('button', { name: 'Tham quan' }))
-    expect(tour).toHaveBeenCalledWith('p1')
+    expect(tour).toHaveBeenCalledWith('p1', 'vi')
     expect(await screen.findByText(/Chưa đủ dữ liệu/)).toBeInTheDocument()
   })
 
@@ -326,12 +333,17 @@ describe('WorkspaceScreen', () => {
     expect(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' })).toBeInTheDocument()
   })
 
-  it('opening a search result switches to the Graph tab centred on that node', async () => {
+  it('Tìm symbol mở mã tệp:dòng của kết quả, nút phụ vẫn mở node trên Graph (A3 #2)', async () => {
     const { neighbors } = setup()
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'login')
     const result = await screen.findByRole('button', { name: /lib\/a\.dart:3/ }, { timeout: 2000 })
     fireEvent.click(result)
+    // Mở đúng tệp trong editor, không đổi sang tab Graph.
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Graph', selected: true })).not.toBeInTheDocument()
+    // Đường xem trên graph vẫn còn ở nút phụ.
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trên graph' }))
     expect(screen.getByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
     await waitFor(() => expect(neighbors).toHaveBeenCalledWith('p1', expect.objectContaining({ node: 'lib/a.dart::AuthService.login#method' })))
     expect(await screen.findByText('lib/a.dart:3–9')).toBeInTheDocument() // NodeInspector của nút đã chọn
@@ -380,6 +392,8 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'login')
     await userEvent.click(await screen.findByText('login'))
+    // Kết quả chính mở mã; nút phụ vẫn chọn node trên graph để lấy NodeInspector.
+    await userEvent.click(await screen.findByRole('button', { name: 'Xem trên graph' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
     return { api, code }
   }
@@ -664,7 +678,6 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'login')
     await userEvent.click(await screen.findByText('login'))
-    await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
     await userEvent.type(await screen.findByLabelText('editor'), 'x')
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     await userEvent.click(screen.getByRole('button', { name: /Dự án|Quay lại|←/ }))
@@ -703,6 +716,7 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'run')
     fireEvent.click(await screen.findByRole('button', { name: /run/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem trên graph' })) // chọn node trên graph, không mở mã
     const nodeLabel = await within(await flowEl()).findByText('run')
     fireEvent.contextMenu(nodeLabel)
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Tìm đường tới…' }))
@@ -726,12 +740,21 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'run')
     fireEvent.click(await screen.findByRole('button', { name: /run/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem trên graph' }))
     const flow = await flowEl()
     fireEvent.contextMenu(await within(flow).findByText('run'))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Vùng ảnh hưởng nếu sửa' }))
     expect(impactOf).toHaveBeenCalledWith('p1', a.id)
     expect(await screen.findByText('Ảnh hưởng nếu sửa run')).toBeInTheDocument()
     await waitFor(() => expect(within(flow).getByText('ảnh hưởng')).toBeInTheDocument())
+  })
+
+  it('đổi ngôn ngữ áp dụng ngay cho nhãn thẻ workspace', async () => {
+    installNexgraph()
+    render(<div style={{ width: 1000, height: 700 }}><LocaleHost render={() => <WorkspaceScreen project={project()} />} /></div>)
+    expect(await screen.findByRole('tab', { name: 'Kiến trúc' })).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(await screen.findByRole('tab', { name: 'Architecture' })).toBeInTheDocument()
   })
 
   it('tab Báo cáo: câu hỏi gợi ý chạy Hỏi graph và chuyển sang Graph; Xuất Markdown chọn sẵn markdown', async () => {
@@ -893,6 +916,50 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     act(() => { runCommand('notifications.toggle'); clearNotifications() })
   })
 
+  it('UI-REFRESH-ERR: lỗi refresh nền hiện toast + thông báo rõ, lỗi lặp không spam', async () => {
+    act(() => clearNotifications())
+    const { emitWatchError, emitWatchRecovered } = installNexgraph()
+    render(<><div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div><NotificationCenter /></>)
+    const bell = screen.getByRole('button', { name: 'Thông báo' })
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+    // Dự án khác thì bỏ qua.
+    act(() => emitWatchError({ projectId: 'p-khac', message: 'disk I/O error' }))
+    expect(screen.queryByText(/disk I\/O error/)).not.toBeInTheDocument()
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
+    expect(await screen.findByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    expect(screen.getByText(/Lỗi nội bộ engine\. Xem log để biết chi tiết\. Đồ thị/)).toBeInTheDocument()
+    expect(screen.queryByText(/\.\. Đồ thị/)).not.toBeInTheDocument()
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Cùng lỗi lặp lại: không thêm thông báo thứ hai.
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Dự án khác khôi phục thì không đụng cảnh báo của dự án này.
+    act(() => emitWatchRecovered('p-khac'))
+    expect(screen.getByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    // Refresh thành công trở lại: main gửi watch:ok → toast + mục thông báo cũ biến mất.
+    act(() => emitWatchRecovered('p1'))
+    expect(screen.queryByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).not.toBeInTheDocument()
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+  })
+
+  it('M3: đổi ngôn ngữ giữa lúc có cảnh báo và lúc khôi phục vẫn gỡ được cảnh báo', async () => {
+    act(() => clearNotifications())
+    const { emitWatchError, emitWatchRecovered } = installNexgraph()
+    render(<><div style={{ width: 1000, height: 700 }}><LocaleHost render={() => <WorkspaceScreen project={project()} />} /></div><NotificationCenter /></>)
+    const bell = screen.getByRole('button', { name: 'Thông báo' })
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
+    expect(await screen.findByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Đổi ngôn ngữ khi cảnh báo đang hiện: câu đổi theo, không chốt chuỗi lúc nhận sự kiện.
+    act(() => setLocale('en'))
+    expect(screen.getByText(/Background graph refresh failed after files changed/)).toBeInTheDocument()
+    // Khôi phục sau khi đã đổi ngôn ngữ: vẫn phải gỡ đúng cảnh báo (trước đây so chuỗi đã dịch nên trượt).
+    act(() => emitWatchRecovered('p1'))
+    expect(screen.queryByText(/Background graph refresh failed after files changed/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).not.toBeInTheDocument()
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
+  })
+
   it('thao tác thật trong Workspace (Xem dấu trang) làm badge chuông tăng', async () => {
     act(() => clearNotifications())
     installNexgraph()
@@ -980,6 +1047,18 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     expect(onOpenProjects).toHaveBeenCalledTimes(1)
   })
 
+  it('MIN-54: đi tới nguồn ảo bằng lịch sử không mở tab chết mà báo rõ', async () => {
+    installNexgraph()
+    render(<WorkspaceScreen project={project()} />)
+    // Mọi surface (inspector, flow, impact…) đều gọi chung openCode; nguồn ảo không có tệp trên đĩa.
+    recordNavigation('p1', { file: 'a.ts', line: 1, column: 1 })
+    recordNavigation('p1', { file: 'nguon://cargo:1', line: 1, column: 1 })
+    act(() => { expect(runCommand('navigation.back')).toBe(true) })
+    act(() => { expect(runCommand('navigation.forward')).toBe(true) })
+    expect(screen.queryByRole('tab', { name: /cargo/ })).toBeNull()
+    expect(await screen.findByText(/Nguồn ảo/)).toBeInTheDocument()
+  })
+
   it('BUG-UI-01: chia đôi editor ngay từ thẻ xem trước vừa bấm trong cây', async () => {
     const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
     installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
@@ -993,9 +1072,27 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     act(() => { expect(runCommand('editor.split_up')).toBe(true) })
     expect(canvas().getAttribute('data-split')).toBe('up')
     expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    // MIN-43 M1: thẻ xem trước được thăng cấp thành tab thường sau khi chia đôi (như VS Code).
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab', { name: 'Xem trước a.ts' })).not.toBeInTheDocument()
     // Bấm lại đúng hướng đang chia thì bỏ chia đôi.
     act(() => { expect(runCommand('editor.split_up')).toBe(true) })
     expect(canvas().getAttribute('data-split')).toBeNull()
+  })
+
+  it('MIN-43 M3: chia đôi từ tab tệp thật (nhánh activeFile) vẫn chạy và không đổi thẻ đang chọn', async () => {
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    // Bấm vào thẻ tệp thật để rời thẻ xem trước: đây là nhánh `activeFile` của splitTo.
+    await userEvent.click(screen.getByRole('tab', { name: 'a.ts' }))
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
+    const canvas = () => document.querySelector('.canvas-wrap') as HTMLElement
+    act(() => { expect(runCommand('editor.split_right')).toBe(true) })
+    expect(canvas().getAttribute('data-split')).toBe('right')
+    expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('chia đôi trên rồi sang phải đổi trục, terminal vẫn nằm ngoài khung chia đôi', async () => {
