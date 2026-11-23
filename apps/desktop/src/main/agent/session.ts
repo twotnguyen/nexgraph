@@ -613,7 +613,10 @@ export class AgentService {
       if (images.length && (!Array.isArray(recipient.model.input) || !recipient.model.input.includes('image'))) {
         throw new AgentError('image_not_supported', 'Mô hình đang chọn không hỗ trợ ảnh hoặc chưa xác định được khả năng nhận ảnh.')
       }
-      const entry = await this.ensureEntry(projectId, recipient, active)
+      // Mở phiên có thể thông báo `session`: hoãn thông báo của đường prompt tới sau khi chủ
+      // phiên đổi ở `onAccepted`, để cửa sổ khởi tạo nhận đúng sessionId của phiên vừa mở.
+      const previous = this.entries.get(projectId)
+      const entry = await this.ensureEntry(projectId, recipient, active, undefined, false, false)
       if (!entry || !active()) return
       if (entry.busy) throw new AgentError('agent_busy', 'Trợ lý đang trả lời')
       entry.busy = true
@@ -629,6 +632,11 @@ export class AgentService {
       // Lượt đã được nhận (qua validate + assertIdle) và chưa có sự kiện nào: báo main chuyển chủ
       // phiên sang cửa sổ khởi tạo TRƯỚC sự kiện đầu tiên để stream/approval về đúng nơi.
       onAccepted?.()
+      // Phiên vừa mở cho lượt này chỉ được thông báo SAU khi chuyển chủ, nếu không renderer nhận
+      // `session` qua cửa sổ cũ và giữ sessionId cũ cho lượt đang chạy.
+      if (previous !== entry && this.entries.get(projectId) === entry && !entry.stopped) {
+        this.deps.emit(projectId, { type: 'session', sessionId: entry.stored.record.id })
+      }
       const task: AgentTask = {
         id: randomUUID(), sessionId: entry.stored.record.id, status: 'running', startedAt: Date.now(),
         turns: 0, limits: this.getLimits(projectId), checkpointIds: []
@@ -807,19 +815,19 @@ export class AgentService {
     for (const projectId of new Set([...this.entries.keys(), ...this.starting.keys(), ...this.forking])) this.close(projectId)
   }
 
-  private ensureEntry(projectId: string, recipient: Recipient, active: () => boolean, id?: string, fresh = false): Promise<Entry | undefined> {
+  private ensureEntry(projectId: string, recipient: Recipient, active: () => boolean, id?: string, fresh = false, announce = true): Promise<Entry | undefined> {
     const existing = this.entries.get(projectId)
     if (existing && !existing.failed && existing.isCurrent() && sameConsentTarget(existing.target, recipient.target) && !fresh && (!id || id === existing.stored.record.id)) return Promise.resolve(existing)
     const pending = this.opening.get(projectId)
-    if (pending) return pending.then(() => this.ensureEntry(projectId, recipient, active, id, fresh))
+    if (pending) return pending.then(() => this.ensureEntry(projectId, recipient, active, id, fresh, announce))
     if (existing) this.discard(projectId, existing, PROVIDER_CHANGED.message)
-    const opening = this.open(projectId, recipient, active, id, fresh)
+    const opening = this.open(projectId, recipient, active, id, fresh, announce)
     this.opening.set(projectId, opening)
     void opening.finally(() => { if (this.opening.get(projectId) === opening) this.opening.delete(projectId) }).catch(() => {})
     return opening
   }
 
-  private async open(projectId: string, recipient: Recipient, active: () => boolean, id?: string, fresh = false): Promise<Entry | undefined> {
+  private async open(projectId: string, recipient: Recipient, active: () => boolean, id?: string, fresh = false, announce = true): Promise<Entry | undefined> {
     const root = realpathSync.native(await this.deps.rootOf(projectId))
     if (!active()) return
     if (!recipient.isCurrent()) throw providerChanged()
@@ -900,7 +908,7 @@ export class AgentService {
     })
     entry.session.catch(() => { entry.failed = true })
     this.entries.set(projectId, entry)
-    emit({ type: 'session', sessionId: stored.record.id })
+    if (announce) emit({ type: 'session', sessionId: stored.record.id })
     return entry
   }
 
