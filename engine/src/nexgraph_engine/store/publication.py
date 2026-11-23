@@ -60,10 +60,23 @@ def backup_graph(source: sqlite3.Connection, target: sqlite3.Connection, *, time
     source.backup(target, pages=256, progress=check, sleep=0.05)
 
 
+WAL_SIZE_LIMIT = 64 * 1024 * 1024  # WAL còn lại sau checkpoint (F7); đủ cho lô ghi bình thường
+
+
 def publish_stage(stage: sqlite3.Connection, live_path: Path, *, timeout: float = 30) -> None:
-    """Xuất bản bản staging đè lên CSDL thật; lỗi giữa chừng để nguyên bản đã công bố."""
+    """Xuất bản bản staging đè lên CSDL thật; lỗi giữa chừng để nguyên bản đã công bố.
+
+    Publish ghi toàn bộ staging vào WAL của bản thật nên đỉnh đĩa ~2× CSDL (F7 của review PR #41):
+    đặt `journal_size_limit` rồi cắt WAL ngay sau khi xong. Refresh tăng dần không đi qua đây nữa
+    (một giao dịch trên CSDL thật), nên rủi ro này chỉ còn ở lập chỉ mục đầy đủ.
+    """
     with closing(sqlite3.connect(f"{live_path.as_uri()}?mode=rw", uri=True)) as live:
+        live.execute(f"PRAGMA journal_size_limit = {WAL_SIZE_LIMIT}")
         backup_graph(stage, live, timeout=timeout)
+        try:
+            live.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.OperationalError:
+            pass  # còn độc giả đang mở: checkpoint sau (hoặc lần publish sau) sẽ cắt
 
 
 @contextmanager

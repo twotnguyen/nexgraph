@@ -143,7 +143,8 @@ def interrupted_backup(source, destination):
 
 indexer = InterruptedIndexer
 if sys.argv[4] == 'publication':
-    jobs.backup_graph = interrupted_backup
+    import nexgraph_engine.store.publication as publication
+    publication.backup_graph = interrupted_backup
     indexer = Indexer
 manager = jobs.JobManager(ProjectRegistry(Path(sys.argv[1])), EventBus(), indexer_cls=indexer)
 manager.start_index(sys.argv[2])
