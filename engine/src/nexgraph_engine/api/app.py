@@ -18,7 +18,7 @@ from nexgraph_engine.api import routes_memory
 from nexgraph_engine.api import routes_global
 from nexgraph_engine.api import routes_prs
 from nexgraph_engine.api import routes_semantic
-from nexgraph_engine.api.errors import ApiError, error_response
+from nexgraph_engine.api.errors import ApiError, INTERNAL_MESSAGE, error_response, graph_error, http_code
 from nexgraph_engine.api.services import Services
 from nexgraph_engine.selftest import run_selftest
 
@@ -80,12 +80,17 @@ def create_app(token: str, allowed_hosts: set[str], *, data_dir: Path | None = N
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
-        return error_response(exc.status_code, "not_found" if exc.status_code == 404 else "http_error", str(exc.detail))
+        return error_response(exc.status_code, http_code(exc.status_code), str(exc.detail))
 
     @app.exception_handler(Exception)
     async def _internal(_: Request, exc: Exception):
+        # Lỗi CSDL đã biết (schema, tệp chỉ đọc, khoá ghi) → mã ổn định để desktop dịch (MIN-47-eng).
+        mapped = graph_error(exc)
+        if mapped is not None:
+            logger.warning("Lỗi CSDL đồ thị ở route: %s", mapped.code)
+            return error_response(mapped.status, mapped.code, mapped.message)
         logger.exception("Lỗi nội bộ engine", exc_info=exc)
-        return error_response(500, "internal_error", "Lỗi nội bộ engine. Xem log để biết chi tiết.")
+        return error_response(500, "internal_error", INTERNAL_MESSAGE)
 
     @app.get("/v1/health")
     def health():
