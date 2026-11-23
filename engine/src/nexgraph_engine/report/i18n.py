@@ -95,6 +95,19 @@ def warning_text(key: str, lang: str, **params: str) -> str:
     return (vi if lang == "vi" else en).format(**params)
 
 
+def community_label(name: str, lang: str) -> str:
+    """Nhãn cụm lưu trong CSDL là tiếng Việt (`Cụm quanh X`, `Cộng đồng N`, `Khác`); dịch lúc trả (MIN-51b).
+
+    Dữ liệu lưu không đổi — cùng cách `tour/build.py::_community_label` xử lý; `lang="vi"` trả nguyên.
+    """
+    if lang != "en":
+        return name
+    for vi, en in (("Cụm quanh ", "Cluster around "), ("Cộng đồng ", "Community ")):
+        if name.startswith(vi):
+            return en + name[len(vi):]
+    return "Other" if name == "Khác" else name
+
+
 def check_lang(lang: str | None, default: str) -> str:
     """Chuẩn hoá `lang` của route; None giữ hành vi cũ của route đó."""
     value = default if lang is None else lang

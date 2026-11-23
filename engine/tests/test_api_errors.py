@@ -82,8 +82,8 @@ def test_method_not_allowed_has_stable_code(api):
     assert r.json()["error"]["code"] == "method_not_allowed"
 
 
-def test_graph_error_maps_only_known_storage_failures():
-    """`graph_error` chỉ nhận lỗi CSDL đã biết; lỗi khác vẫn về `internal_error` để không đoán bừa."""
+def test_graph_error_maps_oserror_only_for_graph_db():
+    """MIN-48: OSError ở bất kỳ route nào từng bị dán nhãn `graph_readonly`; chỉ lỗi trên graph.db mới đúng."""
     import errno
 
     from nexgraph_engine.api.errors import graph_error
@@ -96,10 +96,25 @@ def test_graph_error_maps_only_known_storage_failures():
 
     assert code_of(sqlite3.OperationalError("database is locked")) == "graph_busy"
     assert code_of(GraphWriteBusy("bận")) == "graph_busy"
-    assert code_of(OSError(errno.EROFS, "Read-only file system")) == "graph_readonly"
+    assert code_of(OSError(errno.EROFS, "Read-only file system", "/data/p/.nexgraph/graph.db")) == "graph_readonly"
+    assert code_of(OSError(errno.EACCES, "Permission denied", "/data/p/.nexgraph/graph.db")) == "graph_readonly"
+    # Lỗi quyền ghi ở transcript/tệp nguồn không phải CSDL đồ thị: giữ 500 để không báo sai đối tượng.
+    assert code_of(OSError(errno.EACCES, "Permission denied", "/data/transcripts/p/2026.jsonl")) is None
+    assert code_of(OSError(errno.EROFS, "Read-only file system")) is None
     assert code_of(SchemaOutdatedError("cũ")) == "schema_outdated"
     assert code_of(sqlite3.OperationalError("no such table: nut")) is None
     assert code_of(RuntimeError("bí mật")) is None
+
+
+def test_graph_unavailable_code_for_unopenable_database():
+    """MIN-48: 'unable to open database file' là thiếu tệp/đường dẫn, không phải 'tệp chỉ đọc'."""
+    from nexgraph_engine.api.errors import graph_error
+
+    mapped = graph_error(sqlite3.OperationalError("unable to open database file"))
+    assert mapped is not None
+    assert (mapped.status, mapped.code) == (503, "graph_unavailable")
+    assert "chỉ đọc" not in mapped.message
+    assert mapped.message == "Không mở được CSDL đồ thị: thiếu tệp hoặc không mở được đường dẫn."
 
 
 def test_open_store_rejects_newer_schema(api, copy_fixture):
