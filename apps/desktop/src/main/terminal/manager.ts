@@ -4,6 +4,7 @@ import type { IPty } from 'node-pty'
 import type { TaskDefinition } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
 import { userShellEnv } from '../process-env'
+import { shellQuote } from './quote'
 import { UserError } from '../user-error'
 
 type PtyModule = typeof import('node-pty')
@@ -49,9 +50,7 @@ export function validateTask(task: unknown): asserts task is TaskDefinition {
 function shellTask(shell: string, task: TaskDefinition): string[] {
   const windows = process.platform === 'win32'
   const cmd = windows && /^cmd(?:\.exe)?$/i.test(basename(shell))
-  const quote = (arg: string) => windows
-    ? cmd ? `"${arg.replace(/"/g, '""')}"` : `'${arg.replace(/'/g, "''")}'`
-    : `'${arg.replace(/'/g, `'"'"'`)}'`
+  const quote = shellQuote(shell)
   const command = [task.command, ...(task.args ?? []).map(quote)].join(' ')
   return windows ? cmd ? ['/d', '/s', '/c', command] : ['-NoLogo', '-Command', command] : ['-l', '-c', command]
 }

@@ -137,6 +137,18 @@ describe('fsHandlers qua toIpcResult', () => {
   it('projectId lạ trả unknown_project', async () => {
     expect(await toIpcResult(() => h.read('nope', 'a.ts'))).toMatchObject({ ok: false, error: { code: 'unknown_project' } })
   })
+  it('MIN-38b M2: fs:write không ghi được .vscode/tasks.json, nhưng luồng ghi của agent (writeProjectFile) thì được', async () => {
+    mkdirSync(join(root, '.vscode'))
+    writeFileSync(join(root, '.vscode', 'tasks.json'), '{"version":"2.0.0","tasks":[]}')
+    const version = (await h.read('p1', '.vscode/tasks.json')).version
+    expect(await toIpcResult(() => h.write('p1', '.vscode/tasks.json', '{"tasks":[{"label":"x"}]}', { eol: '\n', bom: false, expectedVersion: version })))
+      .toMatchObject({ ok: false, error: { code: 'protected_path' } })
+    expect(readFileSync(join(root, '.vscode', 'tasks.json'), 'utf8')).toBe('{"version":"2.0.0","tasks":[]}')
+    // Luồng sửa tệp có duyệt của agent gọi writeProjectFile trực tiếp, không qua fs:write.
+    await writeProjectFile(root, '.vscode/tasks.json', '{"version":"2.0.0","tasks":[{"label":"x"}]}', { eol: '\n', bom: false })
+    expect(readFileSync(join(root, '.vscode', 'tasks.json'), 'utf8')).toContain('"label":"x"')
+  })
+
   it('đọc ghi đúng gốc của dự án', async () => {
     await toIpcResult(() => h.write('p1', 'a.ts', 'hi', { eol: '\n', bom: false }))
     expect(await toIpcResult(() => h.read('p1', 'a.ts'))).toMatchObject({ ok: true, data: { text: 'hi' } })

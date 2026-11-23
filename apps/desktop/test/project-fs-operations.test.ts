@@ -196,6 +196,16 @@ describe('project filesystem operations', () => {
     expect(readdirSync(join(root, 'dest'))).toEqual([])
   })
 
+  it('MIN-38b M2: mọi thao tác ghi của renderer bị chặn với .vscode/tasks.json', async () => {
+    const fs = operations()
+    mkdirSync(join(root, '.vscode'))
+    writeFileSync(join(root, 'moi.json'), '{}')
+    await expect(fs.createFile('p1', '.vscode/tasks.json')).rejects.toMatchObject({ code: 'protected_path' })
+    await expect(fs.copy('p1', 'moi.json', '.vscode/tasks.json')).rejects.toMatchObject({ code: 'protected_path' })
+    await expect(fs.rename('p1', 'moi.json', '.vscode/tasks.json')).rejects.toMatchObject({ code: 'protected_path' })
+    expect(existsSync(join(root, '.vscode', 'tasks.json'))).toBe(false)
+  })
+
   it('only passes validated, existing project items to the system shell', async () => {
     const fs = operations()
     writeFileSync(join(root, 'a.txt'), 'a')

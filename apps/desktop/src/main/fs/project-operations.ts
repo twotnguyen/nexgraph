@@ -4,7 +4,7 @@ import {
   utimesSync, writeSync, type BigIntStats
 } from 'node:fs'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { FsError, isProtectedRel, projectRoot, resolveInside } from './project-fs'
+import { FsError, isProtectedRel, isRendererWriteDenied, projectRoot, resolveInside } from './project-fs'
 import { UserError } from '../user-error'
 
 type ProjectLookup = () => Promise<{ project_id: string; path: string }[]>
@@ -20,6 +20,8 @@ const notFound = (path: string): FsError => new FsError('file_not_found', `Khôn
 
 function safePath(root: string, path: string, allowRoot = false): string {
   if (typeof path !== 'string' || path.includes('\0')) throw new FsError('bad_param', 'Đường dẫn không hợp lệ')
+  // Cùng lý do với fs:write: renderer không được tự tạo/copy/đổi tên thành tệp khai task (rereview-38 M2).
+  if (isRendererWriteDenied(path)) throw new FsError('protected_path', `Tệp hoặc thư mục được bảo vệ: ${path}`)
   const abs = resolveInside(root, path)
   let current = root
   for (const part of path.split(process.platform === 'win32' ? /[\\/]/ : /\//).filter((part) => part && part !== '.')) {

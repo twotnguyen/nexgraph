@@ -5,6 +5,8 @@ import type { TaskDefinition } from '../../shared/api'
 import { toProjectRelative } from '../agent/approval'
 import { isProtectedRel, isWithin, MAX_EDIT_BYTES, resolveInside, writeProjectFile } from '../fs/project-fs'
 import { UserError } from '../user-error'
+import { shellQuote, type Quote } from '../terminal/quote'
+import { defaultShell } from '../terminal/manager'
 
 type TaskSource = '.nexgraph/tasks.json' | '.vscode/tasks.json'
 
@@ -171,8 +173,14 @@ export async function ensureTasksFile(root: string): Promise<string> {
   return '.vscode/tasks.json'
 }
 
-export function resolveTask(root: string, task: TaskDefinition, context: { file?: string; line?: number }): TaskDefinition {
+/**
+ * `shellFile` là shell sẽ chạy `command` (mặc định shell của người dùng): biến chèn vào `command` phải được
+ * quote theo shell đó, nếu không tên tệp chứa `;`/`$()` sẽ chèn được cú pháp shell (rereview-38 M1).
+ * `args`/`cwd`/`env` giữ nguyên giá trị vì shellTask tự quote từng arg; `type: 'process'` không qua shell.
+ */
+export function resolveTask(root: string, task: TaskDefinition, context: { file?: string; line?: number }, shellFile?: string): TaskDefinition {
   const workspace = resolveInside(root, '.')
+  const quote: Quote | null = task.type === 'process' ? null : shellQuote(shellFile ?? defaultShell().file)
   const file = context.file ? resolveInside(root, toProjectRelative(root, context.file)) : undefined
   const values: Record<string, string | undefined> = {
     workspaceFolder: workspace,
@@ -186,20 +194,20 @@ export function resolveTask(root: string, task: TaskDefinition, context: { file?
     ZED_WORKTREE_ROOT: 'workspaceFolder', ZED_FILE: 'file', ZED_RELATIVE_FILE: 'relativeFile',
     ZED_FILENAME: 'fileBasename', ZED_DIRNAME: 'fileDirname', ZED_ROW: 'lineNumber'
   }
-  const expand = (value: string) => value.replace(
+  const expand = (value: string, forCommand = false) => value.replace(
     /\$\{(workspaceFolder|file|relativeFile|fileBasename|fileDirname|lineNumber|ZED_WORKTREE_ROOT|ZED_RELATIVE_FILE|ZED_FILENAME|ZED_DIRNAME|ZED_FILE|ZED_ROW)\}|\$(ZED_WORKTREE_ROOT|ZED_RELATIVE_FILE|ZED_FILENAME|ZED_DIRNAME|ZED_FILE|ZED_ROW)(?![A-Za-z0-9_])/g,
     (match: string, name: string | undefined, zedName: string | undefined) => {
       const key = name ?? zedName!
       const result = values[zed[key] ?? key]
       if (result === undefined) throw new UserError('missing_task_context', `Không có ngữ cảnh cho biến ${match}.`)
-      return result
+      return forCommand && quote ? quote(result) : result
     }
   )
   return {
     ...task,
     label: expand(task.label),
-    command: expand(task.command),
-    ...(task.args !== undefined ? { args: task.args.map(expand) } : {}),
+    command: expand(task.command, true),
+    ...(task.args !== undefined ? { args: task.args.map((arg) => expand(arg)) } : {}),
     ...(task.cwd !== undefined ? { cwd: expand(task.cwd) } : {}),
     ...(task.env !== undefined ? { env: Object.fromEntries(Object.entries(task.env).map(([key, value]) => [key, expand(value)])) } : {})
   }

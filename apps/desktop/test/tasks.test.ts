@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -137,7 +138,27 @@ describe('project tasks', () => {
     expect(task.env?.FILE).toBe('${file}')
     expect(resolveTask(root, task, { file: join(root, 'src', 'hello.ts'), line: 42 }).args?.[0]).toBe(join(root, 'src', 'hello.ts'))
     const absolute = join(root, 'src', 'hello.ts')
-    expect(resolveTask(root, { label: 'x', command: '${file}' }, { file: absolute, line: 42 }).command).toBe(absolute)
+    // Biến chèn vào `command` phải được quote theo shell; `args` để nguyên vì shellTask tự quote từng arg.
+    expect(resolveTask(root, { label: 'x', command: '${file}' }, { file: absolute, line: 42 }).command).toBe(`'${absolute}'`)
+  })
+
+  it.runIf(process.platform !== 'win32')('MIN-38b M1: ${file} trong command được quote, tệp tên chứa cú pháp shell không chạy lệnh lạ', () => {
+    const hostile = 'a;touch pwned;'
+    const resolved = resolveTask(root, { label: 'x', command: 'echo ${file}' }, { file: hostile })
+    expect(resolved.command).toBe(`echo '${join(root, hostile)}'`)
+    const out = execFileSync('/bin/sh', ['-c', resolved.command], { cwd: root, encoding: 'utf8' })
+    expect(out.trim()).toBe(join(root, hostile))
+    expect(existsSync(join(root, 'pwned'))).toBe(false)
+    // `$` và nháy đơn trong tên tệp cũng không mở được cú pháp shell.
+    const tricky = "b'$(touch pwned2)'"
+    const quoted = resolveTask(root, { label: 'x', command: 'echo ${file}' }, { file: tricky })
+    expect(execFileSync('/bin/sh', ['-c', quoted.command], { cwd: root, encoding: 'utf8' }).trim()).toBe(join(root, tricky))
+    expect(existsSync(join(root, 'pwned2'))).toBe(false)
+  })
+
+  it.runIf(process.platform !== 'win32')('MIN-38b M1: task type process giữ command là chương trình, không quote', () => {
+    const resolved = resolveTask(root, { label: 'x', command: '${file}', type: 'process' }, { file: 'a;touch pwned;' })
+    expect(resolved.command).toBe(join(root, 'a;touch pwned;'))
   })
 
   it('expands braced Zed variables and rejects missing context by name', () => {
