@@ -1,7 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { McpHttpManager, mcpStdioConfig } from '../src/main/mcp-http'
-import { pythonSafeEnv } from '../src/main/engine/python-env'
 
 const fake = {
   command: process.execPath,
@@ -42,7 +41,7 @@ describe('McpHttpManager', () => {
       const body = (await (await fetch(url, { headers: { 'X-API-Key': key } })).json()) as {
         pythonPath: string | null; pythonNoUserSite: string | null
       }
-      expect(body.pythonPath).toBeNull()
+      expect(body.pythonPath).toBe('') // chuỗi rỗng: không lọt đường dẫn của shell cha
       expect(body.pythonNoUserSite).toBe('1')
     } finally {
       if (saved === undefined) delete process.env.PYTHONPATH
@@ -70,13 +69,6 @@ describe('McpHttpManager', () => {
     const next = await mgr.start('p1', '/x')
     expect(command).toHaveBeenCalledTimes(2)
     expect((await fetch(next.url, { headers: { 'X-API-Key': next.key } })).status).toBe(200)
-  })
-})
-
-describe('pythonSafeEnv', () => {
-  it('bỏ PYTHONPATH/PYTHONHOME và tắt site của người dùng', () => {
-    expect(pythonSafeEnv({ PATH: '/bin', PYTHONPATH: '/gói/lạ', PYTHONHOME: '/home/lạ' }))
-      .toEqual({ PATH: '/bin', PYTHONNOUSERSITE: '1' })
   })
 })
 

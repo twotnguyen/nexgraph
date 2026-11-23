@@ -5,17 +5,10 @@
  *
  * Với cấu hình MCP do app sinh, hai biến được đặt rỗng (Python coi như không đặt) và
  * `PYTHONNOUSERSITE=1` tắt site-packages của người dùng để server chỉ dùng môi trường của engine.
+ * Khi app tự spawn tiến trình, dùng `safeProcessEnv` (main/process-env.ts) — allowlist đã bỏ hai biến này.
  */
 export const PYTHON_ENV_GUARD: Readonly<Record<string, string>> = {
   PYTHONPATH: '',
   PYTHONHOME: '',
   PYTHONNOUSERSITE: '1'
-}
-
-/** Bản env để tự spawn tiến trình Python: bỏ hẳn hai biến và tắt site của người dùng. */
-export function pythonSafeEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const clean: NodeJS.ProcessEnv = { ...env }
-  delete clean.PYTHONPATH
-  delete clean.PYTHONHOME
-  return { ...clean, PYTHONNOUSERSITE: '1' }
 }

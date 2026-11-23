@@ -54,6 +54,23 @@ it('giữ đầu ra và mã lỗi khi task kết thúc trước khi create trả
   expect(create).toHaveBeenCalledTimes(1)
 })
 
+it('lệnh gõ tay trong picker được gõ vào shell, không gửi thành task cho main', async () => {
+  // REV-13: task phải khai trong dự án mới có chữ ký; lệnh gõ tay đi qua shell như người dùng gõ.
+  const create = vi.fn(async () => ({ id: 9, shell: 'zsh', cwd: '/project' }))
+  const write = vi.fn()
+  vi.stubGlobal('nexgraph', { terminal: {
+    create, onEvent: () => () => {}, write, resize: vi.fn(), kill: vi.fn(), resolvePath: vi.fn()
+  } })
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => window.setTimeout(() => callback(0), 0))
+  vi.stubGlobal('cancelAnimationFrame', (handle: number) => window.clearTimeout(handle))
+
+  render(<TerminalPanel {...baseProps} projectId="p-typed" taskRequest={{ seq: 1, command: 'echo D3-TYPED' }} />)
+  await vi.waitFor(() => expect(write).toHaveBeenCalledWith(9, 'echo D3-TYPED\r'))
+  expect(create).toHaveBeenCalledTimes(1)
+  expect(create.mock.calls[0]).toEqual(['p-typed', expect.any(Number), expect.any(Number), undefined])
+})
+
 it('chiều cao theo tuỳ chọn bố cục: đổi từ Cài đặt hoặc kéo thanh chia đều đổi biến CSS và được lưu', () => {
   vi.stubGlobal('nexgraph', { terminal: {
     create: vi.fn(async () => ({ id: 1, shell: 'sh', cwd: '/project' })), onEvent: () => () => {},

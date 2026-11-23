@@ -1,7 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createInterface } from 'node:readline'
-import { pythonSafeEnv, PYTHON_ENV_GUARD } from './engine/python-env'
+import { PYTHON_ENV_GUARD } from './engine/python-env'
+import { safeProcessEnv } from './process-env'
 import { signalProcessTree, type EngineCommand } from './engine/launcher'
 
 /** Nơi giữ key theo project (bản thật mã hoá bằng safeStorage trong ipc.ts). */
@@ -110,8 +111,8 @@ export class McpHttpManager {
     const cmd = this.getCommand()
     const child = spawn(cmd.command, [...cmd.args, 'mcp', '--project', projectPath, '--data-dir', this.dataDir, '--http', '--port', String(port)], {
       cwd: cmd.cwd,
-      // Key chỉ đi qua biến môi trường, không qua argv. Env Python sạch: không thừa hưởng PYTHONPATH/PYTHONHOME.
-      env: { ...pythonSafeEnv(), NEXGRAPH_MCP_KEY: key, PYTHONUTF8: '1' },
+      // Key chỉ đi qua biến môi trường, không qua argv. Env allowlist: không có PYTHONPATH/PYTHONHOME của shell cha.
+      env: safeProcessEnv(process.env, { ...PYTHON_ENV_GUARD, NEXGRAPH_MCP_KEY: key, PYTHONUTF8: '1' }),
       windowsHide: true,
       detached: process.platform !== 'win32',
       stdio: ['ignore', 'pipe', 'pipe']
