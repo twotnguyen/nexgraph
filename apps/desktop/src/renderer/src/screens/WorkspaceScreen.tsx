@@ -61,8 +61,11 @@ type SplitSide = 'right' | 'left' | 'up' | 'down'
 type DiffTab = { file: string; staged: boolean; rev?: string; from?: string }
 const diffKey = (d: DiffTab): Tab => `diff:${d.rev ?? (d.staged ? 's' : 'u')}:${d.from ?? ''}:${d.file}`
 const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
-const TAB_LABELS = { arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
-  graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab }
+/** Nhãn thẻ đọc tại chỗ render: đổi ngôn ngữ phải áp dụng ngay, không giữ bản dịch lúc nạp module. */
+const tabLabels = (): Record<(typeof MAIN_TABS)[number], string> => ({
+  arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
+  graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab
+})
 /** `seq`: mỗi lần mở một số mới, để mở lại đúng dòng cũ (đã cuộn đi chỗ khác) vẫn cuộn về. */
 interface OpenFile { file: string; line: number; lineEnd?: number; column?: number; seq: number }
 const baseName = (p: string): string => p.split(/[/\\]/).pop() ?? p
@@ -973,7 +976,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           onToggle={togglePanel}
           manage={[
             ...(openWorkspaceSettings ? [{ label: tr('Cài đặt'), icon: 'sliders' as const, onSelect: () => openWorkspaceSettings() }] : []),
-            { label: tr('Chọn theme…'), icon: 'palette', onSelect: openTheme }
+            { label: tr('Chọn chủ đề màu…'), icon: 'palette', onSelect: openTheme }
           ]}
         />
       )}
@@ -1019,7 +1022,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           {MAIN_TABS.map((t) => (
             <button key={t} id={tabId(t)} type="button" role="tab" aria-selected={tab === t} aria-controls={viewId} tabIndex={tab === t ? 0 : -1}
               data-tone={VIEW_TONE[t]} className={`tab${tab === t ? ' active' : ''}`} onClick={() => selectView(t)}>
-              <Icon name={t} size={16} /><span>{TAB_LABELS[t]}</span>
+              <Icon name={t} size={16} /><span>{tabLabels()[t]}</span>
             </button>
           ))}
           {prsAvailable && (

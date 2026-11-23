@@ -42,7 +42,9 @@ export class EngineSupervisor {
       h.onExit((code, signal) => {
         if (this.handle !== h) return // đã chủ động dừng hoặc khởi động lại
         this.handle = null
-        this.set({ state: 'error', message: `engine thoát (exit ${code ?? signal})` })
+        const exit = code ?? signal ?? 'unknown'
+        this.set({ state: 'error', message: `engine thoát (exit ${exit})`,
+          messageKey: 'engine thoát (exit {code})', messageVars: { code: exit } })
       })
       const health = await getHealth(h)
       if (gen === this.generation && this.handle === h) {
@@ -51,7 +53,10 @@ export class EngineSupervisor {
     } catch (err) {
       if (gen !== this.generation) return
       const first = err instanceof EngineStartError ? err.stderrTail.trim().split('\n').pop() : undefined
-      this.set({ state: 'error', message: first || (err instanceof Error ? err.message : String(err)) })
+      // Dòng stderr là chữ của engine (không dịch); chỉ giữ khoá khi thông báo do app tạo.
+      const key = first ? undefined : err instanceof EngineStartError ? err.messageKey : undefined
+      const vars = first ? undefined : err instanceof EngineStartError ? err.messageVars : undefined
+      this.set({ state: 'error', message: first || (err instanceof Error ? err.message : String(err)), messageKey: key, messageVars: vars })
     }
   }
 

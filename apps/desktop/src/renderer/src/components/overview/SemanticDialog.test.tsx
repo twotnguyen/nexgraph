@@ -1,9 +1,19 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../../test-utils'
+import { setLocale, useLocale } from '../../state/locale'
 import { SemanticDialog } from './SemanticDialog'
+
+afterEach(() => setLocale('vi'))
+
+/** App thật đăng ký useLocale rồi dựng lại hộp thoại trong render của nó; test lẻ dùng render-prop để giống. */
+function LocaleHost({ render }: { render: () => ReactNode }) {
+  useLocale()
+  return <>{render()}</>
+}
 
 const result = { target: 'docs', nodes_added: 4, edges_added: 6, labels: {}, merged: 0, triage: null, errors: [],
   usage: { input_tokens: 1500, output_tokens: 200 },
@@ -11,6 +21,17 @@ const result = { target: 'docs', nodes_added: 4, edges_added: 6, labels: {}, mer
 const done = { job_id: 'sem1', project_id: 'p1', kind: 'semantic', state: 'done' as const, files_done: 2, files_total: 2, message: null, result }
 
 describe('SemanticDialog', () => {
+  it('đổi ngôn ngữ áp dụng ngay cho tiêu đề và lời đồng ý của hộp thoại đặt tên cụm', async () => {
+    installNexgraph()
+    render(<LocaleHost render={() => <SemanticDialog projectId="p1" target="labels" onClose={() => {}} />} />)
+    expect(await screen.findByRole('heading', { name: 'Đặt tên cụm bằng AI' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Đặt tên cụm bằng AI' })).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(await screen.findByRole('heading', { name: 'Name clusters with AI' })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: 'Name clusters with AI' })).toBeInTheDocument()
+    expect(screen.getByLabelText(/I agree to send each cluster/)).toBeInTheDocument()
+  })
+
   it('AI tắt mặc định: phải đồng ý mới bật, rồi xem ước tính và chạy', async () => {
     const { api } = installNexgraph({ index: { status: vi.fn(async () => done) } })
     render(<SemanticDialog projectId="p1" onClose={() => {}} />)

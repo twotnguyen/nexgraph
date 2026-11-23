@@ -39,7 +39,17 @@ describe('EngineSupervisor', () => {
     const { sup } = setup(vi.fn(async () => handle))
     await sup.startEngine()
     crash(5)
-    expect(sup.getStatus()).toEqual({ state: 'error', message: 'engine thoát (exit 5)' })
+    expect(sup.getStatus()).toEqual({ state: 'error', message: 'engine thoát (exit 5)',
+      messageKey: 'engine thoát (exit {code})', messageVars: { code: 5 } })
+  })
+
+  it('keeps the translation key when the engine never becomes ready', async () => {
+    const start = vi.fn(async () => { throw new EngineStartError('Engine không sẵn sàng sau 300 ms', 1, '',
+      'Engine không sẵn sàng sau {ms} ms', { ms: 300 }) })
+    const { sup } = setup(start)
+    await sup.startEngine()
+    expect(sup.getStatus()).toEqual({ state: 'error', message: 'Engine không sẵn sàng sau 300 ms',
+      messageKey: 'Engine không sẵn sàng sau {ms} ms', messageVars: { ms: 300 } })
   })
 
   it('uses first stderr line when start fails', async () => {
