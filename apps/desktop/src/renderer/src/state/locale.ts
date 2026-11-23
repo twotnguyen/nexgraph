@@ -45,6 +45,14 @@ export function localeTag(): 'vi-VN' | 'en-US' {
   return getLocale() === 'en' ? 'en-US' : 'vi-VN'
 }
 
+const pluralRules: Partial<Record<Locale, Intl.PluralRules>> = {}
+
+/** Dạng số nhiều theo ngôn ngữ hiện tại; tiếng Việt không biến đổi hình thái nên luôn là `other`. */
+export function plural(count: number, one: string, other: string): string {
+  const rules = (pluralRules[getLocale()] ??= new Intl.PluralRules(localeTag()))
+  return rules.select(count) === 'one' ? one : other
+}
+
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
   return new Intl.NumberFormat(localeTag(), options).format(value)
 }

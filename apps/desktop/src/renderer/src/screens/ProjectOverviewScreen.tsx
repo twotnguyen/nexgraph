@@ -110,7 +110,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
           {when && <span className="muted">{vi.overview.lastIndexed(when)}</span>}
         </header>
         {stats ? (
-          <div className="graph-metrics" aria-label={vi.overview.stats(formatNumber(stats.files), formatNumber(nodeCount), formatNumber(sum(stats.edges_by_type)))}>
+          <div className="graph-metrics" aria-label={vi.overview.stats(stats.files, nodeCount, sum(stats.edges_by_type))}>
             <div><strong>{formatNumber(stats.files)}</strong><span>{tr('Tệp đã lập chỉ mục')}</span></div>
             <div><strong>{formatNumber(nodeCount)}</strong><span>{tr('Nút')}</span></div>
             <div><strong>{formatNumber(sum(stats.edges_by_type))}</strong><span>{tr('Quan hệ')}</span></div>

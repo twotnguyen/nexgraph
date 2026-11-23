@@ -282,7 +282,7 @@ export const uiEnAgent: Record<string, string> = {
   'Đã dừng': 'Stopped',
   'Đã ghim': 'Pinned',
   'Đã hủy đọc {name}.': 'Cancelled reading {name}.',
-  'Đã khôi phục {count} tệp.{conflicts}': 'Restored {count} files.{conflicts}',
+  'Đã khôi phục {count} tệp.{conflicts}': 'Restored {count} {count, plural, one {file} other {files}}.{conflicts}',
   'Đã kiểm tra trả lời trực tiếp và công cụ. Bạn có thể bắt đầu một cuộc trò chuyện.': 'Verified direct responses and tools. You can start a conversation.',
   'Đã lưu key; nhập để thay thế': 'Key saved; enter a new one to replace it',
   'Đã sao chép': 'Copied',
