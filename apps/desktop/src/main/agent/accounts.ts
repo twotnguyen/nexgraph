@@ -301,7 +301,8 @@ export class AccountService {
     for (const id of deps.secrets.ids()) {
       const key = deps.secrets.get(id)
       try {
-        if (key && rt.getProvider(id)) {
+        // Credential OAuth trong vault sở hữu provider: key cũ đã lưu không được che khuất nó.
+        if (key && rt.getProvider(id) && (await credentials.read(id))?.type !== 'oauth') {
           rememberSecret(key)
           await rt.setRuntimeApiKey(id, key)
         }
@@ -619,6 +620,8 @@ export class AccountService {
     const before = await this.credentials.read(providerId)
     try {
       await this.modelRuntime.login(providerId, 'oauth', interaction, { agentName: 'NexGraph', getDeviceId: () => this.installationId() })
+      // API key đã lưu từ trước không được che khuất phiên OAuth vừa đăng nhập.
+      if (this.deps.secrets.get(providerId)) await this.modelRuntime.removeRuntimeApiKey(providerId).catch(() => {})
       this.accountGeneration(providerId, true)
     } catch (e) {
       // Pi chỉ ghi khi lấy được token. Nếu đã ghi nhưng đồng bộ runtime thất bại,
@@ -666,6 +669,14 @@ export class AccountService {
     } finally {
       this.accountGeneration(providerId, true)
     }
+    // Pi xoá cả override runtime khi logout: nạp lại key đã lưu ngay, đúng cách create() nạp lúc khởi động.
+    const savedKey = this.deps.secrets.get(providerId)
+    try {
+      if (savedKey && (await this.credentials.read(providerId))?.type !== 'oauth') {
+        rememberSecret(savedKey)
+        await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)
+      }
+    } catch { /* key vẫn còn trong ai-key.json; lần khởi động sau sẽ nạp lại */ }
     if (!revoked) this.deps.notify({ type: 'info', message: 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.' })
   }
 

@@ -8,6 +8,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
+from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION
+
 KEY = "sk-test-SECRET-key-9f3a1c77"
 TERMINAL = {"done", "error", "cancelled"}
 
@@ -126,6 +128,25 @@ def test_estimate_needs_no_key_and_lists_only_documents(api, docs_pid):
     est = r.json()
     assert "lib/auth.py" not in est["files"] and "README.md" in est["files"] and "docs/notes.txt" in est["files"]
     assert est["chunks"] >= 1 and est["input_tokens"] > 0 and est["output_tokens"] > 0 and est["cached_chunks"] == 0
+
+
+@pytest.mark.parametrize("version,status,code,message", [
+    pytest.param(GRAPH_SCHEMA_VERSION + 1, 400, "schema_version",
+                 f"CSDL phiên bản {GRAPH_SCHEMA_VERSION + 1}, ứng dụng chỉ hỗ trợ đến {GRAPH_SCHEMA_VERSION}",
+                 id="newer-400"),
+    pytest.param(GRAPH_SCHEMA_VERSION - 1, 409, "schema_outdated",
+                 "CSDL đồ thị cũ hơn ứng dụng. Mở lại dự án bằng ứng dụng để nâng cấp.",
+                 id="outdated-409"),
+])
+def test_estimate_reports_graph_schema_mismatch(api, docs_pid, version, status, code, message):
+    conn = graph(api, docs_pid)
+    conn.execute(f"PRAGMA user_version = {version}")
+    conn.close()
+
+    r = api.post(f"/v1/projects/{docs_pid}/semantic/estimate", json={"targets": "docs"})
+
+    assert r.status_code == status
+    assert r.json() == {"error": {"code": code, "message": message}}
 
 
 # --- đường B ---------------------------------------------------------------------------------------
@@ -278,6 +299,27 @@ def test_cancel_mid_way_writes_no_partial_chunk(api, copy_fixture):
     assert "Khối một" in labels and "Khối hai" not in labels
 
 
+def test_app_transport_times_out_reports_errors_and_releases_write_lock(api, docs_pid, monkeypatch):
+    """Đường A không ai trả lời: job kết thúc trong hạn, báo timeout từng khối, và nhả khoá ghi của dự án."""
+    from nexgraph_engine.semantic import run as semantic_run
+    from nexgraph_engine.store.publication import graph_writer
+
+    monkeypatch.setattr(semantic_run, "LLM_QUEUE_TIMEOUT_SECONDS", 0.3, raising=False)
+    enable(api, docs_pid, "app")
+    job = wait_job(api, run(api, docs_pid, "docs", {"kind": "app"}), timeout=8)
+    assert job["state"] == "done", job
+    res = job["result"]
+    assert res["chunks"]["sent"] > 0 and res["chunks"]["failed"] == res["chunks"]["sent"]
+    assert len(res["errors"]) == res["chunks"]["sent"]
+    assert all("timeout" in e["message"] for e in res["errors"])
+    # Hàng đợi đã bị bỏ: câu trả lời đến sau timeout không còn đường vào job.
+    assert api.get(f"/v1/jobs/{job['job_id']}/llm/next").status_code == 404
+    # Job đã nhả khoá ghi: một thao tác ghi khác của dự án mở được ngay.
+    info = api.app.state.services.registry.get(docs_pid)
+    with graph_writer(info.graph_db):
+        pass
+
+
 # --- labels ----------------------------------------------------------------------------------------
 def test_labels_name_communities_and_survive_recluster(api, copy_fixture, llm):
     pid = api.open(copy_fixture("bookstore_app"))["project_id"]
@@ -372,6 +414,18 @@ def test_dedup_merges_duplicate_concepts(api, copy_fixture, llm):
     conn = graph(api, pid)
     assert conn.execute("SELECT count(*) FROM nut WHERE nhan = 'Xác thực người dùng'").fetchone()[0] == 1
     conn.close()
+
+
+def test_dedup_runs_without_ai_enabled(api, copy_fixture, llm):
+    """AI-08: dedup chạy trên máy, không gửi gì — không được đòi bật AI/model/consent."""
+    pid = index_docs(api, copy_fixture("docs_app"))
+    assert api.get(f"/v1/projects/{pid}/ai").json()["enabled"] is False
+    r = api.post(f"/v1/projects/{pid}/semantic", json={"targets": "dedup", "transport": {"kind": "app", "model_label": ""}})
+    assert r.status_code == 202, r.text
+    job = wait_job(api, r.json()["job_id"])
+    assert job["state"] == "done", job
+    assert job["result"]["merged"] == 0
+    assert llm.requests == []
 
 
 def test_pr_triage_returns_result_without_graph_write(api, docs_pid, llm):
