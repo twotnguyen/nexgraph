@@ -499,6 +499,7 @@ const viStrings = {
   },
   impact: {
     title: (label: string) => `Ảnh hưởng nếu sửa ${label}`,
+    sourceNode: 'Nút đang xét',
     back: 'Về thay đổi chưa commit'
   },
   explain: {
@@ -1196,6 +1197,7 @@ const enStrings: typeof viStrings = {
   },
   impact: {
     title: (label: string) => `Impact of changing ${label}`,
+    sourceNode: 'Node under review',
     back: 'Back to uncommitted changes'
   },
   explain: {
