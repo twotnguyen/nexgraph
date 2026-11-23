@@ -21,7 +21,7 @@ export const COMMANDS: CommandDef[] = [
   { id: 'file.open_recent', category: 'Tệp', title: 'Mở tệp gần đây', key: 'mod+k mod+r' },
   { id: 'file.save_all', category: 'Tệp', title: 'Lưu tất cả tệp', key: 'mod+k s' },
   { id: 'file.save_as', category: 'Tệp', title: 'Lưu thành…', key: 'mod+shift+s' },
-  { id: 'theme_selector.toggle', category: 'Giao diện', title: 'Chọn theme', key: 'mod+k mod+t' },
+  { id: 'theme_selector.toggle', category: 'Giao diện', title: 'Chọn chủ đề màu', key: 'mod+k mod+t' },
   { id: 'settings.open', category: 'Ứng dụng', title: 'Mở cài đặt', key: 'mod+,' },
   { id: 'keymap.open', category: 'Ứng dụng', title: 'Mở phím tắt', key: 'mod+k mod+s' },
   { id: 'notification.clear', category: 'Ứng dụng', title: 'Xoá tất cả thông báo' },

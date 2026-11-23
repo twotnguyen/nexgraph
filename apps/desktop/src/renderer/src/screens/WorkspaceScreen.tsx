@@ -965,7 +965,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           onToggle={togglePanel}
           manage={[
             ...(openWorkspaceSettings ? [{ label: tr('Cài đặt'), icon: 'sliders' as const, onSelect: () => openWorkspaceSettings() }] : []),
-            { label: tr('Chọn theme…'), icon: 'palette', onSelect: openTheme }
+            { label: tr('Chọn chủ đề màu…'), icon: 'palette', onSelect: openTheme }
           ]}
         />
       )}

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { GraphReport } from '@shared/graph-types'
 import { vi, tr } from '../../strings'
 import { formatNumber } from '../../state/locale'
-import { kindStyle } from '../graph/kindStyle'
+import { kindLabel, kindStyle } from '../graph/kindStyle'
 import { CanvasState } from '../common/CanvasState'
 import { LessonsSection } from './LessonsSection'
 
@@ -54,7 +54,7 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
             {report.god_nodes.map(({ node, degree }) => (
               <tr key={node.id}>
                 <td><button type="button" className="link" onClick={() => onOpenNode(node.id)}>{node.label}</button></td>
-                <td><span className="kind" style={{ color: kindStyle(node.kind).color }}>{node.kind}</span></td>
+                <td><span className="kind" style={{ color: kindStyle(node.kind).color }}>{kindLabel(node.kind)}</span></td>
                 <td className="mono muted">{node.file ? `${node.file}${node.line_start ? `:${node.line_start}` : ''}` : ''}</td>
                 <td>{formatNumber(degree)}</td>
               </tr>

@@ -31,6 +31,7 @@ describe('ReportView', () => {
     render(<ReportView {...p} />)
     await userEvent.click(await screen.findByRole('button', { name: 'helper' }))
     expect(p.onOpenNode).toHaveBeenCalledWith('util.py::helper#function')
+    expect(screen.getByText('Hàm')).toBeInTheDocument()
     expect(screen.getByText('Xác thực')).toBeInTheDocument()
     expect(screen.getByText(/login/)).toBeInTheDocument()
     expect(screen.getByText(/50/)).toBeInTheDocument()

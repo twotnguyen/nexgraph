@@ -97,8 +97,15 @@ describe('NodeInspector', () => {
   it('shows file and line range of the selected node', () => {
     render(<NodeInspector node={gnode('lib/a.dart::A#class', { label: 'A', signature: 'class A' })} />)
     expect(screen.getByText('lib/a.dart:3–9')).toBeInTheDocument()
-    expect(screen.getByText('class')).toBeInTheDocument()
+    expect(screen.getByText('Lớp')).toBeInTheDocument()
     expect(screen.getByText('class A')).toBeInTheDocument()
+  })
+
+  it('nhãn kind của Inspector đổi theo ngôn ngữ', () => {
+    render(<LocaleHost render={() => <NodeInspector node={gnode('lib/a.dart::A#class', { label: 'A' })} />} />)
+    expect(screen.getByText('Lớp')).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(screen.getByText('Class')).toBeInTheDocument()
   })
 
   it('shows nothing selected message when node is null', () => {

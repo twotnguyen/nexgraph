@@ -5,7 +5,7 @@ import { errorText } from '../../state/errorText'
 import { runCommand } from '../../state/commands'
 import { useChanges } from '../../state/useChanges'
 import { useDiagnostics } from '../../state/diagnostics'
-import { kindStyle } from '../graph/kindStyle'
+import { kindLabel, kindStyle } from '../graph/kindStyle'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import './tree-view.css'
@@ -555,7 +555,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
                   : <span className="tree-label">{n.label}</span>}
                 {status && <span className="tree-git" aria-label={tr('Thay đổi git: {status}', { status })}>{status}</span>}
                 {issues > 0 && <span className="tree-diag" aria-label={tr('{count} vấn đề', { count: issues })}>{issues}</span>}
-                <span className="kind" style={{ color: kindStyle(n.kind).color }}>{n.kind}</span>
+                <span className="kind" style={{ color: kindStyle(n.kind).color }}>{kindLabel(n.kind)}</span>
                 {n.file && n.kind !== 'directory' && !(compact && (folder || file)) && (
                   <button type="button" tabIndex={-1} className="link" aria-label={`${vi.tree.openCode} ${n.label}`}
                     onClick={(e) => { e.stopPropagation(); onOpenCode(n.file as string, n.line_start ?? undefined) }}>{'</>'}</button>

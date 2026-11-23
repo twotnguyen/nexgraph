@@ -26,8 +26,8 @@ export function ThemePicker({ onClose }: { onClose: () => void }) {
   const version = useThemesVersion()
   const items = useMemo(ordered, [version])
   return (
-    <Picker label={tr('Chọn theme')} placeholder={tr('Chọn theme…')} className="theme-picker" items={items} itemKey={themeKey} itemText={themeName}
-      initialKey={original.current} empty={tr('Không có theme khớp')} itemData={(theme) => ({ 'data-theme-id': theme.id })}
+    <Picker label={tr('Chọn chủ đề màu')} placeholder={tr('Chọn chủ đề màu…')} className="theme-picker" items={items} itemKey={themeKey} itemText={themeName}
+      initialKey={original.current} empty={tr('Không có chủ đề màu khớp')} itemData={(theme) => ({ 'data-theme-id': theme.id })}
       onActive={(theme) => previewTheme(theme.id)}
       onCancel={() => { previewTheme(original.current); onClose() }}
       onPick={(theme) => { setTheme(theme.id); onClose() }}
