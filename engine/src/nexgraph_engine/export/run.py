@@ -201,7 +201,7 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
         files = store.stats()["files"] if scope.kind == "all" else len({
             node["source_file"] for _, node in bg.G.nodes(data=True) if node["source_file"]
         })
-        target.write_text(render_report_markdown(bg, project_name, files), encoding="utf-8")
+        target.write_text(render_report_markdown(bg, project_name, files, lang=lang), encoding="utf-8")
     elif fmt == "html":
         from graphify.exporters.html import to_html
         to_html(bg.G, bg.communities, str(target), community_labels=bg.labels, node_limit=scope.limit)

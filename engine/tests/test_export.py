@@ -402,6 +402,26 @@ def test_callflow_section_labels_follow_lang(copy_fixture, index_project, tmp_pa
     assert "Cụm quanh" in vi
 
 
+def test_markdown_export_follows_lang(copy_fixture, index_project, tmp_path):
+    """F4 (A3b-P1): báo cáo Markdown nhận `lang` như callflow, không luôn tiếng Anh."""
+    store, _, _ = index_project(copy_fixture("polyglot"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "markdown", Scope(), tmp_path / lang, "polyglot", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    vi, en = exported("vi"), exported("en")
+    assert vi.startswith("# Báo cáo đồ thị - polyglot")
+    assert "## Kiểm tra kho mã" in vi and "## Tóm tắt" in vi and "## Cộng đồng" in vi
+    assert "## Summary" not in vi and "## Corpus Check" not in vi
+    assert "## Câu hỏi gợi ý" in vi and "## Suggested Questions" not in vi
+    assert "Không đủ tín hiệu để sinh câu hỏi." in vi
+    assert "Độ gắn kết:" in vi and "Nút (" in vi
+    assert "- 2 cạnh" in vi and " - 2 edges" not in vi
+    assert "## Summary" in en and "## Corpus Check" in en and "## Tóm tắt" not in en
+
+
 _CALLFLOW_RULE_SAMPLES = [
     # (nguồn tiếng Anh, bản dịch phải có trong kết quả) — phủ MỌI quy tắc trong _RULES + _NOTE.
     (" — Complete Call Flow &amp; Architecture Documentation", " — Tài liệu luồng gọi &amp; kiến trúc đầy đủ"),
@@ -452,6 +472,7 @@ _CALLFLOW_RULE_SAMPLES = [
     ("Generated: 2026-11-23 14:26 UTC · graphify callflow-html", "Tạo lúc: 2026-11-23 14:26 UTC · graphify callflow-html"),
     ('<h2 id="hyperedges">Group Relationships (Hyperedges)</h2>',
      '<h2 id="hyperedges">Quan hệ nhóm (Siêu cạnh)</h2>'),
+    ("    %% Omitted for readability: 3 nodes, 2 edges", "    %% Bỏ bớt cho dễ đọc: 3 nút, 2 cạnh"),
     (" — 3 participants</p>", " — 3 thành viên</p>"),
     ("<li>... and 5 more</li>", "<li>... và 5 nữa</li>"),
     ("This section comes from graphify community clustering. Relationship summary: calls x2. "
