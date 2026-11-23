@@ -1,6 +1,7 @@
 import json
 import shutil
 import time
+from pathlib import Path
 
 from nexgraph_engine.global_graph.store import GlobalStore
 
@@ -160,3 +161,122 @@ def test_removing_project_from_app_leaves_the_group(api, copy_fixture):
     assert api.delete(f"/v1/projects/{lib}").status_code == 200
     assert [m["project_id"] for m in api.get("/v1/global/projects").json()] == [app]
     assert GlobalStore(api.app.state.services.data_dir).edges() == []
+
+
+def test_global_export_twice_does_not_overwrite(api, copy_fixture, tmp_path):
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    out = tmp_path / "out"
+    out.mkdir()
+    first = api.post("/v1/global/export", json={"out_dir": str(out)}).json()["files"][0]
+    Path(first).write_text("nguoi dung da sua", encoding="utf-8")
+    second = api.post("/v1/global/export", json={"out_dir": str(out)}).json()["files"][0]
+    assert second != first and Path(second).is_file()
+    assert Path(first).read_text(encoding="utf-8") == "nguoi dung da sua"
+
+
+def test_incremental_refresh_relinks_cross_repo_edges(api, copy_fixture):
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    has_call = lambda rows: any((r["id_nut_nguon"], r["id_nut_dich"]) == APP_CALL for r in rows)
+    _wait_edges(api, has_call)
+    root = api.app.state.services.registry.get(app).path
+    cart = root / "src" / "cart.ts"
+    original = cart.read_text(encoding="utf-8")
+    cart.write_text('import { formatSum } from "@demo/mathlib";\n\n'
+                    'export function checkout(prices: number[]): string {\n  return formatSum(prices.length);\n}\n',
+                    encoding="utf-8")
+    assert api.post(f"/v1/projects/{app}/refresh").json()["status"] == "ok"
+    _wait_edges(api, lambda rows: not has_call(rows))  # bỏ lời gọi: cạnh liên repo phải biến mất sau refresh
+    cart.write_text(original, encoding="utf-8")
+    assert api.post(f"/v1/projects/{app}/refresh").json()["status"] == "ok"
+    _wait_edges(api, has_call)  # và xuất hiện lại
+
+
+def test_relink_jobs_are_coalesced_when_queued(api, monkeypatch):
+    """Job `global_link` còn `queued`: dùng lại, không xếp thêm (GFY-04)."""
+    services = api.app.state.services
+    jobs = services.jobs
+    started: list[str] = []
+
+    def fake_start(project_id, kind, work):
+        job_id = f"relink-{len(started) + 1}"
+        started.append(job_id)
+        with jobs._lock:
+            jobs._jobs[job_id] = {"job_id": job_id, "project_id": project_id, "kind": kind, "state": "queued"}
+        return job_id
+
+    monkeypatch.setattr(jobs, "start_task", fake_start)
+    first = services.relink_global()
+    assert services.relink_global() == first and started == ["relink-1"]
+
+
+def test_relink_queues_another_job_when_one_is_running(api, monkeypatch):
+    """Job đang `running` đã đọc CSDL trước lần refresh mới: phải xếp thêm đúng 1 job, không nuốt cập nhật."""
+    services = api.app.state.services
+    jobs = services.jobs
+    started: list[str] = []
+
+    def fake_start(project_id, kind, work):
+        job_id = f"relink-{len(started) + 1}"
+        started.append(job_id)
+        with jobs._lock:
+            jobs._jobs[job_id] = {"job_id": job_id, "project_id": project_id, "kind": kind, "state": "queued"}
+        return job_id
+
+    monkeypatch.setattr(jobs, "start_task", fake_start)
+    first = services.relink_global()
+    jobs._set(first, state="running")
+    second = services.relink_global()
+    assert second != first and started == ["relink-1", "relink-2"]  # xếp đúng thêm một job
+    assert services.relink_global() == second and len(started) == 2  # job thứ hai còn queued: gộp
+
+
+def test_relink_started_while_another_runs_finishes_both(api, monkeypatch):
+    """Bản thật: job đang chạy không nuốt lời gọi thứ hai — cả hai job đều chạy xong."""
+    import threading
+
+    from nexgraph_engine.global_graph import link
+
+    started, release = threading.Event(), threading.Event()
+
+    def slow(data_dir, registry):
+        started.set()
+        release.wait(10)
+        return {"edges": 0}
+
+    monkeypatch.setattr(link, "relink", slow)
+    services = api.app.state.services
+    first = services.relink_global()
+    assert started.wait(5), "job relink không chạy"
+    second = services.relink_global()
+    assert second != first  # đang chạy: không gộp, phải xếp thêm
+    release.set()
+    for job_id in (first, second):
+        for _ in range(200):
+            if services.jobs.get(job_id)["state"] not in ("queued", "running"):
+                break
+            time.sleep(0.02)
+        assert services.jobs.get(job_id)["state"] == "done"
+
+
+def test_global_export_on_filesystem_without_hard_links(api, copy_fixture, tmp_path, monkeypatch):
+    import errno
+    import os
+
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    out = tmp_path / "fat"
+    out.mkdir()
+
+    def unsupported(src, dst, *args, **kwargs):
+        raise OSError(errno.ENOTSUP, "Operation not supported", str(src), None, str(dst))
+
+    monkeypatch.setattr(os, "link", unsupported)
+    r = api.post("/v1/global/export", json={"out_dir": str(out)})
+    assert r.status_code == 200, r.text
+    first = Path(r.json()["files"][0])
+    assert first.is_file() and first.stat().st_size > 0
+    second = Path(api.post("/v1/global/export", json={"out_dir": str(out)}).json()["files"][0])
+    assert second != first and second.is_file() and second.stat().st_size > 0
+    assert first.stat().st_size > 0

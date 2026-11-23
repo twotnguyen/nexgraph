@@ -65,7 +65,6 @@ def test_sample_is_deterministic_and_skips_tests(index_project, fixtures_dir, tm
     assert all(not f.startswith("test_") for f in a)
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="bench_all đo RAM bằng module resource, chỉ có trên Unix")
 def test_bench_all_smoke(fixtures_dir, tmp_path):
     out = tmp_path / "perf.json"
     # PYTHONUTF8: script in tiếng Việt ra stdout; Windows mặc định cp1252 sẽ lỗi.
@@ -78,3 +77,21 @@ def test_bench_all_smoke(fixtures_dir, tmp_path):
         assert key in data["metrics"], key
     assert data["metrics"]["rebuild_flows_ms"]["n"] == 1
     assert data["nexgraph_commit"] and data["machine"]["os"]
+
+
+def test_bench_all_imports_and_measures_without_the_unix_resource_module(monkeypatch):
+    """Windows không có module `resource`; script phải nạp được và vẫn trả một số đo (hoặc None)."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "resource":
+            raise ImportError("No module named 'resource'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    mod = load("bench_all")
+    assert mod.resource is None
+    value = mod.peak_rss_mb()
+    assert value is None or value > 0
