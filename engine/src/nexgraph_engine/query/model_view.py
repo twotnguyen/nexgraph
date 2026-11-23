@@ -85,7 +85,8 @@ class ModelGraph:
             if isinstance(flow_id, int) and not self._allows_flow(flow_id):
                 continue
             steps.append(step)
-        return {**payload, "steps": steps}
+        # `TourPanel` hiển thị chính `order`; bỏ bước xong phải đánh số lại 1..n, không để nhảy 5, 6.
+        return {**payload, "steps": [{**step, "order": index} for index, step in enumerate(steps, 1)]}
 
     def filter_cycles(self, payload: dict) -> dict:
         """Chu trình là danh sách tên tệp trần: chỉ giữ chu trình mà mọi thành viên đều được phép.

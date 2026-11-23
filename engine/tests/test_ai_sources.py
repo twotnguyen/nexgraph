@@ -262,3 +262,6 @@ def test_model_tour_drops_steps_whose_flow_uses_excluded_sources(api, copy_fixtu
     model = api.get(f"/v1/projects/{pid}/tour", headers=MODEL).json()["steps"]
     assert model and all("hash_password" not in step["body"] and "login_user" not in step["body"]
                          for step in model)
+    # TourPanel hiển thị chính `order`, nên sau khi lọc phải đánh số lại 1..n (Minor re-review 23/11).
+    assert [step["order"] for step in model] == list(range(1, len(model) + 1))
+    assert [step["order"] for step in steps] == list(range(1, len(steps) + 1))
