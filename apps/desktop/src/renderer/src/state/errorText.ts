@@ -136,6 +136,7 @@ const dynamicErrors: { re: RegExp; key: string }[] = [
 export const codeErrors: Record<string, string> = {
   engine_unavailable: 'Engine chưa sẵn sàng.',
   forbidden_sender: 'Yêu cầu không đến từ cửa sổ NexGraph.',
+  forbidden_owner: 'Chỉ cửa sổ đang chạy tác vụ được trả lời yêu cầu duyệt.',
   bad_locale: 'Ngôn ngữ không hợp lệ.',
   engine_timeout: 'Engine không phản hồi kịp. Hãy thử lại.',
   internal: 'Máy chủ nội bộ gặp lỗi. Vui lòng thử lại.',

@@ -591,7 +591,7 @@ export class AgentService {
     }
   }
 
-  async prompt(projectId: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions): Promise<void> {
+  async prompt(projectId: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions, onAccepted?: () => void): Promise<void> {
     this.assertIdle(projectId)
     const images = options?.images ?? []
     if (typeof text !== 'string' || (!text.trim() && images.length === 0) || text.length > 200_000) throw new AgentError('bad_param', 'Câu hỏi trống hoặc vượt 200.000 ký tự')
@@ -626,6 +626,9 @@ export class AgentService {
       entry.pricing = recipient.pricing
       entry.windowKnown = recipient.windowKnown
       entry.controller = new AbortController()
+      // Lượt đã được nhận (qua validate + assertIdle) và chưa có sự kiện nào: báo main chuyển chủ
+      // phiên sang cửa sổ khởi tạo TRƯỚC sự kiện đầu tiên để stream/approval về đúng nơi.
+      onAccepted?.()
       const task: AgentTask = {
         id: randomUUID(), sessionId: entry.stored.record.id, status: 'running', startedAt: Date.now(),
         turns: 0, limits: this.getLimits(projectId), checkpointIds: []

@@ -11,7 +11,9 @@ const h = vi.hoisted(() => ({
   root: '',
   focused: null as unknown,
   closed: [] as string[],
-  agentDeps: null as { emit: (projectId: string, event: unknown) => void } | null
+  approvals: [] as string[],
+  agentDeps: null as { emit: (projectId: string, event: unknown) => void } | null,
+  prompt: null as null | (() => Promise<void>)
 }))
 
 vi.mock('electron', () => ({
@@ -37,6 +39,8 @@ vi.mock('../src/main/agent/session', async (importOriginal) => {
     constructor(deps: { emit: (projectId: string, event: unknown) => void }) { h.agentDeps = deps }
     getMode() { return 'ask' }
     close(projectId: string) { h.closed.push(projectId) }
+    prompt() { return h.prompt ? h.prompt() : Promise.resolve() }
+    approve(projectId: string, id: string) { h.approvals.push(`${projectId}:${id}`) }
   }
   return { ...actual, AgentService: FakeAgentService }
 })
@@ -50,6 +54,7 @@ vi.mock('../src/main/gemini/service', async (importOriginal) => {
   return { ...actual, GeminiAgentService: FakeGeminiAgentService }
 })
 
+import { AgentError } from '../src/main/agent/session'
 import { closeWindowResources, registerIpc } from '../src/main/ipc'
 
 type Result<T = unknown> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
@@ -107,5 +112,36 @@ describe('phiên agent thuộc cửa sổ đã mở', () => {
     // Cửa sổ đã dọn thì không còn chủ: sự kiện không bị gửi sang cửa sổ đang focus.
     h.agentDeps!.emit('p2', { type: 'text', delta: 'muộn' })
     expect(c.sent).toEqual([])
+  })
+
+  it('prompt bị từ chối (chưa cấu hình AI) không chuyển chủ phiên', async () => {
+    const a = contents('A')
+    const b = contents('B')
+    expect(await invokeAs({ sender: a }, 'agent:get-mode', 'p3')).toMatchObject({ ok: true })
+
+    h.prompt = async () => { throw new AgentError('ai_not_configured', 'Chưa cấu hình trợ lý AI') }
+    const rejected = await invokeAs({ sender: b }, 'agent:prompt', 'p3', 'hỏi', undefined, undefined)
+    h.prompt = null
+    expect(rejected).toMatchObject({ ok: false, error: { code: 'ai_not_configured' } })
+
+    a.sent.length = 0
+    b.sent.length = 0
+    h.agentDeps!.emit('p3', { type: 'text', delta: 'vẫn của A' })
+    expect(a.sent).toEqual([['agent:event', { projectId: 'p3', event: { type: 'text', delta: 'vẫn của A' } }]])
+    expect(b.sent).toEqual([])
+  })
+
+  it('chỉ chủ phiên hiện tại được trả lời yêu cầu duyệt', async () => {
+    const a = contents('A')
+    const b = contents('B')
+    h.approvals.length = 0
+    expect(await invokeAs({ sender: a }, 'agent:get-mode', 'p4')).toMatchObject({ ok: true })
+
+    expect(await invokeAs({ sender: b }, 'agent:approve', 'p4', 'r1', true))
+      .toMatchObject({ ok: false, error: { code: 'forbidden_owner' } })
+    expect(h.approvals).toEqual([])
+
+    expect(await invokeAs({ sender: a }, 'agent:approve', 'p4', 'r1', true)).toMatchObject({ ok: true })
+    expect(h.approvals).toEqual(['p4:r1'])
   })
 })

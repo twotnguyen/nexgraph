@@ -182,6 +182,14 @@ describe('AgentService + pi SDK thật', () => {
     expect(seen.auth[0]).toBe(`Bearer ${KEY}`)
   }, 30_000)
 
+  it('báo lượt đã được nhận đúng một lần, trước sự kiện đầu tiên', async () => {
+    const from = events.length
+    const at: number[] = []
+    await svc.prompt('p1', 'đếm sự kiện khi nhận lượt', target, undefined, () => at.push(events.length - from))
+    expect(at).toEqual([0])
+    expect(events.length - from).toBeGreaterThan(0)
+  }, 30_000)
+
   it('Pi thiếu extension NexGraph thì không dùng công cụ dựng sẵn thay thế', async () => {
     const model = accounts.modelRuntime.getModel('fake', 'fake-1')!
     await expect(createPiSession({

@@ -122,7 +122,7 @@ describe('agent attachments and fork IPC', () => {
 
   it('passes a validated base64 image through and routes forks to the selected runtime', async () => {
     expect(await invoke('agent:prompt', 'p1', 'hello', target, { images: [{ mimeType: 'image/png', data: png }] })).toMatchObject({ ok: true })
-    expect(h.piPrompt).toHaveBeenCalledWith('p1', 'hello', target, { images: [{ mimeType: 'image/png', data: png }] })
+    expect(h.piPrompt).toHaveBeenCalledWith('p1', 'hello', target, { images: [{ mimeType: 'image/png', data: png }] }, expect.any(Function))
     h.piFork.mockResolvedValueOnce({ session: { id: 'fork' } })
     expect(await invoke('agent:fork-session', 'p1', 'source')).toMatchObject({ ok: true, data: { session: { id: 'fork' } } })
     expect(h.piFork).toHaveBeenCalledWith('p1', 'source')

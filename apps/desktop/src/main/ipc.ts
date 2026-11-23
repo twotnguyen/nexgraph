@@ -254,14 +254,39 @@ export function registerIpc(
     }))
   /**
    * Kênh agent: ghi cửa sổ đã dùng phiên của dự án. Sự kiện agent đi về đúng cửa sổ đó (không
-   * theo cửa sổ đang focus) và reload/đóng cửa sổ chỉ dọn phiên do nó mở. `prompt` chuyển chủ vì
-   * lượt mới thuộc về cửa sổ vừa gửi; các kênh khác chỉ nhận chủ khi phiên chưa có.
+   * theo cửa sổ đang focus) và reload/đóng cửa sổ chỉ dọn phiên do nó mở.
+   *
+   * - `claim` (mặc định): cửa sổ đầu tiên dùng phiên thành chủ; cửa sổ khác không giành mất.
+   * - `owner`: chỉ chủ hiện tại được trả lời yêu cầu duyệt của lượt đang chạy.
+   *
+   * KHÔNG kênh nào ở đây đổi chủ phiên đang sống — chỉ `agent:prompt` làm việc đó, và chỉ khi
+   * lượt được nhận (`agentPrompt`).
    */
-  const agentOn = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>, mode: 'claim' | 'assign' = 'claim'): void =>
+  const agentOn = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>, mode: 'claim' | 'owner' = 'claim'): void =>
     ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
       const pid = args[0]
-      if (typeof pid === 'string' && event?.sender) agentOwners[mode](pid, event.sender)
+      const sender = event?.sender as WebContents | undefined
+      if (typeof pid === 'string' && sender) {
+        const owner = agentOwners.ownerOf(pid)
+        if (mode === 'owner' && owner && owner !== sender) {
+          throw new UserError('forbidden_owner', 'Chỉ cửa sổ đang chạy tác vụ được trả lời yêu cầu duyệt.')
+        }
+        if (!owner) agentOwners.claim(pid, sender)
+      }
       return fn(...(args as A))
+    }))
+  /**
+   * `agent:prompt` bắt đầu một LƯỢT agent. Chủ phiên chỉ đổi sang cửa sổ gọi khi lượt được nhận:
+   * service gọi `accepted` sau validate/`assertIdle` và TRƯỚC sự kiện đầu tiên, nên stream và
+   * yêu cầu duyệt của lượt về đúng cửa sổ khởi tạo. Lệnh bị từ chối (`ai_not_configured`,
+   * `consent_required`, `agent_busy`…) không đổi chủ — reload cửa sổ kia không đóng phiên đang sống.
+   */
+  const agentPrompt = (channel: string, fn: (pid: string, text: string, target: AiConsentTarget, options: AgentPromptOptions | undefined, accepted: () => void) => Promise<unknown>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const [pid, text, target, options] = args as [string, string, AiConsentTarget, AgentPromptOptions | undefined]
+      const sender = event?.sender as WebContents | undefined
+      const accepted = (): void => { if (typeof pid === 'string' && sender && !sender.isDestroyed()) agentOwners.assign(pid, sender) }
+      return fn(pid, text, target, options, accepted)
     }))
 
   on('project:pick-folder', async () => {
@@ -863,11 +888,11 @@ export function registerIpc(
       throw new AgentError('ai_not_configured', 'Kiểm tra kết nối và công cụ thành công trước khi dùng Gemini.')
     selectRuntime('antigravity-cli')
   })
-  agentOn('agent:prompt', async (pid: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions) => {
+  agentPrompt('agent:prompt', async (pid, text, target, options, accepted) => {
     validatePromptImages(options)
     await editorStates.wait(pid)
-    return agent.prompt(pid, text, target, options)
-  }, 'assign')
+    return agent.prompt(pid, text, target, options, accepted)
+  })
   agentOn('agent:abort', (pid: string) => agent.abort(pid))
   agentOn('agent:set-mode', async (pid: string, mode: AgentMode) => {
     if (!['ask', 'plan', 'edit'].includes(mode)) throw new AgentError('bad_param', 'Chế độ trợ lý không hợp lệ')
@@ -886,7 +911,7 @@ export function registerIpc(
   agentOn('agent:approve', async (pid: string, id: string, allow: boolean) => {
     if (allow === true) await editorStates.wait(pid)
     return agent.approve(pid, id, allow === true)
-  })
+  }, 'owner')
   agentOn('agent:close', async (pid: string) => {
     editorStates.clear(pid)
     return agent.close(pid)
