@@ -13,10 +13,19 @@
 - **Git (F16).** Panel nhánh, thay đổi, lịch sử, diff theo hunk, stage/unstage, stash, worktree, xung đột theo khối, permalink tới dòng.
 - **Gỡ lỗi DAP (F16).** Cấu hình chạy cho Node (js-debug) và Python (debugpy), breakpoint, stack, biến, bước tiếp, dừng; adapter tải về lần đầu.
 - **Cộng tác LAN (F16).** Máy chia sẻ mở WebSocket trong mạng cục bộ và hiện địa chỉ `IP:cổng` cùng **mã mời 22 ký tự** (base64url); máy khác dán địa chỉ và mã mời để tham gia, tối đa 8 máy tham gia (không kể máy chia sẻ), không qua máy chủ ngoài.
-- **Extension khai báo (F16).** Extension JSON khai báo theme, lệnh và snippet; không nạp mã Node tuỳ ý, không có marketplace.
+- **Extension khai báo (F16).** Extension JSON khai báo theme và lệnh (theme đổi ngay; lệnh chèn văn bản hoặc chạy lệnh có sẵn của app); không nạp mã Node tuỳ ý, không có marketplace.
 - **Giao diện.** Shell 5 vùng có pane kéo/ thu gọn, thanh trạng thái 11 mục, bảng lệnh kiểu Wu, thông báo và dock, breadcrumb theo ký hiệu, multibuffer, bookmark.
 - **Tiếng Anh.** Chuyển ngôn ngữ Việt/Anh trong Cài đặt; toàn bộ chuỗi giao diện có bản dịch (kiểm tự động 681/681 khoá).
 - **Trợ lý AI.** Khung trợ lý mặc định bên phải và mở sẵn lần đầu vào workspace (giữ lựa chọn đã lưu), sửa lỗi xuất PNG dùng đúng thư mục xuất đã nhớ của dự án.
+
+## Sẽ có trước khi phát hành (chờ merge)
+
+Các thay đổi dưới đây đang ở PR mở, **chưa có trên `main`**, nên không nằm trong mục "Tính năng mới". Chỉ giữ dòng nào PR đã merge và CI xanh trước khi tạo tag; nếu không kịp thì bỏ cả mục này.
+
+- **Nhà cung cấp OpenCode Go** trong Cài đặt tài khoản AI (PR #37).
+- **Trích dẫn trong trợ lý AI:** nhận chip trong gạch đầu dòng, inline code và code fence; thông báo thử lại rõ ràng thay vì chi tiết SDK thô (PR #39).
+- **Tăng cường bảo mật tiến trình:** task từ `.vscode/tasks.json`, `.husky/**`, `.github/workflows/**` phải duyệt tay; chặn `core.fsmonitor`; tắt quyền Electron không dùng (PR #38).
+- **Engine:** chặn URL nội bộ cho nhà cung cấp AI, che secret trước khi gửi model, bỏ `dist/`/`__pycache__`/`.venv` khi lập chỉ mục, không ghi đè tệp khi xuất lần hai (PR #36).
 
 ## Sửa lỗi
 
@@ -32,7 +41,7 @@
 - **LSP chỉ TS/JS và Python.** Ngôn ngữ khác có tô màu cú pháp nhưng không có gợi ý mã hay điều hướng ngữ nghĩa.
 - **Terminal không phải sandbox.** Lệnh chạy với quyền tài khoản người dùng trong thư mục dự án.
 - **Cộng tác LAN không có xác thực người dùng** ngoài mã mời 22 ký tự; chỉ dùng trong mạng tin cậy.
-- **Extension chỉ khai báo** theme/lệnh/snippet, không có API mở rộng hay marketplace.
+- **Extension chỉ khai báo** theme và lệnh, không có API mở rộng hay marketplace.
 - **Codex TOML.** Khi `.codex/config.toml` đã có nội dung, phần cài đặt trả `invalid_config` thay vì merge (SPEC-09, chưa sửa trong 0.2.0).
 - **Nhóm test opt-in không chạy ở CI:** 15 test gỡ lỗi DAP cần `NEXGRAPH_DEBUG_IT=1` và mạng để tải adapter; một test Antigravity cần Windows + `NEXGRAPH_ANTIGRAVITY_TEST_BINARY`. Xem [kế hoạch kiểm thử](test-plan.md).
 - **Máy Windows của nhóm bị Code Integrity chặn bộ cài** (biên bản 18/11); luồng người dùng trên Windows được kiểm bằng bản build từ mã nguồn cho tới khi máy đó mở được bộ cài.

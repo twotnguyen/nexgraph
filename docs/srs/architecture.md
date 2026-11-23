@@ -87,7 +87,7 @@ Sáu nhóm dưới đây chạy trong tiến trình chính của Electron, cùng
 | Git | [kho Git](../../apps/desktop/src/main/git/repo.ts), [lịch sử](../../apps/desktop/src/main/git/history.ts), [hunk](../../apps/desktop/src/main/git/hunks.ts), [thao tác](../../apps/desktop/src/main/git/operations.ts), [worktree](../../apps/desktop/src/main/git/worktree.ts), [permalink](../../apps/desktop/src/main/git/permalink.ts) | Gọi `git` CLI của máy; thao tác ghi chỉ chạy khi người dùng xác nhận |
 | Gỡ lỗi | [quản lý gỡ lỗi](../../apps/desktop/src/main/debug/manager.ts), [DAP client](../../apps/desktop/src/main/debug/dap-client.ts), [adapter](../../apps/desktop/src/main/debug/adapters.ts), [cấu hình chạy](../../apps/desktop/src/main/debug/launch-config.ts) | DAP trên stdio; js-debug và debugpy tải về lần đầu |
 | Cộng tác LAN | [hub](../../apps/desktop/src/main/collab/hub.ts) | WebSocket trong LAN, mã tham gia, không qua máy chủ ngoài |
-| Extension | [registry](../../apps/desktop/src/main/extensions/registry.ts) | Khai báo theme, lệnh, snippet; không nạp mã Node tuỳ ý |
+| Extension | [registry](../../apps/desktop/src/main/extensions/registry.ts) | Khai báo theme và lệnh (`insertText`/`runCommands`); không nạp mã Node tuỳ ý |
 
 Trạng thái dùng chung của nhóm này nằm trong bộ nhớ tiến trình chính (không vào CSDL), trừ lịch sử phiên chat của agent. Các giới hạn (không marketplace, LSP chỉ TS/JS + Python, terminal không phải sandbox, cộng tác LAN cần mạng tin cậy) ghi ở [UC18](use-cases/UC18.md).
 
