@@ -66,7 +66,7 @@ export function CommandPaletteHost() {
       empty={tr('Không có lệnh khớp')} onCancel={close} inputRef={inputRef}
       onActive={(command) => setRecording((current) => current && current !== command.id ? null : current)}
       onSecondary={(command) => setRecording(command.id)}
-      footer={(command, pick) => recording === command.id
+      footer={(command, pick) => !command ? null : recording === command.id
         ? <Recorder onDone={(key, restoreFocus = true) => {
           setRecording(null)
           if (key !== undefined) setBinding(command.id, key)

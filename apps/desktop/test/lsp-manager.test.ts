@@ -32,3 +32,14 @@ it('Python: nhảy tới định nghĩa qua pyright', async () => {
   writeFileSync(join(root, 'app.py'), text)
   expect(await lsp.definition(root, 'app.py', text, 1, 7)).toEqual([{ file: 'helpers.py', line: 1, column: 5 }])
 }, 60_000)
+
+it('TypeScript: khai báo lùi về định nghĩa khi server thiếu declarationProvider, định nghĩa kiểu trả interface', async () => {
+  writeFileSync(join(root, 'src/types.ts'), 'export interface Box {\n  value: number\n}\n')
+  const text = "import { addTwo } from './math'\nimport type { Box } from './types'\nconst box: Box = { value: addTwo(1) }\n"
+  writeFileSync(join(root, 'src/decl.ts'), text)
+  await lsp.open(root, 'src/decl.ts', text)
+  // typescript-language-server không đăng ký textDocument/declaration: như VS Code, lệnh khai báo lùi về định nghĩa thay vì báo lỗi.
+  await vi.waitFor(async () => expect(await lsp.declaration(root, 'src/decl.ts', text, 2, 26)).toEqual([{ file: 'src/math.ts', line: 1, column: 17 }]), { timeout: 20_000, interval: 300 })
+  expect(await lsp.declaration(root, 'src/decl.ts', text, 1, 15)).toEqual([{ file: 'src/types.ts', line: 1, column: 18 }])
+  expect(await lsp.typeDefinition(root, 'src/decl.ts', text, 2, 6)).toEqual([{ file: 'src/types.ts', line: 1, column: 18 }])
+}, 60_000)
