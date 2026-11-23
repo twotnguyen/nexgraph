@@ -192,3 +192,34 @@ def test_monorepo_test_command_uses_the_nearest_package_manifest(tmp_path):
         f"cd packages/web && npx vitest run src/cart.test.ts",
     ]
     assert sel["run_all"] is False
+
+
+def test_monorepo_hoisted_workspace_uses_the_root_runner(tmp_path):
+    import json as _json
+    from types import SimpleNamespace
+
+    from nexgraph_engine.prs.diff import DiffFile
+    from nexgraph_engine.prs.review import select_tests
+
+    web = tmp_path / "packages" / "web"
+    (web / "src").mkdir(parents=True)
+    (web / "package.json").write_text(_json.dumps({"name": "web", "private": True}), encoding="utf-8")
+    (tmp_path / "package.json").write_text(_json.dumps({"devDependencies": {"vitest": "^2.1.0"}}), encoding="utf-8")
+    sel = select_tests(tmp_path, SimpleNamespace(tests=[], test_gaps=[], truncated=False),
+                       [DiffFile("packages/web/src/cart.test.ts")], False)
+    assert sel["commands"] == ["npx vitest run packages/web/src/cart.test.ts"]
+
+
+def test_go_monorepo_command_is_relative_to_the_module(tmp_path):
+    from types import SimpleNamespace
+
+    from nexgraph_engine.prs.diff import DiffFile
+    from nexgraph_engine.prs.review import select_tests
+
+    api_pkg = tmp_path / "services" / "api"
+    (api_pkg / "pkg").mkdir(parents=True)
+    (api_pkg / "go.mod").write_text("module example.com/api\n", encoding="utf-8")
+    (api_pkg / "pkg" / "x_test.go").write_text("package pkg\n", encoding="utf-8")
+    sel = select_tests(tmp_path, SimpleNamespace(tests=[], test_gaps=[], truncated=False),
+                       [DiffFile("services/api/pkg/x_test.go")], False)
+    assert sel["commands"] == ["cd services/api && go test ./pkg"]
