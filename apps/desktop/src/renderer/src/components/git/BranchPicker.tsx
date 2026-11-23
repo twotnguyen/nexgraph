@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { tr } from '../../strings'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from '../layout/Picker'
@@ -13,8 +14,8 @@ export function BranchPicker({ projectId, onClose, onChanged }: {
   onChanged: () => void
 }) {
   const api = window.nexgraph.git
-  const [result, setResult] = useState<{ projectId: string; branches: string[] | null; error: string | null }>({ projectId, branches: null, error: null })
-  const [actionError, setActionError] = useState<{ projectId: string; message: string } | null>(null)
+  const [result, setResult] = useState<{ projectId: string; branches: string[] | null; error: Message | null }>({ projectId, branches: null, error: null })
+  const [actionError, setActionError] = useState<{ projectId: string; message: Message } | null>(null)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const currentProject = useRef(projectId)
@@ -30,12 +31,12 @@ export function BranchPicker({ projectId, onClose, onChanged }: {
     let active = true
     setResult({ projectId, branches: null, error: null })
     if (!api) {
-      setResult({ projectId, branches: null, error: tr('Git không dùng được ở chế độ này.') })
+      setResult({ projectId, branches: null, error: msg('Git không dùng được ở chế độ này.') })
     } else {
       api.branches(projectId).then((branches) => {
         if (active) setResult({ projectId, branches, error: null })
       }).catch((error: unknown) => {
-        if (active) setResult({ projectId, branches: null, error: errorText(error) })
+        if (active) setResult({ projectId, branches: null, error: errorMsg(error) })
       })
     }
     return () => { active = false }
@@ -57,7 +58,7 @@ export function BranchPicker({ projectId, onClose, onChanged }: {
       await api.switchBranch(projectId, choice.name, choice.create)
       switched = true
     } catch (error) {
-      if (mounted.current && currentProject.current === projectId) setActionError({ projectId, message: errorText(error) })
+      if (mounted.current && currentProject.current === projectId) setActionError({ projectId, message: errorMsg(error) })
     } finally {
       busyRef.current = false
       if (mounted.current) setBusy(false)
@@ -77,7 +78,7 @@ export function BranchPicker({ projectId, onClose, onChanged }: {
         return matches
       }}
       empty={busy ? tr('Đang chuyển nhánh…') : loading ? tr('Đang tải nhánh…') : loadError ? tr('Không thể tải nhánh.') : tr('Không có nhánh.')}
-      error={error} onCancel={() => { if (!busyRef.current) onClose() }} onPick={(item) => void pick(item)}
+      error={error ? msgText(error) : undefined} onCancel={() => { if (!busyRef.current) onClose() }} onPick={(item) => void pick(item)}
       renderItem={(item, positions) => item.create ? <>
         <Icon name="plus" size={14} />
         <span className="git-branch-create">{tr('Tạo nhánh “{name}” từ HEAD', { name: item.name })}</span>

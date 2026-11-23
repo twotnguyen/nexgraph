@@ -4,6 +4,7 @@ import { useCommand } from '../../state/commands'
 import { useDebounced } from '../../state/useDebounced'
 import { tr } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import './project-search.css'
@@ -17,7 +18,6 @@ interface Props {
   focusRequest?: number
 }
 
-const message = (e: unknown) => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
 
 /** Tìm và thay trong cả dự án kiểu project search của Wu: ô tìm có nút Aa / từ nguyên / regex, ô thay, lọc tệp, kết quả nhóm theo tệp. */
 export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: Props) {
@@ -26,7 +26,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
   const [showReplace, setShowReplace] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [result, setResult] = useState<TextSearchResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<Message | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -43,7 +43,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
     setBusy(true)
     api.searchText(projectId, debounced)
       .then((r) => { if (live) { setResult(r); setError(null) } })
-      .catch((e: unknown) => { if (live) { setResult(null); setError(message(e)) } })
+      .catch((e: unknown) => { if (live) { setResult(null); setError(errorMsg(e)) } })
       .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
   }, [projectId, debounced, runs, api])
@@ -91,7 +91,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
       setStatus(msg('Đã thay {count} chỗ trong {files} tệp{skipped}.', { count: done.replacements, files: done.files, skipped: skippedText }))
       setRuns((n) => n + 1)
     } catch (e) {
-      setError(message(e))
+      setError(errorMsg(e))
     }
   }
   const replaceAll = async () => {
@@ -104,7 +104,7 @@ export function ProjectSearch({ projectId, onOpen, dirtyFiles, focusRequest }: P
     await replace([file], count)
   }
   const allCollapsed = !!result?.files.length && result.files.every((f) => collapsed.has(f.file))
-  const summary = error || msgText(status) || (busy ? tr('Đang tìm…') : result ? (total ? tr('{count} kết quả trong {files} tệp{truncated}', { count: total, files: result.files.length, truncated: result.truncated ? ` — ${tr('Đạt giới hạn')}` : '' }) : tr('Không có kết quả')) : '')
+  const summary = msgText(error) || msgText(status) || (busy ? tr('Đang tìm…') : result ? (total ? tr('{count} kết quả trong {files} tệp{truncated}', { count: total, files: result.files.length, truncated: result.truncated ? ` — ${tr('Đạt giới hạn')}` : '' }) : tr('Không có kết quả')) : '')
 
   return (
     <div className="project-search">

@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GitStash } from '@shared/api'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { Icon } from '../common/icons'
 import { PopoverMenu } from '../common/PopoverMenu'
 import { tr } from '../../strings'
 
-type StashList = { projectId: string; items: GitStash[] | null; error: string | null }
+type StashList = { projectId: string; items: GitStash[] | null; error: Message | null }
 
 export function StashSection({ projectId, onChanged }: { projectId: string; onChanged: () => void }) {
   const api = window.nexgraph.git
   const [list, setList] = useState<StashList>({ projectId, items: null, error: null })
   const [draft, setDraft] = useState({ projectId, message: '' })
-  const [actionError, setActionError] = useState<{ projectId: string; message: string } | null>(null)
+  const [actionError, setActionError] = useState<{ projectId: string; message: Message } | null>(null)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const sequence = useRef(0)
@@ -32,7 +33,7 @@ export function StashSection({ projectId, onChanged }: { projectId: string; onCh
       const items = await api.stashes(projectId)
       if (ticket === sequence.current) setList({ projectId, items, error: null })
     } catch (error) {
-      if (ticket === sequence.current) setList({ projectId, items: null, error: errorText(error) })
+      if (ticket === sequence.current) setList({ projectId, items: null, error: errorMsg(error) })
     }
   }, [api, projectId])
 
@@ -60,7 +61,7 @@ export function StashSection({ projectId, onChanged }: { projectId: string; onCh
       await work()
       if (clearMessage && mounted.current && currentProject.current === projectId) setDraft({ projectId, message: '' })
     } catch (error) {
-      if (mounted.current && currentProject.current === projectId) setActionError({ projectId, message: errorText(error) })
+      if (mounted.current && currentProject.current === projectId) setActionError({ projectId, message: errorMsg(error) })
     } finally {
       busyRef.current = false
       if (mounted.current) setBusy(false)
@@ -84,8 +85,8 @@ export function StashSection({ projectId, onChanged }: { projectId: string; onCh
         onChange={(event) => setDraft({ projectId, message: event.target.value })} />
       <button type="submit" className="git-stash-save" disabled={disabled}>{tr('Lưu stash')}</button>
     </form>
-    {error && <p className="git-stash-error" role="alert">{error}</p>}
-    {currentList?.error && <p className="git-stash-error" role="alert">{currentList.error}</p>}
+    {error && <p className="git-stash-error" role="alert">{msgText(error)}</p>}
+    {currentList?.error && <p className="git-stash-error" role="alert">{msgText(currentList.error)}</p>}
     {busy ? <p className="git-stash-status" role="status">{tr('Đang xử lý stash…')}</p>
       : loading ? <p className="git-stash-status" role="status">{tr('Đang tải stash…')}</p>
       : currentList?.items?.length === 0 ? <p className="git-stash-empty">{tr('Không có stash.')}</p>

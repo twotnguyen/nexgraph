@@ -1,7 +1,8 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { GitFileChange, GitStatus } from '@shared/api'
 import { consentTargetForSettings, sameConsentTarget } from '@shared/agent-types'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import { PopoverMenu } from '../common/PopoverMenu'
@@ -81,7 +82,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
   const [amend, setAmend] = useState(false)
   const [showBranches, setShowBranches] = useState(false)
   const [showStashes, setShowStashes] = useState(false)
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null)
+  const [notice, setNotice] = useState<{ parts: Message[]; error?: boolean } | null>(null)
   const seq = useRef(0)
 
   const refresh = useCallback(async () => {
@@ -91,7 +92,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
       const next = await api.status(projectId)
       if (ticket === seq.current) setStatus(next)
     } catch (error) {
-      if (ticket === seq.current) setNotice({ text: errorText(error), error: true })
+      if (ticket === seq.current) setNotice({ parts: [errorMsg(error)], error: true })
     }
   }, [api, projectId])
 
@@ -108,17 +109,20 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
   }, [refresh, projectId])
 
   const changed = () => window.dispatchEvent(new CustomEvent('nexgraph:git-changed', { detail: projectId }))
-  const act = async (work: () => Promise<unknown>, success?: string) => {
+  const act = async (work: () => Promise<unknown>, success?: Message) => {
     if (busyRef.current) return
     busyRef.current = true
     setBusy(true)
     setNotice(null)
     try {
       const result = await work()
-      if (success) setNotice({ text: typeof result === 'string' && result.trim() ? `${success}\n${result.trim()}` : success })
+      if (success) {
+        const detail = typeof result === 'string' ? result.trim() : ''
+        setNotice({ parts: detail ? [success, detail] : [success] })
+      }
       changed()
     } catch (error) {
-      setNotice({ text: errorText(error), error: true })
+      setNotice({ parts: [errorMsg(error)], error: true })
     } finally {
       busyRef.current = false
       setBusy(false)
@@ -138,7 +142,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
       const sha = await api.commit(projectId, draft.trim(), amend, authors)
       setDraft('')
       setAmend(false)
-      setNotice({ text: tr('Đã {action} {sha}', { action: amend ? 'amend' : 'commit', sha }) })
+      setNotice({ parts: [msg('Đã {action} {sha}', { action: amend ? 'amend' : 'commit', sha })] })
     })
   }
   const onKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -164,7 +168,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
     })
   }
   const remote = (op: 'fetch' | 'pull' | 'push') => {
-    if (api) void act(() => api.remote(projectId, op), tr('Git {op} thành công', { op }))
+    if (api) void act(() => api.remote(projectId, op), msg('Git {op} thành công', { op }))
   }
 
   if (!api) return <p className="git-empty muted">{tr('Git không dùng được ở chế độ này.')}</p>
@@ -299,6 +303,6 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
       </div>
     </>}
     {showBranches && <BranchPicker projectId={projectId} onClose={() => setShowBranches(false)} onChanged={() => void refresh()} />}
-    {notice && <div className={`git-toast${notice.error ? ' git-toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><span>{notice.text}</span><button type="button" className="git-icon" aria-label={tr('Đóng thông báo Git')} onClick={() => setNotice(null)}><Icon name="close" size={13} /></button></div>}
+    {notice && <div className={`git-toast${notice.error ? ' git-toast-error' : ''}`} role={notice.error ? 'alert' : 'status'}><span>{notice.parts.map(msgText).join('\n')}</span><button type="button" className="git-icon" aria-label={tr('Đóng thông báo Git')} onClick={() => setNotice(null)}><Icon name="close" size={13} /></button></div>}
   </div>
 }

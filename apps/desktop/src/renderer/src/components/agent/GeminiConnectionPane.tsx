@@ -4,9 +4,10 @@ import { consentTargetForSettings } from '@shared/agent-types'
 import type { GeminiCliStatus, GeminiConnectionTest } from '@shared/gemini-types'
 import { Icon } from '../common/icons'
 import { tr } from '../../strings'
+import { msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 import { AuthLinks } from './AuthLinks'
 
-const messageOf = (error: unknown): string => error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
 const modelLabel = (model: string): string => model === 'auto' || !model ? tr('Tự động') : model
 const steps = (): string[] => [tr('Công cụ'), tr('Đăng nhập'), tr('Kiểm tra'), tr('Sẵn sàng')]
 type Verified = { connectionId: string; model: string; result: GeminiConnectionTest }
@@ -22,7 +23,7 @@ export function GeminiConnectionPane({ projectId, onConnected, onClose, onBusyCh
   const [authEvent, setAuthEvent] = useState<AuthEventView | null>(null)
   const [verified, setVerified] = useState<Verified | null>(null)
   const [consent, setConsent] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<Message | null>(null)
   const [operation, setOperation] = useState<'setup' | 'login' | 'test' | 'model' | 'finish' | null>(null)
   const alive = useRef(true)
   const pending = useRef<typeof operation>(null)
@@ -61,7 +62,7 @@ export function GeminiConnectionPane({ projectId, onConnected, onClose, onBusyCh
   }
   useEffect(() => {
     alive.current = true
-    void load().catch((e) => { if (alive.current) setError(messageOf(e)) })
+    void load().catch((e) => { if (alive.current) setError(errorMsg(e)) })
     const off = window.nexgraph.gemini.onEvent((event) => {
       if (!alive.current) return
       if (event.type === 'status') { read.current++; apply(event.status) }
@@ -76,7 +77,7 @@ export function GeminiConnectionPane({ projectId, onConnected, onClose, onBusyCh
     }
   }, [])
   useEffect(() => {
-    if (status?.authenticated) void loadModels(status.connectionId).catch((e) => { if (alive.current) setError(messageOf(e)) })
+    if (status?.authenticated) void loadModels(status.connectionId).catch((e) => { if (alive.current) setError(errorMsg(e)) })
   }, [status?.authenticated, status?.connectionId])
   const busy = operation !== null
   useEffect(() => { onBusyChange?.(busy); return () => onBusyChange?.(false) }, [busy, onBusyChange])
@@ -84,8 +85,8 @@ export function GeminiConnectionPane({ projectId, onConnected, onClose, onBusyCh
     if (pending.current) return
     pending.current = kind
     read.current++
-    setOperation(kind); setError('')
-    try { await action() } catch (e) { if (alive.current) setError(messageOf(e)) }
+    setOperation(kind); setError(null)
+    try { await action() } catch (e) { if (alive.current) setError(errorMsg(e)) }
     finally {
       pending.current = null
       if (alive.current) setOperation(null)
@@ -141,11 +142,11 @@ export function GeminiConnectionPane({ projectId, onConnected, onClose, onBusyCh
   })
   const cancelLogin = () => {
     setAuthEvent(null)
-    void window.nexgraph.gemini.loginCancel().catch((e) => { if (alive.current) setError(messageOf(e)) })
+    void window.nexgraph.gemini.loginCancel().catch((e) => { if (alive.current) setError(errorMsg(e)) })
   }
   const refresh = () => {
-    setError('')
-    void load().catch((e) => { if (alive.current) setError(messageOf(e)) })
+    setError(null)
+    void load().catch((e) => { if (alive.current) setError(errorMsg(e)) })
   }
   const authenticated = status?.authenticated === true
   const needsSetup = status?.state === 'not_installed' || status?.state === 'error' && !status.installed && status.platformSupported
@@ -164,7 +165,7 @@ export function GeminiConnectionPane({ projectId, onConnected, onClose, onBusyCh
           ? tr('Đã kiểm tra trả lời trực tiếp và công cụ. Bạn có thể bắt đầu một cuộc trò chuyện.') : authenticated
             ? tr('Kiểm tra kết nối và công cụ trước khi bắt đầu. Hạn mức do Google áp dụng theo tài khoản.')
             : tr('Antigravity CLI chính thức quản lý đăng nhập và hạn mức tài khoản Google.')
-  const errorText = error || status?.error
+  const errorText: Message | null = error ?? (status?.error ? errorMsg(status.error) : null)
   return <div className="gemini-setup">
     <ol className="gemini-steps" aria-label={tr('Các bước kết nối Gemini')}>
       {steps().map((label, index) => <li key={label} aria-current={index === step ? 'step' : undefined} data-complete={index < step || undefined}>
@@ -175,7 +176,7 @@ export function GeminiConnectionPane({ projectId, onConnected, onClose, onBusyCh
       <Icon name={ready || authenticated ? 'check' : busy || !status ? 'refresh' : needsSetup ? 'plug' : 'spark'} size={20} />
       <div><h3>{heading}</h3><small>{detail}</small>{status?.installed && <small>Antigravity CLI {status.version}</small>}</div>
     </div>
-    {errorText && <p role="alert" className="inline-message error">{tr(errorText)}</p>}
+    {errorText && <p role="alert" className="inline-message error">{msgText(errorText)}</p>}
     {errorText && !busy && <div className="row"><button type="button" onClick={refresh}>{tr('Kiểm tra lại kết nối')}</button></div>}
     {(operation === 'setup' || status?.state === 'installing') && <div className="gemini-setup-progress"><progress aria-label={tr('Đang thiết lập Antigravity CLI')} /><small className="muted">{tr('Quá trình thiết lập có thể mất vài phút tùy kết nối mạng.')}</small></div>}
     {needsSetup && <div className="row"><button type="button" className="primary" disabled={busy || !status.platformSupported} onClick={setup}>{tr('Thiết lập Antigravity CLI')}</button>

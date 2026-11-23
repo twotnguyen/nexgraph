@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Changes } from '@shared/graph-types'
 import { tr } from '../strings'
-import { errorText } from './errorText'
+import { errorMsg } from './errorText'
+import { msg, type Message } from './messages'
 
 const RELOAD_MS = 300
 
@@ -12,12 +13,12 @@ const RELOAD_MS = 300
 export function useChanges(projectId: string): {
   changes: Changes | null
   loading: boolean
-  error: string | null
+  error: Message | null
   reload: () => void
 } {
   const [changes, setChanges] = useState<Changes | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const latest = useRef(0)
 
   const load = useCallback(
@@ -32,7 +33,7 @@ export function useChanges(projectId: string): {
           setError(null)
         })
         .catch((e: { message?: string }) => {
-          if (mine === latest.current) setError(errorText(e?.message ?? tr('Không đọc được thay đổi')))
+          if (mine === latest.current) setError(typeof e?.message === 'string' && e.message ? errorMsg(e.message) : msg('Không đọc được thay đổi'))
         })
         .finally(() => {
           if (mine === latest.current) setLoading(false)

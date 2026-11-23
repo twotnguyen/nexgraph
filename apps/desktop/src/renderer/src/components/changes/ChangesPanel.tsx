@@ -1,11 +1,12 @@
 import type { Changes, GraphNode } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { msgText, type Message } from '../../state/messages'
 import { HIGHLIGHT_COLORS } from '../graph/kindStyle'
 
 interface Props {
   changes: Changes | null
   loading: boolean
-  error: string | null
+  error: Message | null
   onReload: () => void
   onOpenNode: (nodeId: string) => void
   onOpenCode?: (file: string, line?: number) => void
@@ -48,7 +49,7 @@ export function ChangesPanel({ changes, loading, error, onReload, onOpenNode, on
       </header>
       {base && <p className="muted">{base}</p>}
       {loading && <p role="status" className="muted">{vi.changes.loading}</p>}
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <p role="alert" className="error">{msgText(error)}</p>}
       {nothing && <p className="muted">{vi.changes.none}</p>}
       {changes && changes.truncated && <p className="muted">{vi.changes.truncated}</p>}
       {changes && hasFiles && (

@@ -1,5 +1,6 @@
 import { tr } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { AuthEventView, AuthPromptView, LocalModelInfo, ModelInfo, ProviderInfo } from '@shared/agent-types'
 import { consentTargetForSettings, sameConsentTarget } from '@shared/agent-types'
@@ -11,8 +12,6 @@ import { GeminiConnectionPane } from './GeminiConnectionPane'
 import './connection-dialog.css'
 
 type Method = 'oauth' | 'api_key' | 'local'
-const messageOf = (error: unknown): string =>
-  error && typeof error === 'object' && 'message' in error ? String(error.message) : String(error)
 const labelFor = (provider: ProviderInfo): string =>
   ({ openai: 'OpenAI / ChatGPT', 'openai-codex': tr('Codex qua ChatGPT'), google: 'Google AI Studio', openrouter: 'OpenRouter', anthropic: 'Anthropic / Claude' } as Record<string, string>)[provider.id] ?? provider.label
 
@@ -96,7 +95,7 @@ function PiConnectionForm({ projectId, onConnected, onClose, initialMethod = 'oa
       setProviders(items)
       const available = items.filter((p) => inGroup(p) && (initialMethod === 'oauth' ? p.oauth && p.id !== 'anthropic' : p.authMethods?.includes('api_key') ?? true))
       setProvider((current) => available.some((p) => p.id === current) ? current : available[0]?.id ?? '')
-    }).catch((e) => { if (alive.current) setError(messageOf(e)) })
+    }).catch((e) => { if (alive.current) setError(errorMsg(e)) })
     const offEvent = window.nexgraph.auth.onEvent(setEvent)
     const offPrompt = window.nexgraph.auth.onPrompt((value) => { setPrompt(value); setAnswer('') })
     return () => {
@@ -113,7 +112,7 @@ function PiConnectionForm({ projectId, onConnected, onClose, initialMethod = 'oa
     operation.current = true
     setBusy(true)
     setError(null)
-    try { await action() } catch (e) { if (alive.current) setError(messageOf(e)) }
+    try { await action() } catch (e) { if (alive.current) setError(errorMsg(e)) }
     finally {
       operation.current = false
       if (alive.current) setBusy(false)
@@ -179,7 +178,7 @@ function PiConnectionForm({ projectId, onConnected, onClose, initialMethod = 'oa
   })
   const reply = (value: string | null) => {
     if (!prompt) return
-    void window.nexgraph.auth.promptReply(prompt.id, value).catch((e) => setError(messageOf(e)))
+    void window.nexgraph.auth.promptReply(prompt.id, value).catch((e) => setError(errorMsg(e)))
     setPrompt(null)
   }
   const close = () => {

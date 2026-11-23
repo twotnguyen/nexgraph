@@ -1,5 +1,5 @@
 import { tr } from '../../strings'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
 import { msg, type Message } from '../../state/messages'
 import { retryNotice } from './retry'
 
@@ -9,8 +9,7 @@ import type { AgentContextUsage, AgentExecutionSettings, AgentRunLimits, AgentSe
 export type AgentInspection = { id: string; title: string; text?: string; before?: string; after?: string; file?: string }
 const defaults: AgentRunLimits = { maxTurns: 30, maxDurationMs: 600_000, maxTokens: 120_000 }
 const emptyUsage: AgentUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, costUsd: null }
-/** Lỗi từ main: `errorText` dịch các câu đã biết (knownErrors) sang ngôn ngữ giao diện, câu lạ giữ nguyên. */
-const messageOf = (e: unknown): string => errorText(e)
+/** Lỗi từ main: `errorMsg` giữ khoá (knownErrors) để `msgText` dịch lúc render, câu lạ giữ nguyên. */
 const pinKeyPrefix = 'nexgraph.agent.pinned.'
 const readPins = (projectId: string): string[] => {
   try {
@@ -88,7 +87,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     mutating.current = false
     setPins({ projectId, ids: readPins(projectId) })
     setPending(false); setError('')
-    void restore().catch((e) => { if (alive.current && generation === mutationSeq.current) setError(messageOf(e)) })
+    void restore().catch((e) => { if (alive.current && generation === mutationSeq.current) setError(errorMsg(e)) })
     const off = window.nexgraph.agent.onEvent((pid, event) => {
       if (pid !== projectId || !alive.current) return
       if (!mutating.current && ['session', 'task', 'tool_detail', 'usage', 'command_output'].includes(event.type)) readSeq.current++
@@ -99,7 +98,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       if (event.type === 'usage') setUsage(event.usage)
       if (event.type === 'context') setContext(event.context)
       if (event.type === 'retry') { setNotice(retryNotice(event)); setNoticeDetail(event.message) }
-      if (event.type === 'compaction') { setNotice(event.active ? tr('Đang tóm tắt ngữ cảnh để tiếp tục…') : tr('Đã tóm tắt ngữ cảnh.')); setNoticeDetail('') }
+      if (event.type === 'compaction') { setNotice(msg(event.active ? 'Đang tóm tắt ngữ cảnh để tiếp tục…' : 'Đã tóm tắt ngữ cảnh.')); setNoticeDetail('') }
       if (event.type === 'command_output') setTools((current) => current.map((t) => t.id === event.id ? { ...t, output: (t.output + event.delta).slice(-65_536) } : t))
       if (event.type === 'done' || event.type === 'error') void refresh().catch(() => {})
     })
@@ -119,7 +118,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       onApplied?.()
       const list = await window.nexgraph.agent.listSessions(projectId)
       if (current()) setSessions(list)
-    } catch (e) { if (current()) setError(messageOf(e)) }
+    } catch (e) { if (current()) setError(errorMsg(e)) }
     finally {
       if (alive.current && mutation === mutationSeq.current) {
         mutating.current = false
@@ -137,7 +136,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
     togglePin: (id: string) => {
       const next = pinnedIds.includes(id) ? pinnedIds.filter((pin) => pin !== id) : [...pinnedIds, id]
       setPins({ projectId, ids: next })
-      setError(writePins(projectId, next) ? '' : tr('Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'))
+      setError(writePins(projectId, next) ? '' : msg('Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'))
     },
     rename: (id: string, title: string) => mutate(() => window.nexgraph.agent.renameSession(projectId, id, title)),
     remove: (id: string) => mutate(async () => {

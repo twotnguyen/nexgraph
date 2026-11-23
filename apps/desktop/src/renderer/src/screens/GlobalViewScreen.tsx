@@ -5,6 +5,7 @@ import { Icon } from '../components/common/icons'
 import { vi } from '../strings'
 import { msg, msgText, type Message } from '../state/messages'
 import './global-view.css'
+import { errorMsg } from '../state/errorText'
 
 const LIMIT = 300 // overlay xếp lớp bằng ELK: giữ đồ thị gộp vừa phải
 
@@ -16,7 +17,7 @@ interface Props {
 /** "Xem chung" (W8): đồ thị gộp chỉ đọc của nhiều dự án trong graph chung, tìm kiếm chung và xuất graph.json gộp. */
 export function GlobalViewScreen({ projectIds, onBack }: Props) {
   const [graph, setGraph] = useState<GlobalGraph | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<GlobalSearchHit[] | null>(null)
   const [focus, setFocus] = useState<string | null>(null)
@@ -30,7 +31,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
     setError(null)
     window.nexgraph.globalGraph.graph(projectIds, LIMIT).then(
       (g) => { if (alive) setGraph(g) },
-      (err: { message?: string }) => { if (alive) setError(err?.message ?? String(err)) })
+      (err: unknown) => { if (alive) setError(errorMsg(err)) })
     return () => { alive = false }
   }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -41,7 +42,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
       const found = await window.nexgraph.globalGraph.search(q.trim(), 50, projectIds)
       setHits(found.filter((h) => projectIds.includes(h.project_id)))
     } catch (err) {
-      setError((err as { message?: string })?.message ?? String(err))
+      setError(errorMsg(err))
     }
   }
 
@@ -52,7 +53,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
       const r = await window.nexgraph.globalGraph.export(projectIds)
       if (r) setNotice(msg('Đã xuất {file}', { file: r.files[0] }))
     } catch (err) {
-      setError((err as { message?: string })?.message ?? String(err))
+      setError(errorMsg(err))
     } finally {
       setExporting(false)
     }
@@ -82,7 +83,7 @@ export function GlobalViewScreen({ projectIds, onBack }: Props) {
                 value={q} onChange={(e) => setQ(e.target.value)} />
             </label>
           </form>
-          {error && <p role="alert" className="inline-message error">{error}</p>}
+          {error && <p role="alert" className="inline-message error">{msgText(error)}</p>}
           {notice && <p role="status" className="inline-message">{msgText(notice)}</p>}
           {graph?.truncated && <p className="global-note">{vi.globalGraph.truncated}</p>}
           {graph && graph.skipped.length > 0 && <p className="global-note">{vi.globalGraph.skipped(graph.skipped.length)}</p>}

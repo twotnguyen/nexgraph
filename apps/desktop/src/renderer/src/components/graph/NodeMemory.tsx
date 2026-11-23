@@ -2,10 +2,9 @@ import { useEffect, useState, type FormEvent } from 'react'
 import type { MemoryKind, MemoryRecall } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 
 const KINDS: MemoryKind[] = ['lesson', 'decision', 'incident', 'owner']
-const message = (e: unknown) => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
-
 /** Mục "Ghi nhớ" của Inspector: bài học từ đánh giá, ghi nhớ neo vào nút và ô thêm ghi nhớ tay. */
 export function NodeMemory({ projectId, nodeId }: { projectId: string; nodeId: string }) {
   const [data, setData] = useState<MemoryRecall | null>(null)
@@ -32,7 +31,7 @@ export function NodeMemory({ projectId, nodeId }: { projectId: string; nodeId: s
       setText('')
       setReload((n) => n + 1)
     } catch (err) {
-      setNote(msg('Không lưu được: {error}', { error: message(err) }))
+      setNote(msg('Không lưu được: {error}', { error: errorMsg(err) }))
     }
   }
 

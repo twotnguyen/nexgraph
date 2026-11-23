@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { IndexOptions, Job, JobState } from '@shared/graph-types'
 import { tr } from '../strings'
-import { errorText } from './errorText'
+import { errorMsg, errorText } from './errorText'
 import { msg, type Message } from './messages'
 
 const POLL_INTERVAL_MS = 1_000
@@ -79,7 +79,7 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
         failures += 1
         if (failures >= MAX_STATUS_FAILURES || (err as { code?: string })?.code === 'unknown_job') {
           setJob(null)
-          setError(msg('Không đọc được tiến độ lập chỉ mục. {detail}. Hãy quay lại và mở dự án.', { detail: errorText(err) }))
+          setError(msg('Không đọc được tiến độ lập chỉ mục. {detail}. Hãy quay lại và mở dự án.', { detail: errorMsg(err) }))
           return
         }
       } finally {
@@ -119,13 +119,13 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
       if (pending) publish(pending)
       void poll()
     }).catch((err) => {
-      if (alive) setError(errorText(err))
+      if (alive) setError(errorMsg(err))
     })
 
     cancelCurrent.current = () => {
       if (!jobId || terminal(current)) return
       void withTimeout(api.cancel(jobId), REQUEST_TIMEOUT_MS, tr('Engine không phản hồi yêu cầu hủy')).catch((err) => {
-        if (alive && !terminal(current)) setError(errorText(err))
+        if (alive && !terminal(current)) setError(errorMsg(err))
       })
     }
     return () => {

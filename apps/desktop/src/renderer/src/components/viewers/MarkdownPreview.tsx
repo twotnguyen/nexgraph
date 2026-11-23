@@ -3,7 +3,8 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Icon } from '../common/icons'
 import { FileTypeIcon } from '../common/FileTypeIcon'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { isFenceClosed, resolveReference, taskEdit } from './markdown'
 import { MermaidBlock } from './MermaidBlock'
 import { observeBuffer, type PreviewBuffer } from './modelBuffer'
@@ -15,25 +16,25 @@ const ItemPosition = createContext<Position | null>(null)
 const imageTypes: Record<string, string> = { png: 'png', jpg: 'jpeg', jpeg: 'jpeg', gif: 'gif', webp: 'webp', bmp: 'bmp', ico: 'x-icon', svg: 'svg+xml', avif: 'avif' }
 
 function LocalImage({ projectId, sourceFile, src, alt }: { projectId: string; sourceFile: string; src?: string; alt?: string }) {
-  const [result, setResult] = useState<{ url?: string; error?: string }>({})
+  const [result, setResult] = useState<{ url?: string; error?: Message }>({})
   const target = src ? resolveReference(sourceFile, src) : null
   const path = target?.kind === 'file' ? target.file : null
   useEffect(() => {
     setResult({})
     if (!path) return
     const mime = imageTypes[path.split('.').pop()?.toLowerCase() ?? '']
-    if (!mime) { setResult({ error: tr('Định dạng ảnh không được hỗ trợ') }); return }
+    if (!mime) { setResult({ error: msg('Định dạng ảnh không được hỗ trợ') }); return }
     let live = true
     const read = window.nexgraph.fs.readBinary
-    if (!read) { setResult({ error: tr('Không đọc được ảnh') }); return }
+    if (!read) { setResult({ error: msg('Không đọc được ảnh') }); return }
     void read(projectId, path).then(({ data }) => {
       if (live) setResult({ url: `data:image/${mime};base64,${data}` })
-    }).catch((error: unknown) => { if (live) setResult({ error: errorText(error) }) })
+    }).catch((error: unknown) => { if (live) setResult({ error: errorMsg(error) }) })
     return () => { live = false }
   }, [path, projectId])
   if (target?.kind === 'external') return <a href={target.url} target="_blank" rel="noopener noreferrer">{alt || target.url}</a>
   if (!path) return <span className="md-image-note">{alt || tr('Ảnh không hợp lệ')}</span>
-  if (result.error) return <span className="md-image-note" title={result.error}>{alt || tr('Không tải được ảnh')}</span>
+  if (result.error) return <span className="md-image-note" title={msgText(result.error)}>{alt || tr('Không tải được ảnh')}</span>
   return result.url ? <img src={result.url} alt={alt ?? ''} /> : <span className="md-image-note">{tr('Đang tải ảnh…')}</span>
 }
 

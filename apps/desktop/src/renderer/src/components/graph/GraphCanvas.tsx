@@ -9,6 +9,8 @@ import { AutoFit } from '../common/AutoFit'
 import { CanvasState } from '../common/CanvasState'
 import { BOX_H, BOX_W, dotEdge, dotEdgeTypes, dotNodeTypes, dotSize, radialLayout, type DotData } from '../common/dotGraph'
 import { HIGHLIGHT_COLORS, kindStyle, type HighlightKind } from './kindStyle'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 const LIMIT = 2000 // không bao giờ vẽ quá ~2.000 nút (spec §5.9)
 
@@ -55,7 +57,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
   const locale = useLocale()
   const [center, setCenter] = useState(focusNodeId ?? startNodeId)
   const [view, setView] = useState<View | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [retry, setRetry] = useState(0)
   const box = useRef<HTMLDivElement>(null)
   /** Khung cao hơn rộng (thẻ Luồng ba cột): xếp chuỗi bước từ trên xuống để ô đủ to mà đọc. */
@@ -103,7 +105,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
         size,
         edges: toFlowEdges(hood.edges, overlay != null, routes)
       })
-    })().catch((err: Error) => alive && setError(err?.message ?? String(err)))
+    })().catch((err: unknown) => alive && setError(errorMsg(err)))
     return () => {
       alive = false
     }
@@ -179,7 +181,7 @@ export function GraphCanvas({ projectId, revision = 0, startNodeId, focusNodeId,
   return (
     <div className="graph-canvas" ref={box} aria-busy={!view && !error}>
       {toolbar}
-      {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
+      {error && <CanvasState kind="error" message={msgText(error)} onRetry={() => setRetry((n) => n + 1)} />}
       {!view && !error && <CanvasState kind="loading" message={tr('Đang tải đồ thị…')} />}
       {view?.raw.size === 0 && <CanvasState kind="empty" message={tr('Không có nút trong vùng đã chọn.')} />}
       {view?.truncated && (

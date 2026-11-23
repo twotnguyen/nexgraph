@@ -38,6 +38,7 @@ describe('SourcesPanel', () => {
     render(<SourcesPanel projectId="p1" />)
     await userEvent.type(await screen.findByLabelText('URL nguồn'), 'file:///etc/passwd')
     await userEvent.click(screen.getByRole('button', { name: 'Thêm' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được: Blocked URL scheme')
+    // UI Việt dịch câu tiếng Anh của engine theo mã `bad_url` (I18N-IPC), không hiện câu thô.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được: URL nguồn không hợp lệ.')
   })
 })

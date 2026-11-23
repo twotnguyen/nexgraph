@@ -3,7 +3,8 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { StatusBarItems } from '../EngineStatusBar'
 import { Icon } from '../common/icons'
 import { useCommand } from '../../state/commands'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import './image-viewer.css'
 
 const MIME: Record<string, string> = {
@@ -41,7 +42,7 @@ export function ImageViewer({ projectId, file, active, onClose, onViewSource, so
   const [dragging, setDragging] = useState(false)
   const [source, setSource] = useState<Source | null>(null)
   const [dimensions, setDimensions] = useState<Dimensions | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [view, setView] = useState<View>({ zoom: 1, x: 0, y: 0, fit: true })
   const suffix = file.slice(file.lastIndexOf('.') + 1).toLowerCase()
   const extension = isImageFile(file) ? suffix : undefined
@@ -77,7 +78,7 @@ export function ImageViewer({ projectId, file, active, onClose, onViewSource, so
           if (alive) setSource({ url: `data:${MIME[extension]};base64,${result.data}`, size: result.size, id })
         }
       } catch (e) {
-        if (alive) setError(errorText(e))
+        if (alive) setError(errorMsg(e))
       }
     }
     void load()
@@ -206,16 +207,16 @@ export function ImageViewer({ projectId, file, active, onClose, onViewSource, so
           if (direction) { event.preventDefault(); move(...direction) }
         }}>
         {!dimensions && !error && <p role="status" className="image-viewer-message">{tr('Đang mở ảnh…')}</p>}
-        {error && <p role="alert" className="image-viewer-message error">{error}</p>}
+        {error && <p role="alert" className="image-viewer-message error">{msgText(error)}</p>}
         {source && !error && <img key={source.id} className="image-viewer-image" alt={tr('Ảnh {file}', { file })} src={source.url} draggable={false}
           style={{ opacity: dimensions ? 1 : 0, transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}
           onLoad={(event) => {
             if (source.id !== request.current) return
             const { naturalWidth: width, naturalHeight: height } = event.currentTarget
             if (width && height) setDimensions({ width, height })
-            else setError(errorText(new Error(tr('Không xác định được kích thước ảnh'))))
+            else setError(msg('Không xác định được kích thước ảnh'))
           }}
-          onError={() => { if (source.id === request.current) setError(errorText(new Error(tr('Không thể giải mã ảnh')))) }} />}
+          onError={() => { if (source.id === request.current) setError(msg('Không thể giải mã ảnh')) }} />}
       </div>
       {active && dimensions && source && !error && <StatusBarItems><span className="status-item">{dimensions.width} × {dimensions.height} • {formatSize(source.size)} • {format}</span></StatusBarItems>}
     </div>

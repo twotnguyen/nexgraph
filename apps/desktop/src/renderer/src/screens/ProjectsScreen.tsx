@@ -6,6 +6,7 @@ import { waitJob } from '../state/waitJob'
 import { formatDate } from '../state/locale'
 import { vi, tr } from '../strings'
 import { msg, msgText, type Message } from '../state/messages'
+import { errorMsg } from '../state/errorText'
 import './welcome.css'
 import './projects.css'
 
@@ -17,11 +18,12 @@ interface Props {
   onOpenGlobal?: (projectIds: string[]) => void
 }
 
-function message(err: unknown) {
+/** Lỗi mở dự án: vài mã có câu riêng, còn lại giữ `Message` của `errorMsg`. */
+function openError(err: unknown): Message {
   const failure = err as { code?: string; message?: string } | null
-  if (failure?.code === 'bad_path') return vi.projects.openFailed
-  if (failure?.code === 'project_busy') return tr('Dự án đang cập nhật đồ thị. Đợi hoàn tất hoặc hủy lập chỉ mục rồi thử lại.')
-  return failure?.message ?? String(err)
+  if (failure?.code === 'bad_path') return msg('Không mở được thư mục này')
+  if (failure?.code === 'project_busy') return msg('Dự án đang cập nhật đồ thị. Đợi hoàn tất hoặc hủy lập chỉ mục rồi thử lại.')
+  return errorMsg(err)
 }
 
 function RemoveProjectDialog({ project, busy, onCancel, onRemove }: {
@@ -54,8 +56,8 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
   const [recent, setRecent] = useState<ProjectSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [refresh, setRefresh] = useState(0)
-  const [listError, setListError] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [listError, setListError] = useState<Message | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [notice, setNotice] = useState<Message | null>(null)
   const [pending, setPending] = useState<'open' | 'remove' | 'clone' | null>(null)
   const [removing, setRemoving] = useState<ProjectSummary | null>(null)
@@ -80,7 +82,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
     setListError(null)
     void window.nexgraph.project.list().then(
       (projects) => { if (alive) setRecent(projects) },
-      (err) => { if (alive) setListError(message(err)) }
+      (err) => { if (alive) setListError(openError(err)) }
     ).finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
   }, [engineReady, refresh])
@@ -95,7 +97,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
   function changeMembership(action: () => Promise<unknown>) {
     setError(null)
     void action().then(() => { if (mounted.current) setMembersVersion((v) => v + 1) },
-      (err) => { if (mounted.current) setError(message(err)) })
+      (err) => { if (mounted.current) setError(openError(err)) })
   }
 
   const memberIds = new Set(members.map((m) => m.project_id))
@@ -109,7 +111,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
     try {
       await action()
     } catch (err) {
-      if (mounted.current) setError(message(err))
+      if (mounted.current) setError(openError(err))
     } finally {
       operation.current = false
       if (mounted.current) setPending(null)
@@ -192,14 +194,14 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
         )}
       </section>
       {!engineReady && <p role="status" className="inline-message">{vi.projects.engineWaiting}</p>}
-      {error && <p role="alert" className="inline-message error">{error}</p>}
+      {error && <p role="alert" className="inline-message error">{msgText(error)}</p>}
       {notice && <Toast message={msgText(notice)} onDismiss={() => setNotice(null)} />}
 
       <section className="welcome-section" aria-labelledby="recent-heading" aria-busy={engineReady && loading}>
         <h2 id="recent-heading" className="welcome-section-title">{vi.projects.recent}</h2>
         {engineReady && loading && <div className="panel-empty"><div className="skeleton-line" /><div className="skeleton-line short" /></div>}
         {listError && (
-          <div className="panel-empty"><p role="alert" className="error">{listError}</p>
+          <div className="panel-empty"><p role="alert" className="error">{msgText(listError)}</p>
             <button type="button" disabled={pending !== null} onClick={() => setRefresh((v) => v + 1)}>{tr('Tải lại danh sách')}</button>
           </div>
         )}

@@ -22,6 +22,8 @@ import { SettingsScreen } from './screens/SettingsScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
 import { WorkspaceScreen } from './screens/WorkspaceScreen'
 import { GlobalViewScreen } from './screens/GlobalViewScreen'
+import { errorMsg } from './state/errorText'
+import { msgText, type Message } from './state/messages'
 
 type Screen =
   | { name: 'projects' }
@@ -66,7 +68,7 @@ export default function App() {
   const [status, setStatus] = useState<EngineStatus>({ state: 'starting' })
   const [screen, setScreen] = useState<Screen>({ name: 'projects' })
   const initialHostCommand = useRef(window.nexgraph?.host?.initialCommand)
-  const [hostError, setHostError] = useState<string | null>(null)
+  const [hostError, setHostError] = useState<Message | null>(null)
 
   useEffect(() => {
     const api = window.nexgraph
@@ -78,7 +80,7 @@ export default function App() {
       setStatus(status)
     })
     const failed = (e: unknown) => {
-      if (alive && !eventReceived) setStatus({ state: 'error', message: e instanceof Error ? e.message : String(e) })
+      if (alive && !eventReceived) setStatus({ state: 'error', message: msgText(errorMsg(e)), messageKey: undefined })
     }
     void api.engine.status().then((s) => alive && !eventReceived && setStatus(s), failed)
     return () => {
@@ -118,7 +120,7 @@ export default function App() {
           return base
         })
       })
-      .catch((error: { message?: string }) => { if (alive) setHostError(error?.message ?? String(error)) })
+      .catch((error: unknown) => { if (alive) setHostError(errorMsg(error)) })
     return () => { alive = false }
   }, [hostFolder, status.state]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -210,7 +212,7 @@ export default function App() {
   return (
     <div className="app">
       {!window.nexgraph?.host && <WorkbenchBar project={'project' in screen ? screen.project : null} />}
-      {hostError && screen.name === 'projects' && <p role="alert" className="inline-message error">{hostError}</p>}
+      {hostError && screen.name === 'projects' && <p role="alert" className="inline-message error">{msgText(hostError)}</p>}
       {screen.name === 'projects' && (
         <ProjectsScreen engineReady={status.state === 'ready'}
           onOpenSettings={() => setScreen({ name: 'settings', back: screen })}

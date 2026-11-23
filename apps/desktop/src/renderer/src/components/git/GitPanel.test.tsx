@@ -82,6 +82,19 @@ it('yêu cầu xác nhận trước khi bỏ thay đổi và đưa lỗi IPC ra 
   confirm.mockRestore()
 })
 
+it('toast lỗi Git giữ khoá Msg nên đổi ngôn ngữ đổi câu tại chỗ', async () => {
+  const { git, rerender } = setup()
+  await screen.findByText('new.txt')
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+  git.restore.mockRejectedValueOnce({ code: 'git_failed', message: 'Engine chưa sẵn sàng.' })
+  fireEvent.click(screen.getByRole('button', { name: 'Bỏ thay đổi new.txt' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Engine chưa sẵn sàng.')
+  setLocale('en')
+  rerender(<GitPanel projectId="p1" onOpenDiff={vi.fn()} onOpenFile={vi.fn()} />)
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('The engine is not ready yet.'))
+  confirm.mockRestore()
+})
+
 it('menu remote chỉ cung cấp fetch, pull và push', async () => {
   setup()
   await screen.findByText('staged.txt')

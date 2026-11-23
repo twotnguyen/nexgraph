@@ -4,8 +4,8 @@ import { waitJob } from '../../state/waitJob'
 import { formatNumber } from '../../state/locale'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 const num = (n: number) => formatNumber(n)
 const SHOWN_FILES = 50
 const TITLE_OF = (target: SemanticTarget | undefined): string | undefined =>
@@ -38,14 +38,14 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
 
   const apply = (s: ProjectAiSettings) => { setSettings(s); onSettings?.(s) }
   useEffect(() => {
-    window.nexgraph.semantic.getSettings(projectId).then(apply, (e) => setError(errMessage(e)))
+    window.nexgraph.semantic.getSettings(projectId).then(apply, (e) => setError(errorMsg(e)))
   }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!settings?.enabled) return
     let live = true
     setEstimate(null)
     setError(null)
-    window.nexgraph.semantic.estimate(projectId, target, noCache).then((e) => live && setEstimate(e), (e) => live && setError(errMessage(e)))
+    window.nexgraph.semantic.estimate(projectId, target, noCache).then((e) => live && setEstimate(e), (e) => live && setError(errorMsg(e)))
     return () => { live = false }
   }, [projectId, target, settings?.enabled, settings?.model, noCache])
 
@@ -53,7 +53,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
     if (busy) return
     setBusy(true)
     setError(null)
-    try { await fn() } catch (e) { setError(msg('Không chạy được: {error}', { error: errMessage(e) })) } finally { setBusy(false) }
+    try { await fn() } catch (e) { setError(msg('Không chạy được: {error}', { error: errorMsg(e) })) } finally { setBusy(false) }
   }
   const enable = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId, { enabled: true, transport, model: null })))
   const agreeNewModel = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId,
