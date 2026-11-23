@@ -233,7 +233,12 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
         "<root>",
         "--data-dir",
         "/data dir"
-      ]
+      ],
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": "",
+        "PYTHONNOUSERSITE": "1"
+      }
     }
   }
 }
@@ -472,6 +477,11 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
       "after": "[mcp_servers.nexgraph]
 command = "/Apps/NexGraph/engine"
 args = ["mcp", "--project", "<root>", "--data-dir", "/data dir"]
+
+[mcp_servers.nexgraph.env]
+PYTHONPATH = ""
+PYTHONHOME = ""
+PYTHONNOUSERSITE = "1"
 ",
       "part": "mcp",
       "path": ".codex/config.toml",
@@ -543,7 +553,12 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
         "<root>",
         "--data-dir",
         "/data dir"
-      ]
+      ],
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": "",
+        "PYTHONNOUSERSITE": "1"
+      }
     }
   }
 }
@@ -701,7 +716,12 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
         "<root>",
         "--data-dir",
         "/data dir"
-      ]
+      ],
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": "",
+        "PYTHONNOUSERSITE": "1"
+      }
     }
   }
 }
@@ -773,7 +793,12 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
         "<root>",
         "--data-dir",
         "/data dir"
-      ]
+      ],
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": "",
+        "PYTHONNOUSERSITE": "1"
+      }
     }
   },
   "hooks": {
@@ -976,7 +1001,12 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
         "<root>",
         "--data-dir",
         "/data dir"
-      ]
+      ],
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": "",
+        "PYTHONNOUSERSITE": "1"
+      }
     }
   }
 }
@@ -1053,7 +1083,12 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
           "<root>",
           "--data-dir",
           "/data dir"
-        ]
+        ],
+        "environment": {
+          "PYTHONPATH": "",
+          "PYTHONHOME": "",
+          "PYTHONNOUSERSITE": "1"
+        }
       }
     }
   }
@@ -1297,7 +1332,12 @@ description: Dùng đồ thị tri thức NexGraph để tìm hiểu, đánh gi�
         "<root>",
         "--data-dir",
         "/data dir"
-      ]
+      ],
+      "env": {
+        "PYTHONPATH": "",
+        "PYTHONHOME": "",
+        "PYTHONNOUSERSITE": "1"
+      }
     }
   }
 }

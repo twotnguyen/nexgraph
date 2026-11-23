@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale } from './state/locale'
 import { tr, vi as t } from './strings'
 import { localizeCommand } from './state/commandLabels'
+import { retryReason } from './components/agent/retry'
 
 afterEach(() => setLocale('vi'))
 
@@ -14,6 +15,22 @@ describe('vi.path.found', () => {
 })
 
 describe('i18n', () => {
+  it('EN: cùng lỗi ai_unreachable ra cùng một câu ở dòng lỗi và dòng thử lại', () => {
+    setLocale('en')
+    expect(t.chat.errors.ai_unreachable).toBe('Could not connect to the AI provider.')
+    expect(retryReason('fetch failed')).toBe('Could not connect to the AI provider.')
+    expect(tr('Không kết nối được tới nhà cung cấp AI.')).toBe('Could not connect to the AI provider.')
+  })
+
+  it('nhãn Context window của nhà cung cấp tuỳ chỉnh có bản tiếng Anh', () => {
+    setLocale('vi')
+    expect(t.accounts.customContext).toBe('Context window (token)')
+    expect(t.accounts.customContextInvalid).toMatch(/số nguyên dương/)
+    setLocale('en')
+    expect(t.accounts.customContext).toBe('Context window (tokens)')
+    expect(t.accounts.customContextInvalid).toMatch(/positive integer/)
+  })
+
   it('đổi dictionary ngay khi đổi locale', () => {
     setLocale('vi')
     expect(t.accounts.title).toBe('Tài khoản AI')

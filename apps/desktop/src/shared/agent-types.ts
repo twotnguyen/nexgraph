@@ -154,7 +154,7 @@ export type AgentEvent =
   | { type: 'approval_closed'; id: string }
   | { type: 'write_conflict'; message: string }
   | { type: 'done'; text: string; citations: Citation[] }
-  | { type: 'error'; code: string; message: string }
+  | { type: 'error'; code: string; message: string; /** Thông điệp ngắn của provider (đã che khoá), hiện sau câu theo mã. */ detail?: string }
   | { type: 'task'; task: AgentTask }
   | { type: 'tool_detail'; tool: AgentToolRun }
   | { type: 'usage'; usage: AgentUsage }

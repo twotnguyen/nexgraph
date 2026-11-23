@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { CitationText } from './CitationText'
@@ -114,6 +114,32 @@ describe('CitationText', () => {
     expect(onOpen).toHaveBeenCalledWith('flow app/service.py', 4, 7)
     await userEvent.click(screen.getByRole('button', { name: 'utils.ts:3–4' }))
     expect(onOpen).toHaveBeenCalledWith('utils.ts', 3, 4)
+  })
+
+  it('N1: trích dẫn có ngoặc mà engine xác minh bằng hậu tố không để lại rác `[[`', async () => {
+    const onOpen = vi.fn()
+    const { container } = render(<CitationText onOpen={onOpen} text="Xem [[xem flow app/service.py:4-7]] nhé."
+      citations={[{ raw: '[[xem flow app/service.py:4-7]]', file: 'app/service.py', start: 4, end: 7, valid: true, reason: null }]} />)
+    const chip = screen.getByRole('button', { name: 'app/service.py:4–7' })
+    await userEvent.click(chip)
+    expect(onOpen).toHaveBeenCalledWith('app/service.py', 4, 7)
+    // Không còn mảnh `[[flo`/`[[xe` trước chip, và ngoặc đóng không bị mất.
+    expect(container.textContent).not.toContain('[[')
+    expect(container.textContent).not.toContain(']]')
+    expect(container.textContent).toBe('Xem app/service.py:4–7 nhé.')
+  })
+
+  it('N3: trích dẫn lặp trong cùng code fence chỉ một chip, nhiều chip có dấu phẩy ngăn cách', () => {
+    const text = ['```ts', '// utils.ts:3-4', '// utils.ts:3-4', '// app.py:8-9', '```'].join('\n')
+    const { container } = render(<CitationText text={text} onOpen={vi.fn()} citations={[
+      { raw: 'utils.ts:3-4', file: 'utils.ts', start: 3, end: 4, valid: true, reason: null },
+      { raw: 'app.py:8-9', file: 'app.py', start: 8, end: 9, valid: true, reason: null }
+    ]} />)
+    const line = screen.getByText(/Trích dẫn trong khối mã:/)
+    expect(line.textContent).toBe('Trích dẫn trong khối mã: utils.ts:3–4, app.py:8–9')
+    const chips = within(line).getAllByRole('button')
+    expect(chips.map((chip) => chip.textContent)).toEqual(['utils.ts:3–4', 'app.py:8–9'])
+    expect(container.querySelectorAll('button')).toHaveLength(2)
   })
 
   it('link tự tạo không giả mạo chip; citation trong inline code thành chip, code khác giữ nguyên', () => {

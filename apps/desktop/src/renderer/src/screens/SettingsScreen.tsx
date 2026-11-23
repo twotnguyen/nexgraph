@@ -9,6 +9,7 @@ import { setBlame, setEditorPrefs, setVimMode, useBlame, useEditorPrefs, useVimM
 import { CHAT_WIDTH, TERMINAL_HEIGHT, setChatDock, setChatWidth, setExplorerOpen, setStatusBar, setStatusItemHidden, setTerminalHeight, useChatDock, useChatWidth, useExplorerOpen, useHiddenStatusItems, useStatusBar, useTerminalHeight } from '../state/layoutPrefs'
 import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
 import { Toast } from '../components/common/Toast'
+import { errorText } from '../state/errorText'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
 import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
@@ -21,7 +22,14 @@ import './settings.css'
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
-const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '' }
+const EMPTY_CUSTOM = { id: '', label: '', baseUrl: '', model: '', apiKey: '', contextWindow: '' }
+/** Cùng giới hạn với `saveCustomProvider` ở main: số nguyên dương ≤ 10 triệu; để trống = tự nhận/mặc định. */
+const parseContextWindow = (raw: string): { value?: number; invalid: boolean } => {
+  const text = raw.trim()
+  if (text === '') return { invalid: false }
+  const value = Number(text)
+  return Number.isInteger(value) && value > 0 && value <= 10_000_000 ? { value, invalid: false } : { invalid: true }
+}
 const STATUS_ITEMS = STATUS_BAR_ITEMS.filter(({ id }) => id !== 'engine').map(({ id, labelKey }) => ({ id, label: labelKey }))
 
 // Từ khoá cho ô tìm: tiêu đề và vài chữ người dùng hay gõ của mỗi mục.
@@ -84,6 +92,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const [keyProvider, setKeyProvider] = useState('')
   const [keyInput, setKeyInput] = useState('')
   const [custom, setCustom] = useState(EMPTY_CUSTOM)
+  const contextInvalid = parseContextWindow(custom.contextWindow).invalid
   const [loginEvent, setLoginEvent] = useState<AuthEventView | null>(null)
   const [loginPrompt, setLoginPrompt] = useState<AuthPromptView | null>(null)
   const [promptInput, setPromptInput] = useState('')
@@ -190,7 +199,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
 
   const saveCustom = () => void run(async () => {
     const { id, label, baseUrl, model, apiKey } = custom
-    await window.nexgraph.auth.saveCustom({ id, label, baseUrl, model }, apiKey === '' ? undefined : apiKey)
+    const contextWindow = parseContextWindow(custom.contextWindow)
+    if (contextWindow.invalid) return
+    await window.nexgraph.auth.saveCustom({ id, label, baseUrl, model, ...(contextWindow.value ? { contextWindow: contextWindow.value } : {}) }, apiKey === '' ? undefined : apiKey)
     await window.nexgraph.auth.selectModel(id, model)
     setCustom(EMPTY_CUSTOM)
   }, vi.accounts.saved)
@@ -227,9 +238,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
     setTestResult(null)
     try {
       const r = await window.nexgraph.auth.test()
-      setTestResult(r.ok ? vi.accounts.testOk : vi.accounts.testFail(r.message))
+      setTestResult(r.ok ? vi.accounts.testOk : `${tr(r.message)}${r.detail ? ` — ${r.detail}` : ''}`)
     } catch (e) {
-      setTestResult(vi.accounts.testFail(errMessage(e)))
+      setTestResult(errorText(e))
     } finally {
       operation.current = false
       setTesting(false)
@@ -543,11 +554,17 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
           <input id="custom-url" value={custom.baseUrl} onChange={(e) => setCustom({ ...custom, baseUrl: e.target.value })} placeholder="https://openrouter.ai/api/v1" />
           <label htmlFor="custom-model">{vi.accounts.customModel}</label>
           <input id="custom-model" value={custom.model} onChange={(e) => setCustom({ ...custom, model: e.target.value })} />
+          <label htmlFor="custom-context">{vi.accounts.customContext}</label>
+          <input id="custom-context" type="text" inputMode="numeric" autoComplete="off" aria-invalid={contextInvalid}
+            aria-describedby="custom-context-hint" value={custom.contextWindow}
+            onChange={(e) => setCustom({ ...custom, contextWindow: e.target.value })} placeholder="128000" />
+          <p id="custom-context-hint" className="muted small">{vi.accounts.customContextHint}</p>
+          {contextInvalid && <p role="alert" className="muted small">{vi.accounts.customContextInvalid}</p>}
           <label htmlFor="custom-key">{vi.accounts.customApiKey}</label>
           <input id="custom-key" type="password" autoComplete="off" value={custom.apiKey} onChange={(e) => setCustom({ ...custom, apiKey: e.target.value })} />
           <div className="row">
             <button type="button" className="primary" onClick={saveCustom}
-              disabled={busy || !custom.id.trim() || !custom.label.trim() || !custom.baseUrl.trim() || !custom.model.trim()}>{vi.accounts.saveCustom}</button>
+              disabled={busy || contextInvalid || !custom.id.trim() || !custom.label.trim() || !custom.baseUrl.trim() || !custom.model.trim()}>{vi.accounts.saveCustom}</button>
           </div>
         </div>
       </section>}

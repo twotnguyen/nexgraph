@@ -104,13 +104,15 @@ interface Props {
   onOpenSettings?: (page?: string) => void
   /** Mở một thư mục khác làm dự án (App chuyển màn hình); chỉ khi có thì mở được worktree. */
   onOpenProject?: (project: ProjectSummary) => void
+  /** Về danh sách dự án (nút "Dự án" ở đường dẫn khối); không có thì nút đó chỉ hiện ở mức gốc và khoá. */
+  onOpenProjects?: () => void
   backLabel?: string
   indexNotice?: string
   initialCommand?: HostCommand
   hidden?: boolean
 }
 
-export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, onOpenProject, backLabel = vi.workspace.back, indexNotice, initialCommand, hidden = false }: Props) {
+export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, onOpenSettings, onOpenProject, onOpenProjects, backLabel = vi.workspace.back, indexNotice, initialCommand, hidden = false }: Props) {
   const hosted = !!window.nexgraph?.host
   const id = useId()
   const tabList = useRef<HTMLDivElement>(null)
@@ -800,7 +802,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       else setSplitSide(direction)
       return
     }
-    if (activeFile) { setSplitSide(direction); setSide(activeFile) }
+    // Thẻ xem trước (`preview:`) không có `activeFile`; chia đôi phải dùng tệp đang xem.
+    const current = activeFile ?? previewFile
+    if (current) { setSplitSide(direction); setSide(current) }
   }
   useCommand('editor.split_right', () => splitTo('right'))
   useCommand('editor.split_up', () => splitTo('up'))
@@ -881,7 +885,8 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setFindFocus((n) => n + 1)
   })
   const previewSideShown = !!activeFile && previewSide === activeFile
-  const sideShown = previewSideShown || (side !== null && activeFile !== undefined && files.some((f) => f.file === side))
+  // Thẻ xem trước (`preview:`) không có `activeFile` nhưng vẫn là một tệp đang xem — chia đôi phải hiện.
+  const sideShown = previewSideShown || (side !== null && (activeFile ?? previewFile) !== undefined && files.some((f) => f.file === side))
   useCommand('notifications.toggle', toggleNotifications)
   useCommand('notification.clear', clearNotifications)
   useCommand('dock.right', () => {
@@ -1102,7 +1107,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           </div>
         </>}
         <div data-split={sideShown ? splitSide : undefined} className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
-          {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} />}
+          {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} onOpenProjects={onOpenProjects ? guardLeave(onOpenProjects) : undefined} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} openRequest={openSeq} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
           {tab === 'graph' && (

@@ -27,6 +27,9 @@ const viStrings = {
     baseUrl: 'Base URL',
     customModel: 'Tên model',
     customApiKey: 'API key (tuỳ chọn; để trống nếu server không cần key)',
+    customContext: 'Context window (token)',
+    customContextHint: 'Tuỳ chọn. Để trống để tự nhận từ nhà cung cấp (mặc định 128000). Cửa sổ nhỏ hơn ~8000 không đủ chỗ cho system prompt và công cụ.',
+    customContextInvalid: 'Context window phải là số nguyên dương (tối đa 10000000)',
     saveCustom: 'Lưu nhà cung cấp',
     removeCustom: 'Xoá',
     oauthTitle: 'Đăng nhập bằng gói đăng ký',
@@ -40,8 +43,7 @@ const viStrings = {
     modelTitle: 'Chọn model',
     modelPlaceholder: '— Chưa chọn —',
     test: 'Kiểm tra kết nối',
-    testOk: 'Kết nối được',
-    testFail: (m: string) => `Không kết nối được: ${m}`
+    testOk: 'Kết nối được'
   },
   agent: {
     ask: 'Hỏi', edit: 'Sửa', modeTitle: 'Chế độ',
@@ -286,6 +288,9 @@ const viStrings = {
     errors: {
       ai_not_configured: 'Chưa cấu hình trợ lý AI.', ai_unauthorized: 'API key bị từ chối. Kiểm tra lại trong Cài đặt.',
       ai_unreachable: 'Không kết nối được tới nhà cung cấp AI.', ai_bad_response: 'Nhà cung cấp AI trả về dữ liệu không hợp lệ.',
+      ai_model_not_found: 'Không tìm thấy mô hình ở nhà cung cấp. Kiểm tra tên mô hình trong Cài đặt.',
+      ai_bad_request: 'Nhà cung cấp AI từ chối yêu cầu.', ai_provider_error: 'Nhà cung cấp AI tạm thời gặp lỗi.',
+      ai_context_window: 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi.',
       ai_too_many_rounds: 'Trợ lý gọi công cụ quá nhiều lần mà chưa trả lời. Hãy hỏi cụ thể hơn.', ai_cancelled: 'Đã dừng.',
       ai_provider_changed: 'Nhà cung cấp hoặc model AI đã thay đổi. Hãy kiểm tra lại rồi gửi câu hỏi.'
     } as Record<string, string>
@@ -480,6 +485,8 @@ const viStrings = {
     pickingLabel: 'Chế độ chọn đích',
     cancel: 'Huỷ',
     noLink: 'Không tìm thấy liên kết trực tiếp trong graph',
+    /** Tô luồng khi một phần cặp trích dẫn không có cạnh: vẫn tô nút, nói rõ phần thiếu. */
+    partial: (nodes: number, missing: number) => `Tô ${nodes} nút được trích dẫn · ${missing} cặp không có liên kết trực tiếp`,
     found: (hops: number, c: PathConfidence | null = null) => {
       if (!c) return `Đường đi ${hops} bước`
       const level = { EXTRACTED: 'trích từ mã', INFERRED: 'suy luận', AMBIGUOUS: 'chưa chắc' }[c.level]
@@ -716,6 +723,9 @@ const enStrings: typeof viStrings = {
     baseUrl: 'Base URL',
     customModel: 'Model name',
     customApiKey: 'API key (optional; leave empty if the server needs none)',
+    customContext: 'Context window (tokens)',
+    customContextHint: 'Optional. Leave empty to read it from the provider (default 128000). A window below ~8000 leaves no room for the system prompt and tools.',
+    customContextInvalid: 'Context window must be a positive integer (at most 10000000)',
     saveCustom: 'Save provider',
     removeCustom: 'Delete',
     oauthTitle: 'Sign in with a subscription',
@@ -729,8 +739,7 @@ const enStrings: typeof viStrings = {
     modelTitle: 'Select a model',
     modelPlaceholder: '— None selected —',
     test: 'Test connection',
-    testOk: 'Connection successful',
-    testFail: (m: string) => `Connection failed: ${m}`
+    testOk: 'Connection successful'
   },
   agent: {
     ask: 'Ask', edit: 'Edit', modeTitle: 'Mode',
@@ -974,7 +983,10 @@ const enStrings: typeof viStrings = {
     consentOk: 'Agree and send', consentCancel: 'Cancel',
     errors: {
       ai_not_configured: 'The AI assistant is not configured.', ai_unauthorized: 'The API key was rejected. Check it in Settings.',
-      ai_unreachable: 'Could not reach the AI provider.', ai_bad_response: 'The AI provider returned invalid data.',
+      ai_unreachable: 'Could not connect to the AI provider.', ai_bad_response: 'The AI provider returned invalid data.',
+      ai_model_not_found: 'The provider does not have this model. Check the model name in Settings.',
+      ai_bad_request: 'The AI provider rejected the request.', ai_provider_error: 'The AI provider is temporarily unavailable.',
+      ai_context_window: 'The context exceeds the model window — raise the context window or shorten the request.',
       ai_too_many_rounds: 'The assistant called tools too many times without answering. Please ask a more specific question.', ai_cancelled: 'Stopped.',
       ai_provider_changed: 'The AI provider or model changed. Check it and send your question again.'
     } as Record<string, string>
@@ -1169,6 +1181,7 @@ const enStrings: typeof viStrings = {
     pickingLabel: 'Target selection mode',
     cancel: 'Cancel',
     noLink: 'No direct link found in the graph',
+    partial: (nodes: number, missing: number) => `Highlighted ${nodes} cited nodes · ${missing} ${missing === 1 ? 'pair has' : 'pairs have'} no direct link`,
     found: (hops: number, c: PathConfidence | null = null) => {
       const steps = `${hops} ${hops === 1 ? 'step' : 'steps'}`
       if (!c) return `Path of ${steps}`

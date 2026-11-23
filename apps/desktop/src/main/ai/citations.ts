@@ -6,11 +6,12 @@ export { CITATION_SOURCE, type ParsedCitation, parseCitations } from '../../shar
 
 /**
  * Trần số đường dẫn thử cho mỗi trích dẫn không ngoặc. Mỗi ứng viên là một lời gọi `code()` cục bộ;
- * không giới hạn thì một câu dài có thể thử hàng chục lần. Thực tế model chỉ viết vài chữ tiếng Anh
- * trước đường dẫn (“Theo flow app/service.py”) vì ký tự có dấu phá chuỗi regex, nên trần 6 vẫn giữ
- * đúng các dạng đã kiểm. Quá trần thì trích dẫn thành chip khoá (`file_not_found`) — không có chip giả.
+ * không giới hạn thì một câu dài có thể thử hàng chục lần. Model thật viết tới 9 từ tiếng Anh trước
+ * đường dẫn (“in this flow the session is stored inside the app/service.py”), nên trần 10 giữ đúng
+ * các dạng đó mà vẫn chặn bùng nổ. Quá trần thì trích dẫn thành chip khoá (`file_not_found`) —
+ * không có chip giả.
  */
-const MAX_CANDIDATES = 6
+const MAX_CANDIDATES = 10
 
 /**
  * Đường dẫn không ngoặc có thể dính chữ của câu đứng trước (“Theo flow app/service.py”): thử nguyên cụm

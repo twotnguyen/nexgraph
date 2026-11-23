@@ -279,6 +279,22 @@ describe('EditorTools E3', () => {
       expect(await screen.findByText('caller')).toBeTruthy()
     })
 
+    it('M1: phân cấp rỗng ở gốc không hiện chân 3 nút chết', async () => {
+      installNexgraph()
+      const api = window.nexgraph as NexGraphApi
+      api.lsp = {
+        callHierarchyPrepare: vi.fn(async () => []),
+        callHierarchyIncoming: vi.fn(async () => []),
+        callHierarchyOutgoing: vi.fn(async () => [])
+      } as unknown as NexGraphApi['lsp']
+      const active = { file: 'a.ts', handle: handle(), text: () => 'one\ntwo\nthree' }
+      render(<EditorTools {...props(active)} />)
+      act(() => { runCommand('editor.call_hierarchy_incoming') })
+      expect(await screen.findByText('Không có ký hiệu gọi được tại con trỏ.')).toBeTruthy()
+      expect(document.querySelector('.picker-footer')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Quay lại' })).toBeNull()
+    })
+
     it('đổi hướng bằng phím tắt khi picker phân cấp đang mở', async () => {
       const { outgoing, root } = setup()
       act(() => { runCommand('editor.call_hierarchy_incoming') })
