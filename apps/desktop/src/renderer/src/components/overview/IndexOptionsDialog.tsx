@@ -53,6 +53,12 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
       setPgMissing(t.psycopg === false)
     }).catch(() => {})
     window.nexgraph.indexSources.hasDsn(projectId).then((v) => live && setHasDsn(v)).catch(() => {})
+    // Mở lại hộp thoại phải thấy đúng lựa chọn mà nút "Index lại" sẽ dùng (A3 #7).
+    window.nexgraph.index.options(projectId).then((o) => {
+      if (!live || !o) return
+      setText((o.exclude ?? []).join('\n')); setDocs(!!o.includeDocs); setMedia(!!o.includeMedia)
+      setConfig(!!o.includeConfig); setWorkers(o.workers ? String(o.workers) : '')
+    }).catch(() => {})
     window.nexgraph.indexSources.remembered(projectId).then((s) => {
       if (!live || !s) return
       setPostgres(!!s.postgres); setCargo(!!s.cargo); setManifests(!!s.manifests)

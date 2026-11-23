@@ -31,6 +31,7 @@ import { AgentRouter } from './agent-router'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
+import { IndexOptionsStore } from './index-options'
 import { IndexSourceStore } from './index-sources'
 import { runSemanticJob } from './ai/semantic-runner'
 import { SemanticUsageStore } from './ai/semantic-usage'
@@ -217,6 +218,7 @@ export function registerIpc(
   on('project:list', () => api().listProjects())
   const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),
     new SecretStore(join(app.getPath('userData'), 'index-source-secrets.json'), secretBox))
+  const indexOptions = new IndexOptionsStore(join(app.getPath('userData'), 'index-options.json'))
   const removalVersions = new Map<string, symbol>()
   const stopWatch = (pid: string): void => {
     watchStarts.delete(pid)
@@ -226,6 +228,7 @@ export function registerIpc(
   on('project:remove', async (pid: string) => {
     await api().removeProject(pid)
     indexSources.forget(pid)
+    indexOptions.forget(pid)
     removalVersions.set(pid, Symbol())
     stopWatch(pid)
     agents?.close(pid)
@@ -497,9 +500,11 @@ export function registerIpc(
     return fsh.write(pid, relPath, text, opts)
   })
   on('index:scan', (pid: string) => api().scan(pid))
+  on('index:options', async (pid: string) => indexOptions.remembered(pid))
   on('index:start', async (pid: string, opts?: IndexOptions) => {
     try {
-      const resolved = indexSources.resolve(pid, opts)
+      // Lựa chọn dính của dự án (includeDocs…) áp trước, rồi nguồn bổ sung; renderer không phải gửi lại.
+      const resolved = indexSources.resolve(pid, indexOptions.resolve(pid, opts))
       return { jobId: (await api().startIndex(pid, resolved.opts, resolved.postgresDsn)).job_id }
     } catch (error) {
       if (error instanceof EngineApiError && error.code === 'index_running' && error.jobId) return { jobId: error.jobId }

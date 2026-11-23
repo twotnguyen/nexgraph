@@ -333,12 +333,17 @@ describe('WorkspaceScreen', () => {
     expect(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' })).toBeInTheDocument()
   })
 
-  it('opening a search result switches to the Graph tab centred on that node', async () => {
+  it('Tìm symbol mở mã tệp:dòng của kết quả, nút phụ vẫn mở node trên Graph (A3 #2)', async () => {
     const { neighbors } = setup()
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'login')
     const result = await screen.findByRole('button', { name: /lib\/a\.dart:3/ }, { timeout: 2000 })
     fireEvent.click(result)
+    // Mở đúng tệp trong editor, không đổi sang tab Graph.
+    expect(await screen.findByRole('tab', { name: 'a.dart', selected: true })).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: 'Graph', selected: true })).not.toBeInTheDocument()
+    // Đường xem trên graph vẫn còn ở nút phụ.
+    fireEvent.click(screen.getByRole('button', { name: 'Xem trên graph' }))
     expect(screen.getByRole('tab', { name: 'Graph', selected: true })).toBeInTheDocument()
     await waitFor(() => expect(neighbors).toHaveBeenCalledWith('p1', expect.objectContaining({ node: 'lib/a.dart::AuthService.login#method' })))
     expect(await screen.findByText('lib/a.dart:3–9')).toBeInTheDocument() // NodeInspector của nút đã chọn
@@ -387,6 +392,8 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'login')
     await userEvent.click(await screen.findByText('login'))
+    // Kết quả chính mở mã; nút phụ vẫn chọn node trên graph để lấy NodeInspector.
+    await userEvent.click(await screen.findByRole('button', { name: 'Xem trên graph' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
     return { api, code }
   }
@@ -671,7 +678,6 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'login')
     await userEvent.click(await screen.findByText('login'))
-    await userEvent.click(await screen.findByRole('button', { name: 'Mở mã' }))
     await userEvent.type(await screen.findByLabelText('editor'), 'x')
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     await userEvent.click(screen.getByRole('button', { name: /Dự án|Quay lại|←/ }))
@@ -710,6 +716,7 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'run')
     fireEvent.click(await screen.findByRole('button', { name: /run/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem trên graph' })) // chọn node trên graph, không mở mã
     const nodeLabel = await within(await flowEl()).findByText('run')
     fireEvent.contextMenu(nodeLabel)
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Tìm đường tới…' }))
@@ -733,6 +740,7 @@ describe('WorkspaceScreen: editor tabs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Tìm trong đồ thị' }))
     await userEvent.type(screen.getByLabelText('Tìm trong đồ thị', { selector: 'input' }), 'run')
     fireEvent.click(await screen.findByRole('button', { name: /run/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem trên graph' }))
     const flow = await flowEl()
     fireEvent.contextMenu(await within(flow).findByText('run'))
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Vùng ảnh hưởng nếu sửa' }))

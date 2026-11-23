@@ -49,6 +49,7 @@ const api: NexGraphApi = {
   index: {
     scan: (projectId) => call('index:scan', projectId),
     start: (projectId, opts) => call('index:start', projectId, opts),
+    options: (projectId) => call('index:options', projectId),
     status: (jobId) => call('index:status', jobId),
     cancel: (jobId) => call('index:cancel', jobId),
     refresh: (projectId) => call('index:refresh', projectId),

@@ -83,6 +83,31 @@ def test_tour_english_plural_agreement(copy_fixture, index_project):
     assert bodies["Tests"] == "1 test file, 1 function or class has tests pointing to it."
 
 
+def test_tour_route_in_english_has_no_vietnamese(api, pid_flow):
+    """rereview-45 Minor 1: tour EN không còn chuỗi Việt, kể cả nhãn cụm lưu tiếng Việt trong CSDL."""
+    import json
+
+    payload = api.get(f"/v1/projects/{pid_flow}/tour", params={"lang": "en"}).json()
+    text = json.dumps(payload, ensure_ascii=False)
+    assert "Cụm" not in text and "Cộng đồng" not in text
+    assert "Điểm" not in text and "Kiểm thử" not in text
+    assert not any(ch in text for ch in
+                   "ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ")
+    community = next(s for s in payload["steps"] if s["kind"] == "community")
+    assert community["title"] == "Community: Cluster around service.py"
+
+
+def test_community_label_covers_all_stored_forms():
+    """Nhãn cụm engine lưu luôn là tiếng Việt (`Cụm quanh …`, `Cộng đồng N`, `Khác`) — EN phải dịch hết."""
+    from nexgraph_engine.tour.build import _community_label
+
+    assert _community_label("Cộng đồng 3", True) == "Community 3"
+    assert _community_label("Khác", True) == "Other"
+    assert _community_label("Cụm quanh service.py", True) == "Cluster around service.py"
+    assert _community_label("Cộng đồng 3", False) == "Cộng đồng 3"
+    assert _community_label("Khác", False) == "Khác"
+
+
 def test_community_label_does_not_double_prefix():
     from nexgraph_engine.tour.build import _community_label
     assert _community_label("Cụm quanh auth_service.dart", False) == "Cụm quanh auth_service.dart"

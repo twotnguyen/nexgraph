@@ -127,7 +127,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
 
       <h2>{vi.overview.build}</h2>
       <div className="cards">
-        <Card title={vi.overview.reindex} icon="refresh" desc={vi.overview.reindexDesc} onClick={() => onReindex({ exclude: [] })} />
+        <Card title={vi.overview.reindex} icon="refresh" desc={vi.overview.reindexDesc} onClick={() => onReindex({})} />
         <Card title={vi.overview.options} icon="sliders" desc={vi.overview.optionsDesc} onClick={() => setOptions(true)} />
         <Card title={vi.overview.recluster} icon="cluster" desc={vi.overview.reclusterDesc}
           status={reclustering ? vi.overview.reclustering : msgText(clusters)} disabled={reclustering || noGraph} onClick={() => void recluster()} />

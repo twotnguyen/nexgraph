@@ -1,6 +1,7 @@
 export const uiEnEditor: Record<string, string> = {
   'Thanh trạng thái': 'Status bar',
   'Engine: đang khởi động…': 'Engine: starting…',
+  'Engine: đang khởi động lại (lần {n})…': 'Engine: restarting (attempt {n})…',
   'Engine: sẵn sàng (v{version})': 'Engine: ready (v{version})',
   'Engine: lỗi — {message}': 'Engine: error — {message}',
   // Thông báo trạng thái engine do main gửi kèm messageKey (main không biết ngôn ngữ UI).
@@ -9,6 +10,7 @@ export const uiEnEditor: Record<string, string> = {
   'Không khởi động được engine: {message}': 'Could not start the engine: {message}',
   'Engine thoát trước khi sẵn sàng (exit {code})': 'Engine exited before it was ready (exit {code})',
   'Khởi động lại': 'Restart',
+  'Khởi động lại engine': 'Restart engine',
   'Thử lại': 'Retry',
   'Sửa điểm dừng': 'Edit breakpoint',
   'Điều kiện': 'Condition',

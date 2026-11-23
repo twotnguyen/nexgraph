@@ -163,10 +163,13 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
         to_html(bg.G, bg.communities, str(target), community_labels=bg.labels, node_limit=scope.limit)
     elif fmt == "callflow_html":
         from graphify.callflow_html import write_callflow_html
+        from nexgraph_engine.export.callflow_i18n import localize_callflow_html
         with tempfile.TemporaryDirectory(prefix="nexgraph-callflow-") as d:
             graph = Path(d) / "graph.json"
             write_graph_json(bg, graph)
             write_callflow_html(None, graph=graph, output=target, lang=lang)
+        if lang == "vi":  # graphify chỉ có zh/en: dịch ở lớp NexGraph, không sửa mã vendored
+            target.write_text(localize_callflow_html(target.read_text(encoding="utf-8"), lang), encoding="utf-8")
     elif fmt == "obsidian":
         gx.to_obsidian(bg.G, bg.communities, str(target), community_labels=bg.labels, cohesion=bg.cohesion)
         gx.to_canvas(bg.G, bg.communities, str(target / "graph.canvas"), community_labels=bg.labels)

@@ -151,7 +151,7 @@ export function GitPanel({ projectId, onOpenDiff, onOpenFile, onOpenWorktrees }:
     void act(async () => {
       const settings = await window.nexgraph.ai.getSettings()
       const target = consentTargetForSettings(settings)
-      if (!target || settings.runtime === 'antigravity-cli') throw new Error(tr('Hãy chọn model Pi trong Cài đặt để viết thông điệp commit.'))
+      if (!target || settings.runtime === 'antigravity-cli') throw new Error(tr('Hãy chọn model AI trong Cài đặt để viết thông điệp commit.'))
       if (!await window.nexgraph.ai.hasConsent(projectId, target)) {
         const destination = target.baseUrl ? `\n${target.baseUrl}` : ''
         if (!window.confirm(tr('Gửi diff đã stage của dự án tới {provider} / {model}{destination} để viết thông điệp commit?', { provider: target.provider, model: settings.model, destination }))) return
