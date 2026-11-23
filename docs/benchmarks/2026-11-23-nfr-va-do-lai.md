@@ -1,10 +1,10 @@
 # Số đo hiện hành cho NFR tầng S/L/XL — 23/11/2026
 
-Tài liệu này chốt **một bộ số** cho các tuyên bố NFR trong repo, thay cho các bảng đo ở những commit khác nhau. Số thô nằm trong [`data/perf-*-2026-11-23.json`](data/) và [`data/accuracy/*-2026-11-23.json`](data/accuracy/); nguồn gốc là đợt A5 (`.bot/lead-run-2026-11-23/reports/A5.md`), đợt PERF-L và re-review #53.
+Tài liệu này chốt **một bộ số** cho các tuyên bố NFR trong repo, thay cho các bảng đo ở những commit khác nhau. Số thô nằm trong [`data/perf-*-2026-11-23.json`](data/) và [`data/accuracy/*-2026-11-23.json`](data/accuracy/); nguồn gốc là báo cáo A5 của đợt nghiệm thu RC, báo cáo PERF-L và re-review #53.
 
 **Máy đo:** Apple M3 Pro, 12 lõi, 18 GB RAM, macOS 15.7.3, Python 3.12.16, Node 26.12.1. **Ngày:** 23/11/2026. **Máy có tải nền** của các đợt khác (load 1 phút 2,6–10,5 khi đo A5); số lập chỉ mục tầng L/XL vì thế kém ổn định hơn các chỉ số truy vấn.
 
-## 1. Bảng NFR theo tầng (SRS §6.1)
+## 1. Bảng NFR theo tầng (SRS — Hiệu năng và khả dụng)
 
 | Tầng | Dự án đại diện | Ngưỡng SRS | Số hiện hành | Kết quả |
 | --- | --- | --- | --- | --- |

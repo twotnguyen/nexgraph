@@ -181,7 +181,7 @@ Số tool trên `main` tại `83e49b7` (`engine/tests/test_mcp.py`; đối chi�
 
 ## Kết quả lần chạy A3 (23/11/2026)
 
-**Bản chạy:** NexGraph 0.1.2 dựng từ `main` `72dc4ec`, macOS arm64, app thật + engine đóng gói (CLI và MCP), `--use-mock-keychain --remote-debugging-port=9411`, `NEXGRAPH_DATA_DIR=/tmp/ng-A3/data`. Ảnh và DOM lưu ngoài repo ở `.bot/lead-run-2026-11-23/ui/A3/`.
+**Bản chạy:** NexGraph 0.1.2 dựng từ `main` `72dc4ec`, macOS arm64, app thật + engine đóng gói (CLI và MCP), `--use-mock-keychain --remote-debugging-port=9411`, `NEXGRAPH_DATA_DIR=/tmp/ng-A3/data`. Ảnh và DOM của lượt chạy lưu ngoài repo (không kèm trong tài liệu).
 
 **Kết luận:** **KHÔNG ĐẠT** — 32 Đạt, 6 Không đạt, còn lại Không chạy được (thiếu AI đã cấu hình, Ollama/Docker, model vision, hộp thoại chọn thư mục native cho export, `gh` cho vài mục).
 
