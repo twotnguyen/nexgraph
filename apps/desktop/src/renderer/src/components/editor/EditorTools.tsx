@@ -394,7 +394,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
         close(false)
         onOpen(row.file, row.line, row.column)
       }}
-      footer={(row) => <>
+      footer={(row) => !row && !shown.stack.length ? null : <>
         <button type="button" disabled={!shown.stack.length} onClick={() => hierarchyBack()}>{tr('Quay lại')}</button>
         <button type="button" disabled={!row} onClick={() => row && hierarchyShowCalls(shown, row)}>{tr('Hiện lời gọi')}</button>
         <button type="button" disabled={!row} onClick={() => row && hierarchySwitch(shown, row)}>{tr('Đổi hướng')}</button>

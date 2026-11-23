@@ -228,6 +228,7 @@ export default function App() {
         <CommandsEnabled value={!settingsOpen}>
           <WorkspaceScreen key={`${workspace.project.project_id}:${workspace.tab ?? 'arch'}`} project={workspace.project} hidden={settingsOpen}
             initialTab={workspace.tab} initialCommand={workspace.initialCommand} onOpenSettings={openSettings} onOpenProject={enterProject}
+            onOpenProjects={() => setScreen({ name: 'projects' })}
             onBack={() => setScreen({ name: 'overview', project: workspace.project })} />
         </CommandsEnabled>
       )}
