@@ -1011,9 +1011,27 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     act(() => { expect(runCommand('editor.split_up')).toBe(true) })
     expect(canvas().getAttribute('data-split')).toBe('up')
     expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    // MIN-43 M1: thẻ xem trước được thăng cấp thành tab thường sau khi chia đôi (như VS Code).
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab', { name: 'Xem trước a.ts' })).not.toBeInTheDocument()
     // Bấm lại đúng hướng đang chia thì bỏ chia đôi.
     act(() => { expect(runCommand('editor.split_up')).toBe(true) })
     expect(canvas().getAttribute('data-split')).toBeNull()
+  })
+
+  it('MIN-43 M3: chia đôi từ tab tệp thật (nhánh activeFile) vẫn chạy và không đổi thẻ đang chọn', async () => {
+    const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
+    installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
+    render(<WorkspaceScreen project={project()} />)
+    await userEvent.click(await screen.findByRole('treeitem', { name: 'a.ts' }))
+    // Bấm vào thẻ tệp thật để rời thẻ xem trước: đây là nhánh `activeFile` của splitTo.
+    await userEvent.click(screen.getByRole('tab', { name: 'a.ts' }))
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
+    const canvas = () => document.querySelector('.canvas-wrap') as HTMLElement
+    act(() => { expect(runCommand('editor.split_right')).toBe(true) })
+    expect(canvas().getAttribute('data-split')).toBe('right')
+    expect(canvas().querySelectorAll('.editor-side')).toHaveLength(1)
+    expect(screen.getByRole('tab', { name: 'a.ts' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('chia đôi trên rồi sang phải đổi trục, terminal vẫn nằm ngoài khung chia đôi', async () => {

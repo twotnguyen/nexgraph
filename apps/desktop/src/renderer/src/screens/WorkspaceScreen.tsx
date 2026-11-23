@@ -811,7 +811,15 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     }
     // Thẻ xem trước (`preview:`) không có `activeFile`; chia đôi phải dùng tệp đang xem.
     const current = activeFile ?? previewFile
-    if (current) { setSplitSide(direction); setSide(current) }
+    if (current) {
+      setSplitSide(direction)
+      setSide(current)
+      // MIN-43 M1: chia đôi một thẻ xem trước thì nó thành tab thường (như VS Code), không bị thay khi bấm tệp khác.
+      if (!activeFile && previewFile) {
+        setPreviews((cur) => cur.filter((file) => file !== previewFile))
+        setTab(`file:${previewFile}`)
+      }
+    }
   }
   useCommand('editor.split_right', () => splitTo('right'))
   useCommand('editor.split_up', () => splitTo('up'))

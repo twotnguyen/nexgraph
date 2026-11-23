@@ -8,10 +8,10 @@ import {
   gitStashSave, gitStashes, gitStatus, gitSwitchBranch, gitUnstage
 } from '../src/main/git/repo'
 
-// Các test dưới đây chạy git thật (init/clone/push/fetch), không phải stub: trên Windows CI một ca
-// mất 6,3 s nên vượt mặc định 5 s rồi kéo theo EBUSY khi dọn thư mục tạm. Timeout riêng theo nền
-// tảng, không skip và không nới cho test không chạy git.
-if (process.platform === 'win32') vi.setConfig({ testTimeout: 30_000 })
+// Các test dưới đây chạy git thật (init/clone/push/fetch), không phải stub. Trên Windows CI ca push/fetch/pull
+// (tạo kho bare + clone + push + pull) từng mất 6,3 s và chạm trần 5 s; số đo sau đó ~2,9 s. Chỉ ca đó có timeout
+// riêng 15 s trên Windows — các ca khác giữ mặc định để test chậm bất thường vẫn đỏ.
+const WINDOWS_SLOW_GIT = process.platform === 'win32' ? { timeout: 15_000 } : {}
 
 /**
  * Windows giữ tay cầm tệp trong kho thêm một nhịp sau khi tiến trình git thoát (indexer/antivirus),
@@ -263,7 +263,7 @@ it('không có remote thì lastCommit chưa xuất bản', async () => {
   expect((await gitStatus(root)).lastCommit?.pushed).toBe(false)
 })
 
-it('push, fetch và pull dùng kho bare cục bộ', async () => {
+it('push, fetch và pull dùng kho bare cục bộ', WINDOWS_SLOW_GIT, async () => {
   const bare = mkdtempSync(join(tmpdir(), 'ng-remote-'))
   const clone = mkdtempSync(join(tmpdir(), 'ng-clone-'))
   try {
