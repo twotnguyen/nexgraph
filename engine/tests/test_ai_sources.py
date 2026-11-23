@@ -31,6 +31,25 @@ def test_secret_shaped_document_name_is_readable_only_for_redacted_output(tmp_pa
     assert not relaxed.allows("docs/secret.md", allow_secret_names=False)
 
 
+def test_only_text_documents_named_with_secret_are_exempt(tmp_path):
+    """Review #52 Minor 2: chỉ miễn tài liệu chữ (.md/.txt/.rst) có "secret" trong tên.
+
+    `service-account.json`, `secrets.yaml`, `credentials*.json` là khoá thật ở tầng policy — không miễn.
+    """
+    names = ["docs/secret.md", "docs/secrets.md", "notes/my-secret-notes.rst", "docs/secrets.txt",
+             "service-account.json", "config/secrets.yaml", "config/secrets.yml", "credentials.json",
+             "docs/passwords.txt", "docs/token.md", "docs/secret.md.bak"]
+    for name in names:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+    relaxed = SourcePolicy(tmp_path, allow_secret_names=True)
+    for name in names[:4]:
+        assert relaxed.allows(name), name
+    for name in names[4:]:
+        assert not relaxed.allows(name), name
+
+
 def test_ai_sources_obey_parent_nested_and_published_exclusions(tmp_path):
     package = tmp_path / "pkg"
     package.mkdir()

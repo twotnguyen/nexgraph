@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -17,6 +18,10 @@ MAX_IGNORE_BYTES = 1024 * 1024
 _BLOCKED = {".git", ".nexgraph", ".npmrc", ".netrc", ".dart_tool", "node_modules", "build"}
 _PREFIXES = (".env", "credentials", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa")
 _SUFFIXES = (".pem", ".key")
+# `allow_secret_names` chỉ miễn tài liệu CHỮ có "secret" trong tên (docs/secrets.md). Tệp cấu hình/khoá
+# (`service-account.json`, `secrets.yaml`, `credentials.json`) vẫn bị loại: đó là khoá thật, không phải tài liệu.
+_DOC_SUFFIXES = frozenset({".md", ".markdown", ".rst", ".txt", ".adoc", ".org"})
+_SECRET_IN_NAME = re.compile(r"(?<![a-z0-9])secrets?(?![a-z])", re.IGNORECASE)
 
 
 def protected_source() -> ApiError:
@@ -98,7 +103,10 @@ class SourcePolicy:
         if any(pattern.search(path.name) for pattern in _SENSITIVE_PATTERNS) and not _is_env_template(path.name):
             return False
         # Cùng thư mục cha, tên trung tính: còn nhạy cảm nghĩa là do thư mục cha, không phải tên tệp.
-        return not _is_sensitive(path.with_name("section" + path.suffix))
+        if _is_sensitive(path.with_name("section" + path.suffix)):
+            return False
+        # Chỉ tài liệu chữ có "secret" trong tên mới được miễn; `secrets.yaml`/`service-account.json` vẫn chặn.
+        return path.suffix.lower() in _DOC_SUFFIXES and bool(_SECRET_IN_NAME.search(path.name))
 
     def _excluded(self, parts: tuple[str, ...], *, directory: bool, allow_secret_names: bool = False) -> bool:
         if _blocked_name(parts):
