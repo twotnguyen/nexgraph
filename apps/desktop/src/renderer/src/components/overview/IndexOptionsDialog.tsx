@@ -56,8 +56,10 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
     // Mở lại hộp thoại phải thấy đúng lựa chọn mà nút "Index lại" sẽ dùng (A3 #7).
     window.nexgraph.index.options(projectId).then((o) => {
       if (!live || !o) return
-      setText((o.exclude ?? []).join('\n')); setDocs(!!o.includeDocs); setMedia(!!o.includeMedia)
-      setConfig(!!o.includeConfig); setWorkers(o.workers ? String(o.workers) : '')
+      // Tệp nhớ có thể hỏng tay: sai kiểu thì bỏ trường đó, đừng để ném và mất cả lựa chọn đúng (review-50 M2).
+      setText((Array.isArray(o.exclude) ? o.exclude : []).join('\n')); setDocs(o.includeDocs === true)
+      setMedia(o.includeMedia === true); setConfig(o.includeConfig === true)
+      setWorkers(Number.isInteger(o.workers) ? String(o.workers) : '')
     }).catch(() => {})
     window.nexgraph.indexSources.remembered(projectId).then((s) => {
       if (!live || !s) return

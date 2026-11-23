@@ -258,6 +258,21 @@ describe('E3 editor handles', () => {
     expect(editor.revealRangeInCenter).toHaveBeenCalledWith(range)
   })
 
+  it('revealLines đặt con trỏ ở dòng đầu và tô cả khoảng ở giữa khung nhìn (A1 F4)', () => {
+    const handle = createEditor(el(), opts())
+    handle.revealLines(872, 875)
+    const editor = fake.editors.at(-1)!
+    // Con trỏ phải ở dòng đầu của trích dẫn, không chỉ cuộn tới.
+    expect(editor.setPosition).toHaveBeenCalledWith({ lineNumber: 872, column: 1 })
+    const range = editor.revealRangeInCenter.mock.calls[0][0]
+    expect(range).toMatchObject({ startLineNumber: 872, startColumn: 1, endLineNumber: 875, endColumn: 1 })
+    // Cả khoảng dòng được tô, không phải một dòng.
+    expect(fake.collections[0].set).toHaveBeenCalledWith([
+      { range: expect.objectContaining({ startLineNumber: 872, endLineNumber: 875 }),
+        options: { isWholeLine: true, className: 'editor-hit' } }
+    ])
+  })
+
   it('reuses a live same-Uri model and disposes it only when the last owner leaves', () => {
     const first = createEditor(el(), opts('src/a.ts'))
     first.setValue?.('chưa lưu')

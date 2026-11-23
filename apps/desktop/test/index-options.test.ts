@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -40,5 +40,14 @@ describe('IndexOptionsStore', () => {
     store.resolve('p1', { includeDocs: true, includeConfig: true, workers: 4 })
     expect(store.resolve('p1', { workers: undefined, force: false }))
       .toEqual({ includeDocs: true, includeConfig: true, workers: 4, force: false })
+  })
+
+  it('trường sai kiểu bị bỏ riêng, trường đúng vẫn giữ và không ném (review-50 M2)', () => {
+    writeFileSync(file, JSON.stringify({ p1: { includeDocs: true, exclude: 'notarray', workers: 'abc',
+      includeConfig: false, includeMedia: 1, evil: 'x' } }))
+    const store = new IndexOptionsStore(file)
+    expect(store.remembered('p1')).toEqual({ includeDocs: true, includeConfig: false })
+    expect(() => store.resolve('p1', {})).not.toThrow()
+    expect(store.resolve('p1', {})).toEqual({ includeDocs: true, includeConfig: false })
   })
 })

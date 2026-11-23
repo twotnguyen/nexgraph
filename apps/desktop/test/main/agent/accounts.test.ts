@@ -193,6 +193,18 @@ describe('AccountService', () => {
     await expect(svc.hasConsent('p1', (await svc.getConsentTarget())!)).resolves.toBe(false)
   })
 
+  it('selectModel báo renderer để panel chat đang mở đổi model ngay (A1 F3)', async () => {
+    const changed = vi.fn()
+    const { svc } = await make({ modelsChanged: changed })
+    await svc.saveCustomProvider({ id: 'c1', label: 'C', baseUrl: 'https://a.example/v1', model: 'm1' })
+    svc.selectModel('c1', 'm1')
+    expect(changed).toHaveBeenCalledWith('c1')
+    // Model lạ vẫn lỗi và không báo đổi.
+    changed.mockClear()
+    expect(() => svc.selectModel('c1', 'm-không')).toThrow(expect.objectContaining({ code: 'bad_param' }))
+    expect(changed).not.toHaveBeenCalled()
+  })
+
   it('loginOAuth mở URL nhà cung cấp và giữ token trong kho mã hoá qua khởi động lại', async () => {
     const { svc } = await make()
     fakeOauthProvider(svc, async (cb) => {
