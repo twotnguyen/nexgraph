@@ -1,8 +1,9 @@
 import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ArchBlock, ArchEvidence, ArchLink, ArchView } from '@shared/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
 import { tr, vi } from '../../strings'
+import { useLocale } from '../../state/locale'
 import { useTheme } from '../../state/useTheme'
 import { AutoFit } from '../common/AutoFit'
 import { CanvasState } from '../common/CanvasState'
@@ -12,17 +13,20 @@ import { EvidencePopover } from './EvidencePopover'
 
 const EVIDENCE_LIMIT = 50
 
-interface Crumb { id: string | null; label: string }
+interface Crumb { id: string | null; label?: string }
 interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: string) => void; onOpenCode?: (file: string, line: number) => void; initialParent?: string; onParentChange?: (parent?: string) => void }
-interface Laid { nodes: Node[]; edges: Edge[]; view: ArchView }
+interface Pt { x: number; y: number }
+interface Laid { view: ArchView; pos: Record<string, Pt>; routes: Record<string, Pt[]> }
 interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
 
 export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent, onParentChange }: Props) {
   const theme = useTheme()
+  // Nhãn tiếng Việt/Anh đọc lúc render: không chốt nhãn đã dịch trong state hay deps của effect tải dữ liệu.
+  const locale = useLocale()
   const initialDirectory = initialParent?.startsWith('file:')
     ? (initialParent.slice(5).includes('/') ? `dir:${initialParent.slice(5, initialParent.lastIndexOf('/'))}` : undefined)
     : initialParent
-  const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null, label: vi.arch.root }, ...(initialDirectory ? [{ id: initialDirectory, label: initialDirectory }] : [])])
+  const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null }, ...(initialDirectory ? [{ id: initialDirectory, label: initialDirectory }] : [])])
   const [laid, setLaid] = useState<Laid | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retry, setRetry] = useState(0)
@@ -45,27 +49,32 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
         'layered-down'
       )
       if (!alive) return
-      setLaid({
-        view,
-        nodes: view.blocks.map((b) => ({
-          id: b.id,
-          type: 'box',
-          selected: b.id === initialParent,
-          position: pos[b.id] ?? { x: 0, y: 0 },
-          initialWidth: BOX_W,
-          initialHeight: BOX_H,
-          data: { label: b.label, sub: vi.arch.files(b.size), color: blockColor(b.kind), size: BOX_W, dashed: b.kind === 'group' }
-        })),
-        edges: view.links.map((l) => dotEdge({
-          id: `${l.from}->${l.to}`, source: l.from, target: l.to, label: String(l.count), width: 1 + Math.min(1.5, Math.log2(l.count + 1) / 3),
-          points: routes[`${l.from}->${l.to}`]
-        }))
-      })
+      setLaid({ view, pos, routes })
     })().catch((err: Error) => alive && setError(err?.message ?? String(err)))
     return () => {
       alive = false
     }
   }, [projectId, current, initialParent, revision, retry])
+
+  // `laid` chỉ giữ dữ liệu; nhãn (kể cả phụ đề "N tệp") dựng ở đây để đổi ngôn ngữ là đổi ngay, không gọi lại engine.
+  const graph = useMemo(() => {
+    if (!laid) return null
+    return {
+      nodes: laid.view.blocks.map((b) => ({
+        id: b.id,
+        type: 'box',
+        selected: b.id === initialParent,
+        position: laid.pos[b.id] ?? { x: 0, y: 0 },
+        initialWidth: BOX_W,
+        initialHeight: BOX_H,
+        data: { label: b.label, sub: vi.arch.files(b.size), color: blockColor(b.kind), size: BOX_W, dashed: b.kind === 'group' }
+      })),
+      edges: laid.view.links.map((l) => dotEdge({
+        id: `${l.from}->${l.to}`, source: l.from, target: l.to, label: String(l.count), width: 1 + Math.min(1.5, Math.log2(l.count + 1) / 3),
+        points: laid.routes[`${l.from}->${l.to}`]
+      }))
+    }
+  }, [laid, initialParent, locale])
 
   const openEvidence = useCallback(
     (link: ArchLink) => {
@@ -96,7 +105,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
         {crumbs.map((c, i) => (
           <span key={`${c.id}-${i}`}>
             {i > 0 && <span className="muted"> › </span>}
-            <button type="button" disabled={i === crumbs.length - 1} onClick={() => setCrumbs((cs) => cs.slice(0, i + 1))}>{c.label}</button>
+            <button type="button" disabled={i === crumbs.length - 1} onClick={() => setCrumbs((cs) => cs.slice(0, i + 1))}>{c.label ?? vi.arch.root}</button>
           </span>
         ))}
       </nav>
@@ -115,8 +124,8 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
           ))}
         </ul>
       )}
-      {laid && laid.view.blocks.length > 0 && (
-        <ReactFlow className="dot-graph show-edge-labels" colorMode={theme} key={current ?? 'root'} nodes={laid.nodes} edges={laid.edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes} minZoom={0.2} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
+      {laid && laid.view.blocks.length > 0 && graph && (
+        <ReactFlow className="dot-graph show-edge-labels" colorMode={theme} key={current ?? 'root'} nodes={graph.nodes} edges={graph.edges} nodeTypes={dotNodeTypes} edgeTypes={dotEdgeTypes} minZoom={0.2} onNodeClick={onNodeClick} onEdgeClick={onEdgeClick}
                    nodesDraggable={false}>
           <Background />
           <Controls showInteractive={false} />
