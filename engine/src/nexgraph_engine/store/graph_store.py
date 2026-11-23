@@ -191,6 +191,7 @@ class GraphStore:
         previous = conn.isolation_level
         conn.isolation_level = None
         self._atomic_depth = 1
+        committed = False
         try:
             conn.execute("BEGIN IMMEDIATE")
             try:
@@ -201,8 +202,16 @@ class GraphStore:
                 raise
             if conn.in_transaction:
                 conn.execute("COMMIT")
+            committed = True
         finally:
             self._atomic_depth = 0
+            # COMMIT ném lỗi (đĩa đầy, SQLITE_BUSY…) thì giao dịch có thể vẫn mở: rollback ngay
+            # trước khi handler lỗi ghi trạng thái, tránh `set_run_state('loi')` commit lại dữ liệu dở (N3).
+            if not committed and conn.in_transaction:
+                try:
+                    conn.execute("ROLLBACK")
+                except sqlite3.Error:
+                    pass  # SQLite đã tự rollback hoặc CSDL hỏng: lỗi COMMIT gốc mới là thứ cần báo
             conn.isolation_level = previous
 
     def savepoint(self, name: str) -> None:
