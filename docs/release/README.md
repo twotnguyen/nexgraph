@@ -1,25 +1,25 @@
-# Cài và nghiệm thu NexGraph 0.2.0
+# Cài và nghiệm thu NexGraph 0.2.0-alpha.1
 
-Bản **0.2.0** là bản ứng viên phát hành; bản đang phát hành là **0.1.2**. Hai bản cùng là **NexGraph độc lập trên Electron, với trình soạn thảo Monaco tích hợp**. CI đóng gói engine Python cùng ứng dụng. Code-OSS đã tích hợp dưới dạng bản xem trước, có quy trình dựng và mốc nghiệm thu riêng. [Cấu hình bộ cài](../../apps/desktop/electron-builder.yml) · [Kiến trúc](../srs/architecture.md) · [Ghi chú phát hành 0.2.0](notes-0.2.0.md)
+Bản **0.2.0-alpha.1** là bản alpha ứng viên phát hành (`v0.2.0-alpha.1`); bản đang phát hành là **0.1.2**. Bản cuối `0.2.0` dự kiến cuối 20/12/2026. Hai bản cùng là **NexGraph độc lập trên Electron, với trình soạn thảo Monaco tích hợp**. CI đóng gói engine Python cùng ứng dụng. Code-OSS đã tích hợp dưới dạng bản xem trước, có quy trình dựng và mốc nghiệm thu riêng. [Cấu hình bộ cài](../../apps/desktop/electron-builder.yml) · [Kiến trúc](../srs/architecture.md) · [Ghi chú phát hành 0.2.0-alpha.1](notes-0.2.0.md)
 
 ## Tải đúng bộ cài
 
-Bản đã gắn tag `v<version>` có sẵn bộ cài và tệp `.build.json` ở [Releases](https://github.com/twotnguyen/nexgraph/releases). Phát hành bản mới theo [runbook phát hành](runbook.md): tăng version ở bốn tệp, merge vào `main`, rồi `git tag v<version> && git push origin v<version>`; CI kiểm, đóng gói hai hệ điều hành rồi tạo Release. Tag không khớp `version` trong `apps/desktop/package.json` thì CI dừng. Commit chưa gắn tag thì lấy bộ cài từ Actions như dưới đây.
+Bản đã gắn tag `v<version>` có sẵn bộ cài và tệp `.build.json` ở [Releases](https://github.com/twotnguyen/nexgraph/releases). Phát hành bản mới theo [runbook phát hành](runbook.md): tăng version ở bốn tệp, merge vào `main`, rồi `git tag v<version> && git push origin v<version>`; CI kiểm, đóng gói hai hệ điều hành rồi tạo Release. Tag không khớp `version` trong `apps/desktop/package.json` thì CI dừng. Bản alpha dùng tag đúng chuỗi `v0.2.0-alpha.1` và phải đánh dấu **prerelease** trên Release (xem [runbook](runbook.md#3-tạo-tag-tình-duyệt-trước)). Commit chưa gắn tag thì lấy bộ cài từ Actions như dưới đây.
 
 1. Mở lượt [GitHub Actions](https://github.com/twotnguyen/nexgraph/actions/workflows/ci.yml) của commit dự kiến bàn giao. Chọn cả hai bộ cài từ cùng commit đó. Ở **Artifacts**, tải gói `NexGraph-${version}-<hệ-điều-hành>-${arch}` rồi giải nén để lấy bộ cài. Chỉ dùng artifact của lượt chạy mà mọi job đều đạt: job `package` khai báo `needs: [engine, desktop]` nên chỉ chạy sau khi test engine và desktop xong, và test đỏ thì không có artifact bộ cài. Tải artifact cần đăng nhập GitHub.
 2. Kiểm hệ điều hành và kiến trúc của máy, rồi đối chiếu tên tệp trong artifact. Trên Windows xem **Settings → System → About → System type**. Trên macOS xem **About This Mac** để phân biệt Apple silicon và Intel. Chỉ dùng kiến trúc có trong lượt build và khớp với máy đích.
-3. Trong artifact, mở tệp cùng tên gốc với bộ cài và có đuôi `.build.json`, ví dụ `NexGraph-0.2.0-windows-x64.build.json`. Dùng `version`, `platform`, `arch`, `filename`, `bytes`, `sha256`, `commit` và `run` để đối chiếu tệp thực tế trước khi cài. Ghi hash và nguồn vào [biên bản nghiệm thu](acceptance/).
+3. Trong artifact, mở tệp cùng tên gốc với bộ cài và có đuôi `.build.json`, ví dụ `NexGraph-0.2.0-alpha.1-windows-x64.build.json`. Dùng `version`, `platform`, `arch`, `filename`, `bytes`, `sha256`, `commit` và `run` để đối chiếu tệp thực tế trước khi cài. Ghi hash và nguồn vào [biên bản nghiệm thu](acceptance/).
 
-| Hệ điều hành | Tệp trong artifact 0.2.0 | Cách cài |
+| Hệ điều hành | Tệp trong artifact 0.2.0-alpha.1 | Cách cài |
 |---|---|---|
-| Windows x64 | `NexGraph-0.2.0-windows-x64.exe` | Mở trình cài NSIS, chọn nơi cài, sau đó mở NexGraph từ Start. |
-| macOS Apple silicon | `NexGraph-0.2.0-macos-arm64.dmg` | Mở ảnh đĩa, kéo NexGraph vào **Applications**, tháo ảnh đĩa rồi mở ứng dụng. |
+| Windows x64 | `NexGraph-0.2.0-alpha.1-windows-x64.exe` | Mở trình cài NSIS, chọn nơi cài, sau đó mở NexGraph từ Start. |
+| macOS Apple silicon | `NexGraph-0.2.0-alpha.1-macos-arm64.dmg` | Mở ảnh đĩa, kéo NexGraph vào **Applications**, tháo ảnh đĩa rồi mở ứng dụng. |
 
-Tên tệp lấy từ `artifactName` trong [cấu hình electron-builder](../../apps/desktop/electron-builder.yml); số byte và SHA-256 lấy từ `.build.json` của lượt đóng gói 0.2.0 (điền khi RC). Bản 0.1.2 có DMG 243 MB và EXE 228 MB.
+Tên tệp lấy từ `artifactName` trong [cấu hình electron-builder](../../apps/desktop/electron-builder.yml); số byte và SHA-256 lấy từ `.build.json` của lượt đóng gói `0.2.0-alpha.1`. Bản RC2 dựng từ `main` `8118db0` có DMG macOS arm64 **257.724.354 byte (257,7 MB)**, đã nghiệm thu demo trên macOS ([biên bản 23/11](acceptance/2026-11-23-macos.md)); bộ cài Windows của 0.2.0-alpha.1 chờ lượt CI dựng (0.1.2 có EXE 228 MB).
 
 Tính SHA-256 của tệp bộ cài đã giải nén bằng `Get-FileHash -Algorithm SHA256 -LiteralPath '<tệp>'` trong PowerShell hoặc `shasum -a 256 '<tệp>'` trên macOS. So hash không phân biệt chữ hoa và thường. Trường `commit` ghi đúng checkout mà runner đã dùng. Khi kiểm pull request, GitHub có thể dựng từ commit hợp nhất của lượt chạy.
 
-Mỗi tệp cài phải dưới 500 MB; bước kiểm tệp cài trong CI báo lỗi khi vượt. Bản 0.1.0 trên macOS chiếm khoảng 650 MB sau khi kéo vào Applications; ghi lại dung lượng sau cài của 0.2.0 trong biên bản.
+Mỗi tệp cài phải dưới 500 MB; bước kiểm tệp cài trong CI báo lỗi khi vượt. Bản 0.1.0 trên macOS chiếm khoảng 650 MB sau khi kéo vào Applications; ghi lại dung lượng sau cài của 0.2.0-alpha.1 trong biên bản.
 
 ### Mở bộ cài chưa ký số
 

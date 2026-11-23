@@ -1,10 +1,10 @@
-# Ghi chú phát hành NexGraph 0.2.0 (bản nháp)
+# Ghi chú phát hành NexGraph 0.2.0-alpha.1 (bản nháp)
 
-> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0`; chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. **Cập nhật 23/11/2026:** các PR đã merge của đợt (#32–#48, #50–#54) đã vào `main` (`caeb85e`); danh sách dưới chỉ gồm PR đã merge, không còn mục “chờ merge”.
+> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0-alpha.1` (alpha, đánh dấu **prerelease**); chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. Bản cuối `0.2.0` dự kiến cuối 20/12/2026, dùng lại ghi chú này sau khi gỡ nhãn alpha. **Cập nhật 24/11/2026:** đợt V1 tăng version lên `0.2.0-alpha.1` (`0.2.0a1` phía engine); các PR đã merge của đợt (#32–#48, #50–#59) đã vào `main` (`8118db0`); danh sách dưới chỉ gồm PR đã merge, không còn mục “chờ merge”.
 
 ## Tóm tắt
 
-0.2.0 gộp bộ công cụ phát triển kiểu Wu (F16, ADR 0020) vào bản Electron + Monaco: LSP, terminal, Git, gỡ lỗi DAP, cộng tác LAN và extension khai báo. Giao diện làm lại theo 5 vùng, có bảng lệnh, thanh trạng thái và chế độ tiếng Anh. Các luồng F1–F15 giữ nguyên hành vi. Bản RC dựng từ `main` (chuỗi phiên bản vẫn là 0.1.2) đã qua nghiệm thu demo trên macOS ([biên bản 23/11](acceptance/2026-11-23-macos.md)); các lỗi nghiệm thu được sửa trong cùng đợt (#50, #51, #52, #54) và sẽ đóng khi chạy lại bản cài.
+0.2.0-alpha.1 gộp bộ công cụ phát triển kiểu Wu (F16, ADR 0020) vào bản Electron + Monaco: LSP, terminal, Git, gỡ lỗi DAP, cộng tác LAN và extension khai báo. Giao diện làm lại theo 5 vùng, có bảng lệnh, thanh trạng thái và chế độ tiếng Anh. Các luồng F1–F15 giữ nguyên hành vi. Bản RC2 dựng từ `main` `8118db0` đã qua nghiệm thu demo trên macOS ([biên bản 23/11](acceptance/2026-11-23-macos.md)); bản alpha chỉ khác RC2 ở bốn chuỗi version, nên biên bản đó áp dụng cho phần mã. Cài lại bộ cài `v0.2.0-alpha.1` và điền checklist trên máy đích (macOS và Windows) vẫn còn chờ.
 
 ## Tính năng mới
 
@@ -29,6 +29,12 @@
 - **#39** — chip trích dẫn trong gạch đầu dòng, inline code và code fence; dedup; thông báo thử lại rõ ràng; danh sách ứng viên.
 - **#35** — Đi đến khai báo/định nghĩa kiểu, chân picker, script lint.
 - **#33** — trợ lý AI: trích dẫn `[[path:start–end]]`, stream không đứt, chế độ Kế hoạch, dedup khi AI tắt.
+
+## Bổ sung sau nghiệm thu RC (#55, #58, #59)
+
+- **#55 — desktop, lỗi UI tồn đọng (F10).** Nguồn ảo (`nguon://…`) không còn nút **Mở mã** và không mở tab chết ở mọi chỗ (inspector node, tìm kiếm, đồ thị), có thông báo VI/EN; đổi model trong Cài đặt khi phiên đang chạy được làm mới ngay sau khi phiên kết thúc; rà lại backlog UI (chip trích dẫn, split từ thẻ xem trước, picker rỗng, nút **Dự án** ở breadcrumb).
+- **#58 — engine, độ ổn định và che secret (E8).** Mở CSDL lần đầu đồng thời không còn `database is locked` (WAL có thử lại + `busy_timeout`; 200 lần lặp 0 lỗi); probe MCP stdio trên Windows đọc đủ phản hồi theo `id` trước khi đóng stdin; `graph_readonly` chỉ trả khi lỗi ở `graph.db`, thêm `graph_unavailable` (503) cho "unable to open database file"; che secret trong ô bảng Markdown không còn che dòng header hay ô mô tả/đường dẫn; khi một lô index treo chỉ gửi lại lô chưa có kết quả.
+- **#59 — desktop, i18n còn sót (F11).** Dịch lúc render thay vì lúc gọi hàm (61 chỗ `errorText()` ghi vào state chuyển thành `Message`); lỗi từ main trả qua IPC dịch **theo mã** (thêm 61 mã có bản Anh, tổng 75) trong khi vẫn giữ nguyên câu thô của công cụ (`fatal: …`); mã lỗi engine mới (`graph_readonly`, `graph_busy`, `schema_outdated`, `blocked_private_ip`…) có bản Anh; cảnh báo số mục không đọc được khi lập chỉ mục; đổi VI↔EN áp dụng ngay tại chỗ.
 
 ## Giao diện và i18n
 
@@ -69,8 +75,9 @@
 - **Extension chỉ khai báo** theme và lệnh, không có API mở rộng hay marketplace.
 - **Codex TOML.** Khi `.codex/config.toml` đã có nội dung, phần cài đặt trả `invalid_config` thay vì merge (SPEC-09, chưa sửa trong 0.2.0).
 - **Index bỏ thư mục ẩn theo mặc định.** `.storybook`, `.vitepress`, `.agents`, `.claude`… không được lập chỉ mục trừ khi chọn rõ trong **Tuỳ chọn index**; tab **Cây** vẫn hiện các thư mục này vì đọc đĩa (MIN-36-4).
+- **Tab Cây chỉ có mức thư mục và tệp.** Chưa có mức lớp/hàm dưới tệp, nên không mở thẳng một hàm từ cây; dùng **Tìm symbol**, **Kiến trúc** hoặc trích dẫn trong trợ lý để tới đúng dòng.
 - **MCP `get_section` từ chối tài liệu có tên nhạy cảm** (`secret`, `kubeconfig`, `service-account`, `gcp-*.json`) thay vì trả bản che — đúng thiết kế bảo mật (#52); UI **Đọc mục** vẫn hiện bản che.
-- **Thư mục không đọc được:** engine trả `unreadable_paths`/`unreadable_count` khi lập chỉ mục (#52), nhưng giao diện chưa hiển thị cảnh báo.
+- **Thư mục không đọc được:** engine trả `unreadable_paths`/`unreadable_count` khi lập chỉ mục; màn lập chỉ mục hiện cảnh báo số mục không đọc được (#59), các màn khác thì không.
 - **Nhóm test opt-in không chạy ở CI:** 15 test gỡ lỗi DAP cần `NEXGRAPH_DEBUG_IT=1` và mạng để tải adapter; một test Antigravity cần Windows + `NEXGRAPH_ANTIGRAVITY_TEST_BINARY`. Xem [kế hoạch kiểm thử](test-plan.md).
 - **Máy Windows của nhóm bị Code Integrity chặn bộ cài** (biên bản 18/11); luồng người dùng trên Windows được kiểm bằng bản build từ mã nguồn cho tới khi máy đó mở được bộ cài.
 
@@ -80,7 +87,7 @@
 |---|---|
 | macOS | Apple silicon (arm64). Không hỗ trợ Mac Intel. |
 | Windows | x64. Máy thử nghiệm: Windows 11 Home 25H2 (build 26200). |
-| Ổ đĩa | Khoảng 650 MB sau khi cài (số của 0.1.0). DMG macOS 0.1.2: 257,7 MB. |
+| Ổ đĩa | Khoảng 650 MB sau khi cài (số của 0.1.0). DMG macOS arm64 của RC2 (`0.2.0-alpha.1`): 257,7 MB. |
 | Mạng | Chỉ cần khi dùng AI qua nhà cung cấp, clone repo, tải adapter gỡ lỗi hoặc cài Antigravity CLI. Các tính năng đọc đồ thị chạy offline. |
 
 ## Cài đặt
@@ -90,4 +97,5 @@ Theo [README](README.md): tải đúng tệp trong artifact của lượt CI xan
 ## Ghi chú cho người bảo trì
 
 - Body này thay cho body tự sinh của `gh release create … --generate-notes` (`.github/workflows/ci.yml:162`); khi tạo Release thật, dán nguyên văn (bỏ phần "Trạng thái" ở đầu) và gắn run id CI của commit merge.
+- Với bản alpha, job `release` của CI tạo Release **không** kèm `--prerelease`, nên sau khi job xanh phải chạy `gh release edit v0.2.0-alpha.1 --prerelease --notes-file docs/release/notes-0.2.0.md`; bản `0.2.0` cuối 20/12 thì bỏ nhãn này.
 - Không thêm PR chưa merge vào tệp này. Nhãn còn thiếu so với 0.1.2 chỉ được thêm khi có bằng chứng nghiệm thu trong [biên bản](acceptance/).

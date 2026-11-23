@@ -8,22 +8,26 @@ Một trang cho người phát hành (hiện là Tình). Quy trình đầy đủ
 - CI của **commit merge** xanh đủ 7 check: `lint`, `engine (macos-latest)`, `engine (windows-latest)`, `desktop (macos-latest)`, `desktop (windows-latest)`, `package (macos-latest)`, `package (windows-latest)`. Job `release` chỉ chạy khi có tag.
 - QA đã duyệt và biên bản nghiệm thu của bản ứng viên đã có trong [acceptance/](acceptance/).
 
-## 1. Tăng version ở bốn tệp
+## 1. Tăng version ở bốn tệp (cộng `uv.lock`)
 
 Phải khớp nhau; `package` kiểm `tag == version` của `apps/desktop/package.json` (`.github/workflows/ci.yml:104-106`):
 
 | Tệp | Trường | Ghi chú |
 |---|---|---|
-| `package.json` (gốc) | `"version"` | Hiện đang lệch (0.1.0 so với 0.1.2); lần phát hành tới đưa về cùng số |
-| `apps/desktop/package.json` | `"version"` | Nguồn cho tên tệp bộ cài và bước kiểm tag |
-| `engine/pyproject.toml` | `version` | `nexgraph-engine` |
-| `engine/uv.lock` | `[[package]] name = "nexgraph-engine"` → `version` | Cập nhật bằng `cd engine && uv lock` sau khi sửa pyproject |
+| `package.json` (gốc) | `"version"` | Từ đợt V1 (24/11/2026) đã về cùng số với app; trước đó lệch (0.1.0 so với 0.1.2) |
+| `apps/desktop/package.json` | `"version"` | Nguồn cho tên tệp bộ cài và bước kiểm tag; viết theo semver (`0.2.0-alpha.1`) |
+| `engine/pyproject.toml` | `version` | `nexgraph-engine`; viết theo PEP 440 (`0.2.0a1`) |
+| `engine/src/nexgraph_engine/__init__.py` | `__version__` | Giá trị engine trả ở `/v1/health` và hiện trên thanh trạng thái app; cùng dạng PEP 440 |
+| `engine/uv.lock` | `[[package]] name = "nexgraph-engine"` → `version` | Cập nhật bằng `cd engine && uv lock` sau khi sửa pyproject; chỉ đổi dòng version của gói, không nâng phụ thuộc |
+
+Bản alpha dùng semver ở hai `package.json` và PEP 440 ở phía Python: `0.2.0-alpha.1` ↔ `0.2.0a1`. `engine/tests/test_version_consistency.py` so bốn tệp (và `uv.lock`) khớp nhau, nên bump sót sẽ đỏ ngay ở `pytest`.
 
 Kiểm nhanh trước khi commit:
 
 ```sh
 grep -n '"version"' package.json apps/desktop/package.json
-grep -n '^version' engine/pyproject.toml
+grep -n '^version = ' engine/pyproject.toml
+grep -n '__version__' engine/src/nexgraph_engine/__init__.py
 grep -A1 'name = "nexgraph-engine"' engine/uv.lock | grep version
 ```
 
@@ -47,6 +51,12 @@ git push origin v<version>
 
 Không tạo tag từ nhánh PR hay commit chưa merge. Không sửa tag sau khi push; nếu sai, xoá tag trên GitHub rồi làm lại từ commit đúng (không force-push `main`).
 
+Bản alpha dùng tag đúng chuỗi `v0.2.0-alpha.1` (CI so **tuyệt đối** với `version` trong `apps/desktop/package.json`), rồi đánh dấu prerelease sau khi job `release` xanh:
+
+```sh
+gh release edit v0.2.0-alpha.1 --prerelease
+```
+
 ## 4. Kiểm Release
 
 CI tạo Release từ tag (`release` job, `needs: [engine, desktop, package]`). CI dùng `gh release create … --generate-notes` (`.github/workflows/ci.yml:162`), nên body ban đầu là body tự sinh; sau khi job `release` xanh, thay bằng ghi chú đã duyệt:
@@ -55,7 +65,7 @@ CI tạo Release từ tag (`release` job, `needs: [engine, desktop, package]`). 
 gh release edit v<version> --notes-file docs/release/notes-<version>.md
 ```
 
-Ví dụ 0.2.0 dùng `docs/release/notes-0.2.0.md`. Tệp nháp còn khối "Trạng thái" ở đầu: bỏ khối đó (hoặc dùng bản đã duyệt không có khối) trước khi chạy, rồi kiểm lại body.
+Ví dụ `0.2.0-alpha.1` (và bản `0.2.0` cuối) dùng `docs/release/notes-0.2.0.md`. Tệp nháp còn khối "Trạng thái" ở đầu: bỏ khối đó (hoặc dùng bản đã duyệt không có khối) trước khi chạy, rồi kiểm lại body.
 
 Kiểm:
 
