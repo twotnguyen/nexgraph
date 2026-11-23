@@ -545,6 +545,25 @@ def test_batch_deadline_scales_with_batch_bytes():
     assert batch_timeout_seconds([f(846_585)] + [f(10_000)] * 15) > 55
 
 
+def test_batch_deadline_has_a_ceiling_and_ignores_unparsed_bytes():
+    """Hạn lô có TRẦN và không cộng byte tệp `oversized` (không được parse) — review-53 Important 1.
+
+    Không có trần, một lô chứa tệp oversized 104,8 MB (codebase-memory-mcp) đòi hạn 105 phút: đúng ca
+    watchdog sinh ra để chặn thì index đứng im, `ProgressEvent` không tăng. Byte của tệp oversized cũng
+    không được cộng vì `extract_file` chỉ băm rồi trả về, không parse.
+    """
+    from nexgraph_engine.index.indexer import DiscoveredFile, batch_timeout_seconds
+
+    def f(size: int, oversized: bool = False) -> DiscoveredFile:
+        return DiscoveredFile("a.js", "javascript", size, 0, False, oversized)
+
+    # Toàn tệp oversized: 0 byte thật sự phải parse -> chỉ còn mức nền.
+    assert batch_timeout_seconds([f(104_800_000, True)]) == 20
+    assert batch_timeout_seconds([f(104_800_000, True)] + [f(400_000)]) == 24
+    # Trần 300 s = 5 × FILE_EXTRACT_TIMEOUT_SECONDS: lô 16 tệp 2 MB (32 MB parse được) không được đòi 32 phút.
+    assert batch_timeout_seconds([f(2_000_000)] * 16) == 300
+
+
 def test_heavy_batch_is_not_treated_as_stalled(tmp_path, index_project, monkeypatch):
     """Lô nặng chạy lâu hơn hạn nền 20 s nhưng trong hạn theo khối lượng thì không bị coi là treo."""
     import threading

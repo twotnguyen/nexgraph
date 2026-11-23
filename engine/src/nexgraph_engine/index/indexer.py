@@ -43,7 +43,13 @@ RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm l�
 COMMIT_EVERY = 100
 EXTRACTION_BATCH_SIZE = 16
 WORKER_PROGRESS_TIMEOUT_SECONDS = 20  # hạn nền cho một lô nhỏ (giữ nguyên hành vi cũ)
-BATCH_DEADLINE_SECONDS_PER_MB = 60   # cộng thêm theo khối lượng: 60 s mỗi MB của lô
+BATCH_DEADLINE_SECONDS_PER_MB = 60   # cộng thêm theo khối lượng: 60 s mỗi MB CẦN PARSE của lô
+# Trần hạn lô. Không có trần thì lô chứa tệp lớn đòi 27–105 phút (review-53: lô 104,8 MB của
+# codebase-memory-mcp → 6.290 s) — đúng ca watchdog sinh ra để chặn thì index đứng im, người dùng chỉ
+# thấy "đang phân tích" không nhúc nhích. 300 s = 5 × FILE_EXTRACT_TIMEOUT_SECONDS: đủ cho một lô 5 MB
+# byte thật sự phải parse (đo PERF-L: ~20–25 ms/KB ⇒ 60 s/MB là biên rộng ~2,4×), vượt mức đó thì chờ
+# thêm không còn ích gì bằng đưa các tệp nghi treo sang đường từng-tệp có hạn riêng.
+MAX_BATCH_DEADLINE_SECONDS = 300
 FILE_EXTRACT_TIMEOUT_SECONDS = 60  # fallback tuần tự: quá hạn một tệp thì bỏ qua tệp đó
 IS_WINDOWS = os.name == "nt"
 
@@ -97,14 +103,20 @@ def _extract_one(root: Path, f: DiscoveredFile, transcript_dir: Path | None) -> 
 
 
 def batch_timeout_seconds(batch: Sequence[DiscoveredFile]) -> float:
-    """Hạn chờ một lô trích xuất, theo khối lượng của lô (PERF-L mục 2).
+    """Hạn chờ một lô trích xuất, theo khối lượng CẦN PARSE của lô, có trần (PERF-L mục 2, review-53 I1).
 
     Hạn cố định 20 s đúng cho lô 16 tệp nhỏ (~150 KB, xong trong 1–2 s) nhưng quá ngắn khi lô chứa một tệp
     lớn: `apps/daemon/src/server.ts` 846 KB một mình ~21 s, nên cả lô vượt hạn oan. Nền 20 s giữ nguyên hành
     vi với lô nhỏ; cộng 60 s mỗi MB để lô 1 MB có hạn ~60 s (open-design không còn kích hoạt nhầm).
+
+    Tệp `oversized` bị loại khỏi phép tính: `extract_file` chỉ băm rồi trả về, không parse, nên cộng byte
+    của nó chỉ làm hạn dài vô ích (lô 104,8 MB của codebase-memory-mcp: hạn 105 phút cho 0,4 MB thật).
+    Trần `MAX_BATCH_DEADLINE_SECONDS` chặn nốt phần đuôi: chờ quá 300 s không còn ích gì bằng đưa tệp nghi
+    treo sang đường từng-tệp.
     """
-    total_mb = sum(f.size for f in batch) / 1_000_000
-    return max(WORKER_PROGRESS_TIMEOUT_SECONDS, BATCH_DEADLINE_SECONDS_PER_MB * total_mb)
+    parsed_mb = sum(f.size for f in batch if not f.oversized) / 1_000_000
+    return max(WORKER_PROGRESS_TIMEOUT_SECONDS,
+               min(BATCH_DEADLINE_SECONDS_PER_MB * parsed_mb, MAX_BATCH_DEADLINE_SECONDS))
 
 
 def _extract_batch(root: Path, files: list[DiscoveredFile], transcript_dir: Path | None) -> list[ExtractedFile]:
