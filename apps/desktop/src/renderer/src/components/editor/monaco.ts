@@ -481,8 +481,12 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     onCursor: (cb) => { const sub = editor.onDidChangeCursorPosition((e) => cb(e.position.lineNumber, e.position.column)); return () => sub.dispose() },
     onSelection: (cb) => { const sub = editor.onDidChangeCursorSelection(() => cb()); return () => sub.dispose() },
     revealLines: (start, end = start) => {
-      hit.set([{ range: new monaco.Range(start, 1, end, 1), options: { isWholeLine: true, className: 'editor-hit' } }])
-      editor.revealLinesInCenter(start, end)
+      const range = new monaco.Range(start, 1, end, 1)
+      // Tô cả khoảng dòng của trích dẫn, không chỉ cuộn tới (A1 F4).
+      hit.set([{ range, options: { isWholeLine: true, className: 'editor-hit' } }])
+      // Con trỏ ở dòng đầu để "dòng hiện tại" và ngữ cảnh editor trỏ đúng chỗ được trích.
+      editor.setPosition({ lineNumber: start, column: 1 })
+      editor.revealRangeInCenter(range)
     },
     setReadOnly: (v) => {
       const current = editor.getModel()

@@ -57,8 +57,10 @@ export class EngineSupervisor {
     this.cancelRetry()
     const gen = ++this.generation
     this.set({ state: 'starting' })
+    // Giữ handle ngoài try để catch còn dừng được engine đã spawn (M3).
+    let h: EngineHandle | null = null
     try {
-      const h = await this.start(this.command(), { dataDir: this.dataDir })
+      h = await this.start(this.command(), { dataDir: this.dataDir })
       if (gen !== this.generation) {
         await h.stop()
         return
@@ -78,6 +80,9 @@ export class EngineSupervisor {
     } catch (err) {
       if (gen !== this.generation) return
       this.handle = null
+      // Engine đã spawn nhưng health lỗi: dừng trước khi bỏ handle, nếu không nó thành mồ côi
+      // và vòng tự thử lại spawn thêm engine nữa (review-50 M3).
+      if (h) await h.stop().catch(() => {})
       const first = err instanceof EngineStartError ? err.stderrTail.trim().split('\n').pop() : undefined
       // Dòng stderr là chữ của engine (không dịch); chỉ giữ khoá khi thông báo do app tạo.
       const key = first ? undefined : err instanceof EngineStartError ? err.messageKey : undefined
@@ -115,7 +120,11 @@ export class EngineSupervisor {
       this.set({ ...reason, restartable: true })
       return
     }
-    this.set({ state: 'starting', attempt })
+    // Giữ lý do chết ngắn trong trạng thái đang thử lại để thanh trạng thái nói được vì sao (M5).
+    this.set({ state: 'starting', attempt,
+      ...(reason.message ? { message: reason.message } : {}),
+      ...(reason.messageKey ? { messageKey: reason.messageKey } : {}),
+      ...(reason.messageVars ? { messageVars: reason.messageVars } : {}) })
     const timer = setTimeout(() => { this.retryTimer = null; void this.startEngine() }, this.retry.delayMs(attempt))
     ;(timer as { unref?: () => void }).unref?.()
     this.retryTimer = timer

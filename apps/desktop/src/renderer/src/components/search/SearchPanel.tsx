@@ -21,11 +21,16 @@ const LIMIT = 30
 const errMessage = (err: unknown): string =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
 
+/** Nguồn ảo (`nguon://cargo`, `nguon://scip`…) không phải tệp trên đĩa: mở editor sẽ ra tab chết. */
+const isVirtualSource = (file: string | null | undefined): boolean => !!file && file.includes('://')
+
 function NodeButton({ node, onOpen, onOpenCode }: { node: GraphNode; onOpen: (n: GraphNode) => void; onOpenCode?: Props['onOpenCode'] }) {
   const source = node.file && (node.line_start ? `${node.file}:${node.line_start}` : node.file)
   const file = node.file
   // Cột 1 để con trỏ đặt đúng dòng của symbol, không chỉ cuộn tới đó.
-  const openCode = onOpenCode && file ? () => onOpenCode(file, node.line_start ?? undefined, 1) : null
+  // Nguồn ảo rơi về chọn trên graph như trước (review-50 M1).
+  const openCode = onOpenCode && file && !isVirtualSource(file)
+    ? () => onOpenCode(file, node.line_start ?? undefined, 1) : null
   return (
     <div className="search-hit">
       <button type="button" className="entry" onClick={openCode ?? (() => onOpen(node))}>
@@ -79,7 +84,7 @@ function SymbolSearch({ projectId, revision = 0, onOpen, onOpenCode }: Props) {
         onKeyDown={(e) => {
           if (e.key !== 'Enter' || !hits || hits.length === 0) return
           const first = hits[0].node
-          if (onOpenCode && first.file) onOpenCode(first.file, first.line_start ?? undefined, 1)
+          if (onOpenCode && first.file && !isVirtualSource(first.file)) onOpenCode(first.file, first.line_start ?? undefined, 1)
           else onOpen(first)
         }}
         autoFocus
@@ -156,7 +161,10 @@ function AskGraph({ projectId, revision, onOpen, onShowSubgraph, onOpenFlow }: P
               </ul>
             </>
           )}
-          <p>{vi.search.askNodes(result.nodes.length, result.edges.length)}</p>
+          {/* Đang chờ chọn node trùng tên thì chưa có kết quả để đếm — đừng hiện "0 node, 0 cạnh" (A3 #9). */}
+          {!(result.ambiguous && result.ambiguous.length > 0 && result.nodes.length === 0) && (
+            <p>{vi.search.askNodes(result.nodes.length, result.edges.length)}</p>
+          )}
           {result.truncated && <p className="muted small">{vi.search.askTruncated}</p>}
           {onShowSubgraph && result.nodes.length > 0 && (
             <button type="button" className="primary" onClick={() => onShowSubgraph({ nodes: result.nodes, edges: result.edges })}>

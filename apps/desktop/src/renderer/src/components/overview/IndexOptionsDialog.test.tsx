@@ -36,6 +36,14 @@ describe('IndexOptionsDialog', () => {
     expect(screen.getByRole('spinbutton', { name: 'Số tiến trình' })).toHaveValue(3)
   })
 
+  it('dữ liệu sai kiểu không làm mất lựa chọn đúng và hộp thoại không ném (review-50 M2)', async () => {
+    installNexgraph({ index: { options: vi.fn(async () => ({ includeDocs: true, exclude: 'notarray', workers: 'abc' } as never)) } })
+    render(<IndexOptionsDialog projectId="p1" onSubmit={vi.fn()} onClose={() => {}} />)
+    expect(await screen.findByRole('checkbox', { name: /Gồm tài liệu/ })).toBeChecked()
+    expect(screen.getByRole('textbox', { name: 'Mẫu bỏ qua' })).toHaveValue('')
+    expect(screen.getByRole('spinbutton', { name: 'Số tiến trình' })).toHaveValue(null)
+  })
+
   it('chỉ dẫn ánh xạ đuôi tệp qua .graphifyrc', () => {
     installNexgraph()
     render(<IndexOptionsDialog projectId="p1" onSubmit={() => {}} onClose={() => {}} />)
