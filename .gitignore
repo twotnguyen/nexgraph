@@ -15,6 +15,9 @@ node_modules/
 out/
 dist/
 apps/desktop/dist/
+# Playwright E2E
+apps/desktop/test-results/
+apps/desktop/playwright-report/
 
 # OS / editor
 .DS_Store
