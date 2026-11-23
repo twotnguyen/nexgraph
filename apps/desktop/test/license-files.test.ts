@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { REQUIRED_LICENSE_FILES, assertLicenseFiles, missingLicenseFiles, resourcesDir } from '../scripts/license-files.mjs'
 
@@ -15,9 +15,13 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 describe('license-files: tệp giấy phép trong gói cài (P3-8.2)', () => {
-  it('macOS đọc Contents/Resources, Windows đọc resources/', () => {
-    expect(resourcesDir('/x/NexGraph.app', 'darwin')).toBe('/x/NexGraph.app/Contents/Resources')
-    expect(resourcesDir('/x/win-unpacked', 'win32')).toBe('/x/win-unpacked/resources')
+  it('macOS đọc Contents/Resources, Windows đọc resources/ (đúng dấu phân cách của nền tảng)', () => {
+    // So với join của chính nền tảng đang mô phỏng, không so chuỗi POSIX cứng: trên Windows
+    // `join` của máy trả `\` nên test cũ đỏ dù mã sản phẩm đúng (QA #63, Important 1).
+    expect(resourcesDir('/x/NexGraph.app', 'darwin')).toBe(posix.join('/x/NexGraph.app', 'Contents', 'Resources'))
+    expect(resourcesDir('C:\\x\\win-unpacked', 'win32')).toBe(win32.join('C:\\x\\win-unpacked', 'resources'))
+    expect(resourcesDir('C:\\x\\win-unpacked', 'win32')).not.toContain('/')
+    expect(resourcesDir('/x/NexGraph.app', 'darwin')).not.toContain('\\')
   })
 
   it('báo đủ cả ba tệp khi Resources rỗng (lỗi RC2)', () => {

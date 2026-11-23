@@ -1,14 +1,16 @@
 // Kiểm tệp giấy phép trong bản đóng gói (P3-8.2). electron-builder chép `extraResources` vào
 // Contents/Resources (macOS) hoặc resources/ (Windows, Linux), không vào app.asar.
 import { statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 
 /** Ba tệp bắt buộc phải có trong bản cài: giấy phép dự án, NOTICE và danh sách phần mềm bên thứ ba. */
 export const REQUIRED_LICENSE_FILES = ['THIRD_PARTY_LICENSES.md', 'NOTICE', 'LICENSE']
 
-/** Thư mục tài nguyên của bản đã đóng gói, đúng như electron-builder xếp `extraResources`. */
+/** Thư mục tài nguyên của bản đã đóng gói, đúng như electron-builder xếp `extraResources`.
+ *  Dùng `join` của chính nền tảng đích (win32/posix) để kết quả không phụ thuộc máy đang chạy. */
 export function resourcesDir(appDir, platform = process.platform) {
-  return platform === 'darwin' ? join(appDir, 'Contents', 'Resources') : join(appDir, 'resources')
+  const path = platform === 'win32' ? win32 : posix
+  return platform === 'darwin' ? path.join(appDir, 'Contents', 'Resources') : path.join(appDir, 'resources')
 }
 
 /** Tên các tệp còn thiếu (hoặc rỗng 0 byte) trong thư mục tài nguyên của bản đóng gói. */
