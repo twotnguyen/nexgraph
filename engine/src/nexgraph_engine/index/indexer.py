@@ -73,6 +73,11 @@ class RunResult:
     files_skipped: int = 0  # tệp sinh tự động bị discovery bỏ (bundle/dense) — PERF-L mục 3
     workers_effective: int = 1  # số worker thật sự xử lý phần lớn tệp (PERF-L mục 4)
     fallback_serial: bool = False  # đã rơi về 1 worker dù chạy được song song
+    # Số tệp theo từng đường — `workers_effective` một mình là số thô (review-53 Minor 2). `parallel_files`
+    # là tệp đọc qua lô song song; `serial_files` là tệp phải đọc từng-tệp VÌ lô quá hạn/pool hỏng khi
+    # đáng lẽ chạy song song (workers == 1 thì cả lần chạy là tuần tự theo thiết kế nên để 0).
+    parallel_files: int = 0
+    serial_files: int = 0
 
 
 def index_workers(n_files: int, include_media: bool, requested: int | None = None) -> int:
@@ -232,6 +237,8 @@ class Indexer:
         self._skip_stats: dict[str, int] = {}  # tệp bị discovery bỏ, theo lý do (bundle/dense)
         self._workers_effective = 1
         self._fallback_serial = False
+        self._parallel_files = 0
+        self._serial_files = 0
         self._unreadable: list[str] = []  # (A1 F6) thư mục/tệp không đọc được khi quét
 
     @property
@@ -331,7 +338,8 @@ class Indexer:
         s = self.store.stats()
         return RunResult(run_id, state, sum(s["nodes_by_kind"].values()), sum(s["edges_by_type"].values()),
                          s["unresolved"], time.time() - t0, sum(self._skip_stats.values()),
-                         self._workers_effective, self._fallback_serial)
+                         self._workers_effective, self._fallback_serial,
+                         self._parallel_files, self._serial_files)
 
     def skipped_files(self) -> dict[str, int]:
         """Số tệp discovery đã bỏ theo lý do (`bundle`, `dense`) — vào kết quả job (PERF-L mục 3)."""
@@ -545,7 +553,8 @@ class Indexer:
                             continue
                 if x is None:
                     x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
-                serial_files += 1
+                if workers > 1:  # chỉ đếm là "phải đọc từng-tệp vì sự cố" khi đáng lẽ chạy song song
+                    serial_files += 1
                 _consume(f, x)
         finally:
             if executor is not None:
@@ -555,6 +564,7 @@ class Indexer:
         # biết đã có tệp phải đi đường từng-tệp vì lô quá hạn/pool hỏng (PERF-L mục 4).
         self._workers_effective = workers if workers > 1 and batch_files >= serial_files else 1
         self._fallback_serial = workers > 1 and (bool(suspects) or serial_files > 0)
+        self._parallel_files, self._serial_files = batch_files, serial_files
 
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)
         store.commit()

@@ -459,6 +459,8 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
     # Kết quả tự khai báo đúng: vẫn 2 worker hiệu dụng (không hạ cả dự án), nhưng có cờ báo đã phải
     # đọc một phần theo đường từng-tệp.
     assert result.workers_effective == 2 and result.fallback_serial is True
+    # Số tệp theo từng đường, vì `workers_effective` một mình là số thô (review-53 Minor 2).
+    assert result.serial_files == len(slow_batch) and result.parallel_files == 40 - len(slow_batch)
 
 
 def test_largest_files_are_batched_first(tmp_path, index_project, monkeypatch):
@@ -945,6 +947,7 @@ def test_single_worker_index_has_no_interruption_message(tmp_path, index_project
     # Hành vi/đầu ra như main: đủ tệp, đọc trong tiến trình chính, không tự khai fallback.
     assert store.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 30
     assert result.workers_effective == 1 and result.fallback_serial is False
+    assert result.serial_files == 0 and result.parallel_files == 0  # cả lần chạy là tuần tự theo thiết kế
 
 
 def test_index_workers_policy(monkeypatch):

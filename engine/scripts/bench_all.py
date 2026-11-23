@@ -164,6 +164,7 @@ def main() -> None:
         # worker mà không ai biết (đúng như A5 đã xảy ra — PERF-L mục 4).
         m["workers_effective"] = runs[-1].workers_effective
         m["fallback_serial"] = runs[-1].fallback_serial
+        m["parallel_files"], m["serial_files"] = runs[-1].parallel_files, runs[-1].serial_files
         m["files_skipped"] = runs[-1].files_skipped
         conn = store.conn
         stats = store.stats()

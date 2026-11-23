@@ -130,7 +130,8 @@ def test_index_job_has_kind_and_result(api, copy_fixture):
     # A1 F6 (trường ổn định cho cảnh báo thư mục không đọc được) — MỘT dict, đủ cả hai phía.
     assert job["kind"] == "index"
     assert job["result"] == {"files_skipped": 0, "skipped": {}, "workers_effective": 1,
-                             "fallback_serial": False, "unreadable_paths": [], "unreadable_count": 0}
+                             "fallback_serial": False, "parallel_files": 0, "serial_files": 0,
+                             "unreadable_paths": [], "unreadable_count": 0}
 
 
 def test_project_task_can_refresh_now(api, copy_fixture):
