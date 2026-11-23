@@ -47,10 +47,15 @@ def make_tree(root: Path, *, npm: str, desktop: str, pyproject: str, engine: str
 
 
 def run_check(root: Path, *args: str) -> subprocess.CompletedProcess:
+    # Node ghi stdout/stderr bằng UTF-8; phải chỉ định encoding, nếu không Python lấy
+    # locale mặc định — trên Windows là code page ANSI (cp1252) nên chuỗi tiếng Việt
+    # của script thành mojibake hoặc UnicodeDecodeError (stdout = None).
     return subprocess.run(
         [NODE, str(SCRIPT), *args, "--root", str(root)],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="strict",
         timeout=60,
     )
 

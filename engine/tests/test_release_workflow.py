@@ -66,6 +66,8 @@ def run_release(tmp_path: Path, tag: str) -> list[str]:
         env=env,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="strict",
         timeout=60,
     )
     assert res.returncode == 0, res.stdout + res.stderr
