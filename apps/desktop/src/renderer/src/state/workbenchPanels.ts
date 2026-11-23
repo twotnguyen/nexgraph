@@ -38,6 +38,8 @@ export interface WorkbenchPanelContext {
   openNode: SearchProps['onOpen']
   openNodeId: TreeProps['onOpenNode']
   openCode: (file: string, line?: number, lineEnd?: number, column?: number) => void
+  /** Đang chọn node đích cho "Tìm đường": bấm kết quả tìm kiếm phải chọn node trên graph, không mở mã. */
+  pickTarget: boolean
   previewCode: NonNullable<TreeProps['onPreviewFile']>
   pinFile: NonNullable<TreeProps['onPinFile']>
   closeFile: NonNullable<TreeProps['onCloseFile']>
@@ -120,7 +122,8 @@ export const WORKBENCH_PANELS: WorkbenchPanel[] = [
   {
     id: 'search', title: () => vi.activity.search, icon: SearchIcon, command: 'graph_search.toggle', group: 'explore',
     render: (ctx) => h('div', { className: 'ws-tools-body' }, h(SearchPanel, {
-      projectId: ctx.projectId, revision: ctx.revision, onOpen: ctx.openNode, onOpenCode: ctx.openCode,
+      projectId: ctx.projectId, revision: ctx.revision, onOpen: ctx.openNode,
+      onOpenCode: ctx.pickTarget ? undefined : ctx.openCode,
       onShowSubgraph: (g) => ctx.showSubgraph(g), onOpenFlow: ctx.openFlow
     }))
   },
