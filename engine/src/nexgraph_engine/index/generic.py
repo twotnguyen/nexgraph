@@ -7,6 +7,7 @@ nên chạy thêm bộ trích xuất của riêng tệp để lấy `raw_calls` 
 """
 from __future__ import annotations
 
+import ast
 import atexit
 import logging
 import re
@@ -140,6 +141,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     refs: list[UnresolvedRef] = []
     labels = {n["id"]: n["label"] for n in result["nodes"] if not n.get("source_file")}
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    shadows = _py_shadow_scopes(path.read_bytes()) if path.suffix in _PY_SUFFIXES else None
     from_lines = {_line(e.get("source_location")) for e in raw_edges if e.get("relation") == "imports_from"}
     from_lines.discard(None)
     # 0.9.112 tách constructor/indexer/operator C# thành nút không `_callable`: lời gọi của chúng thuộc về lớp như 0.9.92.
@@ -174,7 +176,11 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
             name = inc.group(1).strip('"') if inc else dst  # `<...>` giữ ngoặc nhọn: resolver phân biệt include hệ thống với đường dẫn tương đối
             refs.append(UnresolvedRef(source=fid, name=name, type=EdgeType.IMPORTS, line=line, col=0))
         elif rel == "calls" and src in ids and line:
+            if shadows is not None and shadows.shadowed(dst.partition(".")[0], line):
+                continue  # `models.User()` với `models` là biến/tham số che bí danh mô-đun (M1)
             foreign = _foreign_receiver(lines, line, qnames[dst][0].split(".")[-1]) if dst in ids else None
+            if foreign and shadows is not None and shadows.shadowed(foreign.partition(".")[0], line):
+                continue  # extractor khớp nhầm `models.User()` vào lớp cục bộ; `models` là biến che (M1)
             if foreign:  # extractor chỉ khớp theo tên: `bcrypt.compare()` không phải phương thức `compare` của lớp này
                 refs.append(UnresolvedRef(source=ids[src], name=f"{foreign}.{qnames[dst][0].split('.')[-1]}", type=EdgeType.CALLS,
                                           line=line, col=0))
@@ -227,6 +233,7 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
     if python:
         scoped_types.update(_py_scoped_types(source, raw))
     aliases = _py_module_aliases(source) if python else {}
+    shadows = _py_shadow_scopes(source) if python else None
     per_file_fid = next((n["id"] for n in per_file.get("nodes", []) if n.get("label") == path.name), None)
     for rc in per_file.get("raw_calls") or []:
         caller_nid = rc.get("caller_nid") or ""
@@ -243,11 +250,16 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
         line, callee, recv = _line(rc.get("source_location")), rc.get("callee"), rc.get("receiver")
         if not line or not callee:
             continue
+        if rc.get("_python_receiver_shadowed") and shadows is not None and shadows.shadowed(recv, line):
+            # Bộ trích xuất cũng thấy receiver trùng tên biến/tham số: không đoán đó là mô-đun (M1).
+            continue
         if not recv and rc.get("is_member_call"):
             recv = _call_receiver(source, rc)  # `self.repo.save()` / `app.models.User()`: receiver bị extractor ẩn
         if recv in ("self", "this"):
             name = f"this.{callee}"
         elif recv:
+            if shadows is not None and shadows.shadowed(recv, line):
+                continue  # biến/tham số trùng tên mô-đun trong scope này: không đoán đó là mô-đun (M1)
             name = f"{aliases.get(recv, recv)}.{callee}"  # `import pkg.mod as m` → m.x thành pkg.mod.x
         elif rc.get("is_member_call"):
             continue  # `X().m()`: không biết kiểu của receiver, không đoán
@@ -475,6 +487,103 @@ def _py_module_aliases(source: bytes) -> dict[str, str]:
                 if name and name != "*" and alias[:1].islower():
                     out[alias] = f"{module}.{name}"
     return out
+
+
+class _Scope:
+    """Một scope Python (module/hàm/lớp) và các tên bị ràng buộc trực tiếp trong đó."""
+
+    __slots__ = ("start", "end", "kind", "names", "parent", "depth")
+
+    def __init__(self, start: int, end: int, kind: str, parent: "_Scope | None") -> None:
+        self.start, self.end, self.kind, self.parent = start, end, kind, parent
+        self.names: dict[str, int] = {}
+        self.depth = 0 if parent is None else parent.depth + 1
+
+    def bind(self, name: str, line: int) -> None:
+        self.names[name] = min(self.names.get(name, line), line)
+
+
+class _ShadowScopes:
+    """Tên bị ràng buộc theo từng scope, để chỉ bỏ lời gọi *thật sự* bị che (F4/M1).
+
+    Bản trước gom mọi ràng buộc trong tệp nên một biến cục bộ trùng tên ở hàm A làm mất cạnh
+    đúng ở hàm B. Ở đây: hàm/lớp chỉ che trong chính nó; tên ở module che lời gọi trong hàm
+    (thân hàm chạy sau khi module nạp xong) và che lời gọi ở module nếu gán trước dòng gọi;
+    thân lớp không rò vào method.
+    """
+
+    def __init__(self, scopes: list[_Scope], aliases: dict[str, str]) -> None:
+        self._scopes = scopes
+        self._aliases = aliases
+
+    def shadowed(self, name: str, line: int) -> bool:
+        """Tên này có phải bí danh mô-đun bị che tại dòng đó không (tên khác luôn trả False)."""
+        if name not in self._aliases:
+            return False  # biến/tham số thường vẫn để resolver phân giải theo kiểu
+        scope = self._innermost(line)
+        in_function = scope is not None and scope.kind == "function"
+        while scope is not None:
+            bound = scope.names.get(name)
+            if bound is not None:
+                if scope.kind == "module":
+                    if in_function or line >= bound:
+                        return True
+                elif scope.kind == "class":
+                    if not in_function and line >= bound:  # thân lớp không rò vào method
+                        return True
+                else:
+                    return True  # tên cục bộ của hàm che mọi lời gọi trong hàm đó
+            if scope.kind == "function":
+                in_function = True
+            scope = scope.parent
+        return False
+
+    def _innermost(self, line: int) -> _Scope | None:
+        best = None
+        for scope in self._scopes:
+            if scope.start <= line <= scope.end and (best is None or scope.depth > best.depth):
+                best = scope
+        return best
+
+
+def _py_shadow_scopes(source: bytes) -> _ShadowScopes | None:
+    """Dựng bản đồ tên bị che theo scope cho một tệp Python (None nếu không đọc được cú pháp)."""
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return None
+    last = max((getattr(node, "end_lineno", None) or getattr(node, "lineno", 1) for node in ast.walk(tree)), default=1)
+    module = _Scope(1, last, "module", None)
+    scopes = [module]
+    nested = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda,
+              ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+    def visit(node, scope: _Scope) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, nested):
+                kind = "class" if isinstance(child, ast.ClassDef) else "function"
+                line = getattr(child, "lineno", scope.start)
+                end = getattr(child, "end_lineno", None) or line
+                inner = _Scope(line, end, kind, scope)
+                scopes.append(inner)
+                if not isinstance(child, (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
+                    scope.bind(child.name, line)  # def/class đặt tên vào scope ngoài
+                visit(child, inner)
+                continue
+            elif isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
+                scope.bind(child.id, child.lineno)
+            elif isinstance(child, ast.arg):
+                scope.bind(child.arg, getattr(child, "lineno", scope.start))
+            elif isinstance(child, ast.ExceptHandler) and child.name:
+                scope.bind(child.name, child.lineno)
+            elif isinstance(child, (ast.Global, ast.Nonlocal)):
+                for name in child.names:  # `global x` rồi gán: tên nằm ở module
+                    module.bind(name, child.lineno)
+            visit(child, scope)
+
+    visit(tree, module)
+    return _ShadowScopes(scopes, _py_module_aliases(source))
+
 
 
 def _py_scoped_types(source: bytes, raw: dict) -> dict[str, dict[str, str]]:

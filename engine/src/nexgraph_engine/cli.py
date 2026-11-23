@@ -9,6 +9,7 @@ import socket
 import sys
 import threading
 import time
+from contextlib import closing
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -189,14 +190,13 @@ def _refresh_cmd(project: Path, data_dir: Path | None, hook: str | None = None, 
 def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
     """(0, kết quả) kể cả khi bỏ qua (không bao giờ làm lệnh git thất bại); (3, …) khi dự án chưa lập chỉ mục."""
     import sqlite3
-    from contextlib import closing
 
     from nexgraph_engine.index.refresh import refresh_project
     from nexgraph_engine.store.projects import ProjectNotIndexed, resolve_graph_db
-    from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.sources import sources_root
+    from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.store.graph_store import GraphStore
-    from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
+    from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer, is_busy_error
 
     skipped = {**_SKIPPED, "reason": "index_running"}
     try:
@@ -205,19 +205,24 @@ def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
         print(str(exc), file=sys.stderr)
         return 3, {"status": "not_indexed"}
     try:
-        with graph_writer(db) as path, closing(open_graph_db(path)) as conn:
+        # Ghi thẳng vào CSDL thật trong MỘT giao dịch (REV-10): kill giữa chừng giữ nguyên đồ thị cũ,
+        # không phải chép cả CSDL hai lần. Chỉ khoá ghi bận mới bỏ qua; lỗi thật (đầy đĩa…) phải lộ ra.
+        with graph_writer(db) as live_path, closing(open_graph_db(live_path)) as conn:
             store = GraphStore(conn)
             if not store.has_published_graph():
                 print(f"Dự án chưa được lập chỉ mục trong NexGraph: {project}", file=sys.stderr)
                 return 3, {"status": "not_indexed"}
-            # Đang giữ graph_writer mà còn lần chạy dở trên CSDL thật (index đầy đủ chạy trên bản staging) thì đó là
-            # lần refresh bị kill: đánh dấu lỗi để không chặn mọi lần refresh sau.
+            # Lần refresh trước bị kill để lại dòng 'cho' (dữ liệu đã rollback khi mở CSDL).
             store.abort_stale_runs()
             pid = store.project_id()
             r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, pid), keep_sources=data_dir is None,
                                 transcript_dir=data_dir / "transcripts" / pid if data_dir and pid else None)
-    except (GraphWriteBusy, sqlite3.OperationalError):
+    except GraphWriteBusy:
         return 0, skipped
+    except sqlite3.OperationalError as exc:
+        if is_busy_error(exc):
+            return 0, skipped
+        raise
     out = {"status": "ok", "added": r.added, "changed": r.changed, "removed": r.removed,
            "unchanged": r.unchanged, "seconds": round(r.seconds, 3)}
     return 0, out

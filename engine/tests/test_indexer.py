@@ -549,3 +549,109 @@ def test_extracting_twice_through_a_symlinked_root_gives_the_same_references(tmp
     first = refs()
     assert ("IMPORTS", "pkg_util", 1) in first
     assert refs() == first
+
+
+def test_submit_runtimeerror_in_parallel_batch_falls_back(tmp_path, index_project, monkeypatch):
+    """Minor #27 N3: `submit` ném RuntimeError (pool đã đóng) phải rơi về đọc tuần tự, đủ tệp."""
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    class SubmitRuntimeFailsPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            self.parallel = max_workers > 1
+            self.batches = 0
+
+        def submit(self, fn, *args):
+            if not self.parallel:
+                future = Future()
+                future.set_result(fn(*args))
+                return future
+            self.batches += 1
+            if self.batches >= 2:  # lô đầu chạy, lô sau pool đã đóng
+                raise RuntimeError("cannot schedule new tasks after shutdown")
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", SubmitRuntimeFailsPool)
+    recovered, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert recovered.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 40
+    assert graph_state(recovered) == graph_state(serial)
+    assert any(e.message and "gián đoạn" in e.message for e in events)  # người dùng biết đã mất lớp song song
+
+
+def test_future_result_runtimeerror_reports_and_falls_back(tmp_path, index_project, monkeypatch):
+    """Minor #27 N1+N3: `future.result()` ném RuntimeError phải báo cho người dùng và đọc tuần tự."""
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    class ResultRuntimeFailsPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            self.parallel = max_workers > 1
+            self.batches = 0
+
+        def submit(self, fn, *args):
+            future = Future()
+            if not self.parallel:
+                future.set_result(fn(*args))
+                return future
+            self.batches += 1
+            if self.batches == 2:  # lô thứ hai: worker chết khi lấy kết quả
+                future.set_exception(RuntimeError("pool is broken"))
+            else:
+                future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", ResultRuntimeFailsPool)
+    recovered, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert recovered.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 40
+    assert graph_state(recovered) == graph_state(serial)
+    assert any(e.message and "Không dùng được tiến trình trích xuất" in e.message for e in events)
+
+
+def test_progress_callback_runtimeerror_is_not_swallowed(tmp_path, index_project, monkeypatch):
+    """Minor #27 N2: lỗi trong on_progress không được nuốt (job 'loi') và không add_file hai lần."""
+    from nexgraph_engine.index import indexer
+    from nexgraph_engine.store.graph_store import GraphStore
+
+    root = _many_py(tmp_path / "p")
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    calls: list[str] = []
+    original = GraphStore.add_file
+
+    def spy(store, run_id, rec):
+        calls.append(rec.rel_path)
+        return original(store, run_id, rec)
+
+    monkeypatch.setattr(GraphStore, "add_file", spy)
+    raised = {"once": False}
+
+    def on_event(event):
+        if event.state == "structure" and event.files_done >= 17 and not raised["once"]:
+            raised["once"] = True
+            raise RuntimeError("progress callback boom")
+
+    _store, result, _events = index_project(root, on_event=on_event)
+    assert result.state == "loi"
+    duplicates = sorted({p for p in calls if calls.count(p) > 1})
+    assert duplicates == [], f"add_file gọi lại cho: {duplicates}"

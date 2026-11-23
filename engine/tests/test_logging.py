@@ -123,7 +123,8 @@ def test_readable_graph_failure_is_logged_not_silent(tmp_path, caplog):
     db.write_bytes(b"khong phai sqlite")
     info = ProjectInfo("p1", tmp_path, "p1", False, "in_project", db, 0)
     caplog.set_level(logging.WARNING, logger="nexgraph_engine")
-    assert _last_run(info) == (None, None)
+    assert _last_run(info)[:2] == (None, None)
+    assert "graph.db" in _last_run(info)[2]  # M3: lỗi đọc phải đi kèm phản hồi API, không chỉ log
     warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert warnings and warnings[0].exc_info is not None
     assert "graph.db" in warnings[0].getMessage()

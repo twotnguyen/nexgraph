@@ -77,7 +77,8 @@ const viStrings = {
     recent: 'Dự án gần đây',
     noRecent: 'Chưa có dự án nào. Hãy mở một thư mục mã nguồn.',
     engineWaiting: 'Engine chưa sẵn sàng, vui lòng đợi…',
-    openFailed: 'Không mở được thư mục này'
+    openFailed: 'Không mở được thư mục này',
+    indexError: 'Không đọc được lần lập chỉ mục cuối'
   },
   indexing: {
     title: (name: string) => `Đang lập chỉ mục: ${name}`,
@@ -765,7 +766,8 @@ const enStrings: typeof viStrings = {
     recent: 'Recent projects',
     noRecent: 'No projects yet. Open a source folder to get started.',
     engineWaiting: 'Engine is not ready yet, please wait…',
-    openFailed: 'Could not open this folder'
+    openFailed: 'Could not open this folder',
+    indexError: 'Could not read the last index run'
   },
   indexing: {
     title: (name: string) => `Indexing: ${name}`,
