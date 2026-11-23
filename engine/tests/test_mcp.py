@@ -151,12 +151,74 @@ def test_stdio_cli(indexed):
     assert payload(anyio.run(run))
 
 
-def _stdio_probe(root, data_dir, messages: list[dict]) -> subprocess.CompletedProcess:
+def _stdio_probe(root, data_dir, messages: list[dict], *, args: list[str] | None = None) -> subprocess.CompletedProcess:
+    """Gửi message qua stdin rồi ĐỌC ĐỦ phản hồi theo id TRƯỚC khi đóng stdin.
+
+    `subprocess.run(input=...)` đóng stdin ngay sau khi ghi hết; server thấy EOF và dừng vòng đọc trước
+    khi kịp ghi phản hồi cuối — CI Windows PR #54 đỏ `KeyError: 3` đúng kiểu này. Client thật giữ stdin
+    mở tới khi nhận phản hồi, nên probe phải làm theo (FLAKY-MCP-WIN).
+    """
+    import threading
+    import time
+
     env = {k: v for k, v in os.environ.items() if k != "NEXGRAPH_MCP_KEY"}
-    return subprocess.run(
-        [sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root), "--data-dir", str(data_dir)],
-        input="".join(json.dumps(message) + "\n" for message in messages),
-        capture_output=True, text=True, encoding="utf-8", timeout=60, env=env)
+    command = args or [sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root),
+                       "--data-dir", str(data_dir)]
+    proc = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, encoding="utf-8", env=env)
+    assert proc.stdin is not None and proc.stdout is not None and proc.stderr is not None
+    stdout, stderr = proc.stdout, proc.stderr
+    out: list[str] = []
+    err: list[str] = []
+    readers = [threading.Thread(target=lambda: out.extend(stdout), daemon=True),
+               threading.Thread(target=lambda: err.extend(stderr), daemon=True)]
+    for reader in readers:
+        reader.start()
+    expected = {item["id"] for message in messages
+                for item in (message if isinstance(message, list) else [message])
+                if isinstance(item, dict) and "id" in item}
+    for message in messages:
+        proc.stdin.write(json.dumps(message) + "\n")
+        proc.stdin.flush()
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        seen = {row["id"] for row in (json.loads(line) for line in list(out) if line.strip()) if "id" in row}
+        if expected <= seen:
+            break
+        if proc.poll() is not None:  # server đã thoát: không còn phản hồi nào đến nữa
+            break
+        time.sleep(0.02)
+    proc.stdin.close()
+    code = proc.wait(timeout=60)
+    for reader in readers:
+        reader.join(5)
+    return subprocess.CompletedProcess(proc.args, code, "".join(out), "".join(err))
+
+
+def test_stdio_probe_keeps_stdin_open_until_every_response_arrives(tmp_path):
+    """FLAKY-MCP-WIN (CI Windows PR #54): server stdio thoát khi stdin EOF, nên probe đóng stdin ngay sau
+    khi ghi sẽ mất phản hồi cuối. Test này dựng server giả trả lời id 3 CHỈ KHI stdin còn mở."""
+    fake = (
+        "import json, sys, threading\n"
+        "lines = [sys.stdin.readline() for _ in range(4)]\n"
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 1, 'result': {}}), flush=True)\n"
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 2, 'error': {'code': -32601, 'message': 'x'}}), flush=True)\n"
+        "closed = threading.Event()\n"
+        "def watch():\n"
+        "    if sys.stdin.readline() == '':\n"
+        "        closed.set()\n"
+        "threading.Thread(target=watch, daemon=True).start()\n"
+        "closed.wait(1.0)\n"
+        "if closed.is_set():\n"
+        "    sys.exit(0)\n"
+        "print(json.dumps({'jsonrpc': '2.0', 'id': 3, 'result': {'tools': [1]}}), flush=True)\n"
+    )
+    messages = [INIT, INITIALIZED,
+                {"jsonrpc": "2.0", "id": 2, "method": "server/discover", "params": {}},
+                {"jsonrpc": "2.0", "id": 3, "method": "tools/list"}]
+    proc = _stdio_probe(tmp_path, tmp_path, messages, args=[sys.executable, "-c", fake])
+    responses = _responses(proc)
+    assert responses[3]["result"]["tools"] == [1]
 
 
 def test_unknown_probe_before_initialize_is_quiet(indexed):

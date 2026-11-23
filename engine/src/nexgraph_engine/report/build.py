@@ -11,7 +11,7 @@ from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, build_nx,
 from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
 from nexgraph_engine.query.source_policy import SourcePolicy
-from nexgraph_engine.report.i18n import check_lang, translate_questions, translate_surprising, warning_text
+from nexgraph_engine.report.i18n import check_lang, community_label, translate_questions, translate_surprising, warning_text
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -80,7 +80,8 @@ def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = Non
     lang = check_lang(lang, "en")  # lang sai phải ném ValueError như build_tour (M3, review 23/11)
     from graphify.analyze import suggest_questions, surprising_connections
     bg = build_nx(store, keep_file=source.allows if source else None)
-    communities = [{"id": f"com:{cid}", "label": bg.labels[cid], "size": len(members), "cohesion": bg.cohesion[cid]}
+    communities = [{"id": f"com:{cid}", "label": community_label(bg.labels[cid], lang), "size": len(members),
+                    "cohesion": bg.cohesion[cid]}
                    for cid, members in sorted(bg.communities.items()) if cid != OTHER_COMMUNITY]
     surprising = translate_surprising(
         [{"source": s["source"], "target": s["target"], "source_files": s.get("source_files", []),
