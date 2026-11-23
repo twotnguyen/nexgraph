@@ -66,6 +66,11 @@ describe('i18n', () => {
     for (const group of groups) expect(t[group]).toBeDefined()
   })
 
+  it('MIN-54: thông báo nguồn ảo có bản tiếng Anh', () => {
+    setLocale('en')
+    expect(tr('Nguồn ảo — chọn node trên đồ thị để xem chi tiết.')).toBe('Virtual source — select the node on the graph to see details.')
+  })
+
   it('tr thay biến và giữ nguyên chuỗi khi thiếu bản dịch', () => {
     const missing = 'chưa có bản __test_missing_translation__'
     setLocale('vi')

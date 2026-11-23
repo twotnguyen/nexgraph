@@ -189,6 +189,10 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   const scope = useRef<AiConsentTarget | null>(null)
   const operation = useRef<number | null>(null)
   const operationSeq = useRef(0)
+  // MIN-54: `auth:models-changed` tới khi đang có lượt/ thao tác thì không bỏ — nhớ lại và đọc cấu
+  // hình ngay khi lượt kết thúc, để panel không giữ model cũ tới lần gửi sau.
+  const refreshWanted = useRef(false)
+  const refreshNow = useRef<() => void>(() => {})
   const messages = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const imageInput = useRef<HTMLInputElement>(null)
@@ -253,6 +257,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setBusy(false)
     setTool(null)
     setDraft('')
+    // models-changed bị hoãn lúc đang chạy: lượt vừa xong thì đọc lại cấu hình ngay.
+    if (refreshWanted.current) refreshNow.current()
   }
   const fail = (q: string, message: Message) => {
     const current = turn.current
@@ -280,7 +286,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     let read = 0
     mounted.current = true
     const refresh = () => {
-      if (operation.current !== null || turn.current) return
+      if (operation.current !== null || turn.current) { refreshWanted.current = true; return }
+      refreshWanted.current = false
       const which = ++read
       const beforeSubmit = operationSeq.current
       const stillCurrent = () => alive && which === read && beforeSubmit === operationSeq.current && !turn.current
@@ -292,6 +299,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
         setError(errorMessage(e))
       })
     }
+    refreshNow.current = refresh
     refresh()
     void window.nexgraph.auth.models().then((items) => { if (alive) setModels(items) }).catch(() => {})
     window.addEventListener('focus', refresh)
@@ -360,6 +368,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       projectGeneration.current++
       mounted.current = false
       operation.current = null
+      refreshNow.current = () => {}
       if (turn.current) void window.nexgraph.agent.abort(projectId)
       turn.current = null
       window.removeEventListener('focus', refresh)
@@ -396,6 +405,8 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     if (!isCurrent(id)) return
     operation.current = null
     setChecking(false)
+    // Thao tác khác cũng chặn refresh (vd kiểm tra kết nối): xong thì đọc lại nếu có models-changed chờ.
+    if (refreshWanted.current) refreshNow.current()
   }
 
   const pickMode = async (m: AgentMode) => {

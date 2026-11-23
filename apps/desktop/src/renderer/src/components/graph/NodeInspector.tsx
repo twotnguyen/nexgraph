@@ -3,6 +3,7 @@ import type { DocSection, GraphNode, NodeExplain } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { kindLabel, kindStyle } from './kindStyle'
 import { NodeMemory } from './NodeMemory'
+import { isVirtualSource } from './virtualSource'
 
 /** Bậc, cụm và cạnh vào/ra theo loại như `explain`: engine đã nhóm sẵn, phần quá 20 node gom theo tệp. */
 function Explain({ projectId, node, onOpenNode }: { projectId: string; node: GraphNode; onOpenNode?: (n: GraphNode) => void }) {
@@ -87,7 +88,7 @@ export function NodeInspector({ node, onOpenCode, projectId, onOpenNode }: {
       {node.signature && <p className="mono">{node.signature}</p>}
       {node.is_test && <p>{vi.graph.isTest}</p>}
       {node.origin === 'llm' && <p className="ai-inferred" role="note">{vi.graph.aiInferred}</p>}
-      {node.file && onOpenCode && (
+      {node.file && !isVirtualSource(node.file) && onOpenCode && (
         <button type="button" onClick={() => onOpenCode(node.file as string, node.line_start ?? 1, node.line_end ?? undefined)}>{vi.code.open}</button>
       )}
       {projectId && node.kind === 'document' && <ReadSection key={node.id} projectId={projectId} node={node} />}
