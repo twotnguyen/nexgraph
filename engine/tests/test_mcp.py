@@ -438,3 +438,12 @@ def test_pr_routes_hide_blocked_sources_for_model(api, tmp_path, monkeypatch):
         assert "load_secret_vault_token" not in text and "credentials" not in text, (path, text)
     # Giao diện của chính người dùng vẫn thấy đủ.
     assert "credentials.py" in api.get(f"/v1/projects/{pid}/prs/8").text
+
+
+def test_get_impact_accepts_a_node_id(indexed):
+    server = build_server(*indexed)
+    body = payload(call(server, "get_impact", {"node_id": "lib/services/auth_service.dart#file"}))
+    assert body["node"]["id"] == "lib/services/auth_service.dart#file"
+    assert "impacted" in body and "tests" in body
+    bad = call(server, "get_impact", {"node_id": "nope#file"})
+    assert bad.isError and "nope#file" in bad.content[0].text
