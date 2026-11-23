@@ -95,13 +95,13 @@ def make_work(*, graph_db, src: Sources, req: Request, transport: DirectTranspor
     """`load_prs`: lấy hàng PR trong job (gọi `gh` có thể chậm), để request trả 202 ngay."""
     def work(ctx: TaskContext) -> dict:
         nonlocal req
-        if load_prs is not None:
-            req = replace(req, prs=load_prs())
         result = {"target": req.target, "nodes_added": 0, "edges_added": 0, "labels": {}, "triage": None,
                   "merged": 0, "errors": [], "usage": {"input_tokens": 0, "output_tokens": 0},
                   "chunks": {"total": 0, "cached": 0, "sent": 0, "done": 0, "failed": 0, "skipped_budget": 0}}
         stats = result["chunks"]
         try:
+            if load_prs is not None:  # trong `try`: `gh` lỗi vẫn phải đóng hàng đợi LLM ở `finally` (REV-19)
+                req = replace(req, prs=load_prs())
             with graph_writer(graph_db) as db, closing(open_graph_db(db)) as conn:
                 store = GraphStore(conn)
                 if req.target == "dedup":

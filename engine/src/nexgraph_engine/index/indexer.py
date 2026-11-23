@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from nexgraph_engine.docs.secrets import redact_doc_secrets
+
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
@@ -157,7 +159,8 @@ def extract_file(root: Path, f: DiscoveredFile, *, transcript_dir: Path | None =
                 text = media.google_text(path, sha, transcript_dir)
             else:
                 text = doc_text(path, f.language)
-            x: FileExtraction = extract_document(f.rel_path, text, file_id=file_node.id)
+            # Che secret ngay khi vào đồ thị: tiêu đề/mục chép vào nhãn nút, và cùng chữ này được gửi LLM (GFY-08).
+            x: FileExtraction = extract_document(f.rel_path, redact_doc_secrets(text), file_id=file_node.id)
         elif f.language == "dart":
             x = extract_dart(f.rel_path, source, is_test=f.is_test)
         else:
@@ -309,33 +312,52 @@ class Indexer:
         consumed = 0
         if workers > 1:
             executor: ProcessPoolExecutor | None = None
+            batches = []
             try:
                 executor = ProcessPoolExecutor(max_workers=workers)
                 batches = [executor.submit(_extract_batch, self.root, files[offset:offset + EXTRACTION_BATCH_SIZE],
                                            self.transcript_dir) for offset in range(0, total, EXTRACTION_BATCH_SIZE)]
-                for batch in batches:
-                    deadline = time.monotonic() + WORKER_PROGRESS_TIMEOUT_SECONDS
-                    while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
-                        wait((batch,), timeout=0.2)
-                    if not batch.done() or self.cancel.is_set():
-                        break
-                    for extracted in batch.result():
-                        if self.cancel.is_set():
-                            return False
-                        _consume(consumed + 1, files[consumed], extracted)
-                        consumed += 1
             except (BrokenProcessPool, OSError, RuntimeError):
                 # Worker có thể không khởi động được hoặc bị hệ điều hành chặn; các tệp chưa xong
                 # sẽ được đọc tiếp ở nhánh fallback tuần tự bên dưới.
                 logger.warning("Bộ trích xuất song song gián đoạn; đọc tiếp tuần tự", exc_info=True)
-            finally:
-                if executor is not None and consumed < total:
-                    # Python 3.12 chưa có terminate_workers() trên executor.
-                    for process in list((executor._processes or {}).values()):
-                        with suppress(OSError):
-                            process.terminate()
                 if executor is not None:
-                    executor.shutdown(wait=False, cancel_futures=True)
+                    _kill_pool(executor)
+                executor, batches = None, []
+            if executor is not None:
+                try:
+                    for batch in batches:
+                        deadline = time.monotonic() + WORKER_PROGRESS_TIMEOUT_SECONDS
+                        while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
+                            wait((batch,), timeout=0.2)
+                        if not batch.done() or self.cancel.is_set():
+                            break
+                        try:
+                            extracted_batch = batch.result()
+                        except (BrokenProcessPool, OSError, RuntimeError):
+                            # Chỉ lỗi của pool bị bắt ở đây; lỗi trong `_consume`/`on_progress` phải nổi lên.
+                            if self.cancel.is_set():
+                                return False
+                            _kill_pool(executor)
+                            executor = None
+                            self.on_progress(ProgressEvent(
+                                "structure", consumed, total,
+                                "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
+                            break
+                        # Ngoài `try` của pool: lỗi của callback/ghi CSDL không được nuốt (Minor #27 N2).
+                        for extracted in extracted_batch:
+                            if self.cancel.is_set():
+                                return False
+                            _consume(consumed + 1, files[consumed], extracted)
+                            consumed += 1
+                finally:
+                    if executor is not None and consumed < total:
+                        # Python 3.12 chưa có terminate_workers() trên executor.
+                        for process in list((executor._processes or {}).values()):
+                            with suppress(OSError):
+                                process.terminate()
+                    if executor is not None:
+                        executor.shutdown(wait=False, cancel_futures=True)
             if consumed < total and not self.cancel.is_set():
                 self.on_progress(ProgressEvent("structure", consumed, total,
                                                "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
@@ -381,6 +403,9 @@ class Indexer:
                             except (BrokenProcessPool, OSError, RuntimeError):
                                 _kill_pool(pool)
                                 executor, isolated = None, False
+                                self.on_progress(ProgressEvent(
+                                    "structure", i, total,
+                                    "Không dùng được tiến trình trích xuất; đang đọc trong tiến trình chính."))
                         else:  # quá hạn hoặc bị huỷ: dừng tiến trình con, bỏ qua tệp và đi tiếp
                             _kill_pool(pool)
                             executor = None

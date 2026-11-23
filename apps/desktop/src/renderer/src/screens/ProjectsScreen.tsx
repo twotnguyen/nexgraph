@@ -215,6 +215,11 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
                     <span className="projects-recent-date">
                       {date ? <time dateTime={date.toISOString()}>{formatDate(date, { dateStyle: 'medium' })}</time> : tr('Chưa lập chỉ mục')}
                     </span>
+                    {project.last_index_error && (
+                      <span className="projects-recent-warn muted small" role="status" title={project.last_index_error}>
+                        {vi.projects.indexError}
+                      </span>
+                    )}
                   </button>
                   {!memberIds.has(project.project_id) && (
                     <button type="button" className="icon-button recent-remove recent-join" title={vi.globalGraph.addTo(project.name)}

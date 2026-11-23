@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import logging
-import sqlite3
 import threading
+import time
 import uuid
 from collections.abc import Callable
-from contextlib import closing
 
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.extra_sources import ExtraSources
@@ -15,9 +14,12 @@ from nexgraph_engine.index.scan import resolve_subdir
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectRegistry
-from nexgraph_engine.store.publication import backup_graph, stage_graph
+from nexgraph_engine.store.publication import publish_stage, stage_graph
 
 ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting_llm: job semantic đường A chờ main (W9)
+# Job đã xong chỉ giữ để client hỏi kết quả một lúc: giới hạn số lượng và TTL để `_jobs` không phình mãi (REV-19).
+MAX_FINISHED_JOBS = 50
+FINISHED_JOB_TTL_SECONDS = 60 * 60
 logger = logging.getLogger(__name__)
 
 
@@ -59,9 +61,12 @@ class TaskContext:
 
 class JobManager:
     def __init__(self, registry: ProjectRegistry, bus: EventBus, *, indexer_cls: type[Indexer] = Indexer,
-                 locks=None) -> None:
+                 locks=None, max_finished_jobs: int = MAX_FINISHED_JOBS,
+                 finished_job_ttl_seconds: float = FINISHED_JOB_TTL_SECONDS) -> None:
         self._registry, self._bus, self._indexer_cls = registry, bus, indexer_cls
         self._locks = locks
+        self._max_finished = max(0, max_finished_jobs)
+        self._finished_ttl = max(0.0, finished_job_ttl_seconds)
         self._jobs: dict[str, dict] = {}
         self._cancels: dict[str, threading.Event] = {}
         self._publishing: set[str] = set()
@@ -75,6 +80,7 @@ class JobManager:
                     include_config: bool | None = None, workers: int | None = None, force: bool = False,
                     sources: ExtraSources | None = None) -> str:
         with self._lock:
+            self._prune_finished_locked()
             info = self._registry.get(project_id)
             if info is None:
                 raise UnknownProject(project_id)
@@ -102,6 +108,7 @@ class JobManager:
         nên `work` được ghi CSDL của dự án (ví dụ qua `RefreshService.refresh_now`). `None`: không khoá gì.
         """
         with self._lock:
+            self._prune_finished_locked()
             if project_id is not None:
                 if self._registry.get(project_id) is None:
                     raise UnknownProject(project_id)
@@ -123,8 +130,41 @@ class JobManager:
         with self._lock:
             job = self._jobs[job_id]
             job.update(fields)
+            if job["state"] not in ACTIVE and fields.get("state") not in (None, "running", "waiting_llm"):
+                job["finished_at"] = time.time()
+                self._prune_finished_locked(keep=job_id)
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
+
+    def _forget_locked(self, job_id: str) -> None:
+        """Caller giữ `_lock`: bỏ job đã xong khỏi bộ nhớ (client cũ nhận 404 như job không tồn tại)."""
+        self._jobs.pop(job_id, None)
+        self._cancels.pop(job_id, None)
+        self._publishing.discard(job_id)
+
+    def _prune_finished_locked(self, keep: str | None = None) -> None:
+        """Caller giữ `_lock`: dọn job đã xong quá TTL hoặc vượt giới hạn, theo thời điểm xong (REV-19).
+
+        `keep`: job vừa chuyển trạng thái kết thúc trong lần này — luôn giữ để client còn đọc kết quả
+        (cắt theo thứ tự tạo từng xoá ngay job dài vừa xong khi có nhiều job ngắn xong trước — F3).
+        """
+        now = time.time()
+        finished = [(job_id, job) for job_id, job in self._jobs.items() if job["state"] not in ACTIVE]
+        for job_id, job in finished:
+            if job_id != keep and now - job.get("finished_at", now) >= self._finished_ttl:
+                self._forget_locked(job_id)
+        finished = [(job_id, job) for job_id, job in self._jobs.items() if job["state"] not in ACTIVE]
+        excess = len(finished) - self._max_finished
+        if excess > 0:
+            # Job xong lâu nhất bị bỏ trước; job vừa xong không bao giờ bị bỏ trong chính lần prune này.
+            for job_id, _job in sorted(finished, key=lambda item: item[1].get("finished_at") or 0.0):
+                if excess <= 0:
+                    break
+                if job_id == keep:
+                    continue
+                self._forget_locked(job_id)
+                excess -= 1
+        self._threads = [thread for thread in self._threads if thread.is_alive()]
 
     def _run_task(self, job_id: str, project_id: str | None, work: Callable[[TaskContext], dict],
                   cancel: threading.Event) -> None:
@@ -176,8 +216,15 @@ class JobManager:
         with self._lock:
             return self._running_job(project_id) is not None
 
+    def active_task(self, kind: str, *, states: tuple[str, ...] = ACTIVE) -> str | None:
+        """Job cùng loại ở một trong `states` (mặc định: còn hoạt động); dùng để gộp việc trùng."""
+        with self._lock:
+            return next((job["job_id"] for job in self._jobs.values()
+                         if job["kind"] == kind and job["state"] in states), None)
+
     def get(self, job_id: str) -> dict | None:
         with self._lock:
+            self._prune_finished_locked()
             job = self._jobs.get(job_id)
             return dict(job) if job else None
 
@@ -205,7 +252,10 @@ class JobManager:
             if e.files_total or e.state in ("done", "structure"):
                 job["files_total"] = e.files_total
             if e.state in ("done", "cancelled", "error"):
+                # F2: job index cũng phải có `finished_at`, nếu không TTL 1 h không bao giờ áp cho nó.
+                job["finished_at"] = time.time()
                 self._publishing.discard(job_id)
+                self._prune_finished_locked(keep=job_id)
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
         if e.state == "done":  # đồ thị mới đã được xuất bản
@@ -267,9 +317,9 @@ class JobManager:
                                                        terminal_event.files_total)
                         return
                     self._publishing.add(job_id)
-                with closing(sqlite3.connect(f"{live_path.as_uri()}?mode=rw", uri=True)) as live:
-                    backup_graph(stage, live)
-                    published = True
+                # Qua `publish_stage` (không backup tay) để WAL của bản thật được cắt ngay sau khi xong (F7).
+                publish_stage(stage, live_path)
+                published = True
         except Exception as exc:
             logger.exception("Lập chỉ mục thất bại (job %s, dự án %s, đã công bố: %s)",
                              job_id, info.project_id, published)

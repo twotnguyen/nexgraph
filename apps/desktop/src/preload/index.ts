@@ -221,7 +221,9 @@ const api: NexGraphApi = {
     discoverLocal: (baseUrl) => call('auth:discover-local', baseUrl),
     connectLocal: (baseUrl, modelId) => call('auth:connect-local', baseUrl, modelId),
     onEvent: (cb) => subscribe<AuthEventView>('auth:login-event', cb),
-    onPrompt: (cb) => subscribe<AuthPromptView>('auth:login-prompt', cb)
+    onPrompt: (cb) => subscribe<AuthPromptView>('auth:login-prompt', cb),
+    onNotice: (cb) => subscribe<{ message: string }>('auth:notice', cb),
+    onModelsChanged: (cb) => subscribe<{ providerId: string }>('auth:models-changed', cb)
   },
   agent: {
     prompt: (pid, text, target, options) => call('agent:prompt', pid, text, target, options),
@@ -301,6 +303,7 @@ const api: NexGraphApi = {
     setSettings: (pid, settings) => call('semantic:set-settings', pid, settings),
     estimate: (pid, target, noCache) => call('semantic:estimate', pid, target, noCache),
     start: (pid, target, budget, noCache) => call('semantic:start', pid, target, budget, noCache),
+    usage: (jobId) => call('semantic:usage', jobId),
     cancel: (jobId) => call('semantic:cancel', jobId)
   }
 }

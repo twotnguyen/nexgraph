@@ -89,7 +89,11 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const [promptInput, setPromptInput] = useState('')
   const [loginProvider, setLoginProvider] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
+  // Hàng đợi toast: nhiều auth:notice cùng lúc phải hiện đủ, không ghi đè nhau.
+  const [toasts, setToasts] = useState<{ id: number; message: string }[]>([])
+  const toastSeq = useRef(0)
+  const dismissToast = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), [])
+  const pushToast = useCallback((message: string) => setToasts((list) => [...list, { id: ++toastSeq.current, message }]), [])
   const [error, setError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -132,6 +136,12 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   useEffect(() => { void load() }, [load])
 
   useEffect(() => {
+    // Catalog model đổi ở main (refresh nền sau khi lưu key): tải lại để bộ chọn thấy model mới
+    // mà không phải đóng/mở lại Cài đặt. Listener huỷ khi unmount.
+    return window.nexgraph.auth.onModelsChanged(() => { void load() })
+  }, [load])
+
+  useEffect(() => {
     // Sự kiện đăng nhập gửi cho cả cửa sổ: bỏ qua lượt do hộp Kết nối nhanh khởi động.
     const offEvent = window.nexgraph.auth.onEvent((e) => loginPending.current && setLoginEvent(e.type === 'progress' ? null : e))
     const offPrompt = window.nexgraph.auth.onPrompt((p) => {
@@ -139,23 +149,26 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       setLoginPrompt(p)
       setPromptInput('')
     })
+    // Thông báo ngoài luồng đăng nhập (ví dụ Đăng xuất không nạp lại được key) — không phụ thuộc loginPending.
+    const offNotice = window.nexgraph.auth.onNotice((n) => pushToast(tr(n.message)))
     return () => {
       offEvent()
       offPrompt()
+      offNotice()
       if (loginPending.current) void window.nexgraph.auth.loginCancel()
     }
-  }, [])
+  }, [pushToast])
 
   const run = async (fn: () => Promise<void>, okMessage?: string) => {
     if (operation.current) return
     operation.current = true
     setWorking(true)
-    setStatus(null)
+    setToasts([])
     setError(null)
     setTestResult(null)
     try {
       await fn()
-      if (okMessage) setStatus(okMessage)
+      if (okMessage) pushToast(okMessage)
       await load()
     } catch (e) {
       setError(errCode(e) === 'no_keychain' ? vi.accounts.noKeychain : errMessage(e))
@@ -263,7 +276,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       </nav>
       <div className="settings-content" onScroll={onScroll}>
       {error && <p role="alert" className="inline-message error">{error}</p>}
-      {status && <Toast message={status} onDismiss={() => setStatus(null)} />}
+      {toasts.length > 0 && <div className="toast-stack">
+        {toasts.map((t) => <Toast key={t.id} message={t.message} onDismiss={() => dismissToast(t.id)} />)}
+      </div>}
       {pages.length === 0 && <div className="settings-empty"><strong>{tr('Không có kết quả')}</strong><span className="muted">{tr('Không có cài đặt nào khớp “{query}”', { query: query.trim() })}</span></div>}
 
       {pages.some((p) => p.id === 'appearance') && <h1 id="settings-appearance" data-settings-page="appearance" className="settings-page-title">{tr('Giao diện')}</h1>}
@@ -493,7 +508,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
           </select>
         </label>
         {keyTarget?.hasKey && <p className="muted">{vi.accounts.keySaved}</p>}
-        {keyTarget?.description && <p className="muted small">{keyTarget.description}</p>}
+        {keyTarget?.description && <p className="muted small">{tr(keyTarget.description)}</p>}
         <div className="field">
           <label htmlFor="account-key">{vi.accounts.apiKey}</label>
           <input id="account-key" type="password" autoComplete="off" disabled={busy}

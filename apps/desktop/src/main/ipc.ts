@@ -1,4 +1,5 @@
 import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'electron'
+import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -13,7 +14,7 @@ import { AgentFileScope } from './agent/file-scope'
 import { GENERATED_DIRS, replaceText, searchText } from './search/text-search'
 import { LspManager } from './lsp/manager'
 import { AgentError, AgentService } from './agent/session'
-import { AccountService } from './agent/accounts'
+import { AccountService, type AccountDevHooks } from './agent/accounts'
 import { validatePromptImages } from './agent/images'
 import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentExecutionSettings, AgentRunLimits, AgentPromptOptions, AgentEditorState } from '../shared/agent-types'
 import { detectProjectCommands } from './agent/process-tools'
@@ -31,6 +32,7 @@ import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
 import { IndexSourceStore } from './index-sources'
 import { runSemanticJob } from './ai/semantic-runner'
+import { SemanticUsageStore } from './ai/semantic-usage'
 import { directTransport, piComplete, selectedModelLabel } from './ai/semantic-models'
 import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
@@ -38,6 +40,8 @@ import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
 import { ensureTasksFile, listTasks, resolveTask } from './tasks'
+import { createTaskSigner, taskContentKey } from './tasks/signature'
+import { UserError } from './user-error'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
 import { gitApplyHunk, gitHunks } from './git/hunks'
@@ -58,6 +62,8 @@ let agents: AgentRouter | null = null
 let geminiConnection: GeminiConnectionManager | null = null
 let editors: EditorStateRegistry | null = null
 let terminals: TerminalManager | null = null
+/** Khoá ký task sống theo phiên app: task renderer gửi lại phải do chính main cấp (REV-13). */
+const taskSigner = createTaskSigner(randomBytes(32))
 let debugManager: DebugManager | null = null
 let collab: CollabHub | null = null
 
@@ -147,13 +153,20 @@ const cancelPendingAuthPrompts = (): void => {
 }
 
 /** Tạo một lần; mỗi handler chờ nó. `ask` giữ cầu nối prompt OAuth ↔ renderer. */
-const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promise<AccountService> =>
+const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHooks?: AccountDevHooks): Promise<AccountService> =>
   (accountsPromise ??= AccountService.create({
     dataDir,
     prefsFile: prefsFile(),
     secrets: new SecretStore(join(app.getPath('userData'), 'ai-key.json'), secretBox),
     openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
-    notify: (event: AuthEventView) => getWindow()?.webContents.send('auth:login-event', event),
+    devHooks,
+    notify: (event: AuthEventView) => {
+      // Chỉ sự kiện của luồng đăng nhập: message 'info' của pi hiện ở loginEvent, không thành toast.
+      getWindow()?.webContents.send('auth:login-event', event)
+    },
+    // Thông báo sau Đăng xuất (ngoài luồng đăng nhập): kênh riêng để Cài đặt hiện toast dù loginPending=false.
+    notice: (message: string) => getWindow()?.webContents.send('auth:notice', { message }),
+    modelsChanged: (providerId: string) => getWindow()?.webContents.send('auth:models-changed', { providerId }),
     ask: (view: AuthPromptView) => new Promise<string | null>((resolve) => {
       pendingPrompts.set(view.id, resolve)
       getWindow()?.webContents.send('auth:login-prompt', view)
@@ -174,7 +187,8 @@ export function registerIpc(
   getHandle: () => EngineHandle | null,
   getWindow: () => BrowserWindow | null,
   getCommand: () => EngineCommand,
-  dataDir: string
+  dataDir: string,
+  devHooks?: AccountDevHooks
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
@@ -320,7 +334,22 @@ export function registerIpc(
     exit: (id, code) => getWindow()?.webContents.send('terminal:event', { id, type: 'exit', code })
   })
   const term = terminals
-  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => term.create(await rootOf(pid), Number(cols), Number(rows), task))
+  // REV-13: task chỉ được chạy khi chính main ký — và main chỉ ký task khai trong tệp của dự án
+  // (`tasks:resolve`). Chữ ký gắn projectId + root nên không replay sang dự án khác.
+  // Đây là rào chắn cho *task*, không phải sandbox: terminal không task vẫn mở shell của người dùng.
+  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => {
+    const root = await rootOf(pid)
+    let approved: TaskDefinition | undefined
+    if (task !== undefined) {
+      validateTask(task)
+      if (!taskSigner.verify({ projectId: pid, root }, task)) {
+        throw new UserError('unapproved_task', 'Task không do NexGraph cấp, hãy chọn lại trong danh sách tác vụ.')
+      }
+      // Chỉ chuyển các trường đã ký; bỏ mọi thuộc tính lạ renderer gắn thêm.
+      approved = { label: task.label, command: task.command, type: task.type, args: task.args, cwd: task.cwd, env: task.env }
+    }
+    return term.create(root, Number(cols), Number(rows), approved)
+  })
   on('terminal:write', async (id: number, data: string) => { if (typeof data === 'string') term.write(Number(id), data) })
   on('terminal:resize', async (id: number, cols: number, rows: number) => term.resize(Number(id), Number(cols), Number(rows)))
   on('terminal:kill', async (id: number) => term.kill(Number(id)))
@@ -332,7 +361,12 @@ export function registerIpc(
     if (!context || typeof context !== 'object' ||
       (context.file !== undefined && typeof context.file !== 'string') ||
       (context.line !== undefined && (!Number.isInteger(context.line) || context.line < 1))) throw new FsError('bad_param', 'Ngữ cảnh task không hợp lệ')
-    return resolveTask(await rootOf(pid), task, context)
+    const root = await rootOf(pid)
+    // Main tự đọc task của đúng dự án rồi so nội dung: renderer gửi task tự chế (command/args/env
+    // tuỳ ý, lệnh gõ tay, hay task của dự án khác) không xin được chữ ký. Dùng bản của main để ký.
+    const declared = (await listTasks(root)).find((candidate) => taskContentKey(candidate) === taskContentKey(task))
+    if (!declared) throw new UserError('unapproved_task', 'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.')
+    return taskSigner.sign({ projectId: pid, root }, resolveTask(root, declared, context))
   })
   on('git:status', async (pid: string) => gitStatus(await rootOf(pid)))
   on('git:stage', async (pid: string, files: string[]) => gitStage(await rootOf(pid), files))
@@ -528,7 +562,7 @@ export function registerIpc(
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
 
   const win = (): BrowserWindow | null => getWindow()
-  const acc = (): Promise<AccountService> => accounts(win, dataDir)
+  const acc = (): Promise<AccountService> => accounts(win, dataDir, devHooks)
   // A local connection ID cannot verify a shared native Google account after restart.
   // Keep history local until the user explicitly checks and activates the connection again.
   const startupPrefs = readJson(prefsFile())
@@ -872,6 +906,7 @@ export function registerIpc(
   on('prs:detail', (pid: string, n: number) => api().prDetail(pid, n))
   // Phân tích ngữ nghĩa bằng AI (W9). Mặc định tắt theo dự án; key chỉ đọc ở đây và chỉ đi xuống engine ở đường B.
   const semanticRuns = new Map<string, AbortController>()
+  const semanticUsage = new SemanticUsageStore()
   on('semantic:get-settings', (pid: string) => api().aiSettings(pid))
   on('semantic:set-settings', async (pid: string, settings: ProjectAiSettings) => {
     await rootOf(pid)
@@ -906,16 +941,25 @@ export function registerIpc(
     if (!local && transport.kind === 'app') {
       const ac = new AbortController()
       semanticRuns.set(jobId, ac)
+      const used = { input: 0, output: 0 }
       void runSemanticJob(jobId, {
         jobState: async (id) => (await api().getJob(id)).state,
         next: (id) => api().llmNext(id),
         answer: (id, chunkId, body) => api().llmAnswer(id, chunkId, body)
-      }, piComplete(a), { signal: ac.signal, budget: max })
+      }, piComplete(a), {
+        signal: ac.signal, budget: max,
+        onUsage: (usage) => { used.input += usage.inputTokens; used.output += usage.outputTokens }
+      })
         .catch((e) => console.warn(`[semantic] ${jobId}: ${e instanceof Error ? e.message : String(e)}`))
-        .finally(() => semanticRuns.delete(jobId))
+        .finally(() => {
+          semanticUsage.set(jobId, used.input, used.output)
+          semanticRuns.delete(jobId)
+        })
     }
     return { jobId }
   })
+  // Chờ main ghi usage xong: engine có thể báo job done trước khi .finally của runSemanticJob chạy.
+  on('semantic:usage', async (jobId: string) => semanticUsage.wait(jobId))
   on('semantic:cancel', async (jobId: string) => {
     semanticRuns.get(jobId)?.abort()
     await api().cancelJob(jobId)

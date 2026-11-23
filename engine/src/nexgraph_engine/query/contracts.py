@@ -114,8 +114,12 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
         lines = (snapshot if snapshot is not None else path.read_bytes()).decode("utf-8", errors="replace").splitlines()
     last = min(len(lines), end if end is not None else first + MAX_CODE_LINES - 1)
     digest = hashlib.sha256(snapshot).hexdigest() if snapshot is not None else sha256_file(path)
+    # REV-21: chỉ cắt ngầm khi người đọc không truyền `end` mà tệp dài hơn giới hạn; xin dải cụ thể thì
+    # trả đúng dải đó, không tính là cắt (MCP/UI đọc cả tệp mới là chỗ trước đây mất dòng mà không báo).
+    truncated = end is None and last < len(lines)
     return {"file": file, "start": first, "end": last, "text": "\n".join(lines[first - 1:last]),
-            "language": language_of(file) or record.language, "stale": digest != record.sha256}
+            "language": language_of(file) or record.language, "stale": digest != record.sha256,
+            "truncated": truncated}
 
 
 def search_json(store: GraphStore, q: str, kinds, limit: int) -> list[dict]:

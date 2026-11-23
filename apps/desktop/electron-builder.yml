@@ -21,6 +21,16 @@ asarUnpack:
 extraResources:
   - from: ../../engine/dist/nexgraph-engine
     to: engine
+# Electron fuses (REV-17): đóng các đường bật lại Node/gỡ lỗi và buộc nạp app từ asar.
+# runAsNode giữ bật vì language server và debug adapter chạy bằng chính Node của Electron
+# (spawn(process.execPath, …, { ELECTRON_RUN_AS_NODE: '1' })). Tắt nó sẽ làm LSP/debug chết trong bản đóng gói.
+electronFuses:
+  runAsNode: true
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
 mac:
   target: dmg
   # Ký ad-hoc cả gói: không có chứng chỉ nhà phát triển nhưng chữ ký hợp lệ, nên macOS cho mở qua

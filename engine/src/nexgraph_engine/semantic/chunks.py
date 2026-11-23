@@ -9,6 +9,7 @@ from pathlib import Path
 
 from graphify.detect import _is_sensitive
 from graphify.llm import _IMAGE_MEDIA_TYPES, _IMAGE_TOKEN_ESTIMATE, _MAX_IMAGE_BYTES, _estimate_prompt_tokens
+from nexgraph_engine.docs.secrets import redact_doc_secrets
 
 from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.query.source_policy import SourcePolicy
@@ -97,6 +98,8 @@ def _doc_units(store: GraphStore, src: Sources) -> list[tuple[str, str]]:
                 text = doc_text(file_path(src, rel), language)
         except (OSError, ValueError):
             continue
+        # Che secret trước khi vào prompt/cache: tài liệu là chỗ hay dán token, key (GFY-08).
+        text = redact_doc_secrets(text)
         if text.strip():
             units.append((rel, text))
     return units

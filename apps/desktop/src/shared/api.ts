@@ -70,7 +70,16 @@ export type LspSignatureHelp = {
 export type LspCodeAction = { title: string; kind?: string; edit: LspWorkspaceEdit }
 export type LspDiagnosticsEvent = { projectId: string; file: string; diagnostics: LspDiagnostic[] }
 export type TerminalEvent = { id: number; type: 'data'; data: string } | { id: number; type: 'exit'; code: number }
-export type TaskDefinition = { label: string; command: string; args?: string[]; type?: 'shell' | 'process'; cwd?: string; env?: Record<string, string> }
+export type TaskDefinition = {
+  label: string
+  command: string
+  args?: string[]
+  type?: 'shell' | 'process'
+  cwd?: string
+  env?: Record<string, string>
+  /** Chữ ký do main cấp trong `tasks:resolve`; renderer chỉ chuyển tiếp, không tự đặt. */
+  signature?: string
+}
 /** `status`: chữ trạng thái của `git status --porcelain` (M, A, D, R, C, U, ? cho tệp mới chưa theo dõi). */
 export type GitFileChange = { path: string; status: string; from?: string; added?: number | null; deleted?: number | null }
 export type GitStatus = {
@@ -359,6 +368,10 @@ export interface NexGraphApi {
     connectLocal(baseUrl: string, modelId: string): Promise<void>
     onEvent(cb: (e: AuthEventView) => void): () => void
     onPrompt(cb: (p: AuthPromptView) => void): () => void
+    /** Thông báo không thuộc luồng đăng nhập (ví dụ Đăng xuất không nạp lại được API key). */
+    onNotice(cb: (n: { message: string }) => void): () => void
+    /** Catalog model đổi ở main (refresh nền xong): renderer tải lại danh sách model. */
+    onModelsChanged(cb: (e: { providerId: string }) => void): () => void
   }
   /** Phiên agent lưu theo dự án, tài khoản và đích nhận dữ liệu. */
   agent: {
@@ -463,6 +476,8 @@ export interface NexGraphApi {
     estimate(projectId: string, target: SemanticTarget, noCache?: boolean): Promise<SemanticEstimate>
     /** Main chọn đường theo cấu hình dự án. Đường A: main tự kéo khối và gọi model đang chọn. Đường B: main gửi key xuống engine. */
     start(projectId: string, target: SemanticTarget, budget?: number, noCache?: boolean): Promise<{ jobId: string }>
+    /** Token usage đường A do main đếm (engine chỉ cộng usage cho đường B); null khi job chưa chạy xong hoặc chạy đường B. */
+    usage(jobId: string): Promise<{ input_tokens: number; output_tokens: number } | null>
     cancel(jobId: string): Promise<void>
   }
 }

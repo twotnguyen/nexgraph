@@ -1,6 +1,6 @@
 # Cài đặt và chạy NexGraph
 
-Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.1.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản bàn giao](release/README.md). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng.
+Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.2.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản phát hành](release/README.md). Cách chạy test và các nhóm test opt-in ở [hướng dẫn kiểm thử](testing.md). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng.
 
 ## Chạy Electron từ checkout sạch
 
@@ -64,7 +64,7 @@ Trong khung trợ lý, chọn **Kết nối**, chọn nhà cung cấp và phươ
 
 ## Git hook cập nhật sau commit
 
-Trong **Tổng quan dự án → Cập nhật sau mỗi commit**, NexGraph thêm khối giữa `# >>> nexgraph >>>` và `# <<< nexgraph <<<` vào `.git/hooks/post-commit`; khối gọi `nexgraph-engine refresh` ở nền. Có thể gỡ qua giao diện hoặc xóa đúng khối đó bằng tay. Hiện luồng này không hỗ trợ `core.hooksPath` và Git worktree có `.git` là tệp. Hook có sẵn cần shebang shell tương thích (`sh`, `bash`, `dash`, `ksh` hoặc `zsh`). NexGraph giữ nguyên hook có interpreter khác.
+Trong **Tổng quan dự án → Cập nhật sau mỗi commit**, NexGraph thêm khối giữa `# >>> nexgraph >>>` và `# <<< nexgraph <<<` vào thư mục hook Git thật sự có hiệu lực: tôn trọng `core.hooksPath` (kể cả Husky 9 với `<hooksPath>/_`), worktree có `.git` là tệp và dự án nằm trong thư mục con. Khối gọi `nexgraph-engine refresh` ở nền. Có thể gỡ qua giao diện hoặc xóa đúng khối đó bằng tay; khi nhiều worktree dùng chung thư mục hook, NexGraph chỉ gỡ khối của chính dự án đó. `core.hooksPath` trỏ **ra ngoài kho** thì NexGraph từ chối ghi (`unsupported_hook_path`, trạng thái `outside_repo`). Hook có sẵn cần shebang shell tương thích (`sh`, `bash`, `dash`, `ksh` hoặc `zsh`). NexGraph giữ nguyên hook có interpreter khác. [Mã hook phía app](../apps/desktop/src/main/git-hook.ts) · [Tương đương graphify](../engine/src/graphify/hooks.py)
 
 ## Tích hợp trợ lý AI ngoài NexGraph
 

@@ -155,3 +155,125 @@ def test_export_route_unexpected_error_is_json(api, copy_fixture, tmp_path, monk
     monkeypatch.setattr(routes, "export_graph", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     r = api.post(f"/v1/projects/{pid}/export", json={"format": "svg", "scope": {"kind": "all"}, "out_dir": str(tmp_path)})
     assert r.status_code == 500 and r.json()["error"]["code"] == "export_failed" and "boom" in r.json()["error"]["message"]
+
+
+def test_export_twice_does_not_overwrite_the_first_file(index_project, copy_fixture, tmp_path):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    first = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    first.write_bytes(b"nguoi dung da sua")
+    second = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    assert second != first and second.is_file() and second.stat().st_size > 0
+    assert first.read_bytes() == b"nguoi dung da sua"  # không ghi đè im lặng
+
+
+def test_directory_export_twice_keeps_both_dirs(index_project, copy_fixture, tmp_path):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    first = Path(export_graph(store, "wiki", Scope(), tmp_path, "app").files[0])
+    second = Path(export_graph(store, "wiki", Scope(), tmp_path, "app").files[0])
+    assert first != second and first.is_dir() and second.is_dir()
+    assert any(first.iterdir()) and any(second.iterdir())
+
+
+def test_failed_export_leaves_no_placeholder_file(index_project, copy_fixture, tmp_path, monkeypatch):
+    from nexgraph_engine.export import run as run_mod
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    monkeypatch.setattr(run_mod, "_write", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("hỏng")))
+    with pytest.raises(RuntimeError):
+        run_mod.export_graph(store, "json", Scope(), tmp_path, "py_mini app")
+    assert [p.name for p in tmp_path.iterdir() if p.suffix == ".json" or p.name.startswith(".")] == []
+
+
+_FMT_TARGETS = [
+    ("html", "py_mini app-graph.html"), ("callflow_html", "py_mini app-callflow.html"),
+    ("obsidian", "py_mini app-obsidian"), ("wiki", "py_mini app-wiki"), ("svg", "py_mini app-graph.svg"),
+    ("graphml", "py_mini app.graphml"), ("cypher", "py_mini app-cypher.txt"), ("json", "py_mini app-graph.json"),
+    ("markdown", "py_mini app-GRAPH_REPORT.md")]
+
+
+def _no_hard_links(monkeypatch):
+    """Ổ FAT32/exFAT/SMB: `os.link` ném ENOTSUP (đo được trên ổ FAT thật, xem rereview-36)."""
+    import errno
+    import os
+
+    def unsupported(src, dst, *args, **kwargs):
+        raise OSError(errno.ENOTSUP, "Operation not supported", str(src), None, str(dst))
+
+    monkeypatch.setattr(os, "link", unsupported)
+
+
+@pytest.mark.parametrize("fmt,expect", _FMT_TARGETS)
+def test_export_each_format_on_filesystem_without_hard_links(copy_fixture, index_project, tmp_path, monkeypatch, fmt, expect):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    _no_hard_links(monkeypatch)
+    r = export_graph(store, fmt, Scope(), tmp_path, "py_mini app")
+    target = tmp_path / expect
+    assert str(target) in r.files and target.exists()
+    assert (target.is_dir() and any(target.iterdir())) or (target.is_file() and target.stat().st_size > 0)
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".") and p.name.endswith(".tmp")] == []
+
+
+def test_export_without_hard_links_still_does_not_overwrite(copy_fixture, index_project, tmp_path, monkeypatch):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    _no_hard_links(monkeypatch)
+    first = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    first.write_bytes(b"nguoi dung da sua")
+    second = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    assert second.name == "py_mini app-graph-2.json"
+    assert first.read_bytes() == b"nguoi dung da sua" and second.stat().st_size > 0
+
+
+def test_hard_kill_during_write_leaves_no_destination_file(copy_fixture, index_project, tmp_path):
+    """SIGKILL giữa lúc ghi (mất điện): tên đích chưa được tạo, không có tệp dở 0 byte/dở dang.
+
+    Mô phỏng đúng lỗi thật của head 4705df3: tên đích được giữ chỗ rồi ghi trực tiếp vào đó, kill cứng
+    để lại `py_mini app-graph.json` dở (reviewer đo 12 byte). Trên code hiện tại chữ dở chỉ nằm ở tệp tạm ẩn.
+    """
+    import signal
+    import subprocess
+    import sys
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    db = store.conn.execute("PRAGMA database_list").fetchone()[2]
+    out = tmp_path / "out"
+    out.mkdir()
+    # POSIX: SIGKILL thật; Windows không có SIGKILL nên dùng os._exit (cũng bỏ qua finally/atexit).
+    kill = "os.kill(os.getpid(), signal.SIGKILL)" if hasattr(signal, "SIGKILL") else "os._exit(9)"
+    expected = -signal.SIGKILL if hasattr(signal, "SIGKILL") else 9
+    script = (
+        "import os, signal, sqlite3\n"
+        "from pathlib import Path\n"
+        "from nexgraph_engine.bridge.to_nx import Scope\n"
+        "from nexgraph_engine.store.graph_store import GraphStore\n"
+        "import nexgraph_engine.export.run as run\n"
+        "\n"
+        "def half_then_kill(store, fmt, scope, target, project_name, gx):\n"
+        "    with open(target, 'wb') as fh:\n"
+        "        fh.write(b'x' * 4096)\n"
+        "        fh.flush()\n"
+        "        os.fsync(fh.fileno())\n"
+        f"        {kill}\n"
+        "\n"
+        "run._write = half_then_kill\n"
+        f"conn = sqlite3.connect({db!r})\n"
+        f"run.export_graph(GraphStore(conn), 'json', Scope(), Path({str(out)!r}), 'py_mini app')\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+    assert proc.returncode == expected, (proc.returncode, proc.stderr[-800:])
+    assert [p.name for p in out.iterdir() if not p.name.startswith(".")] == []
+
+
+def test_export_cleans_stale_temp_files_left_by_killed_runs(copy_fixture, index_project, tmp_path):
+    """Tệp `.{tên}.*.tmp` còn lại do lần xuất bị kill phải được dọn khi xuất lần sau vào cùng thư mục."""
+    import os
+    import time
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    stale = tmp_path / ".py_mini app-graph.json.deadbeef.tmp"
+    stale.write_bytes(b"rac cua lan xuat bi kill")
+    os.utime(stale, (time.time() - 7200, time.time() - 7200))  # cũ hơn 1 giờ
+    fresh = tmp_path / ".py_mini app-graph.json.cafebabe.tmp"
+    fresh.write_bytes(b"dang ghi do")
+    export_graph(store, "json", Scope(), tmp_path, "py_mini app")
+    assert not stale.exists()
+    assert fresh.exists(), "tệp tạm mới (< 1 giờ) có thể của tiến trình khác đang ghi, không được xoá"

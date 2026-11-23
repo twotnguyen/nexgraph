@@ -17,9 +17,16 @@ from graphify.extractors.json_config import _CONFIG_JSON_NAMES
 from nexgraph_engine.docs import media as _media
 
 # Thư mục luôn bỏ (spec §5.5); `.nexgraph/` là dữ liệu của chính NexGraph.
-SKIP_DIRS = frozenset({".git", ".nexgraph", "build", ".dart_tool", "node_modules"})
+# `.git`/`.nexgraph` không bao giờ lập chỉ mục; các mục còn lại (và thư mục ẩn nói chung) chỉ bị bỏ mặc định —
+# người dùng chọn rõ một package trong đó (monorepo) thì vẫn đi vào.
+ALWAYS_SKIP_DIRS = frozenset({".git", ".nexgraph"})
+SKIP_DIRS = frozenset({"build", ".dart_tool", "node_modules", "dist", "__pycache__", ".venv", "venv",
+                       "vendor", "third_party"})
 GENERATED_SUFFIXES = (".g.dart", ".freezed.dart", ".gr.dart", ".config.dart", ".mocks.dart",
                       "_generated.dart", ".pb.dart")
+# Tệp đã rút gọn/nhúng: không có cấu trúc đọc được, chỉ làm phình đồ thị (spec §5.5).
+MINIFIED_SUFFIXES = (".min.js", ".min.mjs", ".min.cjs", ".min.css", ".bundle.js", ".bundle.mjs",
+                     ".bundle.css", "-min.js", "-min.css")
 
 # Tên cố định cho các ngôn ngữ có từ trước W2 (giữ dữ liệu cũ). Ngôn ngữ khác lấy từ extractor của graphify.
 LANGUAGE_BY_EXT = {
@@ -191,13 +198,19 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                 continue  # không theo symlink (tránh vòng lặp và đọc ngoài project); tên có \ vi phạm RB3
             rel = f"{rel_dir}/{entry.name}" if rel_dir else entry.name
             if entry.is_dir(follow_symlinks=False):
-                if entry.name in SKIP_DIRS or _ignored(rel + "/", rules):
+                selected = subdir is not None and (inside(rel) or on_path_to_subdir(rel))
+                if entry.name in ALWAYS_SKIP_DIRS:
                     continue
-                if inside(rel) or on_path_to_subdir(rel):  # chỉ đi xuống nhánh dẫn tới thư mục con
+                if not selected and (entry.name in SKIP_DIRS or entry.name.startswith(".")):
+                    continue  # mặc định bỏ dist/__pycache__/.venv và thư mục ẩn, trừ nhánh người dùng đã chọn
+                if _ignored(rel + "/", rules):
+                    continue
+                if subdir is None or selected:  # chỉ đi xuống nhánh dẫn tới thư mục con
                     walk(Path(entry.path), rel, rules)
             elif entry.is_file(follow_symlinks=False):
                 language = _language(root, rel, include_docs, include_media, language_map, include_config)
-                if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES) or _ignored(rel, rules):
+                if (not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES)
+                        or entry.name.lower().endswith(MINIFIED_SUFFIXES) or _ignored(rel, rules)):
                     continue
                 st = entry.stat(follow_symlinks=False)
                 doc = language in DOC_LANGUAGES

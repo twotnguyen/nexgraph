@@ -54,18 +54,21 @@ def _god_nodes(store: GraphStore, bg: BridgeGraph) -> list[dict]:
     return out
 
 
-def _benchmark(bg: BridgeGraph) -> dict | None:
+def _benchmark(bg: BridgeGraph, warnings: list[str]) -> dict | None:
     from graphify.benchmark import run_benchmark
     with tempfile.TemporaryDirectory(prefix="nexgraph-bench-") as d:
         path = Path(d) / "graph.json"
         try:
             write_graph_json(bg, path)
             r = run_benchmark(graph_path=str(path))
-        except Exception:  # benchmark chỉ là mục phụ của báo cáo
+        except Exception as exc:  # benchmark chỉ là mục phụ của báo cáo
             logger.warning("Không chạy được benchmark của báo cáo", exc_info=True)
+            # Mục benchmark biến mất khỏi báo cáo thì người dùng phải biết vì sao (ENG-07/M3).
+            warnings.append(f"Không chạy được benchmark của báo cáo ({type(exc).__name__}: {exc})")
             return None
     if "error" in r:
         logger.warning("Benchmark trả lỗi: %s", str(r["error"])[:300])
+        warnings.append(f"Benchmark trả lỗi: {str(r['error'])[:300]}")
         return None
     return {"corpus_tokens": r["corpus_tokens"], "graph_tokens": r["avg_query_tokens"], "reduction": r["reduction_ratio"]}
 
@@ -81,8 +84,10 @@ def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = Non
                   for s in surprising_connections(bg.G, bg.communities, top_n=5)]
     questions = [{"question": q["question"], "why": q.get("why", "")}
                  for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)]
+    warnings: list[str] = []
     return {"god_nodes": _god_nodes(store, bg), "communities": communities, "surprising": surprising,
-            "questions": questions, "benchmark": _benchmark(bg), "truncated": bg.truncated,
+            "questions": questions, "benchmark": _benchmark(bg, warnings), "truncated": bg.truncated,
+            "warnings": warnings,
             "cycles": import_cycles(store.conn), "freshness": freshness(store, root, sources_dir), "gaps": _gaps(store)}
 
 
