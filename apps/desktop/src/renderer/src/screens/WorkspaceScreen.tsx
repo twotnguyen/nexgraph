@@ -32,6 +32,7 @@ import { GraphCanvas } from '../components/graph/GraphCanvas'
 import type { HighlightKind } from '../components/graph/kindStyle'
 import { NodeContextMenu } from '../components/graph/NodeContextMenu'
 import { NodeInspector } from '../components/graph/NodeInspector'
+import { isVirtualSource } from '../components/graph/virtualSource'
 import { ReportView } from '../components/report/ReportView'
 import { FlowsView } from '../components/flows/FlowsView'
 import { AgentPanel } from '../components/agent/AgentPanel'
@@ -457,6 +458,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }
 
   const openCode = (file: string, line = 1, lineEnd?: number, column?: number, record = true) => {
+    // MIN-54: node nguồn ảo (`nguon://cargo`, `nguon://scip`…) không có tệp trên đĩa. Mọi surface
+    // (inspector, luồng, vùng ảnh hưởng, trích dẫn…) đều đi qua đây, nên chặn một chỗ thay vì mở tab chết.
+    if (isVirtualSource(file)) return setFeedback(msg('Nguồn ảo — chọn node trên đồ thị để xem chi tiết.'))
     // Các lệnh đi tới/quay lại chỉ di chuyển con trỏ trong lịch sử, không thêm mục mới.
     if (record) recordNavigation(project.project_id, { file, line, column: column ?? 1 })
     // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.

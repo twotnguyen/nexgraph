@@ -5,6 +5,7 @@ import { vi, tr } from '../../strings'
 import { msgText, type Message } from '../../state/messages'
 import { errorMsg } from '../../state/errorText'
 import { kindStyle } from '../graph/kindStyle'
+import { isVirtualSource } from '../graph/virtualSource'
 
 interface Props {
   projectId: string
@@ -20,8 +21,6 @@ interface Props {
 const DEBOUNCE_MS = 200
 const LIMIT = 30
 
-/** Nguồn ảo (`nguon://cargo`, `nguon://scip`…) không phải tệp trên đĩa: mở editor sẽ ra tab chết. */
-const isVirtualSource = (file: string | null | undefined): boolean => !!file && file.includes('://')
 
 function NodeButton({ node, onOpen, onOpenCode }: { node: GraphNode; onOpen: (n: GraphNode) => void; onOpenCode?: Props['onOpenCode'] }) {
   const source = node.file && (node.line_start ? `${node.file}:${node.line_start}` : node.file)

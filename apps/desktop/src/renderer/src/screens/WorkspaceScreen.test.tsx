@@ -1047,6 +1047,18 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     expect(onOpenProjects).toHaveBeenCalledTimes(1)
   })
 
+  it('MIN-54: đi tới nguồn ảo bằng lịch sử không mở tab chết mà báo rõ', async () => {
+    installNexgraph()
+    render(<WorkspaceScreen project={project()} />)
+    // Mọi surface (inspector, flow, impact…) đều gọi chung openCode; nguồn ảo không có tệp trên đĩa.
+    recordNavigation('p1', { file: 'a.ts', line: 1, column: 1 })
+    recordNavigation('p1', { file: 'nguon://cargo:1', line: 1, column: 1 })
+    act(() => { expect(runCommand('navigation.back')).toBe(true) })
+    act(() => { expect(runCommand('navigation.forward')).toBe(true) })
+    expect(screen.queryByRole('tab', { name: /cargo/ })).toBeNull()
+    expect(await screen.findByText(/Nguồn ảo/)).toBeInTheDocument()
+  })
+
   it('BUG-UI-01: chia đôi editor ngay từ thẻ xem trước vừa bấm trong cây', async () => {
     const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
     installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })

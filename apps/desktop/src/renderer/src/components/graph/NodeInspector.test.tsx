@@ -58,6 +58,13 @@ describe('NodeInspector', () => {
     render(<NodeInspector node={target} projectId="p1" />)
     expect(screen.queryByRole('button', { name: 'Đọc mục' })).not.toBeInTheDocument()
   })
+
+  it('node nguồn ảo (nguon://) không có nút Mở mã — không mở tab chết (MIN-54)', () => {
+    const pkg = gnode('nguon://cargo:1::app#package', 'app', { kind: 'package', file: 'nguon://cargo:1', language: 'rust' })
+    render(<NodeInspector node={pkg} onOpenCode={vi.fn()} />)
+    expect(screen.getByRole('heading', { name: 'app' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mở mã' })).not.toBeInTheDocument()
+  })
 })
 
 describe('NodeInspector — kết quả AI (W9)', () => {

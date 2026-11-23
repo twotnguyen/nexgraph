@@ -1506,6 +1506,7 @@ export const uiEn: Record<string, string> = {
   // WorkspaceScreen: lệnh E3 (dấu trang, nhiều đoạn mã)
   'Không có dấu trang nào trong dự án này.': 'No bookmarks in this project.',
   'Engine chưa sẵn sàng.': 'The engine is not ready yet.',
+  'Nguồn ảo — chọn node trên đồ thị để xem chi tiết.': 'Virtual source — select the node on the graph to see details.',
   'Dấu trang': 'Bookmarks',
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.
