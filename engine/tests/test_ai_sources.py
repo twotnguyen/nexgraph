@@ -13,6 +13,75 @@ MODEL = {"X-NexGraph-Audience": "model"}
 FAKE_SECRET = "FAKE_GROUP6_PRIVATE_SENTINEL"
 
 
+def test_secret_shaped_document_names_are_blocked_without_exemption(tmp_path):
+    """Quyết định lead (re-review #52 vòng 3): che bằng regex không bao giờ kín nên KHÔNG miễn theo tên tệp.
+
+    Mọi tên trông như kho bí mật — kể cả tài liệu chữ — bị loại khỏi nguồn cho model như trên `main`.
+    """
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "secret.md").write_text("x", encoding="utf-8")
+    (tmp_path / "docs" / "secrets.md").write_text("x", encoding="utf-8")
+    (tmp_path / "SECRETS.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "notes.md").write_text("x", encoding="utf-8")
+    policy = SourcePolicy(tmp_path)
+    for name in ("docs/secret.md", "docs/secrets.md", "SECRETS.txt", "secrets/notes.md"):
+        assert not policy.allows(name), name
+
+
+def test_document_and_config_names_that_look_like_secret_stores_are_blocked(tmp_path):
+    """Mọi đuôi tài liệu/cấu hình mang tên nhạy cảm đều bị loại, không có danh sách miễn theo đuôi."""
+    names = ["docs/secret.md", "docs/secrets.md", "docs/secrets.txt", "SECRETS.txt",
+             "service-account.json", "config/secrets.yaml", "config/secrets.yml", "credentials.json",
+             "docs/passwords.txt", "docs/token.md", "docs/secret.md.bak"]
+    for name in names:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+    policy = SourcePolicy(tmp_path)
+    for name in names:
+        assert not policy.allows(name), name
+
+
+CLOUD_CRED_NAMES = ["kubeconfig", "kubeconfig.yaml", "kubeconfig-prod.yaml", "sub/kubeconfig.yaml",
+                    ".kube/config", "service-account-prod.json", "service_account.yaml",
+                    "service.account.toml", "prod-sa-key.json", "gcp-nexgraph.json"]
+
+
+def test_cloud_credential_names_are_blocked(tmp_path):
+    """Review #52 Important 3: kubeconfig, service-account*, *-sa-key*.json, gcp-*.json là khoá thật."""
+    for name in CLOUD_CRED_NAMES:
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x", encoding="utf-8")
+    policy = SourcePolicy(tmp_path)
+    for name in CLOUD_CRED_NAMES:
+        assert not policy.allows(name), name
+
+
+def test_code_route_refuses_cloud_credentials_for_model(api, tmp_path):
+    """Review #52 Important 3: model không đọc được kubeconfig/service-account qua /code (403 ổn định)."""
+    token = "Kube7Tok9" + "Qw3Secret"
+    root = tmp_path / "cloud creds"
+    (root / ".kube").mkdir(parents=True)
+    files = {"kubeconfig.yaml": f"users:\n- token: {token}\n",
+             ".kube/config": f"users:\n- token: {token}\n",
+             "service-account-prod.json": '{"private_key": "' + token + '"}'}
+    for name, body in files.items():
+        (root / name).write_text(body, encoding="utf-8")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    server = build_server(root, tmp_path / "appdata")
+    for name in files:
+        got = api.get(f"/v1/projects/{pid}/code", params={"file": name}, headers=MODEL)
+        assert got.status_code == 403, (name, got.text)
+        assert got.json()["error"]["code"] == "protected_source", name
+        assert token not in got.text, name
+        blocked = call(server, "read_code", {"file": name})
+        assert blocked.isError is True, name
+        assert token not in blocked.content[0].text, name
+
+
 def test_ai_sources_obey_parent_nested_and_published_exclusions(tmp_path):
     package = tmp_path / "pkg"
     package.mkdir()

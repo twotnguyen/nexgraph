@@ -394,6 +394,127 @@ def test_get_section_tool(api, tmp_path):
     assert call(server, "get_section", {"node_id": "README.md#file"}).isError is True
 
 
+def test_get_section_refuses_secret_named_document(api, tmp_path):
+    """Quyết định lead (re-review #52 vòng 3): MCP là đường tới model nên tài liệu tên nhạy cảm bị từ chối."""
+    token = "sk-" + "live-" + "A3TEST" + "1234567890"
+    root = tmp_path / "docs secret"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secret.md").write_text(
+        f"# Bí mật\n\n## Cấu hình\n\nĐặt `api_key={token}` trong tệp.\n", encoding="utf-8")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "keys.md").write_text("# Khoá\n\n## Ghi chú\n\nkhông chia sẻ.\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    import time
+    job = None
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    server = build_server(root, tmp_path / "appdata")
+    for node in ("docs/secret.md::Cấu hình#document", "secrets/keys.md::Ghi chú#document"):
+        blocked = call(server, "get_section", {"node_id": node})
+        assert blocked.isError is True, node
+        assert "loại khỏi ngữ cảnh AI" in blocked.content[0].text, node
+        assert token not in blocked.content[0].text, node
+
+
+def test_get_section_masks_secret_key_env_lines(api, tmp_path):
+    """Review #52 Important 1: tài liệu tên TRUNG TÍNH chứa `SECRET_KEY=…` phải trả bản che qua MCP get_section."""
+    secret_key = "django-insecure-" + "e6b" + "0123456789abcdef"
+    key_base = "9f8e7d6c5b4a3210" + "0f1e2d3c4b5a6978"
+    env_lines = ["SECRET_" + "KEY=" + secret_key, "SECRET_" + "KEY_BASE=" + key_base]
+    root = tmp_path / "secret key proj"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "env-notes.md").write_text(
+        "# Khoá\n\n## Production\n\n" + "\n".join(env_lines) + "\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    job = None
+    import time
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    server = build_server(root, tmp_path / "appdata")
+    out = payload(call(server, "get_section", {"node_id": "docs/env-notes.md::Production#document"}))
+    assert out["text"].startswith("## Production")
+    assert secret_key not in out["text"] and key_base not in out["text"]
+    assert "[redacted]" in out["text"]
+
+
+DOC_FORMS = {
+    "json": '{"secret_key": "Json4Pq9Xy2Lk6Q"}',
+    "quote": '"ENCRYPTION_KEY=Quote4Pq9Xy2"',
+    "prose": "Đặt `MASTER_KEY=Prose8Kx2Rt5` trong tệp.",
+    "bullet": "- `SECRET_KEY=Dash4Pq9Xy2Lk6Q`",
+    "bracket": "[SIGNING_KEY=Bracket4Pq9Xy2]",
+    "export": "export API_KEY=Export8Kx2Rt5ab",
+    "yaml": "master_key: Yaml8Kx2Rt5abcd",
+    "single": "token = 'Single8Kx2Rt5'",
+}
+
+
+def _index_docs(api, root):
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    assert r.status_code == 202, r.text
+    import time
+    job = None
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    return p["project_id"]
+
+
+def test_model_document_paths_redact_all_document_forms(api, tmp_path):
+    """Review #52 Important 2: /code, /context, MCP read_code/get_context đều che tài liệu tên trung tính."""
+    root = tmp_path / "forms proj"
+    (root / "docs").mkdir(parents=True)
+    body = "# forms\n\n" + "\n\n".join(f"## {key}\n\n{line}" for key, line in DOC_FORMS.items()) + "\n"
+    (root / "docs" / "forms.md").write_text(body, encoding="utf-8")
+    pid = _index_docs(api, root)
+    server = build_server(root, tmp_path / "appdata")
+    values = list(DOC_FORMS.values())
+
+    # MCP read_code: cả tệp, đủ 8 dạng.
+    raw = payload(call(server, "read_code", {"file": "docs/forms.md"}))
+    for value in values:
+        assert value not in raw["text"], value
+    assert "[redacted]" in raw["text"]
+
+    # MCP get_context: hỏi đúng từng mục.
+    for key in DOC_FORMS:
+        pack = json.dumps(payload(call(server, "get_context", {"question": key, "budget": 4000})),
+                          ensure_ascii=False)
+        assert DOC_FORMS[key] not in pack, key
+        assert "[redacted]" in pack, key
+
+    # HTTP /code và /context với audience=model.
+    code = api.get(f"/v1/projects/{pid}/code", params={"file": "docs/forms.md"},
+                   headers={"X-NexGraph-Audience": "model"})
+    assert code.status_code == 200, code.text
+    for value in values:
+        assert value not in code.json()["text"], value
+    assert "[redacted]" in code.json()["text"]
+    for key, line in DOC_FORMS.items():
+        got = api.post(f"/v1/projects/{pid}/context", json={"question": key, "budget": 4000},
+                       headers={"X-NexGraph-Audience": "model"})
+        assert got.status_code == 200, got.text
+        assert line not in got.text and "[redacted]" in got.text, key
+
+    # Đường UI (không header audience) vẫn đọc nguyên văn: đây là tệp của người dùng, không phải ngữ cảnh model.
+    ui = api.get(f"/v1/projects/{pid}/code", params={"file": "docs/forms.md"})
+    assert all(value in ui.json()["text"] for value in values)
+
+
 LOGIN = "lib/services/auth_service.dart::AuthService.login#method"
 
 

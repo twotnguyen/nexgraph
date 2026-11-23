@@ -3,6 +3,29 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from nexgraph_engine.errors import ApiError
+
+# Mã lỗi ổn định cho các nhánh của `graphify.security.validate_url`, để desktop dịch sang tiếng Việt
+# (A3 #8). Thứ tự quan trọng: mẫu cụ thể trước mẫu chung `Blocked URL`.
+_URL_ERROR_CODES = (
+    ("Blocked URL scheme", "blocked_url_scheme"),
+    ("Blocked URL containing embedded credentials", "blocked_url_credentials"),
+    ("Blocked URL with an invalid port", "blocked_url_port"),
+    ("Blocked URL with port 0", "blocked_url_port"),
+    ("Blocked URL without a hostname", "blocked_url_host"),
+    ("Blocked cloud metadata endpoint", "blocked_cloud_metadata"),
+    ("Blocked private/internal IP", "blocked_private_ip"),
+    ("Blocked URL", "blocked_url"),
+    ("DNS resolution failed", "dns_failed"),
+)
+
+
+def url_error(exc: ValueError) -> ApiError:
+    """Đổi lỗi `validate_url` của graphify thành `ApiError` 400 kèm mã ổn định; giữ nguyên message cũ."""
+    message = str(exc)
+    code = next((code for prefix, code in _URL_ERROR_CODES if message.startswith(prefix)), "bad_url")
+    return ApiError(400, code, message)
+
 
 def sources_root(data_dir: Path | None, project_id: str | None) -> Path | None:
     """`<data_dir>/sources/<pid>/`: gốc phụ của dự án, hiện trong graph dưới dạng `sources/…`."""

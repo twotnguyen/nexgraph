@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -13,9 +14,20 @@ from nexgraph_engine.errors import ApiError
 
 MAX_MODEL_SOURCE_BYTES = 5 * 1024 * 1024
 MAX_IGNORE_BYTES = 1024 * 1024
-_BLOCKED = {".git", ".nexgraph", ".npmrc", ".netrc", ".dart_tool", "node_modules", "build"}
+_BLOCKED = {".git", ".nexgraph", ".npmrc", ".netrc", ".kube", ".dart_tool", "node_modules", "build"}
 _PREFIXES = (".env", "credentials", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa")
 _SUFFIXES = (".pem", ".key")
+# Khoá cluster/cloud: `graphify.detect._is_sensitive` bỏ qua slug nhiều từ (`service-account-prod.json`) và không
+# biết `kubeconfig`, nên policy chặn thêm theo tên (re-review #52 Important 3). `.kube/config` chặn qua `_BLOCKED`.
+_CLOUD_CREDENTIAL_NAMES = (
+    re.compile(r"^kubeconfig.*$"),                          # kubeconfig, kubeconfig.yaml, kubeconfig-prod.yaml
+    re.compile(r"^.+\.kubeconfig$"),                        # prod.kubeconfig
+    re.compile(r"^service[._-]?account.*\.(json|ya?ml|toml)$"),  # service-account-prod.json
+    re.compile(r"^.+[-_]sa[-_]key.*\.json$"),               # prod-sa-key.json, *-sa-key*.json
+    re.compile(r"^gcp-.+\.json$"),                          # gcp-nexgraph.json
+)
+# Không có miễn trừ theo tên: tài liệu `docs/secrets.md` cũng là nguồn bị loại. Che bằng regex không bao giờ kín,
+# nên nó không được làm hàng rào duy nhất cho tệp có tên nhạy cảm (quyết định lead, re-review #52 vòng 3).
 
 
 def protected_source() -> ApiError:
@@ -38,8 +50,11 @@ def safe_project_path(root: Path, name: str) -> Path:
 
 
 def _blocked_name(parts: tuple[str, ...]) -> bool:
-    return any(part in _BLOCKED or part.startswith(_PREFIXES) or part.endswith(_SUFFIXES)
-               for part in (p.lower() for p in parts))
+    for part in (p.lower() for p in parts):
+        if (part in _BLOCKED or part.startswith(_PREFIXES) or part.endswith(_SUFFIXES)
+                or any(pattern.match(part) for pattern in _CLOUD_CREDENTIAL_NAMES)):
+            return True
+    return False
 
 
 def _identity(st: os.stat_result) -> tuple[int, int, int, int]:
@@ -60,7 +75,7 @@ class SourcePolicy:
         except ValueError as exc:
             raise protected_source() from exc
         self._gitignore: dict[tuple[str, ...], GitIgnoreSpec | None] = {}
-        self._known: dict[tuple[str, bool], bool] = {}
+        self._known: dict[tuple[str, bool, bool], bool] = {}
         self._root_sensitive = any(p.lower() in _CREDENTIAL_STORE_DIRS | _AMBIGUOUS_SENSITIVE_DIRS for p in self.root.parts)
 
     def _rules(self, parent: tuple[str, ...]) -> GitIgnoreSpec | None:
@@ -90,7 +105,8 @@ class SourcePolicy:
         # Tiêu chí tệp bí mật của công cụ tham chiếu (W9 dùng khi chọn tệp gửi model). Đường dẫn tuyệt đối để đọc được
         # shebang của tệp không có đuôi; nhưng nếu chính thư mục chứa dự án mang tên như `secrets/`, `.aws/` thì xét
         # đường dẫn tương đối, kẻo mọi tệp bị chặn (tệp không đuôi khi đó mất bước đọc shebang, nghiêng về chặn).
-        if parts and not directory and _is_sensitive(Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)):
+        if parts and not directory and _is_sensitive(
+                Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)):
             return True
         # Git không đi vào thư mục đã ẩn, kể cả khi tệp con có mẫu phủ định.
         for end in range(1, len(parts) + 1):
@@ -111,8 +127,8 @@ class SourcePolicy:
         canonical = path.relative_to(self.root).parts
         try:
             directory = directory or path.is_dir()
-            if self._excluded(lexical, directory=directory) or (
-                    canonical != lexical and self._excluded(canonical, directory=directory)):
+            if (self._excluded(lexical, directory=directory) or (
+                    canonical != lexical and self._excluded(canonical, directory=directory))):
                 raise protected_source()
         except (OSError, ValueError, RuntimeError) as exc:
             raise protected_source() from exc
@@ -141,11 +157,13 @@ class SourcePolicy:
             with os.fdopen(os.open(path, flags), "rb") as stream:
                 opened = os.fstat(stream.fileno())
                 # Windows có thể báo ctime khác nhau giữa lstat và fstat của cùng tệp.
-                if _identity(opened) != _identity(before) or self.resolve(name) != path:
+                if (_identity(opened) != _identity(before)
+                        or self.resolve(name) != path):
                     raise protected_source()
                 content = stream.read(MAX_MODEL_SOURCE_BYTES + 1)
                 if (len(content) != before.st_size or not _unchanged(opened, os.fstat(stream.fileno()))
-                        or not _unchanged(before, path.lstat()) or self.resolve(name) != path):
+                        or not _unchanged(before, path.lstat())
+                        or self.resolve(name) != path):
                     raise protected_source()
                 return content
         except OSError as exc:

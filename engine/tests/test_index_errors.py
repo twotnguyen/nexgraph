@@ -4,17 +4,24 @@ Tệp không đọc được trước đây chỉ ghi vào bảng `loi_phan_tich
 Nay số tệp lỗi đi theo `ProgressEvent` cuối (thành `job.message`), và lần lập chỉ mục mà **không đọc được tệp
 nào** kết thúc ở trạng thái lỗi thay vì công bố đồ thị rỗng.
 """
+import os
 import threading
+
+import pytest
 
 from nexgraph_engine.ids import file_node_id
 from nexgraph_engine.index import indexer as indexer_module
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.indexer import ExtractedFile, Indexer, ProgressEvent, RunResult
 from nexgraph_engine.index.jobs import JobManager
+from nexgraph_engine.index.scan import scan_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import FileRec, Node
+
+unreadable_only = pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+                                     reason="chmod 000 không chặn được trên Windows/root")
 
 FILES = {
     "a.py": "def a():\n    return 1\n",
@@ -111,3 +118,66 @@ def test_job_payload_carries_the_warning_message(tmp_path, copy_fixture):
         assert job["message"] == "1 tệp không đọc được"
     finally:
         manager.shutdown()
+
+
+def _run_indexer(root, tmp_path, events):
+    store = GraphStore(open_graph_db(tmp_path / "g.db"))
+    store.init_project("p", has_git=False)
+    indexer = Indexer(store, root, on_progress=events.append, cancel=threading.Event())
+    return indexer.run(), indexer
+
+
+@unreadable_only
+def test_unreadable_directory_is_reported_not_silently_skipped(tmp_path):
+    """A1 F6: thư mục chmod 000 bị bỏ qua im lặng — phải thành cảnh báo, index vẫn xong."""
+    root = tmp_path / "src"
+    root.mkdir()
+    (root / "a.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    secret = root / "secret"
+    secret.mkdir()
+    (secret / "b.py").write_text("def b():\n    return 2\n", encoding="utf-8")
+    secret.chmod(0)
+    try:
+        events: list[ProgressEvent] = []
+        result, indexer = _run_indexer(root, tmp_path, events)
+        assert result.state == "hoan_tat"
+        assert indexer.unreadable_paths == ["secret"]
+        final = events[-1]
+        assert final.state == "done" and final.message and "secret" in final.message
+
+        scan = scan_project(root)
+        assert scan.files == 1 and scan.unreadable == ["secret"]
+    finally:
+        secret.chmod(0o755)
+
+
+@unreadable_only
+def test_index_job_result_carries_unreadable_paths(tmp_path):
+    """A1 F6: kết quả job index có trường ổn định để desktop hiện cảnh báo."""
+    from nexgraph_engine.store.projects import ProjectRegistry
+
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "a.py").write_text("def a():\n    return 1\n", encoding="utf-8")
+    locked = root / "locked"
+    locked.mkdir()
+    (locked / "b.py").write_text("def b():\n    return 2\n", encoding="utf-8")
+    locked.chmod(0)
+    registry = ProjectRegistry(tmp_path / "appdata")
+    info = registry.open_project(root)
+    manager = JobManager(registry, EventBus())
+    try:
+        job_id = manager.start_index(info.project_id)
+        job = None
+        for _ in range(3000):
+            job = manager.get(job_id)
+            if job["state"] in ("done", "error", "cancelled"):
+                break
+            threading.Event().wait(0.01)
+        assert job["state"] == "done", job
+        assert job["result"]["unreadable_paths"] == ["locked"]
+        assert job["result"]["unreadable_count"] == 1
+        assert "locked" in (job["message"] or "")
+    finally:
+        manager.shutdown()
+        locked.chmod(0o755)

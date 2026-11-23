@@ -132,7 +132,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
                 store = GraphStore(conn)
                 if not store.has_published_graph():
                     raise ToolError("Dự án chưa được lập chỉ mục xong")
-                model = ModelGraph(store, root)
+                model = ModelGraph(store, root, source=SourcePolicy(root, store.last_exclude()))
                 # Như HTTP: hỏi thẳng về nút bị loại khỏi ngữ cảnh AI thì từ chối, kể cả khi láng giềng của nó hiển thị được.
                 if not all(model.allows_node(node_id) for node_id in guard):
                     raise protected_source()
@@ -195,7 +195,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     async def read_code(file: str, start: int | None = None, end: int | None = None) -> dict:
         """Đọc mã của tệp đã lập chỉ mục (đường dẫn tương đối trong dự án), tối đa 2.000 dòng."""
         return await run("read_code", lambda s: read_code_json(
-            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s)))
+            s, root, file, start, end, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s),
+            redact_documents=True))
 
     @mcp.tool(annotations=READ_ONLY)
     async def query_graph(question: str, depth: int = 2, budget: int = 2000,
@@ -241,7 +242,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         """Gói các nút và đoạn mã liên quan nhất tới câu hỏi, xếp hạng hợp nhất và gọn trong ngân sách token (500–20000)."""
         def body(s: GraphStore) -> dict:
             try:
-                out = build_context(s, root, question, max(500, min(budget, 20_000)), sources_dir=src(s))
+                out = build_context(s, root, question, max(500, min(budget, 20_000)), sources_dir=src(s),
+                                    redact_documents=True)
             except ValueError as exc:
                 raise ToolError(str(exc)) from exc
             touch_query_stamp(data_dir, s.project_id())
@@ -266,9 +268,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     async def get_section(node_id: str) -> dict:
         """Đọc thân một mục tài liệu (nút document, mỗi heading một nút) từ tệp hiện tại, đã che secret,
         tối đa 8.000 ký tự. stale=true nghĩa là tệp đã đổi sau lần lập chỉ mục."""
-        return await run("get_section", lambda s: section_json(s, root, node_id,
-                                                               source=SourcePolicy(root, s.last_exclude()),
-                                                               sources_dir=src(s)))
+        return await run("get_section", lambda s: section_json(
+            s, root, node_id, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s)))
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_callers(node_id: str, depth: int = 1, limit: int = 200) -> dict:

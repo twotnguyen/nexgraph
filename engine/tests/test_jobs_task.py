@@ -126,7 +126,9 @@ def test_unknown_project_rejected(env):
 def test_index_job_has_kind_and_result(api, copy_fixture):
     p = api.open(copy_fixture("py_mini"))
     job = api.index(p["project_id"])
-    assert job["kind"] == "index" and job["result"] is None
+    assert job["kind"] == "index"
+    # A1 F6: kết quả job index có trường ổn định cho cảnh báo thư mục không đọc được (rỗng khi đọc được hết).
+    assert job["result"] == {"unreadable_paths": [], "unreadable_count": 0}
 
 
 def test_project_task_can_refresh_now(api, copy_fixture):

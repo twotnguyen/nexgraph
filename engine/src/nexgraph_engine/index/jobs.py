@@ -245,10 +245,12 @@ class JobManager:
             t.join(timeout=10)
 
     # ------------------------------------------------------------------------------------------------
-    def _update(self, job_id: str, e: ProgressEvent) -> None:
+    def _update(self, job_id: str, e: ProgressEvent, *, result: dict | None = None) -> None:
         with self._lock:
             job = self._jobs[job_id]
             job.update(state=e.state, files_done=e.files_done, message=e.message)
+            if result is not None:
+                job["result"] = result
             if e.files_total or e.state in ("done", "structure"):
                 job["files_total"] = e.files_total
             if e.state in ("done", "cancelled", "error"):
@@ -275,6 +277,7 @@ class JobManager:
             lock.acquire()  # đợi lần refresh hiện tại của project xong
         terminal_event: ProgressEvent | None = None
         published = False
+        index_result: dict | None = None
 
         def on_event(e: ProgressEvent) -> None:
             nonlocal terminal_event
@@ -295,7 +298,7 @@ class JobManager:
                 store = GraphStore(stage)
                 store.abort_stale_runs()
                 last_docs, last_media = store.last_doc_flags()
-                self._indexer_cls(
+                indexer = self._indexer_cls(
                     store, info.path, on_progress=on_event, cancel=cancel, subdir=subdir, exclude=exclude,
                     include_docs=last_docs if include_docs is None else include_docs,
                     include_media=last_media if include_media is None else include_media,
@@ -303,7 +306,11 @@ class JobManager:
                     workers=workers, force=force, **({"sources": sources} if sources is not None else {}),
                     transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id,
                     sources_dir=sources_root(self._registry.app_data_dir, info.project_id),
-                ).run()
+                )
+                indexer.run()
+                # (A1 F6) Thư mục/tệp không đọc được khi quét đi kèm kết quả job, trường tên ổn định cho desktop.
+                unreadable = indexer.unreadable_paths
+                index_result = {"unreadable_paths": unreadable, "unreadable_count": len(unreadable)}
 
                 if terminal_event is None:
                     raise RuntimeError("Lập chỉ mục kết thúc mà chưa báo kết quả")
@@ -329,4 +336,4 @@ class JobManager:
             if lock is not None:
                 lock.release()
             if terminal_event is not None:
-                self._update(job_id, terminal_event)
+                self._update(job_id, terminal_event, result=index_result)

@@ -172,7 +172,8 @@ def scan_project(project_id: str, request: Request) -> dict:
     result = scan_module.scan_project(info.path)
     return {"files": result.files, "by_language": result.by_language, "large": result.large,
             "threshold": scan_module.LARGE_FILE_COUNT,
-            "top_dirs": [{"path": p, "files": n} for p, n in result.top_dirs]}
+            "top_dirs": [{"path": p, "files": n} for p, n in result.top_dirs],
+            "unreadable_paths": result.unreadable, "unreadable_count": len(result.unreadable)}
 
 
 @router.post("/projects/{project_id}/communities")

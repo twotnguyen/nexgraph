@@ -21,6 +21,16 @@ REPO = Path(__file__).resolve().parents[2]
     "max_tokens=4096",
     "GITHUB_TOKEN_EXPIRES=3600",
     "The token is rotated nightly",
+    # Tên kết thúc bằng KEY nhưng là khái niệm kỹ thuật: khoá chính/ngoại của SQL, khoá sắp xếp, khoá công khai.
+    "PRIMARY_KEY = user_id",
+    "PRIMARY_KEY=user_id",
+    "FOREIGN_KEY = user_id",
+    "FOREIGN_KEY=user_id",
+    "SORT_KEY=created_at",
+    "SORT_KEY: created_at",
+    "PUBLIC_KEY=abcd1234",
+    "cache_key = user_id",
+    "KEYBOARD=us-layout",
 ])
 def test_technical_text_is_not_redacted(line):
     assert redact_doc_secrets(line) == line
@@ -37,11 +47,103 @@ def test_technical_text_is_not_redacted(line):
     ("PRIVATE_KEY=abcd1234", "abcd1234"),
     ("CLIENT_SECRET=abcd1234", "abcd1234"),
     ("password = \"correct horse\"", "correct horse"),
+    # Review #52 Important 1: `SECRET_KEY`/`SECRET_KEY_BASE`/`*_KEY` là tên phổ biến nhất trong .env và tài liệu cấu hình.
+    ("SECRET_KEY=django-insecure-a1b2c3d4e5", "django-insecure-a1b2c3d4e5"),
+    ("SECRET_KEY_BASE=9f8e7d6c5b4a3210", "9f8e7d6c5b4a3210"),
+    ("secret_key_base: 0f1e2d3c4b5a69788796a5b4c3d2e1f0", "0f1e2d3c4b5a69788796a5b4c3d2e1f0"),
+    ("MASTER_KEY=abcd1234", "abcd1234"),
+    ("ENCRYPTION_KEY=abcd1234", "abcd1234"),
+    ("SIGNING_KEY=abcd1234", "abcd1234"),
+    ("AUTH_KEY=abcd1234", "abcd1234"),
+    ("secretKey = \"abcd1234\"", "abcd1234"),
+    ("SOME_RANDOM_KEY=0f1e2d3c4b5a69788796a5b4c3d2e1f0", "0f1e2d3c4b5a69788796a5b4c3d2e1f0"),
 ])
 def test_sensitive_env_values_are_redacted(line, secret):
     out = redact_doc_secrets(line)
     assert secret not in out and "[redacted]" in out
     assert out == redact_doc_secrets(out)  # idempotent
+
+
+def test_backticks_surrounding_the_value_are_kept():
+    """A3 #9: che `api_key=*** không được ăn dấu backtick bao quanh giá trị."""
+    value = "abcd" + "1234"
+    for line in (f"API_KEY={value}`", f"`API_KEY={value}`", f'`API_KEY="{value}"`'):
+        out = redact_doc_secrets(line)
+        assert value not in out and "[redacted]" in out, out
+        assert out.count("`") == line.count("`"), (line, out)
+        assert out.endswith("`") is line.endswith("`"), (line, out)
+
+
+def test_backticked_line_keeps_closing_tick_when_redacted():
+    value = "abcd" + "1234"
+    out = redact_doc_secrets(f"`DB_PASSWORD={value}`")
+    assert out == "`DB_PASSWORD=[redacted]`"
+
+
+# Re-review #52 Important 1 (vòng 3): các dạng tài liệu từng lọt — JSON, gạch đầu dòng, cả dòng bọc ngoặc,
+# câu văn có backtick, `*_KEY` tiền tố lạ với giá trị ngắn.
+@pytest.mark.parametrize("line,secret", [
+    ('{"secret_key": "Json4Pq9Xy2Lk6Q"}', "Json4Pq9Xy2Lk6Q"),
+    ('  "api_key": "Json4Pq9Xy2Lk6Q",', "Json4Pq9Xy2Lk6Q"),
+    ('{"MASTER_KEY": "Json4Pq9Xy2Lk6Q"}', "Json4Pq9Xy2Lk6Q"),
+    ('"aws_secret_access_key": "Aws4Pq9Xy2Lk6Q"', "Aws4Pq9Xy2Lk6Q"),
+    ("- `SECRET_KEY=Dash4Pq9Xy2Lk6Q`", "Dash4Pq9Xy2Lk6Q"),
+    ("* `DB_PASSWORD=hunter2`", "hunter2"),
+    ('"ENCRYPTION_KEY=Quote4Pq9Xy2"', "Quote4Pq9Xy2"),
+    ("[SIGNING_KEY=Bracket4Pq9Xy2]", "Bracket4Pq9Xy2"),
+    ("Đặt `MASTER_KEY=Prose8Kx2Rt5` trong tệp.", "Prose8Kx2Rt5"),
+    ("master_key: Yaml8Kx2Rt5abcd", "Yaml8Kx2Rt5abcd"),
+    ("token = 'Single8Kx2Rt5'", "Single8Kx2Rt5"),
+    ("TENANT_KEY=abcd1234", "abcd1234"),
+    ("FOO_KEY=Zx9Qm2", "Zx9Qm2"),
+    ("MY_APP_KEY=hunter2", "hunter2"),
+])
+def test_redacts_secret_forms_found_in_documents(line, secret):
+    out = redact_doc_secrets(line)
+    assert secret not in out and "[redacted]" in out, out
+    assert out == redact_doc_secrets(out)  # idempotent
+
+
+@pytest.mark.parametrize("line", [
+    '{"key": "value"}',
+    '{"name": "NexGraph"}',
+    "key: value",
+    'sorted(subgraph_nodes, key=relevance, reverse=True)',
+    '"token_budget": 4000',
+    '{"public_key": "abcd1234"}',
+    "Credential = ApiKeyCredential | OAuthCredential",
+    "apiKey: 'fake-key',",
+    "DB_PASSWORD=<your-password>",
+    "API_KEY=${MY_KEY}",
+    "API_KEY=***",
+    "API_KEY=xxx",
+    "SECRET_MODE=null",
+    "RETRIES=3",
+    "TOKEN_TTL_SECONDS=3600",
+    "GITHUB_TOKEN_EXPIRES=3600",
+])
+def test_document_shapes_without_secret_are_kept(line):
+    assert redact_doc_secrets(line) == line
+
+
+def test_pem_block_keeps_line_count():
+    """Minor 1 (review #52): che PEM theo từng dòng để heading sau khối không lệch số dòng."""
+    body = "\n".join(["MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "A" * 20] * 3)
+    text = (f"# Khoá\n\n-----BEGIN RSA PRIVATE KEY-----\n{body}\n"
+            "-----END RSA PRIVATE KEY-----\n\n## Sau\n\nNội dung sau.\n")
+    out = redact_doc_secrets(text)
+    assert out.count("\n") == text.count("\n")
+    assert "BEGIN" not in out and "MIIE" not in out
+    assert out.splitlines().index("## Sau") == text.splitlines().index("## Sau")
+    assert out.count("[redacted]") == 5  # 3 dòng thân + BEGIN + END, mỗi dòng một marker
+
+
+def test_pem_block_without_end_line_is_redacted():
+    """PEM bị cắt (không có dòng END) vẫn che hết phần còn lại, giữ nguyên số dòng."""
+    text = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nAAAA\n"
+    out = redact_doc_secrets(text)
+    assert "b3BlbnNzaC1rZXk" not in out and "BEGIN" not in out
+    assert out.count("\n") == text.count("\n")
 
 
 def test_repo_markdown_has_no_false_positive_redaction():
