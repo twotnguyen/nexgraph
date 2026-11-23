@@ -25,12 +25,13 @@ class Services:
     def relink_global(self) -> str:
         """Job tính lại cạnh liên repo; không khoá dự án nào vì chỉ đọc CSDL của chúng.
 
-        Watcher bắn refresh liên tục nên nếu đã có job `global_link` đang chờ/chạy thì dùng lại,
-        không xếp thêm job toàn bộ (GFY-04 minor 6).
+        Watcher bắn refresh liên tục nên nếu đã có job `global_link` đang **chờ** thì dùng lại
+        (GFY-04). Job đang **chạy** có thể đã đọc CSDL trước lần refresh vừa xong, nên vẫn xếp thêm
+        đúng một job; các lời gọi sau đó gộp vào job mới đang chờ ấy.
         """
         from nexgraph_engine.global_graph.link import relink
         with self._relink_lock:
-            existing = self.jobs.active_task("global_link")
+            existing = self.jobs.active_task("global_link", states=("queued",))
             if existing is not None:
                 return existing
             return self.jobs.start_task(None, "global_link", lambda ctx: relink(self.data_dir, self.registry))
