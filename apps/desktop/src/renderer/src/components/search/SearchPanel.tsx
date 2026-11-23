@@ -8,6 +8,8 @@ interface Props {
   projectId: string
   revision?: number
   onOpen: (node: GraphNode) => void
+  /** Khi có: bấm kết quả "Tìm symbol" mở tệp:dòng trong editor; graph vẫn mở được bằng nút phụ. */
+  onOpenCode?: (file: string, line?: number) => void
   /** Khi có: bật chế độ "Hỏi graph", bấm "Xem trên graph" vẽ vùng con trả về. */
   onShowSubgraph?: (g: { nodes: GraphNode[]; edges: GraphEdge[] }) => void
   onOpenFlow?: (flowId: number) => void
@@ -19,20 +21,27 @@ const LIMIT = 30
 const errMessage = (err: unknown): string =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
 
-function NodeButton({ node, onOpen }: { node: GraphNode; onOpen: (n: GraphNode) => void }) {
+function NodeButton({ node, onOpen, onOpenCode }: { node: GraphNode; onOpen: (n: GraphNode) => void; onOpenCode?: Props['onOpenCode'] }) {
   const source = node.file && (node.line_start ? `${node.file}:${node.line_start}` : node.file)
+  const file = node.file
+  const openCode = onOpenCode && file ? () => onOpenCode(file, node.line_start ?? undefined) : null
   return (
-    <button type="button" onClick={() => onOpen(node)}>
-      <b>{node.label}</b>
-      <span className="kind" style={{ color: kindStyle(node.kind).color }}>{node.kind}</span>
-      {source && <span className="mono muted" title={source}>{source}</span>}
-    </button>
+    <div className="search-hit">
+      <button type="button" className="entry" onClick={openCode ?? (() => onOpen(node))}>
+        <b>{node.label}</b>
+        <span className="kind" style={{ color: kindStyle(node.kind).color }}>{node.kind}</span>
+        {source && <span className="mono muted" title={source}>{source}</span>}
+      </button>
+      {openCode && (
+        <button type="button" className="link" onClick={() => onOpen(node)}>{vi.search.showOnGraph}</button>
+      )}
+    </div>
   )
 }
 
 type SymbolResponse = { projectId: string; query: string; revision: number; hits: SearchHit[] | null; error: string | null }
 
-function SymbolSearch({ projectId, revision = 0, onOpen }: Props) {
+function SymbolSearch({ projectId, revision = 0, onOpen, onOpenCode }: Props) {
   const [text, setText] = useState('')
   const draft = text.trim()
   const query = useDebounced(draft, DEBOUNCE_MS)
@@ -67,7 +76,10 @@ function SymbolSearch({ projectId, revision = 0, onOpen }: Props) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && hits && hits.length > 0) onOpen(hits[0].node)
+          if (e.key !== 'Enter' || !hits || hits.length === 0) return
+          const first = hits[0].node
+          if (onOpenCode && first.file) onOpenCode(first.file, first.line_start ?? undefined)
+          else onOpen(first)
         }}
         autoFocus
       />
@@ -78,7 +90,7 @@ function SymbolSearch({ projectId, revision = 0, onOpen }: Props) {
       {hits && hits.length > 0 && (
         <ul className="search-results">
           {hits.map(({ node }) => (
-            <li key={node.id}><NodeButton node={node} onOpen={onOpen} /></li>
+            <li key={node.id}><NodeButton node={node} onOpen={onOpen} onOpenCode={onOpenCode} /></li>
           ))}
         </ul>
       )}

@@ -120,7 +120,7 @@ export const WORKBENCH_PANELS: WorkbenchPanel[] = [
   {
     id: 'search', title: () => vi.activity.search, icon: SearchIcon, command: 'graph_search.toggle', group: 'explore',
     render: (ctx) => h('div', { className: 'ws-tools-body' }, h(SearchPanel, {
-      projectId: ctx.projectId, revision: ctx.revision, onOpen: ctx.openNode,
+      projectId: ctx.projectId, revision: ctx.revision, onOpen: ctx.openNode, onOpenCode: ctx.openCode,
       onShowSubgraph: (g) => ctx.showSubgraph(g), onOpenFlow: ctx.openFlow
     }))
   },
