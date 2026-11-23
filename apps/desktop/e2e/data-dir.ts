@@ -59,7 +59,9 @@ function canonical(path: string): string {
  */
 export function isProtectedRoot(dir: string): boolean {
   const target = canonical(dir)
-  const roots = process.platform === 'win32' ? [homedir(), tmpdir()] : [homedir(), tmpdir(), '/tmp']
+  // `/tmp` cũng bị chặn trên Windows (resolve thành `<ổ>:\\tmp`): người dùng POSIX quen đặt biến này vào `/tmp`,
+  // không được để nó thành thư mục bị xoá chỉ vì chạy trên nền khác.
+  const roots = [homedir(), tmpdir(), '/tmp']
   if (roots.some((root) => target === canonical(root))) return true
   return target === canonical(parse(target).root)
 }
