@@ -74,7 +74,7 @@ if (mode === 'never-ready') {
     }
     if (url.pathname === '/v1/tools') return json(200, { ffmpeg: true, faster_whisper: false, git: true, gh: false, yt_dlp: false })
     if (url.pathname === '/v1/projects') return json(200, [{ project_id: 'p1', path: '/demo', name: 'demo', is_git: false, storage: 'in_project', last_indexed_at: null, last_index_commit: null }])
-    const ECHO = ['/v1/projects/p1/report', '/v1/projects/p1/paths', '/v1/projects/p1/impact', '/v1/projects/p1/ask',
+    const ECHO = ['/v1/projects/p1/report', '/v1/projects/p1/tour', '/v1/projects/p1/paths', '/v1/projects/p1/impact', '/v1/projects/p1/ask',
       '/v1/projects/p1/communities', '/v1/projects/p1/export', '/v1/projects/p1/export/push',
       '/v1/projects/p%201/flows', '/v1/projects/p1/flows', '/v1/projects/p1/flows/7', '/v1/projects/p1/map', '/v1/projects/p1/cycles']
     if (ECHO.includes(url.pathname)) {

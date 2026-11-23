@@ -63,7 +63,7 @@ const api: NexGraphApi = {
     architecture: (pid, parent) => call('graph:architecture', pid, parent),
     archEvidence: (pid, from, to, limit) => call('graph:arch-evidence', pid, from, to, limit),
     changes: (pid, opts) => call('graph:changes', pid, opts),
-    report: (pid) => call('graph:report', pid),
+    report: (pid, lang) => call('graph:report', pid, lang),
     explain: (pid, nodeId) => call('graph:explain', pid, nodeId),
     section: (pid, nodeId) => call('graph:section', pid, nodeId),
     paths: (pid, nodeIds, opts) => call('graph:paths', pid, nodeIds, opts),
@@ -72,7 +72,7 @@ const api: NexGraphApi = {
     recluster: (pid) => call('graph:recluster', pid),
     flows: (pid, opts) => call('graph:flows', pid, opts),
     flow: (pid, flowId) => call('graph:flow', pid, flowId),
-    tour: (pid) => call('graph:tour', pid),
+    tour: (pid, lang) => call('graph:tour', pid, lang),
     locate: (pid, file, line) => call('graph:locate', pid, file, line),
     context: (pid, q, budget) => call('graph:context', pid, q, budget),
     map: (pid, opts) => call('graph:map', pid, opts),
@@ -187,7 +187,7 @@ const api: NexGraphApi = {
   },
   exporter: {
     pickDir: (pid) => call('export:pick-dir', pid),
-    run: (pid, format, scope) => call('export:run', pid, format, scope),
+    run: (pid, format, scope, lang) => call('export:run', pid, format, scope, lang),
     push: (pid, req) => call('export:push', pid, req),
     png: (pid, rect) => call('export:png', pid, rect),
     reveal: (pid, path) => call('export:reveal', pid, path)

@@ -546,7 +546,7 @@ export function registerIpc(
   on('graph:architecture', (pid: string, parent?: string) => api().architecture(pid, parent))
   on('graph:arch-evidence', (pid: string, from: string, to: string, limit?: number) => api().archEvidence(pid, from, to, limit))
   on('engine:tools', () => api().tools())
-  on('graph:report', (pid: string) => api().report(pid))
+  on('graph:report', (pid: string, lang?: 'vi' | 'en') => api().report(pid, lang))
   on('graph:explain', (pid: string, nodeId: string) => api().explain(pid, nodeId))
   on('graph:section', (pid: string, nodeId: string) => api().section(pid, nodeId))
   on('graph:paths', (pid: string, ids: string[], o?: { maxHops?: number; directed?: boolean }) => api().paths(pid, ids, o))
@@ -555,7 +555,7 @@ export function registerIpc(
   on('graph:recluster', (pid: string) => api().recluster(pid))
   on('graph:flows', (pid: string, opts?: FlowQuery) => api().flows(pid, opts))
   on('graph:flow', (pid: string, flowId: number) => api().flow(pid, flowId))
-  on('graph:tour', (pid: string) => api().tour(pid))
+  on('graph:tour', (pid: string, lang?: 'vi' | 'en') => api().tour(pid, lang))
   on('graph:locate', (pid: string, file: string, line: number) => api().locate(pid, file, line))
   on('graph:context', (pid: string, q: string, budget?: number) => api().context(pid, q, budget))
   on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
@@ -824,11 +824,12 @@ export function registerIpc(
     writeJson(file, { ...readJson(file), [exportDirKey(pid)]: r.filePaths[0] })
     return r.filePaths[0]
   })
-  on('export:run', async (pid: string, format: ExportFormat, scope: ExportScope) => {
+  on('export:run', async (pid: string, format: ExportFormat, scope: ExportScope, lang?: 'vi' | 'en') => {
     await rootOf(pid)
     const dir = savedExportDir(pid)
     if (!dir) throw new AgentError('bad_param', 'Chưa chọn thư mục lưu kết quả xuất')
-    return api().exportGraph(pid, format, scope, dir)
+    // Chỉ nhận đúng hai giá trị; tham số lạ của renderer không được chuyển xuống engine.
+    return lang === 'vi' || lang === 'en' ? api().exportGraph(pid, format, scope, dir, lang) : api().exportGraph(pid, format, scope, dir)
   })
   on('export:push', (pid: string, req: PushRequest) => api().pushGraph(pid, req))
   on('export:png', async (pid: string, rect?: { x: number; y: number; width: number; height: number }) => {

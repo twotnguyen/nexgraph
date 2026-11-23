@@ -117,7 +117,7 @@ describe('WorkspaceScreen', () => {
     installNexgraph({ graph: { tour } })
     render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
     await userEvent.click(screen.getByRole('button', { name: 'Tham quan' }))
-    expect(tour).toHaveBeenCalledWith('p1')
+    expect(tour).toHaveBeenCalledWith('p1', 'vi')
     expect(await screen.findByText(/Chưa đủ dữ liệu/)).toBeInTheDocument()
   })
 

@@ -174,7 +174,8 @@ export interface NexGraphApi {
     archEvidence(projectId: string, from: string, to: string, limit?: number): Promise<ArchEvidence[]>
     /** `refresh: false` chỉ đọc, không cập nhật đồ thị trước. */
     changes(projectId: string, opts?: { refresh?: boolean }): Promise<Changes>
-    report(projectId: string): Promise<GraphReport>
+    /** `lang` là ngôn ngữ UI hiện tại: câu hỏi/lý do do engine sinh theo ngôn ngữ đó. */
+    report(projectId: string, lang?: 'vi' | 'en'): Promise<GraphReport>
     explain(projectId: string, nodeId: string): Promise<NodeExplain>
     section(projectId: string, nodeId: string): Promise<DocSection>
     paths(projectId: string, nodeIds: string[], opts?: { maxHops?: number; directed?: boolean }): Promise<PathResult>
@@ -184,7 +185,7 @@ export interface NexGraphApi {
     recluster(projectId: string): Promise<{ communities: number }>
     flows(projectId: string, opts?: FlowQuery): Promise<FlowList>
     flow(projectId: string, flowId: number): Promise<FlowDetail>
-    tour(projectId: string): Promise<{ steps: TourStep[] }>
+    tour(projectId: string, lang?: 'vi' | 'en'): Promise<{ steps: TourStep[] }>
     locate(projectId: string, file: string, line: number): Promise<{ node: GraphNode }>
     context(projectId: string, question: string, budget?: number): Promise<ContextPack>
     map(projectId: string, opts?: { parent?: string; detail?: number }): Promise<ProjectMap>
@@ -325,7 +326,8 @@ export interface NexGraphApi {
     /** Hộp thoại chọn thư mục đích; main nhớ theo projectId, `null` khi huỷ. */
     pickDir(projectId: string): Promise<string | null>
     /** Chỉ dùng thư mục đã lưu theo projectId; renderer không gửi path. */
-    run(projectId: string, format: ExportFormat, scope: ExportScope): Promise<ExportResult>
+    /** `lang` áp cho HTML callflow và chuỗi do engine sinh trong tệp xuất. */
+    run(projectId: string, format: ExportFormat, scope: ExportScope, lang?: 'vi' | 'en'): Promise<ExportResult>
     push(projectId: string, req: PushRequest): Promise<PushResult>
     /** Chụp vùng `rect` của cửa sổ (toạ độ CSS; vắng thì cả cửa sổ) và lưu PNG vào thư mục xuất đã lưu theo projectId; `null` khi huỷ. */
     png(projectId: string, rect?: { x: number; y: number; width: number; height: number }): Promise<string | null>

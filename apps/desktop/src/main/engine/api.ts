@@ -26,6 +26,9 @@ export class EngineApiError extends Error {
 
 type Target = Pick<EngineHandle, 'baseUrl' | 'token'>
 
+/** `?lang=` chỉ có khi renderer truyền ngôn ngữ UI; không truyền thì engine giữ mặc định cũ. */
+const langQuery = (lang?: 'vi' | 'en'): string => lang ? `?${new URLSearchParams({ lang })}` : ''
+
 export class EngineApi {
   constructor(private readonly h: Target, private readonly modelAudience = false) {}
 
@@ -161,8 +164,8 @@ export class EngineApi {
   tools(): Promise<Record<string, boolean>> {
     return this.request('GET', '/v1/tools')
   }
-  report(pid: string): Promise<GraphReport> {
-    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/report`)
+  report(pid: string, lang?: 'vi' | 'en'): Promise<GraphReport> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/report${langQuery(lang)}`)
   }
   paths(pid: string, nodeIds: string[], o?: { maxHops?: number; directed?: boolean }): Promise<PathResult> {
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/paths`, {
@@ -193,8 +196,8 @@ export class EngineApi {
   flow(pid: string, flowId: number): Promise<FlowDetail> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/flows/${flowId}`)
   }
-  tour(pid: string): Promise<{ steps: TourStep[] }> {
-    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/tour`)
+  tour(pid: string, lang?: 'vi' | 'en'): Promise<{ steps: TourStep[] }> {
+    return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/tour${langQuery(lang)}`)
   }
   locate(pid: string, file: string, line: number): Promise<{ node: GraphNode }> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/locate?${new URLSearchParams({ file, line: String(line) })}`)
@@ -212,8 +215,9 @@ export class EngineApi {
   cycles(pid: string, limit?: number): Promise<ImportCycles> {
     return this.request('GET', `/v1/projects/${encodeURIComponent(pid)}/cycles${limit != null ? `?limit=${limit}` : ''}`)
   }
-  exportGraph(pid: string, format: ExportFormat, scope: ExportScope, outDir: string): Promise<ExportResult> {
-    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export`, { format, scope, out_dir: outDir })
+  exportGraph(pid: string, format: ExportFormat, scope: ExportScope, outDir: string, lang?: 'vi' | 'en'): Promise<ExportResult> {
+    return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export`,
+      { format, scope, out_dir: outDir, ...(lang ? { lang } : {}) })
   }
   pushGraph(pid: string, req: PushRequest): Promise<PushResult> {
     return this.request('POST', `/v1/projects/${encodeURIComponent(pid)}/export/push`, req)

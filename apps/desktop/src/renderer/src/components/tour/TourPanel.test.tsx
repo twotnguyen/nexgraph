@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { GraphNode, TourStep } from '@shared/graph-types'
 import { installNexgraph } from '../../test-utils'
+import { setLocale } from '../../state/locale'
 import { TourPanel } from './TourPanel'
 
 const node = (id: string): GraphNode => ({ id, kind: 'file', label: id, qualified_name: id, language: null, file: id, line_start: null, line_end: null,
@@ -22,6 +23,23 @@ const setup = (tour: (p: string) => Promise<{ steps: TourStep[] }>) => {
 }
 
 describe('TourPanel', () => {
+  afterEach(() => setLocale('vi'))
+
+  it('DESK-LANG: tải tour theo ngôn ngữ giao diện và tải lại khi đổi ngôn ngữ', async () => {
+    setLocale('vi')
+    const en: TourStep[] = steps.map((s, i) => ({ ...s, title: `EN step ${i + 1}`, body: `EN body ${i + 1}` }))
+    const tour = vi.fn(async (_p: string, lang?: 'vi' | 'en') => ({ steps: lang === 'en' ? en : steps }))
+    installNexgraph({ graph: { tour } })
+    render(<TourPanel projectId="p1" projectName="demo" {...handlers()} />)
+    expect(await screen.findByText('Tham quan demo · 3 bước')).toBeInTheDocument()
+    expect(tour).toHaveBeenLastCalledWith('p1', 'vi')
+
+    act(() => setLocale('en'))
+    expect(await screen.findByText('Tour of demo · 3 steps')).toBeInTheDocument()
+    expect(await screen.findByText('EN step 1')).toBeInTheDocument()
+    expect(tour).toHaveBeenLastCalledWith('p1', 'en')
+  })
+
   it('hiện tiêu đề, các bước; bước đầu là bước hiện tại và mở luồng của nó', async () => {
     const h = setup(vi.fn(async () => ({ steps })))
     expect(await screen.findByText('Tham quan demo · 3 bước')).toBeInTheDocument()
