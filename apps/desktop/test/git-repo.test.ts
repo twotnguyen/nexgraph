@@ -2,11 +2,22 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction,
   gitStashSave, gitStashes, gitStatus, gitSwitchBranch, gitUnstage
 } from '../src/main/git/repo'
+
+// Các test dưới đây chạy git thật (init/clone/push/fetch), không phải stub: trên Windows CI một ca
+// mất 6,3 s nên vượt mặc định 5 s rồi kéo theo EBUSY khi dọn thư mục tạm. Timeout riêng theo nền
+// tảng, không skip và không nới cho test không chạy git.
+if (process.platform === 'win32') vi.setConfig({ testTimeout: 30_000 })
+
+/**
+ * Windows giữ tay cầm tệp trong kho thêm một nhịp sau khi tiến trình git thoát (indexer/antivirus),
+ * nên `rmdir` mặc định ném EBUSY. Thử lại vài lần thay vì bỏ qua dọn dẹp.
+ */
+const rm = (path: string) => rmSync(path, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
 
 let repo: string
 let root: string // dự án là thư mục con của kho
@@ -25,7 +36,7 @@ beforeEach(() => {
   sh('add', '.')
   sh('commit', '-q', '-m', 'đầu tiên')
 })
-afterEach(() => rmSync(repo, { recursive: true, force: true }))
+afterEach(() => rm(repo))
 
 it('status chỉ trong thư mục dự án; stage, unstage, commit từng tệp; diff hai phía', async () => {
   writeFileSync(join(root, 'src/a.ts'), 'one\nTWO\n')
@@ -95,7 +106,7 @@ it('thư mục không phải kho git', async () => {
     repo: false, branch: null, staged: [], unstaged: [], conflicts: [], upstream: null,
     ahead: 0, behind: 0, remote: null, lastCommit: null
   })
-  rmSync(plain, { recursive: true, force: true })
+  rm(plain)
 })
 
 it('đếm numstat NUL-safe, đổi tên, nhị phân và tệp chưa theo dõi', async () => {
@@ -227,7 +238,7 @@ it('amend bị từ chối nếu commit nằm trên remote ref đã biết', asy
     await expect(gitCommit(root, 'sửa commit đã push', true)).rejects.toMatchObject({ code: 'git_failed' })
     expect(sh('log', '-1', '--format=%s').trim()).toBe('published elsewhere')
   } finally {
-    rmSync(bare, { recursive: true, force: true })
+    rm(bare)
   }
 })
 
@@ -262,7 +273,7 @@ it('push, fetch và pull dùng kho bare cục bộ', async () => {
     expect(readFileSync(join(root, 'src/a.ts'), 'utf8')).toBe('fetched\n')
     await expect(gitRemote(root, 'push --force' as 'push')).rejects.toMatchObject({ code: 'bad_param' })
   } finally {
-    rmSync(bare, { recursive: true, force: true })
-    rmSync(clone, { recursive: true, force: true })
+    rm(bare)
+    rm(clone)
   }
 })
