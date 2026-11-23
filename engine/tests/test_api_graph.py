@@ -83,6 +83,24 @@ def test_neighbors_truncated(indexed):
     assert r["truncated"] is True and len(r["nodes"]) <= 5
 
 
+def test_code_reports_truncation(indexed):
+    """F5/REV-21: đọc cả tệp dài hơn MAX_CODE_LINES phải báo `truncated`, không cắt ngầm."""
+    from nexgraph_engine.query.contracts import MAX_CODE_LINES
+
+    api, pid, root = indexed
+    total = MAX_CODE_LINES + 20
+    (root / "lib" / "long_file.py").write_text("".join(f"VALUE_{i} = {i}\n" for i in range(total)), encoding="utf-8")
+    assert api.post(f"/v1/projects/{pid}/refresh").json()["status"] == "ok"
+    base = f"/v1/projects/{pid}/code?file=lib/long_file.py"
+
+    whole = api.get(base).json()
+    assert whole["truncated"] is True and whole["end"] == MAX_CODE_LINES and whole["text"].count("\n") == MAX_CODE_LINES - 1
+    part = api.get(base + "&start=1&end=10").json()
+    assert part["truncated"] is False and part["end"] == 10
+    tail = api.get(base + f"&start={MAX_CODE_LINES + 10}").json()
+    assert tail["truncated"] is False and tail["end"] == total
+
+
 def test_node_by_path_id(indexed):
     api, pid, _ = indexed
     node_id = "lib/services/auth_service.dart::AuthService.login#method"

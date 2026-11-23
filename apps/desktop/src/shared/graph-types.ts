@@ -96,6 +96,8 @@ export interface CodeSlice {
   text: string
   language: string | null
   stale: boolean
+  /** Engine mới: `true` khi trả cả tệp dài hơn MAX_CODE_LINES mà bị cắt ở cuối (REV-21). */
+  truncated?: boolean
 }
 
 export interface GraphStats {
