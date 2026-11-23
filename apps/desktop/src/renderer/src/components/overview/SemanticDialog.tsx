@@ -26,6 +26,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   const [estimate, setEstimate] = useState<SemanticEstimate | null>(null)
   const [job, setJob] = useState<Job | null>(null)
   const [result, setResult] = useState<SemanticResult | null>(null)
+  /** Đường A: engine không cộng usage, main đếm token đã dùng và trả qua `semantic.usage`. */
+  const [appUsage, setAppUsage] = useState<{ input_tokens: number; output_tokens: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [noCache, setNoCache] = useState(false)
@@ -55,10 +57,12 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   const disable = () => act(async () => apply(await window.nexgraph.semantic.setSettings(projectId, { enabled: false, transport: null, model: null })))
   const run = () => act(async () => {
     setResult(null)
+    setAppUsage(null)
     const { jobId } = await window.nexgraph.semantic.start(projectId, target, undefined, noCache)
     try {
       const done = await waitJob(jobId, setJob, 500)
       setResult(done.result as unknown as SemanticResult)
+      setAppUsage(await window.nexgraph.semantic.usage(jobId))
     } finally {
       setJob(null)
     }
@@ -70,6 +74,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   // Hiện và đối chiếu model sẽ dùng thật (main điền lúc ước tính), không phải model đã lưu lúc bật AI.
   const model = estimate?.model ?? null
   const changed = !local && estimate !== null && model !== null && settings?.model !== model
+  // Engine cộng usage cho đường B; đường A lấy số main đếm (nếu có) để vẫn hiện token sau khi chạy.
+  const usage = result ? (result.usage.input_tokens > 0 || result.usage.output_tokens > 0 ? result.usage : appUsage) : null
   return (
     <div className="modal-backdrop">
       <div role="dialog" aria-modal="true" aria-label={(fixed && TITLE[fixed]) || vi.semantic.title} className="modal">
@@ -123,8 +129,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
             : <p>{result.target === 'labels' ? vi.semantic.labelsDone(Object.keys(result.labels).length)
               : result.target === 'dedup' ? vi.semantic.merged(result.merged) : vi.semantic.done(result.nodes_added, result.edges_added)}</p>}
             {result.chunks.failed > 0 && <p>{vi.semantic.failedChunks(result.chunks.failed)}</p>}
-            {(result.usage.input_tokens > 0 || result.usage.output_tokens > 0) &&
-              <p className="muted">{vi.semantic.cost(num(result.usage.input_tokens), num(result.usage.output_tokens))}</p>}
+            {usage && (usage.input_tokens > 0 || usage.output_tokens > 0) &&
+              <p className="muted">{vi.semantic.cost(num(usage.input_tokens), num(usage.output_tokens))}</p>}
           </div>
         )}
         {error && <p role="alert" className="inline-message error">{error}</p>}

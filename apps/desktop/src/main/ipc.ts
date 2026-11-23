@@ -31,6 +31,7 @@ import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
 import { IndexSourceStore } from './index-sources'
 import { runSemanticJob } from './ai/semantic-runner'
+import { SemanticUsageStore } from './ai/semantic-usage'
 import { directTransport, piComplete, selectedModelLabel } from './ai/semantic-models'
 import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
@@ -872,6 +873,7 @@ export function registerIpc(
   on('prs:detail', (pid: string, n: number) => api().prDetail(pid, n))
   // Phân tích ngữ nghĩa bằng AI (W9). Mặc định tắt theo dự án; key chỉ đọc ở đây và chỉ đi xuống engine ở đường B.
   const semanticRuns = new Map<string, AbortController>()
+  const semanticUsage = new SemanticUsageStore()
   on('semantic:get-settings', (pid: string) => api().aiSettings(pid))
   on('semantic:set-settings', async (pid: string, settings: ProjectAiSettings) => {
     await rootOf(pid)
@@ -899,16 +901,24 @@ export function registerIpc(
     if (transport.kind === 'app') {
       const ac = new AbortController()
       semanticRuns.set(jobId, ac)
+      const used = { input: 0, output: 0 }
       void runSemanticJob(jobId, {
         jobState: async (id) => (await api().getJob(id)).state,
         next: (id) => api().llmNext(id),
         answer: (id, chunkId, body) => api().llmAnswer(id, chunkId, body)
-      }, piComplete(a), { signal: ac.signal, budget: max })
+      }, piComplete(a), {
+        signal: ac.signal, budget: max,
+        onUsage: (usage) => { used.input += usage.inputTokens; used.output += usage.outputTokens }
+      })
         .catch((e) => console.warn(`[semantic] ${jobId}: ${e instanceof Error ? e.message : String(e)}`))
-        .finally(() => semanticRuns.delete(jobId))
+        .finally(() => {
+          semanticUsage.set(jobId, used.input, used.output)
+          semanticRuns.delete(jobId)
+        })
     }
     return { jobId }
   })
+  on('semantic:usage', async (jobId: string) => semanticUsage.get(jobId))
   on('semantic:cancel', async (jobId: string) => {
     semanticRuns.get(jobId)?.abort()
     await api().cancelJob(jobId)

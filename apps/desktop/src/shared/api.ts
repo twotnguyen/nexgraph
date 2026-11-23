@@ -463,6 +463,8 @@ export interface NexGraphApi {
     estimate(projectId: string, target: SemanticTarget, noCache?: boolean): Promise<SemanticEstimate>
     /** Main chọn đường theo cấu hình dự án. Đường A: main tự kéo khối và gọi model đang chọn. Đường B: main gửi key xuống engine. */
     start(projectId: string, target: SemanticTarget, budget?: number, noCache?: boolean): Promise<{ jobId: string }>
+    /** Token usage đường A do main đếm (engine chỉ cộng usage cho đường B); null khi job chưa chạy xong hoặc chạy đường B. */
+    usage(jobId: string): Promise<{ input_tokens: number; output_tokens: number } | null>
     cancel(jobId: string): Promise<void>
   }
 }
