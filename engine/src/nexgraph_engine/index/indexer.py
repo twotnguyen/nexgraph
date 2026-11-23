@@ -13,7 +13,7 @@ from concurrent.futures.process import BrokenProcessPool
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from nexgraph_engine.docs.secrets import redact_doc_secrets
 
@@ -401,13 +401,8 @@ class Indexer:
         if workers > 1:
             while pending and not self.cancel.is_set():
                 executor: ProcessPoolExecutor | None = None
-                futures = {}
                 try:
                     executor = ProcessPoolExecutor(max_workers=workers)
-                    for b in pending:
-                        futures[b] = executor.submit(_extract_batch, self.root,
-                                                     [files[i] for i in batches[b]],
-                                                     self.transcript_dir)
                 except (BrokenProcessPool, OSError, RuntimeError):
                     # Worker có thể không khởi động được hoặc bị hệ điều hành chặn.
                     logger.warning("Bộ trích xuất song song gián đoạn; thử lại rồi đọc từng tệp", exc_info=True)
@@ -418,70 +413,96 @@ class Indexer:
                         gave_up = True
                         break
                     continue
-                pool_failures = 0  # gửi được cả lô: lỗi trước đó không phải lỗi hệ thống lặp lại
-                broken = False
+                futures: dict[int, Any] = {}
+                started: dict[int, float] = {}
+                crashed = submit_failed = False
+                abandoned = 0
                 try:
-                    for b in list(pending):
-                        batch = futures[b]
-                        deadline = time.monotonic() + batch_timeout_seconds([files[i] for i in batches[b]])
-                        while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
-                            wait((batch,), timeout=0.2)
-                        if self.cancel.is_set():
-                            return False
-                        if not batch.done():
-                            # Quá hạn: coi tệp của lô là nghi treo, đẩy sang đường từng-tệp rồi làm lại pool.
-                            # Đếm theo LÔ chứ không toàn cục: hai tệp treo ở hai lô đầu không được kéo cả
-                            # phần còn lại xuống tuần tự (review-53 I4). Mỗi vòng bỏ được ít nhất một lô
-                            # khỏi `pending` nên vẫn kết thúc hữu hạn.
-                            suspects.extend(batches[b])
-                            pending.remove(b)
-                            broken = True
-                            break
+                    while (pending or futures) and not self.cancel.is_set():
+                        # CHỈ nạp tối đa `workers` lô một lúc: một lô treo/crash chỉ làm mất phần đang chạy,
+                        # không phải cả hàng đợi phải gửi lại (review-53 Minor 1: 5 treo từng đọc lại 3,0×).
                         try:
-                            extracted_batch = batch.result()
+                            while pending and len(futures) < workers:
+                                b = pending.pop(0)
+                                try:
+                                    futures[b] = executor.submit(_extract_batch, self.root,
+                                                                 [files[i] for i in batches[b]],
+                                                                 self.transcript_dir)
+                                except (BrokenProcessPool, OSError, RuntimeError):
+                                    pending.insert(0, b)
+                                    raise
+                                started[b] = time.monotonic()
                         except (BrokenProcessPool, OSError, RuntimeError):
-                            # Chỉ lỗi của pool bị bắt ở đây; lỗi trong `_consume`/`on_progress` phải nổi lên.
-                            if self.cancel.is_set():
-                                return False
-                            self.on_progress(ProgressEvent(
-                                "structure", consumed, total,
-                                "Không dùng được tiến trình trích xuất; đang làm lại pool cho phần còn lại."))
-                            # Lô làm chết worker/pool hỏng: chỉ TỆP CỦA LÔ NÀY sang đường từng-tệp
-                            # (có FILE_EXTRACT_TIMEOUT_SECONDS). Gửi lại nguyên lô vào pool mới sẽ
-                            # chết lần 2 rồi hạ cả dự án xuống 1 worker (review-53 I2).
-                            suspects.extend(batches[b])
-                            pending.remove(b)
-                            broken = True
+                            submit_failed = True
                             break
-                        # Ngoài `try` của pool: lỗi của callback/ghi CSDL không được nuốt (Minor #27 N2).
-                        for k, extracted in enumerate(extracted_batch):
-                            if self.cancel.is_set():
-                                return False
-                            _consume(files[batches[b][k]], extracted)
-                        pending.remove(b)
-                        batch_files += len(batches[b])
+                        pool_failures = 0  # gửi được lô: lỗi trước đó không phải lỗi hệ thống lặp lại
+                        wait(list(futures.values()), timeout=0.2)
+                        for b in list(futures):
+                            future = futures[b]
+                            if future.done():
+                                try:
+                                    extracted_batch = future.result()
+                                except (BrokenProcessPool, OSError, RuntimeError):
+                                    # Chỉ lỗi của pool bị bắt ở đây; lỗi trong `_consume`/`on_progress`
+                                    # phải nổi lên (Minor #27 N2).
+                                    if self.cancel.is_set():
+                                        return False
+                                    self.on_progress(ProgressEvent(
+                                        "structure", consumed, total,
+                                        "Không dùng được tiến trình trích xuất; đang làm lại pool cho phần còn lại."))
+                                    # Lô làm chết worker/pool hỏng: chỉ TỆP CỦA LÔ NÀY sang đường từng-tệp
+                                    # (review-53 I2). Các lô đang chạy dở chưa có kết quả: gửi lại sau.
+                                    suspects.extend(batches[b])
+                                    del futures[b]
+                                    crashed = True
+                                    break
+                                # Ngoài `try` của pool: lỗi của callback/ghi CSDL không được nuốt.
+                                for k, extracted in enumerate(extracted_batch):
+                                    if self.cancel.is_set():
+                                        return False
+                                    _consume(files[batches[b][k]], extracted)
+                                del futures[b]
+                                batch_files += len(batches[b])
+                            elif time.monotonic() - started[b] >= batch_timeout_seconds(
+                                    [files[i] for i in batches[b]]):
+                                # Quá hạn: tệp của lô này đi đường từng-tệp. KHÔNG cắt các lô đang chạy —
+                                # chúng vẫn xong trong pool này và được dùng lại (review-53 Minor 1).
+                                suspects.extend(batches[b])
+                                del futures[b]
+                                abandoned += 1
+                        if crashed or submit_failed:
+                            break
+                        if abandoned >= workers:
+                            # Mọi worker đều đang treo: giữ pool chỉ làm các lô sau quá hạn oan.
+                            break
                 finally:
-                    if broken:
+                    if crashed or submit_failed or abandoned:
                         _kill_pool(executor)  # dừng tiến trình con đang treo trước khi làm pool mới
                     else:
                         executor.shutdown(wait=False, cancel_futures=True)
-                if broken:
-                    # Nhặt kết quả các lô ĐÃ XONG trong pool vừa bỏ thay vì đọc lại từ đầu (review-53
-                    # Minor 1: đo thật 241 tệp → 466 lượt đọc = 1,94×, mất thêm ~80–100 s ở open-design).
-                    for b in list(pending):
-                        finished = futures.get(b)
-                        if finished is None or not finished.done() or finished.cancelled():
+                if crashed or submit_failed or abandoned:
+                    # Nhặt kết quả các lô ĐÃ XONG trong pool vừa bỏ; chỉ lô chưa có kết quả mới gửi lại.
+                    for b in list(futures):
+                        finished = futures[b]
+                        if not finished.done() or finished.cancelled():
                             continue
                         try:
                             extracted_batch = finished.result()
                         except (BrokenProcessPool, OSError, RuntimeError):
-                            continue  # pool hỏng: lô này được gửi lại ở vòng sau
+                            continue  # pool hỏng: lô này không có kết quả, gửi lại vòng sau
                         for k, extracted in enumerate(extracted_batch):
                             if self.cancel.is_set():
                                 return False
                             _consume(files[batches[b][k]], extracted)
-                        pending.remove(b)
+                        del futures[b]
                         batch_files += len(batches[b])
+                    pending = sorted(futures) + pending
+                    futures.clear()
+                if submit_failed:
+                    pool_failures += 1
+                    if pool_failures >= 2:
+                        gave_up = True
+                        break
             if gave_up and pending:
                 # Lỗi hệ thống lặp lại (không tạo/gửi được pool): phần còn lại đi đường từng-tệp.
                 for b in list(pending):
