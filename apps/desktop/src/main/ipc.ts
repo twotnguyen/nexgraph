@@ -158,6 +158,9 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promi
       pendingPrompts.set(view.id, resolve)
       getWindow()?.webContents.send('auth:login-prompt', view)
     })
+  }).catch((e: unknown) => {
+    accountsPromise = null // lỗi tạo một lần không được làm chết mọi lần gọi auth sau đó
+    throw e
   }))
 
 export function stopAllWatchers(): void {
@@ -884,16 +887,23 @@ export function registerIpc(
   })
   on('semantic:start', async (pid: string, target: SemanticTarget, budget?: number, noCache?: boolean) => {
     const settings = await api().aiSettings(pid)
-    if (!settings.enabled) throw new AgentError('ai_disabled', 'Chưa bật phân tích bằng AI cho dự án này.')
+    // `dedup` gộp khái niệm trùng ngay trên máy, không gửi gì: không cần bật AI, chọn model hay đồng ý.
+    const local = target === 'dedup'
+    if (!settings.enabled && !local) throw new AgentError('ai_disabled', 'Chưa bật phân tích bằng AI cho dự án này.')
     const a = await acc()
-    // Người dùng đồng ý với một model cụ thể lúc bật AI: model đang chọn đã đổi thì phải đồng ý lại.
-    const current = selectedModelLabel(a)
-    if (settings.model !== current)
-      throw new AgentError('ai_provider_changed', `Model AI đã đổi (${settings.model ?? 'chưa có'} → ${current}). Hãy đồng ý lại trước khi gửi.`)
+    let transport: { kind: 'app'; model_label: string } | { kind: 'direct'; base_url: string; api_key: string; model: string }
+    if (local) {
+      transport = { kind: 'app', model_label: settings.model ?? '' }
+    } else {
+      // Người dùng đồng ý với một model cụ thể lúc bật AI: model đang chọn đã đổi thì phải đồng ý lại.
+      const current = selectedModelLabel(a)
+      if (settings.model !== current)
+        throw new AgentError('ai_provider_changed', `Model AI đã đổi (${settings.model ?? 'chưa có'} → ${current}). Hãy đồng ý lại trước khi gửi.`)
+      transport = settings.transport === 'direct' ? await directTransport(a) : { kind: 'app' as const, model_label: selectedModelLabel(a) }
+    }
     const max = Number.isFinite(budget) && budget! > 0 ? Math.floor(budget!) : 1_000_000
-    const transport = settings.transport === 'direct' ? await directTransport(a) : { kind: 'app' as const, model_label: selectedModelLabel(a) }
     const jobId = (await api().startSemantic(pid, { targets: target, transport, max_tokens_budget: max, no_cache: noCache === true })).job_id
-    if (transport.kind === 'app') {
+    if (!local && transport.kind === 'app') {
       const ac = new AbortController()
       semanticRuns.set(jobId, ac)
       void runSemanticJob(jobId, {
