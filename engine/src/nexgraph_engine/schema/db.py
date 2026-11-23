@@ -111,6 +111,9 @@ def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app", "
 
 WAL_RETRY_SECONDS = 5.0  # FLAKY-SCHEMA: `journal_mode = WAL` không dùng busy_timeout khi kết nối khác đang giữ khoá
 WAL_RETRY_DELAY_SECONDS = 0.02
+# Hạn 5 s trên chỉ cho riêng bước `journal_mode`. Khi CSDL bị khoá vĩnh viễn, lần mở đầu tiên còn chờ
+# `BEGIN IMMEDIATE` của `_create_schema` (busy_timeout 5 s) rồi ~5 s ghi schema trước khi tới đây, nên
+# tổng thời gian tới lỗi `database is locked` là ~10 s (đo 10,13 s — review-58 Minor 2). Vẫn hữu hạn.
 
 
 def _is_locked_error(exc: BaseException) -> bool:
