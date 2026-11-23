@@ -63,7 +63,7 @@ function ReadSection({ projectId, node }: { projectId: string; node: GraphNode }
         <>
           {section.stale && <p className="warn small">{vi.explain.sectionStale}</p>}
           <pre className="mono">{section.text}</pre>
-          {section.truncated && <p role="status" className="muted small">{vi.explain.sectionTruncated}</p>}
+          {section.truncated && <p role="status" className="muted small">{vi.explain.sectionTruncated(section.file, section.start, section.end)}</p>}
         </>
       )}
     </section>

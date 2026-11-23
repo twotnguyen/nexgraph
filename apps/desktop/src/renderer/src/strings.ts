@@ -514,7 +514,7 @@ const viStrings = {
       `+${files.reduce((n, f) => n + f.count, 0)} trong ${files.length} tệp: ${files.map((f) => `${f.file ?? '(ngoài tệp)'} (${f.count})`).join(', ')}`,
     readSection: 'Đọc mục',
     sectionStale: 'Tệp đã đổi sau lần index: nội dung có thể lệch dòng.',
-    sectionTruncated: 'Đã cắt bớt — mở tệp để xem đầy đủ'
+    sectionTruncated: (file: string, start: number, end: number) => `Đã cắt bớt — mở tệp để xem đầy đủ (${file}:${start}–${end})`
   },
   graph: {
     backToRoot: 'Về gốc',
@@ -1219,7 +1219,7 @@ const enStrings: typeof viStrings = {
       `+${files.reduce((n, f) => n + f.count, 0)} in ${files.length} ${plural(files.length, 'file', 'files')}: ${files.map((f) => `${f.file ?? '(outside file)'} (${f.count})`).join(', ')}`,
     readSection: 'Read section',
     sectionStale: 'The file changed after indexing: line numbers may be off.',
-    sectionTruncated: 'Truncated — open the file to see it in full'
+    sectionTruncated: (file: string, start: number, end: number) => `Truncated — open the file to see it in full (${file}:${start}–${end})`
   },
   graph: {
     backToRoot: 'Back to root',
