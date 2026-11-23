@@ -12,6 +12,7 @@ lại tham số — không gọi GitHub API.
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,9 +22,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 BASH = shutil.which("bash") or "bash"
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("bash") is None, reason="cần bash để chạy khối shell của workflow"
-)
+pytestmark = [
+    pytest.mark.skipif(
+        shutil.which("bash") is None, reason="cần bash để chạy khối shell của workflow"
+    ),
+    # Job release chạy trên ubuntu-latest; Git Bash/WSL trên Windows không đại diện
+    # cho runner đó và cách MSYS xử lý exec bit của `gh` giả khác POSIX.
+    pytest.mark.skipif(sys.platform == "win32", reason="khối release chỉ chạy trên ubuntu-latest"),
+]
 
 
 def release_script() -> str:
