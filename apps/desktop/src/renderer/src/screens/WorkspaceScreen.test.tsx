@@ -910,7 +910,7 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
 
   it('UI-REFRESH-ERR: lỗi refresh nền hiện toast + thông báo rõ, lỗi lặp không spam', async () => {
     act(() => clearNotifications())
-    const { emitWatchError } = installNexgraph()
+    const { emitWatchError, emitWatchRecovered } = installNexgraph()
     render(<><div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div><NotificationCenter /></>)
     const bell = screen.getByRole('button', { name: 'Thông báo' })
     expect(within(bell).queryByText('1')).not.toBeInTheDocument()
@@ -925,6 +925,13 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     // Cùng lỗi lặp lại: không thêm thông báo thứ hai.
     act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
     expect(within(bell).getByText('1')).toBeInTheDocument()
+    // Dự án khác khôi phục thì không đụng cảnh báo của dự án này.
+    act(() => emitWatchRecovered('p-khac'))
+    expect(screen.getByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
+    // Refresh thành công trở lại: main gửi watch:ok → toast + mục thông báo cũ biến mất.
+    act(() => emitWatchRecovered('p1'))
+    expect(screen.queryByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).not.toBeInTheDocument()
+    expect(within(bell).queryByText('1')).not.toBeInTheDocument()
   })
 
   it('thao tác thật trong Workspace (Xem dấu trang) làm badge chuông tăng', async () => {

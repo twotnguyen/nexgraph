@@ -194,7 +194,10 @@ export function registerIpc(
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
   // UI-REFRESH-ERR: lỗi refresh nền gửi sang renderer (đã gộp lỗi lặp) thay vì chỉ ghi log main.
-  const watchErrors = new WatchErrorNotifier((failure) => getWindow()?.webContents.send('watch:error', failure))
+  const watchErrors = new WatchErrorNotifier(
+    (failure) => getWindow()?.webContents.send('watch:error', failure),
+    (projectId) => getWindow()?.webContents.send('watch:ok', projectId)
+  )
   const handle = (): EngineHandle => {
     const h = getHandle()
     if (!h) throw new EngineApiError(503, 'engine_unavailable', 'Engine chưa sẵn sàng.')
@@ -518,8 +521,8 @@ export function registerIpc(
         root,
         onFlush: async () => {
           const result = await api().refresh(pid)
-          // Refresh chạy được: lỗi sau đó (nếu có) phải được báo lại, không bị gộp với lỗi cũ.
-          watchErrors.clear(pid)
+          // Refresh chạy được: gỡ cảnh báo cũ ở renderer và cho lần lỗi sau báo lại, không bị gộp với lỗi cũ.
+          watchErrors.recover(pid)
           if (result.status === 'skipped' && (result.reason === 'index_running' || result.reason === 'refresh_running')) {
             return 'retry'
           }

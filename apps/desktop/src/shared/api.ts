@@ -431,8 +431,10 @@ export interface NexGraphApi {
   watch: {
     start(projectId: string): Promise<void>
     stop(projectId: string): Promise<void>
-    /** Refresh nền thất bại (ví dụ graph.db chỉ đọc): renderer phải báo rõ thay vì chỉ "graph cũ hơn mã nguồn". */
+    /** Refresh nền thất bại (ví dụ graph.db chỉ đọc): renderer phải báo rõ thay vì chỉ "graph cũ hơn mã nguồn". Đã gộp lỗi lặp ở main. */
     onError(cb: (failure: WatchFailure) => void): () => void
+    /** Refresh nền chạy được trở lại sau lỗi: gỡ cảnh báo cũ của dự án. */
+    onRecovered(cb: (projectId: string) => void): () => void
   }
   /** Nguồn ngoài thư mục. Tiến độ job theo dõi bằng `index.status`/`index.cancel`. */
   sources: {

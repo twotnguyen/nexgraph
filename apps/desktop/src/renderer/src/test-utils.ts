@@ -32,6 +32,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
   const agentHandlers = new Set<(pid: string, e: AgentEvent) => void>()
   const geminiHandlers = new Set<(event: GeminiCliEvent) => void>()
   const watchHandlers = new Set<(failure: { projectId: string; message: string }) => void>()
+  const watchRecoveredHandlers = new Set<(projectId: string) => void>()
   const api = {
     engine: { status: vi.fn(async () => ({ state: 'ready' as const, engineVersion: '0.1.0', vendorCommit: 'x' })),
       restart: vi.fn(async () => {}),
@@ -96,6 +97,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       stopHttp: vi.fn(async () => {}), httpStatus: vi.fn(async () => null), ...over.mcp },
     watch: { start: vi.fn(async () => {}), stop: vi.fn(async () => {}),
       onError: vi.fn((cb: (failure: { projectId: string; message: string }) => void) => { watchHandlers.add(cb); return () => watchHandlers.delete(cb) }),
+      onRecovered: vi.fn((cb: (projectId: string) => void) => { watchRecoveredHandlers.add(cb); return () => watchRecoveredHandlers.delete(cb) }),
       ...over.watch },
     sources: { clone: vi.fn(async () => ({ jobId: 'c1' })), list: vi.fn(async () => []), add: vi.fn(async () => ({ jobId: 's1' })),
       remove: vi.fn(async () => {}), ...over.sources },
@@ -116,7 +118,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)),
     emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)),
-    emitWatchError: (failure: { projectId: string; message: string }) => watchHandlers.forEach((handler) => handler(failure)) }
+    emitWatchError: (failure: { projectId: string; message: string }) => watchHandlers.forEach((handler) => handler(failure)),
+    emitWatchRecovered: (projectId: string) => watchRecoveredHandlers.forEach((handler) => handler(projectId)) }
 }
 
 export const progress = (state: JobState, done: number, total: number, extra: Partial<Job> = {}): Extract<EngineEvent, { type: 'job_progress' }> =>

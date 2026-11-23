@@ -4,13 +4,18 @@ import type { WatchFailure } from '../../shared/api'
 export const WATCH_ERROR_REPEAT_MS = 60_000
 
 /**
- * Chống spam thông báo lỗi refresh nền: gộp cùng thông điệp trong `WATCH_ERROR_REPEAT_MS` cho mỗi dự án;
- * flush thành công gọi `clear` để lần lỗi sau vẫn hiện lại.
+ * Chống spam thông báo lỗi refresh nền: gộp cùng thông điệp trong `WATCH_ERROR_REPEAT_MS` cho mỗi dự án.
+ * Flush thành công sau lỗi gọi `recover` — xoá dedupe và báo renderer gỡ cảnh báo cũ (UI-REFRESH-ERR M2);
+ * `clear` chỉ xoá dedupe khi dừng theo dõi, không gửi tín hiệu.
  */
 export class WatchErrorNotifier {
   private readonly last = new Map<string, { message: string; at: number }>()
 
-  constructor(private readonly send: (failure: WatchFailure) => void, private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly send: (failure: WatchFailure) => void,
+    private readonly sendRecovered: (projectId: string) => void = () => {},
+    private readonly now: () => number = Date.now
+  ) {}
 
   /** Trả `true` khi đã gửi thông báo (không bị gộp). */
   report(projectId: string, error: unknown): boolean {
@@ -23,6 +28,14 @@ export class WatchErrorNotifier {
     return true
   }
 
+  /** Refresh nền chạy được trở lại: gỡ cảnh báo đã báo (nếu có). Trả `true` khi đã gửi tín hiệu khôi phục. */
+  recover(projectId: string): boolean {
+    const had = this.last.delete(projectId)
+    if (had) this.sendRecovered(projectId)
+    return had
+  }
+
+  /** Quên dedupe mà không báo renderer (dừng theo dõi dự án). */
   clear(projectId: string): void {
     this.last.delete(projectId)
   }

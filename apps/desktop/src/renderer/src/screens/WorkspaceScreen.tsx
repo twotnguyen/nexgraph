@@ -8,7 +8,7 @@ import { FileView } from '../components/viewers/FileView'
 import { MarkdownPreview } from '../components/viewers/MarkdownPreview'
 import { MultiBufferView } from '../components/viewers/MultiBufferView'
 import { SplitEditor } from '../components/editor/SplitEditor'
-import { clearNotifications, notify, toggleNotifications } from '../components/common/NotificationCenter'
+import { clearNotifications, notify, toggleNotifications, withdrawNotification } from '../components/common/NotificationCenter'
 import { TerminalPanel } from '../components/terminal/TerminalPanel'
 import { TaskPicker, readTaskHistory, rememberTask } from '../components/terminal/TaskPicker'
 import { WorktreePicker } from '../components/git/WorktreePicker'
@@ -198,12 +198,21 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       lastWatchError = message
       setFeedback(message)
     })
+    // UI-REFRESH-ERR M2: refresh nền chạy được trở lại thì gỡ cảnh báo cũ (toast + mục trung tâm thông báo).
+    const offWatchRecovered = window.nexgraph.watch.onRecovered((projectId) => {
+      if (!current || projectId !== project.project_id || !lastWatchError) return
+      const message = lastWatchError
+      lastWatchError = null
+      withdrawNotification(message)
+      setFeedbackText((previous) => (previous === message ? null : previous))
+    })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
       if (current) setFeedback(tr('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
     })
     return () => {
       current = false
       offWatchError()
+      offWatchRecovered()
       void window.nexgraph.watch.stop(project.project_id).catch(() => {})
       // Trong extension, trợ lý sống ở view riêng của nền nên rời màn này không đóng phiên của nó.
       if (!window.nexgraph.host) void window.nexgraph.agent.close(project.project_id).catch(() => {})

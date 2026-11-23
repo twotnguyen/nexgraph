@@ -4,7 +4,7 @@ import { WatchErrorNotifier, WATCH_ERROR_REPEAT_MS } from '../src/main/watch/err
 const setup = () => {
   let clock = 1_000_000
   const sent: { projectId: string; message: string }[] = []
-  const notifier = new WatchErrorNotifier((failure) => sent.push(failure), () => clock)
+  const notifier = new WatchErrorNotifier((failure) => sent.push(failure), () => {}, () => clock)
   return { sent, notifier, advance: (ms: number) => { clock += ms } }
 }
 
@@ -37,6 +37,23 @@ describe('WatchErrorNotifier', () => {
     expect(sent).toHaveLength(1)
     notifier.clear('p1')
     notifier.report('p1', new Error('disk I/O error'))
+    expect(sent).toHaveLength(2)
+  })
+
+  it('khôi phục sau lỗi gửi tín hiệu để UI gỡ cảnh báo cũ, và chỉ gửi khi đã có lỗi', () => {
+    const recovered: string[] = []
+    const notifier = new WatchErrorNotifier(() => {}, (projectId) => recovered.push(projectId), () => 1_000_000)
+    expect(notifier.recover('p1')).toBe(false)
+    expect(recovered).toEqual([])
+    notifier.report('p1', new Error('disk I/O error'))
+    expect(notifier.recover('p1')).toBe(true)
+    expect(recovered).toEqual(['p1'])
+    // Đã khôi phục: lần lỗi y hệt sau đó phải báo lại ngay, không bị dedupe.
+    const sent: unknown[] = []
+    const n2 = new WatchErrorNotifier((f) => sent.push(f), () => recovered.push('x'), () => 1_000_000)
+    n2.report('p1', new Error('disk I/O error'))
+    n2.recover('p1')
+    n2.report('p1', new Error('disk I/O error'))
     expect(sent).toHaveLength(2)
   })
 
