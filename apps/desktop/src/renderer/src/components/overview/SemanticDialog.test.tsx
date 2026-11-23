@@ -31,6 +31,21 @@ describe('SemanticDialog', () => {
     expect(screen.getByText(/Đã dùng 1\.500 token đầu vào/)).toBeInTheDocument()
   })
 
+  it('AI-08: Gộp khái niệm trùng chạy được khi chưa bật AI, không bắt đồng ý', async () => {
+    const merged = { ...done, result: { ...result, target: 'dedup', merged: 3 } }
+    const { api } = installNexgraph({ index: { status: vi.fn(async () => merged) } })
+    render(<SemanticDialog projectId="p1" onClose={() => {}} />)
+    await userEvent.click(await screen.findByLabelText(/Gộp khái niệm trùng/))
+    expect(screen.queryByRole('button', { name: 'Bật AI cho dự án' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Tôi đồng ý/)).not.toBeInTheDocument()
+    expect(screen.getByText('Không gửi gì: chạy trên máy.')).toBeInTheDocument()
+    const run = screen.getByRole('button', { name: 'Chạy gộp trên máy' })
+    expect(run).toBeEnabled()
+    await userEvent.click(run)
+    expect(api.semantic.start).toHaveBeenCalledWith('p1', 'dedup', undefined, false)
+    expect(await screen.findByText('Xong: gộp 3 khái niệm trùng.')).toBeInTheDocument()
+  })
+
   it('nút Đặt tên cụm chạy target labels', async () => {
     const labels = { ...done, result: { ...result, target: 'labels', labels: { 1: 'Thanh toán', 2: 'Kho' } } }
     const { api } = installNexgraph({
@@ -78,6 +93,16 @@ describe('SemanticDialog — sửa sau kiểm thử', () => {
     expect(screen.getByRole('button', { name: 'Đồng ý và chạy' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Đồng ý dùng model mới' }))
     expect(api.semantic.setSettings).toHaveBeenCalledWith('p1', { enabled: true, transport: 'app', model: null })
+  })
+
+  it('M2: dedup khi AI đang bật vẫn là nút chạy trên máy, không phải "Đồng ý và chạy"', async () => {
+    installNexgraph({ semantic: {
+      getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'openai / gpt-test' })) } })
+    render(<SemanticDialog projectId="p1" onClose={() => {}} />)
+    await userEvent.click(await screen.findByLabelText(/Gộp khái niệm trùng/))
+    expect(screen.getByText('Không gửi gì: chạy trên máy.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Đồng ý và chạy' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Chạy gộp trên máy' })).toBeEnabled()
   })
 
   it('câu đồng ý nêu đúng thứ gửi đi theo target', async () => {

@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Citation } from '@shared/graph-types'
+import { type ScannedCitation, scanCitations } from '@shared/citations'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
 import './citation-text.css'
@@ -27,23 +28,76 @@ function externalUrl(value: string | undefined): string | undefined {
   } catch { return undefined }
 }
 
-/** Chỉ text node được đổi thành chip. Code fence, inline code và nội dung liên kết giữ nguyên Markdown. */
-function citationPlugin(citations: Citation[]) {
-  const byRaw = new Map(citations.map((citation, index) => [citation.raw, index]))
+const keyOf = (file: string, start: number, end: number): string => `${file}\u0000${start}\u0000${end}`
+
+/**
+ * Tra chip theo `file` + khoảng dòng, không theo `raw`: main đã bỏ tiền tố danh sách và bỏ dần chữ
+ * của câu (“Theo flow app/x.py”) khi engine xác nhận tệp, nên cùng một trích dẫn có thể có `raw`
+ * dài ngắn khác nhau giữa lúc đếm và lúc renderer thấy text node.
+ */
+function resolve(scanned: ScannedCitation, citations: Citation[], byKey: Map<string, number>): { index: number; keep: number } | null {
+  const direct = byKey.get(keyOf(scanned.file, scanned.start, scanned.end))
+  if (direct !== undefined) return { index: direct, keep: 0 }
+  const parts = scanned.file.split(' ')
+  for (let i = 1; i < parts.length; i++) {
+    const file = parts.slice(i).join(' ')
+    const found = byKey.get(keyOf(file, scanned.start, scanned.end))
+    if (found !== undefined) return { index: found, keep: scanned.file.length - file.length }
+  }
+  return null
+}
+
+/** Tách một đoạn văn bản thành text/chip; trong inline code, phần không phải trích dẫn vẫn là code. */
+function splitCitations(value: string, citations: Citation[], byKey: Map<string, number>, asCode = false): MarkdownNode[] {
+  const text = (chunk: string): MarkdownNode => (asCode ? { type: 'inlineCode', value: chunk } : { type: 'text', value: chunk })
+  const out: MarkdownNode[] = []
+  let last = 0
+  for (const scanned of scanCitations(value)) {
+    const found = resolve(scanned, citations, byKey)
+    if (!found) continue
+    if (scanned.index > last) out.push(text(value.slice(last, scanned.index)))
+    // Giữ chữ của câu đứng trước đường dẫn (main đã bỏ khi xác minh) làm text, chip chỉ bọc đường dẫn.
+    if (found.keep > 0) out.push(text(scanned.raw.slice(0, found.keep)))
+    out.push({
+      type: 'link', url: '#nexgraph-citation',
+      data: { hProperties: { dataNexgraphCitation: String(found.index) } },
+      children: [{ type: 'text', value: label(citations[found.index]) }]
+    })
+    last = scanned.index + scanned.raw.length
+  }
+  if (out.length === 0) return [text(value)]
+  if (last < value.length) out.push(text(value.slice(last)))
+  return out
+}
+
+/**
+ * Trong code fence, thay nội dung bằng chip sẽ phá thụt lề/monospace và làm sai thứ người dùng
+ * copy ra — nên giữ nguyên khối code và hiện chip ở một dòng ngay dưới khối. Trong inline code thì
+ * tách: phần không phải trích dẫn vẫn là code, riêng trích dẫn thành chip.
+ */
+function citationPlugin(citations: Citation[], blockLabel: string) {
+  const byKey = new Map<string, number>()
+  citations.forEach((citation, index) => {
+    const key = keyOf(citation.file, citation.start, citation.end)
+    if (!byKey.has(key)) byKey.set(key, index)
+  })
   return () => (tree: MarkdownNode) => {
     const transform = (node: MarkdownNode): void => {
-      if (!node.children || ['code', 'inlineCode', 'link', 'linkReference'].includes(node.type)) return
+      if (!node.children) return
       node.children = node.children.flatMap((child): MarkdownNode[] => {
-        if (child.type !== 'text' || !child.value) { transform(child); return [child] }
-        return child.value.split(/(\[\[[^[\]]+\]\])/g).filter(Boolean).map((value) => {
-          const index = byRaw.get(value)
-          if (index === undefined) return { type: 'text', value }
-          return {
-            type: 'link', url: '#nexgraph-citation',
-            data: { hProperties: { dataNexgraphCitation: String(index) } },
-            children: [{ type: 'text', value: label(citations[index]) }]
-          }
-        })
+        if (['link', 'linkReference'].includes(child.type)) return [child]
+        if (child.type === 'inlineCode' && child.value) {
+          const parts = splitCitations(child.value, citations, byKey, true)
+          return parts.some((part) => part.type === 'link') ? parts : [child]
+        }
+        if (child.type === 'code' && child.value) {
+          const chips = splitCitations(child.value, citations, byKey).filter((part) => part.type === 'link')
+          if (chips.length === 0) return [child]
+          return [child, { type: 'paragraph', children: [{ type: 'text', value: `${blockLabel} ` }, ...chips] }]
+        }
+        if (child.type === 'text' && child.value) return splitCitations(child.value, citations, byKey)
+        transform(child)
+        return [child]
       })
     }
     transform(tree)
@@ -52,7 +106,7 @@ function citationPlugin(citations: Citation[]) {
 
 export function CitationText({ text, citations, onOpen }: Props) {
   const locale = useLocale()
-  const plugin = useMemo(() => citationPlugin(citations), [citations])
+  const plugin = useMemo(() => citationPlugin(citations, tr('Trích dẫn trong khối mã:')), [citations, locale])
   const open = useRef(onOpen)
   open.current = onOpen
   // Giữ nguyên danh tính component giữa các lần vẽ: hàm mới mỗi lần làm React dựng lại chip, nên bấm trượt khi cha vẽ lại giữa mousedown và mouseup.

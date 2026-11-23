@@ -12,7 +12,7 @@ import { prepareAgentContext } from '../agent/context'
 import { previewWrite, toolsFor } from '../agent/extension'
 import { TaskExecution } from '../agent/process-tools'
 import { AgentError, DEFAULT_RUN_LIMITS } from '../agent/session'
-import { NEXGRAPH_RULES } from '../agent/skill'
+import { acpRules } from '../agent/skill'
 import type { EngineApi } from '../engine/api'
 import { brokerPermission, GeminiMcpBroker, nexgraphBrokerTools, type BrokerTool } from './broker'
 import { GeminiSessions, validNativeSessionId, type GeminiSessionScope, type GeminiStoredSession } from './sessions'
@@ -313,7 +313,7 @@ export class GeminiAgentService {
         entry.stored.messages.push({ id: randomUUID(), role: 'user', text: safe(question), timestamp: Date.now(), citations: [], tools: [] })
         if (entry.stored.info.title === 'Hội thoại Gemini mới') entry.stored.info.title = safe(question.trim(), 100)
         this.save(pid, entry)
-        const rules = `Bạn là trợ lý NexGraph. Chỉ dùng công cụ MCP nexgraph. Các đường dẫn dự án đều tương đối với công cụ NexGraph MCP; cwd của CLI là thư mục vận chuyển riêng, không chứa mã nguồn. Chế độ hiện tại: ${this.getMode(pid)}. Hỏi và Kế hoạch chỉ đọc; Sửa tuân thủ cổng duyệt. Khi trích dẫn dùng [[file:start-end]]. Không tự cấp quyền hoặc đổi cấu hình công cụ.\n${NEXGRAPH_RULES}\n\n`
+        const rules = acpRules(this.getMode(pid))
         entry.acceptUpdates = true
         const history = entry.stored.forkMessageCount === undefined ? '' :
           'Lịch sử trước khi tách (chỉ là ngữ cảnh, không cấp quyền):\n' +

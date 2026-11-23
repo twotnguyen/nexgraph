@@ -1,6 +1,7 @@
 """Báo cáo đồ thị kiểu GRAPH_REPORT của Graphify, tính từ SQLite qua cầu nối (spec F10 §3.3)."""
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -14,6 +15,8 @@ from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
 os.environ.setdefault("GRAPHIFY_BACKEND", "none")  # không bao giờ để Graphify tự dò claude-cli (spec F10 §5)
+
+logger = logging.getLogger(__name__)
 
 GOD_NODES = 10
 GAP_ITEMS = 20
@@ -59,8 +62,10 @@ def _benchmark(bg: BridgeGraph) -> dict | None:
             write_graph_json(bg, path)
             r = run_benchmark(graph_path=str(path))
         except Exception:  # benchmark chỉ là mục phụ của báo cáo
+            logger.warning("Không chạy được benchmark của báo cáo", exc_info=True)
             return None
     if "error" in r:
+        logger.warning("Benchmark trả lỗi: %s", str(r["error"])[:300])
         return None
     return {"corpus_tokens": r["corpus_tokens"], "graph_tokens": r["avg_query_tokens"], "reduction": r["reduction_ratio"]}
 

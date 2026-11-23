@@ -48,6 +48,8 @@ type Server = {
   diagnostics: Map<string, LspDiagnostic[]>
   resolveCodeActions: boolean
   callHierarchy: boolean
+  /** Server có khai báo `declarationProvider`; typescript-language-server thì không. */
+  declaration: boolean
 }
 
 /** Một phần nội dung hover của LSP (chuỗi, MarkedString hoặc MarkupContent) → Markdown. */
@@ -100,7 +102,7 @@ export class LspManager {
       const items = params && typeof params === 'object' && 'items' in params && Array.isArray(params.items) ? params.items : []
       return items.map(() => null)
     }
-    const server: Server = { process: child, rpc, versions: new Map(), diagnostics: new Map(), resolveCodeActions: false, callHierarchy: false, ready: Promise.resolve() }
+    const server: Server = { process: child, rpc, versions: new Map(), diagnostics: new Map(), resolveCodeActions: false, callHierarchy: false, declaration: false, ready: Promise.resolve() }
     rpc.onNotification = (method, params) => {
       if (method !== 'textDocument/publishDiagnostics' || this.servers.get(key) !== server) return
       const event = normalizeDiagnostics(root, params)
@@ -146,11 +148,12 @@ export class LspManager {
       },
       initializationOptions: kind === 'ts' ? { tsserver: { path: join(pkgDir('typescript'), 'lib', 'tsserver.js') } } : {}
     }, 60_000).then((result) => {
-      const caps = (result as { capabilities?: { codeActionProvider?: { resolveProvider?: boolean } | boolean; callHierarchyProvider?: unknown } } | null)?.capabilities
+      const caps = (result as { capabilities?: { codeActionProvider?: { resolveProvider?: boolean } | boolean; callHierarchyProvider?: unknown; declarationProvider?: unknown } | null })?.capabilities
       const provider = caps?.codeActionProvider
       server.resolveCodeActions = typeof provider === 'object' && provider !== null && provider.resolveProvider === true
       rpc.notify('initialized', {})
       server.callHierarchy = !!caps?.callHierarchyProvider
+      server.declaration = !!caps?.declarationProvider
     })
     this.servers.set(key, server)
     return server
@@ -208,6 +211,11 @@ export class LspManager {
   }
 
   async declaration(root: string, file: string, text: string, line: number, character: number): Promise<LspLocation[]> {
+    const doc = await this.withDoc(root, file, text)
+    if (!doc) return []
+    // Server không nhận textDocument/declaration (typescript-language-server) thì lùi về định nghĩa như VS Code,
+    // thay vì trả lỗi "Unhandled method" cho lệnh đi đến khai báo.
+    if (!doc.server.declaration) return this.definition(root, file, text, line, character)
     return this.locations('textDocument/declaration', root, file, text, line, character)
   }
 
