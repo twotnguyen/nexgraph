@@ -17,8 +17,8 @@ from graphify.security import redact_secrets
 _SENSITIVE_SUFFIXES = ("PASSWORD", "PASSWD", "PASSPHRASE", "SECRET", "TOKEN", "APIKEY", "ACCESSKEY",
                        "PRIVATEKEY", "CREDENTIAL", "CREDENTIALS")
 _ENV_LINE = re.compile(
-    r"(?im)^([ \t]*(?:export[ \t]+)?)([A-Za-z_][A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*)"
-    r"(\"[^\"\n]*\"|'[^'\n]*'|[^\s#'\"]+)([ \t]*(?:#.*)?)$")
+    r"(?im)^([ \t]*(?:export[ \t]+)?`*)([A-Za-z_][A-Za-z0-9_.-]*)([ \t]*[:=][ \t]*)"
+    r"(\"[^\"\n]*\"|'[^'\n]*'|`[^`\n]*`|[^\s#\"'`]+)([ \t]*`*[ \t]*(?:#.*)?)$")
 # Giá trị có ký tự cú pháp là code/biểu thức, không phải giá trị cấu hình.
 _OBVIOUS_CODE = re.compile(r"[(){}[\]<>]|=>|::|^\$|^%")
 _TYPE_WORDS = frozenset({"string", "number", "boolean", "any", "unknown", "void", "null", "undefined",

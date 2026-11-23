@@ -44,6 +44,22 @@ def test_sensitive_env_values_are_redacted(line, secret):
     assert out == redact_doc_secrets(out)  # idempotent
 
 
+def test_backticks_surrounding_the_value_are_kept():
+    """A3 #9: che `api_key=*** không được ăn dấu backtick bao quanh giá trị."""
+    value = "abcd" + "1234"
+    for line in (f"API_KEY={value}`", f"`API_KEY={value}`", f'`API_KEY="{value}"`'):
+        out = redact_doc_secrets(line)
+        assert value not in out and "[redacted]" in out, out
+        assert out.count("`") == line.count("`"), (line, out)
+        assert out.endswith("`") is line.endswith("`"), (line, out)
+
+
+def test_backticked_line_keeps_closing_tick_when_redacted():
+    value = "abcd" + "1234"
+    out = redact_doc_secrets(f"`DB_PASSWORD={value}`")
+    assert out == "`DB_PASSWORD=[redacted]`"
+
+
 def test_repo_markdown_has_no_false_positive_redaction():
     """Quét mọi tệp .md của repo: không dòng nào bị đổi (mục tiêu 0 dương tính giả)."""
     listed = subprocess.run(["git", "ls-files", "*.md"], cwd=REPO, capture_output=True, text=True, check=True)

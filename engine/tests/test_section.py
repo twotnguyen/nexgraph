@@ -178,3 +178,18 @@ def test_section_masks_document_that_only_contains_secret(tmp_path):
         assert exc.value.code == "protected_source"
     finally:
         store.conn.close()
+
+
+def test_section_redacts_key_value_secret_and_keeps_backticks(tmp_path):
+    """A3 #9: \"Đọc mục\" che cả dạng `KEY=value` và giữ dấu backtick bao quanh giá trị."""
+    value = "abcd" + "1234"
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / "conf.md").write_text(f"# Cấu hình\n\n`DB_PASSWORD={value}`\n", encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        out = section_json(store, root, _doc(store, "Cấu hình", "conf.md").id)
+        assert value not in out["text"] and "[redacted]" in out["text"]
+        assert out["text"].count("`") == 2
+    finally:
+        store.conn.close()

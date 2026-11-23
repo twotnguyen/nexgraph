@@ -4,8 +4,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from graphify.sections import _BODY_CONTROL_RE, DEFAULT_MAX_CHARS
-from graphify.security import redact_secrets
 
+from nexgraph_engine.docs.secrets import redact_doc_secrets
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.query.contracts import MAX_CODE_LINES, node_json, read_code
 from nexgraph_engine.query.source_policy import SourcePolicy
@@ -27,7 +27,7 @@ def section_json(store: GraphStore, root: Path, node_id: str, *, source: SourceP
     code = read_code(store, root, node.file, start, end, transcript_dir=transcript_dir, source=source,
                      sources_dir=sources_dir, allow_secret_names=True)
     # Bỏ ký tự điều khiển (trừ tab) để tài liệu không chèn mã thoát terminal vào ngữ cảnh model, rồi che secret.
-    text = redact_secrets(_BODY_CONTROL_RE.sub("", code["text"]).rstrip())
+    text = redact_doc_secrets(_BODY_CONTROL_RE.sub("", code["text"]).rstrip())
     # Cắt vì số dòng (section dài hơn MAX_CODE_LINES) cũng là cắt: phải báo, không chỉ khi vượt max_chars (REV-21).
     truncated = len(text) > max_chars or end < section_end
     return {"node": node_json(node), "file": node.file, "start": code["start"], "end": code["end"],
