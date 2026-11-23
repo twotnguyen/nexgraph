@@ -80,6 +80,52 @@ def test_backticked_line_keeps_closing_tick_when_redacted():
     assert out == "`DB_PASSWORD=[redacted]`"
 
 
+# Re-review #52 Important 1 (vòng 3): các dạng tài liệu từng lọt — JSON, gạch đầu dòng, cả dòng bọc ngoặc,
+# câu văn có backtick, `*_KEY` tiền tố lạ với giá trị ngắn.
+@pytest.mark.parametrize("line,secret", [
+    ('{"secret_key": "Json4Pq9Xy2Lk6Q"}', "Json4Pq9Xy2Lk6Q"),
+    ('  "api_key": "Json4Pq9Xy2Lk6Q",', "Json4Pq9Xy2Lk6Q"),
+    ('{"MASTER_KEY": "Json4Pq9Xy2Lk6Q"}', "Json4Pq9Xy2Lk6Q"),
+    ('"aws_secret_access_key": "Aws4Pq9Xy2Lk6Q"', "Aws4Pq9Xy2Lk6Q"),
+    ("- `SECRET_KEY=Dash4Pq9Xy2Lk6Q`", "Dash4Pq9Xy2Lk6Q"),
+    ("* `DB_PASSWORD=hunter2`", "hunter2"),
+    ('"ENCRYPTION_KEY=Quote4Pq9Xy2"', "Quote4Pq9Xy2"),
+    ("[SIGNING_KEY=Bracket4Pq9Xy2]", "Bracket4Pq9Xy2"),
+    ("Đặt `MASTER_KEY=Prose8Kx2Rt5` trong tệp.", "Prose8Kx2Rt5"),
+    ("master_key: Yaml8Kx2Rt5abcd", "Yaml8Kx2Rt5abcd"),
+    ("token = 'Single8Kx2Rt5'", "Single8Kx2Rt5"),
+    ("TENANT_KEY=abcd1234", "abcd1234"),
+    ("FOO_KEY=Zx9Qm2", "Zx9Qm2"),
+    ("MY_APP_KEY=hunter2", "hunter2"),
+])
+def test_redacts_secret_forms_found_in_documents(line, secret):
+    out = redact_doc_secrets(line)
+    assert secret not in out and "[redacted]" in out, out
+    assert out == redact_doc_secrets(out)  # idempotent
+
+
+@pytest.mark.parametrize("line", [
+    '{"key": "value"}',
+    '{"name": "NexGraph"}',
+    "key: value",
+    'sorted(subgraph_nodes, key=relevance, reverse=True)',
+    '"token_budget": 4000',
+    '{"public_key": "abcd1234"}',
+    "Credential = ApiKeyCredential | OAuthCredential",
+    "apiKey: 'fake-key',",
+    "DB_PASSWORD=<your-password>",
+    "API_KEY=${MY_KEY}",
+    "API_KEY=***",
+    "API_KEY=xxx",
+    "SECRET_MODE=null",
+    "RETRIES=3",
+    "TOKEN_TTL_SECONDS=3600",
+    "GITHUB_TOKEN_EXPIRES=3600",
+])
+def test_document_shapes_without_secret_are_kept(line):
+    assert redact_doc_secrets(line) == line
+
+
 def test_repo_markdown_has_no_false_positive_redaction():
     """Quét mọi tệp .md của repo: không dòng nào bị đổi (mục tiêu 0 dương tính giả)."""
     listed = subprocess.run(["git", "ls-files", "*.md"], cwd=REPO, capture_output=True, text=True, check=True)
