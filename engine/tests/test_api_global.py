@@ -191,3 +191,28 @@ def test_incremental_refresh_relinks_cross_repo_edges(api, copy_fixture):
     cart.write_text(original, encoding="utf-8")
     assert api.post(f"/v1/projects/{app}/refresh").json()["status"] == "ok"
     _wait_edges(api, has_call)  # và xuất hiện lại
+
+
+def test_relink_jobs_are_coalesced(api, monkeypatch):
+    import threading
+
+    from nexgraph_engine.global_graph import link
+
+    started, release = threading.Event(), threading.Event()
+
+    def slow(data_dir, registry):
+        started.set()
+        release.wait(10)
+        return {"edges": 0}
+
+    monkeypatch.setattr(link, "relink", slow)
+    services = api.app.state.services
+    first = services.relink_global()
+    assert started.wait(5), "job relink không chạy"
+    assert services.relink_global() == first  # đã có job đang chờ/chạy: dùng lại, không xếp thêm
+    release.set()
+    for _ in range(200):
+        if services.jobs.get(first)["state"] not in ("queued", "running"):
+            break
+        time.sleep(0.02)
+    assert services.jobs.get(first)["state"] == "done"

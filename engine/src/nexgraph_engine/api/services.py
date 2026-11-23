@@ -1,4 +1,5 @@
 import tempfile
+import threading
 from pathlib import Path
 
 from nexgraph_engine.index.events import EventBus
@@ -18,12 +19,21 @@ class Services:
         self.jobs.on_index_done.append(self._relink_if_member)
         self.refresh.on_refresh_done.append(self._relink_if_member)
         self.llm_queues: dict = {}  # job_id → LlmQueue của job semantic đường A (W9)
+        self._relink_lock = threading.Lock()  # gộp hai yêu cầu relink trùng thời điểm
 
     # --- graph chung (W8) ---------------------------------------------------------------------------
     def relink_global(self) -> str:
-        """Job tính lại cạnh liên repo; không khoá dự án nào vì chỉ đọc CSDL của chúng."""
+        """Job tính lại cạnh liên repo; không khoá dự án nào vì chỉ đọc CSDL của chúng.
+
+        Watcher bắn refresh liên tục nên nếu đã có job `global_link` đang chờ/chạy thì dùng lại,
+        không xếp thêm job toàn bộ (GFY-04 minor 6).
+        """
         from nexgraph_engine.global_graph.link import relink
-        return self.jobs.start_task(None, "global_link", lambda ctx: relink(self.data_dir, self.registry))
+        with self._relink_lock:
+            existing = self.jobs.active_task("global_link")
+            if existing is not None:
+                return existing
+            return self.jobs.start_task(None, "global_link", lambda ctx: relink(self.data_dir, self.registry))
 
     def _relink_if_member(self, project_id: str) -> None:
         from nexgraph_engine.global_graph.store import GlobalStore
