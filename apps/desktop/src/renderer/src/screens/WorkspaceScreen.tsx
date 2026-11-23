@@ -44,7 +44,7 @@ import { Icon, VIEW_TONE } from '../components/common/icons'
 import { openThemePicker } from '../components/layout/ThemePicker'
 import { FileFinder } from '../components/layout/FileFinder'
 import { runCommand, useCommand } from '../state/commands'
-import { getFileSaver, saveAllFiles } from '../state/fileSaveRegistry'
+import { getFileSaver, revertFile, saveAllFiles } from '../state/fileSaveRegistry'
 import { registerFileMenuActions } from '../state/fileMenuActions'
 import { getExplorerOpen, setChatDock, setChatWidth, useChatDock, useChatWidth } from '../state/layoutPrefs'
 import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
@@ -717,12 +717,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   useCommand('editor.close_f4', () => runCommand('tab.close'))
   useCommand('file.revert', () => {
     const file = activeFile
-    const git = window.nexgraph.git
-    if (!git) { notify(tr('NexGraph chưa hỗ trợ tính năng này.')); return }
     if (!file || !window.confirm(tr('Khôi phục “{path}” về nội dung trên đĩa? Các thay đổi chưa lưu sẽ mất.', { path: file }))) return
-    void git.restore(project.project_id, file).then(async () => {
-      const ok = await getFileSaver(project.project_id, file)?.revert?.()
-      if (ok) notify(tr('Đã khôi phục tệp {file}', { file }))
+    // Hoàn tác = đọc lại đúng nội dung đang có trên đĩa; không gọi git.restore (xoá cả thay đổi đã commit).
+    void revertFile(project.project_id, file).then((result) => {
+      if (result === 'reverted') notify(tr('Đã khôi phục tệp {file}', { file }))
+      else if (result === 'unsupported') notify(tr('NexGraph chưa hỗ trợ tính năng này.'))
     }).catch((e) => notify(errorText(e)))
   }, !!activeFile)
   useCommand('folder.close', () => guardLeave(onOpenProjects)?.(), !!onOpenProjects)

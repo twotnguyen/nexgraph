@@ -652,3 +652,34 @@ describe('EditorTab view controls', () => {
     } finally { stop() }
   })
 })
+
+describe('EditorTab hoàn tác tệp (PR #49)', () => {
+  it('revert đọc lại nội dung trên đĩa, bỏ thay đổi chưa lưu và xoá cờ dirty', async () => {
+    const { read, onDirtyChange, write } = setup()
+    const ta = await box()
+    await userEvent.type(ta, '!')
+    expect(ta.value).toBe('void a() {}\n!')
+    expect(onDirtyChange).toHaveBeenLastCalledWith('lib/a.dart', true)
+    read.mockResolvedValueOnce(content({ text: '// bản mới trên đĩa\n', version: 'disk-v2', mtimeMs: 300 }))
+    const ok = await act(async () => getFileSaver('p1', 'lib/a.dart')?.revert?.())
+    expect(ok).toBe(true)
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(ta.value).toBe('// bản mới trên đĩa\n')
+    expect(onDirtyChange).toHaveBeenLastCalledWith('lib/a.dart', false)
+    // Không ghi gì lên đĩa khi hoàn tác.
+    expect(write).not.toHaveBeenCalled()
+  })
+
+  it('revert trả false và báo lỗi khi không đọc được tệp, giữ nguyên nội dung đang sửa', async () => {
+    const { read, onDirtyChange } = setup()
+    const ta = await box()
+    await userEvent.type(ta, '?')
+    const before = ta.value
+    read.mockRejectedValueOnce(rejection('file_not_found'))
+    const ok = await act(async () => getFileSaver('p1', 'lib/a.dart')?.revert?.())
+    expect(ok).toBe(false)
+    expect(ta.value).toBe(before)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể khôi phục tệp từ đĩa.')
+    expect(onDirtyChange).toHaveBeenLastCalledWith('lib/a.dart', true)
+  })
+})

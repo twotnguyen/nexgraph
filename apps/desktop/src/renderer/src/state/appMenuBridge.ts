@@ -1,5 +1,7 @@
 import { runCommand } from './commands'
 import { getEditorPrefs, setEditorPrefs } from './editorPrefs'
+import { notify } from '../components/common/NotificationCenter'
+import { tr } from '../strings'
 
 /**
  * Menu File/Edit/View là menu hệ thống do main dựng, nhưng chỉ renderer biết màn hình
@@ -10,7 +12,10 @@ export function installAppMenuBridge(): () => void {
   if (!menu) return () => {}
   return menu.onAction(({ id }) => {
     if (id === 'app-menu:auto-save') {
-      setEditorPrefs({ autoSave: getEditorPrefs().autoSave === 'off' ? 'afterDelay' : 'off' })
+      // Menu native không hiện dấu check, nên báo rõ trạng thái vừa bật/tắt.
+      const on = getEditorPrefs().autoSave === 'off'
+      setEditorPrefs({ autoSave: on ? 'afterDelay' : 'off' })
+      notify(on ? tr('Đã bật tự lưu') : tr('Đã tắt tự lưu'))
       return
     }
     runCommand(id)

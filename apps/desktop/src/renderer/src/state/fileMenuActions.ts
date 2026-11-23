@@ -20,11 +20,3 @@ export function registerFileMenuActions(next: Actions): () => void {
 export function openFileFromMenu(path: string, relative?: string): void {
   actions.openFile?.(path, relative)
 }
-
-export function openProjectFromMenu(path: string): void {
-  actions.openProject?.(path)
-}
-
-export function hasFileOpener(): boolean {
-  return !!actions.openFile
-}
