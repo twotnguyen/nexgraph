@@ -50,6 +50,20 @@ describe('WorkbenchControls', () => {
     expect(screen.getByLabelText('Token / tác vụ')).toBeDisabled()
   })
 
+  it('M3: dòng thử lại chỉ hiện câu dễ hiểu; chi tiết SDK thô nằm trong mục mở rộng', async () => {
+    const { emitAgent } = installNexgraph()
+    render(<Controls />)
+    act(() => emitAgent('p1', { type: 'retry', attempt: 2, maxAttempts: 2, delayMs: 2000, message: 'terminated: other side closed (UND_ERR_SOCKET)' }))
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Đang thử lại 2/2 sau 2 giây. Không kết nối được tới nhà cung cấp AI.')
+    expect(status).not.toHaveTextContent('UND_ERR_SOCKET')
+    expect(screen.getByText('Chi tiết kỹ thuật')).toBeInTheDocument()
+    expect(screen.getByText('terminated: other side closed (UND_ERR_SOCKET)')).toBeInTheDocument()
+    act(() => emitAgent('p1', { type: 'retry', attempt: 1, maxAttempts: 3, delayMs: 1000, message: '429 Too Many Requests' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Nhà cung cấp AI đang giới hạn tốc độ hoặc hết hạn mức.')
+    expect(screen.getByRole('status')).not.toHaveTextContent('429')
+  })
+
   it('Google chỉ sửa giới hạn thời gian và không gửi giá trị 0 từ ô lượt/token bị khóa', async () => {
     const { api } = installNexgraph()
     render(<Controls runtime="antigravity-cli" />)

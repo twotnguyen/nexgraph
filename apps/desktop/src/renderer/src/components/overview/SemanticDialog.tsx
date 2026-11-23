@@ -146,7 +146,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
             : <button type="button" onClick={onClose}>{vi.semantic.close}</button>}
           {settings && !settings.enabled && !local && <button type="button" className="primary" disabled={!consent || busy} onClick={() => void enable()}>{vi.semantic.enable}</button>}
           {settings && !settings.enabled && local && <button type="button" className="primary" disabled={busy} onClick={() => void run()}>{vi.semantic.runLocal}</button>}
-          {settings?.enabled && !job && <button type="button" className="primary" disabled={busy || !estimate || empty || changed || (!local && !model)} onClick={() => void run()}>{vi.semantic.run}</button>}
+          {/* `dedup` chạy trên máy kể cả khi AI đang bật: nhãn phải nói đúng là chạy cục bộ, không đòi đồng ý gửi đi. */}
+          {settings?.enabled && !job && <button type="button" className="primary" disabled={busy || !estimate || empty || changed || (!local && !model)} onClick={() => void run()}>{local ? vi.semantic.runLocal : vi.semantic.run}</button>}
         </footer>
       </div>
     </div>
