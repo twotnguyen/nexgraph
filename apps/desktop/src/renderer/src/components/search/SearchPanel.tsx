@@ -156,7 +156,10 @@ function AskGraph({ projectId, revision, onOpen, onShowSubgraph, onOpenFlow }: P
               </ul>
             </>
           )}
-          <p>{vi.search.askNodes(result.nodes.length, result.edges.length)}</p>
+          {/* Đang chờ chọn node trùng tên thì chưa có kết quả để đếm — đừng hiện "0 node, 0 cạnh" (A3 #9). */}
+          {!(result.ambiguous && result.ambiguous.length > 0 && result.nodes.length === 0) && (
+            <p>{vi.search.askNodes(result.nodes.length, result.edges.length)}</p>
+          )}
           {result.truncated && <p className="muted small">{vi.search.askTruncated}</p>}
           {onShowSubgraph && result.nodes.length > 0 && (
             <button type="button" className="primary" onClick={() => onShowSubgraph({ nodes: result.nodes, edges: result.edges })}>

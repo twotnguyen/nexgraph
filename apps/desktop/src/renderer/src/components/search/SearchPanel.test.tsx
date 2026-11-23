@@ -188,4 +188,16 @@ describe('SearchPanel', () => {
     await user.click(choices[1])
     expect(onOpen).toHaveBeenCalledWith(b)
   })
+
+  it('đang chờ chọn node trùng tên thì không hiện dòng "0 node, 0 cạnh liên quan" (A3 #9)', async () => {
+    const a = gnode('a/helper.py::helper#function', { kind: 'function', label: 'helper', file: 'a/helper.py' })
+    const b = gnode('b/helper.py::helper#function', { kind: 'function', label: 'helper', file: 'b/helper.py' })
+    installNexgraph({ graph: { ask: vi.fn(async () => ({ seeds: [], nodes: [], edges: [], truncated: false, ambiguous: [a, b] })) } })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<SearchPanel projectId="p1" onOpen={vi.fn()} onShowSubgraph={vi.fn()} />)
+    await user.click(screen.getByRole('radio', { name: 'Hỏi graph' }))
+    await user.type(screen.getByLabelText('Câu hỏi cho graph'), 'helper{Enter}')
+    expect(await screen.findByText(/trùng với 2 node/)).toBeInTheDocument()
+    expect(screen.queryByText('0 node, 0 cạnh liên quan')).toBeNull()
+  })
 })
