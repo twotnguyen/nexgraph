@@ -294,6 +294,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     void window.nexgraph.auth.models().then((items) => { if (alive) setModels(items) }).catch(() => {})
     window.addEventListener('focus', refresh)
     // Đổi model trong Cài đặt không làm panel chat đang mở biết (A1 F3): main bắn khi danh sách model đổi (#37).
+    const offModels = window.nexgraph.auth.onModelsChanged(() => refresh())
     window.nexgraph.agent.getMode(projectId).then((m) => {
       if (!alive) return
       if (m === 'edit') editWarned.current = true // phiên đã ở Sửa từ trước thì không hỏi lại
@@ -360,6 +361,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       if (turn.current) void window.nexgraph.agent.abort(projectId)
       turn.current = null
       window.removeEventListener('focus', refresh)
+      offModels()
       off()
     }
   }, [projectId])

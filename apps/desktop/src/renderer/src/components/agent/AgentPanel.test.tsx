@@ -271,6 +271,22 @@ describe('AgentPanel', () => {
     expect(screen.getAllByText('Không kết nối được tới nhà cung cấp AI.')).toHaveLength(1)
   })
 
+  it('đổi model trong Cài đặt cập nhật panel chat đang mở ngay, không cần reload (A1 F3)', async () => {
+    let fire: (e: { providerId: string }) => void = () => {}
+    const getSettings = vi.fn(async () => ({ ...target, model: 'm1', hasKey: true }))
+    installNexgraph({
+      ai: { getSettings, hasConsent: vi.fn(async () => true) },
+      auth: { onModelsChanged: vi.fn((cb: (e: { providerId: string }) => void) => { fire = cb; return () => {} }) }
+    })
+    render(<AgentPanel {...props()} />)
+    expect(await screen.findByText('m1')).toBeInTheDocument()
+    // Cài đặt đã đổi model và main báo danh sách model đổi; panel đang mở phải đọc lại cấu hình.
+    getSettings.mockResolvedValue({ ...target, model: 'm2', hasKey: true })
+    act(() => fire({ providerId: 'provider-one' }))
+    expect(await screen.findByText('m2')).toBeInTheDocument()
+    expect(screen.queryByText('m1')).toBeNull()
+  })
+
   it('xung đột khi ghi vẫn hiện sau câu trả lời và được xóa khi gửi câu hỏi mới', async () => {
     let settle!: () => void // prompt() thật settle ngay sau `done`, khi main dọn xong lượt
     const prompt = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve })).mockResolvedValue(undefined)
