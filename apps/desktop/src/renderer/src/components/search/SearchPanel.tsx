@@ -3,6 +3,7 @@ import type { AskResult, GraphEdge, GraphNode, SearchHit } from '@shared/graph-t
 import { useDebounced } from '../../state/useDebounced'
 import { vi, tr } from '../../strings'
 import { kindStyle } from '../graph/kindStyle'
+import { isVirtualSource } from '../graph/virtualSource'
 
 interface Props {
   projectId: string
@@ -20,9 +21,6 @@ const LIMIT = 30
 
 const errMessage = (err: unknown): string =>
   err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
-
-/** Nguồn ảo (`nguon://cargo`, `nguon://scip`…) không phải tệp trên đĩa: mở editor sẽ ra tab chết. */
-const isVirtualSource = (file: string | null | undefined): boolean => !!file && file.includes('://')
 
 function NodeButton({ node, onOpen, onOpenCode }: { node: GraphNode; onOpen: (n: GraphNode) => void; onOpenCode?: Props['onOpenCode'] }) {
   const source = node.file && (node.line_start ? `${node.file}:${node.line_start}` : node.file)
