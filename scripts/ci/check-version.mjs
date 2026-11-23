@@ -73,10 +73,23 @@ function parseJsonVersion(text) {
 }
 
 function parseTomlVersion(text) {
-  // `version = "..."` ở cấp cao nhất của [project] (không nằm trong bảng con).
-  const match = /^version\s*=\s*"([^"]+)"/m.exec(text);
-  if (!match) throw new Error('không thấy dòng version = "..."');
-  return match[1];
+  // TOML tối thiểu, theo bảng: chỉ lấy `version = "..."` nằm trong đúng bảng
+  // [project]; bỏ qua [tool.*], [build-system], bảng con [project.*] và bảng
+  // mảng [[...]]. Không cần Python/TOML parser ngoài trên runner.
+  let table = '';
+  for (const rawLine of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, '').trim();
+    if (!line) continue;
+    if (line.startsWith('[')) {
+      const header = /^\[\s*([^[\]]+?)\s*\]$/.exec(line);
+      table = header ? header[1].trim() : '';
+      continue;
+    }
+    if (table !== 'project') continue;
+    const match = /^version\s*=\s*(?:"([^"]*)"|'([^']*)')\s*$/.exec(line);
+    if (match) return match[1] ?? match[2];
+  }
+  throw new Error('không thấy version = "..." trong bảng [project]');
 }
 
 function parsePythonVersion(text) {

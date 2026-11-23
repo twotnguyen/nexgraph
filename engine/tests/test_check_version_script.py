@@ -105,6 +105,47 @@ def test_lech_mot_nguon_thi_fail_va_neu_ten_tep(tmp_path):
     assert "0.1.2" in out
 
 
+def test_chi_doc_version_trong_bang_project(tmp_path):
+    root = make_tree(
+        tmp_path,
+        npm="0.2.0-alpha.1",
+        desktop="0.2.0-alpha.1",
+        pyproject="0.2.0a1",
+        engine="0.2.0a1",
+    )
+    # Bảng khác đứng trước [project] với version lệch: không được lấy nhầm version của bảng đó.
+    (root / "engine" / "pyproject.toml").write_text(
+        "[tool.example]\n"
+        'version = "0.2.0a1"\n'
+        "\n"
+        "[project]\n"
+        'name = "nexgraph-engine"\n'
+        'version = "0.2.0a0"\n',
+        encoding="utf-8",
+    )
+    res = run_check(root, "v0.2.0-alpha.1")
+    assert res.returncode != 0, res.stdout + res.stderr
+    out = res.stdout + res.stderr
+    assert "engine/pyproject.toml" in out
+    assert "0.2.0a0" in out
+
+
+def test_bo_qua_version_o_bang_khac(tmp_path):
+    root = make_tree(
+        tmp_path,
+        npm="0.2.0-alpha.1",
+        desktop="0.2.0-alpha.1",
+        pyproject="0.2.0a1",
+        engine="0.2.0a1",
+    )
+    (root / "engine" / "pyproject.toml").write_text(
+        '[tool.example]\nversion = "9.9.9"\n\n[project]\nname = "nexgraph-engine"\nversion = "0.2.0a1"\n',
+        encoding="utf-8",
+    )
+    res = run_check(root, "v0.2.0-alpha.1")
+    assert res.returncode == 0, res.stdout + res.stderr
+
+
 def test_thieu_tep_version_thi_fail(tmp_path):
     root = make_tree(tmp_path, npm="0.1.2", desktop="0.1.2", pyproject="0.1.2", engine="0.1.2")
     (root / "engine" / "src" / "nexgraph_engine" / "__init__.py").unlink()
