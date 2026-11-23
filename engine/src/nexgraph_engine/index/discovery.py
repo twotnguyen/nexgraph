@@ -120,6 +120,18 @@ def is_next_static(rel_path: str) -> bool:
     return any(a == BUNDLE_DIR_NAMES[0] and b == BUNDLE_DIR_NAMES[1] for a, b in zip(parts, parts[1:]))
 
 
+def chosen_inside_next(subdir: str | None) -> bool:
+    """Người dùng chọn rõ `_next` hoặc một thư mục con của nó ⇒ `_next/static` vẫn được lập chỉ mục.
+
+    Chọn thư mục CHA (ví dụ `apps/site`) thì KHÔNG: review-53 Minor 3 — phép thử cũ
+    (`rel.startswith(subdir + "/")`) áp lên **tệp** nên chọn cha là bật lại toàn bộ `_next/static`,
+    trong khi ý định chỉ là "chọn rõ package trong `_next/static`".
+    """
+    if subdir is None:
+        return False
+    return any(part == BUNDLE_DIR_NAMES[0] for part in subdir.lower().split("/"))
+
+
 def is_dense_minified(path: Path, size: int) -> bool:
     """Tệp JS/CSS rút gọn: đọc đầu tệp (không đọc cả tệp lớn) rồi đo byte/dòng.
 
@@ -265,8 +277,7 @@ def discover(root: Path, *, max_file_bytes: int = 2_000_000, subdir: str | None 
                 language = _language(root, rel, include_docs, include_media, language_map, include_config)
                 if not inside(rel_dir) or language is None or entry.name.endswith(GENERATED_SUFFIXES):
                     continue
-                chosen = subdir is not None and (rel == subdir or rel.startswith(subdir + "/")
-                                                 or subdir.startswith(rel + "/"))
+                chosen = chosen_inside_next(subdir)
                 if _ignored(rel, rules):
                     continue
                 # *.min.js/*.bundle.js luôn bị bỏ (như E3); riêng `_next/static` thì chọn rõ package là đi vào.

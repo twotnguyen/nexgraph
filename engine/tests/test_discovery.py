@@ -226,6 +226,19 @@ def test_minified_files_stay_skipped_inside_a_chosen_subdir(tmp_path):
     assert rels(tmp_path, subdir="apps/site") == ["apps/site/src/keep.js"]
 
 
+def test_choosing_a_parent_package_keeps_next_static_skipped(tmp_path):
+    """Chọn thư mục CHA không bật lại `_next/static` (review-53 Minor 3).
+
+    Phép thử cũ áp `rel.startswith(subdir + "/")` lên **tệp**, nên chọn `apps/site` (cha của `_next`)
+    làm toàn bộ bundle Next.js lọt vào đồ thị — trái ý "chỉ chọn rõ package TRONG `_next/static`".
+    """
+    write(tmp_path, "apps/site/_next/static/chunks/a.js")
+    write(tmp_path, "apps/site/src/b.js")
+    assert rels(tmp_path, subdir="apps/site") == ["apps/site/src/b.js"]
+    # Chọn đúng `_next` (hoặc thư mục con của nó) thì vẫn đi vào, như mọi thư mục bị bỏ khác.
+    assert rels(tmp_path, subdir="apps/site/_next") == ["apps/site/_next/static/chunks/a.js"]
+
+
 def test_skips_default_build_dependency_and_minified_paths(tmp_path):
     for rel in ("dist/app.js", "__pycache__/mod.py", ".venv/lib/x.py", "venv/lib/y.py",
                 "lib/app.min.js", "lib/app.min.css", "lib/vendor.bundle.js", "lib/keep.js"):
