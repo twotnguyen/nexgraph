@@ -267,6 +267,8 @@ export const uiEnAgent: Record<string, string> = {
   'Không tìm thấy hội thoại của tác vụ': 'Could not find the conversation for this task',
   'Không xác định được mô hình và khả năng nhận ảnh. Hãy chọn mô hình hỗ trợ ảnh.': 'Could not determine the model or its image support. Choose a model that supports images.',
   'Chưa cấu hình trợ lý AI': 'The AI assistant is not configured',
+  'Chưa cấu hình trợ lý AI. Mọi tính năng khác vẫn dùng được.': 'The AI assistant is not configured. All other features still work.',
+  'Không cập nhật được chế độ trợ lý. Hãy chọn lại chế độ.': 'Could not update the assistant mode. Please select it again.',
   'Chưa đồng ý gửi dữ liệu tới nhà cung cấp AI': 'Sending data to the AI provider has not been approved',
   'Mô hình đang chọn không hỗ trợ ảnh hoặc chưa xác định được khả năng nhận ảnh.': 'The selected model does not support images or its image support could not be determined.',
   'Không khởi động được tác vụ': 'Could not start the task',
