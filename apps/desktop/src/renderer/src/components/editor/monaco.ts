@@ -2,6 +2,7 @@
 /// <reference path="./monaco-json.d.ts" />
 // Gói tối thiểu: lõi soạn thảo + vài tính năng soạn thảo + tô cú pháp Monarch; định nghĩa/gợi ý/hover lấy từ language server ở main (lsp:*).
 import * as monaco from 'monaco-editor/editor/editor.api.js'
+import './monaco.css'
 import { MonacoBinding } from 'y-monaco'
 import type { Text as YText } from 'yjs'
 import type { Awareness } from 'y-protocols/awareness'

@@ -1,0 +1,11 @@
+/*
+ * monaco-editor 0.57 không kèm CSS định vị khung chứa widget tràn (`.overflowingContentWidgets`).
+ * Khung này nằm ở cuối editor với `position: static`, nên widget con (hover, signature help) neo
+ * vào `.monaco-editor` trong khi Monaco tính `top` theo khung chứa: kết quả lệch đúng bằng chiều
+ * cao editor và hover vẽ ra ngoài khung nhìn (UI-05: rê chuột lên mã không thấy hover).
+ * Chỉ cần đặt khung chứa thành phần tử được định vị; giữ nguyên vị trí tĩnh của nó để `top` của
+ * Monaco vẫn đúng.
+ */
+.monaco-editor .overflowingContentWidgets {
+  position: absolute;
+}
