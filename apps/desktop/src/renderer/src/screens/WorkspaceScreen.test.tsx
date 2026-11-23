@@ -971,6 +971,15 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     expect(screen.queryByRole('dialog', { name: 'Chạy task' })).toBeNull()
   })
 
+  it('BUG-UI-03: nút Dự án ở đường dẫn khối mở danh sách dự án', async () => {
+    const onOpenProjects = vi.fn()
+    installNexgraph()
+    render(<WorkspaceScreen project={project()} onOpenProjects={onOpenProjects} />)
+    const crumbs = await screen.findByRole('navigation', { name: 'Đường dẫn khối' })
+    await userEvent.click(within(crumbs).getByRole('button', { name: 'Dự án' }))
+    expect(onOpenProjects).toHaveBeenCalledTimes(1)
+  })
+
   it('BUG-UI-01: chia đôi editor ngay từ thẻ xem trước vừa bấm trong cây', async () => {
     const entries = [{ path: 'a.ts', name: 'a.ts', kind: 'file' as const }]
     installNexgraph({ fs: { list: vi.fn(async () => ({ entries, truncated: false })) } })
