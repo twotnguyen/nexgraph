@@ -30,6 +30,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
   const [detail, setDetail] = useState<FlowDetail | null>(null)
   const [stepIndex, setStepIndex] = useState(0)
   const [codeSlice, setCodeSlice] = useState<string | null>(null)
+  const [codeTruncated, setCodeTruncated] = useState(false)
   const [query, setQuery] = useState('')
   const filter = useDebounced(query.trim(), 180)
   const [kind, setKind] = useState<FlowKind | undefined>(undefined)
@@ -120,6 +121,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
     const step = detail?.steps[stepIndex]
     const node = step?.node
     setCodeSlice(null)
+    setCodeTruncated(false)
     if (!node?.file || node.line_start == null) {
       return
     }
@@ -129,7 +131,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
     ;(async () => {
       try {
         const slice = await window.nexgraph.graph.code(projectId, node.file!, start, end)
-        if (alive) setCodeSlice(slice.text)
+        if (alive) { setCodeSlice(slice.text); setCodeTruncated(slice.truncated === true) }
       } catch {
         if (alive) setCodeSlice(null)
       }
@@ -248,6 +250,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
           onOpenCode={onOpenCode}
           onOpenNode={onOpenNode}
           codeSlice={codeSlice}
+          codeTruncated={codeTruncated}
         />
       )}
     </div>

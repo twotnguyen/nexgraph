@@ -3,6 +3,7 @@ import { tr } from '../../strings'
 import type { TaskDefinition } from '@shared/api'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { errorText } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from '../layout/Picker'
 
@@ -43,11 +44,11 @@ export function TaskPicker({ projectId, history, onPick, onClose, onOpenFile }: 
   onOpenFile?: (path: string) => void
 }) {
   const [tasks, setTasks] = useState<TaskDefinition[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   useEffect(() => {
     let alive = true
     const api = window.nexgraph.tasks
-    if (!api) { setError(tr('Không đọc được task ở chế độ này')); return }
+    if (!api) { setError(msg('Không đọc được task ở chế độ này')); return }
     api.list(projectId).then((items) => { if (alive) setTasks(items) }).catch((e: unknown) => { if (alive) setError(errorText(e)) })
     return () => { alive = false }
   }, [projectId])
@@ -78,7 +79,7 @@ export function TaskPicker({ projectId, history, onPick, onClose, onOpenFile }: 
   }
   return <Picker label={tr('Chạy task')} placeholder={tr('Tìm task, hoặc gõ lệnh để chạy')} items={choices}
     itemKey={(item) => item.key} itemText={(item) => item.task.label} filter={filter}
-    empty={error ?? (tasks ? tr('Không có task') : tr('Đang đọc task…'))} error={error} onCancel={onClose}
+    empty={error ? msgText(error) : tasks ? tr('Không có task') : tr('Đang đọc task…')} error={error ? msgText(error) : undefined} onCancel={onClose}
     onPick={(item) => {
       if (item === configChoice) { void editConfig(); return }
       onClose(); onPick(item.task, item.oneshot)

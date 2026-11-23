@@ -38,7 +38,7 @@ import { createTokenizationSupport } from 'monaco-editor/languages/features/json
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import { currentTheme, observeTheme } from '../../state/useTheme'
 import { installFontKeys, monacoOptions } from './monacoPrefs'
-import { mountOverflowWidgets, overflowWidgetsHost } from './overflowWidgets'
+import { mountChildOverflowWidgets, mountOverflowWidgets, overflowWidgetsHost } from './overflowWidgets'
 import { applyProjectEdits, diagnosticMarker } from './lspEdits'
 import { getDiagnostics, subscribeDiagnostics } from '../../state/diagnostics'
 import { tr } from '../../strings'
@@ -588,20 +588,23 @@ export interface DiffHandle {
 /** Trình xem diff chỉ đọc; `automaticLayout` tự layout lại khi panel ẩn→hiện. */
 export function createDiffEditor(el: HTMLElement, opts: { before: string; after: string; language: string }): DiffHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
-  const overflowHost = overflowWidgetsHost()
+  // Không cấp host ở đây: Monaco sẽ dùng chung nó cho hai editor con. Mỗi con nhận host riêng
+  // sau khi có DOM (MIN-42c M1) để toạ độ widget tràn neo đúng gốc editor của nó.
   const diff = monaco.editor.createDiffEditor(el, {
     readOnly: true, theme: editorTheme(), automaticLayout: true, renderSideBySide: false,
     minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
-    overflowWidgetsDomNode: overflowHost,
     ...(font ? { fontFamily: font } : {})
   })
-  const detachOverflowHost = mountOverflowWidgets(el, overflowHost)
   const original = monaco.editor.createModel(opts.before, opts.language)
   const modified = monaco.editor.createModel(opts.after, opts.language)
   diff.setModel({ original, modified })
+  const childHosts = [diff.getOriginalEditor(), diff.getModifiedEditor()]
+    .map((editor) => editor.getDomNode())
+    .filter((root): root is HTMLElement => !!root)
+    .map((root) => mountChildOverflowWidgets(root))
   return {
     dispose: () => {
-      detachOverflowHost()
+      for (const detach of childHosts) detach()
       diff.dispose()
       original.dispose()
       modified.dispose()

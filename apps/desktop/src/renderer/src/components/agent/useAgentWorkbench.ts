@@ -1,5 +1,6 @@
 import { tr } from '../../strings'
 import { errorText } from '../../state/errorText'
+import { msg, type Message } from '../../state/messages'
 import { retryNotice } from './retry'
 
 import { useEffect, useRef, useState } from 'react'
@@ -43,9 +44,9 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
   const [context, setContext] = useState<AgentContextUsage | null>(null)
   const [execution, setExecution] = useState<AgentExecutionSettings>({ policy: 'review', allowCommands: false })
   const [limits, setLimits] = useState(defaults)
-  const [notice, setNotice] = useState('')
+  const [notice, setNotice] = useState<Message>('')
   const [noticeDetail, setNoticeDetail] = useState('')
-  const [error, setError] = useState('')
+  const [error, setError] = useState<Message>('')
   const [pending, setPending] = useState(false)
   const [loading, setLoading] = useState(true)
   const apply = (snapshot: AgentSessionSnapshot) => {
@@ -143,7 +144,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       const generation = mutationSeq.current
       await window.nexgraph.agent.deleteSession(projectId, id)
       const saved = readPins(projectId)
-      if (saved.includes(id) && !writePins(projectId, saved.filter((pin) => pin !== id)) && alive.current && activeProject.current === projectId) setError(tr('Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'))
+      if (saved.includes(id) && !writePins(projectId, saved.filter((pin) => pin !== id)) && alive.current && activeProject.current === projectId) setError(msg('Không thể lưu danh sách đã ghim. Các thay đổi có thể không được lưu.'))
       if (alive.current && activeProject.current === projectId)
         setPins((current) => ({ projectId, ids: (current.projectId === projectId ? current.ids : saved).filter((pin) => pin !== id) }))
       return alive.current && generation === mutationSeq.current ? window.nexgraph.agent.snapshot(projectId) : null
@@ -156,7 +157,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       return { result, remaining: checkpoints.filter((checkpoint) => !checkpoint.restored).map((checkpoint) => checkpoint.id) }
     }, ({ result, remaining }) => {
       const conflicts = result.conflicts.length ? tr(' Xung đột: {items}', { items: result.conflicts.map((c) => `${c.path}: ${c.reason}`).join('; ') }) : ''
-      setNotice(tr('Đã khôi phục {count} tệp.{conflicts}', { count: result.restored.length, conflicts }))
+      setNotice(msg('Đã khôi phục {count} tệp.{conflicts}', { count: result.restored.length, conflicts }))
       setTask({ ...task, checkpointIds: remaining })
     }) : Promise.resolve()
   }

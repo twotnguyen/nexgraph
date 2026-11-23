@@ -5,12 +5,13 @@ import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import { errorText } from '../../state/errorText'
 import { tr } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 
 /** Thẻ diff Git, gồm các khối có thể stage hoặc bỏ stage riêng. */
 export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpenFile }: { projectId: string; file: string; staged: boolean; rev?: string; from?: string; onClose: () => void; onOpenFile: () => void }) {
   const host = useRef<HTMLDivElement>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
+  const [actionError, setActionError] = useState<Message | null>(null)
   const [hunks, setHunks] = useState<GitHunk[]>([])
   const [busy, setBusy] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -46,7 +47,7 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
     setError(null)
     const api = window.nexgraph.git
     if (!api) {
-      setError(tr('Git không dùng được ở chế độ này.'))
+      setError(msg('Git không dùng được ở chế độ này.'))
       return () => { live = false }
     }
     const sides = rev === undefined ? api.diff(projectId, file, staged, baseChoice) : api.commitDiff(projectId, rev, file, from)
@@ -94,8 +95,8 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
           <button type="button" className="ws-icon-button" aria-label={tr('Đóng diff')} title={tr('Đóng diff')} onClick={onClose}><Icon name="close" size={15} /></button>
         </span>
       </header>
-      {error && <p role="alert" className="ws-editor-loading error">{error}</p>}
-      {actionError && <p role="alert" className="ws-editor-loading error git-hunk-error">{actionError}</p>}
+      {error && <p role="alert" className="ws-editor-loading error">{msgText(error)}</p>}
+      {actionError && <p role="alert" className="ws-editor-loading error git-hunk-error">{msgText(actionError)}</p>}
       {rev === undefined && baseChoice === undefined && hunks.length > 0 && (
         <section className="git-hunk-bar" aria-label={tr('Các khối thay đổi')}>
           <header className="git-head">{tr('Các khối thay đổi')}</header>
