@@ -152,9 +152,12 @@ def _retitle_html(target: Path, title: str) -> None:
     """Đặt `<title>` cho HTML do graphify sinh — `to_html` lấy tên tệp tạm làm tiêu đề (A3b-P1 F3).
 
     Hậu xử lý ở lớp NexGraph như `localize_callflow_html`, không thêm tham số vào mã vendored.
+    Dùng callable: tên dự án có `\\`, `$`, `&`… là chuỗi thay thế hợp lệ (tên thư mục `QA\\Desktop`
+    từng làm `re.subn` báo `bad escape \\D` rồi route export trả 500 — E9b-2, review-62).
     """
     text = target.read_text(encoding="utf-8")
-    updated, count = _TITLE_TAG.subn(f"<title>{html_escape(title)}</title>", text, count=1)
+    replacement = f"<title>{html_escape(title)}</title>"
+    updated, count = _TITLE_TAG.subn(lambda _match: replacement, text, count=1)
     if count:
         target.write_text(updated, encoding="utf-8")
 

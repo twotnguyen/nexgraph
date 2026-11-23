@@ -363,6 +363,20 @@ def test_html_export_title_is_project_name(copy_fixture, index_project, tmp_path
     assert ".tmp" not in title
 
 
+@pytest.mark.parametrize("name", [r"QA\Desktop", "A$B&C", r"team\1 $&"])
+def test_html_export_title_keeps_regex_special_chars(copy_fixture, index_project, tmp_path, name):
+    """E9b-2 (review-62 Important 2): tên dự án có `\\`, `$`, `&` từng làm `re.subn` báo `bad escape` → 500."""
+    from html import escape as html_escape
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    out = tmp_path / f"case-{len(name)}-{abs(hash(name))}"
+    out.mkdir()
+    r = export_graph(store, "html", Scope(), out, name)
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
+    assert title == f"{html_escape(name)} — NexGraph"
+
+
 def test_callflow_uses_project_name_and_git_commit(copy_fixture, index_project, tmp_path):
     """P1-F1: tiêu đề callflow lấy tên dự án thật + commit HEAD, không phải thư mục tạm và "unknown"."""
     root = copy_fixture("py_mini")
