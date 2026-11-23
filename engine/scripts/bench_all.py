@@ -6,8 +6,8 @@ Chạy từ thư mục engine/ (script dùng `git` để ghi commit). Cần `if 
 """
 import argparse
 import json
+import os
 import platform
-import resource
 import shutil
 import statistics
 import subprocess
@@ -17,6 +17,11 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
+
+try:  # Unix: đo RSS đỉnh của tiến trình cha và con
+    import resource
+except ImportError:  # Windows không có module này (ENG-04)
+    resource = None
 
 from nexgraph_engine.arch.builder import build_view
 from nexgraph_engine.index.discovery import discover
@@ -29,15 +34,44 @@ from nexgraph_engine.store.search import search
 IGNORE = shutil.ignore_patterns(".git", ".nexgraph", "node_modules", "build", ".dart_tool", "__pycache__", ".venv", "venv")
 
 
-def peak_rss_mb() -> float:
+def peak_rss_mb() -> float | None:
+    if resource is None:  # Windows: PSAPI thay cho getrusage
+        return _windows_peak_rss_mb()
     rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
 
 
-def peak_children_rss_mb() -> float:
+def _windows_peak_rss_mb() -> float | None:
+    """RSS đỉnh của tiến trình hiện tại qua `GetProcessMemoryInfo` (không cần thêm thư viện)."""
+    try:
+        from ctypes import Structure, byref, c_size_t, c_ulong, sizeof, windll
+
+        class _ProcessMemoryCounters(Structure):
+            _fields_ = [("cb", c_ulong), ("PageFaultCount", c_ulong),
+                        ("PeakWorkingSetSize", c_size_t), ("WorkingSetSize", c_size_t),
+                        ("QuotaPeakPagedPoolUsage", c_size_t), ("QuotaPagedPoolUsage", c_size_t),
+                        ("QuotaPeakNonPagedPoolUsage", c_size_t), ("QuotaNonPagedPoolUsage", c_size_t),
+                        ("PagefileUsage", c_size_t), ("PeakPagefileUsage", c_size_t)]
+
+        counters = _ProcessMemoryCounters()
+        counters.cb = sizeof(counters)
+        ok = windll.psapi.GetProcessMemoryInfo(windll.kernel32.GetCurrentProcess(), byref(counters),
+                                               sizeof(counters))
+        return counters.PeakWorkingSetSize / (1024 * 1024) if ok else None
+    except (AttributeError, ImportError, OSError, ValueError):  # nền tảng khác Windows: không đo được
+        return None
+
+
+def peak_children_rss_mb() -> float | None:
     """RSS lớn nhất của MỘT tiến trình con đã kết thúc (worker lập chỉ mục); tổng thật <= cha + số worker x giá trị này."""
+    if resource is None:  # Windows không lấy được RSS đỉnh của tiến trình con đã thoát
+        return None
     rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
     return rss / (1024 * 1024) if sys.platform == "darwin" else rss / 1024
+
+
+def _rounded(value: float | None) -> int | None:
+    return round(value) if value is not None else None
 
 
 def stat(xs: list[float]) -> dict:
@@ -56,7 +90,8 @@ def machine() -> dict:
         cpu, ncpu, mem = sh("sysctl", "-n", "machdep.cpu.brand_string", "hw.ncpu", "hw.memsize").splitlines()[:3]
         os_ = "macOS " + sh("sw_vers", "-productVersion")
         return {"cpu": cpu, "ncpu": int(ncpu), "ram_gb": round(int(mem) / 2**30, 1), "os": os_, "python": platform.python_version()}
-    return {"cpu": platform.processor(), "ncpu": None, "ram_gb": None, "os": platform.platform(), "python": platform.python_version()}
+    return {"cpu": platform.processor() or platform.machine(), "ncpu": os.cpu_count(), "ram_gb": None,
+            "os": platform.platform(), "python": platform.python_version()}
 
 
 def timed(fn) -> tuple[object, float]:
@@ -120,8 +155,8 @@ def main() -> None:
         store = stores[-1]
         db = tmp / f"graph{index_repeat - 1}.db"
         m["index_full_ms"] = stat(index_ms)
-        m["peak_rss_after_index_mb"] = round(peak_rss_mb())  # tiến trình cha, tích luỹ qua các lần lặp; KHÔNG gồm worker
-        m["worker_peak_rss_mb"] = round(peak_children_rss_mb())  # worker lớn nhất (0 nếu không dùng pool)
+        m["peak_rss_after_index_mb"] = _rounded(peak_rss_mb())  # tiến trình cha, tích luỹ qua các lần lặp; KHÔNG gồm worker
+        m["worker_peak_rss_mb"] = _rounded(peak_children_rss_mb())  # worker lớn nhất (null nếu không đo được)
         from nexgraph_engine.index.indexer import index_workers
         m["index_workers"] = index_workers(store.stats()["files"], False)
         conn = store.conn
@@ -194,7 +229,7 @@ def main() -> None:
         m["top_degree_node"] = hub
         if hub:
             measure("neighbors_top_node_ms", r, lambda: store.neighbors(hub, depth=1, limit=500), m)
-        m["peak_rss_total_mb"] = round(peak_rss_mb())
+        m["peak_rss_total_mb"] = _rounded(peak_rss_mb())
         conn.close()
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

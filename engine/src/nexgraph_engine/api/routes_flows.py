@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query, Request
 
-from nexgraph_engine.api.routes_graph import model_payload, open_store
+from nexgraph_engine.api.routes_graph import for_model, model_payload, open_store
 from nexgraph_engine.flows.query import flow_json, list_flows_json
+from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.tour.build import build_tour
 
 router = APIRouter(prefix="/v1/projects/{project_id}")
@@ -33,5 +34,9 @@ def get_flow(project_id: str, flow_id: int, request: Request) -> dict:
 
 @router.get("/tour")
 def get_tour(project_id: str, request: Request) -> dict:
-    with open_store(request, project_id) as (store, _):
-        return build_tour(store)
+    with open_store(request, project_id) as (store, info):
+        payload = build_tour(store)
+        if not for_model(request):
+            return payload
+        # `ModelGraph.filter` từ chối cả payload khi một bước bị bỏ (luồng có lỗ hổng); tour thì bỏ bước đó là đủ.
+        return ModelGraph(store, info.path).filter_tour(payload)
