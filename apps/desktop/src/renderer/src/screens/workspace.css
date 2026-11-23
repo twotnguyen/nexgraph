@@ -522,6 +522,9 @@
 .workspace-shell .report-view table { min-width: 0; overflow-wrap: break-word; word-break: normal; }
 .workspace-shell .report-view th { white-space: nowrap; }
 .workspace-shell .report-view td { overflow-wrap: break-word; }
+/* `.mono` đặt word-break: break-all trực tiếp trên ô nên thắng giá trị thừa kế từ table;
+   trả `normal` cho ô đường dẫn để <wbr> sau dấu `/` có tác dụng, không bẻ giữa tên tệp. */
+.workspace-shell .report-view td.mono { word-break: normal; }
 /* Ở 1024 vùng báo cáo chỉ còn ~380px: mỗi dòng thành khối có nhãn, đường dẫn đủ chỗ trên một dòng. */
 @media (max-width: 1180px) {
   .workspace-shell .report-view table.report-nodes,
