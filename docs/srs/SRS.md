@@ -97,7 +97,7 @@ flowchart LR
 | Giao diện và đường dẫn | Tiếng Việt là giao diện hiện hành. Thử bàn phím, kích thước cửa sổ, đường dẫn có dấu/khoảng trắng và phương án thay thế khi WebGL không khả dụng. |
 | Đóng gói | Bộ cài Electron theo phiên bản và kiến trúc cần mở được, khởi động engine đi kèm trên máy Windows/macOS. Mỗi tệp cài (`.dmg`, `.exe`) dưới 500 MB, CI báo lỗi khi vượt. Ghi tên artifact, commit, kiến trúc, dung lượng bộ cài và dung lượng sau khi cài, cùng kết quả. Bộ cài chưa ký số, [hướng dẫn phát hành](../release/README.md) chỉ cách mở qua cảnh báo hệ điều hành. Smoke CI và kiểm cài trên máy đích có biên bản riêng. |
 
-Kết quả đo ở [báo cáo thực nghiệm](../benchmarks/2026-12-danh-gia.md) và [đợt tối ưu sau review](../benchmarks/2026-11-13-sua-sau-review.md) dùng các phiên bản và điều kiện khác nhau. Ghi phiên bản, host, phiên bản hệ điều hành và dữ liệu thử cho từng phép đo nghiệm thu mới.
+Kết quả đo hiện hành cho ba tầng nằm ở [số đo 23/11/2026](../benchmarks/2026-11-23-nfr-va-do-lai.md) (một bộ số duy nhất, kèm commit và điều kiện đo). Các báo cáo [thực nghiệm H6](../benchmarks/2026-12-danh-gia.md) và [đợt tối ưu sau review](../benchmarks/2026-11-13-sua-sau-review.md) là số lịch sử, dùng phiên bản và điều kiện khác nhau. Ghi phiên bản, host, phiên bản hệ điều hành và dữ liệu thử cho từng phép đo nghiệm thu mới.
 
 ## Điều kiện nghiệm thu
 

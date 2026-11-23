@@ -1,0 +1,115 @@
+{
+ "project": "hermes",
+ "project_commit": "cc8cc35e6074173d6a4afaeaa351d6cba250c0cc",
+ "nexgraph_commit": "72dc4ec18e9dcc72369652ed8f532a13bd70f2d9",
+ "machine": {
+  "cpu": "Apple M3 Pro",
+  "ncpu": 12,
+  "ram_gb": 18.0,
+  "os": "macOS 15.7.3",
+  "python": "3.12.16"
+ },
+ "date": "2026-11-23",
+ "repeat": 3,
+ "index_repeat": 1,
+ "metrics": {
+  "index_full_ms": {
+   "median": 146542.56,
+   "min": 146542.56,
+   "max": 146542.56,
+   "n": 1
+  },
+  "peak_rss_after_index_mb": 1037,
+  "worker_peak_rss_mb": 270,
+  "index_workers": 8,
+  "files": 17408,
+  "nodes": 216370,
+  "edges": 706092,
+  "unresolved": 889765,
+  "languages": {
+   "bash": 86,
+   "c": 3,
+   "commonlisp": 2,
+   "cpp": 4,
+   "csharp": 2,
+   "javascript": 335,
+   "objc": 2,
+   "pascal": 2,
+   "powershell": 38,
+   "python": 11328,
+   "rust": 12,
+   "typescript": 5594
+  },
+  "graph_db_mb": 308.0,
+  "reopen_ms": {
+   "median": 148.54,
+   "min": 147.69,
+   "max": 152.58,
+   "n": 3
+  },
+  "search_build_ms": {
+   "median": 4.04,
+   "min": 3.93,
+   "max": 4.65,
+   "n": 3
+  },
+  "arch_root_ms": {
+   "median": 384.6,
+   "min": 380.14,
+   "max": 392.23,
+   "n": 3
+  },
+  "refresh_one_file_ms": {
+   "median": 1537.26,
+   "min": 1525.39,
+   "max": 1561.2,
+   "n": 3
+  },
+  "rebuild_flows_ms": {
+   "median": 1581.92,
+   "min": 1575.78,
+   "max": 1602.7,
+   "n": 3
+  },
+  "list_flows_auth_ms": {
+   "median": 47.29,
+   "min": 46.92,
+   "max": 47.61,
+   "n": 3
+  },
+  "build_map_400_ms": {
+   "median": 424.29,
+   "min": 423.38,
+   "max": 429.5,
+   "n": 3
+  },
+  "import_cycles_ms": {
+   "median": 140.96,
+   "min": 132.96,
+   "max": 144.56,
+   "n": 3
+  },
+  "build_tour_ms": {
+   "median": 418.55,
+   "min": 414.38,
+   "max": 493.67,
+   "n": 3
+  },
+  "build_context_question": "login",
+  "build_context_login_ms": {
+   "median": 21.11,
+   "min": 21.1,
+   "max": 21.27,
+   "n": 3
+  },
+  "top_degree_node": "hermes_state.py::SessionDB#class",
+  "neighbors_top_node_ms": {
+   "median": 14.02,
+   "min": 13.88,
+   "max": 15.37,
+   "n": 3
+  },
+  "peak_rss_total_mb": 1037
+ },
+ "note": "Số chính của A5 (load 2,6–6,1). Bản đo lúc load 10,4 (278,9 s) ở perf-hermes-2026-11-23-tai-cao.json."
+}

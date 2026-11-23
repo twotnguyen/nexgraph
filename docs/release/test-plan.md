@@ -82,7 +82,7 @@ Chạy [checklist Windows/macOS](../windows-checklist.md) mục A–E trên bả
 | `engine/tests/fixtures/polyglot` | đa ngôn ngữ, LSP, MCP query |
 | `engine/tests/fixtures/docs_app` | tài liệu, section, che secret |
 | `engine/tests/fixtures/global_ts_app` + `global_ts_lib` | graph chung, cộng tác nhiều repo |
-| Bản sao `ecommerce-backend-nestjs` tại `d11f4ef` | demo 5 phút, hiệu năng tầng M, Git |
+| Bản sao `ecommerce-backend-nestjs` tại `d11f4ef` | demo 5 phút, hiệu năng tầng S, Git |
 | Một repo nhỏ ngoài GitHub | clone/URL, pull request (cần `gh`) |
 
 Mỗi lượt dùng bản sao sạch, hồ sơ dữ liệu riêng; đặt ít nhất một bản sao trong thư mục có dấu và khoảng trắng.

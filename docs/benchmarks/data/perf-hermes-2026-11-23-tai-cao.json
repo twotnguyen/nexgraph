@@ -1,0 +1,115 @@
+{
+ "project": "hermes",
+ "project_commit": "cc8cc35e6074173d6a4afaeaa351d6cba250c0cc",
+ "nexgraph_commit": "72dc4ec18e9dcc72369652ed8f532a13bd70f2d9",
+ "machine": {
+  "cpu": "Apple M3 Pro",
+  "ncpu": 12,
+  "ram_gb": 18.0,
+  "os": "macOS 15.7.3",
+  "python": "3.12.16"
+ },
+ "date": "2026-11-23",
+ "repeat": 3,
+ "index_repeat": 1,
+ "metrics": {
+  "index_full_ms": {
+   "median": 278915.3,
+   "min": 278915.3,
+   "max": 278915.3,
+   "n": 1
+  },
+  "peak_rss_after_index_mb": 1040,
+  "worker_peak_rss_mb": 238,
+  "index_workers": 8,
+  "files": 17408,
+  "nodes": 216370,
+  "edges": 706092,
+  "unresolved": 889765,
+  "languages": {
+   "bash": 86,
+   "c": 3,
+   "commonlisp": 2,
+   "cpp": 4,
+   "csharp": 2,
+   "javascript": 335,
+   "objc": 2,
+   "pascal": 2,
+   "powershell": 38,
+   "python": 11328,
+   "rust": 12,
+   "typescript": 5594
+  },
+  "graph_db_mb": 308.0,
+  "reopen_ms": {
+   "median": 155.17,
+   "min": 154.43,
+   "max": 155.31,
+   "n": 3
+  },
+  "search_build_ms": {
+   "median": 5.05,
+   "min": 4.81,
+   "max": 5.13,
+   "n": 3
+  },
+  "arch_root_ms": {
+   "median": 411.97,
+   "min": 411.28,
+   "max": 413.33,
+   "n": 3
+  },
+  "refresh_one_file_ms": {
+   "median": 1676.38,
+   "min": 1659.04,
+   "max": 1701.8,
+   "n": 3
+  },
+  "rebuild_flows_ms": {
+   "median": 1774.07,
+   "min": 1770.38,
+   "max": 1795.69,
+   "n": 3
+  },
+  "list_flows_auth_ms": {
+   "median": 53.74,
+   "min": 51.53,
+   "max": 67.98,
+   "n": 3
+  },
+  "build_map_400_ms": {
+   "median": 470.93,
+   "min": 466.08,
+   "max": 471.27,
+   "n": 3
+  },
+  "import_cycles_ms": {
+   "median": 154.51,
+   "min": 151.24,
+   "max": 160.67,
+   "n": 3
+  },
+  "build_tour_ms": {
+   "median": 476.18,
+   "min": 474.1,
+   "max": 480.67,
+   "n": 3
+  },
+  "build_context_question": "login",
+  "build_context_login_ms": {
+   "median": 22.69,
+   "min": 22.48,
+   "max": 22.77,
+   "n": 3
+  },
+  "top_degree_node": "hermes_state.py::SessionDB#class",
+  "neighbors_top_node_ms": {
+   "median": 17.22,
+   "min": 16.61,
+   "max": 17.35,
+   "n": 3
+  },
+  "peak_rss_total_mb": 1040
+ },
+ "note": "Đo lúc load 10,4 — bằng chứng nhiễu tải, không dùng làm số chính."
+}
