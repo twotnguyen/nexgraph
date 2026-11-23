@@ -18,7 +18,8 @@ const h = vi.hoisted(() => ({
   window: null as unknown,
   showOpenDialog: vi.fn(async () => ({ canceled: false, filePaths: [] as string[] })),
   showSaveDialog: vi.fn(async () => ({ canceled: true }) as { canceled: boolean; filePath?: string }),
-  showItemInFolder: vi.fn(async (_path: string) => {})
+  showItemInFolder: vi.fn(async (_path: string) => {}),
+  rebuildMenu: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -27,6 +28,7 @@ vi.mock('electron', () => ({
   contextBridge: { exposeInMainWorld: (name: string, api: unknown) => { h.exposed = [name, api] } },
   ipcRenderer: { invoke: (channel: string, ...args: unknown[]) => h.handlers.get(channel)!({}, ...args) },
   dialog: { showOpenDialog: h.showOpenDialog, showSaveDialog: h.showSaveDialog },
+  BrowserWindow: { fromWebContents: () => ({ isDestroyed: () => false }) },
   shell: { showItemInFolder: h.showItemInFolder },
   safeStorage: { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() }
 }))
@@ -84,6 +86,14 @@ const invoke = (channel: string, ...args: unknown[]): Promise<Result> => {
   return fn({}, ...args) as Promise<Result>
 }
 const dataOf = <T,>(r: Result): T => (r as { ok: true; data: T }).data
+/** Kênh mới kiểm khung gửi: event giả của khung chính một cửa sổ app. */
+const mainFrame = {}
+const appEvent = { sender: { mainFrame }, senderFrame: mainFrame }
+const invokeAs = (event: unknown, channel: string, ...args: unknown[]): Promise<Result> => {
+  const fn = h.handlers.get(channel)
+  if (!fn) throw new Error(`Thiếu handler ${channel}`)
+  return fn(event, ...args) as Promise<Result>
+}
 
 let root: string
 let root2: string
@@ -104,7 +114,7 @@ beforeAll(() => {
     { label: 'build', command: 'echo', args: ['ok'], type: 'process' }
   ]))
   h.projects = [{ project_id: 'p1', path: root }, { project_id: 'p2', path: root2 }]
-  registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => h.window as never, () => ({ command: 'engine', args: [], cwd: base }), base)
+  registerIpc(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }) as never, () => h.window as never, () => ({ command: 'engine', args: [], cwd: base }), base, undefined, () => {}, h.rebuildMenu)
 })
 
 describe('IPC: path thô từ renderer bị từ chối', () => {
@@ -310,5 +320,38 @@ describe('IPC: xuất chỉ dùng thư mục đã chọn trong main', () => {
     h.showSaveDialog.mockResolvedValueOnce({ canceled: true })
     expect(await invoke('export:png', 'p2', { x: 1, y: 2, width: 3, height: 4 })).toMatchObject({ ok: true, data: null })
     expect(h.showSaveDialog).toHaveBeenLastCalledWith(h.window, expect.objectContaining({ defaultPath: join('/tmp', 'nexgraph.png') }))
+  })
+})
+
+describe('menu hệ thống (PR #49): IPC ngôn ngữ và chọn tệp', () => {
+  it('app-menu:set-locale chỉ nhận vi/en, mã lạ bị từ chối', async () => {
+    expect(await invokeAs(appEvent, 'app-menu:set-locale', 'fr')).toMatchObject({ ok: false, error: { code: 'bad_locale' } })
+    expect(await invokeAs(appEvent, 'app-menu:set-locale', null)).toMatchObject({ ok: false, error: { code: 'bad_locale' } })
+    expect(h.rebuildMenu).not.toHaveBeenCalled()
+    expect(await invokeAs(appEvent, 'app-menu:set-locale', 'en')).toMatchObject({ ok: true })
+    expect(h.rebuildMenu).toHaveBeenCalledWith('en')
+  })
+
+  it('file:pick-open chỉ trả đường dẫn từ hộp thoại; relative chỉ khi nằm trong dự án', async () => {
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [join(root, 'a.ts')] })
+    expect(await invokeAs(appEvent, 'file:pick-open', 'p1')).toMatchObject({ ok: true, data: { path: join(root, 'a.ts'), relative: 'a.ts' } })
+    // Tệp ngoài dự án vẫn mở được (người dùng tự chọn trong hộp thoại) nhưng không có relative.
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/etc/passwd'] })
+    const outside = await invokeAs(appEvent, 'file:pick-open', 'p1')
+    expect(outside).toMatchObject({ ok: true, data: { path: '/etc/passwd' } })
+    expect(dataOf<{ relative?: string }>(outside).relative).toBeUndefined()
+    // projectId lạ: không suy được root nên chỉ trả path, không lỗi.
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: ['/etc/hosts'] })
+    expect(await invokeAs(appEvent, 'file:pick-open', 'nope')).toMatchObject({ ok: true, data: { path: '/etc/hosts' } })
+    h.showOpenDialog.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    expect(await invokeAs(appEvent, 'file:pick-open')).toMatchObject({ ok: true, data: null })
+  })
+
+  it('kênh mới từ chối event không phải khung chính của cửa sổ app', async () => {
+    for (const channel of ['app-menu:set-locale', 'file:pick-open', 'window:open-new']) {
+      expect(await invokeAs({}, channel, 'en')).toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
+      expect(await invokeAs({ sender: { mainFrame }, senderFrame: {} }, channel, 'en'))
+        .toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
+    }
   })
 })

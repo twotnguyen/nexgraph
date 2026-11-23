@@ -1,8 +1,9 @@
-import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import type { CollabHello, DebugBreakpoints, LspCallHierarchyItem, LspRange, TaskDefinition, TextSearchQuery, WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi, EngineApiError } from './engine/api'
@@ -41,9 +42,12 @@ import type { GeminiConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
+import { WindowOwners } from './window-owners'
 import { ensureTasksFile, listTasks, resolveTask } from './tasks'
 import { createTaskSigner, taskContentKey } from './tasks/signature'
 import { UserError } from './user-error'
+import { setMenuLocale, getMenuLocale } from './app-menu-locale'
+import { isMenuLocale, pickFileTitle } from './app-menu-labels'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
 import { gitApplyHunk, gitHunks } from './git/hunks'
@@ -68,6 +72,27 @@ let terminals: TerminalManager | null = null
 const taskSigner = createTaskSigner(randomBytes(32))
 let debugManager: DebugManager | null = null
 let collab: CollabHub | null = null
+/** Phiên agent của mỗi dự án thuộc về cửa sổ đã mở nó (không theo cửa sổ đang focus). */
+const agentOwners = new WindowOwners<WebContents>()
+
+/** Gửi sự kiện của tài nguyên về đúng cửa sổ sở hữu; cửa sổ đã đóng thì bỏ, không gửi sang cửa sổ khác. */
+const sendOwned = (owner: unknown, channel: string, payload: unknown): void => {
+  const contents = owner as WebContents | undefined
+  if (!contents || contents.isDestroyed()) return
+  contents.send(channel, payload)
+}
+
+/**
+ * Dọn tài nguyên của MỘT cửa sổ: reload, renderer chết hoặc đóng cửa sổ chỉ được giết phiên agent
+ * và terminal của chính cửa sổ đó. Thoát app / cửa sổ cuối vẫn dùng `closeAllAgents`.
+ */
+export const closeWindowResources = (owner: WebContents): void => {
+  for (const projectId of agentOwners.release(owner)) {
+    editors?.clear(projectId)
+    agents?.close(projectId)
+  }
+  terminals?.killOwned(owner)
+}
 
 /** Rời mọi dự án: từ chối yêu cầu duyệt đang treo, huỷ phiên agent, huỷ đăng nhập OAuth đang chạy. */
 export const closeAllAgents = (): void => {
@@ -190,7 +215,10 @@ export function registerIpc(
   getWindow: () => BrowserWindow | null,
   getCommand: () => EngineCommand,
   dataDir: string,
-  devHooks?: AccountDevHooks
+  devHooks?: AccountDevHooks,
+  openWindow?: () => void,
+  /** Dựng lại menu hệ thống sau khi đổi ngôn ngữ (index.ts nối vào appMenu). */
+  rebuildMenu?: (locale: 'vi' | 'en') => void
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
@@ -207,12 +235,72 @@ export function registerIpc(
   const api = (): EngineApi => new EngineApi(handle())
   const on = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
     ipcMain.handle(channel, (_e, ...args) => toIpcResult(() => fn(...(args as A))))
+  /** Như on() nhưng truyền webContents đã gọi vào handler (tài nguyên gắn cửa sổ đã mở nó). */
+  const onFrom = <A extends unknown[], R>(channel: string, fn: (owner: WebContents, ...args: A) => Promise<R>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(() => fn(event?.sender as WebContents, ...(args as A))))
+  /**
+   * Kênh mới (#38/REV-*): chỉ nhận lệnh từ khung chính của một cửa sổ NexGraph.
+   * Renderer không có iframe/webview, nhưng chặn ở đây để khung lạ không gọi ké được
+   * các kênh mở hộp thoại/tạo cửa sổ/đổi menu.
+   */
+  const onTrusted = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const sender = event?.sender
+      const frame = event?.senderFrame
+      if (!sender || !frame || frame !== sender.mainFrame || !BrowserWindow.fromWebContents(sender)) {
+        throw new UserError('forbidden_sender', 'Yêu cầu không đến từ cửa sổ NexGraph.')
+      }
+      return fn(...(args as A))
+    }))
+  /**
+   * Kênh agent: ghi cửa sổ đã dùng phiên của dự án. Sự kiện agent đi về đúng cửa sổ đó (không
+   * theo cửa sổ đang focus) và reload/đóng cửa sổ chỉ dọn phiên do nó mở.
+   *
+   * - `claim` (mặc định): cửa sổ đầu tiên dùng phiên thành chủ; cửa sổ khác không giành mất.
+   * - `owner`: chỉ chủ hiện tại được trả lời yêu cầu duyệt của lượt đang chạy.
+   *
+   * KHÔNG kênh nào ở đây đổi chủ phiên đang sống — chỉ `agent:prompt` làm việc đó, và chỉ khi
+   * lượt được nhận (`agentPrompt`).
+   */
+  const agentOn = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>, mode: 'claim' | 'owner' = 'claim'): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const pid = args[0]
+      const sender = event?.sender as WebContents | undefined
+      if (typeof pid === 'string' && sender) {
+        const owner = agentOwners.ownerOf(pid)
+        if (mode === 'owner' && owner && owner !== sender) {
+          throw new UserError('forbidden_owner', 'Chỉ cửa sổ đang chạy tác vụ được trả lời yêu cầu duyệt.')
+        }
+        if (!owner) agentOwners.claim(pid, sender)
+      }
+      return fn(...(args as A))
+    }))
+  /**
+   * `agent:prompt` bắt đầu một LƯỢT agent. Chủ phiên chỉ đổi sang cửa sổ gọi khi lượt được nhận:
+   * service gọi `accepted` sau validate/`assertIdle` và TRƯỚC sự kiện đầu tiên, nên stream và
+   * yêu cầu duyệt của lượt về đúng cửa sổ khởi tạo. Lệnh bị từ chối (`ai_not_configured`,
+   * `consent_required`, `agent_busy`…) không đổi chủ — reload cửa sổ kia không đóng phiên đang sống.
+   */
+  const agentPrompt = (channel: string, fn: (pid: string, text: string, target: AiConsentTarget, options: AgentPromptOptions | undefined, accepted: () => void) => Promise<unknown>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const [pid, text, target, options] = args as [string, string, AiConsentTarget, AgentPromptOptions | undefined]
+      const sender = event?.sender as WebContents | undefined
+      const accepted = (): void => { if (typeof pid === 'string' && sender && !sender.isDestroyed()) agentOwners.assign(pid, sender) }
+      return fn(pid, text, target, options, accepted)
+    }))
 
   on('project:pick-folder', async () => {
     const win = getWindow()
     const opts = { properties: ['openDirectory' as const], title: 'Chọn thư mục mã nguồn' }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
+  })
+  if (openWindow) onTrusted('window:open-new', async () => { openWindow() })
+  // Menu native và hộp thoại của menu File đổi nhãn theo ngôn ngữ UI; renderer gửi khi đổi.
+  onTrusted('app-menu:set-locale', async (value?: unknown) => {
+    if (!isMenuLocale(value)) throw new UserError('bad_locale', 'Ngôn ngữ không hợp lệ.')
+    setMenuLocale(value)
+    rebuildMenu?.(value)
   })
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
@@ -242,6 +330,21 @@ export function registerIpc(
   const fsh = fsHandlers(listProjects)
   /** Mọi kênh nhận path đều phải suy root từ projectId đã đăng ký; id lạ → FsError('unknown_project'). */
   const rootOf = projectRoot(listProjects)
+  onTrusted('file:pick-open', async (projectId?: string) => {
+    const win = getWindow()
+    const opts = { properties: ['openFile' as const], title: pickFileTitle[getMenuLocale()] }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || r.filePaths.length === 0) return null
+    const path = r.filePaths[0]
+    let relativePath: string | undefined
+    if (projectId) {
+      try {
+        const rel = relative(await rootOf(projectId), path)
+        if (rel && !rel.startsWith('..') && !isAbsolute(rel)) relativePath = rel.split(sep).join('/')
+      } catch { /* dự án không hợp lệ: trả về đường dẫn tuyệt đối */ }
+    }
+    return { path, relative: relativePath }
+  })
   on('fs:list', fsh.list)
   lsp.onDiagnostics = (root, file, diagnostics) => {
     for (const [pid, projectRootPath] of lspProjects) {
@@ -337,16 +440,17 @@ export function registerIpc(
   }))
   on('lsp:close', lspRequest((root, file: string) => { lsp.close(root, file); return Promise.resolve() }))
   on('lsp:open', lspRequest((root, file: string, text: string) => lsp.open(root, file, lspArgs(text, 1, 1)[0])))
-  // Terminal: shell của người dùng trong gốc dự án; dữ liệu về renderer qua 'terminal:event'.
-  terminals = new TerminalManager({
-    data: (id, chunk) => getWindow()?.webContents.send('terminal:event', { id, type: 'data', data: chunk }),
-    exit: (id, code) => getWindow()?.webContents.send('terminal:event', { id, type: 'exit', code })
+  // Terminal: shell của người dùng trong gốc dự án; dữ liệu về đúng cửa sổ đã mở terminal qua 'terminal:event'.
+  const terminalManager = new TerminalManager({
+    data: (id, chunk) => sendOwned(terminalManager.ownerOf(id), 'terminal:event', { id, type: 'data', data: chunk }),
+    exit: (id, code) => sendOwned(terminalManager.ownerOf(id), 'terminal:event', { id, type: 'exit', code })
   })
-  const term = terminals
+  terminals = terminalManager
+  const term = terminalManager
   // REV-13: task chỉ được chạy khi chính main ký — và main chỉ ký task khai trong tệp của dự án
   // (`tasks:resolve`). Chữ ký gắn projectId + root nên không replay sang dự án khác.
   // Đây là rào chắn cho *task*, không phải sandbox: terminal không task vẫn mở shell của người dùng.
-  on('terminal:create', async (pid: string, cols: number, rows: number, task?: TaskDefinition) => {
+  onFrom('terminal:create', async (owner, pid: string, cols: number, rows: number, task?: TaskDefinition) => {
     const root = await rootOf(pid)
     let approved: TaskDefinition | undefined
     if (task !== undefined) {
@@ -357,11 +461,20 @@ export function registerIpc(
       // Chỉ chuyển các trường đã ký; bỏ mọi thuộc tính lạ renderer gắn thêm.
       approved = { label: task.label, command: task.command, type: task.type, args: task.args, cwd: task.cwd, env: task.env }
     }
-    return term.create(root, Number(cols), Number(rows), approved)
+    return term.create(root, Number(cols), Number(rows), approved, owner)
   })
-  on('terminal:write', async (id: number, data: string) => { if (typeof data === 'string') term.write(Number(id), data) })
-  on('terminal:resize', async (id: number, cols: number, rows: number) => term.resize(Number(id), Number(cols), Number(rows)))
-  on('terminal:kill', async (id: number) => term.kill(Number(id)))
+  /** Chỉ cửa sổ đã mở terminal mới được ghi/đổi kích thước/kill nó (id đoán được). */
+  const ownsTerminal = (owner: WebContents, id: number): boolean => {
+    const held = term.ownerOf(Number(id))
+    return held === undefined || held === owner
+  }
+  onFrom('terminal:write', async (owner, id: number, data: string) => {
+    if (ownsTerminal(owner, Number(id)) && typeof data === 'string') term.write(Number(id), data)
+  })
+  onFrom('terminal:resize', async (owner, id: number, cols: number, rows: number) => {
+    if (ownsTerminal(owner, Number(id))) term.resize(Number(id), Number(cols), Number(rows))
+  })
+  onFrom('terminal:kill', async (owner, id: number) => { if (ownsTerminal(owner, Number(id))) term.kill(Number(id)) })
   on('terminal:resolve-path', async (pid: string, path: string) => resolveTerminalPath(await rootOf(pid), path))
   on('tasks:list', async (pid: string) => listTasks(await rootOf(pid)))
   on('tasks:config-file', async (pid: string) => ensureTasksFile(await rootOf(pid)))
@@ -726,14 +839,14 @@ export function registerIpc(
     accounts: acc,
     rootOf,
     editorState: (projectId) => editorStates.get(projectId),
-    emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
+    emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event })
   })
   const googleAgent = new GeminiAgentService({
     api: liveApi, dataDir, rootOf, connection: google,
     consentTarget: () => geminiEnabled() ? googleTarget() : null,
     hasConsent: (pid, target) => googleConsent.hasConsent(pid, target),
     editorState: (pid) => editorStates.get(pid),
-    emit: (projectId, event) => win()?.webContents.send('agent:event', { projectId, event })
+    emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event })
   })
   const agent = (agents = new AgentRouter(piAgent, googleAgent, selectedRuntime))
   const probeKey = () => JSON.stringify([google.connectionIdentity(), google.selectedModel()])
@@ -775,58 +888,75 @@ export function registerIpc(
       throw new AgentError('ai_not_configured', 'Kiểm tra kết nối và công cụ thành công trước khi dùng Gemini.')
     selectRuntime('antigravity-cli')
   })
-  on('agent:prompt', async (pid: string, text: string, target: AiConsentTarget, options?: AgentPromptOptions) => {
+  agentPrompt('agent:prompt', async (pid, text, target, options, accepted) => {
     validatePromptImages(options)
     await editorStates.wait(pid)
-    return agent.prompt(pid, text, target, options)
+    return agent.prompt(pid, text, target, options, accepted)
   })
-  on('agent:abort', (pid: string) => agent.abort(pid))
-  on('agent:set-mode', async (pid: string, mode: AgentMode) => {
+  agentOn('agent:abort', (pid: string) => agent.abort(pid))
+  agentOn('agent:set-mode', async (pid: string, mode: AgentMode) => {
     if (!['ask', 'plan', 'edit'].includes(mode)) throw new AgentError('bad_param', 'Chế độ trợ lý không hợp lệ')
     await rootOf(pid)
     return agent.setMode(pid, mode)
   })
-  on('agent:get-mode', async (pid: string) => agent.getMode(pid))
-  on('agent:set-disabled-tools', async (pid: string, tools: string[]) => {
+  /**
+   * `agent:close` do renderer gọi khi RỜI màn dự án (WorkspaceScreen unmount) — không phải lệnh
+   * đóng phiên của dự án. Cửa sổ không phải chủ chỉ rời màn, không được giết phiên đang sống của
+   * cửa sổ kia (bản dev còn gọi cleanup này hai lần khi mount; đóng theo yêu cầu của cửa sổ lạ
+   * cũng không được).
+   */
+  const agentClose = (channel: string, fn: (pid: string) => Promise<unknown>): void =>
+    ipcMain.handle(channel, (event, ...args) => toIpcResult(async () => {
+      const pid = args[0]
+      const sender = event?.sender as WebContents | undefined
+      if (typeof pid !== 'string' || !sender) return fn(pid)
+      const owner = agentOwners.ownerOf(pid)
+      if (owner && owner !== sender) return undefined
+      const result = await fn(pid)
+      agentOwners.forget(pid)
+      return result
+    }))
+  agentOn('agent:get-mode', async (pid: string) => agent.getMode(pid))
+  agentOn('agent:set-disabled-tools', async (pid: string, tools: string[]) => {
     await rootOf(pid)
     setDisabledTools(pid, tools)
     // Áp lại tool đang bật của phiên (cùng đường với đổi chế độ).
     await agent.setMode(pid, await agent.getMode(pid))
   })
-  on('agent:get-disabled-tools', async (pid: string) => getDisabledTools(pid))
+  agentOn('agent:get-disabled-tools', async (pid: string) => getDisabledTools(pid))
   on('agent:tool-names', async () => allToolNames())
-  on('agent:approve', async (pid: string, id: string, allow: boolean) => {
+  agentOn('agent:approve', async (pid: string, id: string, allow: boolean) => {
     if (allow === true) await editorStates.wait(pid)
     return agent.approve(pid, id, allow === true)
-  })
-  on('agent:close', async (pid: string) => {
+  }, 'owner')
+  agentClose('agent:close', async (pid: string) => {
     editorStates.clear(pid)
     return agent.close(pid)
   })
-  on('agent:snapshot', (pid: string) => agent.snapshot(pid))
-  on('agent:list-sessions', (pid: string) => agent.listSessions(pid))
-  on('agent:new-session', (pid: string) => agent.newSession(pid))
-  on('agent:fork-session', (pid: string, sessionId: string) => agent.forkSession(pid, sessionId))
-  on('agent:switch-session', (pid: string, sessionId: string) => agent.switchSession(pid, sessionId))
-  on('agent:rename-session', (pid: string, sessionId: string, title: string) => agent.renameSession(pid, sessionId, title))
-  on('agent:delete-session', (pid: string, sessionId: string) => agent.deleteSession(pid, sessionId))
-  on('agent:set-execution', async (pid: string, settings: AgentExecutionSettings) => {
+  agentOn('agent:snapshot', (pid: string) => agent.snapshot(pid))
+  agentOn('agent:list-sessions', (pid: string) => agent.listSessions(pid))
+  agentOn('agent:new-session', (pid: string) => agent.newSession(pid))
+  agentOn('agent:fork-session', (pid: string, sessionId: string) => agent.forkSession(pid, sessionId))
+  agentOn('agent:switch-session', (pid: string, sessionId: string) => agent.switchSession(pid, sessionId))
+  agentOn('agent:rename-session', (pid: string, sessionId: string, title: string) => agent.renameSession(pid, sessionId, title))
+  agentOn('agent:delete-session', (pid: string, sessionId: string) => agent.deleteSession(pid, sessionId))
+  agentOn('agent:set-execution', async (pid: string, settings: AgentExecutionSettings) => {
     await rootOf(pid)
     return agent.setExecution(pid, settings)
   })
-  on('agent:get-execution', async (pid: string) => agent.getExecution(pid))
-  on('agent:set-limits', async (pid: string, limits: AgentRunLimits) => {
+  agentOn('agent:get-execution', async (pid: string) => agent.getExecution(pid))
+  agentOn('agent:set-limits', async (pid: string, limits: AgentRunLimits) => {
     await rootOf(pid)
     return agent.setLimits(pid, limits)
   })
-  on('agent:get-limits', async (pid: string) => agent.getLimits(pid))
-  on('agent:project-commands', async (pid: string) => detectProjectCommands(await rootOf(pid)))
-  on('agent:checkpoints', (pid: string, taskId: string) => agent.checkpoints(pid, taskId))
-  on('agent:rollback', async (pid: string, taskId: string) => {
+  agentOn('agent:get-limits', async (pid: string) => agent.getLimits(pid))
+  agentOn('agent:project-commands', async (pid: string) => detectProjectCommands(await rootOf(pid)))
+  agentOn('agent:checkpoints', (pid: string, taskId: string) => agent.checkpoints(pid, taskId))
+  agentOn('agent:rollback', async (pid: string, taskId: string) => {
     await editorStates.wait(pid)
     return agent.rollback(pid, taskId)
   })
-  on('agent:editor-state', (pid: string, states: AgentEditorState[]) => editorStates.update(pid, states))
+  agentOn('agent:editor-state', (pid: string, states: AgentEditorState[]) => editorStates.update(pid, states))
   on('agent:notify', async (title: string, body: string) => notifyAgent(getWindow(), title, body))
 
   on('export:pick-dir', async (pid: string) => {

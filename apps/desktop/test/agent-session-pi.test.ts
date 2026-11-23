@@ -182,6 +182,46 @@ describe('AgentService + pi SDK thật', () => {
     expect(seen.auth[0]).toBe(`Bearer ${KEY}`)
   }, 30_000)
 
+  it('báo lượt đã được nhận đúng một lần, trước sự kiện đầu tiên', async () => {
+    // Dự án riêng: ca này phải TỰ mở phiên Pi mới, không dựa vào phiên mà test trước đã mở cho p1.
+    await accounts.grantConsent('p2', target)
+    const acceptedTurn = async (text: string) => {
+      const from = events.length
+      const at: number[] = []
+      const before: string[][] = []
+      await svc.prompt('p2', text, target, undefined, () => {
+        at.push(events.length - from)
+        before.push(events.slice(from).map((event) => event.type))
+      })
+      return { at, before, evs: events.slice(from) }
+    }
+
+    // Phiên mới: `open` không được thông báo `session` trước khi chủ phiên đổi ở `onAccepted`.
+    const fresh = await acceptedTurn('đếm sự kiện khi mở phiên mới')
+    expect(fresh.at).toEqual([0])
+    expect(fresh.before).toEqual([[]])
+    expect(fresh.evs[0]).toEqual({ type: 'session', sessionId: expect.any(String) })
+    expect(fresh.evs.length).toBeGreaterThan(1)
+    const sessionId = (fresh.evs[0] as Extract<AgentEvent, { type: 'session' }>).sessionId
+
+    // Phiên dùng lại: không có sự kiện `session` mới, lượt vẫn nhận trước mọi sự kiện.
+    const reused = await acceptedTurn('đếm sự kiện khi dùng lại phiên')
+    expect(reused.at).toEqual([0])
+    expect(reused.before).toEqual([[]])
+    expect(reused.evs.some((event) => event.type === 'session')).toBe(false)
+    expect((await svc.snapshot('p2')).session?.id).toBe(sessionId)
+
+    // Prompt bị từ chối không được báo nhận lượt (không đổi chủ phiên).
+    const rejected: number[] = []
+    await expect(svc.prompt('p2', '   ', target, undefined, () => rejected.push(events.length))).rejects.toMatchObject({ code: 'bad_param' })
+    expect(rejected).toEqual([])
+
+    // Mở phiên tường minh vẫn thông báo `session` (hành vi cũ được giữ).
+    const fromNew = events.length
+    const created = await svc.newSession('p2')
+    expect(events.slice(fromNew)).toContainEqual({ type: 'session', sessionId: created.session!.id })
+  }, 30_000)
+
   it('Pi thiếu extension NexGraph thì không dùng công cụ dựng sẵn thay thế', async () => {
     const model = accounts.modelRuntime.getModel('fake', 'fake-1')!
     await expect(createPiSession({

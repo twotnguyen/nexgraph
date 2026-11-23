@@ -320,6 +320,7 @@ export const uiEnOthers: Record<string, string> = {
   'Mô hình chỉ có {n} token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.':
     'The model has only {n} context tokens — not enough for the system prompt and tools. Choose a larger model.',
   // Mã lỗi chính của main (review #57 I3).
+  'Chỉ cửa sổ đang chạy tác vụ được trả lời yêu cầu duyệt.': 'Only the window running the task can answer the approval request.',
   'Debug adapter đã dừng.': 'The debug adapter stopped.',
   'Debug adapter không khởi động.': 'The debug adapter did not start.',
   'Chưa bật phân tích bằng AI cho dự án này.': 'AI analysis is not enabled for this project.',

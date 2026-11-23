@@ -16,6 +16,8 @@
 }
 /* Mở lên trên, canh trái nút: dùng cho nút ở đáy thanh icon. */
 .popover-menu-wrap.popover-up-right .popover-menu { top: auto; right: auto; bottom: 0; left: calc(100% + 6px); }
+.popover-row-wrap { position: relative; }
+.popover-separator { height: 1px; margin: 4px 6px; background: var(--color-border); opacity: .7; }
 .popover-menu button {
   display: flex;
   align-items: center;
@@ -34,3 +36,8 @@
 .popover-menu button svg { flex: none; color: var(--color-muted); }
 .popover-menu button:is(:hover, :focus-visible):not(:disabled) { background: color-mix(in srgb, var(--color-text) 11%, transparent); outline: 0; }
 .popover-menu button:disabled { opacity: .45; }
+.popover-check { flex: none; display: grid; place-items: center; width: 14px; min-width: 14px; height: 14px; }
+.popover-label { flex: 1; }
+.popover-keys { margin-left: auto; padding-left: 18px; color: var(--color-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Menu con kiểu VS Code: mở sang phải, canh đầu hàng cha. */
+.popover-menu .popover-submenu { top: -5px; right: auto; left: calc(100% + 3px); min-width: 210px; }

@@ -274,7 +274,7 @@ export class GeminiAgentService {
     })().catch(async (error) => { await this.stopClient(entry); throw error }).finally(() => { entry.opening = undefined })
     return entry.opening
   }
-  async prompt(pid: string, question: string, target: AiConsentTarget, options?: AgentPromptOptions): Promise<void> {
+  async prompt(pid: string, question: string, target: AiConsentTarget, options?: AgentPromptOptions, onAccepted?: () => void): Promise<void> {
     this.idle(pid)
     const images = options?.images ?? []
     if (typeof question !== 'string' || (!question.trim() && images.length === 0) || question.length > 200_000) throw failed('bad_param', 'Câu hỏi trống hoặc vượt giới hạn')
@@ -288,10 +288,17 @@ export class GeminiAgentService {
       if (!sameConsentTarget(active, target)) throw failed('ai_provider_changed', 'Kết nối Gemini đã thay đổi')
       if (!await this.deps.hasConsent(pid, target)) throw failed('consent_required', 'Chưa đồng ý gửi dữ liệu dự án tới Antigravity CLI/Google')
       if (generation !== (this.generations.get(pid) ?? 0)) return
-      entry = await this.entry(pid)
+      // Mở hội thoại có thể thông báo `session` — hoãn tới sau khi lượt được nhận để sự kiện
+      // đầu tiên của lượt không đi về cửa sổ cũ (chủ đổi ở `onAccepted`).
+      const previous = this.entries.get(pid)
+      entry = await this.entry(pid, undefined, false, { announce: false })
       if (!entry || !sameConsentTarget(entry.target, target)) throw failed('ai_not_configured', 'Chưa kết nối Gemini')
+      const opened = previous !== entry
       entry.busy = true; entry.stopped = false; entry.text = ''; entry.error = undefined; entry.errorCode = undefined; entry.tools.clear()
       entry.controller = new AbortController()
+      // Lượt đã được nhận và chưa có sự kiện nào: báo main chuyển chủ phiên sang cửa sổ khởi tạo.
+      onAccepted?.()
+      if (opened && this.current(pid, entry)) this.deps.emit(pid, { type: 'session', sessionId: entry.stored.info.id })
       entry.task = { id: randomUUID(), sessionId: entry.stored.info.id, status: 'running', startedAt: Date.now(), turns: 0, turnsKnown: false, runtime: 'antigravity-cli', limits: this.getLimits(pid), checkpointIds: [] }
       const taskId = entry.task.id
       const settings = this.getExecution(pid)

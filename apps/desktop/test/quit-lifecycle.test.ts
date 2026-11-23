@@ -5,11 +5,13 @@ const h = vi.hoisted(() => ({
   closed: null as (() => void) | null,
   closeWindow: vi.fn(), stopEngine: vi.fn(async () => {}), stopWatchers: vi.fn(),
   closeAgents: vi.fn(), stopMcp: vi.fn(async () => {}), quit: vi.fn(), externalOpen: vi.fn(async () => {}),
+  closeResources: vi.fn(),
   openHandler: null as ((details: { url: string }) => { action: string }) | null,
   webEvents: new Map<string, (...args: unknown[]) => void>()
 }))
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp/nexgraph-quit-test', getAppPath: () => '/tmp/nexgraph-quit-test',
+    isPackaged: false, getName: () => 'NexGraph',
     commandLine: { hasSwitch: () => false },
     whenReady: () => Promise.resolve(), quit: h.quit,
     on: (name: string, cb: (event: { preventDefault(): void }) => void) => h.events.set(name, cb) },
@@ -28,10 +30,13 @@ vi.mock('electron', () => ({
     loadURL = vi.fn(async () => {})
     on(name: string, cb: () => void) { if (name === 'closed') h.closed = cb }
   },
-  dialog: { showMessageBoxSync: vi.fn() }, ipcMain: { handle: vi.fn() }, shell: { openExternal: h.externalOpen }
+  dialog: { showMessageBoxSync: vi.fn() }, ipcMain: { handle: vi.fn() }, shell: { openExternal: h.externalOpen },
+  // appMenu dựng menu hệ thống lúc whenReady; mock đủ để entrypoint nạp được.
+  Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn(() => ({ items: [] })) }
 }))
 vi.mock('../src/main/ipc', () => ({
-  registerIpc: vi.fn(), closeAllAgents: h.closeAgents, stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopEditorProcesses: vi.fn()
+  registerIpc: vi.fn(), closeAllAgents: h.closeAgents, closeWindowResources: h.closeResources,
+  stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopEditorProcesses: vi.fn()
 }))
 vi.mock('../src/main/engine/supervisor', () => ({ EngineSupervisor: class {
   startEngine = vi.fn(async () => {})

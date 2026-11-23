@@ -10,6 +10,7 @@ import '@fontsource/be-vietnam-pro/700.css'
 import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/600.css'
 import './styles.css'
+import './styles/tab-motion.css'
 
 initializeTheme()
 createRoot(document.getElementById('root')!).render(

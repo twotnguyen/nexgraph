@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { NexGraphApi } from '../shared/api'
+import type { AppMenuAction, NexGraphApi } from '../shared/api'
 import type { EngineStatus } from '../shared/engine-status'
 import type { EngineEvent } from '../shared/graph-types'
 import type { AgentEvent, AuthEventView, AuthPromptView } from '../shared/agent-types'
@@ -46,6 +46,9 @@ const api: NexGraphApi = {
     list: () => call('project:list'),
     remove: (pid) => call('project:remove', pid)
   },
+  file: { pickOpen: (projectId) => call('file:pick-open', projectId) },
+  window: { openNew: () => call('window:open-new') },
+  menu: { onAction: (cb) => subscribe<AppMenuAction>('app-menu:action', cb), setLocale: (locale) => call('app-menu:set-locale', locale) },
   index: {
     scan: (projectId) => call('index:scan', projectId),
     start: (projectId, opts) => call('index:start', projectId, opts),

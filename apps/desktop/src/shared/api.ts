@@ -122,6 +122,8 @@ export type ExtensionCommand = { id: string; title: string; action: { type: 'ins
 export type ExtensionInfo = { id: string; name: string; version: string; description: string; themes: ExtensionTheme[]; commands: ExtensionCommand[] }
 
 export type HostCommand = { name: string; arg?: unknown }
+/** Lệnh do menu hệ thống (File/Edit/View) gửi sang renderer. */
+export type AppMenuAction = { id: string }
 
 /** API mà preload phơi ra renderer qua `window.nexgraph`. Lỗi từ engine là đối tượng `{ name, code, message }` (không phải Error: contextBridge làm mất thuộc tính của Error). */
 /** Lỗi refresh nền do watcher gửi sang renderer; main đã gộp lỗi lặp. */
@@ -157,6 +159,20 @@ export interface NexGraphApi {
     list(): Promise<ProjectSummary[]>
     /** Gỡ đăng ký tại ứng dụng. Mở lại cùng thư mục sẽ dùng lại đồ thị đã lưu. */
     remove(projectId: string): Promise<void>
+  }
+  /** Hộp thoại mở tệp cho menu File. `relative` có giá trị khi tệp nằm trong dự án đã cho. */
+  file?: {
+    pickOpen(projectId?: string): Promise<{ path: string; relative?: string } | null>
+  }
+  /** Tạo cửa sổ NexGraph mới (menu File → New Window). */
+  window?: {
+    openNew(): Promise<void>
+  }
+  /** Menu hệ thống File/Edit/View do main dựng; renderer đăng ký để chạy lệnh. */
+  menu?: {
+    onAction(cb: (action: AppMenuAction) => void): () => void
+    /** Đổi nhãn menu native theo ngôn ngữ UI (main dựng lại thanh menu). */
+    setLocale(locale: 'vi' | 'en'): Promise<void>
   }
   index: {
     scan(projectId: string): Promise<ScanInfo>

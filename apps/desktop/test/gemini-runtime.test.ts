@@ -114,6 +114,19 @@ describe('Gemini controlled runtime', () => {
     expect(f.createClient).toHaveBeenCalledTimes(2)
     expect(f.clients[1].calls[0].method).toBe('session/load')
   })
+  it('báo lượt đã được nhận trước sự kiện đầu tiên, không báo khi bị từ chối', async () => {
+    const f = setup()
+    const at: number[] = []
+    f.setConsent(false)
+    await expect(f.service.prompt('p', 'no consent', TARGET, undefined, () => at.push(f.events.length)))
+      .rejects.toMatchObject({ code: 'consent_required' })
+    expect(at).toEqual([])
+
+    f.setConsent(true)
+    await f.service.prompt('p', 'report accepted', TARGET, undefined, () => at.push(f.events.length))
+    expect(at).toEqual([0])
+    expect(f.events.length).toBeGreaterThan(0)
+  })
   it('forks local history into a new native session with prior text and tool results in its first prompt', async () => {
     const f = setup()
     f.script(async (client) => {
