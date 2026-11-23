@@ -6,6 +6,8 @@ import { SecretStore, writeJson } from '../src/main/ai/settings'
 import { isProtectedRel, resolveInside } from '../src/main/fs/project-fs'
 import { GeminiConnectionManager } from '../src/main/gemini/connection'
 
+// NTFS không có mode POSIX: chỉ kiểm quyền tệp trên macOS/Linux.
+const posix = process.platform !== 'win32'
 const mode = (file: string) => statSync(file).mode & 0o777
 const base = (tag: string) => mkdtempSync(join(tmpdir(), `ng-sec-${tag}-`))
 
@@ -14,7 +16,7 @@ const box = { available: () => true, encrypt: (s: string) => `enc:${Buffer.from(
 
 // AI-07: các bất biến đã đọc khi review connection.ts / kho token / project-fs.ts.
 describe('kho token (ai/settings SecretStore)', () => {
-  it('chỉ ghi bản mã hoá, tệp 0600, đọc lại đúng', () => {
+  it('chỉ ghi bản mã hoá và đọc lại đúng', () => {
     const dir = base('secret')
     const file = join(dir, 'ai-keys.json')
     const store = new SecretStore(file, box)
@@ -22,8 +24,14 @@ describe('kho token (ai/settings SecretStore)', () => {
     const raw = readFileSync(file, 'utf8')
     expect(raw).not.toContain('sk-bí-mật')
     expect(JSON.parse(raw).openai).toMatch(/^enc:/)
-    expect(mode(file)).toBe(0o600)
     expect(store.get('openai')).toBe('sk-bí-mật-không-được-lên-đĩa')
+  })
+
+  it.skipIf(!posix)('tệp khoá tạo với quyền 0600', () => {
+    const dir = base('secret-mode')
+    const file = join(dir, 'ai-keys.json')
+    new SecretStore(file, box).set('openai', 'sk')
+    expect(mode(file)).toBe(0o600)
   })
 
   it('bản mã hỏng: get() trả null, readStrict() báo lỗi thay vì lặng lẽ dùng rỗng', () => {
@@ -71,10 +79,12 @@ describe('deny-list project-fs (AI-07)', () => {
 })
 
 describe('tệp cấu hình chung', () => {
-  it('writeJson tạo tệp 0600', () => {
+  it('writeJson ghi nội dung mới và giữ tệp chỉ chủ sở hữu đọc', () => {
     const dir = base('json')
     const file = join(dir, 'prefs.json')
     writeJson(file, { a: '1' })
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ a: '1' })
+    if (!posix) return // NTFS không có mode POSIX
     expect(mode(file)).toBe(0o600)
     chmodSync(file, 0o644)
     writeJson(file, { a: '2' })
