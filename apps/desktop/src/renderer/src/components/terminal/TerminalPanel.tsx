@@ -19,6 +19,8 @@ type Tab = {
   customTitle?: string
   cwd: string
   task?: TaskDefinition
+  /** Lệnh người dùng gõ trong picker: gõ vào shell sau khi mở, như tự tay nhập (không phải task). */
+  command?: string
   taskState?: { type: 'running' } | { type: 'exited'; code: number } | { type: 'error' }
 }
 export type TerminalSplitDirection = 'right' | 'left' | 'up' | 'down'
@@ -268,6 +270,8 @@ function TerminalView({ projectId, tab, title, visible, focused, hidden, pane, s
         if (early?.data) xterm.write(early.data)
         if (early?.overflow) xterm.write(`\r\n[${tr('Đầu ra quá lớn trước khi terminal sẵn sàng; một phần đã bị bỏ qua.')}]\r\n`)
         if (early?.code !== undefined) callbacks.current.onExit(early.code)
+        // Lệnh gõ tay: nhập vào shell như người dùng tự gõ, không phải task do main cấp.
+        if (tab.command) void api.write(id, `${tab.command}\r`)
         fitVisible()
       }).catch((error: unknown) => {
         pending.clear()
@@ -292,7 +296,7 @@ function TerminalView({ projectId, tab, title, visible, focused, hidden, pane, s
       term.current = null
       xterm.dispose()
     }
-  }, [projectId, tab.key, tab.task, controls])
+  }, [projectId, tab.key, tab.task, tab.command, controls])
 
   useEffect(() => {
     if (!visible || hidden) return
@@ -320,7 +324,7 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   projectId: string
   projectPath: string
   newRequest: number
-  taskRequest: { seq: number; task: TaskDefinition } | null
+  taskRequest: { seq: number; task?: TaskDefinition; command?: string } | null
   hidden: boolean
   onHide: () => void
   onCloseAll: () => void
@@ -337,7 +341,8 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   const [state, dispatch] = useReducer(reducer, undefined, () => {
     const saved = savedTabs.get(projectId)?.[0]
     const tab: Tab = { key: 1, shell: 'Terminal', cwd: saved?.cwd ?? projectPath, customTitle: saved?.customTitle,
-      task: taskRequest?.task, taskState: taskRequest ? { type: 'running' } : undefined }
+      task: taskRequest?.task, command: taskRequest?.command,
+      taskState: taskRequest?.task ? { type: 'running' } : undefined }
     return { tabs: [tab], visible: [1], active: 1, axis: 'horizontal' as const }
   })
   const controls = useRef(new Map<number, Controls>())
@@ -353,9 +358,9 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   const height = useTerminalHeight()
   const drag = useRef<{ y: number; height: number } | null>(null)
   const folder = projectPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || projectPath || tr('Dự án')
-  const titleOf = (tab: Tab) => tab.customTitle || (tab.task ? tab.task.label : `${folder} — ${tab.shell}`)
-  const add = (task?: TaskDefinition, split = false, direction: TerminalSplitDirection = 'right') => {
-    dispatch({ type: 'add', split, direction, tab: { key: next.current++, shell: 'Terminal', cwd: projectPath, task, taskState: task ? { type: 'running' } : undefined } })
+  const titleOf = (tab: Tab) => tab.customTitle || (tab.task ? tab.task.label : tab.command ? tab.command : `${folder} — ${tab.shell}`)
+  const add = (task?: TaskDefinition, split = false, direction: TerminalSplitDirection = 'right', command?: string) => {
+    dispatch({ type: 'add', split, direction, tab: { key: next.current++, shell: 'Terminal', cwd: projectPath, task, command, taskState: task ? { type: 'running' } : undefined } })
   }
   const newTerminal = () => { add(); onNewTerminal?.() }
   const splitTerminal = (direction: TerminalSplitDirection) => {
@@ -389,7 +394,7 @@ export function TerminalPanel({ projectId, projectPath, newRequest, taskRequest,
   useEffect(() => {
     if (!taskRequest || taskRequest.seq === seenTask.current) return
     seenTask.current = taskRequest.seq
-    add(taskRequest.task)
+    add(taskRequest.task, false, 'right', taskRequest.command)
   }, [taskRequest]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!state.tabs.length) onCloseAll() }, [state.tabs.length, onCloseAll])
   useEffect(() => { savedTabs.set(projectId, state.tabs.map(({ cwd, customTitle }) => ({ cwd, customTitle }))) }, [projectId, state.tabs])

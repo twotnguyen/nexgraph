@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { createInterface } from 'node:readline'
+import { safeProcessEnv } from '../process-env'
 
 export interface EngineCommand {
   command: string
@@ -19,6 +20,40 @@ export interface EngineHandle {
 
 const STDERR_TAIL = 4000
 const KILL_GRACE_MS = 3000
+
+/** Biến của tiến trình cha đổi cách Python tìm gói; engine phải chạy bằng môi trường của chính nó. */
+const PYTHON_ISOLATION = ['PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP']
+
+/**
+ * Biến ngoài danh sách hệ thống mà engine cần: `gh` đọc token từ biến môi trường
+ * (GH_TOKEN/GITHUB_TOKEN) cho tính năng Pull request; engine gọi `gh pr list|view|diff` (chỉ đọc)
+ * bằng env kế thừa nên bỏ hai biến này là tab Pull request mất đăng nhập khi người dùng dùng
+ * token qua env thay vì `gh auth login`.
+ */
+const ENGINE_PASSTHROUGH = ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_HOST']
+/** NEXGRAPH_* là cấu hình nội bộ của engine (token, chế độ hook, số worker…). */
+const ENGINE_PREFIX = /^NEXGRAPH_/i
+
+/**
+ * Env cho engine: chỉ biến hệ thống trong `safeProcessEnv` (REV-14) + `ENGINE_PASSTHROUGH` +
+ * NEXGRAPH_*, bỏ PYTHONPATH/PYTHONHOME/PYTHONSTARTUP. App mở từ shell có PYTHONPATH của công cụ
+ * khác (Hermes, pipx…) làm `serve` chết ở import
+ * (`ImportError: cannot import name 'ArgsKwargs' from 'pydantic_core._pydantic_core'`).
+ * Engine parse mã của dự án (không tin được) nên không được nhận AWS_*, token npm, SSH agent…
+ */
+export function engineEnv(source: NodeJS.ProcessEnv = process.env, extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
+  const passthrough: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined && (ENGINE_PREFIX.test(key) || ENGINE_PASSTHROUGH.includes(key.toUpperCase()))) {
+      passthrough[key] = value
+    }
+  }
+  const env: NodeJS.ProcessEnv = safeProcessEnv(source, { ...passthrough, ...extra })
+  for (const key of Object.keys(env)) {
+    if (PYTHON_ISOLATION.includes(key.toUpperCase())) delete env[key]
+  }
+  return { ...env, PYTHONNOUSERSITE: '1', PYTHONUTF8: '1' }
+}
 
 export class EngineStartError extends Error {
   constructor(
@@ -65,7 +100,9 @@ export function startEngine(
   const child = spawn(cmd.command, [...cmd.args, 'serve', '--data-dir', opts.dataDir, '--port', '0', '--exit-on-stdin-close'], {
     cwd: cmd.cwd,
     // Token chỉ đi qua biến môi trường, không bao giờ qua argv.
-    env: { ...(opts.env ?? process.env), NEXGRAPH_TOKEN: token, PYTHONUTF8: '1' },
+    // Token chỉ đi qua biến môi trường, không bao giờ qua argv. `opts.env` là biến main đặt thêm
+    // (test hook), không phải env kế thừa từ shell — env kế thừa đi qua allowlist của `engineEnv`.
+    env: engineEnv(process.env, { ...opts.env, NEXGRAPH_TOKEN: token }),
     windowsHide: true,
     // Nơi khác Windows: tạo nhóm tiến trình riêng để diệt được cả cây (ví dụ `uv run` -> python).
     detached: !isWin,

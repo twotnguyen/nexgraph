@@ -6,6 +6,7 @@ import { StringDecoder } from 'node:string_decoder'
 import type { ApprovalGate, CommandPreview } from './approval'
 import type { FileContent } from '../../shared/api'
 import { readProjectFile, readProjectFileBytes, resolveInside } from '../fs/project-fs'
+import { safeProcessEnv } from '../process-env'
 import { CheckpointStore } from './checkpoints'
 import { AgentFileScope } from './file-scope'
 
@@ -33,12 +34,28 @@ const MAX_TIMEOUT = 5 * 60_000
 const SNAPSHOT_LIMIT = 32 * 1024 * 1024
 const GENERATED_PATHS = ['.venv/', 'venv/', 'dist/', '.next/', '.cache/', '.turbo/', '__pycache__/',
   '**/*.g.dart', '**/*.freezed.dart', '**/*.mocks.dart']
-const ENV_KEYS = new Set(['path', 'pathext', 'systemroot', 'windir', 'comspec', 'temp', 'tmp', 'home', 'userprofile',
-  'appdata', 'localappdata', 'lang', 'lc_all', 'term', 'number_of_processors', 'processor_architecture', 'programfiles',
-  'programfiles(x86)', 'programdata'])
-const NETWORK_EXECUTABLES = new Set(['curl', 'wget', 'ssh', 'scp', 'sftp', 'ftp', 'npx', 'pip', 'pip3'])
+/**
+ * Tên lệnh bị chặn vì tự tải/gửi dữ liệu ra ngoài. Danh sách chỉ nhìn tên đầu, nên nó là
+ * "đường đi quen thuộc bị đóng", không phải sandbox: `python -c`, `node -e`, hay script
+ * trong dự án vẫn chạy được mã tuỳ ý. Rào chắn thật là cổng duyệt từng lệnh (ADR 0016).
+ */
+const NETWORK_EXECUTABLES = new Set(['curl', 'wget', 'ssh', 'scp', 'sftp', 'ftp', 'npx', 'pip', 'pip3',
+  'uvx', 'pipx', 'bunx', 'corepack', 'deno'])
 const PACKAGE_EXECUTABLES = new Set(['npm', 'pnpm', 'yarn', 'bun'])
 const LOCAL_PACKAGE_ACTIONS = new Set(['run', 'test', 'build', 'lint', 'check', 'typecheck', 'exec'])
+const PIP_MODULES = new Set(['pip', 'pip3', 'ensurepip'])
+/** `python`, `python3.12`, và py launcher (`py`, `py -3`) trên Windows đều cài gói qua `-m pip`. */
+const PYTHON_LAUNCHERS = /^(python\d*(\.\d+)?|py)$/
+
+/** `-m pip`, `-mpip` (dính), kể cả sau tham số của py launcher như `py -3 -m pip`. */
+function installsWithPip(args: readonly string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i].toLowerCase()
+    if (arg === '-m' && PIP_MODULES.has((args[i + 1] ?? '').toLowerCase())) return true
+    if (/^-m(pip3?|ensurepip)$/.test(arg)) return true
+  }
+  return false
+}
 
 function readJson(root: string, path: string): Record<string, unknown> | null {
   try {
@@ -91,6 +108,10 @@ function normalizedCommand(root: string, input: ProcessInput): CommandPreview {
   const executable = input.executable.trim()
   const name = basename(executable).replace(/\.(exe|cmd|bat)$/i, '').toLowerCase()
   if (NETWORK_EXECUTABLES.has(name)) throw new Error('Lệnh tải hoặc gửi dữ liệu ra ngoài chưa được cấp quyền')
+  // `python -m pip install`, `python -mpip install`, `py -m pip install`… đều là đường cài gói của pip.
+  if (PYTHON_LAUNCHERS.test(name) && installsWithPip(input.args)) {
+    throw new Error('Cài gói qua pip cần thao tác riêng, agent chỉ chạy script đã có trong dự án')
+  }
   if (name === 'git' && !['status', 'diff', 'log', 'show', 'ls-files', 'rev-parse', 'check-ignore'].includes(input.args[0] ?? '')) {
     throw new Error('Tác vụ chỉ được dùng Git để đọc, không push hoặc thay đổi lịch sử')
   }
@@ -109,11 +130,7 @@ function normalizedCommand(root: string, input: ProcessInput): CommandPreview {
 
 /** Môi trường tiến trình chỉ chứa biến hệ thống cần thiết, không kế thừa credential/provider của NexGraph. */
 function processEnvironment(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (ENV_KEYS.has(key.toLowerCase()) && value !== undefined) env[key] = value
-  }
-  return { ...env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', PYTHONUTF8: '1', ELECTRON_RUN_AS_NODE: '1' }
+  return safeProcessEnv(process.env, { CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', PYTHONUTF8: '1', ELECTRON_RUN_AS_NODE: '1' })
 }
 
 /** Windows .cmd được chạy bằng JS entry của package manager, không đi qua cmd.exe. */
