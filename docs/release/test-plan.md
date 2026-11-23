@@ -72,7 +72,7 @@ Chạy [checklist Windows/macOS](../windows-checklist.md) mục A–E trên bả
 | F13 | Monaco, CRLF/BOM, xung đột tệp | checklist D | cả hai |
 | F15 | tích hợp Codex, giữ cấu hình có sẵn | checklist D | một máy |
 | F16 | LSP TS/Python, terminal, Git, DAP, cộng tác LAN, extension | UC18 | cả hai; LAN cần 2 máy |
-| NFR | index < 60 s (S), < 10 phút (L), mở lại < 3 s, RAM < 2 GB, bộ cài < 500 MB, UI ≤ 2.000 node | SRS NFR, benchmark | macOS + CI |
+| NFR | index < 60 s (S), < 10 phút (L), mở lại < 3 s (dự án nhỏ) / < 5 s (dự án lớn), RAM < 2 GB, bộ cài < 500 MB, UI ≤ 2.000 node | SRS NFR, benchmark | macOS + CI |
 
 ## 5. Dữ liệu thử
 

@@ -49,7 +49,15 @@ Không tạo tag từ nhánh PR hay commit chưa merge. Không sửa tag sau khi
 
 ## 4. Kiểm Release
 
-CI tạo Release từ tag (`release` job, `needs: [engine, desktop, package]`). Kiểm:
+CI tạo Release từ tag (`release` job, `needs: [engine, desktop, package]`). CI dùng `gh release create … --generate-notes` (`.github/workflows/ci.yml:162`), nên body ban đầu là body tự sinh; sau khi job `release` xanh, thay bằng ghi chú đã duyệt:
+
+```sh
+gh release edit v<version> --notes-file docs/release/notes-<version>.md
+```
+
+Ví dụ 0.2.0 dùng `docs/release/notes-0.2.0.md`. Tệp nháp còn khối "Trạng thái" ở đầu: bỏ khối đó (hoặc dùng bản đã duyệt không có khối) trước khi chạy, rồi kiểm lại body.
+
+Kiểm:
 
 ```sh
 gh release view v<version> --json tagName,assets \

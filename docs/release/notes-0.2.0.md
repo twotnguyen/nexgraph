@@ -61,5 +61,5 @@ Theo [README](README.md): tải đúng tệp trong artifact của lượt CI xan
 
 ## Ghi chú cho người bảo trì
 
-- Body này thay cho body tự sinh của `gh release create … --generate-notes` (`.github/workflows/ci.yml:160`); khi tạo Release thật, dán nguyên văn (bỏ phần "Trạng thái" ở đầu) và gắn run id CI của commit merge.
+- Body này thay cho body tự sinh của `gh release create … --generate-notes` (`.github/workflows/ci.yml:162`); khi tạo Release thật, dán nguyên văn (bỏ phần "Trạng thái" ở đầu) và gắn run id CI của commit merge.
 - Nhãn còn thiếu so với 0.1.2 chỉ được thêm khi có bằng chứng nghiệm thu trong [biên bản](acceptance/).

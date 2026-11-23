@@ -34,7 +34,7 @@ Sinh bởi `scripts/parity/compare_graphify.py` của workspace (không nằm tr
 
 *Bảng 1. Kết quả đối chiếu NexGraph với graphify theo corpus*
 
-Lượt này chạy lại toàn bộ trên `83e49b7` bằng graphify 0.9.115 (lượt W12 dùng 0.9.112). Khác biệt chính: 0.9.115 đã có extra `[sql]` nên 11 tệp `.sql` của NestJS vào graph và tên bảng có schema; vì vậy hai dòng `Số node có tệp` và `Tập community` của NestJS đổi số và được giải thích lại ở trên, không phải hồi quy của NexGraph.
+Lượt này chạy lại toàn bộ trên `83e49b7` bằng graphify 0.9.115 (lượt W12 dùng 0.9.112). Đây là mốc duy nhất dùng trong tệp, đúng commit mà `--stamp` ghi vào bảng; `a4dbe39` (8 commit sau, chỉ đổi tài liệu) có mã `engine`/`apps` giống hệt — `git diff --stat 83e49b7..a4dbe39 -- engine apps` rỗng — nên không dùng làm mốc riêng. Khác biệt chính: 0.9.115 đã có extra `[sql]` nên 11 tệp `.sql` của NestJS vào graph và tên bảng có schema; vì vậy hai dòng `Số node có tệp` và `Tập community` của NestJS đổi số và được giải thích lại ở trên, không phải hồi quy của NexGraph.
 
 **Tổng:** 11 khớp · 16 lệch có lý do · 0 lệch chưa rõ.
 
@@ -134,4 +134,4 @@ Nhóm tệp lệch (dấu `19d0e7562b`; tệp NexGraph không vào cụm nào t�
 - path `resetPassword` (src/apps/auth/auth.service.ts) → `resetPassword` (src/apps/auth/auth.controller.ts): graphify không · NexGraph không
 - path `signIn` (src/apps/auth/auth.service.ts) → `signIn` (src/apps/auth/auth.controller.ts): graphify không · NexGraph không
 
-Chạy ngày 2026-11-23 trên NexGraph `a4dbe39`.
+Chạy ngày 2026-11-23 trên NexGraph `83e49b7` (mốc của `--stamp`; mã `engine`/`apps` trùng `a4dbe39`).
