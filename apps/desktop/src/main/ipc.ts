@@ -2,7 +2,7 @@ import { app, dialog, ipcMain, safeStorage, shell, type BrowserWindow } from 'el
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { isAbsolute, join, relative, sep } from 'node:path'
 import type { CollabHello, DebugBreakpoints, LspCallHierarchyItem, LspRange, TaskDefinition, TextSearchQuery, WriteOpts } from '../shared/api'
 import type { ExportFormat, ExportScope, FlowQuery, IndexOptions, NeighborQuery, PushRequest } from '../shared/graph-types'
 import { EngineApi, EngineApiError } from './engine/api'
@@ -188,7 +188,8 @@ export function registerIpc(
   getWindow: () => BrowserWindow | null,
   getCommand: () => EngineCommand,
   dataDir: string,
-  devHooks?: AccountDevHooks
+  devHooks?: AccountDevHooks,
+  openWindow?: () => void
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
@@ -207,6 +208,7 @@ export function registerIpc(
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
   })
+  if (openWindow) on('window:open-new', async () => { openWindow() })
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
   const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),
@@ -233,6 +235,21 @@ export function registerIpc(
   const fsh = fsHandlers(listProjects)
   /** Mọi kênh nhận path đều phải suy root từ projectId đã đăng ký; id lạ → FsError('unknown_project'). */
   const rootOf = projectRoot(listProjects)
+  on('file:pick-open', async (projectId?: string) => {
+    const win = getWindow()
+    const opts = { properties: ['openFile' as const], title: 'Chọn tệp để mở' }
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || r.filePaths.length === 0) return null
+    const path = r.filePaths[0]
+    let relativePath: string | undefined
+    if (projectId) {
+      try {
+        const rel = relative(await rootOf(projectId), path)
+        if (rel && !rel.startsWith('..') && !isAbsolute(rel)) relativePath = rel.split(sep).join('/')
+      } catch { /* dự án không hợp lệ: trả về đường dẫn tuyệt đối */ }
+    }
+    return { path, relative: relativePath }
+  })
   on('fs:list', fsh.list)
   lsp.onDiagnostics = (root, file, diagnostics) => {
     for (const [pid, projectRootPath] of lspProjects) {

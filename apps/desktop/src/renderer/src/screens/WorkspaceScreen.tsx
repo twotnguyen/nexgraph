@@ -42,8 +42,9 @@ import { useChanges } from '../state/useChanges'
 import { Icon, VIEW_TONE } from '../components/common/icons'
 import { openThemePicker } from '../components/layout/ThemePicker'
 import { FileFinder } from '../components/layout/FileFinder'
-import { useCommand } from '../state/commands'
+import { runCommand, useCommand } from '../state/commands'
 import { getFileSaver, saveAllFiles } from '../state/fileSaveRegistry'
+import { registerFileMenuActions } from '../state/fileMenuActions'
 import { getExplorerOpen, setChatDock, setChatWidth, useChatDock, useChatWidth } from '../state/layoutPrefs'
 import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
 import { listBookmarks } from '../state/bookmarks'
@@ -244,6 +245,28 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const [recentStore, setRecentStore] = useState(() => ({ projectId: project.project_id, paths: readRecentFiles(project.project_id) }))
   const recentFiles = recentStore.projectId === project.project_id ? recentStore.paths : []
   const orderedFiles = useMemo(() => [...files.filter((f) => pinned.has(f.file)), ...files.filter((f) => !pinned.has(f.file))], [files, pinned])
+  // Vạch trượt dưới thanh tab: đo bằng rect nên chạy đúng cả tab tệp và khi thanh tab cuộn ngang.
+  useLayoutEffect(() => {
+    const list = tabList.current
+    if (!list) return
+    const position = () => {
+      const active = list.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      if (!active || !active.getBoundingClientRect || !list.getBoundingClientRect) return
+      const base = list.getBoundingClientRect()
+      const item = active.getBoundingClientRect()
+      list.style.setProperty('--tab-x', `${item.left - base.left + list.scrollLeft}px`)
+      list.style.setProperty('--tab-w', `${item.width}px`)
+    }
+    position()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(position)
+    observer.observe(list)
+    list.addEventListener('scroll', position, { passive: true })
+    return () => {
+      observer.disconnect()
+      list.removeEventListener('scroll', position)
+    }
+  }, [tab, prsAvailable, orderedFiles])
   const draggedTab = useRef<string | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const moveTab = (from: string, to: string) => {
@@ -646,9 +669,29 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
 
   // Lệnh cho bảng lệnh và phím tắt (state/commands.ts); rời màn hình thì hỏi trước nếu còn tệp chưa lưu.
   useCommand('agent.toggle', () => setChatOpen((v) => !v), !hosted)
+  useEffect(() => registerFileMenuActions({
+    openFile: (_path, relative) => {
+      // Chỉ mở được tệp trong dự án đang làm việc; tệp ngoài project cần mở project chứa nó.
+      if (!relative) { notify(tr('Chọn tệp trong dự án hiện tại để mở.')); return }
+      openCode(relative)
+    }
+  }), [project.project_id])
   useCommand('file_finder.toggle', () => setFinder((v) => !v))
   useCommand('file.new', () => setFinder(true))
+  useCommand('file.new_dialog', () => setFinder(true))
   useCommand('file.open_recent', () => setFinder(true))
+  useCommand('editor.close_f4', () => runCommand('tab.close'))
+  useCommand('file.revert', () => {
+    const file = activeFile
+    const git = window.nexgraph.git
+    if (!git) { notify(tr('NexGraph chưa hỗ trợ tính năng này.')); return }
+    if (!file || !window.confirm(tr('Khôi phục “{path}” về nội dung trên đĩa? Các thay đổi chưa lưu sẽ mất.', { path: file }))) return
+    void git.restore(project.project_id, file).then(async () => {
+      const ok = await getFileSaver(project.project_id, file)?.revert?.()
+      if (ok) notify(tr('Đã khôi phục tệp {file}', { file }))
+    }).catch((e) => notify(errorText(e)))
+  }, !!activeFile)
+  useCommand('folder.close', () => guardLeave(onOpenProjects)?.(), !!onOpenProjects)
   useCommand('file.save_all', () => {
     void saveAllFiles(project.project_id, [...dirtyFiles]).then((failed) => {
       for (const file of failed) notify(tr('Không lưu được tệp {file}', { file }))

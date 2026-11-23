@@ -1491,7 +1491,37 @@ export const uiEn: Record<string, string> = {
   'Dấu trang': 'Bookmarks',
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.
-  'Luồng {id}': 'Flow {id}'
+  'Luồng {id}': 'Flow {id}',
+  // Menu File kiểu VS Code
+  'Tệp văn bản mới': 'New Text File',
+  'Tệp mới…': 'New File…',
+  'Cửa sổ mới': 'New Window',
+  'Cửa sổ mới với hồ sơ': 'New Window with Profile',
+  'Mở tệp…': 'Open File…',
+  'Mở thư mục…': 'Open Folder…',
+  'Mở workspace từ tệp…': 'Open Workspace from File…',
+  'Mở gần đây': 'Open Recent',
+  'Thêm thư mục vào workspace…': 'Add Folder to Workspace…',
+  'Lưu workspace thành…': 'Save Workspace As…',
+  'Nhân bản workspace': 'Duplicate Workspace',
+  'Lưu tất cả': 'Save All',
+  'Chia sẻ': 'Share',
+  'Tùy chọn': 'Preferences',
+  'Cài đặt': 'Settings',
+  'Phím tắt': 'Keyboard Shortcuts',
+  'Chọn theme': 'Select Theme',
+  'Hoàn tác tệp': 'Revert File',
+  'Đóng editor': 'Close Editor',
+  'Đóng thư mục': 'Close Folder',
+  'Đóng cửa sổ': 'Close Window',
+  'Không có dự án gần đây': 'No recent projects',
+  'NexGraph chưa hỗ trợ tính năng này.': 'This feature is not supported in NexGraph yet.',
+  'Chọn tệp trong dự án hiện tại để mở.': 'Choose a file in the current project to open.',
+  'Không thể mở tệp đã chọn.': 'Could not open the selected file.',
+  'Khôi phục “{path}” về nội dung trên đĩa? Các thay đổi chưa lưu sẽ mất.': 'Restore “{path}” to the version on disk? Unsaved changes will be lost.',
+  'Đã khôi phục tệp {file}': 'Restored {file}',
+  'Không thể khôi phục tệp từ đĩa.': 'Could not restore the file from disk.',
+  'Thanh menu': 'Menu bar'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}. */

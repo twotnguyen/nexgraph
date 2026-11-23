@@ -1,5 +1,5 @@
 /** Thao tác lưu do mỗi thẻ tệp đăng ký để chạy lệnh Lưu tất cả / Lưu thành mà không giữ component trong state. */
-type FileSaver = { save: () => Promise<boolean>; saveAs: () => Promise<void> }
+type FileSaver = { save: () => Promise<boolean>; saveAs: () => Promise<void>; revert?: () => Promise<boolean> }
 
 const savers = new Map<string, FileSaver>()
 const key = (projectId: string, file: string) => `${projectId}\0${file}`

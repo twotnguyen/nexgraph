@@ -15,6 +15,7 @@ import { runSmoke } from './smoke'
 import { externalWebUrl, isSameDocument } from './external-links'
 import { accountDevHooks } from './dev-hooks'
 import { installPermissionHandlers } from './security/permissions'
+import { installAppMenu } from './appMenu'
 
 // Kiểm bản cài dùng kho tài khoản riêng, không đọc/ghi cấu hình AI thật của người dùng.
 if (process.env.NEXGRAPH_USER_DATA_DIR) {
@@ -101,7 +102,7 @@ async function createWindow(show = true): Promise<void> {
   else await mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
-registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged))
+registerIpc(() => supervisor.getHandle(), () => mainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged), () => { void createWindow() })
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
 
@@ -181,6 +182,8 @@ app.whenReady().then(() => {
     void smoke()
     return
   }
+  // Thay menu mặc định File/Edit/View/Window bằng menu chứa đầy đủ lệnh của NexGraph.
+  installAppMenu(() => mainWindow)
   void createWindow()
   void supervisor.startEngine()
   app.on('activate', () => {

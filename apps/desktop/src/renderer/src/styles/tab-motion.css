@@ -1,0 +1,101 @@
+/* Chuyển động chuyển tab: nút mềm hơn, vạch trượt theo tab đang chọn, nội dung vào nhẹ nhàng.
+   File được import sau styles.css để đè các transition ngắn có sẵn; không đổi cấu trúc DOM/aria. */
+
+:root {
+  --tab-ease: cubic-bezier(.22, .9, .25, 1);
+}
+
+/* Thanh tab chính của workspace: vạch trượt đo bằng --tab-x / --tab-w ở WorkspaceScreen. */
+.workspace-shell .ws-tabs {
+  position: relative;
+}
+.workspace-shell .ws-tabs::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  width: var(--tab-w, 0px);
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(90deg, var(--blue), var(--teal));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--blue) 55%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(var(--tab-x, 0px));
+  transition: transform .4s var(--tab-ease), width .4s var(--tab-ease), opacity .2s ease;
+}
+.workspace-shell .ws-tabs[style*='--tab-w']::after {
+  opacity: 1;
+}
+.workspace-shell .ws-tabs .tab,
+.workspace-shell .ws-tabs .file-tab {
+  transition: background-color .2s ease, border-color .2s ease, color .2s ease,
+    box-shadow .2s ease, transform .22s var(--tab-ease);
+}
+.workspace-shell .ws-tabs .tab:hover,
+.workspace-shell .ws-tabs .file-tab:hover {
+  transform: translateY(-1px);
+}
+.workspace-shell .ws-tabs .tab:active,
+.workspace-shell .ws-tabs .file-tab:active {
+  transform: translateY(0) scale(.97);
+}
+.workspace-shell .ws-tabs .tab.active,
+.workspace-shell .ws-tabs .file-tab.active {
+  background: color-mix(in srgb, var(--blue) 12%, var(--color-surface));
+}
+
+/* Nội dung đổi view: chỉ các phần tử mount mới chạy animation, không đụng key của React. */
+@keyframes tab-panel-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.workspace-shell .canvas-wrap > * {
+  animation: tab-panel-in .24s var(--tab-ease) backwards;
+}
+
+/* Chế độ Hỏi / Kế hoạch / Sửa của assistant. */
+.agent-panel .agent-composer-foot .mode button {
+  transition: background-color .22s ease, color .22s ease, transform .22s var(--tab-ease), box-shadow .22s ease;
+}
+.agent-panel .agent-composer-foot .mode button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.agent-panel .agent-composer-foot .mode button[aria-pressed='true'] {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--blue) 28%, transparent);
+}
+
+/* Điều hướng trong Cài đặt. */
+.settings-nav-item {
+  transition: background-color .22s ease, border-color .22s ease, color .22s ease, transform .22s var(--tab-ease);
+}
+.settings-nav-item:hover {
+  transform: translateX(2px);
+}
+.settings-nav-item[aria-current='true'] {
+  border-color: color-mix(in srgb, var(--blue) 42%, transparent);
+  background: color-mix(in srgb, var(--blue) 14%, transparent);
+}
+
+/* Các segmented (Biểu tượng/Hỏi, ...) dùng chung. */
+.segmented button {
+  transition: background-color .2s ease, color .2s ease, transform .2s var(--tab-ease);
+}
+.segmented button:active {
+  transform: scale(.94);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-shell .ws-tabs::after,
+  .workspace-shell .ws-tabs .tab,
+  .workspace-shell .ws-tabs .file-tab,
+  .workspace-shell .canvas-wrap > *,
+  .agent-panel .agent-composer-foot .mode button,
+  .settings-nav-item,
+  .segmented button {
+    animation: none !important;
+    transition: none !important;
+  }
+}

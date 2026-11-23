@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { vi } from './strings'
+import { vi, tr } from './strings'
 import { useLocale } from './state/locale'
 import type { HostCommand } from '@shared/api'
 import type { EngineStatus } from '@shared/engine-status'
 import type { IndexOptions, ProjectSummary, ScanInfo } from '@shared/graph-types'
 import { EngineStatusBar } from './components/EngineStatusBar'
+import { notify } from './components/common/NotificationCenter'
+import { errorText } from './state/errorText'
+import { openFileFromMenu, registerFileMenuActions } from './state/fileMenuActions'
+import { installAppMenuBridge } from './state/appMenuBridge'
 import { WorkbenchBar } from './components/layout/WorkbenchBar'
 import { Icon } from './components/common/icons'
 import { CommandPaletteHost } from './components/layout/CommandPalette'
@@ -160,8 +164,32 @@ export default function App() {
     setScreen(project.last_indexed_at != null ? { name: 'workspace', project } : { name: 'scan', project })
   }
 
+  useEffect(() => installAppMenuBridge(), [])
   useEffect(() => (window.nexgraph?.host ? undefined : installKeymap()), [])
   useEffect(() => { if (!window.nexgraph?.host) void loadExtensions() }, [])
+  useEffect(() => registerFileMenuActions({
+    openProject: (path) => { void window.nexgraph.project.open(path).then(enterProject).catch((e) => notify(errorText(e))) }
+  }), [])
+
+  // Menu File: các lệnh cần hộp thoại/cửa sổ thuộc tầng App, không phụ thuộc màn đang mở.
+  const desktop = !window.nexgraph?.host
+  const activeProjectId = 'project' in screen ? screen.project.project_id : undefined
+  useCommand('file.open', () => {
+    const api = window.nexgraph.file
+    if (!api?.pickOpen) { notify(tr('NexGraph chưa hỗ trợ tính năng này.')); return }
+    void api.pickOpen(activeProjectId).then((picked) => {
+      if (picked) openFileFromMenu(picked.path, picked.relative)
+    }).catch((e) => notify(errorText(e)))
+  }, desktop)
+  useCommand('folder.open', () => {
+    void window.nexgraph.project.pickFolder().then((path) => {
+      if (path) return window.nexgraph.project.open(path).then(enterProject)
+    }).catch((e) => notify(errorText(e)))
+  }, desktop)
+  useCommand('window.new', () => {
+    void window.nexgraph.window?.openNew?.().catch((e) => notify(errorText(e)))
+  }, desktop)
+  useCommand('window.close', () => { window.close() }, desktop)
   // Khi Không gian làm việc hiện, màn đó tự đăng ký lệnh; Cài đặt vẫn mở được trang phím tắt.
   const appCommands = !(screen.name === 'workspace' || (screen.name === 'indexing' && screen.exploring))
   const openSettings = (page?: string) => setScreen((s) => s.name === 'settings' ? { ...s, page } : { name: 'settings', back: s, page })

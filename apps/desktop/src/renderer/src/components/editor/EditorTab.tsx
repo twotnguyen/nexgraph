@@ -102,7 +102,7 @@ export function blameText(line: GitBlameLine, now = Date.now(), summary = true):
 export function EditorTab({ projectId, file, line, column, lineEnd, revealRequest, onClose, onDirtyChange, onContextReady, active = true, onSplit, onOpenFile, onViewImage, onViewTable, onReadOnlyChange, onLoadError, onSavedAs, locked }: Props) {
   const host = useRef<HTMLDivElement | null>(null)
   const editor = useRef<EditorHandle | null>(null)
-  const actions = useRef<{ save: () => Promise<boolean>; saveAs: (path: string) => Promise<boolean>; reload: () => void; keepMine: () => void; blur: () => void; eolChanged: () => void } | null>(null)
+  const actions = useRef<{ save: () => Promise<boolean>; saveAs: (path: string) => Promise<boolean>; revert: () => Promise<boolean>; reload: () => void; keepMine: () => void; blur: () => void; eolChanged: () => void } | null>(null)
   const dirty = useRef(false)
   const contextCallback = useRef(onContextReady)
   contextCallback.current = onContextReady
@@ -387,6 +387,26 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
           return false
         }
       },
+      revert: async () => {
+        if (lockedRef.current || !open || isReloading) return false
+        const current = open
+        // Huỷ các lần lưu đang chờ: nếu không, nội dung cũ có thể ghi đè file vừa khôi phục.
+        saveGeneration++
+        pendingSave = undefined
+        pendingReload = undefined
+        writing = undefined
+        settleSave(undefined, false)
+        try {
+          const disk = await fs.read(projectId, file)
+          if (!alive || open !== current) return false
+          adopt(current, disk)
+          void flush()
+          return true
+        } catch {
+          if (alive) setError(tr('Không thể khôi phục tệp từ đĩa.'))
+          return false
+        }
+      },
       reload: () => {
         if (!open || !diskConflict || isReloading) return
         saveGeneration++
@@ -434,7 +454,8 @@ export function EditorTab({ projectId, file, line, column, lineEnd, revealReques
     })
     const offSaver = registerFileSaver(projectId, file, {
       save: () => actions.current?.save() ?? Promise.resolve(false),
-      saveAs: async () => setSaveAsOpen(true)
+      saveAs: async () => setSaveAsOpen(true),
+      revert: () => actions.current?.revert() ?? Promise.resolve(false)
     })
     fs.read(projectId, file).then((c) => {
       if (!alive || !host.current) return
