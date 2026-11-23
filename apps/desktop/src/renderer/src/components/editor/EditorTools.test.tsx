@@ -480,3 +480,20 @@ describe('EditorTools đi đến khai báo và định nghĩa kiểu', () => {
   })
 })
 })
+
+describe('EditorTools: nhãn chốt lúc mount', () => {
+  afterEach(() => setLocale('vi'))
+
+  it('trạng thái picker ký hiệu trong dự án đổi ngay khi đổi ngôn ngữ', async () => {
+    installNexgraph()
+    const api = window.nexgraph as NexGraphApi
+    api.lsp = { workspaceSymbols: vi.fn(() => new Promise(() => {})) } as unknown as NexGraphApi['lsp']
+    render(<EditorTools {...props({ file: 'a.ts', handle: handle(), text: () => 'one\ntwo\nthree' })} />)
+    act(() => { runCommand('editor.workspace_symbols') })
+    expect(await screen.findByText('Đang tìm ký hiệu…')).toBeInTheDocument()
+    act(() => setLocale('en'))
+    expect(await screen.findByText('Finding symbols…')).toBeInTheDocument()
+    act(() => setLocale('vi'))
+    expect(await screen.findByText('Đang tìm ký hiệu…')).toBeInTheDocument()
+  })
+})

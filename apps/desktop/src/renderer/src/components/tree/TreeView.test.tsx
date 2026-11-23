@@ -41,6 +41,7 @@ describe('TreeView', () => {
     expect(items.map((i) => i.getAttribute('aria-label'))).toEqual(['src', 'README.md']) // thư mục trước
     await userEvent.click(screen.getByRole('button', { name: 'Mở src' }))
     expect(await screen.findByRole('treeitem', { name: 'app.py' })).toBeInTheDocument()
+    expect(screen.getAllByText('Tệp').length).toBeGreaterThan(0)
     expect(screen.getByText(/còn nữa, dùng Tìm kiếm/)).toBeInTheDocument()
   })
 

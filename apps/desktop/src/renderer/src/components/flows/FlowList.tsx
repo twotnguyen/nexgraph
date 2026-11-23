@@ -1,5 +1,6 @@
 import type { FlowKind, FlowSummary } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
+import { useLocale } from '../../state/locale'
 
 interface Props {
   flows: FlowSummary[]
@@ -17,7 +18,8 @@ interface Props {
   onLoadMore?: () => void
 }
 
-const KINDS: { key?: FlowKind; label: string }[] = [
+/** Nhãn loại luồng tính lúc render: đổi ngôn ngữ là đổi ngay, không chốt bản dịch lúc nạp module. */
+const kinds = (): { key?: FlowKind; label: string }[] => [
   { key: undefined, label: vi.flows.kindAll },
   { key: 'route', label: vi.flows.kinds.route },
   { key: 'main', label: vi.flows.kinds.main },
@@ -41,6 +43,7 @@ export function FlowList({
   onRetry,
   onLoadMore
 }: Props) {
+  useLocale()
   return (
     <aside className="flow-list-col">
       <div className="list-header">
@@ -53,7 +56,7 @@ export function FlowList({
           onChange={(e) => onQueryChange(e.target.value)}
         />
         <div className="kind-filter" role="group" aria-label={tr('Loại luồng')}>
-          {KINDS.map((k) => (
+          {kinds().map((k) => (
             <button
               key={`${k.key}:${k.label}`}
               type="button"

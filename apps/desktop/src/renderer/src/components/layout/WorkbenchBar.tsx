@@ -75,7 +75,7 @@ export function WorkbenchBar({ project }: { project?: { project_id: string; name
       </div>
       <div className="workbench-actions">
         <NotificationCenter />
-        <button type="button" className="theme-toggle" data-theme-id={themeId} aria-label={tr('Giao diện: {name}', { name: themeName })} title={tr('Chọn theme · ⌘K ⌘T')} aria-haspopup="dialog" onClick={openThemePicker}>
+        <button type="button" className="theme-toggle" data-theme-id={themeId} aria-label={tr('Giao diện: {name}', { name: themeName })} title={tr('Chọn chủ đề màu · ⌘K ⌘T')} aria-haspopup="dialog" onClick={openThemePicker}>
           <Icon name={dark ? 'moon' : 'sun'} size={14} />
           <span>{themeName}</span>
         </button>

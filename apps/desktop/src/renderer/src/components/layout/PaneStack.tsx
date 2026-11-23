@@ -28,7 +28,7 @@ export function PaneStack<Id extends string = string>({ sections, state, onToggl
       {sections.map(({ id, title, actions, children }) => {
         const collapsed = !!state.collapsed[id]
         const height = state.heights[id] ?? DEFAULT_HEIGHT
-        const label = tr(collapsed ? 'Mở rộng {section}' : 'Thu gọn {section}', { section: title })
+        const label = tr(collapsed ? 'Mở rộng {section}' : 'Thu gọn {section}', { section: tr(title) })
         return (
           <section key={id} className="pane-section" aria-label={tr(title)} data-collapsed={collapsed || undefined}
             style={{ '--pane-height': state.heights[id] === undefined ? undefined : `${height}px` } as CSSProperties}>

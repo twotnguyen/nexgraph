@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { Job, ProjectAiSettings, SemanticEstimate, SemanticResult, SemanticTarget } from '@shared/graph-types'
 import { waitJob } from '../../state/waitJob'
+import { formatNumber } from '../../state/locale'
 import { vi } from '../../strings'
 
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
-const num = (n: number) => n.toLocaleString('vi-VN')
+const num = (n: number) => formatNumber(n)
 const SHOWN_FILES = 50
-const TITLE: Partial<Record<SemanticTarget, string>> = { labels: vi.semantic.labelsTitle, pr_triage: vi.semantic.triageTitle }
-const CONSENT: Partial<Record<SemanticTarget, string>> = { labels: vi.semantic.consentLabels, pr_triage: vi.semantic.consentTriage }
+const TITLE_OF = (target: SemanticTarget | undefined): string | undefined =>
+  target === 'labels' ? vi.semantic.labelsTitle : target === 'pr_triage' ? vi.semantic.triageTitle : undefined
+const CONSENT_OF = (target: SemanticTarget | undefined): string | undefined =>
+  target === 'labels' ? vi.semantic.consentLabels : target === 'pr_triage' ? vi.semantic.consentTriage : undefined
 
 interface Props {
   projectId: string
@@ -82,8 +85,8 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
   const usage = result ? (result.usage.input_tokens > 0 || result.usage.output_tokens > 0 ? result.usage : appUsage) : null
   return (
     <div className="modal-backdrop">
-      <div role="dialog" aria-modal="true" aria-label={(fixed && TITLE[fixed]) || vi.semantic.title} className="modal">
-        <h2>{(fixed && TITLE[fixed]) || vi.semantic.title}</h2>
+      <div role="dialog" aria-modal="true" aria-label={(fixed && TITLE_OF(fixed)) || vi.semantic.title} className="modal">
+        <h2>{(fixed && TITLE_OF(fixed)) || vi.semantic.title}</h2>
         {settings && !fixed && (
           <fieldset>
             <legend>{vi.semantic.targetLabel}</legend>
@@ -98,7 +101,7 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
             <p>{vi.semantic.enableIntro}</p>
             <label><input type="radio" name="transport" checked={transport === 'app'} onChange={() => setTransport('app')} /> {vi.semantic.transportApp}</label>
             <label><input type="radio" name="transport" checked={transport === 'direct'} onChange={() => setTransport('direct')} /> {vi.semantic.transportDirect}</label>
-            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {(fixed && CONSENT[fixed]) || vi.semantic.consent}</label>
+            <label><input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} /> {(fixed && CONSENT_OF(fixed)) || vi.semantic.consent}</label>
           </>
         )}
         {local && <p className="muted">{vi.semantic.sends[target]}</p>}
