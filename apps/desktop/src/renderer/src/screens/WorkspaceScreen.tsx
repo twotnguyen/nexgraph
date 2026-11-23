@@ -54,6 +54,7 @@ import { buildExcerpts, consumePendingMultiBuffer, getPendingMultiBuffer, reques
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi, tr } from '../strings'
 import { msg, msgId, msgText, type Message, type Msg } from '../state/messages'
+import { askNotice, pathFound, pathNoLink } from '../state/pathNotice'
 import './workspace.css'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
@@ -396,7 +397,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       if (request !== graphRequest.current) return
       // Không nối được: chỉ tô hai nút, không vẽ mũi tên (spec gốc §5.8).
       setOverlay({ nodes: r.nodes, edges: r.unconnected.length ? [] : r.edges })
-      setNotice(r.unconnected.length ? vi.path.noLink : vi.path.found(r.edges.length, r.confidence ?? null))
+      setNotice(r.unconnected.length ? pathNoLink() : pathFound(r.edges.length, r.confidence ?? null))
     } catch (e) {
       if (request === graphRequest.current) {
         setFeedback(errorMsg(e))
@@ -413,7 +414,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       const r = await window.nexgraph.graph.ask(project.project_id, question)
       if (request !== graphRequest.current) return
       setOverlay(r.nodes.length ? { nodes: r.nodes, edges: r.edges } : null)
-      setNotice(!r.nodes.length ? vi.search.askNone : r.truncated ? vi.search.askTruncated : null)
+      setNotice(askNotice(r.nodes.length, r.truncated))
     } catch (e) {
       if (request === graphRequest.current) {
         setFeedback(errorMsg(e))

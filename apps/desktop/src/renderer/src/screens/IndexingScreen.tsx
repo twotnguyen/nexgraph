@@ -60,6 +60,9 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
       : vi.indexing.existingGraph
     return renderExisting(notice)
   }
+  // Engine gửi câu Việt thô kèm ví dụ mục không đọc được; đã có cảnh báo `unreadable_count` dịch tại chỗ
+  // nên bỏ câu thô để UI English không lộ tiếng Việt/trùng thông tin (M1 review #57).
+  const engineNote = job?.message && !(unreadable > 0 && /mục không đọc được khi quét/.test(job.message)) ? job.message : null
   if (hidden) return null
 
   return (
@@ -85,7 +88,7 @@ export function IndexingScreen({ project, subdir, options, rebuild, onExplore, o
           ) : <div className="phase-head phase-next"><span>{vi.indexing.phase2}</span><span>{tr('Đang chờ')}</span></div>}
         </>}
         {message && <p role="alert" className="inline-message error">{vi.indexing.error(message)}</p>}
-        {completed && job?.message && <p role="status" className="inline-message">{job.message}</p>}
+        {completed && engineNote && <p role="status" className="inline-message">{engineNote}</p>}
         {unreadable > 0 && (
           <p role="status" className="inline-message">{tr('{n} mục không đọc được khi quét — kiểm tra quyền đọc của các mục đó.', { n: unreadable })}</p>
         )}

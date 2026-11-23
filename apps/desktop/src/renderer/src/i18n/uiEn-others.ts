@@ -377,4 +377,14 @@ export const uiEnOthers: Record<string, string> = {
   'core.hooksPath trỏ ra ngoài kho nên NexGraph không ghi vào đó.': 'core.hooksPath points outside the repository, so NexGraph will not write there.',
   'Không tạo được permalink cho remote này.': 'Could not create a permalink for this remote.',
   'Worktree còn thay đổi chưa commit hoặc tệp chưa theo dõi. Hãy commit, stash hoặc dọn rồi thử lại.': 'The worktree has uncommitted changes or untracked files. Commit, stash or clean them and try again.',
+  // Câu đường đi/hỏi trên graph dựng bằng khoá (M4 review #57).
+  'Không tìm thấy liên kết trực tiếp trong graph': 'No direct link found in the graph',
+  'Đường đi {hops} bước': 'Path of {hops} {hops, plural, one {step} other {steps}}',
+  'Đường đi {hops} bước · tin cậy: {level}': 'Path of {hops} {hops, plural, one {step} other {steps}} · confidence: {level}',
+  'Đường đi {hops} bước · tin cậy: {level} {score} (bước {hop})': 'Path of {hops} {hops, plural, one {step} other {steps}} · confidence: {level} {score} (hop {hop})',
+  'Không tìm thấy node nào khớp câu hỏi': 'No nodes matching the question were found',
+  'Đã cắt theo ngân sách 2.000 token': 'Truncated to a 2,000-token budget',
+  'trích từ mã': 'from code',
+  'suy luận': 'inferred',
+  'chưa chắc': 'uncertain',
 }

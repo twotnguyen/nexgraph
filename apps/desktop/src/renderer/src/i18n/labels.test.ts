@@ -23,9 +23,7 @@ const ALLOWED: { file: string; contains: string; why: string }[] = [
   { file: 'components/agent/AgentPanel.tsx', contains: 'content: msgText(message)', why: 'nội dung bubble lỗi trong lịch sử hội thoại: đã gửi cho model, lưu chuỗi như mọi tin nhắn' },
   { file: 'components/collab/CollabUi.tsx', contains: "name || tr('Người dùng')", why: 'tên hiển thị gửi sang phiên cộng tác là dữ liệu, không phải nhãn UI' },
   { file: 'state/debugState.ts', contains: 'output: [...state.output.slice(-500)', why: 'dòng console gỡ lỗi: ghi vào buffer văn bản, không phải nhãn UI' },
-  { file: 'screens/WorkspaceScreen.tsx', contains: 'vi.path.noLink', why: 'câu dựng bằng hàm dictionary vi.path.found() (không có khoá phẳng) — ghi ở REPORT F11' },
-  { file: 'App.tsx', contains: "state: 'error', message: msgText(errorMsg(e))", why: 'EngineStatus.message là chuỗi theo hợp đồng IPC; các lần cập nhật sau dùng messageKey của supervisor' },
-  { file: 'screens/WorkspaceScreen.tsx', contains: 'vi.search.askNone', why: 'câu dựng từ dictionary vi.search (không có khoá phẳng) — ghi ở REPORT F11' }
+  { file: 'App.tsx', contains: "state: 'error', message: msgText(errorMsg(e))", why: 'EngineStatus.message là chuỗi theo hợp đồng IPC; các lần cập nhật sau dùng messageKey của supervisor' }
 ]
 
 function sources(dir: string): string[] {
