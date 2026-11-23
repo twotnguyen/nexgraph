@@ -7,6 +7,13 @@ type Sticky = Pick<IndexOptions, (typeof STICKY)[number]>
 
 const isSticky = (key: string): key is (typeof STICKY)[number] => (STICKY as readonly string[]).includes(key)
 
+/** Kiểu đúng của từng trường nhớ; tệp hỏng tay/sai phiên bản chỉ mất đúng trường đó (review-50 M2). */
+const wellTyped = (key: (typeof STICKY)[number], value: unknown): boolean => {
+  if (key === 'exclude') return Array.isArray(value) && value.every((item) => typeof item === 'string')
+  if (key === 'workers') return Number.isInteger(value)
+  return typeof value === 'boolean'
+}
+
 const clean = (opts: IndexOptions | undefined): IndexOptions => {
   if (!opts) return {}
   const out: Record<string, unknown> = {}
@@ -26,7 +33,9 @@ export class IndexOptionsStore {
     const entry = readJson(this.file)[pid]
     if (!entry || typeof entry !== 'object') return null
     const out: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(entry as Record<string, unknown>)) if (isSticky(key) && value !== undefined) out[key] = value
+    for (const [key, value] of Object.entries(entry as Record<string, unknown>)) {
+      if (isSticky(key) && value !== undefined && wellTyped(key, value)) out[key] = value
+    }
     return Object.keys(out).length > 0 ? (out as Sticky) : null
   }
 
