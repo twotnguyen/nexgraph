@@ -453,6 +453,67 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
     assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
 
 
+def test_batch_deadline_scales_with_batch_bytes():
+    """Hạn chờ một lô theo khối lượng: nền 20 s cho lô nhỏ, +60 s mỗi MB (PERF-L mục 2)."""
+    from nexgraph_engine.index.indexer import DiscoveredFile, batch_timeout_seconds
+
+    def f(size: int) -> DiscoveredFile:
+        return DiscoveredFile("a.js", "javascript", size, 0, False, False)
+
+    assert batch_timeout_seconds([]) == 20  # lô rỗng: mức nền, không chia cho 0
+    assert batch_timeout_seconds([f(10_000)] * 16) == 20  # lô 160 KB của hermes-agent: giữ 20 s
+    assert batch_timeout_seconds([f(1_000_000)]) == 60
+    assert batch_timeout_seconds([f(2_500_000)]) == 150
+    # Lô thật của open-design: server.ts 846 KB + 15 tệp nhỏ -> ~60 s, không phải 20 s.
+    assert batch_timeout_seconds([f(846_585)] + [f(10_000)] * 15) > 55
+
+
+def test_heavy_batch_is_not_treated_as_stalled(tmp_path, index_project, monkeypatch):
+    """Lô nặng chạy lâu hơn hạn nền 20 s nhưng trong hạn theo khối lượng thì không bị coi là treo."""
+    import threading
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    per_file: list[str] = []
+
+    class SlowHeavyPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            pass
+
+        def submit(self, fn, *args):
+            future = Future()
+            target = args[1]
+            if isinstance(target, list):
+                if any(f.size >= 500_000 for f in target):
+                    # Lô nặng: xong sau 0,1 s — quá hạn nền (0 s trong test) nhưng trong hạn theo khối lượng.
+                    threading.Timer(0.1, lambda: future.set_result(fn(*args))).start()
+                else:
+                    future.set_result(fn(*args))
+            else:
+                per_file.append(target.rel_path)
+                future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 20)
+    (root / "big.py").write_text("# " + "x" * 200 + "\n" + "".join(f"# dòng {i} " + "y" * 180 + "\n" for i in range(4000)),
+                                 encoding="utf-8")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", SlowHeavyPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    store, result, events = index_project(root)
+    assert result.state == "hoan_tat"
+    assert graph_state(store) == graph_state(serial)
+    assert per_file == []  # lô nặng không bị đẩy sang đường từng-tệp
+    assert not any(e.message and "Đang đọc tiếp" in e.message for e in events)
+
+
 def test_hung_file_in_sequential_fallback_is_skipped_with_a_report(tmp_path, index_project, monkeypatch):
     """Worker song song gián đoạn, rồi tệp treo trong fallback: chỉ tệp đó bị bỏ qua, có báo, các tệp khác vẫn vào đồ thị."""
     from concurrent.futures import Future

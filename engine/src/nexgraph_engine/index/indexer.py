@@ -7,7 +7,7 @@ import sqlite3
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ProcessPoolExecutor, wait
 from concurrent.futures.process import BrokenProcessPool
 from contextlib import suppress
@@ -42,7 +42,8 @@ RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm l�
 
 COMMIT_EVERY = 100
 EXTRACTION_BATCH_SIZE = 16
-WORKER_PROGRESS_TIMEOUT_SECONDS = 20
+WORKER_PROGRESS_TIMEOUT_SECONDS = 20  # hạn nền cho một lô nhỏ (giữ nguyên hành vi cũ)
+BATCH_DEADLINE_SECONDS_PER_MB = 60   # cộng thêm theo khối lượng: 60 s mỗi MB của lô
 FILE_EXTRACT_TIMEOUT_SECONDS = 60  # fallback tuần tự: quá hạn một tệp thì bỏ qua tệp đó
 IS_WINDOWS = os.name == "nt"
 
@@ -90,6 +91,17 @@ def index_workers(n_files: int, include_media: bool, requested: int | None = Non
 
 def _extract_one(root: Path, f: DiscoveredFile, transcript_dir: Path | None) -> ExtractedFile:
     return extract_file(root, f, transcript_dir=transcript_dir, cancel=None)
+
+
+def batch_timeout_seconds(batch: Sequence[DiscoveredFile]) -> float:
+    """Hạn chờ một lô trích xuất, theo khối lượng của lô (PERF-L mục 2).
+
+    Hạn cố định 20 s đúng cho lô 16 tệp nhỏ (~150 KB, xong trong 1–2 s) nhưng quá ngắn khi lô chứa một tệp
+    lớn: `apps/daemon/src/server.ts` 846 KB một mình ~21 s, nên cả lô vượt hạn oan. Nền 20 s giữ nguyên hành
+    vi với lô nhỏ; cộng 60 s mỗi MB để lô 1 MB có hạn ~60 s (open-design không còn kích hoạt nhầm).
+    """
+    total_mb = sum(f.size for f in batch) / 1_000_000
+    return max(WORKER_PROGRESS_TIMEOUT_SECONDS, BATCH_DEADLINE_SECONDS_PER_MB * total_mb)
 
 
 def _extract_batch(root: Path, files: list[DiscoveredFile], transcript_dir: Path | None) -> list[ExtractedFile]:
@@ -343,7 +355,8 @@ class Indexer:
                 try:
                     for offset in list(pending):
                         batch = futures[offset]
-                        deadline = time.monotonic() + WORKER_PROGRESS_TIMEOUT_SECONDS
+                        deadline = time.monotonic() + batch_timeout_seconds(
+                            files[offset:offset + EXTRACTION_BATCH_SIZE])
                         while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
                             wait((batch,), timeout=0.2)
                         if self.cancel.is_set():
