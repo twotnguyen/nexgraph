@@ -15,6 +15,7 @@ import { ConnectionDialog } from './ConnectionDialog'
 import { useAgentWorkbench, type AgentInspection } from './useAgentWorkbench'
 import { WorkbenchHistory, WorkbenchSettings, WorkbenchStatus, workbenchUsage } from './WorkbenchControls'
 import { AnswerRating } from './AnswerRating'
+import { highlightFlow } from './highlightFlow'
 import './agent-panel.css'
 import { matchProfile, useAgentProfiles, type AgentProfile } from '../../state/agentProfiles'
 import { ContextRing } from './ContextRing'
@@ -582,19 +583,12 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   }, [queue, queueWake, busy, checking, stopping, consent, hidden, work.pending, work.loading, work.sessionId, editingQueue])
 
   const highlight = async (citations: Citation[]) => {
-    const seen = new Set<string>()
-    const ids: string[] = []
-    for (const c of citations.filter((x) => x.valid)) {
-      try {
-        const { node } = await window.nexgraph.graph.locate(projectId, c.file, c.start)
-        if (!seen.has(node.id)) { seen.add(node.id); ids.push(node.id) }
-      } catch { /* trích dẫn không định vị được thì bỏ qua */ }
-    }
-    if (ids.length < 2) return onHighlight([], [], vi.chat.highlightNone)
     try {
-      const r = await window.nexgraph.graph.paths(projectId, ids.slice(0, 10))
-      const linked = r.unconnected.length === 0
-      onHighlight(r.nodes, linked ? r.edges : [], linked ? null : vi.path.noLink)
+      const result = await highlightFlow(projectId, citations, {
+        locate: (pid, file, line) => window.nexgraph.graph.locate(pid, file, line),
+        paths: (pid, ids) => window.nexgraph.graph.paths(pid, ids)
+      })
+      onHighlight(result.nodes, result.edges, result.note)
     } catch (e) {
       onHighlight([], [], e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
     }

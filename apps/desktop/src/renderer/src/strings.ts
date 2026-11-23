@@ -485,6 +485,8 @@ const viStrings = {
     pickingLabel: 'Chế độ chọn đích',
     cancel: 'Huỷ',
     noLink: 'Không tìm thấy liên kết trực tiếp trong graph',
+    /** Tô luồng khi một phần cặp trích dẫn không có cạnh: vẫn tô nút, nói rõ phần thiếu. */
+    partial: (nodes: number, missing: number) => `Tô ${nodes} nút được trích dẫn · ${missing} cặp không có liên kết trực tiếp`,
     found: (hops: number, c: PathConfidence | null = null) => {
       if (!c) return `Đường đi ${hops} bước`
       const level = { EXTRACTED: 'trích từ mã', INFERRED: 'suy luận', AMBIGUOUS: 'chưa chắc' }[c.level]
@@ -1179,6 +1181,7 @@ const enStrings: typeof viStrings = {
     pickingLabel: 'Target selection mode',
     cancel: 'Cancel',
     noLink: 'No direct link found in the graph',
+    partial: (nodes: number, missing: number) => `Highlighted ${nodes} cited nodes · ${missing} ${missing === 1 ? 'pair has' : 'pairs have'} no direct link`,
     found: (hops: number, c: PathConfidence | null = null) => {
       const steps = `${hops} ${hops === 1 ? 'step' : 'steps'}`
       if (!c) return `Path of ${steps}`
