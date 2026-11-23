@@ -1,6 +1,5 @@
 import { type Message, MsgError, msg, msgText } from './messages'
 import { getLocale } from './locale'
-import { uiEn } from '../strings'
 
 /** Lỗi IPC tiếng Việt phổ biến: chỉ những câu có bản dịch mới đổi theo ngôn ngữ. */
 const knownErrors: Record<string, true> = {
@@ -198,13 +197,15 @@ export function errorMsg(e: unknown): Message {
     const match = rule.re.exec(text)
     if (match) return msg(rule.key, { n: match[1] })
   }
-  // Câu cụ thể của main thắng khi nó đã đúng ngôn ngữ UI: người dùng VI thấy câu chi tiết,
-  // người dùng EN thấy bản Anh nếu có. Chỉ khi câu lệch ngôn ngữ (câu Việt chưa có bản Anh,
-  // hoặc câu tiếng Anh của engine) mới dùng câu chuẩn theo mã lỗi.
+  // Câu cụ thể của main thắng khi nó đã đúng ngôn ngữ UI. Chỉ thay bằng câu chuẩn của mã khi
+  // câu lệch ngôn ngữ: UI English gặp câu Việt chưa có bản Anh, hoặc UI Việt gặp câu Anh của
+  // engine (nguồn URL). Câu thô của công cụ (`fatal: …`, stderr) giữ nguyên — đổi thành câu
+  // chung là nuốt mất nguyên nhân (review #57 I2). Câu rỗng dùng câu chung của mã.
   const code = errorCode(e)
   if (code && codeErrors[code]) {
-    const english = getLocale() === 'en'
-    if (english ? uiEn[text] === undefined : englishEngineCodes.has(code) && !VIETNAMESE.test(text)) return msg(codeErrors[code])
+    const vietnamese = VIETNAMESE.test(text)
+    const empty = text.trim() === ''
+    if (getLocale() === 'en' ? vietnamese || empty : englishEngineCodes.has(code) && (empty || !vietnamese)) return msg(codeErrors[code])
   }
   return msg(text)
 }

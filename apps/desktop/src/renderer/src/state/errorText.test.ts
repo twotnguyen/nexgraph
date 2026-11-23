@@ -71,6 +71,23 @@ describe('errorText', () => {
     expect(errorText({ message: 'Engine chưa sẵn sàng.' })).toBe('The engine is not ready yet.')
   })
 
+
+  it('I2: lỗi có mã nhưng câu là thô của công cụ thì giữ câu gốc, không thay bằng câu chung', () => {
+    const fatal = "fatal: '/tmp/nope' does not appear to be a git repository"
+    setLocale('en')
+    expect(errorText({ code: 'git_failed', message: fatal })).toBe(fatal)
+    expect(errorText({ code: 'internal', message: 'LLM returned 502 Bad Gateway' })).toBe('LLM returned 502 Bad Gateway')
+    expect(errorText({ code: 'no_git', message: 'git: command not found' })).toBe('git: command not found')
+    // Câu Việt của app vẫn dịch theo mã; câu rỗng dùng câu chung của mã.
+    expect(errorText({ code: 'git_failed', message: 'Thao tác Git không thành công' })).toBe('The Git operation failed')
+    expect(errorText({ code: 'git_failed', message: '' })).toBe('The Git operation failed')
+    setLocale('vi')
+    // VI: câu Anh của engine (nguồn URL) vẫn dịch theo mã; stderr của công cụ giữ nguyên.
+    expect(errorText({ code: 'blocked_private_ip', message: 'Blocked private/internal IP: 127.0.0.1' }))
+      .toBe('URL nguồn trỏ tới địa chỉ IP riêng hoặc nội bộ nên bị chặn.')
+    expect(errorText({ code: 'git_failed', message: fatal })).toBe(fatal)
+  })
+
   it('câu lạ đi nguyên văn, không nuốt lỗi', () => {
     setLocale('en')
     expect(errorText(new Error('một lỗi lạ'))).toBe('một lỗi lạ')
