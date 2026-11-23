@@ -16,6 +16,9 @@ const dirty: NodeJS.ProcessEnv = {
   SystemRoot: 'C:\\Windows',
   ComSpec: 'C:\\Windows\\cmd.exe',
   PATHEXT: '.COM;.EXE',
+  HOMEDRIVE: 'C:',
+  HOMEPATH: '\\Users\\thử',
+  PSModulePath: 'C:\\Windows\\system32\\WindowsPowerShell\\v1.0\\Modules',
   APPDATA: 'C:\\Users\\thử\\AppData\\Roaming',
   LOCALAPPDATA: 'C:\\Users\\thử\\AppData\\Local',
   ProgramFiles: 'C:\\Program Files',
@@ -49,9 +52,16 @@ describe('safeProcessEnv', () => {
   it('giữ biến hệ thống cần thiết cho tiến trình con', () => {
     const env = safeProcessEnv(dirty)
     for (const key of ['PATH', 'HOME', 'LANG', 'SHELL', 'TERM', 'USER', 'TMPDIR',
-      'SystemRoot', 'ComSpec', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'ProgramFiles']) {
+      'SystemRoot', 'ComSpec', 'PATHEXT', 'APPDATA', 'LOCALAPPDATA', 'ProgramFiles',
+      'HOMEDRIVE', 'HOMEPATH', 'PSModulePath']) {
       expect(env[key], key).toBe(dirty[key])
     }
+  })
+
+  it('tên Windows là HOMEPATH, không có HOMEDIRPATH', () => {
+    // Git for Windows/POSIX tool đọc HOMEDRIVE+HOMEPATH khi HOME vắng; HOMEDIRPATH không tồn tại.
+    expect(safeProcessEnv({ HOMEPATH: '\\Users\\thử' }).HOMEPATH).toBe('\\Users\\thử')
+    expect(safeProcessEnv({ HOMEDIRPATH: '\\Users\\thử' })).toEqual({})
   })
 
   it('bỏ mọi biến bí mật và cấu hình Python/Node của tiến trình cha', () => {

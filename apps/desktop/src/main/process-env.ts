@@ -8,11 +8,12 @@
  */
 const SAFE_ENV_KEYS: ReadonlySet<string> = new Set([
   // Đường dẫn và thư mục người dùng
-  'path', 'pathext', 'home', 'userprofile', 'homedrive', 'homedirpath', 'systemdrive',
+  'path', 'pathext', 'home', 'userprofile', 'homedrive', 'homepath', 'systemdrive',
   'temp', 'tmp', 'tmpdir', 'appdata', 'localappdata', 'programdata', 'programfiles',
   'programfiles(x86)', 'commonprogramfiles', 'commonprogramfiles(x86)', 'allusersprofile', 'public',
   // Windows
   'systemroot', 'windir', 'comspec', 'username', 'userdomain', 'userdomain_roamingprofile', 'logonserver',
+  'psmodulepath',
   // Shell và locale trên macOS/Linux
   'shell', 'user', 'logname', 'lang', 'lc_all', 'lc_ctype', 'languagelist', 'term', 'colorterm',
   'display', 'wayland_display', 'xdg_runtime_dir', 'xdg_session_type', 'dbus_session_bus_address',
