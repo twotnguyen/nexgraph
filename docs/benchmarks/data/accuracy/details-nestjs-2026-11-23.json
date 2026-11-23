@@ -1,0 +1,95 @@
+{
+  "symbol": {
+    "fp": [],
+    "fn": []
+  },
+  "call": {
+    "fp": [],
+    "fn": [
+      [
+        "src/apps/products/products.service.ts::ProductsService.getProducts",
+        "src/common/utils/pagination-util/pagination-util.service.ts::PaginationUtilService.format",
+        74
+      ]
+    ]
+  },
+  "import": {
+    "fp": [],
+    "fn": []
+  },
+  "inherit": {
+    "fp": [],
+    "fn": []
+  },
+  "test": {
+    "fp": [
+      [
+        "src/apps/products/products.service.ts::ProductsService",
+        "src/apps/product-images/product-images.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService",
+        "src/apps/product-variants/product-variants.service.spec.ts"
+      ]
+    ],
+    "fn": [
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.createCartItem",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.deleteCartItem",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.onOrderCreated",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/cart-items/cart-items.service.ts::CartItemsService.updateCartItem",
+        "src/apps/cart-items/cart-items.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.createProduct",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.deleteProduct",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.exportProducts",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.getProduct",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.getProducts",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.importProducts",
+        "src/apps/products/products.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts::ProductsService.updateProduct",
+        "src/apps/products/products.service.spec.ts"
+      ]
+    ]
+  },
+  "test_file": {
+    "fp": [
+      [
+        "src/apps/products/products.service.ts",
+        "src/apps/product-images/product-images.service.spec.ts"
+      ],
+      [
+        "src/apps/products/products.service.ts",
+        "src/apps/product-variants/product-variants.service.spec.ts"
+      ]
+    ],
+    "fn": []
+  }
+}

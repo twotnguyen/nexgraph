@@ -1,0 +1,108 @@
+{
+ "project": "open-design",
+ "project_commit": "b4ec310921f49ae512de1f0a1f3a4e7ce3d05f2f",
+ "nexgraph_commit": "72dc4ec18e9dcc72369652ed8f532a13bd70f2d9",
+ "machine": {
+  "cpu": "Apple M3 Pro",
+  "ncpu": 12,
+  "ram_gb": 18.0,
+  "os": "macOS 15.7.3",
+  "python": "3.12.16"
+ },
+ "date": "2026-11-23",
+ "repeat": 3,
+ "index_repeat": 1,
+ "metrics": {
+  "index_full_ms": {
+   "median": 500536.29,
+   "min": 500536.29,
+   "max": 500536.29,
+   "n": 1
+  },
+  "peak_rss_after_index_mb": 412,
+  "worker_peak_rss_mb": 224,
+  "index_workers": 8,
+  "files": 5658,
+  "nodes": 49790,
+  "edges": 203689,
+  "unresolved": 395550,
+  "languages": {
+   "bash": 42,
+   "javascript": 154,
+   "powershell": 7,
+   "python": 100,
+   "typescript": 5355
+  },
+  "graph_db_mb": 96.0,
+  "reopen_ms": {
+   "median": 39.95,
+   "min": 39.68,
+   "max": 39.98,
+   "n": 3
+  },
+  "search_build_ms": {
+   "median": 1.54,
+   "min": 1.48,
+   "max": 2.54,
+   "n": 3
+  },
+  "arch_root_ms": {
+   "median": 114.26,
+   "min": 114.22,
+   "max": 140.04,
+   "n": 3
+  },
+  "refresh_one_file_ms": {
+   "median": 498.84,
+   "min": 494.41,
+   "max": 507.56,
+   "n": 3
+  },
+  "rebuild_flows_ms": {
+   "median": 421.4,
+   "min": 416.35,
+   "max": 425.38,
+   "n": 3
+  },
+  "list_flows_auth_ms": {
+   "median": 17.21,
+   "min": 16.95,
+   "max": 17.87,
+   "n": 3
+  },
+  "build_map_400_ms": {
+   "median": 133.79,
+   "min": 133.6,
+   "max": 159.33,
+   "n": 3
+  },
+  "import_cycles_ms": {
+   "median": 35.14,
+   "min": 34.64,
+   "max": 42.93,
+   "n": 3
+  },
+  "build_tour_ms": {
+   "median": 118.28,
+   "min": 118.23,
+   "max": 125.9,
+   "n": 3
+  },
+  "build_context_question": "login",
+  "build_context_login_ms": {
+   "median": 12.88,
+   "min": 12.74,
+   "max": 13.1,
+   "n": 3
+  },
+  "top_degree_node": "plugins/_official/examples/open-design-homepage/assets/_next/static/chunks/8c2d1abc8462562b.js::it#function",
+  "neighbors_top_node_ms": {
+   "median": 85.39,
+   "min": 83.44,
+   "max": 90.87,
+   "n": 3
+  },
+  "peak_rss_total_mb": 412
+ },
+ "note": "Trước #53: watchdog 20 s hạ cả dự án xuống 1 worker. Sau #53 đo 85,2 s (xem 2026-11-23-nfr-va-do-lai.md)."
+}

@@ -100,6 +100,8 @@ Script: `engine/scripts/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --
 - "RAM đỉnh sau lập chỉ mục" là `ru_maxrss` của **tiến trình cha**. Lập chỉ mục tầng L chạy bằng 8 tiến trình con (`ProcessPoolExecutor`) không nằm trong số đó. Số tổng cả cây tiến trình ở §4.3.
 - `list_flows(q="auth")` đo thời gian truy vấn, không bảo đảm có kết quả (tìm theo tên luồng).
 
+> **Số hiện hành 23/11/2026:** §4.1–§4.3 dưới đây là bản đo lịch sử trên `5237841`/`72dc4ec`. Con số dùng để tuyên bố NFR nằm ở [số đo lại 23/11](2026-11-23-nfr-va-do-lai.md): tầng L index **85,2 s** sau #53 (500,5 s là **trước** #53), refresh **0,50 s**, RAM cả cây **917 MB**; tầng XL `hermes-agent` index **146,5 s**, refresh **1,54 s**, RAM **1,52 GB**; **không có tầng M**. Đặc biệt, 4.729 ms của `hermes-agent` là số **trước tối ưu** `353c083` — không dùng làm số hiện hành.
+
 ### 4.1 Tầng S (≤ 1.000 tệp), trung vị [min–max] của 3 lần lặp
 
 | Chỉ số | Mục tiêu spec §6.1 | `ecommerce-backend-nestjs` | `Bot_Albion_TNC` | `tests/fixtures/bookstore_app` | Đạt |
@@ -119,7 +121,9 @@ Script: `engine/scripts/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --
 | Kích thước `graph.db` (MB) | — | 1,6 | 2,8 | 0,2 | — |
 | Số tệp / nút / cạnh | — | 268 / 1190 / 2905 | 258 / 2067 / 3695 | 9 / 35 / 53 | — |
 
-### 4.2 Tầng L (5.000–17.000 tệp): index 1 lần, các chỉ số còn lại trung vị [min–max] của 3 lần
+### 4.2 Tầng L/XL (5.000–17.408 tệp): index 1 lần, các chỉ số còn lại trung vị [min–max] của 3 lần
+
+`hermes-agent` từ 2026-11-20 thuộc **tầng XL**; cột này giữ để so lịch sử, không chấm bằng ngưỡng L (xem [số hiện hành](2026-11-23-nfr-va-do-lai.md)).
 
 | Chỉ số | Mục tiêu spec §6.1 | Mục tiêu nội bộ H1–H3 | `hermes-agent` | `repo-reference/open-design` | Đạt (spec / nội bộ) |
 |---|---|---|---|---|---|
@@ -149,15 +153,15 @@ Script: `engine/scripts/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --
 | `hermes-agent` | 2 | 298 s | 3.530 MB | — | KHÔNG / KHÔNG |
 | `open-design` | 8 (mặc định) | 198 s | 1.482 MB | 436 MB | đạt / đạt (sát ngưỡng 1.536) |
 
-Mỗi tiến trình con lớn nhất đạt 1.008 MB trên `hermes-agent` (232 MB trên `open-design`). **Mục tiêu RAM < 2 GB của tầng L không đạt trên `hermes-agent` ở mọi cấu hình đã thử**; giảm số tiến trình con chỉ giảm RAM từ 4,8 xuống 3,5 GB và kéo thời gian lên gấp 2,3 lần. Số 939 MB H1 báo (và 965 MB ở bảng 4.2) chỉ là tiến trình cha; trong tài liệu H1 cần hiểu đúng như vậy. Nguyên nhân chưa phân tích sâu (không có hồ sơ bộ nhớ của tiến trình con). Thời gian 132 s ở đây là chạy `index_to.py` riêng, khác 141 s trong `bench_all` do chạy trong tiến trình có thêm phần đo.
+Mỗi tiến trình con lớn nhất đạt 1.008 MB trên `hermes-agent` (232 MB trên `open-design`). **Mục tiêu RAM < 2 GB của tầng L không đạt trên `hermes-agent` ở mọi cấu hình đã thử**; giảm số tiến trình con chỉ giảm RAM từ 4,8 xuống 3,5 GB và kéo thời gian lên gấp 2,3 lần. Số 939 MB H1 báo (và 965 MB ở bảng 4.2) chỉ là tiến trình cha; trong tài liệu H1 cần hiểu đúng như vậy. Nguyên nhân chưa phân tích sâu (không có hồ sơ bộ nhớ của tiến trình con). Thời gian 132 s ở đây là chạy `index_to.py` riêng, khác 141 s trong `bench_all` do chạy trong tiến trình có thêm phần đo. Lưu ý phân tầng: `hermes-agent` là **XL**, không chấm bằng ngưỡng L; đo 23/11 cả cây còn **1,52 GB** — dưới 2 GB (xem [số hiện hành](2026-11-23-nfr-va-do-lai.md)).
 
 **Cập nhật 2026-11-20, đã sửa:** nguyên nhân là `lru_cache(maxsize=2048)` `_parse_python_tree_cached` của bộ trích xuất vendored giữ cây cú pháp Python của tới 2.048 tệp trong mỗi tiến trình con. NexGraph gọi bộ trích xuất theo từng tệp nên cache chỉ có ích trong một lần gọi; `generic.py` nay xoá cache đầu mỗi lần gọi. Đo lại `hermes-agent` (17.260 tệp, 8 tiến trình con, M3 Pro, `scripts/engine/ram_index.py` của workspace): RSS đỉnh cả cây **4.634 → 1.236 MB**, tiến trình con lớn nhất 816 → 173 MB, thời gian 138 → 114 s, số nút và cạnh không đổi (215.015 / 693.526). Tiến trình cha còn khoảng 950 MB. Từ 2026-11-20 `hermes-agent` thuộc tầng XL (> 15.000 tệp, chỉ đo).
 
 ### 4.4 Đạt / không đạt và nguyên nhân
 
 - **Tầng S đạt hết**: lập chỉ mục lần đầu ≤ 1.52 s (mục tiêu < 60 s), mở lại ≈ 1 ms (mục tiêu < 3 s).
-- **Tầng L: lập chỉ mục và mở lại đạt** (126 s và 193 s so với 600 s; mục tiêu nội bộ 300 s cũng đạt). Dựng luồng và bản đồ đạt mục tiêu nội bộ với biên lớn.
-- **Tầng L: cập nhật 1 tệp KHÔNG ĐẠT trên `hermes-agent`** (4.73 s so với 2 s), đạt trên `open-design` (1.23 s). Nguyên nhân đã xác định bằng cProfile (hồ sơ chạy lúc máy đang bận, 7,8 s tổng): dựng lại toàn bộ luồng 3,7 s, nối tham chiếu 1,7 s, quét thư mục có `.gitignore` 1,6 s. Muốn dưới 2 s cần chỉ dựng lại luồng chạm tệp đổi và bỏ qua nối tham chiếu khi không có ký hiệu mới; **chưa làm**.
+- **Tầng L: lập chỉ mục và mở lại đạt** (126 s và 193 s so với 600 s; mục tiêu nội bộ 300 s cũng đạt). Sau #53 đo lại `open-design` còn **85,2 s** (xem [số hiện hành](2026-11-23-nfr-va-do-lai.md)). Dựng luồng và bản đồ đạt mục tiêu nội bộ với biên lớn.
+- **Tầng L: cập nhật 1 tệp đạt** — `open-design` **0,50 s** (đo 23/11; bảng cũ 1,23 s). Với `hermes-agent` (tầng **XL**), số 4,73 s là **trước tối ưu** `353c083`; đo 23/11 còn **1,54 s**, đạt nếu áp ngưỡng L. Nguyên nhân cũ đã xác định bằng cProfile: dựng lại toàn bộ luồng 3,7 s, nối tham chiếu 1,7 s, quét thư mục có `.gitignore` 1,6 s — đã xử lý bằng luồng cục bộ, không còn "chưa làm".
 - **Lỗi hiệu năng tìm thấy và đã sửa nhờ phép đo này** (commit `d2d4ee5`): bước đồng bộ `TESTED_BY` quét cả bảng tạm cho mỗi cạnh (DELETE 41 s + UPDATE 41 s với 62.321 cạnh), làm mỗi lần refresh trên `hermes-agent` mất **84 s** (lần đo đầu, 3 lần lặp 83,8–85,0 s). Thêm chỉ mục cho bảng tạm đưa về 4.73 s. Bài kiểm tra hồi quy `test_derivation_scales_linearly_with_edge_count` đỏ trước sửa (16,4 s), xanh sau (< 1 s). H1 chỉ đo refresh trên NestJS nên không bắt được lỗi này.
 - **Lỗi chặn lập chỉ mục tìm thấy trên `open-design`** (commit `6d30c9e`): hàm cùng tên cùng dòng trong tệp JS rút gọn (`three.min.js`, chunk Next.js) làm hai nút trùng `id_nut`, lập chỉ mục kết thúc ở trạng thái `loi` (`UNIQUE constraint failed: nut.id_nut`). Lần đo đầu trên `open-design` thất bại vì lỗi này. Đã sửa, có test.
 

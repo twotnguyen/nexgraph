@@ -4,6 +4,8 @@
 **Môi trường:** Apple M-series (Darwin 24.6.0 arm64, macOS 15.7), Python 3.12.16  
 **Dự án:** `hermes-agent` (17.260 tệp nguồn)
 
+> **Số lịch sử (H1, 13/11/2026).** Bảng dưới đo ở phiên bản engine lúc H1; `hermes-agent` nay là **tầng XL** và các số hiện hành (index 146,5 s, refresh 1,54 s, RAM cả cây 1,52 GB) ở [số đo lại 23/11](2026-11-23-nfr-va-do-lai.md).
+
 ---
 
 ## 1. Kết quả đo tổng hợp
@@ -85,4 +87,4 @@ Không cần bộ nhớ đệm (Task 2 Step 5 chỉ áp dụng khi > 2 s). Đo s
 
 ## Đính chính (H6, 2026-11-13)
 
-Con số RAM đỉnh 939 MB ở các mục trên là `ru_maxrss` của **tiến trình cha**; các tiến trình con lập chỉ mục (8 worker) không được tính. Đo cả cây tiến trình (lấy mẫu RSS mỗi 0,5 s) cho đỉnh **4,8 GB** trên cùng dự án, nên mục tiêu "RAM ≤ 1,5 GB" và "< 2 GB" **không đạt**. Chi tiết và bảng theo số tiến trình con: `2026-12-danh-gia.md` §4.3. Mục 3 ở trên chỉ đo refresh trên NestJS; trên hermes-agent refresh 1 tệp từng mất 84 s (lỗi `TESTED_BY`, đã sửa) và nay 4,7 s (chưa đạt 2 s).
+Con số RAM đỉnh 939 MB ở các mục trên là `ru_maxrss` của **tiến trình cha**; các tiến trình con lập chỉ mục (8 worker) không được tính. Đo cả cây tiến trình (lấy mẫu RSS mỗi 0,5 s) cho đỉnh **4,8 GB** trên cùng dự án, nên mục tiêu "RAM ≤ 1,5 GB" và "< 2 GB" **không đạt** ở thời điểm H1. Chi tiết và bảng theo số tiến trình con: `2026-12-danh-gia.md` §4.3. Mục 3 ở trên chỉ đo refresh trên NestJS; trên `hermes-agent` refresh 1 tệp từng mất 84 s (lỗi `TESTED_BY`, đã sửa), rồi 4,7 s trước tối ưu và **1,54 s** theo [số đo lại 23/11](2026-11-23-nfr-va-do-lai.md). `hermes-agent` nay là **tầng XL** (17.408 tệp > 15.000) — không chấm bằng ngưỡng L, chỉ đo và báo cáo.
