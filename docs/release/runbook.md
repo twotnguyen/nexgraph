@@ -4,13 +4,18 @@ Một trang cho người phát hành (hiện là Tình). Quy trình đầy đủ
 
 ## 0. Điều kiện vào
 
-- PR phát hành đã merge vào `main`, ruleset `main-guard` xanh.
-- CI của **commit merge** xanh đủ 7 check: `lint`, `engine (macos-latest)`, `engine (windows-latest)`, `desktop (macos-latest)`, `desktop (windows-latest)`, `package (macos-latest)`, `package (windows-latest)`. Job `release` chỉ chạy khi có tag.
-- QA đã duyệt và biên bản nghiệm thu của bản ứng viên đã có trong [acceptance/](acceptance/).
+Không tạo tag khi còn bất kỳ điều kiện nào dưới đây chưa đạt:
+
+- **#60 (X1)** đã merge: workflow trên `main` có job `version-check` và job `release` tạo Release với `--prerelease` ngay khi tag có dấu `-`.
+- **#61 (V1)** đã merge: version `0.2.0-alpha.1` (`0.2.0a1` phía engine) ở bốn tệp cộng `uv.lock`, cùng tài liệu phát hành.
+- Các PR sửa finding nghiệm thu **RC2** (`main` `8118db0`, app 0.1.2) đã merge — tối thiểu các finding Important: HTML luồng gọi mất tên dự án/commit, hộp thoại Xuất thiếu phạm vi "Cộng đồng", ảnh trong dự án không index được trên bản đóng gói, bundle thiếu `THIRD_PARTY_LICENSES.md`.
+- CI của **commit merge cuối trên `main`** xanh đủ 7 check: `lint`, `engine (macos-latest)`, `engine (windows-latest)`, `desktop (macos-latest)`, `desktop (windows-latest)`, `package (macos-latest)`, `package (windows-latest)`. Job `release` chỉ chạy khi có tag và sau `version-check` (X1).
+- Bản dựng từ `main` cuối đã được nghiệm thu: cài đúng bộ cài, làm checklist trên máy macOS (và Windows nếu có máy), QA duyệt, biên bản trong [acceptance/](acceptance/) ghi Đạt các mục chặn. Biên bản RC1 (`72dc4ec`) và nghiệm thu RC2 (`8118db0`) là bằng chứng của bản ứng viên, **không thay** cho lượt nghiệm thu bộ cài dựng từ tag.
+- Ruleset `main-guard` xanh.
 
 ## 1. Tăng version ở bốn tệp (cộng `uv.lock`)
 
-Phải khớp nhau; `package` kiểm `tag == version` của `apps/desktop/package.json` (`.github/workflows/ci.yml:104-106`):
+Phải khớp nhau; sau #60, job `version-check` (và `package`) gọi `scripts/ci/check-version.mjs` để so tag với **cả bốn nguồn version**; trên workflow cũ chỉ `package` so `tag == version` của `apps/desktop/package.json`:
 
 | Tệp | Trường | Ghi chú |
 |---|---|---|
@@ -43,23 +48,25 @@ Commit dạng `chore: phát hành <version>`, mở PR, chờ 7 check, merge.
 
 ## 3. Tạo tag (Tình duyệt trước)
 
+Chỉ tạo tag khi **mục 0** đã đạt hết. Tag tạo từ `main` đã merge, không bao giờ từ nhánh PR hay commit chưa merge:
+
 ```sh
 git switch main && git pull --ff-only
 git tag v<version>
 git push origin v<version>
 ```
 
-Không tạo tag từ nhánh PR hay commit chưa merge. Không sửa tag sau khi push; nếu sai, xoá tag trên GitHub rồi làm lại từ commit đúng (không force-push `main`).
+Bản alpha dùng tag đúng chuỗi `v0.2.0-alpha.1` (CI so **tuyệt đối** với `version` trong `apps/desktop/package.json`). Với workflow của #60 (X1, nhánh `ci/release-hardening`):
 
-Bản alpha dùng tag đúng chuỗi `v0.2.0-alpha.1` (CI so **tuyệt đối** với `version` trong `apps/desktop/package.json`), rồi đánh dấu prerelease sau khi job `release` xanh:
+- Job `version-check` chạy trước và chặn `release` nếu tag không khớp version ở cả bốn nguồn.
+- Tag có dấu `-` (`0.2.0-alpha.1`, `-beta.N`, `-rc.N`) thì job `release` gọi `gh release create … --prerelease` **ngay khi tạo Release** — không có khoảng thời gian bản alpha bị xếp là bản thường.
+- `gh release edit v<version> --prerelease` chỉ dùng để **khôi phục** khi phát hiện Release bị sai nhãn (ví dụ chạy lại trên workflow cũ), không phải bước thường quy và không thay cho việc kiểm ở mục 4.
 
-```sh
-gh release edit v0.2.0-alpha.1 --prerelease
-```
+Không sửa tag sau khi push; nếu sai, xoá tag trên GitHub rồi làm lại từ commit đúng (không force-push `main`).
 
 ## 4. Kiểm Release
 
-CI tạo Release từ tag (`release` job, `needs: [engine, desktop, package]`). CI dùng `gh release create … --generate-notes` (`.github/workflows/ci.yml:162`), nên body ban đầu là body tự sinh; sau khi job `release` xanh, thay bằng ghi chú đã duyệt:
+CI tạo Release từ tag (`release` job, `needs: [version-check, engine, desktop, package]` sau #60). Job dùng `gh release create … --generate-notes`, kèm `--prerelease` khi tag có dấu `-`, nên body ban đầu là body tự sinh; sau khi job `release` xanh, thay bằng ghi chú đã duyệt:
 
 ```sh
 gh release edit v<version> --notes-file docs/release/notes-<version>.md
@@ -75,9 +82,10 @@ gh release view v<version> --json tagName,assets \
 ```
 
 - Đúng **4 asset**: `NexGraph-<version>-macos-arm64.dmg`, `NexGraph-<version>-macos-arm64.build.json`, `NexGraph-<version>-windows-x64.exe`, `NexGraph-<version>-windows-x64.build.json` (v0.1.2 có đúng 4).
+- **Bản alpha:** `gh release view v<version> --json isPrerelease` trả `true`. Nếu `false`, dừng phát hành và kiểm lại tag/workflow; `gh release edit … --prerelease` chỉ là khôi phục.
 - Body là [ghi chú phát hành](notes-0.2.0.md) đã duyệt, không phải body tự sinh.
 - Gắn run id CI của commit merge vào body hoặc phần thảo luận.
-- Nếu job `release` chạy lại, nó chỉ upload đè tệp (`--clobber`), không tạo Release trùng.
+- Nếu job `release` chạy lại, nó chỉ upload đè tệp (`--clobber`) và giữ nhãn prerelease, không tạo Release trùng.
 
 ## 5. Thông báo
 

@@ -1,6 +1,6 @@
 # Ghi chú phát hành NexGraph 0.2.0-alpha.1 (bản nháp)
 
-> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0-alpha.1` (alpha, đánh dấu **prerelease**); chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. Bản cuối `0.2.0` dự kiến cuối 20/12/2026, dùng lại ghi chú này sau khi gỡ nhãn alpha. **Cập nhật 24/11/2026:** đợt V1 tăng version lên `0.2.0-alpha.1` (`0.2.0a1` phía engine); các PR đã merge của đợt (#32–#48, #50–#56, #58–#59) đã vào `main` (`8118db0`). **#57 bị đóng không merge** (đổi tên nhánh `bot/` → `fix/` làm GitHub đóng PR) và được thay bằng **#59** đã merge. Mọi số PR trong tệp đã kiểm `gh pr view N --json state`: tất cả `MERGED`; PR chưa merge xếp riêng ở mục [Dự kiến trong bản này — chưa merge](#dự-kiến-trong-bản-này--chưa-merge).
+> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0-alpha.1` (alpha, **prerelease**); chỉ dùng sau khi #60/#61 và các PR sửa nghiệm thu RC2 đã merge, CI `main` xanh 7/7, bản dựng từ `main` cuối được nghiệm thu, rồi Tình tạo tag ([runbook](runbook.md#0-điều-kiện-vào)). Bản cuối `0.2.0` dự kiến cuối 20/12/2026, dùng lại ghi chú này sau khi gỡ nhãn alpha. **Cập nhật 24/11/2026:** đợt V1 tăng version lên `0.2.0-alpha.1` (`0.2.0a1` phía engine); các PR đã merge của đợt (#32–#48, #50–#56, #58–#59) đã vào `main` (`8118db0`). **#57 bị đóng không merge** (đổi tên nhánh `bot/` → `fix/` làm GitHub đóng PR) và được thay bằng **#59** đã merge. Mọi số PR trong tệp đã kiểm `gh pr view N --json state`: tất cả `MERGED`; PR chưa merge xếp riêng ở mục [Dự kiến trong bản này — chưa merge](#dự-kiến-trong-bản-này--chưa-merge).
 
 ## Tóm tắt
 
@@ -115,6 +115,6 @@ Các PR dưới đây **chưa merge** tại 24/11/2026; không nằm trong phầ
 
 ## Ghi chú cho người bảo trì
 
-- Body này thay cho body tự sinh của `gh release create … --generate-notes` (`.github/workflows/ci.yml:162`); khi tạo Release thật, dán nguyên văn (bỏ phần "Trạng thái" ở đầu) và gắn run id CI của commit merge.
-- Với bản alpha, job `release` của CI tạo Release **không** kèm `--prerelease`, nên sau khi job xanh phải chạy `gh release edit v0.2.0-alpha.1 --prerelease --notes-file docs/release/notes-0.2.0.md`; bản `0.2.0` cuối 20/12 thì bỏ nhãn này.
+- Body này thay cho body tự sinh của `gh release create … --generate-notes` (job `release` trong `.github/workflows/ci.yml`); khi tạo Release thật, dán nguyên văn (bỏ phần "Trạng thái" ở đầu) và gắn run id CI của commit merge.
+- Với bản alpha, job `release` của CI (sau #60/X1) tạo Release với `--prerelease` **ngay** khi tag có dấu `-`, sau khi `version-check` xanh — không phải sửa nhãn sau khi công bố. Kiểm `gh release view v0.2.0-alpha.1 --json isPrerelease` ra `true` rồi thay body bằng tệp này; `gh release edit … --prerelease` chỉ dùng để khôi phục. Workflow trước #60 không có hành vi này nên **không tạo tag khi #60 chưa merge**. Bản `0.2.0` cuối 20/12 dùng tag không có dấu `-` nên Release là bản thường.
 - Không thêm PR chưa merge vào tệp này. Nhãn còn thiếu so với 0.1.2 chỉ được thêm khi có bằng chứng nghiệm thu trong [biên bản](acceptance/).
