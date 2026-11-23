@@ -54,7 +54,7 @@ from nexgraph_engine.prs.gh import GhError
 from nexgraph_engine.prs.listing import list_prs_json, triage_json
 from nexgraph_engine.prs.review import pr_detail_json, review_status_json
 from nexgraph_engine.query.model_view import ModelGraph
-from nexgraph_engine.query.paths import find_paths
+from nexgraph_engine.query.paths import find_paths, impact_of
 from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source
 from nexgraph_engine.report.build import audit_json, report_json, report_markdown
@@ -174,10 +174,21 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
                                                                  max(1, min(limit, 200))))
 
     @mcp.tool(annotations=READ_ONLY)
-    async def get_impact() -> dict:
-        """Thay đổi chưa commit (hoặc so với lần lập chỉ mục nếu không có Git), vùng ảnh hưởng,
-        test liên quan và hàm đổi chưa có test. Dựa trên đồ thị đã lập chỉ mục; không tự lập chỉ mục lại."""
-        return await run("get_impact", lambda s: changes_json(s, root))
+    async def get_impact(node_id: str | None = None) -> dict:
+        """Vùng ảnh hưởng. Không tham số: thay đổi chưa commit (hoặc so với lần lập chỉ mục nếu không có Git),
+        vùng ảnh hưởng, test liên quan và hàm đổi chưa có test. Có `node_id`: vùng ảnh hưởng của riêng
+        tệp/symbol đó (ví dụ `lib/a.dart::A.run#method`, `lib/a.dart#file`) cùng test liên quan.
+        Dựa trên đồ thị đã lập chỉ mục; không tự lập chỉ mục lại."""
+        if node_id is None:
+            return await run("get_impact", lambda s: changes_json(s, root))
+
+        def body(s: GraphStore) -> dict:
+            try:
+                return impact_of(s, node_id)
+            except KeyError as exc:
+                raise ToolError(f"Không có nút {node_id}") from exc
+
+        return await run("get_impact", body, (node_id,))
 
     @mcp.tool(annotations=READ_ONLY)
     async def read_code(file: str, start: int | None = None, end: int | None = None) -> dict:

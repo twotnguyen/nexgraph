@@ -97,20 +97,100 @@ def unreferenced(store: GraphStore, files: list[DiffFile]) -> list[dict]:
     return [{"node": node_json(n), "heuristic": True} for n in nodes[:MAX_LISTED]]
 
 
-def _runner_for(root: Path, ext: str) -> str | None:
+_MANIFEST_NAMES = ("package.json", "pubspec.yaml", "pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg",
+                   "setup.py", "go.mod")
+
+
+def _package_dir(root: Path, rel: str) -> Path:
+    """Thư mục package gần nhất có manifest (monorepo); gốc dự án khi không có."""
+    base = Path(root).resolve()
+    try:
+        current = (base / rel).parent.resolve()
+    except OSError:
+        return base
+    if not current.is_relative_to(base):
+        return base
+    while True:
+        if any((current / name).is_file() for name in _MANIFEST_NAMES):
+            return current
+        if current == base:
+            return base
+        current = current.parent
+
+
+def _runner_for(package: Path, ext: str) -> str | None:
     def mentions(name: str, word: str) -> bool:
         try:
-            return word in (root / name).read_text("utf-8", "replace")
+            return word in (package / name).read_text("utf-8", "replace")
         except OSError:
             return False
     if ext == ".py":
         return "python -m pytest"
-    if ext in (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"):
+    if ext in _JS_EXTS:
         return "npx vitest run" if mentions("package.json", "vitest") else (
             "npx jest" if mentions("package.json", "jest") else "npm test --")
     if ext == ".dart":
         return "flutter test" if mentions("pubspec.yaml", "flutter") else "dart test"
     return None
+
+
+_JS_EXTS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts")
+_PY_MANIFESTS = ("pyproject.toml", "pytest.ini", "tox.ini", "setup.cfg", "setup.py")
+
+
+def _declared_runner(directory: Path, ext: str) -> str | None:
+    """Runner mà manifest của *directory* khai báo; None nếu manifest không khai báo gì.
+
+    Dùng để dò ngược lên gốc: workspace hoisted (pnpm/npm/yarn) thường chỉ khai `vitest`/`jest` ở gốc.
+    """
+    if ext == ".py":
+        return "python -m pytest" if any((directory / name).is_file() for name in _PY_MANIFESTS) else None
+    try:
+        if ext in _JS_EXTS:
+            text = (directory / "package.json").read_text("utf-8", "replace")
+        elif ext == ".dart":
+            text = (directory / "pubspec.yaml").read_text("utf-8", "replace")
+        else:
+            return None
+    except OSError:
+        return None
+    if ext == ".dart":
+        return "flutter test" if "flutter" in text else "dart test"
+    return "npx vitest run" if "vitest" in text else "npx jest" if "jest" in text else None
+
+
+def _runner_scope(root: Path, rel: str, ext: str) -> tuple[str, Path] | None:
+    """(runner, thư mục chạy): dò runner từ package gần nhất ngược lên gốc, chạy ở nơi khai báo runner.
+
+    Nhờ vậy repo một package giữ nguyên lệnh cũ, package tự khai runner thì `cd` vào package,
+    còn workspace hoisted (chỉ gốc khai vitest/jest) thì chạy từ gốc như trước bản sửa GFY-07.
+    """
+    package = _package_dir(root, rel)
+    current = package
+    while True:
+        runner = _declared_runner(current, ext)
+        if runner is not None:
+            return runner, current
+        if current == root:
+            break
+        current = current.parent
+    runner = _runner_for(package, ext)  # không manifest nào khai báo: giữ mặc định cũ
+    return (runner, package) if runner is not None else None
+
+
+def _module_dir(root: Path, rel: str) -> Path:
+    """Thư mục module Go gần nhất (có `go.mod`); gốc dự án khi không có."""
+    base = Path(root).resolve()
+    try:
+        current = (base / rel).parent.resolve()
+    except OSError:
+        return base
+    while True:
+        if (current / "go.mod").is_file():
+            return current
+        if current == base or not current.is_relative_to(base):
+            return base
+        current = current.parent
 
 
 def select_tests(root: Path, report: ImpactReport, files: list[DiffFile], truncated: bool,
@@ -135,22 +215,39 @@ def select_tests(root: Path, report: ImpactReport, files: list[DiffFile], trunca
     if code and not tests:
         reasons.append("Không tìm được test nào liên quan tới thay đổi")
     commands: list[str] = []
-    groups: dict[str, list[str]] = {}
-    go_dirs: set[str] = set()
+    groups: dict[tuple[str, Path], list[str]] = {}
+    go_dirs: dict[Path, set[str]] = {}
+    root = Path(root).resolve()
+
+    def local(package: Path, path: str) -> str:
+        prefix = package.relative_to(root).as_posix()
+        return str(PurePosixPath(path).relative_to(prefix)) if prefix != "." else path
+
     for t in sorted(tests):
         ext = PurePosixPath(t).suffix.lower()
         if ext == ".go":
-            go_dirs.add("./" + str(PurePosixPath(t).parent))
+            module = _module_dir(root, t)
+            module_rel = module.relative_to(root).as_posix()
+            parent = PurePosixPath(t).parent
+            inside = parent.relative_to(module_rel) if module_rel != "." and parent.is_relative_to(module_rel) else parent
+            go_dirs.setdefault(module, set()).add("./" + str(inside))
             continue
-        runner = _runner_for(root, ext)
-        if runner is None:
+        scope = _runner_scope(root, t, ext)
+        if scope is None:
             reasons.append(f"Chưa biết lệnh chạy test cho {t}")
             continue
-        groups.setdefault(runner, []).append(t)
-    for runner, items in groups.items():
-        commands.append(f"{runner} {' '.join(shlex.quote(i) for i in items)}")
-    if go_dirs:
-        commands.append("go test " + " ".join(shlex.quote(d) for d in sorted(go_dirs)))
+        runner, run_dir = scope
+        groups.setdefault((runner, run_dir), []).append(t)
+    for (runner, package), items in groups.items():
+        command = f"{runner} {' '.join(shlex.quote(local(package, i)) for i in items)}"
+        if package != root:  # monorepo: chạy trong đúng package để config/manifest của nó có hiệu lực
+            command = f"cd {shlex.quote(package.relative_to(root).as_posix())} && {command}"
+        commands.append(command)
+    for package, dirs in go_dirs.items():
+        command = "go test " + " ".join(shlex.quote(d) for d in sorted(dirs))
+        if package != root:
+            command = f"cd {shlex.quote(package.relative_to(root).as_posix())} && {command}"
+        commands.append(command)
     return {"files": sorted(tests), "commands": commands, "run_all": bool(reasons), "reasons": reasons}
 
 
