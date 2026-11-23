@@ -543,6 +543,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     dispose: () => {
       setVim(null)
       stopOverflowAnchor()
+      overflowHost.remove()
       detachConflicts()
       bookmarks.clear()
       const model = editor.getModel()
@@ -579,7 +580,7 @@ export function createMirror(el: HTMLElement, path: string, projectId?: string, 
     setVim,
     setReadOnly: (value) => editor.updateOptions({ readOnly: value }),
     onDisposeModel: (cb) => void model.onWillDispose(cb),
-    dispose: () => { setVim(null); stopOverflowAnchor(); editor.dispose(); releaseModel(model) }
+    dispose: () => { setVim(null); stopOverflowAnchor(); overflowHost.remove(); editor.dispose(); releaseModel(model) }
   }
 }
 
@@ -605,6 +606,7 @@ export function createDiffEditor(el: HTMLElement, opts: { before: string; after:
   return {
     dispose: () => {
       stopOverflowAnchor()
+      overflowHost.remove()
       diff.dispose()
       original.dispose()
       modified.dispose()

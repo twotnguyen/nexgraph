@@ -303,6 +303,8 @@ describe('E3 editor handles', () => {
     diff.dispose()
     handle.dispose()
     mirror.dispose()
+    expect(host.parentElement).toBeNull()
+    expect(diffHost.parentElement).toBeNull()
   })
 })
 
