@@ -20,7 +20,6 @@ const APP_DIR = join(__dirname, '..')
 const PROJECT_NAME = 'ng-e2e-Đồ án'
 
 /** `electron` export đường dẫn binary; cần require vì package.json của desktop không phải ESM. */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const electronPath = require('electron') as string
 
 const FIXTURE: Record<string, string> = {
@@ -50,6 +49,7 @@ function cleanEnv(): NodeJS.ProcessEnv {
   return env
 }
 
+// biome-ignore lint/correctness/noEmptyPattern: Playwright bắt buộc tham số đầu là object destructuring; spec không dùng fixture nào.
 test('mở dự án → index → tìm → Kiến trúc → Luồng → mở tệp → sửa → vùng ảnh hưởng', async ({}, testInfo) => {
   const root = mkdtempSync(join(tmpdir(), 'ng-e2e-'))
   const projectDir = join(root, PROJECT_NAME)
