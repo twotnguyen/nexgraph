@@ -154,7 +154,13 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promi
     prefsFile: prefsFile(),
     secrets: new SecretStore(join(app.getPath('userData'), 'ai-key.json'), secretBox),
     openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
-    notify: (event: AuthEventView) => getWindow()?.webContents.send('auth:login-event', event),
+    notify: (event: AuthEventView) => {
+      const win = getWindow()
+      win?.webContents.send('auth:login-event', event)
+      // Thông báo 'info' không thuộc luồng đăng nhập (ví dụ Đăng xuất không nạp lại được key):
+      // gửi kênh riêng để Cài đặt hiện được dù loginPending=false.
+      if (event.type === 'info') win?.webContents.send('auth:notice', { message: event.message })
+    },
     ask: (view: AuthPromptView) => new Promise<string | null>((resolve) => {
       pendingPrompts.set(view.id, resolve)
       getWindow()?.webContents.send('auth:login-prompt', view)

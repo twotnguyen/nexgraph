@@ -704,6 +704,8 @@ export class AccountService {
     const savedKey = this.deps.secrets.get(providerId)
     if (!savedKey) return
     try {
+      // Cờ dev để kiểm nhánh lỗi đồng bộ trên app thật (đợt D2); không đặt trong bản phát hành.
+      if (process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY === '1') throw new Error('dev hook: setRuntimeApiKey lỗi')
       if ((await this.credentials.read(providerId))?.type === 'oauth') return
       rememberSecret(savedKey)
       await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)

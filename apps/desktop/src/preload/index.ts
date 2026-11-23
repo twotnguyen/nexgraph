@@ -221,7 +221,8 @@ const api: NexGraphApi = {
     discoverLocal: (baseUrl) => call('auth:discover-local', baseUrl),
     connectLocal: (baseUrl, modelId) => call('auth:connect-local', baseUrl, modelId),
     onEvent: (cb) => subscribe<AuthEventView>('auth:login-event', cb),
-    onPrompt: (cb) => subscribe<AuthPromptView>('auth:login-prompt', cb)
+    onPrompt: (cb) => subscribe<AuthPromptView>('auth:login-prompt', cb),
+    onNotice: (cb) => subscribe<{ message: string }>('auth:notice', cb)
   },
   agent: {
     prompt: (pid, text, target, options) => call('agent:prompt', pid, text, target, options),

@@ -359,6 +359,8 @@ export interface NexGraphApi {
     connectLocal(baseUrl: string, modelId: string): Promise<void>
     onEvent(cb: (e: AuthEventView) => void): () => void
     onPrompt(cb: (p: AuthPromptView) => void): () => void
+    /** Thông báo không thuộc luồng đăng nhập (ví dụ Đăng xuất không nạp lại được API key). */
+    onNotice(cb: (n: { message: string }) => void): () => void
   }
   /** Phiên agent lưu theo dự án, tài khoản và đích nhận dữ liệu. */
   agent: {

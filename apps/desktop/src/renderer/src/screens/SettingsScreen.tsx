@@ -139,9 +139,12 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       setLoginPrompt(p)
       setPromptInput('')
     })
+    // Thông báo ngoài luồng đăng nhập (ví dụ Đăng xuất không nạp lại được key) — không phụ thuộc loginPending.
+    const offNotice = window.nexgraph.auth.onNotice((n) => setStatus(tr(n.message)))
     return () => {
       offEvent()
       offPrompt()
+      offNotice()
       if (loginPending.current) void window.nexgraph.auth.loginCancel()
     }
   }, [])

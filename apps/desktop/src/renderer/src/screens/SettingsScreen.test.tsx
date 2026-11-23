@@ -1,15 +1,20 @@
 // @vitest-environment jsdom
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { emptyGeminiStatus, installNexgraph } from '../test-utils'
 import type { NexGraphApi } from '@shared/api'
 import { SettingsScreen } from './SettingsScreen'
 import { isStatusItemHidden, setStatusItemHidden } from '../state/layoutPrefs'
 import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
+import { setLocale } from '../state/locale'
 
 const provider = (id: string, over: Record<string, unknown> = {}) =>
   ({ id, label: id, hasKey: false, oauth: false, loggedIn: false, custom: false, ...over })
+
+const RESTORE_FAILED = 'Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.'
+
+afterEach(() => setLocale('vi'))
 
 describe('SettingsScreen', () => {
   it('switch bật lại các mục thanh trạng thái đã ẩn bằng chuột phải', async () => {
@@ -207,17 +212,29 @@ describe('SettingsScreen', () => {
     unmount()
     expect(api.auth.loginCancel).toHaveBeenCalled()
   })
+
+  it('Đăng xuất không nạp lại được API key → hiện thông báo dù không ở luồng đăng nhập', async () => {
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai', { oauth: true, loggedIn: true, hasKey: true })]) } })
+    const { emitNotice } = installAuthSinks(api)
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
+    act(() => emitNotice({ message: RESTORE_FAILED }))
+    expect(await screen.findByText(RESTORE_FAILED)).toBeInTheDocument()
+  })
 })
 
-/** Nối các sink onEvent/onPrompt của stub auth trong installNexgraph để bắn sự kiện từ main. */
-function installAuthSinks(api: { auth: Pick<NexGraphApi['auth'], 'onEvent' | 'onPrompt'> }) {
+/** Nối các sink onEvent/onPrompt/onNotice của stub auth trong installNexgraph để bắn sự kiện từ main. */
+function installAuthSinks(api: { auth: Pick<NexGraphApi['auth'], 'onEvent' | 'onPrompt' | 'onNotice'> }) {
   const eventSinks = new Set<(e: unknown) => void>()
   const promptSinks = new Set<(p: unknown) => void>()
+  const noticeSinks = new Set<(n: unknown) => void>()
   const auth = api.auth
   ;(auth.onEvent as ReturnType<typeof vi.fn>).mockImplementation((cb: (e: unknown) => void) => { eventSinks.add(cb); return () => eventSinks.delete(cb) })
   ;(auth.onPrompt as ReturnType<typeof vi.fn>).mockImplementation((cb: (p: unknown) => void) => { promptSinks.add(cb); return () => promptSinks.delete(cb) })
+  ;(auth.onNotice as ReturnType<typeof vi.fn>).mockImplementation((cb: (n: unknown) => void) => { noticeSinks.add(cb); return () => noticeSinks.delete(cb) })
   return {
     emitAuth: (e: unknown) => eventSinks.forEach((h) => h(e)),
-    emitPrompt: (p: unknown) => promptSinks.forEach((h) => h(p))
+    emitPrompt: (p: unknown) => promptSinks.forEach((h) => h(p)),
+    emitNotice: (n: unknown) => noticeSinks.forEach((h) => h(n))
   }
 }

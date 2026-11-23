@@ -69,7 +69,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       forgetRegistration: vi.fn(async () => {}), loginCancel: vi.fn(async () => {}), promptReply: vi.fn(async () => {}), logout: vi.fn(async () => {}),
       models: vi.fn(async () => []), selectModel: vi.fn(async () => {}), test: vi.fn(async () => ({ ok: true, message: '' })),
       discoverLocal: vi.fn(async () => []), connectLocal: vi.fn(async () => {}),
-      onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), ...over.auth
+      onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), onNotice: vi.fn(() => () => {}), ...over.auth
     },
     gemini: {
       status: vi.fn(async () => emptyGeminiStatus()), setup: vi.fn(async () => emptyGeminiStatus({ state: 'signed_out', installed: true })),
