@@ -2,7 +2,8 @@ import { useSyncExternalStore } from 'react'
 import * as Y from 'yjs'
 import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate, removeAwarenessStates } from 'y-protocols/awareness'
 import type { EditorHandle } from '../components/editor/monaco'
-import { errorText } from './errorText'
+import { errorMsg } from './errorText'
+import { msg, type Message } from './messages'
 import { getActiveEditor } from './activeEditor'
 import { tr } from '../strings'
 
@@ -21,7 +22,7 @@ export type CollabState = {
   peers: number
   share: { addresses: string[]; port: number; code: string } | null
   remote: { name: string; color: string }[]
-  error: string | null
+  error: Message | null
 }
 let state: CollabState = { role: null, file: null, peers: 0, share: null, remote: [], error: null }
 const listeners = new Set<() => void>()
@@ -36,7 +37,7 @@ let live: Live | null = null
 
 const frame = (kind: number, body: Uint8Array) => { const out = new Uint8Array(body.length + 1); out[0] = kind; out.set(body, 1); return out }
 const send = (data: Uint8Array) => void window.nexgraph.collab?.send(data).catch(() => {})
-const message = errorText
+const message = errorMsg
 
 // Màu và tên nhãn con trỏ người khác: y-monaco gắn lớp yRemoteSelection(Head)-<clientID>.
 function paintRemote(awareness: Awareness, style: HTMLStyleElement) {
@@ -78,7 +79,7 @@ function open(role: 'host' | 'guest'): Live {
       send(frame(UPDATE, Y.encodeStateAsUpdate(doc)))
       send(frame(AWARENESS, encodeAwarenessUpdate(awareness, [...awareness.getStates().keys()])))
     } else if (event.type === 'peers') patch({ peers: event.count })
-    else if (event.type === 'closed') { const tooMany = event.reason === 'too_many_failures'; close(); patch({ error: tooMany ? tr('Phiên chia sẻ đã dừng vì có quá nhiều lần nhập sai mã') : tr('Máy chia sẻ đã dừng phiên') }) }
+    else if (event.type === 'closed') { const tooMany = event.reason === 'too_many_failures'; close(); patch({ error: msg(tooMany ? 'Phiên chia sẻ đã dừng vì có quá nhiều lần nhập sai mã' : 'Máy chia sẻ đã dừng phiên') }) }
   }) ?? (() => {})
   live = { doc, awareness, off, unbind: null, style }
   return live
@@ -87,7 +88,7 @@ function open(role: 'host' | 'guest'): Live {
 /** Chia sẻ tệp đang mở: dựng Y.Text từ nội dung hiện tại rồi gắn vào chính editor của thẻ đó. */
 export async function shareActiveFile(): Promise<void> {
   const target = getActiveEditor()
-  if (!window.nexgraph.collab || !target?.handle.bindCollab) return patch({ error: tr('Mở một tệp trong editor rồi chia sẻ') })
+  if (!window.nexgraph.collab || !target?.handle.bindCollab) return patch({ error: msg('Mở một tệp trong editor rồi chia sẻ') })
   const session = open('host')
   session.doc.getText('content').insert(0, target.text())
   session.unbind = target.handle.bindCollab(session.doc.getText('content'), session.awareness)

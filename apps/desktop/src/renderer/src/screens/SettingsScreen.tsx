@@ -9,7 +9,8 @@ import { setBlame, setEditorPrefs, setVimMode, useBlame, useEditorPrefs, useVimM
 import { CHAT_WIDTH, TERMINAL_HEIGHT, setChatDock, setChatWidth, setExplorerOpen, setStatusBar, setStatusItemHidden, setTerminalHeight, useChatDock, useChatWidth, useExplorerOpen, useHiddenStatusItems, useStatusBar, useTerminalHeight } from '../state/layoutPrefs'
 import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
 import { Toast } from '../components/common/Toast'
-import { errorText } from '../state/errorText'
+import { errorMsg } from '../state/errorText'
+import { msg, msgText, type Message } from '../state/messages'
 import { ConnectionDialog } from '../components/agent/ConnectionDialog'
 import { AuthLinks } from '../components/agent/AuthLinks'
 import { GeminiAccountSettingsCard } from '../components/agent/GeminiAccountSettingsCard'
@@ -19,6 +20,7 @@ import { ExtensionList } from '../components/settings/ExtensionList'
 import { setNotifyPrefs, useNotifyPrefs } from '../state/agentNotify'
 import './settings.css'
 
+type TestResult = { message: Message; detail?: string; contextWarning?: number }
 const errCode = (e: unknown): string | undefined => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : undefined)
 const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
@@ -97,13 +99,13 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const [loginPrompt, setLoginPrompt] = useState<AuthPromptView | null>(null)
   const [promptInput, setPromptInput] = useState('')
   const [loginProvider, setLoginProvider] = useState<string | null>(null)
-  const [testResult, setTestResult] = useState<string | null>(null)
+  const [testResult, setTestResult] = useState<TestResult | null>(null)
   // Hàng đợi toast: nhiều auth:notice cùng lúc phải hiện đủ, không ghi đè nhau.
   const [toasts, setToasts] = useState<{ id: number; message: string }[]>([])
   const toastSeq = useRef(0)
   const dismissToast = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), [])
   const pushToast = useCallback((message: string) => setToasts((list) => [...list, { id: ++toastSeq.current, message }]), [])
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [working, setWorking] = useState(false)
   const [testing, setTesting] = useState(false)
   const [connecting, setConnecting] = useState<'oauth' | 'api_key' | 'local' | null>(null)
@@ -128,7 +130,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const load = useCallback(async () => {
     const currentSettings = window.nexgraph.ai.getSettings().then(setSettings).catch((e) => {
       setSettings(null)
-      setError(errMessage(e))
+      setError(errorMsg(e))
     })
     try {
       const a = window.nexgraph.auth
@@ -137,7 +139,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       setModels(models)
       setKeyProvider((prev) => prev || providers.find((p) => !p.custom && p.hasKey)?.id || providers.find((p) => !p.custom)?.id || '')
     } catch (e) {
-      setError(errMessage(e))
+      setError(errorMsg(e))
     }
     await currentSettings
   }, [])
@@ -180,7 +182,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       if (okMessage) pushToast(okMessage)
       await load()
     } catch (e) {
-      setError(errCode(e) === 'no_keychain' ? vi.accounts.noKeychain : errMessage(e))
+      setError(errCode(e) === 'no_keychain' ? msg('Kho khoá an toàn của hệ điều hành không khả dụng. Không thể lưu thông tin đăng nhập AI.') : errorMsg(e))
     } finally {
       operation.current = false
       setWorking(false)
@@ -223,11 +225,11 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
     }
   })
 
-  const loginCancel = () => void window.nexgraph.auth.loginCancel().catch((e) => setError(errMessage(e)))
+  const loginCancel = () => void window.nexgraph.auth.loginCancel().catch((e) => setError(errorMsg(e)))
 
   const answerPrompt = (value: string | null) => {
     setLoginPrompt(null)
-    if (loginPrompt) void window.nexgraph.auth.promptReply(loginPrompt.id, value).catch((e) => setError(errMessage(e)))
+    if (loginPrompt) void window.nexgraph.auth.promptReply(loginPrompt.id, value).catch((e) => setError(errorMsg(e)))
   }
 
   const test = async () => {
@@ -239,10 +241,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
     try {
       const r = await window.nexgraph.auth.test()
       // Cửa sổ ngữ cảnh nhỏ hơn system prompt + công cụ: kết nối được nhưng không chat được, cảnh báo ngay tại đây.
-      const warning = r.contextWarning ? ` — ${vi.accounts.contextTooSmall.replace('{n}', formatNumber(r.contextWarning))}` : ''
-      setTestResult(r.ok ? `${vi.accounts.testOk}${warning}` : `${tr(r.message)}${r.detail ? ` — ${r.detail}` : ''}`)
+      setTestResult({ message: r.ok ? msg('Kết nối được') : errorMsg(r.message), detail: r.detail, contextWarning: r.contextWarning })
     } catch (e) {
-      setTestResult(errorText(e))
+      setTestResult({ message: errorMsg(e) })
     } finally {
       operation.current = false
       setTesting(false)
@@ -288,7 +289,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
         </button>)}
       </nav>
       <div className="settings-content" onScroll={onScroll}>
-      {error && <p role="alert" className="inline-message error">{error}</p>}
+      {error && <p role="alert" className="inline-message error">{msgText(error)}</p>}
       {toasts.length > 0 && <div className="toast-stack">
         {toasts.map((t) => <Toast key={t.id} message={t.message} onDismiss={() => dismissToast(t.id)} />)}
       </div>}
@@ -633,7 +634,7 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
 
         <div className="row">
           <button type="button" disabled={busy} onClick={() => void test()}>{testing ? tr('Đang kiểm tra…') : vi.accounts.test}</button>
-          {testResult && <span role="status">{testResult}</span>}
+          {testResult && <span role="status">{msgText(testResult.message)}{testResult.contextWarning ? ` — ${tr('Mô hình chỉ có {n} token ngữ cảnh, không đủ cho system prompt + công cụ — chọn mô hình lớn hơn.', { n: formatNumber(testResult.contextWarning) })}` : ''}{testResult.detail ? ` — ${testResult.detail}` : ''}</span>}
         </div>
       </section>}
 

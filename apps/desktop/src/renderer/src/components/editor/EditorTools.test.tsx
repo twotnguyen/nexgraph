@@ -87,14 +87,14 @@ describe('EditorTools', () => {
       await waitFor(() => expect(open).toHaveBeenCalledWith(url, '_blank', 'noopener,noreferrer'))
       expect(permalink).toHaveBeenCalledWith('p1', 'src/a.ts', 2, 2, 'one\ntwo\nthree')
       expect(writeText).not.toHaveBeenCalled()
-      expect(onError).toHaveBeenCalledWith(expect.stringContaining('chưa có trên remote'))
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ key: expect.stringContaining('chưa có trên remote') }))
     })
 
     it('shows the main-process error and neither copies nor opens anything', async () => {
       const open = vi.spyOn(window, 'open').mockReturnValue(null)
       const { onError } = setup(async () => { throw { code: 'unsupported_remote', message: 'Remote chưa được hỗ trợ' } }, null)
       act(() => runCommand('git.copy_permalink'))
-      await waitFor(() => expect(onError).toHaveBeenCalledWith('Remote chưa được hỗ trợ'))
+      await waitFor(() => expect(onError).toHaveBeenCalledWith({ key: 'Remote chưa được hỗ trợ' }))
       expect(writeText).not.toHaveBeenCalled()
       expect(open).not.toHaveBeenCalled()
     })
@@ -315,7 +315,7 @@ describe('EditorTools E3', () => {
       const p = props(active)
       render(<EditorTools {...p} />)
       act(() => { runCommand('editor.call_hierarchy_incoming') })
-      expect(p.onError).toHaveBeenCalledWith('Phân cấp lời gọi không dùng được trong tệp này.')
+      expect(p.onError).toHaveBeenCalledWith({ key: 'Phân cấp lời gọi không dùng được trong tệp này.' })
     })
   })
 })
@@ -377,7 +377,7 @@ describe('EditorTools view commands', () => {
     const p = props({ file: 'a.ts', handle: handle(), text: () => 'one\ntwo\nthree' })
     render(<EditorTools {...p} />)
     act(() => { runCommand('editor.copy_and_trim') })
-    await waitFor(() => expect(p.onError).toHaveBeenCalledWith('Không có clipboard'))
+    await waitFor(() => expect(p.onError).toHaveBeenCalledWith({ key: 'Không có clipboard' }))
   })
   it('applies the new editor view commands and folds through real Monaco actions', () => {
     const h = { ...handle(), runAction: vi.fn(async () => {}) }
@@ -459,9 +459,9 @@ describe('EditorTools đi đến khai báo và định nghĩa kiểu', () => {
     declaration.mockResolvedValue([])
     typeDefinition.mockResolvedValue([])
     act(() => { runCommand('editor.declaration') })
-    await waitFor(() => expect(onError).toHaveBeenCalledWith('Không tìm thấy khai báo.'))
+    await waitFor(() => expect(onError).toHaveBeenCalledWith({ key: 'Không tìm thấy khai báo.' }))
     act(() => { runCommand('editor.type_definition') })
-    await waitFor(() => expect(onError).toHaveBeenCalledWith('Không tìm thấy định nghĩa kiểu.'))
+    await waitFor(() => expect(onError).toHaveBeenCalledWith({ key: 'Không tìm thấy định nghĩa kiểu.' }))
   })
 
   it('có phím mặc định theo quy ước Wu và bản Anh cho lệnh, picker, thông báo', () => {

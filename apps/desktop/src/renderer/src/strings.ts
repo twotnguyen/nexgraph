@@ -1510,7 +1510,12 @@ export const uiEn: Record<string, string> = {
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.
   'Luồng {id}': 'Flow {id}',
-  'Đã chia {n} cụm': 'Split into {n} {n, plural, one {cluster} other {clusters}}'
+  'Đã chia {n} cụm': 'Split into {n} {n, plural, one {cluster} other {clusters}}',
+  // Câu lấy từ dictionary (không phải literal) nên trước đây thiếu bản Anh: SettingsScreen, IntegrationsDialog.
+  'Kết nối được': 'Connection successful',
+  'Kho khoá an toàn của hệ điều hành không khả dụng. Không thể lưu thông tin đăng nhập AI.': 'The operating system keychain is unavailable. AI credentials cannot be stored.',
+  'Đã ghi {path}': 'Wrote {path}',
+  'Đã gỡ NexGraph khỏi các tệp trên': 'Removed NexGraph from the files above'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}.

@@ -5,7 +5,8 @@ import { Icon } from '../common/icons'
 import { addWatch, attachDebugging, clearAllBreakpoints, debugStep, evaluateConsole, pauseDebugging, removeWatch, restartDebugging, selectDebugConfig, selectFrame, setBreakpoint, setDebugError, startDebugging, stopDebugging, toggleBreakpoint, useDebugLayout, useDebugState, type ConfigRef, type DebugKind, type DebugLayoutSection } from '../../state/debugState'
 import './debug-panel.css'
 import { PaneStack, type PaneSection } from '../layout/PaneStack'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { BreakpointForm } from './BreakpointForm'
 
 export const debugKindOf = (file: string | undefined): DebugKind | null => (!file ? null : /\.(m|c)?js$/.test(file) ? 'node' : /\.py$/.test(file) ? 'python' : null)
@@ -49,11 +50,11 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
   const [historyIndex, setHistoryIndex] = useState(0)
   const [draft, setDraft] = useState('')
   const [configs, setConfigs] = useState<DebugConfigInfo[] | null>(null)
-  const [configError, setConfigError] = useState<string | null>(null)
+  const [configError, setConfigError] = useState<Message | null>(null)
   const [attachKind, setAttachKind] = useState<DebugKind>('node')
   const [attachHost, setAttachHost] = useState('')
   const [attachPort, setAttachPort] = useState('')
-  const loadConfigs = () => api?.configs(projectId).then((list) => { setConfigs(list); setConfigError(null) }, (e: unknown) => setConfigError(errorText(e)))
+  const loadConfigs = () => api?.configs(projectId).then((list) => { setConfigs(list); setConfigError(null) }, (e: unknown) => setConfigError(errorMsg(e)))
   const output = useRef<HTMLPreElement>(null)
   const kind = debugKindOf(target)
   const layout = useDebugLayout(kind ?? 'node')
@@ -82,7 +83,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
       await api.installAdapter(adapter)
       setInstalled(await api.adapterStatus())
     } catch (e) {
-      setDebugError(errorText(e))
+      setDebugError(errorMsg(e))
     } finally {
       setInstalling(false)
     }
@@ -98,7 +99,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
     try {
       onOpenFile(await api.configFile(projectId), 1)
       void loadConfigs()
-    } catch (e) { setConfigError(errorText(e)) }
+    } catch (e) { setConfigError(errorMsg(e)) }
   }
   const attach = () => void attachDebugging(projectId, attachKind, attachHost.trim() || ATTACH_DEFAULT[attachKind].host, Number(attachPort.trim() || ATTACH_DEFAULT[attachKind].port))
   const breakpoints = Object.entries(debug.breakpoints).sort(([a], [b]) => a.localeCompare(b)).flatMap(([file, points]) => points.map((point) => ({ file, ...point })))
@@ -131,14 +132,14 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
       ))}
     </> },
     { id: 'modules', title: 'Modules', children: <>
-      {debug.moduleError && <p role="alert" className="dbg-error">{debug.moduleError}</p>}
+      {debug.moduleError && <p role="alert" className="dbg-error">{msgText(debug.moduleError)}</p>}
       {!debug.modules.length && !debug.moduleError && <p className="dbg-empty muted">{tr('Adapter không cung cấp danh sách module.')}</p>}
       <ul className="dbg-list">{debug.modules.map((module) => (
         <li key={module.id} className="dbg-scope" title={module.path ?? undefined}>{module.name}{module.version ? ` · ${module.version}` : ''}</li>
       ))}</ul>
     </> },
     { id: 'sources', title: 'Nguồn đã tải', children: <>
-      {debug.sourceError && <p role="alert" className="dbg-error">{debug.sourceError}</p>}
+      {debug.sourceError && <p role="alert" className="dbg-error">{msgText(debug.sourceError)}</p>}
       {!debug.loadedSources.length && !debug.sourceError && <p className="dbg-empty muted">{tr('Adapter không cung cấp danh sách nguồn.')}</p>}
       <ul className="dbg-list">{debug.loadedSources.map((source, index) => (
         <li key={source.sourceReference ?? source.path ?? source.name ?? index} className="dbg-scope" title={source.path ?? undefined}>{source.path ?? source.name ?? tr('(nguồn không tên)')}</li>
@@ -210,7 +211,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
         ? <><b>{selected.name}</b> <span className="muted">· {selected.request} · {ADAPTER_LABEL[selected.kind]}</span></>
         : target ? <><b>{target}</b> <span className="muted">· {kind ? ADAPTER_LABEL[kind] : tr('chỉ gỡ lỗi được tệp .js, .mjs, .cjs, .py')}</span></> : <span className="muted">{tr('Mở một tệp .js hoặc .py rồi bấm chạy.')}</span>}</p>
       {needsAdapter && banner(needsAdapter)}
-      {debug.error && <p role="alert" className="dbg-error">{debug.error}</p>}
+      {debug.error && <p role="alert" className="dbg-error">{msgText(debug.error)}</p>}
       <section aria-label={tr('Cấu hình gỡ lỗi')}><div className="dbg-section-head"><h3>{tr('Cấu hình')}</h3>
         <div className="dbg-actions">
           <button type="button" className="dbg-btn" title={tr('Tải lại danh sách cấu hình')} aria-label={tr('Tải lại cấu hình')} onClick={() => void loadConfigs()}><Icon name="refresh" size={13} /></button>
@@ -224,7 +225,7 @@ export function DebugPanel({ projectId, target, onOpenFile }: { projectId: strin
           <option value="">{tr('Chạy tệp đang mở')}</option>
           {list.map((item) => <option key={configKey(item)} value={configKey(item)} title={item.source}>{item.name} · {item.request}</option>)}
         </select>
-        {configError && <p role="alert" className="dbg-error">{configError}</p>}
+        {configError && <p role="alert" className="dbg-error">{msgText(configError)}</p>}
       </section>
       {status === 'idle' && (
         <section aria-label={tr('Attach vào tiến trình')}><h3>{tr('Attach')}</h3>

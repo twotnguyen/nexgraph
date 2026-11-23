@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Changes } from '@shared/graph-types'
 import { emptyChanges, installNexgraph } from '../test-utils'
 import { useChanges } from './useChanges'
+import { msgText } from './messages'
 
 const changed = (label: string): Changes =>
   emptyChanges({ changed_files: [{ path: `lib/${label}.dart`, status: 'M', old_path: null }] })
@@ -62,7 +63,7 @@ describe('useChanges', () => {
     const changes = vi.fn().mockRejectedValueOnce({ code: 'unknown_project', message: 'Không có dự án' }).mockResolvedValue(changed('a'))
     installNexgraph({ graph: { changes } })
     const { result } = renderHook(() => useChanges('p1'))
-    await waitFor(() => expect(result.current.error).toBe('Không có dự án'))
+    await waitFor(() => expect(msgText(result.current.error)).toBe('Không có dự án'))
     act(() => result.current.reload())
     await waitFor(() => expect(result.current.error).toBeNull())
     expect(result.current.changes?.changed_files).toHaveLength(1)

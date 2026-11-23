@@ -3,7 +3,7 @@ import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, Lsp
 import { tr } from '../../strings'
 import { useCommand } from '../../state/commands'
 import type { ActiveEditor } from '../../state/activeEditor'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
 import { msg, msgText, type Message } from '../../state/messages'
 import { useLocale } from '../../state/locale'
 import { largerSymbolAt, positionInRange, previousFromHistory, siblingSymbol, smallestSymbolAt } from '../../state/syntaxSelection'
@@ -14,8 +14,11 @@ import { getEditorPrefs, setEditorPrefs } from '../../state/editorPrefs'
 import type { OpenEditorLocation } from './EditorPanels'
 import './editor-tools.css'
 
-type HierarchyRow = { key: string; item: LspCallHierarchyItem; name: string; file: string; line: number; column: number; isCall: boolean }
-type HierarchyMode = { kind: 'hierarchy'; direction: 'incoming' | 'outgoing'; roots: HierarchyRow[]; stack: LspCallHierarchyItem[]; rows: HierarchyRow[]; status: string }
+type HierarchyRow = { key: string; item: LspCallHierarchyItem; name: string; file: string; line: number; column: number; isCall: boolean; calls?: number }
+/** Nhãn dòng đọc lúc render: số lời gọi là dữ liệu, câu chữ dịch theo ngôn ngữ hiện tại. */
+const rowLabel = (row: HierarchyRow): string =>
+  row.calls && row.calls > 1 ? `${row.name} — ${row.file}${tr(' ({count} lời gọi)', { count: row.calls })}` : row.name
+type HierarchyMode = { kind: 'hierarchy'; direction: 'incoming' | 'outgoing'; roots: HierarchyRow[]; stack: LspCallHierarchyItem[]; rows: HierarchyRow[]; status: Message }
 type Mode =
   | { kind: 'goto' | 'rename' | 'document'; editor: ActiveEditor }
   | { kind: 'workspace' }
@@ -92,7 +95,7 @@ function RenameDialog({ projectId, editor, close }: { projectId: string; editor:
       if (editor.text() !== text) throw new Error(tr('Tệp đã thay đổi trong khi đổi tên. Hãy thử lại.'))
       await editorMonaco.applyWorkspaceEdit(projectId, edit)
       close()
-    } catch (e) { setError(errorText(e)); setBusy(false) }
+    } catch (e) { setError(errorMsg(e)); setBusy(false) }
   }
   return <div className="picker-layer" onPointerDown={(event) => { if (!busy && event.target === event.currentTarget) close() }}>
     <form className="picker editor-tool-dialog" role="dialog" aria-modal="true" aria-label={tr('Đổi tên ký hiệu')} onSubmit={(event) => void submit(event)}
@@ -118,7 +121,7 @@ function WorkspaceSymbolPicker({ projectId, onOpen, close }: { projectId: string
       if (!api) { setStatus(msg('Không hỗ trợ tìm ký hiệu trong dự án.')); return }
       void Promise.resolve().then(() => api(projectId, query)).then((items) => {
         if (live) { setSymbols(items.slice(0, 100)); setStatus(msg('Không có ký hiệu khớp')) }
-      }).catch((error: unknown) => { if (live) setStatus(errorText(error)) })
+      }).catch((error: unknown) => { if (live) setStatus(errorMsg(error)) })
     }, 200)
     return () => { live = false; clearTimeout(timer) }
   }, [projectId, query])
@@ -130,8 +133,8 @@ function WorkspaceSymbolPicker({ projectId, onOpen, close }: { projectId: string
 }
 
 export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, onDiagnostics, onError }: {
-  projectId: string; editor: ActiveEditor | null; symbols: LspDocumentSymbol[]; symbolsError: string | null
-  onOpen: OpenEditorLocation; onDiagnostics: () => void; onError: (message: string) => void
+  projectId: string; editor: ActiveEditor | null; symbols: LspDocumentSymbol[]; symbolsError: Message | null
+  onOpen: OpenEditorLocation; onDiagnostics: () => void; onError: (message: Message) => void
 }) {
   const [mode, setMode] = useState<Mode | null>(null)
   const syntaxState = useRef<{ file: string; symbols: LspDocumentSymbol[]; current: LspDocumentSymbol; history: LspDocumentSymbol[] } | null>(null)
@@ -185,12 +188,12 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     const root = stack[stack.length - 1]
     if (!root) return
     const serial = ++hierarchySerial.current
-    setMode({ kind: 'hierarchy', direction, roots, stack, rows: [], status: tr('Đang tải lời gọi…') })
+    setMode({ kind: 'hierarchy', direction, roots, stack, rows: [], status: msg('Đang tải lời gọi…') })
     try {
       const api = window.nexgraph?.lsp
-      if (!api?.callHierarchyIncoming || !api.callHierarchyOutgoing) { onError(tr('Phân cấp lời gọi không dùng được trong tệp này.')); return }
+      if (!api?.callHierarchyIncoming || !api.callHierarchyOutgoing) { onError(msg('Phân cấp lời gọi không dùng được trong tệp này.')); return }
       const text = editor && root.file === editor.file ? editor.text() : await window.nexgraph?.fs?.read(projectId, root.file).then((read) => read.text)
-      if (text === undefined) { onError(tr('Không đọc được tệp chứa ký hiệu.')); return }
+      if (text === undefined) { onError(msg('Không đọc được tệp chứa ký hiệu.')); return }
       const line = root.range.start.line + 1
       const column = root.range.start.character + 1
       const calls: LspCallHierarchyCall[] = direction === 'incoming'
@@ -214,13 +217,13 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
           const total = ranges.length
           return {
             key: `${file}:${call.from.range.start.line}:${call.from.range.start.character}:${index}`,
-            item: call.from, name: total > 1 ? `${call.from.name} — ${file}${tr(' ({count} lời gọi)', { count: total })}` : call.from.name,
+            item: call.from, name: call.from.name, calls: total,
             file, line: site.line + 1, column: site.character + 1, isCall: true
           }
         }),
-        status: calls.length ? '' : (direction === 'incoming' ? tr('Không có lời gọi vào.') : tr('Không có lời gọi ra.'))
+        status: calls.length ? '' : (direction === 'incoming' ? msg('Không có lời gọi vào.') : msg('Không có lời gọi ra.'))
       } : current)
-    } catch (error) { if (serial === hierarchySerial.current) { onError(errorText(error)); close() } }
+    } catch (error) { if (serial === hierarchySerial.current) { onError(errorMsg(error)); close() } }
   }
   const hierarchy = async (direction: 'incoming' | 'outgoing') => {
     if (!editor) return
@@ -234,7 +237,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     const position = editor.handle.getPosition?.()
     const api = window.nexgraph?.lsp
     if (!position || !api?.callHierarchyPrepare || !api.callHierarchyIncoming || !api.callHierarchyOutgoing) {
-      onError(tr('Phân cấp lời gọi không dùng được trong tệp này.'))
+      onError(msg('Phân cấp lời gọi không dùng được trong tệp này.'))
       return
     }
     const serial = ++hierarchySerial.current
@@ -246,14 +249,14 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
         item, name: item.name, file: item.file,
         line: item.range.start.line + 1, column: item.range.start.character + 1, isCall: false
       }))
-      open({ kind: 'hierarchy', direction, roots: rows, stack: [], rows, status: rows.length ? '' : tr('Không có ký hiệu gọi được tại con trỏ.') })
-    } catch (error) { if (serial === hierarchySerial.current) onError(errorText(error)) }
+      open({ kind: 'hierarchy', direction, roots: rows, stack: [], rows, status: rows.length ? '' : msg('Không có ký hiệu gọi được tại con trỏ.') })
+    } catch (error) { if (serial === hierarchySerial.current) onError(errorMsg(error)) }
   }
   const hierarchyBack = () => {
     const shown = mode?.kind === 'hierarchy' ? mode : null
     if (!shown || !shown.stack.length) return
     if (shown.stack.length === 1) {
-      setMode({ ...shown, stack: [], rows: shown.roots, status: shown.roots.length ? '' : tr('Không có ký hiệu gọi được tại con trỏ.') })
+      setMode({ ...shown, stack: [], rows: shown.roots, status: shown.roots.length ? '' : msg('Không có ký hiệu gọi được tại con trỏ.') })
       return
     }
     void loadCalls(shown.direction, shown.stack.slice(0, -1), shown.roots)
@@ -268,39 +271,39 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   const action = (id: string) => {
     if (!editor) return
     if (!editor.handle.runAction) return
-    void editor.handle.runAction(id).catch((error: unknown) => onError(errorText(error)))
+    void editor.handle.runAction(id).catch((error: unknown) => onError(errorMsg(error)))
   }
-  const locationLabel = (kind: 'references' | 'implementation' | 'declaration' | 'typeDefinition') =>
-    kind === 'references' ? { title: tr('Tham chiếu'), empty: tr('Không tìm thấy tham chiếu.') }
-      : kind === 'implementation' ? { title: tr('Phần triển khai'), empty: tr('Không tìm thấy phần triển khai.') }
-        : kind === 'declaration' ? { title: tr('Khai báo'), empty: tr('Không tìm thấy khai báo.') }
-          : { title: tr('Định nghĩa kiểu'), empty: tr('Không tìm thấy định nghĩa kiểu.') }
+  const locationLabel = (kind: 'references' | 'implementation' | 'declaration' | 'typeDefinition'): { title: string; empty: Message } =>
+    kind === 'references' ? { title: tr('Tham chiếu'), empty: msg('Không tìm thấy tham chiếu.') }
+      : kind === 'implementation' ? { title: tr('Phần triển khai'), empty: msg('Không tìm thấy phần triển khai.') }
+        : kind === 'declaration' ? { title: tr('Khai báo'), empty: msg('Không tìm thấy khai báo.') }
+          : { title: tr('Định nghĩa kiểu'), empty: msg('Không tìm thấy định nghĩa kiểu.') }
   const locations = async (kind: 'references' | 'implementation' | 'declaration' | 'typeDefinition') => {
     if (!editor) return
     const position = editor.handle.getPosition?.()
     const api = window.nexgraph?.lsp?.[kind]
     const label = locationLabel(kind)
-    if (!position || !api) { onError(tr('Không hỗ trợ điều hướng ký hiệu trong tệp này.')); return }
+    if (!position || !api) { onError(msg('Không hỗ trợ điều hướng ký hiệu trong tệp này.')); return }
     try {
       const found = await api(projectId, editor.file, editor.text(), position.line, position.column)
       if (!found.length) { onError(label.empty); return }
       if (found.length === 1) onOpen(found[0].file, found[0].line, found[0].column)
       else open({ kind: 'locations', title: label.title, locations: found })
-    } catch (error) { onError(errorText(error)) }
+    } catch (error) { onError(errorMsg(error)) }
   }
   // Permalink kiểu Wu: vùng chọn (không có thì dòng con trỏ) tại commit HEAD trên remote; main quy số dòng về HEAD.
   const permalink = async (copy: boolean) => {
     if (!editor) return
     const api = window.nexgraph?.git
-    if (!api) { onError(tr('Git không dùng được ở chế độ này.')); return }
+    if (!api) { onError(msg('Git không dùng được ở chế độ này.')); return }
     const selection = editor.handle.getSelection?.()
     const line = editor.handle.getPosition?.().line
     try {
       const { url, published } = await api.permalink(projectId, editor.file, selection?.start ?? line, selection?.end ?? line, editor.text())
       if (copy) await navigator.clipboard.writeText(url)
       else window.open(url, '_blank', 'noopener,noreferrer') // main chỉ mở http(s) (setWindowOpenHandler → externalWebUrl)
-      if (!published) onError(tr('Lưu ý: commit HEAD chưa có trên remote nên liên kết có thể không mở được. Hãy push trước khi chia sẻ.'))
-    } catch (error) { onError(errorText(error)) }
+      if (!published) onError(msg('Lưu ý: commit HEAD chưa có trên remote nên liên kết có thể không mở được. Hãy push trước khi chia sẻ.'))
+    } catch (error) { onError(errorMsg(error)) }
   }
   const copyTrimmed = async () => {
     if (!editor) return
@@ -311,7 +314,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
     const indents = lines.filter((line) => line.trim()).map((line) => /^[ \t]*/.exec(line)?.[0].length ?? 0)
     const cut = indents.length ? Math.min(...indents) : 0
     const text = lines.map((line) => line.replace(/^[ \t]*/, (space) => space.slice(cut))).join(editor.handle.getEOL?.() ?? '\n')
-    try { await navigator.clipboard.writeText(text) } catch (error) { onError(errorText(error)) }
+    try { await navigator.clipboard.writeText(text) } catch (error) { onError(errorMsg(error)) }
   }
   useCommand('editor.goto_line', () => { if (editor) open({ kind: 'goto', editor }) }, !!editor)
   useCommand('editor.document_symbols', () => { if (editor) open({ kind: 'document', editor }) }, !!editor)
@@ -391,9 +394,9 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   if (mode.kind === 'hierarchy') {
     const shown = mode
     return <Picker label={tr('Phân cấp lời gọi')} placeholder={tr('Lọc ký hiệu hoặc lời gọi…')} items={shown.rows}
-      itemKey={(row) => row.key} itemText={(row) => row.name}
-      renderItem={(row, positions) => <><span><Highlight text={row.name} positions={positions} /></span><small>{row.file}:{row.line}</small></>}
-      empty={shown.status} onCancel={() => close()} onPick={(row) => {
+      itemKey={(row) => row.key} itemText={(row) => rowLabel(row)}
+      renderItem={(row, positions) => <><span><Highlight text={rowLabel(row)} positions={positions} /></span><small>{row.file}:{row.line}</small></>}
+      empty={msgText(shown.status)} onCancel={() => close()} onPick={(row) => {
         if (!row.isCall) { void loadCalls(shown.direction, [row.item], shown.roots); return }
         close(false)
         onOpen(row.file, row.line, row.column)
@@ -406,7 +409,7 @@ export function EditorTools({ projectId, editor, symbols, symbolsError, onOpen, 
   }
   const rows = flattenSymbols(symbols)
   return <Picker label={tr('Tìm ký hiệu trong tệp')} placeholder={tr('Tìm ký hiệu trong tệp…')} items={rows} itemKey={(item) => item.id} itemText={(item) => item.symbol.name}
-    empty={symbolsError ?? tr('Không có ký hiệu khớp')} onCancel={() => close()} onPick={({ symbol }) => {
+    empty={symbolsError ? msgText(symbolsError) : tr('Không có ký hiệu khớp')} onCancel={() => close()} onPick={({ symbol }) => {
       close(false)
       const { line, character } = symbol.selectionRange.start
       if (mode.editor.handle.revealPosition) mode.editor.handle.revealPosition(line + 1, character + 1)

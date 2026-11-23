@@ -3,6 +3,7 @@ import { installExtension, removeExtension, useExtensions } from '../../state/ex
 import { errorText } from '../../state/errorText'
 import { tr } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 
 /** Trang Extension trong Cài đặt: danh sách đã cài (theme, lệnh), nút cài từ thư mục, gỡ, lỗi manifest. */
 export function ExtensionList() {
@@ -12,7 +13,7 @@ export function ExtensionList() {
   const act = async (work: () => Promise<unknown>) => {
     setBusy(true)
     setMessage(null)
-    try { await work() } catch (e) { setMessage(errorText(e)) } finally { setBusy(false) }
+    try { await work() } catch (e) { setMessage(errorMsg(e)) } finally { setBusy(false) }
   }
   return (
     <div className="extension-list">
@@ -23,7 +24,7 @@ export function ExtensionList() {
         })}>{tr('Cài từ thư mục…')}</button>
         {message && <span role="status" className="muted">{msgText(message)}</span>}
       </div>
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <p role="alert" className="error">{msgText(error)}</p>}
       {extensions.length === 0 && <p className="muted">{tr('Chưa cài extension nào.')}</p>}
       <ul>
         {extensions.map((ext) => (

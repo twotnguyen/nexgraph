@@ -11,6 +11,18 @@ import { describe, expect, it } from 'vitest'
  */
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const TRANSLATED = /(?<![\w.$])(vi\.|tr\()/
+/** Gọi hàm dịch ngay trong đối số setter = chốt câu theo ngôn ngữ lúc gọi, không đổi khi người dùng đổi ngôn ngữ. */
+const AT_CALL = /(?<![\w.$])(errorText|msgText|tr)\(|(?<![\w.$])(vi|en)\./
+/** `setAttribute`/`setTimeout`… không phải state: tham số là hiệu ứng DOM, không phải nhãn giữ lại. */
+const DOM_SETTERS = new Set(['setAttribute', 'setAttributeNS', 'setTimeout', 'setInterval', 'setImmediate', 'setProperty', 'setSelectionRange', 'setPointerCapture', 'setStart', 'setEnd'])
+/** Ngoại lệ có chủ đích: dữ liệu người dùng thấy nhưng không phải nhãn UI (đã ghi rõ lý do). */
+const ALLOWED: { file: string; contains: string; why: string }[] = [
+  { file: 'components/agent/AgentPanel.tsx', contains: 'content: msgText(message)', why: 'nội dung bubble lỗi trong lịch sử hội thoại: đã gửi cho model, lưu chuỗi như mọi tin nhắn' },
+  { file: 'components/collab/CollabUi.tsx', contains: "name || tr('Người dùng')", why: 'tên hiển thị gửi sang phiên cộng tác là dữ liệu, không phải nhãn UI' },
+  { file: 'state/debugState.ts', contains: 'output: [...state.output.slice(-500)', why: 'dòng console gỡ lỗi: ghi vào buffer văn bản, không phải nhãn UI' },
+  { file: 'screens/WorkspaceScreen.tsx', contains: 'vi.path.noLink', why: 'câu dựng bằng hàm dictionary vi.path.found() (không có khoá phẳng) — ghi ở REPORT F11' },
+  { file: 'screens/WorkspaceScreen.tsx', contains: 'vi.search.askNone', why: 'câu dựng từ dictionary vi.search (không có khoá phẳng) — ghi ở REPORT F11' }
+]
 
 function sources(dir: string): string[] {
   const out: string[] = []
@@ -31,6 +43,21 @@ function callArgument(text: string, at: number): string {
     else if (text[i] === ')' && --depth === 0) return text.slice(at + 1, i)
   }
   return text.slice(at + 1)
+}
+
+/** Thay lời gọi `name(...)` bằng `__NAME__` để chỉ xét các lời gọi dịch còn lộ ra ngoài. */
+function stripCalls(text: string, names: string[]): string {
+  let out = text
+  for (const name of names) {
+    for (let guard = 0; guard < 200; guard++) {
+      const match = new RegExp(`(?<![\\w.$])${name}\\s*\\(`).exec(out)
+      if (!match) break
+      const open = match.index + match[0].length - 1
+      const argument = callArgument(out, open)
+      out = `${out.slice(0, match.index)}__MSG__${out.slice(open + argument.length + 2)}`
+    }
+  }
+  return out
 }
 
 /** Khai báo cấp module: dòng bắt đầu ở cột 0, gom tới dòng cấp module kế tiếp. */
@@ -80,6 +107,23 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
       }
     }
     expect(hits, 'state giữ khoá/dữ liệu rồi dịch lúc render (msg/msgText), không chốt chuỗi đã dịch').toEqual([])
+  })
+
+  it('không lưu câu đã dịch qua setter/patch: setX(errorText(...)), setX(msgText(...)), object literal có tr(...)', () => {
+    const hits: string[] = []
+    for (const file of files) {
+      const text = readFileSync(file, 'utf8')
+      for (const match of text.matchAll(/(?<![\w.$])(set[A-Z]\w*|patch)\s*\(/g)) {
+        if (DOM_SETTERS.has(match[1])) continue
+        const argument = callArgument(text, match.index + match[0].length - 1)
+        // `msg(...)`/`msgError(...)` chỉ giữ khoá + biến nên phần bên trong hợp lệ.
+        if (!AT_CALL.test(stripCalls(argument, ['msg', 'msgError']))) continue
+        const rel = relative(ROOT, file)
+        if (ALLOWED.some((rule) => rule.file === rel && argument.includes(rule.contains))) continue
+        hits.push(`${rel}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 90).replace(/\s+/g, ' ')}`)
+      }
+    }
+    expect(hits, 'state giữ Msg (msg/errorMsg) rồi msgText lúc render; errorText/msgText/tr() trong đối số setter là dịch lúc gọi').toEqual([])
   })
 
   it('không ném new Error(vi.*/en.*) — lỗi mang khoá Msg để chỗ bắt dịch lúc render', () => {

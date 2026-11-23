@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { GitCommit, GitFileChange } from '@shared/api'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { assignLanes, type GraphRow } from './graph'
 import { localeTag } from '../../state/locale'
 import { tr } from '../../strings'
@@ -12,8 +13,8 @@ interface Props {
   onOpenDiff: (file: string, staged: boolean, rev?: string, from?: string) => void
 }
 
-type HistoryState = { projectId: string; graph: boolean; commits: GitCommit[] | null; error: string | null }
-type FilesState = { projectId: string; sha: string; files: GitFileChange[] | null; error: string | null }
+type HistoryState = { projectId: string; graph: boolean; commits: GitCommit[] | null; error: Message | null }
+type FilesState = { projectId: string; sha: string; files: GitFileChange[] | null; error: Message | null }
 
 const laneX = (lane: number) => lane * 14 + 9
 const relativeFormats = new Map<string, Intl.RelativeTimeFormat>()
@@ -72,7 +73,7 @@ export function GitHistory({ projectId, onOpenDiff }: Props) {
     setHistory({ projectId, graph, commits: null, error: null })
     api.history(projectId, graph).then(
       (commits) => { if (live) setHistory({ projectId, graph, commits, error: null }) },
-      (error: unknown) => { if (live) setHistory({ projectId, graph, commits: null, error: errorText(error) }) }
+      (error: unknown) => { if (live) setHistory({ projectId, graph, commits: null, error: errorMsg(error) }) }
     )
     return () => { live = false }
   }, [api, projectId, graph, refresh])
@@ -93,7 +94,7 @@ export function GitHistory({ projectId, onOpenDiff }: Props) {
     setFileState({ projectId, sha: expanded, files: null, error: null })
     api.commitFiles(projectId, expanded).then(
       (files) => { if (live) setFileState({ projectId, sha: expanded, files, error: null }) },
-      (error: unknown) => { if (live) setFileState({ projectId, sha: expanded, files: null, error: errorText(error) }) }
+      (error: unknown) => { if (live) setFileState({ projectId, sha: expanded, files: null, error: errorMsg(error) }) }
     )
     return () => { live = false }
   }, [api, projectId, expanded])
@@ -107,7 +108,7 @@ export function GitHistory({ projectId, onOpenDiff }: Props) {
         <button type="button" className="git-history-mode" aria-pressed={graph} onClick={() => setGraph(true)}>{tr('Đồ thị')}</button>
         <button type="button" className="git-history-mode" aria-label={tr('Làm mới lịch sử')} title={tr('Làm mới')} onClick={() => setRefresh((n) => n + 1)}><Icon name="refresh" size={14} /></button>
       </div>
-      {current?.error && <p className="git-history-error" role="alert">{current.error}</p>}
+      {current?.error && <p className="git-history-error" role="alert">{msgText(current.error)}</p>}
       {!current?.error && !commits && <p className="git-history-empty muted" role="status">{tr('Đang tải lịch sử…')}</p>}
       {commits?.length === 0 && <p className="git-history-empty muted">{tr('Chưa có commit.')}</p>}
       {!!commits?.length && <ul className="git-history-list">
@@ -132,7 +133,7 @@ export function GitHistory({ projectId, onOpenDiff }: Props) {
                   {Array.from({ length: row.outgoing }, (_, lane) => <line key={lane} className={`git-history-lane git-history-lane-${lane % 6}`}
                     x1={laneX(lane)} x2={laneX(lane)} y1="0" y2="100%" stroke="currentColor" strokeWidth="1.5" />)}
                 </svg>}
-                {files?.error && <p className="git-history-error" role="alert">{files.error}</p>}
+                {files?.error && <p className="git-history-error" role="alert">{msgText(files.error)}</p>}
                 {!files?.error && !files?.files && <p className="git-history-empty muted" role="status">{tr('Đang tải tệp…')}</p>}
                 {files?.files?.length === 0 && <p className="git-history-empty muted">{tr('Không có tệp thay đổi trong dự án.')}</p>}
                 {!!files?.files?.length && <ul className="git-history-files">

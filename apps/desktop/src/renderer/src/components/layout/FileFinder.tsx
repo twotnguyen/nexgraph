@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
 import { fuzzyMatch } from '../../state/fuzzy'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
@@ -52,7 +52,7 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
     if (!load) { setError(msg('Không liệt kê được tệp ở chế độ này')); return }
     load(projectId).then(({ files: all }) => {
       if (live) setListing({ projectId, files: all })
-    }).catch((e: unknown) => { if (live) setError(errorText(e)) })
+    }).catch((e: unknown) => { if (live) setError(errorMsg(e)) })
     return () => { live = false }
   }, [projectId])
 
@@ -79,7 +79,7 @@ export function FileFinder({ projectId, projectName, recent, onOpen, onClose }: 
       await createFile(projectId, item.path)
       if (mounted.current && currentProject.current === projectId) { onClose(); onOpen(item.path) }
     } catch (e: unknown) {
-      if (mounted.current && currentProject.current === projectId) setError(errorText(e))
+      if (mounted.current && currentProject.current === projectId) setError(errorMsg(e))
     } finally {
       creating.current = false
     }

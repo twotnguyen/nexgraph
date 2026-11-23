@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GitWorktree } from '@shared/api'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from '../layout/Picker'
@@ -42,7 +42,7 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
       const [worktrees, branches] = await Promise.all([api.worktrees(projectId), api.branches(projectId)])
       if (mounted.current) { setData({ worktrees, branches }); setLoadError(null) }
     } catch (error) {
-      if (mounted.current) setLoadError(errorText(error))
+      if (mounted.current) setLoadError(errorMsg(error))
     }
   }, [api, projectId])
 
@@ -59,7 +59,7 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
     try {
       await work()
     } catch (error) {
-      if (mounted.current) setActionError(errorText(error))
+      if (mounted.current) setActionError(errorMsg(error))
     } finally {
       busyRef.current = false
       if (mounted.current) setBusy(null)

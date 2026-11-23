@@ -49,7 +49,7 @@ import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
 import { listBookmarks } from '../state/bookmarks'
 import { navigationBack, navigationForward, recordNavigation, type NavigationEntry } from '../state/navigationHistory'
 import { startDiagnostics } from '../state/diagnostics'
-import { errorText } from '../state/errorText'
+import { errorMsg, errorText } from '../state/errorText'
 import { buildExcerpts, consumePendingMultiBuffer, getPendingMultiBuffer, requestMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi, tr } from '../strings'
@@ -82,8 +82,7 @@ const readRecentFiles = (projectId: string): string[] => {
 }
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
 type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour' | 'outline' | 'diagnostics'
-const messageOf = (e: unknown): string =>
-  e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
+const messageOf = (e: unknown): Message => errorMsg(e)
 
 /** Ảnh hưởng của một nút hiển thị bằng chính ChangesPanel (nút nguồn đứng ở mục "đã đổi"). */
 const impactAsChanges = (i: NodeImpact): Changes => ({
@@ -213,7 +212,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setFeedbackText((previous) => (msgId(previous) === id ? null : previous))
     })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
-      if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
+      if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: errorText(error) }))
     })
     return () => {
       current = false
@@ -500,7 +499,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Worktree mở như một dự án: project.open đăng ký thư mục, App chuyển màn hình; còn tệp chưa lưu thì hỏi trước.
   const [worktrees, setWorktrees] = useState(false)
   const openWorktree = onOpenProject && !hosted && ((path: string) => guardLeave(() => {
-    void window.nexgraph.project.open(path).then(onOpenProject, (e: unknown) => setFeedback(errorText(e)))
+    void window.nexgraph.project.open(path).then(onOpenProject, (e: unknown) => setFeedback(errorMsg(e)))
   })?.())
   const closeFiles = (paths: string[], force = false) => {
     const selected = orderedFiles.filter((item) => paths.includes(item.file))
@@ -895,7 +894,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setTaskHistory(rememberTask(pid, task, oneshot))
       queueTask({ task: resolved })
     } catch (e) {
-      if (taskProject.current === pid) setFeedback(errorText(e))
+      if (taskProject.current === pid) setFeedback(errorMsg(e))
     }
   }
   const rerunTask = async () => {
@@ -907,7 +906,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       const task = (await window.nexgraph.tasks?.list(project.project_id))?.find((item) => item.label === recent.label && item.command === recent.command)
       if (task) await runTask(task, false)
       else setTaskPicker(true)
-    } catch (e) { setFeedback(errorText(e)) }
+    } catch (e) { setFeedback(errorMsg(e)) }
   }
   useCommand('task.spawn', () => setTaskPicker(true), !hosted && !!window.nexgraph.tasks)
   useCommand('task.rerun', () => void rerunTask(), !hosted && !!window.nexgraph.tasks)
