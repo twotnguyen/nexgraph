@@ -64,6 +64,25 @@ describe('citations', () => {
     expect(code).toHaveBeenCalledWith('p1', 'flow app/service.py', 1, 2)
   })
 
+  it('M4: chặn trích dẫn vô nghĩa và giới hạn số đường dẫn thử cho mỗi trích dẫn', async () => {
+    // Dòng 0 không phải dòng của tệp nào; "/x.ts" là mảnh vụn của tiền tố lạ (uluç/x.ts), không phải đường dẫn dự án.
+    expect(parseCitations('file.ts:0')).toEqual([])
+    expect(parseCitations('uluç/x.ts:1-2')).toEqual([])
+    const code = vi.fn(async (_p: string, file: string, start: number, end: number) => {
+      if (file !== 'flow app/service.py') throw new EngineApiError(404, 'file_not_found', '')
+      return { file, start, end, text: 'x', language: null, stale: false }
+    })
+    // Bỏ dần từ đầu: "Theo nhu toi doc trong" là 5 từ trước đường dẫn, vẫn ra đúng tệp trong trần 6 lời gọi.
+    const found = await verifyCitations({ code } as unknown as EngineApi, 'p1', 'Theo nhu toi doc trong flow app/service.py:4-7')
+    expect(found).toEqual([{ raw: 'Theo nhu toi doc trong flow app/service.py:4-7', file: 'flow app/service.py', start: 4, end: 7, valid: true, reason: null }])
+    expect(code.mock.calls.length).toBe(6)
+    // Tiền tố dài hơn trần: dừng đúng 6 lời gọi, trả chip khoá (không false chip) thay vì thử vô hạn.
+    code.mockClear()
+    const long = await verifyCitations({ code } as unknown as EngineApi, 'p1', 'a b c d e f g h flow app/service.py:4-7')
+    expect(code).toHaveBeenCalledTimes(6)
+    expect(long).toEqual([expect.objectContaining({ valid: false, reason: 'file_not_found' })])
+  })
+
   it('kiểm chứng: hợp lệ, vượt cuối tệp, tệp không có', async () => {
     const code = vi.fn(async (_p: string, file: string, start: number, end: number) => {
       if (file === 'gone.ts') throw new EngineApiError(404, 'file_not_found', '')

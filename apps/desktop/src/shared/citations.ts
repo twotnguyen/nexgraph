@@ -56,10 +56,15 @@ function looksLikeFile(file: string): boolean {
 
 /**
  * `bare` (không ngoặc) phải là tệp trông có thật; loại `example.com:8080` (TLD, không có `/`).
+ * `start < 1` không phải dòng của tệp nào. Đường dẫn mở đầu bằng một dấu `/` rồi tới ký tự thường
+ * (`uluç/x.ts` → regex bắt từ `/x.ts`) không phải đường dẫn tương đối của dự án; còn `// xem utils.ts`
+ * là dấu chú thích nên vẫn để verifyCitations bỏ dần tiền tố.
  */
-function accept(file: string, bare: boolean): boolean {
+function accept(file: string, bare: boolean, start: number): boolean {
+  if (!Number.isInteger(start) || start < 1) return false
   if (!file || /^[.\\/]+$/.test(file)) return false
   if (!bare) return looksLikeFile(file) || file.includes('/')
+  if (/^[\\/](?![\\/ ])/.test(file)) return false
   if (!looksLikeFile(file)) return false
   return file.includes('/') || !TLD.test(file)
 }
@@ -76,7 +81,7 @@ function scan(re: RegExp, text: string, bare: boolean): ScannedCitation[] {
       file = file.slice(skip).trim()
     }
     const start = Number(m[2])
-    if (!accept(file, bare)) continue
+    if (!accept(file, bare, start)) continue
     out.push({ raw: m[0].slice(skip), file, start, end: m[3] ? Number(m[3]) : start, index: (m.index ?? 0) + skip })
   }
   return out
