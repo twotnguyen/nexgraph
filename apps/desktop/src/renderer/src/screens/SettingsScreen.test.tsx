@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { emptyGeminiStatus, installNexgraph } from '../test-utils'
 import type { NexGraphApi } from '@shared/api'
+import type { ModelInfo } from '@shared/agent-types'
 import { SettingsScreen } from './SettingsScreen'
 import { isStatusItemHidden, setStatusItemHidden } from '../state/layoutPrefs'
 import { STATUS_BAR_ITEMS } from '../state/statusBarRegistry'
@@ -231,20 +232,44 @@ describe('SettingsScreen', () => {
     act(() => emitNotice({ message: RESTORE_FAILED }))
     expect(await screen.findByText('Signed out but could not reload the saved API key. The key is still in the keychain; reopen the app to use it.')).toBeInTheDocument()
   })
+
+  it('main báo catalog model đổi sau khi lưu key → danh sách tự tải lại, listener huỷ khi unmount', async () => {
+    let catalog = [model('go-a')]
+    const { api } = installNexgraph({ auth: {
+      list: vi.fn(async () => [provider('opencode-go')]),
+      models: vi.fn(async () => catalog)
+    } })
+    const { emitModelsChanged } = installAuthSinks(api)
+    const { unmount } = render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('option', { name: 'go-a (opencode-go)' })).toBeInTheDocument()
+    catalog = [model('go-a'), model('go-b')]
+    act(() => emitModelsChanged({ providerId: 'opencode-go' }))
+    expect(await screen.findByRole('option', { name: 'go-b (opencode-go)' })).toBeInTheDocument()
+    expect(api.auth.models).toHaveBeenCalledTimes(2)
+    unmount()
+    act(() => emitModelsChanged({ providerId: 'opencode-go' }))
+    expect(api.auth.models).toHaveBeenCalledTimes(2)
+  })
 })
 
+const model = (id: string, provider = 'opencode-go'): ModelInfo =>
+  ({ provider, id, label: id, supportsImages: false, pricing: 'unknown', cost: { input: null, output: null } })
+
 /** Nối các sink onEvent/onPrompt/onNotice của stub auth trong installNexgraph để bắn sự kiện từ main. */
-function installAuthSinks(api: { auth: Pick<NexGraphApi['auth'], 'onEvent' | 'onPrompt' | 'onNotice'> }) {
+function installAuthSinks(api: { auth: Pick<NexGraphApi['auth'], 'onEvent' | 'onPrompt' | 'onNotice' | 'onModelsChanged'> }) {
   const eventSinks = new Set<(e: unknown) => void>()
   const promptSinks = new Set<(p: unknown) => void>()
   const noticeSinks = new Set<(n: unknown) => void>()
+  const modelsSinks = new Set<(e: unknown) => void>()
   const auth = api.auth
   ;(auth.onEvent as ReturnType<typeof vi.fn>).mockImplementation((cb: (e: unknown) => void) => { eventSinks.add(cb); return () => eventSinks.delete(cb) })
   ;(auth.onPrompt as ReturnType<typeof vi.fn>).mockImplementation((cb: (p: unknown) => void) => { promptSinks.add(cb); return () => promptSinks.delete(cb) })
   ;(auth.onNotice as ReturnType<typeof vi.fn>).mockImplementation((cb: (n: unknown) => void) => { noticeSinks.add(cb); return () => noticeSinks.delete(cb) })
+  ;(auth.onModelsChanged as ReturnType<typeof vi.fn>).mockImplementation((cb: (e: unknown) => void) => { modelsSinks.add(cb); return () => modelsSinks.delete(cb) })
   return {
     emitAuth: (e: unknown) => eventSinks.forEach((h) => h(e)),
     emitPrompt: (p: unknown) => promptSinks.forEach((h) => h(p)),
-    emitNotice: (n: unknown) => noticeSinks.forEach((h) => h(n))
+    emitNotice: (n: unknown) => noticeSinks.forEach((h) => h(n)),
+    emitModelsChanged: (e: unknown) => modelsSinks.forEach((h) => h(e))
   }
 }

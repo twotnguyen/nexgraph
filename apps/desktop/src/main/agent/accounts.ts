@@ -151,6 +151,8 @@ export type AccountDeps = {
   openExternal(url: string): void
   /** Sự kiện đăng nhập (auth_url, device_code…) gửi xuống renderer. */
   notify(event: AuthEventView): void
+  /** Catalog model đổi ở main (refresh nền sau khi lưu key): renderer tải lại danh sách. */
+  modelsChanged(providerId: string): void
   /** Câu hỏi đăng nhập hiện ở renderer; trả về chuỗi nhập, `null` khi renderer huỷ. */
   ask(prompt: AuthPromptView): Promise<string | null>
   /** Hook kiểm thử do lớp khởi tạo truyền vào; vắng ở bản đóng gói. */
@@ -489,8 +491,10 @@ export class AccountService {
    */
   private async refreshModelCatalog(providerId: string): Promise<void> {
     if (!CATALOG_REFRESH.has(providerId) || !this.modelRuntime.getProvider(providerId)?.refreshModels) return
-    await this.modelRuntime.refresh({ allowNetwork: true, providers: [providerId], signal: AbortSignal.timeout(6_000) })
-      .catch(() => undefined)
+    const result = await this.modelRuntime.refresh({ allowNetwork: true, providers: [providerId], signal: AbortSignal.timeout(6_000) })
+      .catch(() => null)
+    // Chỉ báo khi catalog thật sự đổi: renderer tải lại danh sách model (lưu key vẫn không chờ refresh).
+    if (result && !result.aborted && !result.errors.has(providerId)) this.deps.modelsChanged(providerId)
   }
 
   async removeApiKey(providerId: string): Promise<void> {

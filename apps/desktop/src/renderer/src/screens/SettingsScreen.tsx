@@ -132,6 +132,12 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   useEffect(() => { void load() }, [load])
 
   useEffect(() => {
+    // Catalog model đổi ở main (refresh nền sau khi lưu key): tải lại để bộ chọn thấy model mới
+    // mà không phải đóng/mở lại Cài đặt. Listener huỷ khi unmount.
+    return window.nexgraph.auth.onModelsChanged(() => { void load() })
+  }, [load])
+
+  useEffect(() => {
     // Sự kiện đăng nhập gửi cho cả cửa sổ: bỏ qua lượt do hộp Kết nối nhanh khởi động.
     const offEvent = window.nexgraph.auth.onEvent((e) => loginPending.current && setLoginEvent(e.type === 'progress' ? null : e))
     const offPrompt = window.nexgraph.auth.onPrompt((p) => {

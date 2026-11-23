@@ -361,6 +361,8 @@ export interface NexGraphApi {
     onPrompt(cb: (p: AuthPromptView) => void): () => void
     /** Thông báo không thuộc luồng đăng nhập (ví dụ Đăng xuất không nạp lại được API key). */
     onNotice(cb: (n: { message: string }) => void): () => void
+    /** Catalog model đổi ở main (refresh nền xong): renderer tải lại danh sách model. */
+    onModelsChanged(cb: (e: { providerId: string }) => void): () => void
   }
   /** Phiên agent lưu theo dự án, tài khoản và đích nhận dữ liệu. */
   agent: {

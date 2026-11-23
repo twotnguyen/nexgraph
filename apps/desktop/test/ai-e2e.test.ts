@@ -44,7 +44,7 @@ run('AI end-to-end (engine thật + LLM giả)', () => {
     const accounts = await AccountService.create({
       dataDir: dir, prefsFile: join(dir, 'p.json'),
       secrets: new SecretStore(join(dir, 'k.json'), { available: () => true, encrypt: (s) => s, decrypt: (s) => s }),
-      openExternal: () => {}, notify: () => {}, ask: async () => null
+      openExternal: () => {}, notify: () => {}, modelsChanged: () => {}, ask: async () => null
     })
     await accounts.saveCustomProvider({ id: 'fake', label: 'Fake', baseUrl: `http://127.0.0.1:${llm.address().port}/v1`, model: 'fake' })
     accounts.selectModel('fake', 'fake')

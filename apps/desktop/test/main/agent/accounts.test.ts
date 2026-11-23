@@ -29,7 +29,7 @@ afterEach(() => {
 })
 
 const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox;
-  devHooks?: { failRestoreKey?: boolean } } = {}) => {
+  devHooks?: { failRestoreKey?: boolean }; modelsChanged?: (providerId: string) => void } = {}) => {
   const prefs = join(base, 'prefs.json')
   const svc = await AccountService.create({
     dataDir: base, prefsFile: prefs,
@@ -37,7 +37,8 @@ const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) =>
     openExternal: (url) => opens.push(url),
     notify: over.notify ?? (() => {}),
     ask: over.ask ?? (async () => 'answer'),
-    ...(over.devHooks ? { devHooks: over.devHooks } : {})
+    ...(over.devHooks ? { devHooks: over.devHooks } : {}),
+    modelsChanged: over.modelsChanged ?? (() => {})
   })
   return { svc, prefs }
 }
@@ -647,6 +648,25 @@ describe('AccountService', () => {
       release()
       await vi.waitFor(async () => expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-nen')).toBe(true))
       expect(fetchSpy).toHaveBeenCalled()
+    })
+
+    it('refresh catalog nền xong thì báo renderer tải lại danh sách model', async () => {
+      const changed = vi.fn()
+      const { svc } = await make({ modelsChanged: changed })
+      catalogHit()
+      await svc.setApiKey('opencode-go', 'oc_sk_test_bao_catalog')
+      await vi.waitFor(() => expect(changed).toHaveBeenCalledWith('opencode-go'))
+      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-moi')).toBe(true)
+    })
+
+    it('refresh catalog lỗi mạng không báo đổi model', async () => {
+      const changed = vi.fn()
+      const { svc } = await make({ modelsChanged: changed })
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+      await svc.setApiKey('opencode-go', 'oc_sk_test_loi_catalog')
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(changed).not.toHaveBeenCalled()
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(true)
     })
   })
 

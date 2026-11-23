@@ -162,6 +162,7 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHoo
       // gửi kênh riêng để Cài đặt hiện được dù loginPending=false.
       if (event.type === 'info') win?.webContents.send('auth:notice', { message: event.message })
     },
+    modelsChanged: (providerId: string) => getWindow()?.webContents.send('auth:models-changed', { providerId }),
     ask: (view: AuthPromptView) => new Promise<string | null>((resolve) => {
       pendingPrompts.set(view.id, resolve)
       getWindow()?.webContents.send('auth:login-prompt', view)
