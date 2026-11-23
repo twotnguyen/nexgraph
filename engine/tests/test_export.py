@@ -172,3 +172,13 @@ def test_directory_export_twice_keeps_both_dirs(index_project, copy_fixture, tmp
     second = Path(export_graph(store, "wiki", Scope(), tmp_path, "app").files[0])
     assert first != second and first.is_dir() and second.is_dir()
     assert any(first.iterdir()) and any(second.iterdir())
+
+
+def test_failed_export_leaves_no_placeholder_file(index_project, copy_fixture, tmp_path, monkeypatch):
+    from nexgraph_engine.export import run as run_mod
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    monkeypatch.setattr(run_mod, "_write", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("hỏng")))
+    with pytest.raises(RuntimeError):
+        run_mod.export_graph(store, "json", Scope(), tmp_path, "py_mini app")
+    assert [p.name for p in tmp_path.iterdir() if p.suffix == ".json" or p.name.startswith(".")] == []

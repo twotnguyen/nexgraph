@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, get_args
@@ -35,36 +36,38 @@ def safe_name(name: str) -> str:
     return cleaned or "nexgraph"
 
 
-def _reserve(candidate: Path, directory: bool) -> bool:
-    """Giữ chỗ nguyên tử để hai lần xuất song song không chọn trùng tên."""
-    try:
-        if directory:
-            candidate.mkdir()
-        else:
-            os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
-        return True
-    except FileExistsError:
-        return False
-
-
-def unique_target(target: Path, *, directory: bool = False) -> Path:
-    """Tên đích chưa tồn tại: thêm `-2`, `-3`… thay vì ghi đè tệp người dùng đã có (GFY-09)."""
-    stem, suffix = (target.name, "") if directory else (target.stem, target.suffix)
+def unique_dir(target: Path) -> Path:
+    """Thư mục đích chưa tồn tại: `mkdir` nguyên tử, thêm `-2`, `-3`… khi đã có (GFY-09)."""
     for index in range(1, 1001):
-        candidate = target if index == 1 else target.with_name(f"{stem}-{index}{suffix}")
-        if _reserve(candidate, directory):
+        candidate = target if index == 1 else target.with_name(f"{target.name}-{index}")
+        try:
+            candidate.mkdir()
             return candidate
+        except FileExistsError:
+            continue
     raise OSError(f"Không tìm được tên trống cho {target.name}")
 
 
-def _discard(target: Path, directory: bool) -> None:
-    try:
-        if directory:
-            shutil.rmtree(target, ignore_errors=True)
-        else:
-            target.unlink(missing_ok=True)
-    except OSError:
-        pass
+def write_new_file(base: Path, writer) -> Path:
+    """Ghi ra tên tạm rồi `link` sang tên chưa tồn tại.
+
+    Không đè tệp cũ và không để lại tệp 0 byte nếu writer hỏng giữa chừng (GFY-09 minor 5).
+    """
+    stem, suffix = base.stem, base.suffix
+    for index in range(1, 1001):
+        candidate = base if index == 1 else base.with_name(f"{stem}-{index}{suffix}")
+        if candidate.exists():
+            continue
+        tmp = base.with_name(f".{base.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            writer(tmp)
+            os.link(tmp, candidate)  # nguyên tử, FileExistsError nếu ai đó vừa tạo
+            return candidate
+        except FileExistsError:
+            continue
+        finally:
+            tmp.unlink(missing_ok=True)
+    raise OSError(f"Không tìm được tên trống cho {base.name}")
 
 
 def validate_push_uri(uri: str) -> str:
@@ -80,16 +83,25 @@ def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Pa
     if fmt not in FORMATS:
         raise ValueError(f"Định dạng không hỗ trợ: {fmt}")
     directory = fmt in ("obsidian", "wiki")
-    # Tệp/thư mục đã tồn tại thì chọn tên mới, không ghi đè lặng lẽ (GFY-09).
-    target = unique_target(Path(out_dir) / _TARGETS[fmt].format(p=safe_name(project_name)), directory=directory)
-    try:
-        return _write(store, fmt, scope, target, project_name, gx)
-    except BaseException:
-        _discard(target, directory)  # không để lại tệp giữ chỗ rỗng khi lần xuất hỏng
-        raise
+    base = Path(out_dir) / _TARGETS[fmt].format(p=safe_name(project_name))
+    if directory:
+        target = unique_dir(base)
+        try:
+            return ExportResult([str(target)], _write(store, fmt, scope, target, project_name, gx))
+        except BaseException:
+            shutil.rmtree(target, ignore_errors=True)  # không để lại thư mục dở dang
+            raise
+    # Tệp đã tồn tại thì chọn tên mới; ghi tạm rồi link nên không đè và không để lại tệp 0 byte.
+    holder: dict[str, bool] = {}
+
+    def writer(tmp: Path) -> None:
+        holder["truncated"] = _write(store, fmt, scope, tmp, project_name, gx)
+
+    target = write_new_file(base, writer)
+    return ExportResult([str(target)], holder["truncated"])
 
 
-def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, project_name: str, gx) -> ExportResult:
+def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, project_name: str, gx) -> bool:
     bg = build_nx(store, scope)
     if fmt == "markdown":
         from nexgraph_engine.report.build import render_report_markdown
@@ -122,7 +134,7 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
         gx.to_cypher(bg.G, str(target))
     elif fmt == "json":
         write_graph_json(bg, target)
-    return ExportResult([str(target)], bg.truncated)
+    return bg.truncated
 
 
 def push_graph(store: GraphStore, target: Literal["neo4j", "falkordb"], uri: str, user: str | None,
