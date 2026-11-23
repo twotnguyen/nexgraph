@@ -58,13 +58,20 @@ test('mở dự án → index → tìm → Kiến trúc → Luồng → mở t�
   const projectPath = realpathSync(projectDir)
   for (const [name, text] of Object.entries(FIXTURE)) writeFileSync(join(projectDir, name), text)
 
+  // `NEXGRAPH_E2E_DATA_DIR` cho phép dùng lại một thư mục giữa các lượt: dọn sạch đầu mỗi lượt để lượt sau
+  // giống hệt lượt đầu. Không dọn thì dự án cũ còn trong kho engine, app mở ở “Chào mừng trở lại NexGraph”
+  // và assert heading dưới đỏ ngay lượt thứ 2.
+  const engineDataDir = process.env.NEXGRAPH_E2E_DATA_DIR ?? join(root, 'engine-data')
+  rmSync(engineDataDir, { recursive: true, force: true, maxRetries: 3 })
+  mkdirSync(engineDataDir, { recursive: true })
+
   const app = await electron.launch({
     executablePath: electronPath,
     args: [APP_DIR],
     timeout: 90_000,
     env: {
       ...cleanEnv(),
-      NEXGRAPH_DATA_DIR: process.env.NEXGRAPH_E2E_DATA_DIR ?? join(root, 'engine-data'),
+      NEXGRAPH_DATA_DIR: engineDataDir,
       NEXGRAPH_USER_DATA_DIR: join(root, 'user-data')
     }
   })
