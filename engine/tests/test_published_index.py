@@ -170,3 +170,43 @@ time.sleep(30)
     assert api.index(pid)["state"] == "done"
     assert api.get(f"/v1/projects/{pid}/stats").json()["files"] == 5
     assert not list((root / ".nexgraph").glob(".graph.db.index-stage*"))
+
+
+def test_cancel_inside_structure_keeps_published_graph(api, copy_fixture):
+    """ENG-03: huỷ giữa lúc dựng cấu trúc không được để lại đồ thị trắng/dở trên CSDL thật."""
+    root = copy_fixture("flow_app")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    previous = api.open(root)["last_indexed_at"]
+    db_path = root / ".nexgraph" / "graph.db"
+    with closing(open_graph_db(db_path, read_only=True)) as snapshot:
+        baseline = graph_state(GraphStore(snapshot))
+    (root / "cancel_probe.py").write_text("def cancel_probe():\n    return 1\n", encoding="utf-8")
+
+    reached = threading.Event()
+
+    class CancelledMidStructure(Indexer):
+        def _structure(self, run_id, files):
+            super()._structure(run_id, files)  # dữ liệu dở đã ghi (và commit) vào bản đang ghi
+            reached.set()
+            while not self.cancel.is_set():
+                time.sleep(0.01)
+            return False
+
+    api.app.state.services.jobs._indexer_cls = CancelledMidStructure
+    start = api.post(f"/v1/projects/{pid}/index")
+    assert start.status_code == 202
+    job_id = start.json()["job_id"]
+    assert reached.wait(15), "Indexer did not reach the structure phase"
+    assert api.delete(f"/v1/jobs/{job_id}").json()["cancelled"] is True
+    job = wait_job(api, job_id)
+    assert job["state"] == "cancelled", job
+
+    assert api.open(root)["last_indexed_at"] == previous
+    assert api.get(f"/v1/projects/{pid}/stats").json()["files"] == 4
+    assert api.get(f"/v1/projects/{pid}/search", params={"q": "cancel_probe"}).json() == []
+    with closing(open_graph_db(db_path, read_only=True)) as conn:
+        store = GraphStore(conn)
+        assert store.has_published_graph()
+        assert graph_state(store) == baseline
+
