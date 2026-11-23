@@ -298,6 +298,40 @@ def test_callflow_export_forwards_lang(copy_fixture, index_project, tmp_path, mo
     assert seen["lang"] == "en"
 
 
+def test_callflow_html_in_vietnamese(copy_fixture, index_project, tmp_path):
+    """MIN-47-eng: `lang=vi` phải dịch nội dung HTML callflow (pick_text vendored chỉ có zh/en)."""
+    store, _, _ = index_project(copy_fixture("py_mini"))
+
+    def exported(lang: str) -> str:
+        r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "py_mini app", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    vi, en = exported("vi"), exported("en")
+    assert '<html lang="vi">' in vi and '<html lang="en">' in en
+    # Tiêu đề + chrome do graphify sinh cứng trong template
+    assert "Complete Call Flow &amp; Architecture Documentation" in en
+    assert "Complete Call Flow &amp; Architecture Documentation" not in vi
+    assert "— Tài liệu luồng gọi &amp; kiến trúc đầy đủ" in vi
+    assert "Generated from graphify knowledge graph: 11 nodes" in en
+    assert "Sinh từ đồ thị tri thức graphify: 11 nút" in vi
+    # Các khối chính
+    assert "Call Details" in en and "Chi tiết lời gọi" in vi
+    assert "Architecture Layers" in en and "Các tầng kiến trúc" in vi
+    assert "Architecture Overview" in en and "Tổng quan kiến trúc" in vi
+    assert "Project Statistics" in en and "Thống kê dự án" in vi
+    assert "<th>Tầng</th><th>Nút</th><th>Cộng đồng</th>" in vi
+    # Câu do pick_text sinh (nhãn tag, mô tả nút, ghi chú)
+    assert ">Function<" in en and ">Hàm<" in vi
+    assert ">Module<" in en and ">Mô-đun<" in vi
+    assert "Module file in main.py." in en and "Tệp mô-đun trong main.py." in vi
+    assert "External entry / no inbound edge" in en and "Điểm vào ngoài / không có cạnh vào" in vi
+    assert "groups implementation around" in en and "gom phần triển khai quanh" in vi
+    assert "This section comes from graphify community clustering." in en
+    assert "Phần này do graphify gom cụm cộng đồng sinh ra." in vi
+    # EN như cũ: không lẫn tiếng Việt (fixture py_mini là mã tiếng Anh)
+    assert not any(ch in en for ch in "ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ")
+
+
 def test_export_route_accepts_lang(api, copy_fixture, tmp_path):
     pid = _indexed(api, copy_fixture)
     ok = api.post(f"/v1/projects/{pid}/export",
