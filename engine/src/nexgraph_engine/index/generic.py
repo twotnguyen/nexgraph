@@ -532,7 +532,9 @@ class _ShadowScopes:
                     if not in_function and line >= bound:  # thân lớp không rò vào method
                         return True
                 else:
-                    return True  # tên cục bộ của hàm che mọi lời gọi trong hàm đó
+                    # Cục bộ/đối số của hàm chỉ che từ lúc gán (trước lời gọi) trở đi.
+                    if line >= bound:
+                        return True
             if scope.kind == "function":
                 in_function = True
             scope = scope.parent
@@ -546,19 +548,51 @@ class _ShadowScopes:
         return best
 
 
+def _alias_passed_params(tree: ast.AST, aliases: dict[str, str]) -> set[tuple[int, str]]:
+    """(dòng def, tên tham số) được truyền chính bí danh mô-đun ở một lời gọi trong tệp.
+
+    `def _write(gx)` rồi `_write(..., gx)` với `gx` là bí danh mô-đun: tham số đó không che
+    lời gọi `gx.to_*()` bên trong `_write` (MIN-41b N1). Tham số không được truyền bí danh
+    vẫn che như cũ (`test_param_shadow`).
+    """
+    defs: dict[str, list[ast.FunctionDef | ast.AsyncFunctionDef]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            defs.setdefault(node.name, []).append(node)
+    out: set[tuple[int, str]] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+        if not name:
+            continue
+        for fn in defs.get(name, ()):
+            params = [a.arg for a in (*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs)]
+            for index, arg in enumerate(node.args):
+                if index < len(params) and isinstance(arg, ast.Name) and arg.id in aliases:
+                    out.add((fn.lineno, params[index]))
+            for keyword in node.keywords:
+                if keyword.arg in params and isinstance(keyword.value, ast.Name) and keyword.value.id in aliases:
+                    out.add((fn.lineno, keyword.arg))
+    return out
+
+
 def _py_shadow_scopes(source: bytes) -> _ShadowScopes | None:
     """Dựng bản đồ tên bị che theo scope cho một tệp Python (None nếu không đọc được cú pháp)."""
     try:
         tree = ast.parse(source)
     except (SyntaxError, ValueError):
         return None
+    aliases = _py_module_aliases(source)
+    alias_params = _alias_passed_params(tree, aliases)
     last = max((getattr(node, "end_lineno", None) or getattr(node, "lineno", 1) for node in ast.walk(tree)), default=1)
     module = _Scope(1, last, "module", None)
     scopes = [module]
     nested = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda,
               ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
 
-    def visit(node, scope: _Scope) -> None:
+    def visit(node, scope: _Scope, def_line: int | None = None) -> None:
         for child in ast.iter_child_nodes(node):
             if isinstance(child, nested):
                 kind = "class" if isinstance(child, ast.ClassDef) else "function"
@@ -568,21 +602,23 @@ def _py_shadow_scopes(source: bytes) -> _ShadowScopes | None:
                 scopes.append(inner)
                 if not isinstance(child, (ast.Lambda, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)):
                     scope.bind(child.name, line)  # def/class đặt tên vào scope ngoài
-                visit(child, inner)
+                visit(child, inner, line)
                 continue
             elif isinstance(child, ast.Name) and isinstance(child.ctx, (ast.Store, ast.Del)):
                 scope.bind(child.id, child.lineno)
             elif isinstance(child, ast.arg):
-                scope.bind(child.arg, getattr(child, "lineno", scope.start))
+                # Tham số nhận chính bí danh mô-đun ở lời gọi trong tệp thì không che bí danh đó.
+                if (def_line, child.arg) not in alias_params:
+                    scope.bind(child.arg, getattr(child, "lineno", scope.start))
             elif isinstance(child, ast.ExceptHandler) and child.name:
                 scope.bind(child.name, child.lineno)
             elif isinstance(child, (ast.Global, ast.Nonlocal)):
                 for name in child.names:  # `global x` rồi gán: tên nằm ở module
                     module.bind(name, child.lineno)
-            visit(child, scope)
+            visit(child, scope, def_line)
 
     visit(tree, module)
-    return _ShadowScopes(scopes, _py_module_aliases(source))
+    return _ShadowScopes(scopes, aliases)
 
 
 
