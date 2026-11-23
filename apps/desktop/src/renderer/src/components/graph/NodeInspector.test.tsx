@@ -42,6 +42,15 @@ describe('NodeInspector', () => {
     expect(await screen.findByText(/chạy \[REDACTED\]/)).toBeInTheDocument()
   })
 
+  it('mục bị cắt hiện dòng nhỏ "Đã cắt bớt — mở tệp để xem đầy đủ" (UI-TRUNC)', async () => {
+    const doc = gnode('docs/guide.md::Setup#document', 'Setup', { kind: 'document', file: 'docs/guide.md', language: 'markdown' })
+    const section = vi.fn(async () => ({ node: doc, file: 'docs/guide.md', start: 5, end: 9, text: '## Setup', truncated: true, stale: false }))
+    installNexgraph({ graph: { explain: vi.fn(async () => explain({ node: doc, groups: [], degree: 0, community: null })), section } })
+    render(<NodeInspector node={doc} projectId="p1" />)
+    await userEvent.click(screen.getByRole('button', { name: 'Đọc mục' }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã cắt bớt — mở tệp để xem đầy đủ')
+  })
+
   it('node không phải document không có nút Đọc mục', () => {
     installNexgraph({ graph: { explain: vi.fn(async () => explain()) } })
     render(<NodeInspector node={target} projectId="p1" />)

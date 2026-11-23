@@ -419,7 +419,8 @@ const viStrings = {
   },
   code: {
     open: 'Mở mã',
-    viewNode: 'Xem nút'
+    viewNode: 'Xem nút',
+    truncated: 'Đã cắt bớt — mở tệp để xem đầy đủ'
   },
   editor: {
     close: 'Đóng',
@@ -513,7 +514,7 @@ const viStrings = {
       `+${files.reduce((n, f) => n + f.count, 0)} trong ${files.length} tệp: ${files.map((f) => `${f.file ?? '(ngoài tệp)'} (${f.count})`).join(', ')}`,
     readSection: 'Đọc mục',
     sectionStale: 'Tệp đã đổi sau lần index: nội dung có thể lệch dòng.',
-    sectionTruncated: (file: string, start: number, end: number) => `Đã cắt ở 8.000 ký tự. Mở ${file} dòng ${start}–${end} để đọc hết.`
+    sectionTruncated: 'Đã cắt bớt — mở tệp để xem đầy đủ'
   },
   graph: {
     backToRoot: 'Về gốc',
@@ -1120,7 +1121,8 @@ const enStrings: typeof viStrings = {
   },
   code: {
     open: 'Open code',
-    viewNode: 'View node'
+    viewNode: 'View node',
+    truncated: 'Truncated — open the file to see it in full'
   },
   editor: {
     close: 'Close',
@@ -1217,7 +1219,7 @@ const enStrings: typeof viStrings = {
       `+${files.reduce((n, f) => n + f.count, 0)} in ${files.length} ${plural(files.length, 'file', 'files')}: ${files.map((f) => `${f.file ?? '(outside file)'} (${f.count})`).join(', ')}`,
     readSection: 'Read section',
     sectionStale: 'The file changed after indexing: line numbers may be off.',
-    sectionTruncated: (file: string, start: number, end: number) => `Truncated at 8,000 characters. Open ${file} lines ${start}–${end} to read the rest.`
+    sectionTruncated: 'Truncated — open the file to see it in full'
   },
   graph: {
     backToRoot: 'Back to root',
