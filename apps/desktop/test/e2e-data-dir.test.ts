@@ -147,7 +147,9 @@ describe('không bao giờ xoá chính thư mục tạm, home hay gốc ổ', ()
   })
 
   it.each(['/tmp', tmpdir(), homedir()])('từ chối prepareDataDir(%s) và không xoá gì', async (dir) => {
+    const existed = existsSync(dir)
     await expect(prepareDataDir(dir)).rejects.toThrow(/Từ chối xoá/)
-    expect(existsSync(dir)).toBe(true)
+    // Windows không có `/tmp`: điều cần kiểm là không xoá và cũng không tạo mới thư mục bị từ chối.
+    expect(existsSync(dir)).toBe(existed)
   })
 })
