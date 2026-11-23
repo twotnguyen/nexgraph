@@ -136,6 +136,36 @@ describe('SettingsScreen', () => {
     expect(api.auth.selectModel).toHaveBeenCalledWith('smoke', 'fake')
   })
 
+  it('ô Context window tuỳ chọn: nhập số thì gửi kèm, để trống thì không gửi', async () => {
+    const { api } = installNexgraph()
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.type(await screen.findByLabelText('ID'), 'ctx')
+    await userEvent.type(screen.getByLabelText('Tên hiển thị'), 'Ctx local')
+    await userEvent.type(screen.getByLabelText('Base URL'), 'http://127.0.0.1:9/v1')
+    await userEvent.type(screen.getByLabelText('Tên model'), 'fake')
+    await userEvent.type(screen.getByLabelText('Context window (token)'), '20000')
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu nhà cung cấp' }))
+    expect(api.auth.saveCustom).toHaveBeenCalledWith({ id: 'ctx', label: 'Ctx local', baseUrl: 'http://127.0.0.1:9/v1', model: 'fake', contextWindow: 20000 }, undefined)
+  })
+
+  it('Context window không hợp lệ: báo lỗi, khoá nút Lưu, không gọi IPC', async () => {
+    const { api } = installNexgraph()
+    render(<SettingsScreen onBack={() => {}} />)
+    await userEvent.type(await screen.findByLabelText('ID'), 'bad')
+    await userEvent.type(screen.getByLabelText('Tên hiển thị'), 'Bad')
+    await userEvent.type(screen.getByLabelText('Base URL'), 'http://127.0.0.1:9/v1')
+    await userEvent.type(screen.getByLabelText('Tên model'), 'fake')
+    const field = screen.getByLabelText('Context window (token)')
+    await userEvent.type(field, '4096.5')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Context window phải là số nguyên dương')
+    expect(screen.getByRole('button', { name: 'Lưu nhà cung cấp' })).toBeDisabled()
+    await userEvent.clear(field)
+    await userEvent.type(field, '2000')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lưu nhà cung cấp' })).toBeEnabled()
+    expect(api.auth.saveCustom).not.toHaveBeenCalled()
+  })
+
   it('bỏ nháp key khi chọn một nhà cung cấp khác', async () => {
     const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('anthropic'), provider('openai')]) } })
     render(<SettingsScreen onBack={() => {}} />)

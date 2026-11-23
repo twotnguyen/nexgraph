@@ -14,6 +14,15 @@ describe('vi.path.found', () => {
 })
 
 describe('i18n', () => {
+  it('nhãn Context window của nhà cung cấp tuỳ chỉnh có bản tiếng Anh', () => {
+    setLocale('vi')
+    expect(t.accounts.customContext).toBe('Context window (token)')
+    expect(t.accounts.customContextInvalid).toMatch(/số nguyên dương/)
+    setLocale('en')
+    expect(t.accounts.customContext).toBe('Context window (tokens)')
+    expect(t.accounts.customContextInvalid).toMatch(/positive integer/)
+  })
+
   it('đổi dictionary ngay khi đổi locale', () => {
     setLocale('vi')
     expect(t.accounts.title).toBe('Tài khoản AI')

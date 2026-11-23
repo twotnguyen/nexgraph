@@ -42,6 +42,26 @@ export class AgentError extends Error {
 type Model = Parameters<AgentSession['setModel']>[0]
 // getContextUsage tùy chọn: phiên giả trong test không có; phiên Pi thật luôn có.
 export type PiSession = Pick<AgentSession, 'subscribe' | 'prompt' | 'abort' | 'dispose' | 'setActiveToolsByName' | 'getActiveToolNames' | 'setModel' | 'model' | 'messages'> & Partial<Pick<AgentSession, 'getContextUsage'>>
+
+/**
+ * Sàn đầu ra mỗi lượt gọi model. SDK kẹp `maxTokens` theo cửa sổ ngữ cảnh còn trống và có thể trả 1;
+ * provider thật (OpenAI, vLLM, OpenRouter…) từ chối `max_output_tokens < 16`, nên khi không đủ chỗ
+ * phải báo lỗi rõ ràng thay vì gửi một request chắc chắn hỏng.
+ */
+export const MIN_OUTPUT_TOKENS = 1024
+export const CONTEXT_WINDOW_MESSAGE = 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi.'
+/** Mã/câu lỗi do chính app phát hiện trước khi gửi (không phải chuỗi thô của SDK). */
+export type ProviderFailure = { code: string; message: string; detail?: string }
+
+/** Trường số token đầu ra trong payload đã dựng của từng API (OpenAI dùng `max_completion_tokens`). */
+export const outputTokensOf = (payload: unknown): number | undefined => {
+  if (!payload || typeof payload !== 'object') return undefined
+  for (const field of ['max_completion_tokens', 'max_tokens', 'max_output_tokens'] as const) {
+    const value = (payload as Record<string, unknown>)[field]
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+  }
+  return undefined
+}
 export type SessionSpec = {
   cwd: string
   agentDir: string
@@ -52,6 +72,8 @@ export type SessionSpec = {
   sessionManager?: SessionManager
   beforeModelTurn?(): void
   remainingTokens?(): number
+  /** Lỗi do app phát hiện trước khi gửi (cửa sổ ngữ cảnh, HTTP 4xx): main biết mã chính xác. */
+  onProviderFailure?(failure: ProviderFailure): void
   assertDispatch(model: Model, resolvedEndpoint?: boolean): void
   assertRequest(url: URL): void
 }
@@ -117,12 +139,18 @@ export async function createPiSession(spec: SessionSpec): Promise<AgentSession> 
     }
     return stream(model, context, {
       ...options,
-      ...(spec.remainingTokens ? { maxTokens: Math.min(options?.maxTokens ?? model.maxTokens, Math.max(1, spec.remainingTokens())) } : {}),
+      ...(spec.remainingTokens ? { maxTokens: Math.min(options?.maxTokens ?? model.maxTokens, Math.max(MIN_OUTPUT_TOKENS, spec.remainingTokens())) } : {}),
       ...(GUARDED_HTTP_APIS.has(model.api) ? { fetch } : {}),
       ...(model.api === 'openai-codex-responses' ? { transport: 'sse' as const } : {}),
       onPayload: (payload, requestModel) => {
         // SDK có thể đổi endpoint theo OAuth sau khi nhận model. Kiểm tra model thật ngay trước khi gửi payload.
         spec.assertDispatch(requestModel, true)
+        // SDK tự kẹp maxTokens theo cửa sổ ngữ cảnh (có thể còn 1): chặn trước khi gửi thay vì để provider 400.
+        const capped = outputTokensOf(payload)
+        if (capped !== undefined && capped < MIN_OUTPUT_TOKENS) {
+          spec.onProviderFailure?.({ code: 'ai_context_window', message: CONTEXT_WINDOW_MESSAGE })
+          throw new AgentError('ai_context_window', CONTEXT_WINDOW_MESSAGE)
+        }
         return options?.onPayload?.(payload, requestModel)
       }
     })
@@ -163,6 +191,8 @@ type Entry = {
   context: AgentContextUsage | null
   /** Phiên Pi đã tạo xong (entry.session còn đang chờ thì chưa có). */
   live?: PiSession
+  /** Lỗi provider do app phát hiện ở lượt đang chạy (cửa sổ ngữ cảnh, HTTP 4xx) — chính xác hơn chuỗi thô của SDK. */
+  providerFailure?: ProviderFailure
   failed?: boolean
 }
 
@@ -617,26 +647,29 @@ export class AgentService {
 
   private async run(projectId: string, entry: Entry, model: Model, text: string, active: () => boolean, images: NonNullable<AgentPromptOptions['images']>): Promise<AgentEvent> {
     const closed = () => !active() || this.entries.get(projectId) !== entry
+    /** Lỗi app đã phát hiện ở lượt này thắng chuỗi thô của SDK (SDK bọc 4xx thành "Connection error."). */
+    const failure = (): AgentEvent | null => entry.providerFailure ? { type: 'error', ...entry.providerFailure } : null
     try {
       const session = await entry.session
       if (closed()) return CANCELLED
       if (!entry.isCurrent()) return PROVIDER_CHANGED
       if (session.model?.provider !== model.provider || session.model?.id !== model.id) await session.setModel(model)
       this.assertTaskCurrent(projectId, entry)
+      entry.providerFailure = undefined
       await session.prompt(text, { expandPromptTemplates: false, ...(images.length ? { images: images.map(({ mimeType, data }) => ({ type: 'image' as const, mimeType, data })) } : {}) } as Parameters<PiSession['prompt']>[1])
       if (closed()) return CANCELLED
       if (entry.limitError) return { type: 'error', code: 'agent_limit', message: entry.limitError }
       if (entry.dispatchBlocked || !entry.isCurrent()) return PROVIDER_CHANGED
       const last = session.messages.filter((message) => message.role === 'assistant').at(-1) as { stopReason?: string; errorMessage?: string } | undefined
       if (last?.stopReason === 'aborted') return CANCELLED
-      if (last?.stopReason === 'error') return providerError(last.errorMessage ?? '')
+      if (last?.stopReason === 'error') return failure() ?? providerError(last.errorMessage ?? '')
       const citations = await verifyCitations(this.deps.api, projectId, entry.text)
       return closed() ? CANCELLED : { type: 'done', text: entry.text, citations }
     } catch (error) {
       if (closed()) return CANCELLED
       if (entry.limitError) return { type: 'error', code: 'agent_limit', message: entry.limitError }
       if (entry.dispatchBlocked || !entry.isCurrent()) return PROVIDER_CHANGED
-      return providerError(error instanceof Error ? error.message : String(error))
+      return failure() ?? providerError(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -779,6 +812,7 @@ export class AgentService {
         const used = entry.taskUsage.inputTokens + entry.taskUsage.outputTokens + entry.taskUsage.cacheReadTokens + entry.taskUsage.cacheWriteTokens
         return Math.max(0, (entry.task?.limits.maxTokens ?? DEFAULT_RUN_LIMITS.maxTokens) - used)
       },
+      onProviderFailure: (failure) => { entry.providerFailure = failure },
       assertDispatch: (requestModel, resolvedEndpoint) => {
         this.assertTaskCurrent(projectId, entry)
         if (!entry.isCurrent() || requestModel.provider !== entry.target.provider ||

@@ -161,14 +161,21 @@ export type AccountDeps = {
   devHooks?: AccountDevHooks
 }
 
+/** Mặc định cho provider OpenAI-compatible chưa khai báo: cửa sổ 128k (đủ cho system prompt + schema tool của NexGraph),
+ *  đầu ra 4096. Trước đây 4096/1024 khiến SDK kẹp `max_completion_tokens` còn 1 và mọi lượt chat bị provider từ chối. */
+export const CUSTOM_CONTEXT_WINDOW = 128_000
+export const CUSTOM_MAX_TOKENS = 4096
 export const CUSTOM_MODEL_SPEC = (id: string, metadata?: CustomProvider) => ({
   id, name: id, reasoning: false, input: ['text'] as ('text' | 'image')[],
   // Pi yêu cầu số cho chi phí và giới hạn. View giữ null/undefined khi người dùng chưa xác nhận metadata.
   cost: { input: metadata?.cost?.input ?? 0, output: metadata?.cost?.output ?? 0, cacheRead: 0, cacheWrite: 0 },
-  contextWindow: metadata?.contextWindow ?? 4096, maxTokens: metadata?.maxTokens ?? 1024
+  contextWindow: metadata?.contextWindow ?? CUSTOM_CONTEXT_WINDOW, maxTokens: metadata?.maxTokens ?? CUSTOM_MAX_TOKENS
 })
 
 const OLLAMA_ID = 'ollama-local'
+/** Câu thử kết nối chỉ có 1 message + 1 tool: cửa sổ 32k là đủ, không phụ thuộc context window người dùng khai. */
+const PROBE_CONTEXT_WINDOW = 32_768
+const PROBE_MAX_TOKENS = 256
 const OLLAMA_DEFAULT = 'http://127.0.0.1:11434/v1'
 const BLOCKED_OAUTH = new Set(['anthropic'])
 /**
@@ -201,6 +208,36 @@ async function ollamaRequest(baseUrl: string, path: string, body?: object): Prom
   const value: unknown = JSON.parse(text)
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw badUrl('Ollama trả về dữ liệu không hợp lệ')
   return value as Record<string, unknown>
+}
+
+/**
+ * `context_length` từ `GET {baseUrl}/models` (OpenRouter, vLLM, LM Studio…) khi người dùng để trống ô context window.
+ * Best-effort: mạng lỗi/không có trường thì dùng mặc định. Không gọi host công khai khi chưa có key —
+ * tránh gửi request không xác thực ra ngoài chỉ vì lưu nhà cung cấp.
+ */
+export async function discoverContextWindow(baseUrl: string, model: string, apiKey?: string): Promise<number | undefined> {
+  let url: URL
+  try { url = new URL('models', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`) } catch { return undefined }
+  const local = isLocalHost(url.hostname)
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && local && devHttpAllowed())) return undefined
+  if (!apiKey && !local) return undefined
+  try {
+    const response = await fetch(url, {
+      redirect: 'error', signal: AbortSignal.timeout(2500),
+      ...(apiKey ? { headers: { authorization: `Bearer ${apiKey}` } } : {})
+    })
+    if (!response.ok) return undefined
+    const text = (await response.text()).slice(0, 2_000_000)
+    const value: unknown = JSON.parse(text)
+    const data = value && typeof value === 'object' ? (value as { data?: unknown }).data : undefined
+    if (!Array.isArray(data)) return undefined
+    const entry = data.find((item) => !!item && typeof item === 'object' && (item as { id?: unknown }).id === model) as Record<string, unknown> | undefined
+    for (const field of ['context_length', 'context_window'] as const) {
+      const found = entry?.[field]
+      if (finitePositive(found) && Number.isInteger(found) && found <= 10_000_000) return found
+    }
+    return undefined
+  } catch { return undefined }
 }
 
 const isCustom = (v: unknown): v is CustomProvider =>
@@ -435,10 +472,13 @@ export class AccountService {
     if (!previous && this.modelRuntime.getProvider(p.id)) throw new AgentError('bad_param', 'ID đã thuộc nhà cung cấp có sẵn')
     // Key của máy chủ cũ không được tự chuyển sang origin khác.
     if (previous && new URL(previous.baseUrl).origin !== origin) await this.removeApiKey(p.id)
+    // Ô context window để trống: thử lấy `context_length` thật của model từ nhà cung cấp (không chặn lưu khi lỗi).
+    const contextWindow = p.contextWindow ?? (p.kind === 'ollama' ? undefined
+      : await discoverContextWindow(baseUrl, p.model.trim(), apiKey?.trim() || (this.deps.secrets.get(p.id) ?? undefined)))
     const custom: CustomProvider = {
       id: p.id, label: p.label.trim(), baseUrl, model: p.model.trim(),
       ...(p.kind ? { kind: p.kind } : {}),
-      ...(p.contextWindow ? { contextWindow: p.contextWindow } : {}),
+      ...(contextWindow ? { contextWindow } : {}),
       ...(p.maxTokens ? { maxTokens: p.maxTokens } : {}),
       ...(typeof p.supportsTools === 'boolean' ? { supportsTools: p.supportsTools } : {}),
       ...(p.cost ? { cost: p.cost } : {})
@@ -739,11 +779,11 @@ export class AccountService {
       if (BLOCKED_OAUTH.has(model.provider) && this.modelRuntime.isUsingOAuth(model.provider))
         throw new AgentError('ai_not_configured', 'Hãy kết nối Claude bằng Anthropic API key')
       const marker = randomUUID()
-      const stream = this.modelRuntime.streamSimple(model, {
+      const stream = this.modelRuntime.streamSimple({ ...model, contextWindow: Math.max(model.contextWindow, PROBE_CONTEXT_WINDOW) }, {
         messages: [{ role: 'user', content: `Call nexgraph_connection_check with value "${marker}".`, timestamp: Date.now() }],
         tools: [{ name: 'nexgraph_connection_check', description: 'A connection probe with no side effects.',
           parameters: Type.Object({ value: Type.String() }) }]
-      }, { signal: AbortSignal.timeout(20_000) })
+      }, { signal: AbortSignal.timeout(20_000), maxTokens: PROBE_MAX_TOKENS })
       let streaming = false
       for await (const event of stream) {
         if (event.type === 'text_delta' || event.type === 'toolcall_delta') streaming = true
