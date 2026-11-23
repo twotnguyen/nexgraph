@@ -96,3 +96,38 @@ def test_shadowed_module_alias_creates_no_call_or_tested_by_edge(tmp_path):
         "SELECT a.id_nut, b.id_nut FROM canh c JOIN nut a ON a.ma_nut = c.ma_nut_nguon"
         " JOIN nut b ON b.ma_nut = c.ma_nut_dich WHERE c.loai_canh = 'TESTED_BY'")}
     assert not [pair for pair in tested if pair[1].startswith(shadow_tests) and pair[0] == USER]
+
+
+SCOPED_SHADOW_FILES = {
+    "app/__init__.py": "",
+    "app/models.py": "class User:\n    def name(self):\n        return ''\n",
+    "tests/test_scoped_shadow.py": (
+        "import app.models as models\n\n\n"
+        "def helper_with_local():\n"
+        "    models = object()\n"
+        "    return models\n\n\n"
+        "def test_module_alias_not_shadowed_here():\n"
+        "    models.User()\n"
+    ),
+}
+
+
+def test_local_shadow_in_another_function_keeps_correct_edge(tmp_path):
+    """F4/M1: biến cục bộ trùng tên ở hàm A không được làm mất cạnh đúng ở hàm B trong cùng tệp."""
+    root = tmp_path / "scoped_shadow"
+    for rel, text in SCOPED_SHADOW_FILES.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    store = GraphStore(open_graph_db(tmp_path / "scoped.db"))
+    store.init_project("p", has_git=False)
+    assert Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event()).run().state == "hoan_tat"
+    test_node = "tests/test_scoped_shadow.py::test_module_alias_not_shadowed_here#function"
+    calls = {(row[0], row[1]) for row in store.conn.execute(
+        "SELECT a.id_nut, b.id_nut FROM canh c JOIN nut a ON a.ma_nut = c.ma_nut_nguon"
+        " JOIN nut b ON b.ma_nut = c.ma_nut_dich WHERE c.loai_canh = 'CALLS'")}
+    assert (test_node, USER) in calls
+    tested = {(row[0], row[1]) for row in store.conn.execute(
+        "SELECT a.id_nut, b.id_nut FROM canh c JOIN nut a ON a.ma_nut = c.ma_nut_nguon"
+        " JOIN nut b ON b.ma_nut = c.ma_nut_dich WHERE c.loai_canh = 'TESTED_BY'")}
+    assert (USER, test_node) in tested
