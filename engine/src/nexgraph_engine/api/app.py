@@ -24,8 +24,6 @@ from nexgraph_engine.selftest import run_selftest
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 
 class Guard:
     """ASGI thuần (không dùng BaseHTTPMiddleware để SSE không bị chặn): kiểm Host rồi token."""

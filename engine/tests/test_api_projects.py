@@ -17,7 +17,9 @@ class Blocking(Indexer):
 def test_open_project_and_list(api, copy_fixture):
     root = copy_fixture("bookstore_app")
     p = api.open(root)
-    assert set(p) == {"project_id", "path", "name", "is_git", "storage", "last_indexed_at", "last_index_commit"}
+    assert set(p) == {"project_id", "path", "name", "is_git", "storage", "last_indexed_at", "last_index_commit",
+                      "last_index_error"}
+    assert p["last_index_error"] is None
     assert p["last_indexed_at"] is None
     assert p["storage"] == "in_project" and p["is_git"] is False and p["name"] == "bookstore_app app"
     (listed,) = api.get("/v1/projects").json()
@@ -135,3 +137,17 @@ def test_scan_route(api, copy_fixture):
     assert body["files"] == 9 and body["large"] is False and body["threshold"] == 5000
     assert body["by_language"] == {"dart": 9} and body["top_dirs"][0] == {"path": "lib", "files": 8}
     assert api.get("/v1/projects/nope/scan").status_code == 404
+
+
+def test_unreadable_graph_db_is_reported_not_treated_as_new_project(api, copy_fixture):
+    """M3: graph.db hỏng phải báo lỗi HTTP và cảnh báo trong danh sách, không im lặng thành dự án mới."""
+    root = copy_fixture("bookstore_app")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    (root / ".nexgraph" / "graph.db").write_bytes(b"not a sqlite database")
+
+    opened = api.post("/v1/projects", json={"path": str(root)})
+    assert opened.status_code == 400 and opened.json()["error"]["code"] == "graph_unreadable"
+    listed = next(p for p in api.get("/v1/projects").json() if p["project_id"] == pid)
+    assert listed["last_indexed_at"] is None
+    assert "Không đọc được lần lập chỉ mục cuối" in listed["last_index_error"]

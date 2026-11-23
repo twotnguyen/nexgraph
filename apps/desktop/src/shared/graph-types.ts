@@ -85,6 +85,8 @@ export interface ProjectSummary {
   is_git?: boolean
   last_indexed_at?: number | null
   last_index_commit?: string | null
+  /** Lỗi đọc lần lập chỉ mục cuối trong graph.db (M3); null/undefined = bình thường. */
+  last_index_error?: string | null
 }
 
 export interface CodeSlice {
@@ -246,6 +248,8 @@ export interface GraphReport {
   questions: { question: string; why: string }[]
   benchmark: { corpus_tokens: number; graph_tokens: number; reduction: number } | null
   truncated: boolean
+  /** Phần phụ không dựng được (ví dụ benchmark); rỗng/undefined = không có cảnh báo. */
+  warnings?: string[]
   cycles: ImportCycles
   freshness: GraphFreshness
   /** Lỗ hổng tri thức: node cô lập (không có cạnh ngoài cấu trúc chứa) và cạnh AMBIGUOUS. */

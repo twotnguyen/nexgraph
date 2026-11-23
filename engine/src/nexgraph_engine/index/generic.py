@@ -7,6 +7,7 @@ nên chạy thêm bộ trích xuất của riêng tệp để lấy `raw_calls` 
 """
 from __future__ import annotations
 
+import ast
 import atexit
 import logging
 import re
@@ -140,6 +141,7 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
     refs: list[UnresolvedRef] = []
     labels = {n["id"]: n["label"] for n in result["nodes"] if not n.get("source_file")}
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    shadowed_aliases = _py_shadowed_aliases(path)
     from_lines = {_line(e.get("source_location")) for e in raw_edges if e.get("relation") == "imports_from"}
     from_lines.discard(None)
     # 0.9.112 tách constructor/indexer/operator C# thành nút không `_callable`: lời gọi của chúng thuộc về lớp như 0.9.92.
@@ -174,7 +176,11 @@ def extract_generic(root: Path, rel_path: str, language: str, *, is_test: bool) 
             name = inc.group(1).strip('"') if inc else dst  # `<...>` giữ ngoặc nhọn: resolver phân biệt include hệ thống với đường dẫn tương đối
             refs.append(UnresolvedRef(source=fid, name=name, type=EdgeType.IMPORTS, line=line, col=0))
         elif rel == "calls" and src in ids and line:
+            if dst.partition(".")[0] in shadowed_aliases:
+                continue  # `models.User()` với `models` là biến/tham số che bí danh mô-đun (M1)
             foreign = _foreign_receiver(lines, line, qnames[dst][0].split(".")[-1]) if dst in ids else None
+            if foreign and foreign.partition(".")[0] in shadowed_aliases:
+                continue  # extractor khớp nhầm `models.User()` vào lớp cục bộ; `models` là biến che (M1)
             if foreign:  # extractor chỉ khớp theo tên: `bcrypt.compare()` không phải phương thức `compare` của lớp này
                 refs.append(UnresolvedRef(source=ids[src], name=f"{foreign}.{qnames[dst][0].split('.')[-1]}", type=EdgeType.CALLS,
                                           line=line, col=0))
@@ -227,6 +233,11 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
     if python:
         scoped_types.update(_py_scoped_types(source, raw))
     aliases = _py_module_aliases(source) if python else {}
+    shadowed_aliases = _py_shadowed_aliases(path) if python else set()
+    if aliases:
+        # Tên mô-đun bị biến cục bộ/tham số che: bỏ bí danh và bỏ luôn lời gọi kiểu `models.User()`
+        # (ưu tiên chính xác hơn độ phủ — Minor #34 M1).
+        aliases = {name: module for name, module in aliases.items() if name not in shadowed_aliases}
     per_file_fid = next((n["id"] for n in per_file.get("nodes", []) if n.get("label") == path.name), None)
     for rc in per_file.get("raw_calls") or []:
         caller_nid = rc.get("caller_nid") or ""
@@ -243,11 +254,16 @@ def _cross_file_calls(path: Path, root: Path, raw: dict, raw_edges: list[dict], 
         line, callee, recv = _line(rc.get("source_location")), rc.get("callee"), rc.get("receiver")
         if not line or not callee:
             continue
+        if rc.get("_python_receiver_shadowed") and recv in shadowed_aliases:
+            # Bộ trích xuất cũng thấy receiver trùng tên biến/tham số: không đoán đó là mô-đun (M1).
+            continue
         if not recv and rc.get("is_member_call"):
             recv = _call_receiver(source, rc)  # `self.repo.save()` / `app.models.User()`: receiver bị extractor ẩn
         if recv in ("self", "this"):
             name = f"this.{callee}"
         elif recv:
+            if recv in shadowed_aliases:
+                continue  # biến/tham số trùng tên mô-đun: không đoán đó là mô-đun (M1)
             name = f"{aliases.get(recv, recv)}.{callee}"  # `import pkg.mod as m` → m.x thành pkg.mod.x
         elif rc.get("is_member_call"):
             continue  # `X().m()`: không biết kiểu của receiver, không đoán
@@ -475,6 +491,42 @@ def _py_module_aliases(source: bytes) -> dict[str, str]:
                 if name and name != "*" and alias[:1].islower():
                     out[alias] = f"{module}.{name}"
     return out
+
+
+def _py_shadowed_aliases(path: Path) -> set[str]:
+    """Bí danh mô-đun Python trùng tên một ràng buộc khác trong tệp (biến/tham số/lớp/hàm)."""
+    if path.suffix not in _PY_SUFFIXES:
+        return set()
+    try:
+        source = path.read_bytes()
+    except OSError:
+        return set()
+    return {name for name in _py_module_aliases(source) if name in _py_shadowed_names(source)}
+
+
+def _py_shadowed_names(source: bytes) -> set[str]:
+    """Tên bị ràng buộc trong tệp (gán, tham số, for/with/except, def/class): bí danh mô-đun trùng tên không đáng tin.
+
+    Chỉ thu thập ràng buộc *không* đến từ câu lệnh import — `import a.b as m` / `from a import m` chính là bí danh.
+    Thô hơn phạm vi hàm (một tên bị che ở bất kỳ đâu thì bỏ bí danh cho cả tệp) để không tạo cạnh sai (M1).
+    """
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return set()
+    bound: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            bound.add(node.id)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            bound.add(node.name)
+        elif isinstance(node, ast.arg):
+            bound.add(node.arg)
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            bound.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            bound.update(node.names)
+    return bound
 
 
 def _py_scoped_types(source: bytes, raw: dict) -> dict[str, dict[str, str]]:
