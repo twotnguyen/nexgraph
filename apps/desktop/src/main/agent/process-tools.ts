@@ -44,6 +44,18 @@ const NETWORK_EXECUTABLES = new Set(['curl', 'wget', 'ssh', 'scp', 'sftp', 'ftp'
 const PACKAGE_EXECUTABLES = new Set(['npm', 'pnpm', 'yarn', 'bun'])
 const LOCAL_PACKAGE_ACTIONS = new Set(['run', 'test', 'build', 'lint', 'check', 'typecheck', 'exec'])
 const PIP_MODULES = new Set(['pip', 'pip3', 'ensurepip'])
+/** `python`, `python3.12`, và py launcher (`py`, `py -3`) trên Windows đều cài gói qua `-m pip`. */
+const PYTHON_LAUNCHERS = /^(python\d*(\.\d+)?|py)$/
+
+/** `-m pip`, `-mpip` (dính), kể cả sau tham số của py launcher như `py -3 -m pip`. */
+function installsWithPip(args: readonly string[]): boolean {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i].toLowerCase()
+    if (arg === '-m' && PIP_MODULES.has((args[i + 1] ?? '').toLowerCase())) return true
+    if (/^-m(pip3?|ensurepip)$/.test(arg)) return true
+  }
+  return false
+}
 
 function readJson(root: string, path: string): Record<string, unknown> | null {
   try {
@@ -96,8 +108,8 @@ function normalizedCommand(root: string, input: ProcessInput): CommandPreview {
   const executable = input.executable.trim()
   const name = basename(executable).replace(/\.(exe|cmd|bat)$/i, '').toLowerCase()
   if (NETWORK_EXECUTABLES.has(name)) throw new Error('Lệnh tải hoặc gửi dữ liệu ra ngoài chưa được cấp quyền')
-  // `python -m pip install` là đường cài gói khác của pip, phải chặn cùng lý do.
-  if (/^python(3(\.\d+)?)?$/.test(name) && input.args[0] === '-m' && PIP_MODULES.has((input.args[1] ?? '').toLowerCase())) {
+  // `python -m pip install`, `python -mpip install`, `py -m pip install`… đều là đường cài gói của pip.
+  if (PYTHON_LAUNCHERS.test(name) && installsWithPip(input.args)) {
     throw new Error('Cài gói qua pip cần thao tác riêng, agent chỉ chạy script đã có trong dự án')
   }
   if (name === 'git' && !['status', 'diff', 'log', 'show', 'ls-files', 'rev-parse', 'check-ignore'].includes(input.args[0] ?? '')) {

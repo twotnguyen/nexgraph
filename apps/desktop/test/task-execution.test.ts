@@ -70,10 +70,16 @@ describe('TaskExecution', () => {
     for (const [executable, args] of [
       ['uvx', ['ruff', 'check']], ['pipx', ['run', 'black']], ['bunx', ['cowsay']],
       ['corepack', ['pnpm', 'dlx', 'x']], ['deno', ['run', 'https://example.invalid/x.ts']],
-      ['python3', ['-m', 'pip', 'install', 'requests']], ['python', ['-m', 'ensurepip']]
+      ['python3', ['-m', 'pip', 'install', 'requests']], ['python', ['-m', 'ensurepip']],
+      // Biến thể dính `-mpip` và py launcher trên Windows.
+      ['python', ['-mpip', 'install', 'requests']], ['py', ['-m', 'pip', 'install', 'requests']],
+      ['py', ['-3', '-mpip', 'install', 'requests']]
     ] as [string, string[]][]) {
       await expect(f.task.run({ executable, args }), `${executable} ${args.join(' ')}`).rejects.toThrow(/cấp quyền|cài gói|thao tác riêng/i)
     }
+    // `py` không có mô-đun pip không bị chặn nhầm (máy không cài py launcher thì lỗi spawn, không phải lỗi cài gói).
+    const py = await f.task.run({ executable: 'py', args: ['--version'] }).catch((error: Error) => error)
+    expect(py instanceof Error ? py.message : '').not.toMatch(/cài gói|thao tác riêng/i)
   })
 
   it('python -c / node -e vẫn chạy được vì mọi lệnh đều phải qua cổng duyệt (giới hạn ghi ở ADR 0016)', async () => {
