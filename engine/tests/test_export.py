@@ -6,6 +6,9 @@ from nexgraph_engine.bridge.to_nx import Scope
 from nexgraph_engine.export.callflow_i18n import localize_callflow_html
 from nexgraph_engine.export.run import export_graph
 
+import re
+import subprocess
+
 
 @pytest.mark.parametrize("fmt,expect", [
     ("html", "py_mini app-graph.html"), ("callflow_html", "py_mini app-callflow.html"),
@@ -304,6 +307,7 @@ def test_callflow_html_in_vietnamese(copy_fixture, index_project, tmp_path):
     store, _, _ = index_project(copy_fixture("py_mini"))
 
     def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
         r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "py_mini app", lang=lang)
         return Path(r.files[0]).read_text(encoding="utf-8")
 
@@ -337,6 +341,65 @@ def test_callflow_html_in_vietnamese(copy_fixture, index_project, tmp_path):
     assert ">Fit<" not in vi and ">Reset<" not in vi
     # EN như cũ: không lẫn tiếng Việt (fixture py_mini là mã tiếng Anh)
     assert not any(ch in en for ch in "ăâđêôơưàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ")
+
+
+def _git_init(root: Path) -> str:
+    """Khởi tạo repo git + commit đầu, trả HEAD (để test commit của lần xuất)."""
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(root), "-c", "user.email=e9@example.com", "-c", "user.name=E9",
+                    "commit", "-q", "-m", "fixture"], check=True)
+    return subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+
+
+def test_html_export_title_is_project_name(copy_fixture, index_project, tmp_path):
+    """F3 (A3b-P1): `<title>` HTML đồ thị phải là tên dự án, không phải tệp tạm `.<uuid>.tmp`."""
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    r = export_graph(store, "html", Scope(), tmp_path, "py_mini app")
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    title = re.search(r"<title>(.*?)</title>", html, re.S).group(1)
+    assert title == "py_mini app — NexGraph"
+    assert ".tmp" not in title
+
+
+def test_callflow_uses_project_name_and_git_commit(copy_fixture, index_project, tmp_path):
+    """P1-F1: tiêu đề callflow lấy tên dự án thật + commit HEAD, không phải thư mục tạm và "unknown"."""
+    root = copy_fixture("py_mini")
+    head = _git_init(root)
+    store, _, _ = index_project(root)
+    r = export_graph(store, "callflow_html", Scope(), tmp_path, "du an mau", lang="en")
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    assert "nexgraph-callflow-" not in html
+    assert "<h1>du an mau — Complete Call Flow &amp; Architecture Documentation</h1>" in html
+    assert f"Commit: {head[:7]}" in html
+
+
+def test_callflow_sections_are_real_communities(copy_fixture, index_project, tmp_path):
+    """P1-F1: mục lục theo cộng đồng thật của đồ thị, không theo archetype cứng của graphify."""
+    store, _, _ = index_project(copy_fixture("polyglot"))
+    r = export_graph(store, "callflow_html", Scope(), tmp_path, "polyglot", lang="en")
+    html = Path(r.files[0]).read_text(encoding="utf-8")
+    assert "Extraction Pipeline" not in html and "CLI &amp; Skill Installers" not in html
+    labels = [row[0] for row in store.conn.execute("SELECT ten FROM khoi_kien_truc ORDER BY ten")]
+    assert len(labels) >= 8
+    links = re.findall(r'<a href="#[^"]*">([^<]+)</a>', html)
+    assert set(labels) <= set(links)
+
+
+def test_callflow_section_labels_follow_lang(copy_fixture, index_project, tmp_path):
+    """Nhãn cụm lưu tiếng Việt (`Cụm quanh X`) phải dịch khi xuất callflow tiếng Anh."""
+    store, _, _ = index_project(copy_fixture("py_mini"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "py_mini app", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    en, vi = exported("en"), exported("vi")
+    assert "Cụm quanh" not in en
+    assert "Cluster around " in en
+    assert "Cụm quanh" in vi
 
 
 _CALLFLOW_RULE_SAMPLES = [
