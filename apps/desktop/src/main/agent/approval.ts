@@ -43,12 +43,15 @@ const OUTSIDE = deny('Đường dẫn nằm ngoài dự án')
 
 /**
  * Tệp mà một lần ghi có thể biến thành chạy mã ngoài phạm vi checkpoint: task của VS Code,
- * hook của Husky, workflow CI. Policy `auto` không được tự duyệt các đường này (REV-15).
+ * hook của Husky, workflow CI, script npm (postinstall) và cấu hình npm. Policy `auto` không
+ * được tự duyệt các đường này (REV-15).
  */
 const ALWAYS_ASK = [
   /^\.vscode[/\\]tasks\.json$/i,
   /^\.husky[/\\]/i,
-  /^\.github[/\\]workflows[/\\]/i
+  /^\.github[/\\]workflows[/\\]/i,
+  /^(?:.*[/\\])?package\.json$/i,
+  /^(?:.*[/\\])?\.npmrc$/i
 ]
 
 /** true khi đường dẫn tương đối cần người dùng duyệt tay kể cả ở policy `auto`. */
