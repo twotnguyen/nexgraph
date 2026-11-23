@@ -6,6 +6,7 @@ import pytest
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.index.indexer import Indexer
 from nexgraph_engine.query.section import section_json
+from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -154,5 +155,26 @@ def test_section_reports_truncated_when_section_exceeds_line_cap(tmp_path):
         assert out["end"] < node.line_end
         assert len(out["text"]) < 8000
         assert out["truncated"] is True
+    finally:
+        store.conn.close()
+
+
+def test_section_masks_document_that_only_contains_secret(tmp_path):
+    """A3 #4: tài liệu chỉ CHỨA secret (tên tệp không thuộc danh sách loại trừ thật) trả bản đã che như UI."""
+    token = "sk-" + "live-" + "A3TEST" + "1234567890"
+    root = tmp_path / "proj"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secret.md").write_text(
+        f"# Bí mật\n\n## Cấu hình\n\nĐặt `api_key={token}` trong tệp.\n", encoding="utf-8")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "notes.md").write_text("# Ghi chú\n\n## Khoá\n\nkhông chia sẻ.\n", encoding="utf-8")
+    store = _index(root, tmp_path / "g.db")
+    try:
+        out = section_json(store, root, _doc(store, "Cấu hình", "docs/secret.md").id, source=SourcePolicy(root))
+        assert token not in out["text"] and "[redacted]" in out["text"]
+
+        with pytest.raises(ApiError) as exc:
+            section_json(store, root, _doc(store, "Khoá", "secrets/notes.md").id, source=SourcePolicy(root))
+        assert exc.value.code == "protected_source"
     finally:
         store.conn.close()

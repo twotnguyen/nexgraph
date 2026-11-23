@@ -7,7 +7,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from pathspec import GitIgnoreSpec
 
-from graphify.detect import _AMBIGUOUS_SENSITIVE_DIRS, _CREDENTIAL_STORE_DIRS, _is_sensitive
+from graphify.detect import (_AMBIGUOUS_SENSITIVE_DIRS, _CREDENTIAL_STORE_DIRS, _SENSITIVE_PATTERNS,
+                             _is_env_template, _is_sensitive)
 
 from nexgraph_engine.errors import ApiError
 
@@ -53,14 +54,18 @@ def _unchanged(before: os.stat_result, after: os.stat_result) -> bool:
 class SourcePolicy:
     """Một chính sách cho mỗi truy vấn. Mẫu người dùng và .gitignore đều có quyền loại trừ."""
 
-    def __init__(self, root: Path, exclude: list[str] | None = None) -> None:
+    def __init__(self, root: Path, exclude: list[str] | None = None, *, allow_secret_names: bool = False) -> None:
         self.root = root.resolve()
+        # `allow_secret_names`: đọc cho đầu ra ĐÃ CHE (get_section/Đọc mục) — tên tệp trông như kho bí mật
+        # (`secret.md`) không bị loại, vì nội dung trả về đã qua redact. Danh sách loại trừ thật (khoá riêng,
+        # thư mục credential store, .env, mẫu người dùng, .gitignore) vẫn chặn.
+        self.allow_secret_names = allow_secret_names
         try:
             self._exclude = GitIgnoreSpec.from_lines(exclude or [])
         except ValueError as exc:
             raise protected_source() from exc
         self._gitignore: dict[tuple[str, ...], GitIgnoreSpec | None] = {}
-        self._known: dict[tuple[str, bool], bool] = {}
+        self._known: dict[tuple[str, bool, bool], bool] = {}
         self._root_sensitive = any(p.lower() in _CREDENTIAL_STORE_DIRS | _AMBIGUOUS_SENSITIVE_DIRS for p in self.root.parts)
 
     def _rules(self, parent: tuple[str, ...]) -> GitIgnoreSpec | None:
@@ -84,14 +89,29 @@ class SourcePolicy:
             self._gitignore[parent] = GitIgnoreSpec.from_lines(contents.decode("utf-8-sig").splitlines())
         return self._gitignore[parent]
 
-    def _excluded(self, parts: tuple[str, ...], *, directory: bool) -> bool:
+    def _name_only_sensitive(self, parts: tuple[str, ...]) -> bool:
+        """Tệp bị coi là nhạy cảm CHỈ vì tên tệp, không phải vì thư mục cha hay mẫu khoá riêng."""
+        path = Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)
+        if not _is_sensitive(path):
+            return False
+        # Khoá riêng / tệp chứa credential đúng nghĩa (.env, .pem, id_rsa, .npmrc…): danh sách loại trừ thật.
+        if any(pattern.search(path.name) for pattern in _SENSITIVE_PATTERNS) and not _is_env_template(path.name):
+            return False
+        # Cùng thư mục cha, tên trung tính: còn nhạy cảm nghĩa là do thư mục cha, không phải tên tệp.
+        return not _is_sensitive(path.with_name("section" + path.suffix))
+
+    def _excluded(self, parts: tuple[str, ...], *, directory: bool, allow_secret_names: bool = False) -> bool:
         if _blocked_name(parts):
             return True
         # Tiêu chí tệp bí mật của công cụ tham chiếu (W9 dùng khi chọn tệp gửi model). Đường dẫn tuyệt đối để đọc được
         # shebang của tệp không có đuôi; nhưng nếu chính thư mục chứa dự án mang tên như `secrets/`, `.aws/` thì xét
         # đường dẫn tương đối, kẻo mọi tệp bị chặn (tệp không đuôi khi đó mất bước đọc shebang, nghiêng về chặn).
-        if parts and not directory and _is_sensitive(Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)):
-            return True
+        # `allow_secret_names`: chỉ miễn bước đoán theo TÊN tệp — người gọi trả bản đã che nên nội dung không lộ;
+        # thư mục cha nhạy cảm (secrets/, .ssh/) vẫn loại như cũ.
+        if parts and not directory and _is_sensitive(
+                Path(*parts) if self._root_sensitive else self.root.joinpath(*parts)):
+            if not (allow_secret_names and self._name_only_sensitive(parts)):
+                return True
         # Git không đi vào thư mục đã ẩn, kể cả khi tệp con có mẫu phủ định.
         for end in range(1, len(parts) + 1):
             suffix = "/" if end < len(parts) or directory else ""
@@ -103,7 +123,8 @@ class SourcePolicy:
                     return True
         return False
 
-    def resolve(self, name: str, *, directory: bool = False) -> Path:
+    def resolve(self, name: str, *, directory: bool = False, allow_secret_names: bool | None = None) -> Path:
+        allow = self.allow_secret_names if allow_secret_names is None else allow_secret_names
         lexical = PurePosixPath(name).parts
         if _blocked_name(lexical):
             raise protected_source()
@@ -111,29 +132,31 @@ class SourcePolicy:
         canonical = path.relative_to(self.root).parts
         try:
             directory = directory or path.is_dir()
-            if self._excluded(lexical, directory=directory) or (
-                    canonical != lexical and self._excluded(canonical, directory=directory)):
+            if (self._excluded(lexical, directory=directory, allow_secret_names=allow) or (
+                    canonical != lexical and self._excluded(canonical, directory=directory, allow_secret_names=allow))):
                 raise protected_source()
         except (OSError, ValueError, RuntimeError) as exc:
             raise protected_source() from exc
         return path
 
-    def allows(self, name: str, *, directory: bool = False) -> bool:
-        key = (name, directory)
+    def allows(self, name: str, *, directory: bool = False, allow_secret_names: bool | None = None) -> bool:
+        allow = self.allow_secret_names if allow_secret_names is None else allow_secret_names
+        key = (name, directory, allow)
         if key not in self._known:
             try:
-                self.resolve(name, directory=directory)
+                self.resolve(name, directory=directory, allow_secret_names=allow)
             except ApiError:
                 self._known[key] = False
             else:
                 self._known[key] = True
         return self._known[key]
 
-    def read(self, name: str, path: Path) -> bytes:
+    def read(self, name: str, path: Path, *, allow_secret_names: bool | None = None) -> bytes:
         """Ràng buộc byte với tệp đã kiểm bằng handle, kể cả nếu đích bị tráo trong lúc mở."""
+        allow = self.allow_secret_names if allow_secret_names is None else allow_secret_names
         try:
             before = path.lstat()
-            if not stat.S_ISREG(before.st_mode) or self.resolve(name) != path:
+            if not stat.S_ISREG(before.st_mode) or self.resolve(name, allow_secret_names=allow) != path:
                 raise protected_source()
             if before.st_size > MAX_MODEL_SOURCE_BYTES:
                 raise ApiError(413, "source_too_large", "Nguồn quá lớn cho ngữ cảnh AI")
@@ -141,11 +164,13 @@ class SourcePolicy:
             with os.fdopen(os.open(path, flags), "rb") as stream:
                 opened = os.fstat(stream.fileno())
                 # Windows có thể báo ctime khác nhau giữa lstat và fstat của cùng tệp.
-                if _identity(opened) != _identity(before) or self.resolve(name) != path:
+                if (_identity(opened) != _identity(before)
+                        or self.resolve(name, allow_secret_names=allow) != path):
                     raise protected_source()
                 content = stream.read(MAX_MODEL_SOURCE_BYTES + 1)
                 if (len(content) != before.st_size or not _unchanged(opened, os.fstat(stream.fileno()))
-                        or not _unchanged(before, path.lstat()) or self.resolve(name) != path):
+                        or not _unchanged(before, path.lstat())
+                        or self.resolve(name, allow_secret_names=allow) != path):
                     raise protected_source()
                 return content
         except OSError as exc:

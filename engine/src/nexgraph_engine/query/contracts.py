@@ -77,16 +77,16 @@ def neighbors_json(store: GraphStore, node: str, types: set[EdgeType] | None, di
 
 def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: int | None, *,
               transcript_dir: Path | None = None, source: SourcePolicy | None = None,
-              sources_dir: Path | None = None) -> dict:
+              sources_dir: Path | None = None, allow_secret_names: bool = False) -> dict:
     if is_source_path(file):
         raise ApiError(404, "file_not_found", "Nút đến từ nguồn bổ sung, không có mã nguồn")
     external = source_path(root, file, sources_dir)
     if external is not None:  # nguồn tải từ URL: ngoài dự án nên không qua .gitignore, nhưng vẫn theo mẫu loại trừ AI
-        if source is not None and not source.allows(file):
+        if source is not None and not source.allows(file, allow_secret_names=allow_secret_names):
             raise protected_source()
         path, source = external, None
     else:
-        path = source.resolve(file) if source else safe_project_path(root, file)
+        path = source.resolve(file, allow_secret_names=allow_secret_names) if source else safe_project_path(root, file)
     record = store.file_record(file)
     if record is None:  # chỉ phục vụ tệp đã được lập chỉ mục (không đọc .git, .nexgraph, khóa bí mật...)
         raise ApiError(404, "file_not_found", f"Tệp chưa được lập chỉ mục: {file}")
@@ -96,7 +96,7 @@ def read_code(store: GraphStore, root: Path, file: str, start: int | None, end: 
     if first < 1 or (end is not None and (end < first or end - first + 1 > MAX_CODE_LINES)):
         raise ApiError(400, "bad_param", f"start >= 1, end >= start, tối đa {MAX_CODE_LINES} dòng mỗi lần")
     cached_text = record.language in ("media", "google_workspace")
-    snapshot = source.read(file, path) if source and not cached_text else None
+    snapshot = source.read(file, path, allow_secret_names=allow_secret_names) if source and not cached_text else None
     if cached_text:  # audio/video, lối tắt Google: phục vụ chữ đã lưu lúc index, không đọc lại tệp hay gọi gws
         cached = transcript_dir / f"{record.sha256}.txt" if transcript_dir else None
         if cached is None or not cached.is_file():

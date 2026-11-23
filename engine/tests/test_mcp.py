@@ -394,6 +394,33 @@ def test_get_section_tool(api, tmp_path):
     assert call(server, "get_section", {"node_id": "README.md#file"}).isError is True
 
 
+def test_get_section_returns_masked_text_for_document_that_only_contains_secret(api, tmp_path):
+    """A3 #4: MCP trả bản đã che như UI cho tài liệu chỉ chứa secret; nguồn bị loại trừ thật vẫn từ chối."""
+    token = "sk-" + "live-" + "A3TEST" + "1234567890"
+    root = tmp_path / "docs secret"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "secret.md").write_text(
+        f"# Bí mật\n\n## Cấu hình\n\nĐặt `api_key={token}` trong tệp.\n", encoding="utf-8")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "keys.md").write_text("# Khoá\n\n## Ghi chú\n\nkhông chia sẻ.\n", encoding="utf-8")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"include_docs": True})
+    import time
+    job = None
+    for _ in range(1500):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error"):
+            break
+        time.sleep(0.02)
+    assert job["state"] == "done", job
+    server = build_server(root, tmp_path / "appdata")
+    out = payload(call(server, "get_section", {"node_id": "docs/secret.md::Cấu hình#document"}))
+    assert out["text"].startswith("## Cấu hình") and token not in out["text"]
+    assert "[redacted]" in out["text"]
+    blocked = call(server, "get_section", {"node_id": "secrets/keys.md::Ghi chú#document"})
+    assert blocked.isError is True and "loại khỏi ngữ cảnh AI" in blocked.content[0].text
+
+
 LOGIN = "lib/services/auth_service.dart::AuthService.login#method"
 
 

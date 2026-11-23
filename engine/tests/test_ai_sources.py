@@ -13,6 +13,24 @@ MODEL = {"X-NexGraph-Audience": "model"}
 FAKE_SECRET = "FAKE_GROUP6_PRIVATE_SENTINEL"
 
 
+def test_secret_shaped_document_name_is_readable_only_for_redacted_output(tmp_path):
+    """A3 #4: tên tệp trông như kho bí mật chỉ được miễn khi người gọi trả bản đã che; loại trừ thật vẫn chặn."""
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "secret.md").write_text("x", encoding="utf-8")
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "notes.md").write_text("x", encoding="utf-8")
+    (tmp_path / ".npmrc").write_text("x", encoding="utf-8")
+    strict = SourcePolicy(tmp_path)
+    assert not strict.allows("docs/secret.md")
+    relaxed = SourcePolicy(tmp_path, allow_secret_names=True)
+    assert relaxed.allows("docs/secret.md") and relaxed.resolve("docs/secret.md").name == "secret.md"
+    for blocked in ("secrets/notes.md", ".npmrc"):
+        assert not relaxed.allows(blocked), blocked
+    # Gọi lẻ cũng đổi được chế độ mà không cần dựng policy mới.
+    assert strict.allows("docs/secret.md", allow_secret_names=True)
+    assert not relaxed.allows("docs/secret.md", allow_secret_names=False)
+
+
 def test_ai_sources_obey_parent_nested_and_published_exclusions(tmp_path):
     package = tmp_path / "pkg"
     package.mkdir()
