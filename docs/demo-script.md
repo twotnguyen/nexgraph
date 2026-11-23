@@ -1,6 +1,6 @@
 # Kịch bản demo NexGraph
 
-Dùng **NexGraph 0.1.0 Electron/Monaco** từ [bộ cài đúng commit bàn giao](release/README.md). Chạy trên bản sao dự án. Ghi tên và hash bộ cài, commit NexGraph, commit hoặc tên fixture của dự án, hệ điều hành và provider trước mỗi lượt. [Biên bản nghiệm thu](release/acceptance/2026-11-18.md).
+Dùng **NexGraph 0.2.0 Electron/Monaco** (bản ứng viên; 0.1.2 là bản đang phát hành) từ [bộ cài đúng commit bàn giao](release/README.md). Chạy trên bản sao dự án. Ghi tên và hash bộ cài, commit NexGraph, commit hoặc tên fixture của dự án, hệ điều hành và provider trước mỗi lượt. [Biên bản nghiệm thu](release/acceptance/2026-11-18.md).
 
 ## Kiểm nhanh bằng fixture Python
 
@@ -42,24 +42,24 @@ NEXGRAPH_USER_DATA_DIR="$demo/user-data" NEXGRAPH_DATA_DIR="$demo/engine-data" \
   NEXGRAPH_ALLOW_HTTP_PROVIDER=1 "$app/Contents/MacOS/NexGraph"
 ```
 
-1. Trong app, kiểm engine sẵn sàng, mở bản sao fixture và lập chỉ mục. Xem **Tìm kiếm**, **Kiến trúc** và **Luồng** trước khi cấu hình AI. Vào **Cài đặt → Tài khoản AI → Nhà cung cấp tuỳ chỉnh**, thêm Base URL `http://127.0.0.1:8787/v1` và model `fake`, để trống API key. Lưu, chọn model và bấm **Kiểm tra kết nối**.
-2. Ở **Luồng**, tìm `login`. Mở Agent ở chế độ **Hỏi**, đồng ý gửi dữ liệu cho endpoint cục bộ rồi hỏi về luồng đăng nhập. Kiểm trích dẫn hợp lệ mở đúng dòng trong Monaco và **Tô luồng** tô các cạnh của graph. Máy chủ giả cố ý trả thêm một trích dẫn tới tệp không tồn tại để kiểm tra app không cho mở chip đó.
-3. Chuyển sang **Sửa**, gửi `NEXGRAPH_DEMO_EDIT`. Máy chủ giả đề xuất thêm comment vào dòng `return save_session(user)` trong `service.py`. Bấm **Từ chối**, xác nhận tệp giữ nguyên, gửi lại và bấm **Duyệt thay đổi**. Kiểm nội dung đã ghi và thẻ **Thay đổi**.
-4. Quay về **Hỏi**. Dừng máy chủ giả bằng Ctrl+C rồi gửi một câu hỏi. Ghi lỗi kết nối và kiểm **Tìm kiếm**, **Kiến trúc** và **Luồng** vẫn mở được. Ghi phép thử này là gián đoạn endpoint AI cục bộ.
+1. Trong app, kiểm engine sẵn sàng, mở bản sao fixture và lập chỉ mục. Xem **Tìm trong đồ thị**, **Kiến trúc** và **Luồng** trước khi cấu hình AI. Vào **Cài đặt → Tài khoản AI → Nhà cung cấp tuỳ chỉnh**, thêm Base URL `http://127.0.0.1:8787/v1` và model `fake`, để trống API key. Lưu, chọn model và bấm **Kiểm tra kết nối**.
+2. Ở **Luồng**, tìm `login`. Mở Agent ở chế độ **Hỏi**, đồng ý gửi dữ liệu cho endpoint cục bộ rồi hỏi về luồng đăng nhập. Kiểm trích dẫn hợp lệ mở đúng dòng trong Monaco và **Tô luồng trên graph** tô các cạnh của graph. Máy chủ giả cố ý trả thêm một trích dẫn tới tệp không tồn tại để kiểm tra app không cho mở chip đó.
+3. Chuyển sang **Sửa**, gửi `NEXGRAPH_DEMO_EDIT`. Máy chủ giả đề xuất thêm comment vào dòng `return save_session(user)` trong `service.py`. Bấm **Từ chối**, xác nhận tệp giữ nguyên, gửi lại và bấm **Duyệt thay đổi**. Kiểm nội dung đã ghi và thẻ **Vùng ảnh hưởng**.
+4. Quay về **Hỏi**. Dừng máy chủ giả bằng Ctrl+C rồi gửi một câu hỏi. Ghi lỗi kết nối và kiểm **Tìm trong đồ thị**, **Kiến trúc** và **Luồng** vẫn mở được. Ghi phép thử này là gián đoạn endpoint AI cục bộ.
 5. Thoát ứng dụng, kiểm engine của lượt thử đã dừng rồi đóng terminal đã đặt biến thử trên Windows.
 
 [Phiên kiểm Electron đóng gói trên macOS ngày 15/11](benchmarks/2026-11-15-editor-agent.md) ghi lại lượt thử fixture trước khi bỏ công cụ chạy lệnh. Ghi riêng kết quả của bản đang dùng và loại nhà cung cấp đã thử.
 
 ## Demo NestJS trong 5 phút
 
-Chuẩn bị bản sao `ecommerce-backend-nestjs`, baseline đã dùng tại commit `d11f4ef7d906ba514cf9e3c2234116ad49789ee7` (268 tệp được lập chỉ mục). Giữ lịch sử Git hoặc tạo một commit mốc trong bản sao để **Thay đổi** so với HEAD. Lập chỉ mục trước, mở app và thử kết nối model hỗ trợ tool calling nếu trình bày phần AI thật. Chuẩn bị bản sao sạch cho từng lượt. Nếu mất kết nối, dùng thẻ **Luồng** và thao tác chỉnh sửa tay.
+Chuẩn bị bản sao `ecommerce-backend-nestjs`, baseline đã dùng tại commit `d11f4ef7d906ba514cf9e3c2234116ad49789ee7` (268 tệp được lập chỉ mục). Giữ lịch sử Git hoặc tạo một commit mốc trong bản sao để **Vùng ảnh hưởng** so với HEAD. Lập chỉ mục trước, mở app và thử kết nối model hỗ trợ tool calling nếu trình bày phần AI thật. Chuẩn bị bản sao sạch cho từng lượt. Nếu mất kết nối, dùng thẻ **Luồng** và thao tác chỉnh sửa tay.
 
 | Bước | Thao tác | Thời lượng |
 | --- | --- | --- |
 | 1. Mở dự án | Từ màn **Dự án**, mở bản sao NestJS đã lập chỉ mục để vào không gian làm việc. Chỉ ra cây tệp bên trái, các thẻ mã và sơ đồ ở giữa, trợ lý AI bên phải. Nếu cần trình bày số tệp, nút và cạnh, bấm **← Tổng quan** rồi trở lại **Kiến trúc**. | 0:30 |
 | 2. Khám phá kiến trúc | Mở **Kiến trúc**, đi xuống `src/apps`, bấm mũi tên xem bằng chứng. Mở **Bản đồ** để xem toàn cục. Nếu máy thiếu WebGL, dùng **Kiến trúc**. | 1:00 |
-| 3. Theo luồng đăng nhập | Chọn `signIn` ở **Luồng** và phát qua các cạnh. Nếu model sẵn sàng, hỏi “Luồng đăng nhập chạy thế nào?”, mở chip trích dẫn đúng dòng và thử **Tô luồng**. | 1:30 |
-| 4. Sửa và xem ảnh hưởng | Chọn tệp `src/common/utils/string-util/string-util.service.ts` ở cây bên trái để mở Monaco ở giữa, thêm một comment rồi lưu bằng `Ctrl+S` hoặc `⌘S`. Mở **Thay đổi** để xem ảnh hưởng và kiểm thử liên quan. Nếu dùng AI thật, yêu cầu một thay đổi nhỏ trên bản sao, xem diff trước khi duyệt, rồi kiểm **Từ chối** ở một đề xuất khác. | 1:00 |
+| 3. Theo luồng đăng nhập | Chọn `signIn` ở **Luồng** và phát qua các cạnh. Nếu model sẵn sàng, hỏi “Luồng đăng nhập chạy thế nào?”, mở chip trích dẫn đúng dòng và thử **Tô luồng trên graph**. | 1:30 |
+| 4. Sửa và xem ảnh hưởng | Chọn tệp `src/common/utils/string-util/string-util.service.ts` ở cây bên trái để mở Monaco ở giữa, thêm một comment rồi lưu bằng `Ctrl+S` hoặc `⌘S`. Mở **Vùng ảnh hưởng** để xem ảnh hưởng và kiểm thử liên quan. Nếu dùng AI thật, yêu cầu một thay đổi nhỏ trên bản sao, xem diff trước khi duyệt, rồi kiểm **Từ chối** ở một đề xuất khác. | 1:00 |
 | 5. Trình bày đánh giá | Trình bày độ đúng và hiệu năng đã đo trong [báo cáo H6](benchmarks/2026-12-danh-gia.md). Ghi rõ các phép đo có/không MCP và khảo sát nếu vẫn đang chờ dữ liệu. | 0:30 |
 
 Tổng mục tiêu là 4:30, còn 0:30 dự phòng. Các số của H6 cho demo là thời gian engine; ghi riêng tổng thời gian có thao tác giao diện.

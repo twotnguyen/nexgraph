@@ -1,6 +1,6 @@
 # Đặc tả yêu cầu phần mềm NexGraph
 
-Đặc tả này mô tả phạm vi bàn giao NexGraph 0.1.0 dựa trên các yêu cầu đã điều chỉnh ở tuần 5. Dùng tài liệu này cùng [ma trận truy vết](traceability.md) để phát triển và nghiệm thu. Mỗi yêu cầu tách tiêu chí cần đạt khỏi bằng chứng đã có. Các bản thiết kế theo tuần trước đó được giữ trong [kho lưu trữ](../superpowers/).
+Đặc tả này mô tả phạm vi bàn giao NexGraph 0.1.2 và bản ứng viên 0.2.0 dựa trên các yêu cầu đã điều chỉnh ở tuần 5. Dùng tài liệu này cùng [ma trận truy vết](traceability.md) để phát triển và nghiệm thu. Mỗi yêu cầu tách tiêu chí cần đạt khỏi bằng chứng đã có. Các bản thiết kế theo tuần trước đó được giữ trong [kho lưu trữ](../superpowers/).
 
 ## Mục tiêu và đối tượng
 
@@ -12,18 +12,18 @@
 
 | Hạng mục | Phạm vi |
 |---|---|
-| Nền tảng | Bản bàn giao chính 0.1.0 là Electron độc lập với Monaco tích hợp, cho **macOS Apple silicon (arm64) và Windows x64**; Mac Intel và Windows ARM ngoài phạm vi. Repo và bộ cài công khai ở [GitHub Releases](https://github.com/twotnguyen/nexgraph/releases). Người dùng chọn đúng kiến trúc theo [bộ cài](../release/README.md). [Code-OSS](../../apps/shell/README.md) được giữ ở mức bản xem trước tích hợp, dùng editor của workbench và có phép nghiệm thu riêng. |
+| Nền tảng | Bản phát hành hiện hành 0.1.2 và bản ứng viên 0.2.0 là Electron độc lập với Monaco tích hợp, cho **macOS Apple silicon (arm64) và Windows x64**; Mac Intel và Windows ARM ngoài phạm vi. Repo và bộ cài công khai ở [GitHub Releases](https://github.com/twotnguyen/nexgraph/releases). Người dùng chọn đúng kiến trúc theo [bộ cài](../release/README.md). [Code-OSS](../../apps/shell/README.md) được giữ ở mức bản xem trước tích hợp, dùng editor của workbench và có phép nghiệm thu riêng. |
 | Ngôn ngữ MVP | TypeScript, JavaScript và Python. Đánh giá trên ca sử dụng thực tế và báo giới hạn phân tích tĩnh. |
 | Ngôn ngữ bổ sung | C# và Dart có bộ trích xuất trong engine. Go và Java ở mức đồ thị chung. Cây widget, route và phân tích Flutter chuyên sâu thuộc hướng phát triển. Bảng [phần mở rộng thực tế](../../engine/src/nexgraph_engine/index/discovery.py) là tham chiếu khi cập nhật mức hỗ trợ. |
 | Phạm vi đồ thị | Một thư mục dự án mỗi lần phân tích, có thể giới hạn ở thư mục con và loại trừ đường dẫn. Dùng Git khi có commit phù hợp, nếu thiếu thì dùng mốc lập chỉ mục. |
-| Dịch vụ AI | Luồng kiểm chính sử dụng API key hoặc nhà cung cấp tùy chỉnh tương thích. OAuth khả dụng theo cấu hình nhưng cần nghiệm thu riêng. Chat dùng phiên trong bộ nhớ. |
+| Dịch vụ AI | Luồng kiểm chính sử dụng API key hoặc nhà cung cấp tùy chỉnh tương thích. OAuth khả dụng theo cấu hình nhưng cần nghiệm thu riêng. Phiên chat lưu dạng JSONL trong thư mục dữ liệu của app, tách theo dự án và tài khoản (ADR 0021). |
 | Hướng mở rộng | Ứng dụng web, máy chủ hoặc tài khoản NexGraph, clone repo qua URL và phân tích liên kho hoặc liên dịch vụ. |
 
 ## Yêu cầu chức năng
 
 Chi tiết thao tác, lỗi và bằng chứng theo từng mục có trong [ma trận truy vết](traceability.md). Điều kiện cần xác nhận trên bản cài được ghi trong [kịch bản demo](../demo-script.md) và [checklist Windows](../windows-checklist.md).
 
-Theo phạm vi tuần 5, nhóm xếp F1–F4, F6, F8, F10 và F11 là bắt buộc cho đồ án. F5, F7 và F12 là nhóm nên có, F9 là nhóm có thể có. F13–F15 là các chức năng được bổ sung cho luồng sửa mã và tích hợp trợ lý, có use case và tiêu chí nghiệm thu riêng.
+Theo phạm vi tuần 5, nhóm xếp F1–F4, F6, F8, F10 và F11 là bắt buộc cho đồ án. F5, F7 và F12 là nhóm nên có, F9 là nhóm có thể có. F13–F16 là các chức năng được bổ sung sau: luồng sửa mã và tích hợp trợ lý (F13–F15) và bộ công cụ phát triển kiểu Wu (F16), có use case và tiêu chí nghiệm thu riêng.
 
 | Mã | Chức năng | Kết quả người dùng cần nhận được |
 |---|---|---|
@@ -40,8 +40,9 @@ Theo phạm vi tuần 5, nhóm xếp F1–F4, F6, F8, F10 và F11 là bắt bu�
 | F11 | Luồng | Tìm điểm vào, phát từng bước, xem caller và mở mã từ cạnh lời gọi có bằng chứng. |
 | F12 | Bản đồ toàn cảnh | Xem đồ thị cấp tệp/khối, đi sâu theo phạm vi và dùng thẻ Kiến trúc khi WebGL không khả dụng. |
 | F13 | Trình soạn thảo | Mở đúng vị trí, sửa/lưu và xử lý tệp thay đổi bên ngoài, giữ nội dung chưa lưu. |
-| F14 | Agent Hỏi và Sửa có duyệt | Hỏi dùng công cụ đọc. Sửa hiển thị diff, chờ duyệt từng đề xuất tạo hoặc chỉnh sửa tệp và cho phép dừng lượt. Cả hai chế độ từ chối yêu cầu chạy lệnh shell. |
+| F14 | Agent Hỏi, Kế hoạch và Sửa có duyệt | Hỏi và Kế hoạch chỉ dùng công cụ đọc; Sửa hiển thị diff, chờ duyệt từng đề xuất tạo hoặc chỉnh sửa tệp, có checkpoint và cho phép dừng lượt. Chạy lệnh build/test chỉ ở chế độ Sửa, khi bật công tắc riêng, và mỗi lệnh phải duyệt riêng (ADR 0016). |
 | F15 | Tích hợp Codex | Xem trước cấu hình MCP và skill cấp dự án, áp dụng sau khi người dùng xác nhận và giữ cấu hình hiện có. |
+| F16 | Bộ công cụ phát triển kiểu Wu | Editor có LSP TypeScript/Python, terminal tích hợp, giao diện Git (nhánh, lịch sử, hunk, stash, worktree), gỡ lỗi DAP Node/Python, cộng tác LAN và extension khai báo theme/lệnh. Chi tiết và giới hạn ở [UC18](use-cases/UC18.md); ngoại lệ so với non-goals §1.3 của spec, ghi ở ADR 0020. |
 
 ### Tác nhân và ca sử dụng
 
@@ -57,12 +58,14 @@ flowchart LR
         Export(["UC11<br/>Xuất kết quả"])
         Integrate(["UC16<br/>Xem trước và cài cấu hình Codex"])
         MCP(["UC10<br/>Truy vấn đồ thị qua MCP"])
+        Tools(["UC18<br/>Terminal, Git, gỡ lỗi và extension"])
     end
     Developer --- Explore
     Developer --- Edit
     Developer --- Agent
     Developer --- Export
     Developer --- Integrate
+    Developer --- Tools
     Provider --- Agent
     Client --- MCP
 ```
@@ -73,7 +76,7 @@ flowchart LR
 
 - Cạnh quan hệ dùng để giải thích phải có căn cứ từ cây cú pháp hoặc bộ phân giải. Khi graph chưa xong, đã cũ hoặc kết quả bị cắt, ứng dụng cần hiển thị giới hạn tương ứng.
 - **Tiêu chí cần nghiệm thu cho bản bàn giao:** hủy hoặc lỗi khi dựng lại giữ được bản đồ thị hoàn tất gần nhất. Sau khi chạy lại, dữ liệu phải nhất quán giữa UI, API và MCP. Xem [luồng hiện tại và điểm cần kiểm](architecture.md).
-- Chế độ Hỏi chỉ có công cụ đọc và truy vấn đồ thị. Chế độ Sửa yêu cầu duyệt từng thao tác `edit` hoặc `write`, kiểm tra lại trạng thái tệp trước khi ghi và từ chối bản xem trước đã cũ.
+- Chế độ Hỏi và Kế hoạch chỉ có công cụ đọc và truy vấn đồ thị. Chế độ Sửa yêu cầu duyệt từng thao tác `edit` hoặc `write`, kiểm tra lại trạng thái tệp trước khi ghi và từ chối bản xem trước đã cũ. Chạy lệnh build/test chỉ ở chế độ Sửa, khi bật công tắc riêng, và mỗi lệnh phải duyệt riêng (ADR 0016).
 - Khi dịch vụ AI gặp lỗi, người dùng vẫn mở được chỉ mục cục bộ, tìm kiếm, đọc kiến trúc và xem luồng.
 
 ### Bảo mật và riêng tư
@@ -98,9 +101,9 @@ Kết quả đo ở [báo cáo thực nghiệm](../benchmarks/2026-12-danh-gia.m
 
 ## Điều kiện nghiệm thu
 
-1. Với [bản cài Electron 0.1.0](../release/README.md), chạy mạch mở dự án → kiến trúc/tìm kiếm → luồng → mở mã trong Monaco → sửa → xem ảnh hưởng và test liên quan.
+1. Với [bản cài Electron 0.1.2](../release/README.md), chạy mạch mở dự án → kiến trúc/tìm kiếm → luồng → mở mã trong Monaco → sửa → xem ảnh hưởng và test liên quan.
 2. Kiểm luồng lỗi trên bản cài gồm chưa cấu hình AI, mất mạng, không có Git, dự án lớn chọn thư mục con và ngôn ngữ ở mức đồ thị chung.
-3. Kiểm AI Hỏi/Sửa bằng provider sẽ trình diễn, gồm mở trích dẫn, Duyệt, Từ chối và Dừng. Trên Windows và macOS, dùng provider giả để kiểm yêu cầu chạy lệnh bị từ chối ở cả hai chế độ. Kiểm MCP bằng client thật.
+3. Kiểm AI Hỏi/Kế hoạch/Sửa bằng provider sẽ trình diễn, gồm mở trích dẫn, Duyệt, Từ chối và Dừng. Trên Windows và macOS, dùng provider giả để kiểm Hỏi và Kế hoạch không có công cụ chạy lệnh, còn Sửa chỉ chạy lệnh khi bật công tắc và mỗi lệnh hiện thẻ duyệt riêng. Kiểm MCP bằng client thật.
 4. Chạy ba lượt [kịch bản bảo vệ](../demo-script.md), ghi thời gian và tình huống dự phòng. Duyệt lại nhãn đồ thị, đánh giá có/không MCP và khảo sát người dùng theo [kế hoạch thực nghiệm](../benchmarks/2026-12-danh-gia.md).
 
 Xem [kiến trúc](architecture.md), [mô hình dữ liệu](data-model.md) và [ma trận truy vết](traceability.md) để xác định đường chạy, hợp đồng và bằng chứng cho từng chức năng.
