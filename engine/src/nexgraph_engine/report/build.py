@@ -11,7 +11,7 @@ from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, build_nx,
 from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
 from nexgraph_engine.query.source_policy import SourcePolicy
-from nexgraph_engine.report.i18n import check_lang, translate_questions, translate_surprising
+from nexgraph_engine.report.i18n import check_lang, translate_questions, translate_surprising, warning_text
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -55,7 +55,7 @@ def _god_nodes(store: GraphStore, bg: BridgeGraph) -> list[dict]:
     return out
 
 
-def _benchmark(bg: BridgeGraph, warnings: list[str]) -> dict | None:
+def _benchmark(bg: BridgeGraph, warnings: list[str], lang: str) -> dict | None:
     from graphify.benchmark import run_benchmark
     with tempfile.TemporaryDirectory(prefix="nexgraph-bench-") as d:
         path = Path(d) / "graph.json"
@@ -65,11 +65,11 @@ def _benchmark(bg: BridgeGraph, warnings: list[str]) -> dict | None:
         except Exception as exc:  # benchmark chỉ là mục phụ của báo cáo
             logger.warning("Không chạy được benchmark của báo cáo", exc_info=True)
             # Mục benchmark biến mất khỏi báo cáo thì người dùng phải biết vì sao (ENG-07/M3).
-            warnings.append(f"Không chạy được benchmark của báo cáo ({type(exc).__name__}: {exc})")
+            warnings.append(warning_text("benchmark_failed", lang, detail=f"{type(exc).__name__}: {exc}"))
             return None
     if "error" in r:
         logger.warning("Benchmark trả lỗi: %s", str(r["error"])[:300])
-        warnings.append(f"Benchmark trả lỗi: {str(r['error'])[:300]}")
+        warnings.append(warning_text("benchmark_error", lang, detail=str(r["error"])[:300]))
         return None
     return {"corpus_tokens": r["corpus_tokens"], "graph_tokens": r["avg_query_tokens"], "reduction": r["reduction_ratio"]}
 
@@ -91,7 +91,7 @@ def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = Non
          for q in suggest_questions(bg.G, bg.communities, bg.labels, top_n=7)], lang)
     warnings: list[str] = []
     return {"god_nodes": _god_nodes(store, bg), "communities": communities, "surprising": surprising,
-            "questions": questions, "benchmark": _benchmark(bg, warnings), "truncated": bg.truncated,
+            "questions": questions, "benchmark": _benchmark(bg, warnings, lang), "truncated": bg.truncated,
             "warnings": warnings,
             "cycles": import_cycles(store.conn), "freshness": freshness(store, root, sources_dir), "gaps": _gaps(store)}
 

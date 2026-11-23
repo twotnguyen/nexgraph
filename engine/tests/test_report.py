@@ -227,6 +227,31 @@ def test_translate_every_graphify_message():
 
 
 
+def test_report_warnings_follow_lang(copy_fixture, index_project, monkeypatch):
+    """MIN-45b (1): banner cảnh báo của /report phải theo `lang`, không luôn là câu tiếng Việt."""
+    import graphify.benchmark as benchmark
+
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+
+    monkeypatch.setattr(benchmark, "run_benchmark",
+                        lambda graph_path=None, corpus_words=None, questions=None: {"error": "No matching nodes found"})
+    vi = report_json(store, root, lang="vi")
+    assert vi["benchmark"] is None
+    assert vi["warnings"] == ["Benchmark trả lỗi: No matching nodes found"]
+    en = report_json(store, root, lang="en")
+    assert en["warnings"] == ["Benchmark returned an error: No matching nodes found"]
+
+    def boom(graph_path=None, corpus_words=None, questions=None):
+        raise RuntimeError("không đọc được graph.json")
+
+    monkeypatch.setattr(benchmark, "run_benchmark", boom)
+    assert report_json(store, root, lang="en")["warnings"] == [
+        "Could not run the report benchmark (RuntimeError: không đọc được graph.json)"]
+    assert report_json(store, root, lang="vi")["warnings"] == [
+        "Không chạy được benchmark của báo cáo (RuntimeError: không đọc được graph.json)"]
+
+
 def test_report_json_rejects_unknown_lang(copy_fixture, index_project):
     """M3 (review 23/11): lang sai phải ném ValueError như build_tour, không lặng lẽ trả tiếng Anh."""
     root = copy_fixture("py_mini")
