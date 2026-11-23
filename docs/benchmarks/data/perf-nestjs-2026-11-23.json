@@ -1,0 +1,107 @@
+{
+ "project": "nestjs",
+ "project_commit": "d11f4ef7d906ba514cf9e3c2234116ad49789ee7",
+ "nexgraph_commit": "72dc4ec18e9dcc72369652ed8f532a13bd70f2d9",
+ "machine": {
+  "cpu": "Apple M3 Pro",
+  "ncpu": 12,
+  "ram_gb": 18.0,
+  "os": "macOS 15.7.3",
+  "python": "3.12.16"
+ },
+ "date": "2026-11-23",
+ "repeat": 3,
+ "index_repeat": 3,
+ "metrics": {
+  "index_full_ms": {
+   "median": 1344.83,
+   "min": 1305.23,
+   "max": 1614.71,
+   "n": 3
+  },
+  "peak_rss_after_index_mb": 115,
+  "worker_peak_rss_mb": 68,
+  "index_workers": 8,
+  "files": 280,
+  "nodes": 1253,
+  "edges": 2986,
+  "unresolved": 2742,
+  "languages": {
+   "javascript": 2,
+   "powershell": 1,
+   "sql": 11,
+   "typescript": 266
+  },
+  "graph_db_mb": 1.6,
+  "reopen_ms": {
+   "median": 1.03,
+   "min": 0.98,
+   "max": 1.22,
+   "n": 3
+  },
+  "search_build_ms": {
+   "median": 0.06,
+   "min": 0.05,
+   "max": 0.22,
+   "n": 3
+  },
+  "arch_root_ms": {
+   "median": 2.29,
+   "min": 2.23,
+   "max": 2.69,
+   "n": 3
+  },
+  "refresh_one_file_ms": {
+   "median": 25.66,
+   "min": 25.42,
+   "max": 34.45,
+   "n": 3
+  },
+  "rebuild_flows_ms": {
+   "median": 8.48,
+   "min": 8.38,
+   "max": 9.57,
+   "n": 3
+  },
+  "list_flows_auth_ms": {
+   "median": 0.46,
+   "min": 0.46,
+   "max": 0.6,
+   "n": 3
+  },
+  "build_map_400_ms": {
+   "median": 4.34,
+   "min": 4.33,
+   "max": 4.75,
+   "n": 3
+  },
+  "import_cycles_ms": {
+   "median": 1.31,
+   "min": 1.28,
+   "max": 1.7,
+   "n": 3
+  },
+  "build_tour_ms": {
+   "median": 1.54,
+   "min": 1.49,
+   "max": 1.82,
+   "n": 3
+  },
+  "build_context_question": "login",
+  "build_context_login_ms": {
+   "median": 0.08,
+   "min": 0.07,
+   "max": 0.1,
+   "n": 3
+  },
+  "top_degree_node": "src/apps/app.module.ts#file",
+  "neighbors_top_node_ms": {
+   "median": 0.79,
+   "min": 0.71,
+   "max": 0.91,
+   "n": 3
+  },
+  "peak_rss_total_mb": 116
+ },
+ "copy": "git archive (không có .git); commit ghim lấy từ manifest đợt A5"
+}

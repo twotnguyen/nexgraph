@@ -70,6 +70,17 @@ Trong **Tổng quan dự án → Cập nhật sau mỗi commit**, NexGraph thêm
 
 Ghi `.mcp.json` (Claude Code), `.cursor/mcp.json` (Cursor), `.vscode/mcp.json` (VS Code), `opencode.json` (OpenCode), `.codex/config.toml` (Codex) sau khi bạn xem trước và xác nhận. Chỉ thêm mục `nexgraph`; tệp không phân tích được (JSON hỏng hoặc có chú thích `//`, TOML đã có sẵn) thì không ghi, dùng nút "Sao chép cấu hình".
 
+### Duyệt server MCP project-scope trong Claude Code (A4-F2)
+
+NexGraph ghi `.mcp.json` ở **gốc dự án** (`mcpServers.nexgraph`, `type: stdio`). Claude Code coi server trong tệp này là **project-scope** và để trạng thái **⏸ Pending approval** cho tới khi người dùng duyệt — cấu hình đúng vẫn chưa chạy, đây không phải lỗi NexGraph.
+
+1. Mở terminal tại thư mục dự án, chạy `claude`.
+2. Gõ `/mcp`, chọn `nexgraph`, bấm duyệt (**Approve**). Quyết định lưu theo máy trong `~/.claude.json`; `.mcp.json` không bị sửa.
+3. Kiểm: `/mcp` hiện `nexgraph` ở trạng thái connected; hỏi thử một tool như `graph_stats`.
+4. Nếu đã lỡ từ chối: chạy `claude mcp reset-project-choices` trong thư mục dự án rồi duyệt lại, hoặc mở `/mcp` và đổi lựa chọn.
+
+Khi kiểm tự động bằng `claude --mcp-config <tệp> --strict-mcp-config`, bước duyệt bị bỏ qua — đừng lấy kết quả đó thay cho việc kiểm luồng người dùng thật.
+
 ### 21 nền tảng, gỡ và hook nhắc dùng graph (W5, 2026-11-21)
 
 Hộp thoại có 21 trợ lý. Mỗi trợ lý ghi tối đa bốn phần, mỗi phần có xem trước:
@@ -130,3 +141,10 @@ Mọi mục MCP do NexGraph sinh đều kèm `env` (`environment` với OpenCode
 VS Code đánh dấu Local harness/editor-managed là deprecated; `.vscode/mcp.json` vẫn là cấu hình hợp lệ của editor và có thể forward sang Copilot. Copilot native dùng `.mcp.json`/`mcpServers`; không đồng nhất hai schema. Chọn Claude Code trong NexGraph nếu cần xuất dạng workspace-root `.mcp.json` rồi đối chiếu hướng dẫn Copilot.
 
 Đây là đối chiếu schema. Để nghiệm thu runtime, mở một dự án đã lập chỉ mục bằng client cần dùng và gọi tool NexGraph như `graph_stats`. JSONC có chú thích vẫn chỉ sao chép cấu hình để ghép tay: không ghi lại làm mất chú thích.
+
+## Giới hạn đã biết
+
+- **Index bỏ thư mục ẩn theo mặc định.** `discover()` không lập chỉ mục `.storybook`, `.vitepress`, `.agents`, `.claude`, `.git`, `node_modules`… trừ khi bạn chọn rõ trong **Tuỳ chọn index** (hoặc thêm vào mẫu bỏ qua/nguồn bổ sung). Tab **Cây** và **Duyệt tệp** vẫn hiện các thư mục này vì đọc đĩa, không đọc graph — không phải lỗi (MIN-36-4).
+- **Tài liệu có tên nhạy cảm bị từ chối qua MCP.** `get_section` không trả nội dung cho tệp như `secret.md`, `kubeconfig`, `service-account`, `gcp-*.json`; UI **Đọc mục** vẫn hiện bản đã che secret (#52). Đây là thiết kế bảo mật, không phải lỗi cấu hình.
+- **Thư mục không đọc được:** engine báo `unreadable_paths`/`unreadable_count` trong kết quả lập chỉ mục (#52), nhưng giao diện chưa hiển thị cảnh báo; kiểm bằng log engine nếu nghi thiếu tệp.
+- **MCP qua HTTP** chỉ nghe `127.0.0.1` và yêu cầu key; không mở ra mạng LAN.

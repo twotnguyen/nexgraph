@@ -1,0 +1,108 @@
+{
+ "project": "open-design",
+ "project_commit": "b4ec310921f49ae512de1f0a1f3a4e7ce3d05f2f",
+ "nexgraph_commit": "72dc4ec18e9dcc72369652ed8f532a13bd70f2d9",
+ "machine": {
+  "cpu": "Apple M3 Pro",
+  "ncpu": 12,
+  "ram_gb": 18.0,
+  "os": "macOS 15.7.3",
+  "python": "3.12.16"
+ },
+ "date": "2026-11-23",
+ "repeat": 3,
+ "index_repeat": 1,
+ "metrics": {
+  "index_full_ms": {
+   "median": 491707.74,
+   "min": 491707.74,
+   "max": 491707.74,
+   "n": 1
+  },
+  "peak_rss_after_index_mb": 414,
+  "worker_peak_rss_mb": 260,
+  "index_workers": 8,
+  "files": 5658,
+  "nodes": 49790,
+  "edges": 203689,
+  "unresolved": 395550,
+  "languages": {
+   "bash": 42,
+   "javascript": 154,
+   "powershell": 7,
+   "python": 100,
+   "typescript": 5355
+  },
+  "graph_db_mb": 96.0,
+  "reopen_ms": {
+   "median": 40.16,
+   "min": 39.88,
+   "max": 40.3,
+   "n": 3
+  },
+  "search_build_ms": {
+   "median": 1.54,
+   "min": 1.46,
+   "max": 2.34,
+   "n": 3
+  },
+  "arch_root_ms": {
+   "median": 114.26,
+   "min": 114.25,
+   "max": 114.3,
+   "n": 3
+  },
+  "refresh_one_file_ms": {
+   "median": 504.41,
+   "min": 493.26,
+   "max": 511.71,
+   "n": 3
+  },
+  "rebuild_flows_ms": {
+   "median": 412.6,
+   "min": 407.02,
+   "max": 416.29,
+   "n": 3
+  },
+  "list_flows_auth_ms": {
+   "median": 16.71,
+   "min": 16.49,
+   "max": 17.44,
+   "n": 3
+  },
+  "build_map_400_ms": {
+   "median": 135.58,
+   "min": 132.98,
+   "max": 139.0,
+   "n": 3
+  },
+  "import_cycles_ms": {
+   "median": 33.03,
+   "min": 32.32,
+   "max": 38.43,
+   "n": 3
+  },
+  "build_tour_ms": {
+   "median": 116.64,
+   "min": 114.07,
+   "max": 119.3,
+   "n": 3
+  },
+  "build_context_question": "login",
+  "build_context_login_ms": {
+   "median": 12.45,
+   "min": 12.31,
+   "max": 12.75,
+   "n": 3
+  },
+  "top_degree_node": "plugins/_official/examples/open-design-homepage/assets/_next/static/chunks/8c2d1abc8462562b.js::it#function",
+  "neighbors_top_node_ms": {
+   "median": 85.1,
+   "min": 84.45,
+   "max": 86.21,
+   "n": 3
+  },
+  "peak_rss_total_mb": 414
+ },
+ "note": "Lần bench_all thứ nhất trước #53 (491,7 s)."
+}
