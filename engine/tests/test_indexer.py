@@ -397,6 +397,8 @@ def test_stalled_workers_fall_back_without_repeating_completed_files(tmp_path, i
     assert graph_state(recovered) == graph_state(serial)
     assert [e.files_done for e in events if e.state == "structure" and not e.message] == list(range(41))
     assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
+    # Lô treo: các tệp còn lại đi đường từng-tệp nên kết quả phải khai báo đúng như vậy (PERF-L mục 4).
+    assert result.workers_effective >= 1 and result.fallback_serial is True
 
 
 def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project, monkeypatch):
@@ -437,6 +439,8 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
             pass
 
     root = _many_py(tmp_path / "p", 40)
+    # Tệp chậm là tệp LỚN NHẤT để LPT đặt nó vào lô đầu: mô phỏng server.ts 846 KB của open-design.
+    (root / slow).write_text("".join("# " + "y" * 40 + "\n" for _ in range(50)), encoding="utf-8")  # ~2 KB
     serial, _, _ = index_project(root)
     monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
     monkeypatch.setattr(indexer, "ProcessPoolExecutor", SlowBatchPool)
@@ -445,12 +449,65 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
     assert result.state == "hoan_tat"
     assert graph_state(store) == graph_state(serial)
     # Chỉ tệp của lô quá hạn đi đường từng-tệp, không phải toàn bộ phần còn lại.
-    assert len(batches[0]) == 16
-    assert sorted(per_file) == sorted(batches[0])
+    slow_batch = next(b for b in batches if slow in b)
+    assert slow_batch is batches[0] and len(slow_batch) == 16
+    assert sorted(per_file) == sorted(slow_batch)
     # Pool mới sau lô quá hạn vẫn giữ 2 worker (không hạ xuống 1).
     assert pools.count(2) >= 2 and max(pools) == 2
     assert {name for b in batches for name in b} == {f"m{i}.py" for i in range(40)}  # vẫn chạy theo lô
     assert any(e.message and "Đang đọc tiếp" in e.message for e in events)
+    # Kết quả tự khai báo đúng: vẫn 2 worker hiệu dụng (không hạ cả dự án), nhưng có cờ báo đã phải
+    # đọc một phần theo đường từng-tệp.
+    assert result.workers_effective == 2 and result.fallback_serial is True
+
+
+def test_largest_files_are_batched_first(tmp_path, index_project, monkeypatch):
+    """LPT: tệp lớn nhất nằm ở lô gửi đầu tiên, không phải lô cuối theo đường dẫn (PERF-L mục 4)."""
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+
+    submitted: list[list[str]] = []
+
+    class RecordingPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            pass
+
+        def submit(self, fn, *args):
+            target = args[1]
+            if isinstance(target, list):
+                submitted.append([f.rel_path for f in target])
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 20)
+    (root / "z_big.py").write_text("# " + "x" * 300_000 + "\n", encoding="utf-8")
+    (root / "a_small.py").write_text("# " + "x" * 10 + "\n", encoding="utf-8")
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", RecordingPool)
+    store, result, _ = index_project(root)
+    assert result.state == "hoan_tat" and store.get_node("z_big.py#file") is not None
+    assert submitted and submitted[0][0] == "z_big.py"
+    assert len(submitted[0]) == 16
+
+
+def test_extraction_batches_are_longest_processing_time_first():
+    from nexgraph_engine.index.indexer import DiscoveredFile, extraction_batches
+
+    def f(rel: str, size: int) -> DiscoveredFile:
+        return DiscoveredFile(rel, "python", size, 0, False, False)
+
+    files = [f("a.py", 10), f("b.py", 5_000_000), f("c.py", 900), f("d.py", 700_000)] + \
+            [f(f"z{i}.py", 1) for i in range(20)]
+    batches = extraction_batches(files)
+    assert len(batches) == 2 and sum(len(b) for b in batches) == 24
+    assert [files[i].rel_path for i in batches[0]][:3] == ["b.py", "d.py", "c.py"]  # giảm dần theo byte
+    assert {i for b in batches for i in b} == set(range(24))  # không sót, không lặp
 
 
 def test_index_reports_skipped_bundle_files(tmp_path, index_project):

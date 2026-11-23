@@ -65,6 +65,8 @@ class RunResult:
     unresolved: int
     seconds: float
     files_skipped: int = 0  # tệp sinh tự động bị discovery bỏ (bundle/dense) — PERF-L mục 3
+    workers_effective: int = 1  # số worker thật sự xử lý phần lớn tệp (PERF-L mục 4)
+    fallback_serial: bool = False  # đã rơi về 1 worker dù chạy được song song
 
 
 def index_workers(n_files: int, include_media: bool, requested: int | None = None) -> int:
@@ -107,6 +109,17 @@ def batch_timeout_seconds(batch: Sequence[DiscoveredFile]) -> float:
 
 def _extract_batch(root: Path, files: list[DiscoveredFile], transcript_dir: Path | None) -> list[ExtractedFile]:
     return [_extract_one(root, f, transcript_dir) for f in files]
+
+
+def extraction_batches(files: Sequence[DiscoveredFile]) -> list[list[int]]:
+    """Chia lô theo LPT (Longest Processing Time first): tệp lớn nhất vào lô đầu tiên (PERF-L mục 4).
+
+    Lô theo thứ tự đường dẫn từng đặt `apps/daemon/src/server.ts` (846 KB, ~21 s) ở lô thứ 45, nên nó
+    vừa là đường tới hạn của cả lần index vừa là lô dễ vượt hạn watchdog nhất. Xếp giảm dần theo byte
+    thì các worker nhận tệp đắt tiền ngay từ đầu và phần đuôi hàng đợi chỉ còn tệp nhỏ.
+    """
+    order = sorted(range(len(files)), key=lambda i: files[i].size, reverse=True)
+    return [order[start:start + EXTRACTION_BATCH_SIZE] for start in range(0, len(order), EXTRACTION_BATCH_SIZE)]
 
 
 def _kill_pool(executor: ProcessPoolExecutor) -> None:
@@ -198,6 +211,8 @@ class Indexer:
         self.sources_dir = sources_dir
         self._file_errors: list[tuple[str, str, str]] = []  # (tệp, loại, chi tiết) để báo cho người dùng
         self._skip_stats: dict[str, int] = {}  # tệp bị discovery bỏ, theo lý do (bundle/dense)
+        self._workers_effective = 1
+        self._fallback_serial = False
 
     def run(self) -> RunResult:
         t0 = time.time()
@@ -285,7 +300,8 @@ class Indexer:
     def _result(self, run_id: int, state: RunState, t0: float) -> RunResult:
         s = self.store.stats()
         return RunResult(run_id, state, sum(s["nodes_by_kind"].values()), sum(s["edges_by_type"].values()),
-                         s["unresolved"], time.time() - t0, sum(self._skip_stats.values()))
+                         s["unresolved"], time.time() - t0, sum(self._skip_stats.values()),
+                         self._workers_effective, self._fallback_serial)
 
     def skipped_files(self) -> dict[str, int]:
         """Số tệp discovery đã bỏ theo lý do (`bundle`, `dense`) — vào kết quả job (PERF-L mục 3)."""
@@ -335,19 +351,21 @@ class Indexer:
         # Lô quá hạn/pool hỏng KHÔNG hạ cả dự án xuống một worker (hồi quy PERF-L: một tệp 846 KB vượt hạn
         # 20 s làm 87,5 % tệp của open-design chạy từng tệp, 534 s thay vì 177 s). Chỉ tệp của lô quá hạn đi
         # đường từng-tệp có hạn riêng; phần còn lại chạy lại bằng pool MỚI cùng số worker.
-        pending = list(range(0, total, EXTRACTION_BATCH_SIZE))
+        batches = extraction_batches(files)  # LPT: tệp lớn nhất trước (PERF-L mục 4)
+        pending = list(range(len(batches)))
         suspects: list[int] = []
         stalled_streak = 0  # số lần liên tiếp chưa xong lô nào; >= 2 thì coi là treo thật
         gave_up = False
+        batch_files = 0
         if workers > 1:
             while pending and not self.cancel.is_set():
                 executor: ProcessPoolExecutor | None = None
                 futures = {}
                 try:
                     executor = ProcessPoolExecutor(max_workers=workers)
-                    futures = {offset: executor.submit(_extract_batch, self.root,
-                                                       files[offset:offset + EXTRACTION_BATCH_SIZE],
-                                                       self.transcript_dir) for offset in pending}
+                    futures = {b: executor.submit(_extract_batch, self.root,
+                                                  [files[i] for i in batches[b]],
+                                                  self.transcript_dir) for b in pending}
                 except (BrokenProcessPool, OSError, RuntimeError):
                     # Worker có thể không khởi động được hoặc bị hệ điều hành chặn.
                     logger.warning("Bộ trích xuất song song gián đoạn; thử lại rồi đọc từng tệp", exc_info=True)
@@ -360,18 +378,17 @@ class Indexer:
                     continue
                 broken = False
                 try:
-                    for offset in list(pending):
-                        batch = futures[offset]
-                        deadline = time.monotonic() + batch_timeout_seconds(
-                            files[offset:offset + EXTRACTION_BATCH_SIZE])
+                    for b in list(pending):
+                        batch = futures[b]
+                        deadline = time.monotonic() + batch_timeout_seconds([files[i] for i in batches[b]])
                         while not batch.done() and not self.cancel.is_set() and time.monotonic() < deadline:
                             wait((batch,), timeout=0.2)
                         if self.cancel.is_set():
                             return False
                         if not batch.done():
                             # Quá hạn: coi tệp của lô là nghi treo, đẩy sang đường từng-tệp rồi làm lại pool.
-                            suspects.extend(range(offset, min(offset + EXTRACTION_BATCH_SIZE, total)))
-                            pending.remove(offset)
+                            suspects.extend(batches[b])
+                            pending.remove(b)
                             stalled_streak += 1
                             broken = True
                             break
@@ -391,8 +408,9 @@ class Indexer:
                         for k, extracted in enumerate(extracted_batch):
                             if self.cancel.is_set():
                                 return False
-                            _consume(files[offset + k], extracted)
-                        pending.remove(offset)
+                            _consume(files[batches[b][k]], extracted)
+                        pending.remove(b)
+                        batch_files += len(batches[b])
                         stalled_streak = 0
                 finally:
                     if broken:
@@ -404,11 +422,11 @@ class Indexer:
                     break
             if gave_up and pending:
                 # Hai lần liên tiếp không tiến triển: treo thật, phần còn lại đi đường từng-tệp.
-                for offset in list(pending):
-                    suspects.extend(range(offset, min(offset + EXTRACTION_BATCH_SIZE, total)))
-                    pending.remove(offset)
+                for b in list(pending):
+                    suspects.extend(batches[b])
+                    pending.remove(b)
 
-        remaining = [i for offset in pending for i in range(offset, min(offset + EXTRACTION_BATCH_SIZE, total))]
+        remaining = [i for b in pending for i in batches[b]]
         todo = suspects + remaining
         if todo and not self.cancel.is_set():
             self.on_progress(ProgressEvent("structure", consumed, total,
@@ -418,6 +436,7 @@ class Indexer:
         # tiến trình con mới đọc trong tiến trình chính.
         executor: ProcessPoolExecutor | None = None
         isolated = workers > 1
+        serial_files = 0
         try:
             for i in todo:
                 if self.cancel.is_set():
@@ -469,10 +488,16 @@ class Indexer:
                             continue
                 if x is None:
                     x = extract_file(self.root, f, transcript_dir=self.transcript_dir, cancel=self.cancel)
+                serial_files += 1
                 _consume(f, x)
         finally:
             if executor is not None:
                 executor.shutdown(wait=False, cancel_futures=True)
+
+        # Số worker THẬT SỰ xử lý phần lớn tệp (bảng NFR cần số này, không phải số cấu hình), và cờ cho
+        # biết đã có tệp phải đi đường từng-tệp vì lô quá hạn/pool hỏng (PERF-L mục 4).
+        self._workers_effective = workers if workers > 1 and batch_files >= serial_files else 1
+        self._fallback_serial = workers > 1 and (bool(suspects) or serial_files > 0)
 
         store.add_edges(Edge(source=a, target=b, type=EdgeType.CONTAINS) for a, b in contains)
         store.commit()

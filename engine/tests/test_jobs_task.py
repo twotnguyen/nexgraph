@@ -129,6 +129,7 @@ def test_index_job_has_kind_and_result(api, copy_fixture):
     # Hợp đồng đổi ở PERF-L mục 3: job index có `result` chứa số liệu lần chạy (trước đây luôn None),
     # để UI/bench biết đã bỏ bao nhiêu tệp sinh tự động và chạy với bao nhiêu worker.
     assert job["kind"] == "index" and job["result"]["files_skipped"] == 0
+    assert job["result"]["workers_effective"] == 1 and job["result"]["fallback_serial"] is False
 
 
 def test_project_task_can_refresh_now(api, copy_fixture):

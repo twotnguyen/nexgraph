@@ -107,7 +107,7 @@ def top_degree_node(conn) -> str | None:
     return row[0] if row else None
 
 
-def one_index(root: Path, db: Path) -> tuple[GraphStore, float]:
+def one_index(root: Path, db: Path) -> tuple[GraphStore, float, object]:
     conn = open_graph_db(db)
     store = GraphStore(conn)
     store.init_project(root.name, False)
@@ -115,7 +115,7 @@ def one_index(root: Path, db: Path) -> tuple[GraphStore, float]:
     result = Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event()).run()
     if result.state != "hoan_tat" and result.state != "done":
         print(f"CẢNH BÁO: lập chỉ mục kết thúc ở trạng thái {result.state}", file=sys.stderr)
-    return store, (time.perf_counter() - t0) * 1000
+    return store, (time.perf_counter() - t0) * 1000, result
 
 
 def measure(name: str, repeat: int, fn, out: dict) -> None:
@@ -145,10 +145,11 @@ def main() -> None:
         root = tmp / "project"
         shutil.copytree(src, root, ignore=IGNORE, symlinks=True)
 
-        stores, index_ms = [], []
+        stores, index_ms, runs = [], [], []
         for i in range(index_repeat):
-            store, ms = one_index(root, tmp / f"graph{i}.db")
+            store, ms, run = one_index(root, tmp / f"graph{i}.db")
             index_ms.append(ms)
+            runs.append(run)
             if i < index_repeat - 1:
                 store.conn.close()
             stores.append(store)
@@ -159,6 +160,11 @@ def main() -> None:
         m["worker_peak_rss_mb"] = _rounded(peak_children_rss_mb())  # worker lớn nhất (null nếu không đo được)
         from nexgraph_engine.index.indexer import index_workers
         m["index_workers"] = index_workers(store.stats()["files"], False)
+        # Số worker THẬT SỰ dùng và cờ rơi về tuần tự: thiếu hai số này thì bảng NFR so 1 worker với 8
+        # worker mà không ai biết (đúng như A5 đã xảy ra — PERF-L mục 4).
+        m["workers_effective"] = runs[-1].workers_effective
+        m["fallback_serial"] = runs[-1].fallback_serial
+        m["files_skipped"] = runs[-1].files_skipped
         conn = store.conn
         stats = store.stats()
         m["files"], m["nodes"] = stats["files"], sum(stats["nodes_by_kind"].values())

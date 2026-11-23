@@ -138,9 +138,10 @@ class JobManager:
 
     @staticmethod
     def _job_result(indexer: "Indexer | None", result: RunResult) -> dict:
-        """Số liệu một lần index đủ cho JSON của job: tệp sinh tự động đã bỏ (PERF-L mục 3)."""
+        """Số liệu một lần index cho JSON của job: tệp sinh tự động đã bỏ (mục 3) và số worker hiệu dụng (mục 4)."""
         skipped = indexer.skipped_files() if indexer is not None else {}
-        return {"files_skipped": result.files_skipped, "skipped": skipped}
+        return {"files_skipped": result.files_skipped, "skipped": skipped,
+                "workers_effective": result.workers_effective, "fallback_serial": result.fallback_serial}
 
     def _forget_locked(self, job_id: str) -> None:
         """Caller giữ `_lock`: bỏ job đã xong khỏi bộ nhớ (client cũ nhận 404 như job không tồn tại)."""
