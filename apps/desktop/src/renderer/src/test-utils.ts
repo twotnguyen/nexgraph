@@ -41,7 +41,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       list: vi.fn(async () => []), remove: vi.fn(async () => {}), ...over.project },
     index: {
       scan: vi.fn(async () => ({ files: 10, by_language: {}, large: false, threshold: 5000, top_dirs: [] })),
-      start: vi.fn(async () => ({ jobId: 'j1' })), status: vi.fn(async () => progress('queued', 0, 0)), cancel: vi.fn(async () => {}),
+      start: vi.fn(async () => ({ jobId: 'j1' })), options: vi.fn(async () => null), status: vi.fn(async () => progress('queued', 0, 0)), cancel: vi.fn(async () => {}),
       refresh: vi.fn(async () => ({ status: 'ok' as const, reason: null, added: 0, changed: 0, removed: 0, seconds: 0 })),
       onEvent: vi.fn((cb: (e: EngineEvent) => void) => { handlers.add(cb); return () => handlers.delete(cb) }),
       ...over.index

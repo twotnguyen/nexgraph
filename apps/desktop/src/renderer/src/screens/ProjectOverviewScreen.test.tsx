@@ -92,10 +92,10 @@ describe('ProjectOverviewScreen', () => {
     expect(screen.getByLabelText(/Gồm audio\/video/)).toBeDisabled()
   })
 
-  it('index lại không có mẫu bỏ qua', async () => {
+  it('Index lại dùng lại lựa chọn đã lưu theo dự án, không tự đặt lại mẫu bỏ qua (A3 #7)', async () => {
     const { props } = renderOverview()
     await userEvent.click(screen.getByRole('button', { name: /^Index lại/ }))
-    expect(props.onReindex).toHaveBeenCalledWith({ exclude: [] })
+    expect(props.onReindex).toHaveBeenCalledWith({})
   })
 
   it('sao chép cấu hình MCP', async () => {

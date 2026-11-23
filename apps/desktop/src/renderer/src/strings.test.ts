@@ -45,6 +45,19 @@ describe('i18n', () => {
     expect(t.indexing.titleDone('demo')).toBe('Indexed: demo')
   })
 
+  it('không lộ thương hiệu "Pi" trong chuỗi người dùng thấy (A1 F1)', () => {
+    setLocale('vi')
+    expect(t.chat.setupTitle).toBe('Thiết lập trợ lý AI')
+    setLocale('en')
+    expect(t.chat.setupTitle).toBe('Set up the AI assistant')
+    // Nhắc tới "Pi" như một sản phẩm khác trong Cài đặt là sai thương hiệu; tên nhà cung cấp kỹ thuật thì giữ.
+    setLocale('vi')
+    const commitHint = 'Hãy chọn model AI trong Cài đặt để viết thông điệp commit.'
+    expect(tr(commitHint)).toBe(commitHint)
+    setLocale('en')
+    expect(tr(commitHint)).toBe('Select an AI model in Settings to write a commit message.')
+  })
+
   it('enStrings có đủ các nhóm của bản tiếng Việt', () => {
     setLocale('vi')
     const groups = Object.keys(t) as (keyof typeof t)[]

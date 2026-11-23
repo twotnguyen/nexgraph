@@ -70,7 +70,7 @@ export const uiEnOthers: Record<string, string> = {
   'Hiện trong Finder': 'Reveal in Finder',
   'Hiện ô thay': 'Show replace field',
   'Huỷ': 'Cancel',
-  'Hãy chọn model Pi trong Cài đặt để viết thông điệp commit.': 'Select a Pi model in Settings to write a commit message.',
+  'Hãy chọn model AI trong Cài đặt để viết thông điệp commit.': 'Select an AI model in Settings to write a commit message.',
   'Hãy lưu các tệp đang sửa trước khi chuyển vào Thùng rác.': 'Save modified files before moving them to Trash.',
   'Hãy lưu các tệp đang sửa trước khi đổi tên hoặc di chuyển.': 'Save modified files before renaming or moving them.',
   'Khung xem ảnh': 'Image viewport',

@@ -980,7 +980,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     revision, activeFile, previewFile, dirtyFiles, findFocus,
     editor: activeEditor, symbols: documentSymbols.symbols, symbolError: documentSymbols.error,
     debugTarget, worktreeAvailable: !!openWorktree && !!window.nexgraph.git, chatDock, hosted,
-    openFlow, openArch, openNode, openNodeId, openCode, previewCode,
+    openFlow, openArch, openNode, openNodeId, openCode, previewCode, pickTarget: !!pathFrom,
     pinFile: (file, line) => { setPreviews((cur) => cur.filter((item) => item !== file)); openCode(file, line ?? 1) },
     closeFile, renamePath: renamedPath, trashPath: trashedPath,
     showSubgraph: (g) => highlightFromChat(g.nodes, g.edges, null),

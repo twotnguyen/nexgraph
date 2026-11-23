@@ -161,6 +161,8 @@ export interface NexGraphApi {
   index: {
     scan(projectId: string): Promise<ScanInfo>
     start(projectId: string, opts?: IndexOptions): Promise<{ jobId: string }>
+    /** Lựa chọn lập chỉ mục đã lưu theo dự án (hộp thoại mở lại đúng trạng thái). */
+    options(projectId: string): Promise<IndexOptions | null>
     status(jobId: string): Promise<Job>
     cancel(jobId: string): Promise<void>
     /** Lập chỉ mục tăng dần; `status: 'skipped'` khi đang lập chỉ mục đầy đủ hoặc đang refresh. */
