@@ -56,10 +56,11 @@ def _seed_ids(G, question: str) -> tuple[list[str], list[str]]:
         return [], find_node_ambiguity(G, question) or source_exact or exact
     terms = _query_terms(question)
     vietnamese = has_vietnamese(question)
-    if vietnamese:
-        terms = drop_vi_stopwords(terms, question)
-        if not terms:
-            return [], []
+    content = drop_vi_stopwords(terms, question) if vietnamese else terms
+    if vietnamese and not content:
+        return [], []
+    # Chấm điểm bằng MỌI từ như main (hư từ vẫn có thể là hạt giống hợp lệ, vd `tim_nguoi_dung`
+    # khi hỏi "người dùng đăng nhập thế nào"); chỉ lọc hạt giống theo từ có nghĩa để bỏ chuỗi con rác.
     qs = _score_query(G, terms, collect_per_term_seeds=True, path_weight=_query_path_weight(terms))
     best = qs.best_seed_by_term
     intent = {t for t in best if t in _RELATIONAL_INTENT_TERMS}
@@ -68,7 +69,7 @@ def _seed_ids(G, question: str) -> tuple[list[str], list[str]]:
     seeds = _pick_seeds(qs.ranked, G=G, best_seed_by_term=best, term_order=qs.term_order)
     if vietnamese:
         # Chỉ nhận hạt giống khớp theo ranh giới từ/định danh: bỏ kiểu `thế` → `the` trong `other`.
-        seeds = [node_id for node_id in seeds if _node_matches(G, node_id, terms)]
+        seeds = [node_id for node_id in seeds if _node_matches(G, node_id, content)]
     return seeds, []
 
 

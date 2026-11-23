@@ -20,8 +20,9 @@ def build_match_query(q: str, any_terms: bool = False) -> str | None:
     """Biến chuỗi người dùng nhập thành truy vấn FTS5 an toàn: mọi từ nằm trong ngoặc kép nên toán tử không có nghĩa.
     any_terms=True (Hỏi graph): khớp từ nào cũng được, bm25 xếp nút khớp nhiều từ hiếm lên trước.
 
-    Câu tiếng Việt: bỏ từ dừng cơ bản trước khi dựng truy vấn; từ 2–3 ký tự chỉ khớp nguyên từ
-    (không thêm `*`) để `the`/`sao` không kéo về `other`/`saver` (A4-F4).
+    Câu tiếng Việt: bỏ từ dừng cơ bản trước khi dựng truy vấn; token 2–3 ký tự CÓ DẤU tiếng Việt chỉ khớp
+    nguyên từ (không thêm `*`) để `the`/`sao` không kéo về `other`/`saver` (A4-F4). Token không dấu
+    (kể cả trong câu tiếng Việt) vẫn giữ tiền tố như main, để không mất recall (I3).
     """
     terms: list[str] = []
     for token in drop_vi_stopwords(re.findall(r"\w+", q, re.UNICODE), q)[:MAX_TERMS]:
@@ -30,8 +31,8 @@ def build_match_query(q: str, any_terms: bool = False) -> str | None:
             continue
         low = token.lower()
         if len(parts) == 1:
-            # Câu tiếng Việt: từ ngắn chỉ khớp nguyên từ; câu khác giữ tiền tố như trước.
-            terms.append(f'"{low}"' + ("*" if len(low) >= 4 or not has_vietnamese(q) else ""))
+            exact_only = len(low) < 4 and has_vietnamese(token)
+            terms.append(f'"{low}"' + ("" if exact_only else "*"))
         else:
             terms.append(f'("{low}"* OR ({" AND ".join(f"{chr(34)}{p}{chr(34)}" for p in parts)}))')
     return (" OR " if any_terms else " AND ").join(terms) or None
