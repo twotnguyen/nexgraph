@@ -221,3 +221,56 @@ def test_export_without_hard_links_still_does_not_overwrite(copy_fixture, index_
     second = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
     assert second.name == "py_mini app-graph-2.json"
     assert first.read_bytes() == b"nguoi dung da sua" and second.stat().st_size > 0
+
+
+def test_hard_kill_during_write_leaves_no_destination_file(copy_fixture, index_project, tmp_path):
+    """SIGKILL giữa lúc ghi (mất điện): tên đích chưa được tạo, không có tệp dở 0 byte/dở dang.
+
+    Mô phỏng đúng lỗi thật của head 4705df3: tên đích được giữ chỗ rồi ghi trực tiếp vào đó, kill cứng
+    để lại `py_mini app-graph.json` dở (reviewer đo 12 byte). Trên code hiện tại chữ dở chỉ nằm ở tệp tạm ẩn.
+    """
+    import signal
+    import subprocess
+    import sys
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    db = store.conn.execute("PRAGMA database_list").fetchone()[2]
+    out = tmp_path / "out"
+    out.mkdir()
+    script = (
+        "import os, signal, sqlite3\n"
+        "from pathlib import Path\n"
+        "from nexgraph_engine.bridge.to_nx import Scope\n"
+        "from nexgraph_engine.store.graph_store import GraphStore\n"
+        "import nexgraph_engine.export.run as run\n"
+        "\n"
+        "def half_then_kill(store, fmt, scope, target, project_name, gx):\n"
+        "    with open(target, 'wb') as fh:\n"
+        "        fh.write(b'x' * 4096)\n"
+        "        fh.flush()\n"
+        "        os.fsync(fh.fileno())\n"
+        "        os.kill(os.getpid(), signal.SIGKILL)\n"
+        "\n"
+        "run._write = half_then_kill\n"
+        f"conn = sqlite3.connect({db!r})\n"
+        f"run.export_graph(GraphStore(conn), 'json', Scope(), Path({str(out)!r}), 'py_mini app')\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, timeout=120)
+    assert proc.returncode == -signal.SIGKILL, (proc.returncode, proc.stderr[-800:])
+    assert [p.name for p in out.iterdir() if not p.name.startswith(".")] == []
+
+
+def test_export_cleans_stale_temp_files_left_by_killed_runs(copy_fixture, index_project, tmp_path):
+    """Tệp `.{tên}.*.tmp` còn lại do lần xuất bị kill phải được dọn khi xuất lần sau vào cùng thư mục."""
+    import os
+    import time
+
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    stale = tmp_path / ".py_mini app-graph.json.deadbeef.tmp"
+    stale.write_bytes(b"rac cua lan xuat bi kill")
+    os.utime(stale, (time.time() - 7200, time.time() - 7200))  # cũ hơn 1 giờ
+    fresh = tmp_path / ".py_mini app-graph.json.cafebabe.tmp"
+    fresh.write_bytes(b"dang ghi do")
+    export_graph(store, "json", Scope(), tmp_path, "py_mini app")
+    assert not stale.exists()
+    assert fresh.exists(), "tệp tạm mới (< 1 giờ) có thể của tiến trình khác đang ghi, không được xoá"

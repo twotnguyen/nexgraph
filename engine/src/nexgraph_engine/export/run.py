@@ -1,10 +1,12 @@
 """Export đồ thị sang các định dạng của Graphify bằng hàm của bản vendor (spec F10 §3.4)."""
 from __future__ import annotations
 
+import glob
 import os
 import re
 import shutil
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +50,20 @@ def unique_dir(target: Path) -> Path:
     raise OSError(f"Không tìm được tên trống cho {target.name}")
 
 
+def _cleanup_stale_tmp(base: Path) -> None:
+    """Dọn `.{tên}.*.tmp` do lần xuất trước bị kill (`finally` không chạy) — chỉ tệp cũ hơn 1 giờ.
+
+    Tệp mới hơn có thể của tiến trình khác đang ghi vào cùng thư mục nên để nguyên.
+    """
+    cutoff = time.time() - _TMP_MAX_AGE_SECONDS
+    for path in base.parent.glob(glob.escape(f".{base.name}.") + "*.tmp"):
+        try:
+            if path.stat().st_mtime < cutoff:
+                path.unlink(missing_ok=True)
+        except OSError:
+            pass  # tệp vừa bị người khác dọn hoặc không xoá được: lần xuất sau dọn tiếp
+
+
 def _link_or_copy(tmp: Path, candidate: Path) -> None:
     """Đặt `tmp` vào tên `candidate` mà không đè: hard link, lùi về `O_EXCL` + chép khi FS không hỗ trợ.
 
@@ -72,11 +88,16 @@ def _link_or_copy(tmp: Path, candidate: Path) -> None:
         raise
 
 
+_TMP_MAX_AGE_SECONDS = 3600
+
+
 def write_new_file(base: Path, writer) -> Path:
     """Ghi ra tên tạm rồi đặt sang tên chưa tồn tại (hard link, hoặc `O_EXCL` + chép).
 
     Không đè tệp cũ và không để lại tệp 0 byte nếu writer hỏng giữa chừng (GFY-09 minor 5).
+    Tệp tạm của lần xuất bị kill trước đó (`finally` không chạy) được dọn khi bắt đầu xuất.
     """
+    _cleanup_stale_tmp(base)
     stem, suffix = base.stem, base.suffix
     for index in range(1, 1001):
         candidate = base if index == 1 else base.with_name(f"{stem}-{index}{suffix}")
