@@ -48,8 +48,32 @@ def unique_dir(target: Path) -> Path:
     raise OSError(f"Không tìm được tên trống cho {target.name}")
 
 
+def _link_or_copy(tmp: Path, candidate: Path) -> None:
+    """Đặt `tmp` vào tên `candidate` mà không đè: hard link, lùi về `O_EXCL` + chép khi FS không hỗ trợ.
+
+    FAT32/exFAT (USB, thẻ SD) và nhiều ổ mạng/SMB không có hard link → `os.link` ném ENOTSUP/EPERM/EXDEV.
+    Khi đó giữ nguyên tắc "không đè": mở tên đích bằng `O_CREAT|O_EXCL` (FileExistsError nếu ai đó vừa tạo)
+    rồi chép nội dung từ tệp tạm; chép hỏng giữa chừng thì xoá tên đích vừa giữ.
+    """
+    try:
+        os.link(tmp, candidate)
+        return
+    except FileExistsError:
+        raise
+    except OSError:
+        pass  # ENOTSUP/EPERM/EXDEV/EOPNOTSUPP/EINVAL: định dạng ổ không hỗ trợ hard link
+    # FileExistsError ở đây phải nổi lên cho vòng lặp chọn tên khác, nên mở trước `try` bên dưới.
+    handle = os.fdopen(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644), "wb")
+    try:
+        with handle as dst, open(tmp, "rb") as src:
+            shutil.copyfileobj(src, dst)
+    except BaseException:
+        candidate.unlink(missing_ok=True)  # không để lại tệp dở khi chép hỏng
+        raise
+
+
 def write_new_file(base: Path, writer) -> Path:
-    """Ghi ra tên tạm rồi `link` sang tên chưa tồn tại.
+    """Ghi ra tên tạm rồi đặt sang tên chưa tồn tại (hard link, hoặc `O_EXCL` + chép).
 
     Không đè tệp cũ và không để lại tệp 0 byte nếu writer hỏng giữa chừng (GFY-09 minor 5).
     """
@@ -61,7 +85,7 @@ def write_new_file(base: Path, writer) -> Path:
         tmp = base.with_name(f".{base.name}.{uuid.uuid4().hex}.tmp")
         try:
             writer(tmp)
-            os.link(tmp, candidate)  # nguyên tử, FileExistsError nếu ai đó vừa tạo
+            _link_or_copy(tmp, candidate)  # nguyên tử, FileExistsError nếu ai đó vừa tạo
             return candidate
         except FileExistsError:
             continue

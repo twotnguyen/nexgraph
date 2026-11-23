@@ -216,3 +216,25 @@ def test_relink_jobs_are_coalesced(api, monkeypatch):
             break
         time.sleep(0.02)
     assert services.jobs.get(first)["state"] == "done"
+
+
+def test_global_export_on_filesystem_without_hard_links(api, copy_fixture, tmp_path, monkeypatch):
+    import errno
+    import os
+
+    lib, app = _pair(api, copy_fixture)
+    _join(api, lib, app)
+    out = tmp_path / "fat"
+    out.mkdir()
+
+    def unsupported(src, dst, *args, **kwargs):
+        raise OSError(errno.ENOTSUP, "Operation not supported", str(src), None, str(dst))
+
+    monkeypatch.setattr(os, "link", unsupported)
+    r = api.post("/v1/global/export", json={"out_dir": str(out)})
+    assert r.status_code == 200, r.text
+    first = Path(r.json()["files"][0])
+    assert first.is_file() and first.stat().st_size > 0
+    second = Path(api.post("/v1/global/export", json={"out_dir": str(out)}).json()["files"][0])
+    assert second != first and second.is_file() and second.stat().st_size > 0
+    assert first.stat().st_size > 0

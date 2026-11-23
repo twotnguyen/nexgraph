@@ -182,3 +182,42 @@ def test_failed_export_leaves_no_placeholder_file(index_project, copy_fixture, t
     with pytest.raises(RuntimeError):
         run_mod.export_graph(store, "json", Scope(), tmp_path, "py_mini app")
     assert [p.name for p in tmp_path.iterdir() if p.suffix == ".json" or p.name.startswith(".")] == []
+
+
+_FMT_TARGETS = [
+    ("html", "py_mini app-graph.html"), ("callflow_html", "py_mini app-callflow.html"),
+    ("obsidian", "py_mini app-obsidian"), ("wiki", "py_mini app-wiki"), ("svg", "py_mini app-graph.svg"),
+    ("graphml", "py_mini app.graphml"), ("cypher", "py_mini app-cypher.txt"), ("json", "py_mini app-graph.json"),
+    ("markdown", "py_mini app-GRAPH_REPORT.md")]
+
+
+def _no_hard_links(monkeypatch):
+    """Ổ FAT32/exFAT/SMB: `os.link` ném ENOTSUP (đo được trên ổ FAT thật, xem rereview-36)."""
+    import errno
+    import os
+
+    def unsupported(src, dst, *args, **kwargs):
+        raise OSError(errno.ENOTSUP, "Operation not supported", str(src), None, str(dst))
+
+    monkeypatch.setattr(os, "link", unsupported)
+
+
+@pytest.mark.parametrize("fmt,expect", _FMT_TARGETS)
+def test_export_each_format_on_filesystem_without_hard_links(copy_fixture, index_project, tmp_path, monkeypatch, fmt, expect):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    _no_hard_links(monkeypatch)
+    r = export_graph(store, fmt, Scope(), tmp_path, "py_mini app")
+    target = tmp_path / expect
+    assert str(target) in r.files and target.exists()
+    assert (target.is_dir() and any(target.iterdir())) or (target.is_file() and target.stat().st_size > 0)
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".") and p.name.endswith(".tmp")] == []
+
+
+def test_export_without_hard_links_still_does_not_overwrite(copy_fixture, index_project, tmp_path, monkeypatch):
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    _no_hard_links(monkeypatch)
+    first = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    first.write_bytes(b"nguoi dung da sua")
+    second = Path(export_graph(store, "json", Scope(), tmp_path, "py_mini app").files[0])
+    assert second.name == "py_mini app-graph-2.json"
+    assert first.read_bytes() == b"nguoi dung da sua" and second.stat().st_size > 0
