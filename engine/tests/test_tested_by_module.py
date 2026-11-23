@@ -131,3 +131,34 @@ def test_local_shadow_in_another_function_keeps_correct_edge(tmp_path):
         "SELECT a.id_nut, b.id_nut FROM canh c JOIN nut a ON a.ma_nut = c.ma_nut_nguon"
         " JOIN nut b ON b.ma_nut = c.ma_nut_dich WHERE c.loai_canh = 'TESTED_BY'")}
     assert (USER, test_node) in tested
+
+
+ALIAS_PARAM_FILES = {
+    "app/__init__.py": "",
+    "app/models.py": "class User:\n    def name(self):\n        return ''\n",
+    "app/run.py": (
+        "from app import models as gx\n\n\n"
+        "def _write(gx):\n"
+        "    return gx.User()\n\n\n"
+        "def export_graph():\n"
+        "    return _write(gx)\n"
+    ),
+}
+
+
+def test_alias_parameter_passed_module_keeps_call_edge(tmp_path):
+    """MIN-41b N1: `_write(gx)` nhận chính bí danh mô-đun từ hàm gọi — tham số không che lời gọi
+    `gx.User()`; cạnh CALLS đúng không được mất (5 cạnh to_* ở export/run.py)."""
+    root = tmp_path / "alias_param"
+    for rel, text in ALIAS_PARAM_FILES.items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    store = GraphStore(open_graph_db(tmp_path / "alias.db"))
+    store.init_project("p", has_git=False)
+    assert Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event()).run().state == "hoan_tat"
+    calls = {(row[0], row[1]) for row in store.conn.execute(
+        "SELECT a.id_nut, b.id_nut FROM canh c JOIN nut a ON a.ma_nut = c.ma_nut_nguon"
+        " JOIN nut b ON b.ma_nut = c.ma_nut_dich WHERE c.loai_canh = 'CALLS'")}
+    assert ("app/run.py::_write#function", USER) in calls
+

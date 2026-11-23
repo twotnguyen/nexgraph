@@ -247,7 +247,7 @@ def test_hard_kill_during_write_leaves_no_destination_file(copy_fixture, index_p
         "from nexgraph_engine.store.graph_store import GraphStore\n"
         "import nexgraph_engine.export.run as run\n"
         "\n"
-        "def half_then_kill(store, fmt, scope, target, project_name, gx):\n"
+        "def half_then_kill(store, fmt, scope, target, project_name, gx, **kwargs):\n"
         "    with open(target, 'wb') as fh:\n"
         "        fh.write(b'x' * 4096)\n"
         "        fh.flush()\n"
@@ -277,3 +277,33 @@ def test_export_cleans_stale_temp_files_left_by_killed_runs(copy_fixture, index_
     export_graph(store, "json", Scope(), tmp_path, "py_mini app")
     assert not stale.exists()
     assert fresh.exists(), "tệp tạm mới (< 1 giờ) có thể của tiến trình khác đang ghi, không được xoá"
+
+
+def test_callflow_export_forwards_lang(copy_fixture, index_project, tmp_path, monkeypatch):
+    """M2 (review 23/11): HTML callflow phải nhận `lang` của lần xuất, không luôn ép 'en'."""
+    import graphify.callflow_html as callflow
+
+    seen: dict = {}
+
+    def fake_write(*args, **kwargs):
+        seen.update(kwargs)
+        Path(kwargs["output"]).write_text("<!doctype html><title>callflow</title>", encoding="utf-8")
+        return Path(kwargs["output"])
+
+    monkeypatch.setattr(callflow, "write_callflow_html", fake_write)
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    export_graph(store, "callflow_html", Scope(), tmp_path, "py_mini app", lang="vi")
+    assert seen["lang"] == "vi"
+    export_graph(store, "callflow_html", Scope(), tmp_path, "py_mini en", lang="en")
+    assert seen["lang"] == "en"
+
+
+def test_export_route_accepts_lang(api, copy_fixture, tmp_path):
+    pid = _indexed(api, copy_fixture)
+    ok = api.post(f"/v1/projects/{pid}/export",
+                  json={"format": "callflow_html", "scope": {"kind": "all"}, "out_dir": str(tmp_path), "lang": "vi"})
+    assert ok.status_code == 200, ok.text
+    bad = api.post(f"/v1/projects/{pid}/export",
+                   json={"format": "callflow_html", "scope": {"kind": "all"}, "out_dir": str(tmp_path), "lang": "fr"})
+    assert bad.status_code == 400 and bad.json()["error"]["code"] == "bad_param"
+

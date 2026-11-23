@@ -13,6 +13,7 @@ from nexgraph_engine.flows.query import flow_json, flows_for_nodes
 from nexgraph_engine.query.contracts import node_json, read_code
 from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.query.source_policy import SourcePolicy
+from nexgraph_engine.query.terms import NO_MATCH_SUGGESTION, has_words
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.search import search
@@ -39,7 +40,10 @@ def build_context(store: GraphStore, root: Path, question: str, budget: int = 40
     hits = [n for n, _ in search(store.conn, question, limit=20, any_terms=True)
             if n.file is None or source.allows(n.file)]
     if not hits:
-        raise ValueError("Câu hỏi không có từ nào tìm được")
+        if not has_words(question):  # "???" vẫn là lỗi tham số; câu có từ thì gợi ý cách hỏi
+            raise ValueError("Câu hỏi không có từ nào tìm được")
+        return ModelGraph(store, root, source=source).filter({
+            "items": [], "flows": [], "tokens": 0, "truncated": False, "suggestion": NO_MATCH_SUGGESTION})
     seeds = hits[:SEEDS]
     seed_pks = [store.pk_of(n.id) for n in seeds]
     neighbor_ids: list[str] = []

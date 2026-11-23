@@ -151,6 +151,113 @@ def test_stdio_cli(indexed):
     assert payload(anyio.run(run))
 
 
+def _stdio_probe(root, data_dir, messages: list[dict]) -> subprocess.CompletedProcess:
+    env = {k: v for k, v in os.environ.items() if k != "NEXGRAPH_MCP_KEY"}
+    return subprocess.run(
+        [sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root), "--data-dir", str(data_dir)],
+        input="".join(json.dumps(message) + "\n" for message in messages),
+        capture_output=True, text=True, encoding="utf-8", timeout=60, env=env)
+
+
+def test_unknown_probe_before_initialize_is_quiet(indexed):
+    """A4-F1: Claude Code gửi `server/discover` trước `initialize`; trả MethodNotFound gọn,
+    không dump 31 lỗi validation ra stderr, và initialize sau đó vẫn thành công."""
+    root, data_dir = indexed
+    proc = _stdio_probe(root, data_dir, [
+        {"jsonrpc": "2.0", "id": 1, "method": "server/discover", "params": {}},
+        {"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {
+            "protocolVersion": "2025-11-25", "capabilities": {},
+            "clientInfo": {"name": "probe", "version": "0"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+    ])
+    assert proc.returncode == 0
+    responses = {r.get("id"): r for r in (json.loads(line) for line in proc.stdout.splitlines() if line.strip())}
+    assert responses[1]["error"]["code"] == -32601
+    assert responses[1]["error"]["message"] == "Method not found: server/discover"
+    assert responses[2]["result"]["serverInfo"]["name"] == "nexgraph"
+    assert "result" in responses[2]
+    stderr_lines = [line for line in proc.stderr.splitlines() if line.strip()]
+    assert len(stderr_lines) <= 1, proc.stderr
+    assert "Failed to validate request" not in proc.stderr
+
+
+
+def _stdio_probe_raw(root, data_dir, chunks: list[bytes]) -> subprocess.CompletedProcess:
+    """Ghi byte thô vào stdin theo từng chunk (cắt giữa ký tự UTF-8) rồi đọc kết quả."""
+    import time
+
+    env = {k: v for k, v in os.environ.items() if k != "NEXGRAPH_MCP_KEY"}
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "nexgraph_engine.cli", "mcp", "--project", str(root), "--data-dir", str(data_dir)],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+    assert proc.stdin is not None
+    for chunk in chunks:
+        proc.stdin.write(chunk)
+        proc.stdin.flush()
+        time.sleep(0.05)
+    proc.stdin.close()
+    out = proc.stdout.read() if proc.stdout is not None else b""
+    err = proc.stderr.read() if proc.stderr is not None else b""
+    code = proc.wait(timeout=60)
+    return subprocess.CompletedProcess(proc.args, code, out.decode("utf-8", "replace"), err.decode("utf-8", "replace"))
+
+
+INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    "protocolVersion": "2025-11-25", "capabilities": {}, "clientInfo": {"name": "probe", "version": "0"}}}
+INITIALIZED = {"jsonrpc": "2.0", "method": "notifications/initialized"}
+
+
+def _responses(proc):
+    return {r.get("id"): r for r in (json.loads(line) for line in proc.stdout.splitlines() if line.strip())}
+
+
+def test_unknown_method_after_initialize_is_quiet(indexed):
+    """M6 (review 23/11): method lạ SAU initialize cũng phải trả -32601 gọn, không dump 31 lỗi validation."""
+    root, data_dir = indexed
+    proc = _stdio_probe(root, data_dir, [
+        INIT, INITIALIZED,
+        {"jsonrpc": "2.0", "id": 2, "method": "server/discover", "params": {}},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/list"},
+    ])
+    assert proc.returncode == 0
+    responses = _responses(proc)
+    assert responses[2]["error"] == {"code": -32601, "message": "Method not found: server/discover"}
+    assert responses[3]["result"]["tools"], "tools/list sau method lạ vẫn phải trả lời"
+    assert "Failed to validate request" not in proc.stderr and "validation error" not in proc.stderr
+    assert "Traceback" not in proc.stderr
+
+
+def test_batch_message_after_initialize_keeps_server_alive(indexed):
+    root, data_dir = indexed
+    proc = _stdio_probe(root, data_dir, [
+        INIT, INITIALIZED,
+        [{"jsonrpc": "2.0", "id": 10, "method": "ping"},
+         {"jsonrpc": "2.0", "id": 11, "method": "tools/list"}],
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/list"},
+    ])
+    assert proc.returncode == 0
+    responses = _responses(proc)
+    assert responses[10]["error"]["code"] == -32600 and responses[11]["error"]["code"] == -32600
+    assert responses[3]["result"]["tools"], "batch bị từ chối nhưng server phải sống và trả lời tiếp"
+
+
+def test_large_initialize_and_utf8_split_across_chunks(indexed):
+    """>64 KB và UTF-8 bị cắt giữa ký tự khi client ghi stdin: vẫn initialize + tools/list bình thường."""
+    root, data_dir = indexed
+    init = {**INIT, "params": {**INIT["params"],
+                               "clientInfo": {"name": "đ" * 30_000 + "p" * 40_000, "version": "0"}}}
+    line = (json.dumps(init, ensure_ascii=False) + "\n" + json.dumps(INITIALIZED) + "\n"
+            + json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list"}) + "\n").encode("utf-8")
+    assert len(line) > 64 * 1024
+    cut = line.index("đ".encode("utf-8")) + 1  # giữa ký tự nhiều byte
+    proc = _stdio_probe_raw(root, data_dir, [line[:cut], line[cut:cut + 10], line[cut + 10:]])
+    assert proc.returncode == 0
+    responses = _responses(proc)
+    assert responses[1]["result"]["serverInfo"]["name"] == "nexgraph"
+    assert responses[2]["result"]["tools"]
+    assert "Traceback" not in proc.stderr
+
+
 def test_query_graph_tool(indexed):
     body = payload(call(build_server(*indexed), "query_graph", {"question": "login auth"}))
     assert body["nodes"] and "edges" in body
