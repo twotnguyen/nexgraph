@@ -1,5 +1,6 @@
 """Mở CSDL SQLite của NexGraph (đồ thị theo project và cá nhân theo ứng dụng)."""
 import sqlite3
+import time
 from importlib import resources
 from pathlib import Path
 from typing import Literal
@@ -108,6 +109,39 @@ def _create_schema(conn: sqlite3.Connection, sql_name: Literal["graph", "app", "
             pass
 
 
+WAL_RETRY_SECONDS = 5.0  # FLAKY-SCHEMA: `journal_mode = WAL` không dùng busy_timeout khi kết nối khác đang giữ khoá
+WAL_RETRY_DELAY_SECONDS = 0.02
+# Hạn 5 s trên chỉ cho riêng bước `journal_mode`. Khi CSDL bị khoá vĩnh viễn, lần mở đầu tiên còn chờ
+# `BEGIN IMMEDIATE` của `_create_schema` (busy_timeout 5 s) rồi ~5 s ghi schema trước khi tới đây, nên
+# tổng thời gian tới lỗi `database is locked` là ~10 s (đo 10,13 s — review-58 Minor 2). Vẫn hữu hạn.
+
+
+def _is_locked_error(exc: BaseException) -> bool:
+    """SQLite báo bận/khoá (khác lỗi thật như CSDL hỏng hay đầy đĩa)."""
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+    text = str(exc).lower()
+    return "locked" in text or "busy" in text
+
+
+def _enable_wal(conn: sqlite3.Connection) -> None:
+    """Bật WAL, thử lại khi SQLite báo bận.
+
+    `PRAGMA journal_mode = WAL` cần khoá độc quyền; nếu kết nối khác đang mở/đọc — app và MCP mở CSDL
+    lần đầu cùng lúc là tình huống thật — SQLite trả SQLITE_BUSY ngay chứ không chờ `busy_timeout`
+    (CI Windows PR #53 đỏ đúng ở đây). Thử lại có giới hạn là cách SQLite khuyến nghị.
+    """
+    deadline = time.monotonic() + WAL_RETRY_SECONDS
+    while True:
+        try:
+            conn.execute("PRAGMA journal_mode = WAL")
+            return
+        except sqlite3.OperationalError as exc:
+            if not _is_locked_error(exc) or time.monotonic() >= deadline:
+                raise
+            time.sleep(WAL_RETRY_DELAY_SECONDS)
+
+
 def _split_statements(sql: str) -> list[str]:
     out, buf = [], ""
     for line in sql.splitlines(keepends=True):
@@ -133,6 +167,7 @@ def _open(
         path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA foreign_keys = ON")
     if read_only:
         # Một truy vấn HTTP/MCP có thể đọc nhiều bảng khi graph mới được công bố.
@@ -150,7 +185,7 @@ def _open(
     if version == 0 and not read_only:
         _create_schema(conn, sql_name)
     if wal and not read_only:
-        conn.execute("PRAGMA journal_mode = WAL")
+        _enable_wal(conn)
     return conn
 
 

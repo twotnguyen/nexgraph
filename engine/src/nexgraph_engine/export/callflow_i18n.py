@@ -138,6 +138,11 @@ _RULES: list[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
     (re.compile(r"<tr><td>Communities</td>"), "<tr><td>Cộng đồng</td>"),
     (re.compile(r"<tr><td>Documented Sections</td>"), "<tr><td>Phần đã ghi tài liệu</td>"),
     (re.compile(r"<h4>Edge Confidence</h4>"), "<h4>Độ tin cậy của cạnh</h4>"),
+    # ── Thanh công cụ Mermaid (JS template của graphify, ngoài pick_text) ───────────────────────
+    (re.compile(r'title="Zoom out"'), 'title="Thu nhỏ"'),
+    (re.compile(r'title="Zoom in"'), 'title="Phóng to"'),
+    (re.compile(r'title="Fit width">Fit</button>'), 'title="Vừa chiều rộng">Vừa</button>'),
+    (re.compile(r'title="Reset view">Reset</button>'), 'title="Đặt lại khung nhìn">Đặt lại</button>'),
     (re.compile(r" — Architecture Documentation</p>"), " — Tài liệu kiến trúc</p>"),
     (re.compile(r"Generated: (?P<ts>[^<]+) · graphify callflow-html"), "Tạo lúc: \\g<ts> · graphify callflow-html"),
     # ── Siêu cạnh (chỉ có khi đồ thị có hyperedge) ─────────────────────────────────────────────
@@ -148,6 +153,31 @@ _RULES: list[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
 ]
 
 
+def _translate_section_names(html: str) -> str:
+    """Dịch tên phần của graphify chỉ khi nó là nhãn do mẫu sinh ra.
+
+    Trước đây `html.replace(en, vi)` thay toàn trang: tên dự án, nhãn cụm hay tên nút trùng tên phần
+    (`Serving API`, `Tests & Fixtures`…) bị dịch nhầm (review-48 Minor 6). Các ngữ cảnh dưới đây là
+    đúng những chỗ graphify in tên phần: h2 có số thứ tự, h4, nav, bảng tầng, chuỗi luồng, câu mở
+    đầu phần và sơ đồ Mermaid (subgraph + comment).
+    """
+    for en, vi in _SECTION_NAMES.items():
+        esc = re.escape(en)
+        html = re.sub(rf"(<h2\b[^>]*>\s*\d+\.\s*){esc}(</h2>)", rf"\g<1>{vi}\g<2>", html)
+        html = re.sub(rf"<h4>{esc}</h4>", f"<h4>{vi}</h4>", html)
+        html = re.sub(rf'(<a href="#[^"]*">){esc}(</a>)', rf"\g<1>{vi}\g<2>", html)
+        html = re.sub(rf"(<tr><td>){esc}(</td>)", rf"\g<1>{vi}\g<2>", html)
+        html = re.sub(rf"(<p>){esc}( gom phần triển khai)", rf"\g<1>{vi}\g<2>", html)
+        html = re.sub(rf"(%% Section: ){esc}( \()", rf"\g<1>{vi}\g<2>", html)
+        # Nhãn subgraph Mermaid luôn kèm số nút (`"Tên phần<br/><small>12 nodes</small>"`); nhãn node
+        # cùng tên phần nhưng kèm đường dẫn tệp phải giữ nguyên (review-58 Minor 1).
+        html = re.sub(rf'"{esc}<br/><small>(?P<n>\d+) nodes</small>"',
+                      lambda m: f'"{vi}<br/><small>{m["n"]} nodes</small>"', html)
+        html = re.sub(r'(<div class="arrow-chain">)([^<]+)(</div>)',
+                      lambda m: m.group(1) + m.group(2).replace(en, vi) + m.group(3), html)
+    return html
+
+
 def localize_callflow_html(html: str, lang: str) -> str:
     """Dịch HTML callflow sang tiếng Việt khi `lang=\"vi\"`; ngôn ngữ khác trả nguyên bản."""
     if lang != "vi":
@@ -156,8 +186,7 @@ def localize_callflow_html(html: str, lang: str) -> str:
         html = pattern.sub(replacement, html)  # type: ignore[arg-type]
     html = _NOTE.sub(_section_note, html)
     # Tên phần do graphify đặt theo mẫu (archetype) và nhãn cụm dự phòng.
-    for en, vi in _SECTION_NAMES.items():
-        html = html.replace(en, vi)
+    html = _translate_section_names(html)
     html = re.sub(r">Community (?P<n>\d+)<", r">Cộng đồng \g<n><", html)
     html = re.sub(r"<small>(?P<n>\d+) nodes</small>", r"<small>\g<n> nút</small>", html)
     html = re.sub(r"<td>(?P<n>\d+) nodes</td>", r"<td>\g<n> nút</td>", html)

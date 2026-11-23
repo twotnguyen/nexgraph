@@ -16,6 +16,22 @@ def test_report_excludes_tests_and_files(copy_fixture, index_project):
     assert r["truncated"] is False
 
 
+def test_report_community_labels_follow_lang(copy_fixture, index_project):
+    """MIN-51b: nhãn `Cụm quanh X` lưu tiếng Việt — report lang=en phải dịch lúc trả, không đổi dữ liệu lưu."""
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+
+    en = report_json(store, root, lang="en")
+    assert en["communities"]
+    assert all("Cụm" not in c["label"] and "Cộng đồng" not in c["label"] for c in en["communities"])
+    assert any(c["label"].startswith("Cluster around ") for c in en["communities"])
+    # VI giữ nguyên như trước; dữ liệu trong CSDL vẫn là nhãn tiếng Việt.
+    vi = report_json(store, root, lang="vi")
+    assert any(c["label"].startswith("Cụm quanh ") for c in vi["communities"])
+    stored = [r[0] for r in store.conn.execute("SELECT ten FROM khoi_kien_truc")]
+    assert any(name.startswith("Cụm quanh ") for name in stored)
+
+
 def test_report_markdown_has_sections(copy_fixture, index_project):
     store, _, _ = index_project(copy_fixture("py_mini"))
     md = report_markdown(store, "py_mini")

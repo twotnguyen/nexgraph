@@ -929,6 +929,60 @@ def test_batches_finished_before_a_timeout_are_not_read_again(tmp_path, index_pr
     assert store.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 40
 
 
+def test_timeout_resends_only_batches_without_results(tmp_path, index_project, monkeypatch):
+    """review-53 Minor 1: 5 lô treo từng làm đọc lại 3,0× (735/245 lượt) vì mỗi lần treo lại bỏ cả pool.
+
+    Treo một lô không được cắt các lô đang chạy: chỉ tệp của (các) lô treo đi đường từng-tệp, mọi lô khác
+    gửi đúng một lần.
+    """
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    hung = {f"h{i}.py" for i in range(5)}
+    submitted: list[tuple[str, ...]] = []
+    per_file: list[str] = []
+
+    class FiveHungPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            self.parallel = max_workers > 1
+
+        def submit(self, fn, *args):
+            future = Future()
+            target = args[1]
+            if not self.parallel:
+                per_file.append(target.rel_path)
+                future.set_result(fn(*args))
+                return future
+            submitted.append(tuple(f.rel_path for f in target))
+            if any(f.rel_path in hung for f in target):
+                return future  # treo: quá hạn
+            future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 160)
+    for name in hung:  # lớn nhất để LPT rải mỗi tệp vào một lô khác nhau
+        (root / name).write_text("# " + "h" * 300_000 + f"\n\ndef {name[:-3]}():\n    return 1\n", encoding="utf-8")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 4)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", FiveHungPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(indexer, "BATCH_DEADLINE_SECONDS_PER_MB", 0)
+    store, result, _events = index_project(root)
+
+    assert result.state == "hoan_tat" and graph_state(store) == graph_state(serial)
+    assert len(submitted) == len(set(submitted))  # không lô nào bị gửi lại sau một lô treo
+    assert store.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 165
+    hung_batches = [b for b in submitted if set(b) & hung]
+    assert len(hung_batches) == len(hung)  # mỗi tệp treo nằm ở một lô riêng
+    assert sorted(per_file) == sorted(name for b in hung_batches for name in b)
+
+
 def test_single_worker_index_has_no_interruption_message(tmp_path, index_project, monkeypatch):
     """workers == 1 (mọi dự án < 200 tệp, mặc định trên Windows) không có gián đoạn nào để báo.
 
