@@ -3,7 +3,7 @@ import type { GitCommit, GitHunk } from '@shared/api'
 import { createDiffEditor, languageFor } from '../editor/monaco'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
 import { tr } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
 
@@ -54,11 +54,11 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
     void sides.then((result) => {
       if (!live || !host.current) return
       handle = createDiffEditor(host.current, { ...result, language: languageFor(file) })
-    }).catch((e: unknown) => { if (live) setError(errorText(e)) })
+    }).catch((e: unknown) => { if (live) setError(errorMsg(e)) })
     if (rev === undefined && baseChoice === undefined) {
       void api.hunks(projectId, file, staged).then((result) => {
         if (live) setHunks(result)
-      }).catch((e: unknown) => { if (live) setError(errorText(e)) })
+      }).catch((e: unknown) => { if (live) setError(errorMsg(e)) })
     }
     return () => { live = false; handle?.dispose() }
   }, [projectId, file, staged, rev, from, baseChoice, revision])
@@ -72,7 +72,7 @@ export function GitDiffView({ projectId, file, staged, rev, from, onClose, onOpe
       await api.applyHunk(projectId, file, staged, id)
       window.dispatchEvent(new CustomEvent('nexgraph:git-changed', { detail: projectId }))
     } catch (e) {
-      setActionError(errorText(e))
+      setActionError(errorMsg(e))
       setRevision((n) => n + 1)
     } finally {
       setBusy(false)

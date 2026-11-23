@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { tr } from '../../strings'
 import type { TaskDefinition } from '@shared/api'
 import { fuzzyFilter } from '../../state/fuzzy'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
 import { msg, msgText, type Message } from '../../state/messages'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from '../layout/Picker'
@@ -49,7 +49,7 @@ export function TaskPicker({ projectId, history, onPick, onClose, onOpenFile }: 
     let alive = true
     const api = window.nexgraph.tasks
     if (!api) { setError(msg('Không đọc được task ở chế độ này')); return }
-    api.list(projectId).then((items) => { if (alive) setTasks(items) }).catch((e: unknown) => { if (alive) setError(errorText(e)) })
+    api.list(projectId).then((items) => { if (alive) setTasks(items) }).catch((e: unknown) => { if (alive) setError(errorMsg(e)) })
     return () => { alive = false }
   }, [projectId])
 
@@ -59,7 +59,7 @@ export function TaskPicker({ projectId, history, onPick, onClose, onOpenFile }: 
     try {
       onOpenFile(await api.configFile(projectId))
       onClose()
-    } catch (e) { setError(errorText(e)) }
+    } catch (e) { setError(errorMsg(e)) }
   }
 
   const defined = tasks ?? []

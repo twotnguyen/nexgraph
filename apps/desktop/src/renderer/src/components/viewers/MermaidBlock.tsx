@@ -1,6 +1,7 @@
 import type { Mermaid } from 'mermaid'
 import { useEffect, useState, type ReactNode } from 'react'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { useDebounced } from '../../state/useDebounced'
 import { useTheme } from '../../state/useTheme'
 import { tr } from '../../strings'
@@ -27,20 +28,20 @@ export function MermaidBlock({ code, children }: { code: string; children: React
   const theme = useTheme()
   // Gõ liên tục trong khung bên cạnh: chỉ vẽ khi nội dung đứng yên, lần đầu vẽ ngay.
   const source = useDebounced(code, 250)
-  const [result, setResult] = useState<{ svg?: string; error?: string }>({})
+  const [result, setResult] = useState<{ svg?: string; error?: Message }>({})
   useEffect(() => {
     let live = true
     loading ??= import('mermaid').then((module) => module.default)
     void loading.then((mermaid) => {
       mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', suppressErrorRendering: true, theme: theme === 'dark' ? 'dark' : 'default' })
       return mermaid.render(`nexgraph-mermaid-${++sequence}`, source, scratchArea())
-    }).then(({ svg }) => { if (live) setResult({ svg }) }, (error: unknown) => { if (live) setResult({ error: errorText(error) }) })
+    }).then(({ svg }) => { if (live) setResult({ svg }) }, (error: unknown) => { if (live) setResult({ error: errorMsg(error) }) })
     return () => { live = false }
   }, [source, theme])
   // SVG do mermaid trả về ở securityLevel 'strict' (đã qua DOMPurify), không chèn HTML nào khác.
   if (result.svg) return <div className="md-mermaid" dangerouslySetInnerHTML={{ __html: result.svg }} />
   return <>
-    {result.error && <p role="alert" className="md-mermaid-error">{tr('Không vẽ được sơ đồ: {error}', { error: result.error })}</p>}
+    {result.error && <p role="alert" className="md-mermaid-error">{tr('Không vẽ được sơ đồ: {error}', { error: msgText(result.error) })}</p>}
     <pre>{children}</pre>
   </>
 }

@@ -3,6 +3,8 @@ import type { ExportFormat, ExportScope } from '@shared/graph-types'
 import { getLocale } from '../../state/locale'
 import { vi } from '../../strings'
 import { Icon } from '../common/icons'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 type Choice = ExportFormat | 'png' | 'neo4j' | 'falkordb'
 
@@ -24,14 +26,13 @@ interface Props {
 // Hai khung hình: React bỏ hộp thoại khỏi DOM rồi trình duyệt vẽ lại, sau đó mới chụp.
 const nextFrame = () => new Promise<void>((r) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => r()) : setTimeout(r, 16)))
 
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
 
 export function ExportDialog({ projectId, projectName, scope: initialScope, initialFormat = 'html', onClose }: Props) {
   const [choice, setChoice] = useState<Choice>(initialFormat)
   const [scope, setScope] = useState<ExportScope>(initialScope)
   const [busy, setBusy] = useState(false)
   const [capturing, setCapturing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [done, setDone] = useState<Done | null>(null)
   const [uri, setUri] = useState(DEFAULT_URI.neo4j)
   const [user, setUser] = useState('')
@@ -59,7 +60,7 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
     try {
       setDone(await work())
     } catch (e) {
-      setError(errMessage(e))
+      setError(errorMsg(e))
     } finally {
       setBusy(false)
     }
@@ -139,13 +140,13 @@ export function ExportDialog({ projectId, projectName, scope: initialScope, init
           </div>
         )}
 
-        {error && <p role="alert" className="error">{error}</p>}
+        {error && <p role="alert" className="error">{msgText(error)}</p>}
         {done?.truncated && <p className="warn">{vi.export.truncated}</p>}
         {done?.kind === 'files' && (
           <div className="export-done">
             <p>{vi.export.saved}</p>
             <ul>{done.files.map((f) => <li key={f} className="mono">{f}</li>)}</ul>
-            <button type="button" onClick={() => void window.nexgraph.exporter.reveal(projectId, done.files[0]).catch((e) => setError(errMessage(e)))}>{vi.export.reveal}</button>
+            <button type="button" onClick={() => void window.nexgraph.exporter.reveal(projectId, done.files[0]).catch((e) => setError(errorMsg(e)))}>{vi.export.reveal}</button>
           </div>
         )}
         {done?.kind === 'push' && <p className="export-done">{vi.export.pushed(done.nodes, done.edges)}</p>}

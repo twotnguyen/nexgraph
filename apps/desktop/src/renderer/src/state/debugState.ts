@@ -1,7 +1,7 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugEvent, DebugFrame, DebugLoadedSource, DebugModule, DebugScope, DebugVariable, NexGraphApi } from '@shared/api'
-import { errorText } from './errorText'
-import { tr } from '../strings'
+import { errorMsg, errorText } from './errorText'
+import { msg, type Message } from './messages'
 
 export type DebugKind = 'node' | 'python'
 export type DebugStatus = 'idle' | 'starting' | 'running' | 'stopped'
@@ -80,11 +80,11 @@ type State = {
   scopes: ScopeView[]
   modules: DebugModule[]
   loadedSources: DebugLoadedSource[]
-  moduleError: string | null
-  sourceError: string | null
+  moduleError: Message | null
+  sourceError: Message | null
   watches: WatchView[]
   output: string[]
-  error: string | null
+  error: Message | null
   /** Cấu hình đang chọn; null = chạy tệp đang mở như trước. */
   config: ConfigRef | null
 }
@@ -128,7 +128,7 @@ export function setDebugProject(id: string): void {
     const pending = stop.then(() => {
       if (generation === current) patch({ status: 'idle' })
     }, (e: unknown) => {
-      if (generation === current) patch({ status: 'idle', error: errorText(e) })
+      if (generation === current) patch({ status: 'idle', error: errorMsg(e) })
     })
     switching = pending
     void pending.finally(() => { if (switching === pending) switching = null })
@@ -144,11 +144,11 @@ function changeBreakpoints(file: string, points: DebugBreakpoint[]): void {
   patch({ breakpoints })
   if (project) {
     try { localStorage.setItem(storageKey(project), JSON.stringify(breakpoints)) }
-    catch { patch({ error: tr('Không lưu được điểm dừng cho dự án') }) }
+    catch { patch({ error: msg('Không lưu được điểm dừng cho dự án') }) }
   }
   if (state.status !== 'idle' && !switching) {
     const current = generation
-    void api()?.setBreakpoints(file, points).catch((e: unknown) => { if (generation === current) patch({ error: errorText(e) }) })
+    void api()?.setBreakpoints(file, points).catch((e: unknown) => { if (generation === current) patch({ error: errorMsg(e) }) })
   }
 }
 
@@ -202,7 +202,7 @@ export async function selectFrame(frame: DebugFrame): Promise<void> {
     const scopes = await debug.scopes(frame.id)
     const views = await Promise.all(scopes.map(async (s) => ({ ...s, vars: s.expensive ? [] : await debug.variables(s.variablesReference).catch(() => []) })))
     if (request === frameRequest && state.status === 'stopped') patch({ scopes: views })
-  } catch (e) { if (request === frameRequest) patch({ error: errorText(e) }) }
+  } catch (e) { if (request === frameRequest) patch({ error: errorMsg(e) }) }
 }
 
 
@@ -211,8 +211,8 @@ async function refreshInventory(current: number): Promise<void> {
   if (!debug) return
   if (generation === current) patch({ moduleError: null, sourceError: null })
   const [modules, loadedSources] = await Promise.all([
-    debug.modules?.().catch((e: unknown) => { if (generation === current) patch({ modules: [], moduleError: errorText(e) }); return [] }) ?? [],
-    debug.loadedSources?.().catch((e: unknown) => { if (generation === current) patch({ loadedSources: [], sourceError: errorText(e) }); return [] }) ?? []
+    debug.modules?.().catch((e: unknown) => { if (generation === current) patch({ modules: [], moduleError: errorMsg(e) }); return [] }) ?? [],
+    debug.loadedSources?.().catch((e: unknown) => { if (generation === current) patch({ loadedSources: [], sourceError: errorMsg(e) }); return [] }) ?? []
   ])
   if (generation === current) patch({ modules, loadedSources })
 }
@@ -220,8 +220,8 @@ const NOTICE_TEMPLATES: Record<string, string> = {
   'debug.modules_failed': 'Không lấy được modules: {detail}',
   'debug.sources_failed': 'Không lấy được nguồn đã tải: {detail}'
 }
-const noticeText = (event: Extract<DebugEvent, { type: 'notice' }>): string =>
-  tr(event.code ? NOTICE_TEMPLATES[event.code] ?? event.code : event.text ?? '', { detail: event.detail ?? '' })
+const noticeText = (event: Extract<DebugEvent, { type: 'notice' }>): Message =>
+  msg(event.code ? NOTICE_TEMPLATES[event.code] ?? event.code : event.text ?? '', { detail: event.detail ?? '' })
 let listening = false
 function listen() {
   const debug = api()
@@ -245,7 +245,7 @@ function listen() {
         patch({ frames })
         const top = frames.find((f) => f.file) ?? frames[0]
         if (top) void selectFrame(top)
-      }).catch((e: unknown) => { if (request === frameRequest) patch({ error: errorText(e) }) })
+      }).catch((e: unknown) => { if (request === frameRequest) patch({ error: errorMsg(e) }) })
       return
     }
     patch({ status: event.state === 'terminated' ? 'idle' : event.state, frames: [], scopes: [], modules: [], loadedSources: [], moduleError: null, sourceError: null, frameId: null, at: null,
@@ -273,11 +273,11 @@ async function begin(projectId: string, launch: Launch): Promise<void> {
         if (generation !== current) break
         if (initial[path] !== state.breakpoints[path]) {
           try { await debug.setBreakpoints(path, state.breakpoints[path] ?? []) }
-          catch (e) { if (generation === current) patch({ error: errorText(e) }) }
+          catch (e) { if (generation === current) patch({ error: errorMsg(e) }) }
         }
       }
     }
-  } catch (e) { if (generation === current) patch({ error: errorText(e), status: 'idle' }) }
+  } catch (e) { if (generation === current) patch({ error: errorMsg(e), status: 'idle' }) }
   finally { if (starting === task) starting = null }
 }
 
@@ -297,10 +297,10 @@ export const attachDebugging = (projectId: string, kind: DebugKind, host: string
 
 export function debugStep(action: 'continue' | 'next' | 'stepIn' | 'stepOut'): void {
   if (state.status !== 'stopped') return
-  void api()?.step(action, state.threadId).catch((e: unknown) => patch({ error: errorText(e) }))
+  void api()?.step(action, state.threadId).catch((e: unknown) => patch({ error: errorMsg(e) }))
 }
 export function pauseDebugging(): void {
-  if (state.status === 'running') void api()?.pause().catch((e: unknown) => patch({ error: errorText(e) }))
+  if (state.status === 'running') void api()?.pause().catch((e: unknown) => patch({ error: errorMsg(e) }))
 }
 export function restartDebugging(): void {
   if (state.status !== 'running' && state.status !== 'stopped') return
@@ -316,7 +316,7 @@ export function restartDebugging(): void {
       if (generation !== current) break
       if (initial[path] !== state.breakpoints[path]) await debug.setBreakpoints(path, state.breakpoints[path] ?? [])
     }
-  }).catch((e: unknown) => { if (generation === current) patch({ error: errorText(e) }) })
+  }).catch((e: unknown) => { if (generation === current) patch({ error: errorMsg(e) }) })
     .finally(() => { if (starting === task) starting = null })
 }
 export function evaluateConsole(expression: string): void {
@@ -331,5 +331,5 @@ export function evaluateConsole(expression: string): void {
     if (generation === current) patch({ output: [...state.output.slice(-500), `${errorText(e)}\n`] })
   })
 }
-export const stopDebugging = (): void => void api()?.stop().catch((e: unknown) => patch({ error: errorText(e) }))
-export const setDebugError = (error: string | null): void => patch({ error })
+export const stopDebugging = (): void => void api()?.stop().catch((e: unknown) => patch({ error: errorMsg(e) }))
+export const setDebugError = (error: Message | null): void => patch({ error })

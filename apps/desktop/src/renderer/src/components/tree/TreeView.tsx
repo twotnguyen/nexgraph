@@ -56,7 +56,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
   const [loaded, setLoaded] = useState<Map<string, Loaded>>(new Map())
   const [expanded, setExpanded] = useState<Set<string>>(new Set([ROOT]))
   const [focused, setFocused] = useState<string | null>(null)
-  const [errors, setErrors] = useState<Map<string, string>>(new Map())
+  const [errors, setErrors] = useState<Map<string, Message>>(new Map())
   const [edit, setEdit] = useState<Editing | null>(null)
   const [operationError, setOperationError] = useState<Message | null>(null)
   const [working, setWorking] = useState(false)
@@ -124,7 +124,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
         if (pending !== requests.current) return
         if (list && id.endsWith('#file') && (e?.code === 'unknown_node' || e?.code === 'not_indexed')) {
           setLoaded((m) => new Map(m).set(id, { kids: [], truncated: false }))
-        } else setErrors((current) => new Map(current).set(id, e?.message ?? String(e)))
+        } else setErrors((current) => new Map(current).set(id, errorMsg(e)))
       })
       .finally(() => pending.delete(id))
   }
@@ -428,7 +428,7 @@ export function TreeView({ projectId, projectPath, onOpenNode, onOpenCode, compa
 
   const tabStop = items.some(({ node }) => node.id === focused) ? focused : items[0]?.node.id
   const renderError = (id: string) => errors.has(id) ? (
-    <div role="alert" className="tree-error">{errors.get(id)} <button type="button" onClick={() => load(id, true)}>{tr('Thử lại')}</button></div>
+    <div role="alert" className="tree-error">{msgText(errors.get(id))} <button type="button" onClick={() => load(id, true)}>{tr('Thử lại')}</button></div>
   ) : null
   const editor = edit && <input className="tree-edit" autoFocus disabled={working}
     aria-label={edit.kind === 'rename' ? tr('Đổi tên') : edit.kind === 'file' ? tr('Tệp mới') : tr('Thư mục mới')}

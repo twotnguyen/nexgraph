@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Citation, RatingOutcome } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 
 /** Ba nút đánh giá dưới một câu trả lời của agent; lưu vào bộ nhớ làm việc của dự án qua engine. */
 export function AnswerRating({ projectId, question, answer, citations }: {
@@ -24,7 +25,7 @@ export function AnswerRating({ projectId, question, answer, citations }: {
       })
       setState('saved')
     } catch (e) {
-      setError(msg('Không lưu được: {error}', { error: e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e) }))
+      setError(msg('Không lưu được: {error}', { error: errorMsg(e) }))
       setState(outcome === 'da_sua' ? 'correcting' : 'idle')
     }
   }

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { AGENT_IDS, type AgentId, type IntegrationPlan } from '@shared/integration-types'
 import type { ProjectSummary } from '@shared/graph-types'
 import { vi } from '../../strings'
+import { errorMsg } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { Icon } from '../common/icons'
 
 const STRICT_AGENTS: AgentId[] = ['claude', 'codebuddy'] // nền tảng có hook PreToolUse
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
+const errMsg = (e: unknown): Message => errorMsg(e)
 const WRITES = new Set<IntegrationPlan['status']>(['new', 'add', 'update', 'remove', 'delete'])
 
 function invalidMessage(p: IntegrationPlan, removing: boolean): string {
@@ -29,9 +31,9 @@ export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }
   const [strict, setStrict] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [plans, setPlans] = useState<IntegrationPlan[] | null>(null)
-  const [done, setDone] = useState<string | null>(null)
+  const [done, setDone] = useState<Message[] | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const hasStrict = STRICT_AGENTS.includes(agent)
   const opts = hasStrict ? { strict } : undefined
 
@@ -42,7 +44,7 @@ export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }
     setError(null)
     const pending = removing ? window.nexgraph.mcp.planRemove(agent, project.project_id)
       : window.nexgraph.mcp.plan(agent, project.project_id, hasStrict ? { strict } : undefined)
-    pending.then((p) => alive && setPlans(p)).catch((e) => alive && setError(errMessage(e)))
+    pending.then((p) => alive && setPlans(p)).catch((e) => alive && setError(errMsg(e)))
     return () => { alive = false }
   }, [agent, project.project_id, removing, strict, hasStrict])
 
@@ -52,11 +54,11 @@ export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }
     try {
       const p = removing ? await window.nexgraph.mcp.remove(agent, project.project_id) : await window.nexgraph.mcp.apply(agent, project.project_id, opts)
       const written = p.filter((x) => WRITES.has(x.status))
-      setDone(removing ? vi.integration.removed : written.map((x) => vi.integrate.written(x.path)).join(' · '))
+      setDone(removing ? [msg('Đã gỡ NexGraph khỏi các tệp trên')] : written.map((x) => msg('Đã ghi {path}', { path: x.path })))
       // Sau khi ghi/gỡ, mọi phần không invalid đều đã khớp đĩa.
       setPlans(p.map((x) => (WRITES.has(x.status) ? { ...x, status: 'up_to_date' } : x)))
     } catch (e) {
-      setError(errMessage(e))
+      setError(errMsg(e))
     }
   }
   const copy = async (p: IntegrationPlan) => {
@@ -98,8 +100,8 @@ export function IntegrationsDialog({ project, onClose, initialAgent = 'claude' }
         ))}
         {agent === 'codex' && <p className="muted small">{vi.integration.codexTrusted}</p>}
         {agent === 'opencode' && <p className="muted small">{vi.chat.openCodeHint}</p>}
-        {done && <p role="status">{done}</p>}
-        {error && <p role="alert" className="error">{error}</p>}
+        {done && <p role="status">{done.map(msgText).join(' · ')}</p>}
+        {error && <p role="alert" className="error">{msgText(error)}</p>}
         <p className="muted small">{removing ? vi.integration.sharedNote : vi.integrate.note}</p>
         <div className="row">
           <button type="button" className="primary" disabled={!plans || pendingWrites.length === 0} onClick={() => void run()}>

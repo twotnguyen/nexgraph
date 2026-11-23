@@ -6,13 +6,16 @@ import { tr } from '../strings'
  */
 export interface Msg {
   key: string
-  vars?: Record<string, string | number>
+  /** Biến có thể là `Message` khác: câu lỗi lồng nhau vẫn dịch lúc render, không chốt lúc gọi. */
+  vars?: Record<string, MessageVar>
 }
+
+export type MessageVar = string | number | Message
 
 /** `string` là câu động (engine, lỗi hệ thống) — giữ nguyên; `Msg` dịch theo ngôn ngữ hiện tại. */
 export type Message = string | Msg
 
-export const msg = (key: string, vars?: Record<string, string | number>): Msg => (vars ? { key, vars } : { key })
+export const msg = (key: string, vars?: Record<string, MessageVar>): Msg => (vars ? { key, vars } : { key })
 
 /** Lỗi mang khoá thông điệp: `throw msgError('…')` thay vì ném Error với chuỗi `vi.*` đã dịch, để chỗ bắt dịch lúc render. */
 export class MsgError extends Error {
@@ -29,7 +32,11 @@ export const msgError = (key: string, vars?: Record<string, string | number>): M
 /** Câu hiển thị của một Message; `null`/rỗng thành chuỗi rỗng. */
 export function msgText(message: Message | null | undefined): string {
   if (message == null) return ''
-  return typeof message === 'string' ? message : tr(message.key, message.vars)
+  if (typeof message === 'string') return message
+  if (!message.vars) return tr(message.key)
+  const vars: Record<string, string | number> = {}
+  for (const [name, value] of Object.entries(message.vars)) vars[name] = typeof value === 'object' ? msgText(value) : value
+  return tr(message.key, vars)
 }
 
 /**

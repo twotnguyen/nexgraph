@@ -1511,7 +1511,36 @@ export const uiEn: Record<string, string> = {
   'Nhiều đoạn mã': 'Multiple excerpts',
   // uiEn-agent ghi đè 'Luồng {id}' thành Thread: bản Anh của luồng đồ thị là Flow.
   'Luồng {id}': 'Flow {id}',
-  'Đã chia {n} cụm': 'Split into {n} {n, plural, one {cluster} other {clusters}}'
+  'Đã chia {n} cụm': 'Split into {n} {n, plural, one {cluster} other {clusters}}',
+  // Câu lấy từ dictionary (không phải literal) nên trước đây thiếu bản Anh: SettingsScreen, IntegrationsDialog.
+  'Kết nối được': 'Connection successful',
+  'Kho khoá an toàn của hệ điều hành không khả dụng. Không thể lưu thông tin đăng nhập AI.': 'The operating system keychain is unavailable. AI credentials cannot be stored.',
+  'Đã ghi {path}': 'Wrote {path}',
+  'Đã gỡ NexGraph khỏi các tệp trên': 'Removed NexGraph from the files above',
+  // Câu dự phòng theo mã lỗi (state/errorText codeErrors) — main trả câu cụ thể chưa có bản Anh.
+  'Engine không phản hồi kịp. Hãy thử lại.': 'The engine did not respond in time. Try again.',
+  'Không kết nối được engine.': 'Could not connect to the engine.',
+  'Không tìm thấy dự án': 'Project not found',
+  'Dự án không phải kho Git': 'The project is not a Git repository',
+  'Thao tác Git không thành công': 'The Git operation failed',
+  'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.': 'Only tasks declared in the project .vscode/tasks.json or .nexgraph/tasks.json can run.',
+  'Task không do NexGraph cấp, hãy chọn lại trong danh sách tác vụ.': 'The task was not issued by NexGraph; pick it again from the task list.',
+  // Mã lỗi của engine (#48/#52) — xem state/errorText codeErrors.
+  'Không ghi được CSDL đồ thị: tệp đang chỉ đọc hoặc thiếu quyền ghi.': 'Could not write the graph database: the file is read-only or write permission is missing.',
+  'Đồ thị đang được cập nhật bởi tiến trình khác. Thử lại sau.': 'The graph is being updated by another process. Try again later.',
+  'Không đọc được CSDL đồ thị của dự án.': 'Could not read the project graph database.',
+  'CSDL đồ thị cũ hơn ứng dụng. Mở lại dự án bằng ứng dụng để nâng cấp.': 'The graph database is older than the app. Reopen the project with the app to upgrade it.',
+  'Phiên bản CSDL đồ thị không được hỗ trợ.': 'This graph database version is not supported.',
+  'Nguồn URL dùng giao thức không được hỗ trợ.': 'The source URL scheme is not supported.',
+  'URL nguồn không được chứa thông tin đăng nhập.': 'The source URL must not contain credentials.',
+  'Cổng trong URL nguồn không hợp lệ.': 'The source URL port is invalid.',
+  'URL nguồn thiếu tên máy chủ.': 'The source URL has no host name.',
+  'URL nguồn trỏ tới endpoint metadata của cloud nên bị chặn.': 'The source URL points to a cloud metadata endpoint and is blocked.',
+  'URL nguồn trỏ tới địa chỉ IP riêng hoặc nội bộ nên bị chặn.': 'The source URL points to a private or internal IP address and is blocked.',
+  'URL nguồn không hợp lệ hoặc bị chặn.': 'The source URL is invalid or blocked.',
+  'Không phân giải được tên máy chủ của URL nguồn.': 'Could not resolve the source URL host name.',
+  'URL nguồn không hợp lệ.': 'The source URL is invalid.',
+  '{n} mục không đọc được khi quét — kiểm tra quyền đọc của các mục đó.': '{n} {n, plural, one {item} other {items}} could not be read during the scan — check read permissions.'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}.

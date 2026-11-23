@@ -10,6 +10,8 @@ import { CanvasState } from '../common/CanvasState'
 import { BOX_H, BOX_W, dotEdge, dotEdgeTypes, dotNodeTypes } from '../common/dotGraph'
 import { blockColor } from './blockStyle'
 import { EvidencePopover } from './EvidencePopover'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 const EVIDENCE_LIMIT = 50
 
@@ -19,7 +21,7 @@ interface Props { projectId: string; revision?: number; onOpenNode: (nodeId: str
   onOpenProjects?: () => void }
 interface Pt { x: number; y: number }
 interface Laid { view: ArchView; pos: Record<string, Pt>; routes: Record<string, Pt[]> }
-interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: string | null }
+interface EvidenceState { link: ArchLink; items: ArchEvidence[]; loading: boolean; error: Message | null }
 
 export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpenCode, initialParent, onParentChange, onOpenProjects }: Props) {
   const theme = useTheme()
@@ -30,7 +32,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
     : initialParent
   const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null }, ...(initialDirectory ? [{ id: initialDirectory, label: initialDirectory }] : [])])
   const [laid, setLaid] = useState<Laid | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [retry, setRetry] = useState(0)
   const [evidence, setEvidence] = useState<EvidenceState | null>(null)
   const current = crumbs[crumbs.length - 1].id
@@ -52,7 +54,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
       )
       if (!alive) return
       setLaid({ view, pos, routes })
-    })().catch((err: Error) => alive && setError(err?.message ?? String(err)))
+    })().catch((err: unknown) => alive && setError(errorMsg(err)))
     return () => {
       alive = false
     }
@@ -84,7 +86,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
       window.nexgraph.graph
         .archEvidence(projectId, link.from, link.to, EVIDENCE_LIMIT)
         .then((items) => setEvidence((cur) => (cur?.link === link ? { link, items, loading: false, error: null } : cur)))
-        .catch((err: Error) => setEvidence((cur) => (cur?.link === link ? { link, items: [], loading: false, error: err.message } : cur)))
+        .catch((err: Error) => setEvidence((cur) => (cur?.link === link ? { link, items: [], loading: false, error: errorMsg(err) } : cur)))
     },
     [projectId]
   )
@@ -119,7 +121,7 @@ export function ArchitectureCanvas({ projectId, revision = 0, onOpenNode, onOpen
         })}
       </nav>
       <div className="legend muted"><span>{vi.arch.legendArrow}</span><span>{vi.arch.legendCount}</span></div>
-      {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
+      {error && <CanvasState kind="error" message={msgText(error)} onRetry={() => setRetry((n) => n + 1)} />}
       {!laid && !error && <CanvasState kind="loading" message={tr('Đang tải kiến trúc…')} />}
       {laid?.view.blocks.length === 0 && !error && <CanvasState kind="empty" message={vi.arch.empty} />}
       {laid && laid.view.links.length > 0 && (

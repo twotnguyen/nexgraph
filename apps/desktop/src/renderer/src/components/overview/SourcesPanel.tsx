@@ -3,8 +3,7 @@ import type { SourceItem } from '@shared/graph-types'
 import { waitJob } from '../../state/waitJob'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
-
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
+import { errorMsg } from '../../state/errorText'
 
 /** Danh sách nguồn tải từ URL của dự án (W6): thêm (job `ingest`, engine tự cập nhật đồ thị), xem, xoá. */
 export function SourcesPanel({ projectId }: { projectId: string }) {
@@ -13,7 +12,7 @@ export function SourcesPanel({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<Message | null>(null)
 
-  const load = () => window.nexgraph.sources.list(projectId).then(setItems, (e) => setError(errMessage(e)))
+  const load = () => window.nexgraph.sources.list(projectId).then(setItems, (e) => setError(errorMsg(e)))
   useEffect(() => { void load() }, [projectId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (action: () => Promise<unknown>) => {
@@ -24,7 +23,7 @@ export function SourcesPanel({ projectId }: { projectId: string }) {
       await action()
       await load()
     } catch (e) {
-      setError(msg('Không tải được: {error}', { error: errMessage(e) }))
+      setError(msg('Không tải được: {error}', { error: errorMsg(e) }))
     } finally {
       setBusy(false)
     }

@@ -5,6 +5,8 @@ import { formatNumber, useLocale } from '../../state/locale'
 import { kindLabel, kindStyle } from '../graph/kindStyle'
 import { CanvasState } from '../common/CanvasState'
 import { LessonsSection } from './LessonsSection'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 interface Props {
   projectId: string
@@ -20,7 +22,7 @@ const breakablePath = (file: string) =>
 
 export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExportMarkdown }: Props) {
   const [report, setReport] = useState<GraphReport | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [retry, setRetry] = useState(0)
   const locale = useLocale()
 
@@ -31,13 +33,13 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
     window.nexgraph.graph
       .report(projectId, locale)
       .then((r) => alive && setReport(r))
-      .catch((e: { message?: string }) => alive && setError(e?.message ?? String(e)))
+      .catch((e: unknown) => alive && setError(errorMsg(e)))
     return () => {
       alive = false
     }
   }, [projectId, revision, retry, locale])
 
-  if (error) return <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />
+  if (error) return <CanvasState kind="error" message={msgText(error)} onRetry={() => setRetry((n) => n + 1)} />
   if (!report) return <CanvasState kind="loading" message={vi.report.loading} />
 
   return (

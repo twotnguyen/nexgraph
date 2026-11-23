@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@shared/graph-types'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { EvidencePopover } from '../architecture/EvidencePopover'
 import { CanvasState } from '../common/CanvasState'
 import { CyclesPopover } from './CyclesPopover'
@@ -19,10 +21,7 @@ interface Props {
 }
 
 interface Crumb { id: string | null; label?: string }
-interface EvidenceState { source: string; target: string; weight: number; items: ArchEvidence[]; loading: boolean; error: string | null }
-
-const errMessage = (err: unknown): string =>
-  err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
+interface EvidenceState { source: string; target: string; weight: number; items: ArchEvidence[]; loading: boolean; error: Message | null }
 
 /** `dir:src` -> `src#directory`, `file:a.py` -> `a.py#file` (id nút của thẻ Graph). */
 export const graphNodeId = (mapId: string): string => {
@@ -40,7 +39,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
   useLocale()
   const [crumbs, setCrumbs] = useState<Crumb[]>([{ id: null }])
   const [data, setData] = useState<ProjectMap | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [retry, setRetry] = useState(0)
   const [selected, setSelected] = useState<MapNode | null>(null)
   const [types, setTypes] = useState({ IMPORTS: true, CALLS: true })
@@ -62,7 +61,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
     setEvidence(null)
     window.nexgraph.graph.map(projectId, { parent: parent ?? undefined, detail: DETAIL })
       .then((m) => alive && setData(m))
-      .catch((e) => alive && setError(errMessage(e)))
+      .catch((e) => alive && setError(errorMsg(e)))
     return () => {
       alive = false
       evidenceRequest.current += 1
@@ -97,7 +96,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
     setEvidence({ source, target, weight, items: [], loading: true, error: null })
     window.nexgraph.graph.archEvidence(projectId, source, target, EVIDENCE_LIMIT)
       .then((items) => request === evidenceRequest.current && setEvidence((cur) => cur && { ...cur, items, loading: false }))
-      .catch((e) => request === evidenceRequest.current && setEvidence((cur) => cur && { ...cur, loading: false, error: errMessage(e) }))
+      .catch((e) => request === evidenceRequest.current && setEvidence((cur) => cur && { ...cur, loading: false, error: errorMsg(e) }))
   }, [data, projectId])
 
   const onNodeClick = useCallback((id: string) => setSelected(data?.nodes.find((n) => n.id === id) ?? null), [data])
@@ -128,7 +127,7 @@ export function MapView({ projectId, revision = 0, onOpenNode, onOpenCode, onOpe
           <button type="button" className="badge" onClick={() => setShowCycles(!showCycles)}>{vi.map.cycles(cycles.total)}</button>
         )}
       </div>
-      {error && <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />}
+      {error && <CanvasState kind="error" message={msgText(error)} onRetry={() => setRetry((n) => n + 1)} />}
       {!data && !error && <CanvasState kind="loading" message={tr('Đang tải bản đồ…')} />}
       {data && (
       <>

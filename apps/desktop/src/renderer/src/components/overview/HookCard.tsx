@@ -2,16 +2,17 @@ import { useEffect, useState } from 'react'
 import type { ProjectSummary } from '@shared/graph-types'
 import { Icon } from '../common/icons'
 import { vi } from '../../strings'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 type Status = 'no_git' | 'off' | 'on' | 'outdated' | 'outside_repo'
-const errMessage = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String((e as { message: unknown }).message) : String(e))
 
 export function HookCard({ project }: { project: ProjectSummary }) {
   const [status, setStatus] = useState<Status | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
 
-  const load = () => window.nexgraph.hook.status(project.project_id).then(setStatus).catch((e) => setError(errMessage(e)))
+  const load = () => window.nexgraph.hook.status(project.project_id).then(setStatus).catch((e) => setError(errorMsg(e)))
   useEffect(() => { void load() }, [project.project_id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openDialog = async () => {
@@ -19,7 +20,7 @@ export function HookCard({ project }: { project: ProjectSummary }) {
     try {
       setPreview(await window.nexgraph.hook.preview(project.project_id))
     } catch (e) {
-      setError(errMessage(e))
+      setError(errorMsg(e))
     }
   }
   const apply = async (install: boolean) => {
@@ -28,7 +29,7 @@ export function HookCard({ project }: { project: ProjectSummary }) {
       setPreview(null)
       await load()
     } catch (e) {
-      setError(errMessage(e))
+      setError(errorMsg(e))
     }
   }
 
@@ -41,7 +42,7 @@ export function HookCard({ project }: { project: ProjectSummary }) {
         <span className="muted">{vi.hook.cardDesc}</span>
         <small className="card-status">{label}</small>
       </button>
-      {error && preview == null && <p role="alert" className="error">{error}</p>}
+      {error && preview == null && <p role="alert" className="error">{msgText(error)}</p>}
       {preview != null && (
         <div className="modal-backdrop">
           <div role="dialog" aria-label={vi.hook.title} className="modal">
@@ -49,7 +50,7 @@ export function HookCard({ project }: { project: ProjectSummary }) {
             <p className="muted">{vi.hook.preview}</p>
             <pre className="mono">{preview}</pre>
             {status === 'outdated' && <p className="muted">{vi.hook.outdated}</p>}
-            {error && <p role="alert" className="error">{error}</p>}
+            {error && <p role="alert" className="error">{msgText(error)}</p>}
             <div className="row">
               {status !== 'on' && <button type="button" className="primary" onClick={() => void apply(true)}>{vi.hook.install}</button>}
               {(status === 'on' || status === 'outdated') && <button type="button" onClick={() => void apply(false)}>{vi.hook.uninstall}</button>}

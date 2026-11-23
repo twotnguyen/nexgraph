@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { LspDiagnostic, LspDocumentSymbol } from '@shared/api'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { refreshDiagnostics, useDiagnostics } from '../../state/diagnostics'
-import { errorText } from '../../state/errorText'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { fuzzyMatch } from '../../state/fuzzy'
 import { smallestSymbolAt } from '../../state/syntaxSelection'
 import { tr } from '../../strings'
@@ -10,8 +11,8 @@ import './editor-tools.css'
 
 export type OpenEditorLocation = (file: string, line: number, column?: number) => void
 
-export function useDocumentSymbols(projectId: string, editor: ActiveEditor | null): { symbols: LspDocumentSymbol[]; error: string | null } {
-  const [result, setResult] = useState<{ editor: ActiveEditor | null; symbols: LspDocumentSymbol[]; error: string | null }>({ editor: null, symbols: [], error: null })
+export function useDocumentSymbols(projectId: string, editor: ActiveEditor | null): { symbols: LspDocumentSymbol[]; error: Message | null } {
+  const [result, setResult] = useState<{ editor: ActiveEditor | null; symbols: LspDocumentSymbol[]; error: Message | null }>({ editor: null, symbols: [], error: null })
   useEffect(() => {
     if (!editor) return
     let live = true
@@ -24,7 +25,7 @@ export function useDocumentSymbols(projectId: string, editor: ActiveEditor | nul
       void Promise.resolve().then(() => api(projectId, editor.file, editor.text())).then((symbols) => {
         if (live && request === serial) setResult({ editor, symbols, error: null })
       }).catch((error: unknown) => {
-        if (live && request === serial) setResult({ editor, symbols: [], error: errorText(error) })
+        if (live && request === serial) setResult({ editor, symbols: [], error: errorMsg(error) })
       })
     }
     load()
@@ -84,9 +85,9 @@ function SymbolList({ symbols, query, collapsed, active, onPick, onToggle, regis
   })}</ul>
 }
 
-type PinnedOutline = { editor: ActiveEditor; symbols: LspDocumentSymbol[]; error: string | null }
+type PinnedOutline = { editor: ActiveEditor; symbols: LspDocumentSymbol[]; error: Message | null }
 
-export function OutlinePanel({ editor, symbols, error }: { editor: ActiveEditor | null; symbols: LspDocumentSymbol[]; error: string | null }) {
+export function OutlinePanel({ editor, symbols, error }: { editor: ActiveEditor | null; symbols: LspDocumentSymbol[]; error: Message | null }) {
   const [query, setQuery] = useState('')
   const [pinned, setPinned] = useState<PinnedOutline | null>(null)
   const [collapsed, setCollapsed] = useState<string[]>([])
@@ -136,7 +137,7 @@ export function OutlinePanel({ editor, symbols, error }: { editor: ActiveEditor 
         {allCollapsed ? tr('Mở rộng tất cả') : tr('Thu gọn tất cả')}
       </button>
     </div>
-    {!shown.editor ? <p className="muted">{tr('Mở một tệp để xem ký hiệu.')}</p> : shown.error ? <p role="alert">{shown.error}</p> :
+    {!shown.editor ? <p className="muted">{tr('Mở một tệp để xem ký hiệu.')}</p> : shown.error ? <p role="alert">{msgText(shown.error)}</p> :
       shown.symbols.length === 0 ? <p className="muted">{tr('Không có ký hiệu trong tệp.')}</p> :
       <SymbolList symbols={shown.symbols} query={query} collapsed={collapsed} active={activeSymbol}
         register={(key, node) => { if (node) rows.current.set(key, node); else rows.current.delete(key) }}

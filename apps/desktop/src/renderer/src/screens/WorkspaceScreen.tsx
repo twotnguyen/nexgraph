@@ -50,11 +50,12 @@ import { getActiveEditor, useActiveEditor } from '../state/activeEditor'
 import { listBookmarks } from '../state/bookmarks'
 import { navigationBack, navigationForward, recordNavigation, type NavigationEntry } from '../state/navigationHistory'
 import { startDiagnostics } from '../state/diagnostics'
-import { errorText } from '../state/errorText'
+import { errorMsg, errorText } from '../state/errorText'
 import { buildExcerpts, consumePendingMultiBuffer, getPendingMultiBuffer, requestMultiBuffer, subscribeMultiBuffer, type MultiBufferRequest } from '../state/multiBuffer'
 import { FileTypeIcon } from '../components/common/FileTypeIcon'
 import { vi, tr } from '../strings'
 import { msg, msgId, msgText, type Message, type Msg } from '../state/messages'
+import { askNotice, pathFound, pathNoLink } from '../state/pathNotice'
 import './workspace.css'
 
 type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
@@ -83,8 +84,6 @@ const readRecentFiles = (projectId: string): string[] => {
 }
 type Overlay = { nodes: GraphNode[]; edges: GraphEdge[] }
 type Panel = 'explorer' | 'find' | 'git' | 'debug' | 'search' | 'changes' | 'tour' | 'outline' | 'diagnostics'
-const messageOf = (e: unknown): string =>
-  e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
 
 /** Ảnh hưởng của một nút hiển thị bằng chính ChangesPanel (nút nguồn đứng ở mục "đã đổi"). */
 const impactAsChanges = (i: NodeImpact): Changes => ({
@@ -214,7 +213,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setFeedbackText((previous) => (msgId(previous) === id ? null : previous))
     })
     void window.nexgraph.watch.start(project.project_id).catch((error: unknown) => {
-      if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: messageOf(error) }))
+      if (current) setFeedback(msg('Không theo dõi được thay đổi của tệp. {error}', { error: errorMsg(error) }))
     })
     return () => {
       current = false
@@ -399,10 +398,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       if (request !== graphRequest.current) return
       // Không nối được: chỉ tô hai nút, không vẽ mũi tên (spec gốc §5.8).
       setOverlay({ nodes: r.nodes, edges: r.unconnected.length ? [] : r.edges })
-      setNotice(r.unconnected.length ? vi.path.noLink : vi.path.found(r.edges.length, r.confidence ?? null))
+      setNotice(r.unconnected.length ? pathNoLink() : pathFound(r.edges.length, r.confidence ?? null))
     } catch (e) {
       if (request === graphRequest.current) {
-        setFeedback(messageOf(e))
+        setFeedback(errorMsg(e))
         setNotice(null)
       }
     }
@@ -416,10 +415,10 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       const r = await window.nexgraph.graph.ask(project.project_id, question)
       if (request !== graphRequest.current) return
       setOverlay(r.nodes.length ? { nodes: r.nodes, edges: r.edges } : null)
-      setNotice(!r.nodes.length ? vi.search.askNone : r.truncated ? vi.search.askTruncated : null)
+      setNotice(askNotice(r.nodes.length, r.truncated))
     } catch (e) {
       if (request === graphRequest.current) {
-        setFeedback(messageOf(e))
+        setFeedback(errorMsg(e))
         setNotice(null)
       }
     }
@@ -452,7 +451,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       const impact = await window.nexgraph.graph.impactOf(project.project_id, node.id)
       if (request === impactRequest.current) setNodeImpact(impact)
     } catch (e) {
-      if (request === impactRequest.current) setFeedback(messageOf(e))
+      if (request === impactRequest.current) setFeedback(errorMsg(e))
     } finally {
       if (request === impactRequest.current) setImpactPending(false)
     }
@@ -465,7 +464,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     // Các lệnh đi tới/quay lại chỉ di chuyển con trỏ trong lịch sử, không thêm mục mới.
     if (record) recordNavigation(project.project_id, { file, line, column: column ?? 1 })
     // Trong extension, tệp mở bằng editor của nền thay cho thẻ Monaco.
-    if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(messageOf(e)))
+    if (window.nexgraph.host) return void window.nexgraph.host.openFile(file, line, lineEnd).catch((e: unknown) => setFeedback(errorMsg(e)))
     const seq = openSeq + 1
     setOpenSeq(seq)
     setFiles((cur) => (cur.some((f) => f.file === file) ? cur.map((f) => (f.file === file ? { file, line, lineEnd, column, seq } : f)) : [...cur, { file, line, lineEnd, column, seq }]))
@@ -485,7 +484,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       else next.delete(file)
       return next
     })
-    void flushEditorState().catch((e) => setFeedback(messageOf(e)))
+    void flushEditorState().catch((e) => setFeedback(errorMsg(e)))
   }, [flushEditorState])
   // Đóng cửa sổ khi còn tệp chưa lưu: chặn unload, main hỏi bằng hộp thoại hệ thống (will-prevent-unload).
   useEffect(() => {
@@ -504,7 +503,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Worktree mở như một dự án: project.open đăng ký thư mục, App chuyển màn hình; còn tệp chưa lưu thì hỏi trước.
   const [worktrees, setWorktrees] = useState(false)
   const openWorktree = onOpenProject && !hosted && ((path: string) => guardLeave(() => {
-    void window.nexgraph.project.open(path).then(onOpenProject, (e: unknown) => setFeedback(errorText(e)))
+    void window.nexgraph.project.open(path).then(onOpenProject, (e: unknown) => setFeedback(errorMsg(e)))
   })?.())
   const closeFiles = (paths: string[], force = false) => {
     const selected = orderedFiles.filter((item) => paths.includes(item.file))
@@ -635,7 +634,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     setSelected(null)
     void window.nexgraph.graph.node(project.project_id, id)
       .then((node) => { if (request === nodeRequest.current) setSelected(node) })
-      .catch((error: unknown) => { if (request === nodeRequest.current) setFeedback(messageOf(error)) })
+      .catch((error: unknown) => { if (request === nodeRequest.current) setFeedback(errorMsg(error)) })
   }
 
   const onTabKeys = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -899,7 +898,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       setTaskHistory(rememberTask(pid, task, oneshot))
       queueTask({ task: resolved })
     } catch (e) {
-      if (taskProject.current === pid) setFeedback(errorText(e))
+      if (taskProject.current === pid) setFeedback(errorMsg(e))
     }
   }
   const rerunTask = async () => {
@@ -911,7 +910,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
       const task = (await window.nexgraph.tasks?.list(project.project_id))?.find((item) => item.label === recent.label && item.command === recent.command)
       if (task) await runTask(task, false)
       else setTaskPicker(true)
-    } catch (e) { setFeedback(errorText(e)) }
+    } catch (e) { setFeedback(errorMsg(e)) }
   }
   useCommand('task.spawn', () => setTaskPicker(true), !hosted && !!window.nexgraph.tasks)
   useCommand('task.rerun', () => void rerunTask(), !hosted && !!window.nexgraph.tasks)

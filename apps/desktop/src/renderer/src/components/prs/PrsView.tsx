@@ -3,11 +3,11 @@ import { SemanticDialog } from '../overview/SemanticDialog'
 import type { GraphNode, PrDetail, PrList } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 import { CanvasState } from '../common/CanvasState'
 
 type Props = { projectId: string; onOpenNode: (id: string) => void }
 
-const messageOf = (e: unknown): string => (e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e))
 const loc = (n: GraphNode) => (n.file ? (n.line_start ? `${n.file}:${n.line_start}` : n.file) : '')
 
 function NodeItems({ nodes, onOpenNode }: { nodes: GraphNode[]; onOpenNode: (id: string) => void }) {
@@ -84,18 +84,18 @@ function Review({ d, onOpenNode }: { d: PrDetail; onOpenNode: (id: string) => vo
 
 export function PrsView({ projectId, onOpenNode }: Props) {
   const [list, setList] = useState<PrList | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [retry, setRetry] = useState(0)
   const [picked, setPicked] = useState<number | null>(null)
   const [detail, setDetail] = useState<PrDetail | null>(null)
-  const [detailError, setDetailError] = useState<string | null>(null)
+  const [detailError, setDetailError] = useState<Message | null>(null)
   const [triage, setTriage] = useState(false)
 
   useEffect(() => {
     let alive = true
     setList(null)
     setError(null)
-    window.nexgraph.prs.list(projectId).then((r) => alive && setList(r)).catch((e) => alive && setError(messageOf(e)))
+    window.nexgraph.prs.list(projectId).then((r) => alive && setList(r)).catch((e) => alive && setError(errorMsg(e)))
     return () => { alive = false }
   }, [projectId, retry])
 
@@ -104,11 +104,11 @@ export function PrsView({ projectId, onOpenNode }: Props) {
     let alive = true
     setDetail(null)
     setDetailError(null)
-    window.nexgraph.prs.detail(projectId, picked).then((r) => alive && setDetail(r)).catch((e) => alive && setDetailError(messageOf(e)))
+    window.nexgraph.prs.detail(projectId, picked).then((r) => alive && setDetail(r)).catch((e) => alive && setDetailError(errorMsg(e)))
     return () => { alive = false }
   }, [projectId, picked])
 
-  if (error) return <CanvasState kind="error" message={error} onRetry={() => setRetry((n) => n + 1)} />
+  if (error) return <CanvasState kind="error" message={msgText(error)} onRetry={() => setRetry((n) => n + 1)} />
   if (!list) return <CanvasState kind="loading" message={vi.prs.loading} />
 
   return (
@@ -157,7 +157,7 @@ export function PrsView({ projectId, onOpenNode }: Props) {
           </ul>
         </section>
       )}
-      {picked != null && detailError && <CanvasState kind="error" message={detailError} />}
+      {picked != null && detailError && <CanvasState kind="error" message={msgText(detailError)} />}
       {picked != null && !detail && !detailError && <CanvasState kind="loading" message={vi.prs.detailLoading(picked)} />}
       {detail && <Review d={detail} onOpenNode={onOpenNode} />}
     </div>

@@ -5,8 +5,9 @@ import { tr } from '../../strings'
 import type { AgentInspection, AgentWorkbench } from './useAgentWorkbench'
 import './agent-history.css'
 import { msgText } from '../../state/messages'
+import type { Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 
-const messageOf = (e: unknown): string => e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
 const pinText = (pinned: boolean): string => pinned ? tr('Bỏ ghim') : tr('Ghim')
 
 /** Thời gian rút gọn kiểu Wu ở cột phải danh sách: vừa xong, 17 phút, 5 giờ, 3 ngày… */
@@ -73,7 +74,7 @@ export function WorkbenchHistory({ work, busy, onPicked }: { work: AgentWorkbenc
 
 export function WorkbenchSettings({ projectId, work, busy, mode, runtime, onSuggest }: { projectId: string; work: AgentWorkbench; busy: boolean; mode: AgentMode | null; runtime?: 'pi' | 'antigravity-cli'; onSuggest?: (text: string) => void }) {
   const [commands, setCommands] = useState<ProjectCommands | null>(null)
-  const [localError, setLocalError] = useState('')
+  const [localError, setLocalError] = useState<Message | null>(null)
   const [commandsLoading, setCommandsLoading] = useState(false)
   const commandRead = useRef(0)
   useEffect(() => {
@@ -90,7 +91,7 @@ export function WorkbenchSettings({ projectId, work, busy, mode, runtime, onSugg
       const result = await window.nexgraph.agent.projectCommands(projectId)
       if (read === commandRead.current) setCommands(result)
     } catch (e) {
-      if (read === commandRead.current) setLocalError(messageOf(e))
+      if (read === commandRead.current) setLocalError(errorMsg(e))
     } finally { if (read === commandRead.current) setCommandsLoading(false) }
   }
   return <section className="agent-subpanel" aria-label={tr('Quyền và giới hạn AI')}>
@@ -114,20 +115,20 @@ export function WorkbenchSettings({ projectId, work, busy, mode, runtime, onSugg
     {googleAccount && <p className="muted small">{tr('NexGraph dừng tác vụ khi hết thời gian. Antigravity chưa cung cấp trần lượt mô hình hoặc token cho kết nối này. Token chỉ hiển thị khi CLI báo, không phải số dư tài khoản hay trần thanh toán.')}</p>}
     <button type="button" disabled={locked || commandsLoading} onClick={() => void loadCommands()}>{commandsLoading ? tr('Đang nhận diện lệnh…') : tr('Nhận diện lệnh dự án')}</button>
     {commands && <div className="agent-command-suggestions">{commands.commands.map((command) => <button type="button" key={command.id} disabled={locked} title={`${command.executable} ${command.args.join(' ')}`} onClick={() => onSuggest?.(tr('Hãy chạy {command} và phân tích kết quả. Nếu thất bại, tìm nguyên nhân và đề xuất hoặc thực hiện sửa phù hợp với chế độ hiện tại.', { command: `${command.executable} ${command.args.join(' ')}` }))}>{command.label}</button>)}{commands.warnings.map((warning) => <p className="muted small" key={warning}>{warning}</p>)}</div>}
-    {localError && <p role="alert" className="error">{localError}</p>}
+    {localError && <p role="alert" className="error">{msgText(localError)}</p>}
   </section>
 }
 
 /** Trạng thái tác vụ, token và công cụ của phiên; nằm ngay trên ô soạn tin. */
 export function WorkbenchStatus({ projectId, work, busy, onInspect }: { projectId: string; work: AgentWorkbench; busy: boolean; onInspect?: (inspection: AgentInspection) => void }) {
-  const [localError, setLocalError] = useState('')
+  const [localError, setLocalError] = useState<Message | null>(null)
   const activeTask = useRef(work.task?.id)
   activeTask.current = work.task?.id
   useEffect(() => setLocalError(''), [projectId])
   const taskLabels = { running: tr('Đang thực hiện'), waiting_approval: tr('Chờ duyệt'), completed: tr('Hoàn tất'), failed: tr('Thất bại'), cancelled: tr('Đã dừng') }
   return <>
     {work.error && <p role="alert" className="error">{msgText(work.error)}</p>}
-    {localError && <p role="alert" className="error">{localError}</p>}
+    {localError && <p role="alert" className="error">{msgText(localError)}</p>}
     {work.notice && <p role="status" className="agent-notice">{msgText(work.notice)}</p>}
     {work.notice && work.noticeDetail && <details className="agent-notice-detail"><summary>{tr('Chi tiết kỹ thuật')}</summary><pre>{work.noticeDetail}</pre></details>}
     {work.task && <div className="agent-task-status" role="status"><span>{taskLabels[work.task.status]}{work.task.turnsKnown === false ? ' · Antigravity CLI' : tr(' · {turns}/{max} lượt', { turns: work.task.turns, max: work.task.limits.maxTurns })}</span>
@@ -137,7 +138,7 @@ export function WorkbenchStatus({ projectId, work, busy, onInspect }: { projectI
           void window.nexgraph.agent.checkpoints(projectId, taskId).then((checkpoints) => {
             if (activeTask.current !== taskId) return
             for (const checkpoint of checkpoints) onInspect?.({ id: checkpoint.id, title: tr('Thay đổi · {path}', { path: checkpoint.path }), file: checkpoint.path, before: checkpoint.before, after: checkpoint.after })
-          }).catch((e) => setLocalError(messageOf(e)))
+          }).catch((e) => setLocalError(errorMsg(e)))
         }}>{tr('Xem thay đổi')}</button>
         <button type="button" disabled={work.pending} onClick={() => { if (window.confirm(tr('Khôi phục mã nguồn đã lưu trong checkpoint của tác vụ? Tệp đã bị sửa thêm sẽ được giữ và báo xung đột.'))) void work.rollback() }}>{tr('Hoàn tác')}</button>
       </>}

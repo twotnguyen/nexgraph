@@ -4,6 +4,8 @@ import type { HighlightKind } from '../graph/kindStyle'
 import { tr, vi } from '../../strings'
 import { useDebounced } from '../../state/useDebounced'
 import { CanvasState } from '../common/CanvasState'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { GraphCanvas } from '../graph/GraphCanvas'
 import { FlowList } from './FlowList'
 import { FlowPlayer } from './FlowPlayer'
@@ -20,9 +22,6 @@ interface Props {
   onSelectedFlowChange?: (id?: number) => void
 }
 
-const errMessage = (err: unknown): string =>
-  err && typeof err === 'object' && 'message' in err ? String((err as { message: unknown }).message) : String(err)
-
 export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, initialFlowId, openRequest, onSelectedFlowChange }: Props) {
   const [list, setList] = useState<FlowListType>({ flows: [], total: 0, truncated: false })
   const [page, setPage] = useState<{ key: string; offset: number } | null>(null)
@@ -34,8 +33,8 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
   const [query, setQuery] = useState('')
   const filter = useDebounced(query.trim(), 180)
   const [kind, setKind] = useState<FlowKind | undefined>(undefined)
-  const [listError, setListError] = useState<string | null>(null)
-  const [detailError, setDetailError] = useState<string | null>(null)
+  const [listError, setListError] = useState<Message | null>(null)
+  const [detailError, setDetailError] = useState<Message | null>(null)
   const [listLoading, setListLoading] = useState(true)
   const [detailLoading, setDetailLoading] = useState(false)
   const [listRetry, setListRetry] = useState(0)
@@ -76,7 +75,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
           ? res
           : { ...res, flows: [...current.flows, ...res.flows] })
       } catch (err) {
-        if (alive && request === listRequest.current) setListError(errMessage(err))
+        if (alive && request === listRequest.current) setListError(errorMsg(err))
       } finally {
         if (alive && request === listRequest.current) {
           loadingMore.current = false
@@ -106,7 +105,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
         setDetail(d)
         setStepIndex(0)
       } catch (err) {
-        if (alive) setDetailError(errMessage(err))
+        if (alive) setDetailError(errorMsg(err))
       } finally {
         if (alive) setDetailLoading(false)
       }
@@ -205,7 +204,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
         onKindChange={setKind}
         truncated={list.truncated}
         loading={listLoading || query.trim() !== filter}
-        error={listError}
+        error={msgText(listError)}
         onRetry={() => setListRetry((n) => n + 1)}
         onLoadMore={loadMore}
       />
@@ -214,7 +213,7 @@ export function FlowsView({ projectId, revision = 0, onOpenCode, onOpenNode, ini
         {!detail ? (
           <div className="canvas-area">
             {detailLoading ? <CanvasState kind="loading" message={tr('Đang tải các bước…')} />
-              : detailError ? <CanvasState kind="error" message={detailError} onRetry={() => setDetailRetry((n) => n + 1)} />
+              : detailError ? <CanvasState kind="error" message={msgText(detailError)} onRetry={() => setDetailRetry((n) => n + 1)} />
                 : <CanvasState kind="empty" message={vi.flows.pick} />}
           </div>
         ) : (

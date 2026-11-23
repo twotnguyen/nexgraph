@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { IndexOptions } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
+import { errorMsg } from '../../state/errorText'
 import { Icon } from '../common/icons'
 
 interface Props {
@@ -90,7 +91,7 @@ export function IndexOptionsDialog({ projectId, onSubmit, onClose }: Props) {
       try {
         await window.nexgraph.indexSources.saveDsn(projectId, dsn.trim())
       } catch (e) {
-        setDsnError(msg('Không lưu được chuỗi kết nối: {error}', { error: e instanceof Error ? e.message : String(e) }))
+        setDsnError(msg('Không lưu được chuỗi kết nối: {error}', { error: errorMsg(e) }))
         return
       }
     }

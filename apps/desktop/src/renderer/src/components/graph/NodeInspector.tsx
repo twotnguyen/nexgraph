@@ -3,6 +3,8 @@ import type { DocSection, GraphNode, NodeExplain } from '@shared/graph-types'
 import { vi } from '../../strings'
 import { kindLabel, kindStyle } from './kindStyle'
 import { NodeMemory } from './NodeMemory'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 import { isVirtualSource } from './virtualSource'
 
 /** Bậc, cụm và cạnh vào/ra theo loại như `explain`: engine đã nhóm sẵn, phần quá 20 node gom theo tệp. */
@@ -44,7 +46,7 @@ function Explain({ projectId, node, onOpenNode }: { projectId: string; node: Gra
 
 function ReadSection({ projectId, node }: { projectId: string; node: GraphNode }) {
   const [section, setSection] = useState<DocSection | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   useEffect(() => {
     setSection(null)
     setError(null)
@@ -54,12 +56,12 @@ function ReadSection({ projectId, node }: { projectId: string; node: GraphNode }
     window.nexgraph.graph
       .section(projectId, node.id)
       .then(setSection)
-      .catch((e: { message?: string }) => setError(e?.message ?? String(e)))
+      .catch((e: unknown) => setError(errorMsg(e)))
   }
   return (
     <section className="read-section">
       {!section && <button type="button" onClick={read}>{vi.explain.readSection}</button>}
-      {error && <p role="alert" className="error">{error}</p>}
+      {error && <p role="alert" className="error">{msgText(error)}</p>}
       {section && (
         <>
           {section.stale && <p className="warn small">{vi.explain.sectionStale}</p>}
