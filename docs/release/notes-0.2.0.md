@@ -1,6 +1,6 @@
 # Ghi chú phát hành NexGraph 0.2.0 (bản nháp)
 
-> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0`; chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. Nội dung tính năng lấy từ lịch sử commit `v0.1.2..main` (72 commit tính đến `f4d6e35`) và mã trên `main`; không chép body tự sinh của `gh release create --generate-notes`.
+> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0`; chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. Nội dung tính năng lấy từ lịch sử commit `v0.1.2..main` (82 commit tính đến `e605b15`) và mã trên `main`; không chép body tự sinh của `gh release create --generate-notes`.
 
 ## Tóm tắt
 
@@ -23,7 +23,6 @@
 Các thay đổi dưới đây đang ở PR mở, **chưa có trên `main`**, nên không nằm trong mục "Tính năng mới". Chỉ giữ dòng nào PR đã merge và CI xanh trước khi tạo tag; nếu không kịp thì bỏ cả mục này.
 
 - **Nhà cung cấp OpenCode Go** trong Cài đặt tài khoản AI (PR #37).
-- **Trích dẫn trong trợ lý AI:** nhận chip trong gạch đầu dòng, inline code và code fence; thông báo thử lại rõ ràng thay vì chi tiết SDK thô (PR #39).
 - **Tăng cường bảo mật tiến trình:** task từ `.vscode/tasks.json`, `.husky/**`, `.github/workflows/**` phải duyệt tay; chặn `core.fsmonitor`; tắt quyền Electron không dùng (PR #38).
 - **Engine:** chặn URL nội bộ cho nhà cung cấp AI, che secret trước khi gửi model, bỏ `dist/`/`__pycache__`/`.venv` khi lập chỉ mục, không ghi đè tệp khi xuất lần hai (PR #36).
 
@@ -33,6 +32,7 @@ Các thay đổi dưới đây đang ở PR mở, **chưa có trên `main`**, n�
 - Xuất PNG ghi vào thư mục xuất đã lưu của dự án thay vì thư mục mặc định.
 - Fixture tên tệp có tab/newline chạy lại được trên macOS/Linux.
 - Smoke bộ cài cập nhật theo giao diện hiện tại; test Git và FS chạy được trên Windows.
+- Trích dẫn trong trợ lý AI nhận chip trong gạch đầu dòng, inline code và code fence; thông báo thử lại rõ ràng thay vì chi tiết SDK thô.
 
 ## Giới hạn đã biết
 
