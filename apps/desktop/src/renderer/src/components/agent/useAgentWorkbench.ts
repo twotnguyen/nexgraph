@@ -1,4 +1,5 @@
 import { tr } from '../../strings'
+import { retryNotice } from './retry'
 
 import { useEffect, useRef, useState } from 'react'
 import type { AgentContextUsage, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot, AgentTask, AgentToolRun, AgentUsage } from '@shared/agent-types'
@@ -41,6 +42,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
   const [execution, setExecution] = useState<AgentExecutionSettings>({ policy: 'review', allowCommands: false })
   const [limits, setLimits] = useState(defaults)
   const [notice, setNotice] = useState('')
+  const [noticeDetail, setNoticeDetail] = useState('')
   const [error, setError] = useState('')
   const [pending, setPending] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -88,13 +90,13 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       if (pid !== projectId || !alive.current) return
       if (!mutating.current && ['session', 'task', 'tool_detail', 'usage', 'command_output'].includes(event.type)) readSeq.current++
       if (event.type === 'session') setSessionId(event.sessionId)
-      if (event.type === 'task') { setTask(event.task); if (event.task.status === 'running' && event.task.turns === 0) { setTools([]); setNotice('') } }
+      if (event.type === 'task') { setTask(event.task); if (event.task.status === 'running' && event.task.turns === 0) { setTools([]); setNotice(''); setNoticeDetail('') } }
       if (event.type === 'tool_detail') setTools((current) => current.some((t) => t.id === event.tool.id)
         ? current.map((t) => t.id === event.tool.id ? event.tool : t) : [...current, event.tool])
       if (event.type === 'usage') setUsage(event.usage)
       if (event.type === 'context') setContext(event.context)
-      if (event.type === 'retry') setNotice(tr('Đang thử lại {attempt}/{max} sau {seconds} giây. {message}', { attempt: event.attempt, max: event.maxAttempts, seconds: Math.ceil(event.delayMs / 1000), message: event.message }))
-      if (event.type === 'compaction') setNotice(event.active ? tr('Đang tóm tắt ngữ cảnh để tiếp tục…') : tr('Đã tóm tắt ngữ cảnh.'))
+      if (event.type === 'retry') { setNotice(retryNotice(event)); setNoticeDetail(event.message) }
+      if (event.type === 'compaction') { setNotice(event.active ? tr('Đang tóm tắt ngữ cảnh để tiếp tục…') : tr('Đã tóm tắt ngữ cảnh.')); setNoticeDetail('') }
       if (event.type === 'command_output') setTools((current) => current.map((t) => t.id === event.id ? { ...t, output: (t.output + event.delta).slice(-65_536) } : t))
       if (event.type === 'done' || event.type === 'error') void refresh().catch(() => {})
     })
@@ -122,7 +124,7 @@ export function useAgentWorkbench(projectId: string, onSnapshot: (snapshot: Agen
       }
     }
   }
-  return { sessions, pinnedIds, sessionId, task, tools, usage, context, execution, limits, notice, error, pending, loading,
+  return { sessions, pinnedIds, sessionId, task, tools, usage, context, execution, limits, notice, noticeDetail, error, pending, loading,
     invalidate: () => { readSeq.current++ },
     restore,
     refresh,

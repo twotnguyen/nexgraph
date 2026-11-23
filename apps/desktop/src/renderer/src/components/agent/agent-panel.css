@@ -366,6 +366,9 @@
 .agent-task-status span { flex: 1; }
 .agent-task-status button { padding: 3px 7px; border-radius: 6px; font-size: 11px; }
 .agent-notice { margin: 0; padding: 4px 16px 6px; color: var(--color-muted); font-size: 11px; overflow-wrap: anywhere; }
+.agent-notice-detail { margin: 0; padding: 0 16px 6px; color: var(--color-muted); font-size: 11px; }
+.agent-notice-detail summary { cursor: pointer; }
+.agent-notice-detail pre { margin: 4px 0 0; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-workbench-status > .error { margin: 0 12px 6px; font-size: 12px; }
 .agent-timeline { margin: 0 12px 6px; font-size: 12px; color: var(--color-muted); }
 .agent-timeline > summary { display: flex; align-items: center; height: 26px; cursor: pointer; }
