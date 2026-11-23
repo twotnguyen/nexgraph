@@ -61,8 +61,12 @@ export function SemanticDialog({ projectId, target: fixed, onClose, onSettings }
     const { jobId } = await window.nexgraph.semantic.start(projectId, target, undefined, noCache)
     try {
       const done = await waitJob(jobId, setJob, 500)
-      setResult(done.result as unknown as SemanticResult)
-      setAppUsage(await window.nexgraph.semantic.usage(jobId))
+      const semantic = done.result as unknown as SemanticResult
+      setResult(semantic)
+      // Đường B: engine đã cộng usage. Đường A: engine trả 0, hỏi main số token đã đếm.
+      if (semantic.usage.input_tokens === 0 && semantic.usage.output_tokens === 0) {
+        setAppUsage(await window.nexgraph.semantic.usage(jobId))
+      }
     } finally {
       setJob(null)
     }

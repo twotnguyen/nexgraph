@@ -924,7 +924,8 @@ export function registerIpc(
     }
     return { jobId }
   })
-  on('semantic:usage', async (jobId: string) => semanticUsage.get(jobId))
+  // Chờ main ghi usage xong: engine có thể báo job done trước khi .finally của runSemanticJob chạy.
+  on('semantic:usage', async (jobId: string) => semanticUsage.wait(jobId))
   on('semantic:cancel', async (jobId: string) => {
     semanticRuns.get(jobId)?.abort()
     await api().cancelJob(jobId)

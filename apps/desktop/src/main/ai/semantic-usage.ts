@@ -9,11 +9,15 @@ const MAX_JOBS = 20
 
 export class SemanticUsageStore {
   private readonly byJob = new Map<string, SemanticUsage>()
+  private readonly waiters = new Map<string, Set<(usage: SemanticUsage | null) => void>>()
 
   set(jobId: string, inputTokens: number, outputTokens: number): void {
     // Xoá rồi thêm lại để job vừa chạy xuống cuối hàng (bị đẩy ra sau cùng khi quá 20 job).
     this.byJob.delete(jobId)
-    this.byJob.set(jobId, { input_tokens: inputTokens, output_tokens: outputTokens })
+    const usage = { input_tokens: inputTokens, output_tokens: outputTokens }
+    this.byJob.set(jobId, usage)
+    for (const notify of this.waiters.get(jobId) ?? []) notify({ ...usage })
+    this.waiters.delete(jobId)
     while (this.byJob.size > MAX_JOBS) {
       const oldest = this.byJob.keys().next().value
       if (oldest === undefined) break
@@ -24,5 +28,29 @@ export class SemanticUsageStore {
   get(jobId: string): SemanticUsage | null {
     const usage = this.byJob.get(jobId)
     return usage ? { ...usage } : null
+  }
+
+  /**
+   * Chờ main ghi usage xong: engine có thể báo job `done` trước khi `.finally` của runSemanticJob kịp
+   * gọi `set()`. Job đường B (engine tự cộng usage) không bao giờ có entry → hết hạn trả null.
+   */
+  wait(jobId: string, timeoutMs = 2_000): Promise<SemanticUsage | null> {
+    const ready = this.byJob.get(jobId)
+    if (ready) return Promise.resolve({ ...ready })
+    return new Promise((resolve) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout>
+      const finish = (usage: SemanticUsage | null): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.waiters.get(jobId)?.delete(finish)
+        resolve(usage)
+      }
+      timer = setTimeout(() => finish(null), timeoutMs)
+      const set = this.waiters.get(jobId) ?? new Set<(usage: SemanticUsage | null) => void>()
+      this.waiters.set(jobId, set)
+      set.add(finish)
+    })
   }
 }

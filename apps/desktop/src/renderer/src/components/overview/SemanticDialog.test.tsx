@@ -98,4 +98,30 @@ describe('SemanticDialog — sửa sau kiểm thử', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Đồng ý và chạy' }))
     expect(api.semantic.start).toHaveBeenCalledWith('p1', 'images', undefined, true)
   })
+
+  it('đường A: engine trả usage 0 thì hiện token main đếm qua semantic.usage', async () => {
+    const zero = { ...done, result: { ...result, usage: { input_tokens: 0, output_tokens: 0 } } }
+    const { api } = installNexgraph({
+      index: { status: vi.fn(async () => zero) },
+      semantic: {
+        getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'openai / gpt-test' })),
+        usage: vi.fn(async () => ({ input_tokens: 240, output_tokens: 60 }))
+      }
+    })
+    render(<SemanticDialog projectId="p1" onClose={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Đồng ý và chạy' }))
+    expect(api.semantic.usage).toHaveBeenCalledWith('sem1')
+    expect(await screen.findByText('Đã dùng 240 token đầu vào, 60 token đầu ra.')).toBeInTheDocument()
+  })
+
+  it('đường B: engine đã có usage thì không hỏi main', async () => {
+    const { api } = installNexgraph({
+      index: { status: vi.fn(async () => done) },
+      semantic: { getSettings: vi.fn(async () => ({ enabled: true, transport: 'app' as const, model: 'openai / gpt-test' })) }
+    })
+    render(<SemanticDialog projectId="p1" onClose={() => {}} />)
+    await userEvent.click(await screen.findByRole('button', { name: 'Đồng ý và chạy' }))
+    expect(await screen.findByText(/Đã dùng 1\.500 token đầu vào/)).toBeInTheDocument()
+    expect(api.semantic.usage).not.toHaveBeenCalled()
+  })
 })
