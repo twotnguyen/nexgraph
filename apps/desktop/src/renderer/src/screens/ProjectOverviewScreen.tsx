@@ -13,6 +13,7 @@ import { msg, msgText, type Message } from '../state/messages'
 import { vi, tr } from '../strings'
 import './welcome.css'
 import './overview.css'
+import { errorMsg } from '../state/errorText'
 
 export type WorkspaceTab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report'
 
@@ -41,10 +42,10 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
   const pid = project.project_id
   const [stats, setStats] = useState<GraphStats | null>(null)
   const [clusters, setClusters] = useState<Message | null>(null)
-  const [statsError, setStatsError] = useState<string | null>(null)
+  const [statsError, setStatsError] = useState<Message | null>(null)
   const [refresh, setRefresh] = useState(0)
   const [reclustering, setReclustering] = useState(false)
-  const [clusterError, setClusterError] = useState<string | null>(null)
+  const [clusterError, setClusterError] = useState<Message | null>(null)
   const [options, setOptions] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [integrating, setIntegrating] = useState(false)
@@ -62,7 +63,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       setStatsError(null)
       void window.nexgraph.graph.stats(pid).then(
         (value) => { if (alive && request === newest) setStats(value) },
-        (error: { message?: string }) => { if (alive && request === newest) setStatsError(error?.message ?? String(error)) }
+        (error: unknown) => { if (alive && request === newest) setStatsError(errorMsg(error)) }
       )
     }
     read()
@@ -86,7 +87,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
       const r = await window.nexgraph.graph.recluster(pid)
       setClusters(msg('Đã chia {n} cụm', { n: r.communities }))
     } catch (e) {
-      setClusterError((e as { message?: string }).message ?? String(e))
+      setClusterError(errorMsg(e))
     } finally {
       setReclustering(false)
     }
@@ -117,7 +118,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
           </div>
         ) : !statsError && <div className="panel-empty"><p className="muted">{vi.overview.loading}</p><div className="skeleton-line" /></div>}
         {statsError && <div className="inline-message error" role="alert">
-          {statsError} <button type="button" onClick={() => setRefresh((value) => value + 1)}>{tr('Tải lại số liệu')}</button>
+          {msgText(statsError)} <button type="button" onClick={() => setRefresh((value) => value + 1)}>{tr('Tải lại số liệu')}</button>
         </div>}
         {noGraph ? <div className="inline-message" role="status">{tr('Chưa có dữ liệu đồ thị. Chọn')} <strong>{vi.overview.reindex}</strong> {tr('để đọc lại thư mục này.')}</div>
           : stats?.stale ? <div className="inline-message warning" role="status"><strong>{vi.overview.stale}</strong><span>{vi.overview.staleHint}</span></div>
@@ -133,7 +134,7 @@ export function ProjectOverviewScreen({ project, onOpenWorkspace, onReindex, onB
           status={reclustering ? vi.overview.reclustering : msgText(clusters)} disabled={reclustering || noGraph} onClick={() => void recluster()} />
         <Card title={vi.semantic.labelsCard} icon="spark" tone="violet" desc={vi.semantic.labelsDesc} disabled={noGraph} onClick={() => setSemantic('labels')} />
       </div>
-      {clusterError && <p role="alert" className="inline-message error">{clusterError}</p>}
+      {clusterError && <p role="alert" className="inline-message error">{msgText(clusterError)}</p>}
       <SourcesPanel projectId={pid} />
 
       <h2>{vi.overview.view}</h2>

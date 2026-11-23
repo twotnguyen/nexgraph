@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { GeminiCliStatus } from '@shared/gemini-types'
 import { Icon } from '../common/icons'
 import { tr } from '../../strings'
+import { errorMsg } from '../../state/errorText'
+import { msgText, type Message } from '../../state/messages'
 
 export function GeminiAccountSettingsCard({ active, disabled = false, onConnect, onApiKey, onDisconnected }: {
   active: boolean
@@ -11,7 +13,7 @@ export function GeminiAccountSettingsCard({ active, disabled = false, onConnect,
   onDisconnected: () => void
 }) {
   const [status, setStatus] = useState<GeminiCliStatus | null>(null)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<Message>('')
   const [busy, setBusy] = useState(false)
   const locked = busy || disabled
   const alive = useRef(true)
@@ -23,7 +25,7 @@ export function GeminiAccountSettingsCard({ active, disabled = false, onConnect,
       try {
         const next = await window.nexgraph.gemini.status()
         if (alive.current && generation === read.current) { setStatus(next); setError('') }
-      } catch (e) { if (alive.current && generation === read.current) setError(e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)) }
+      } catch (e) { if (alive.current && generation === read.current) setError(errorMsg(e)) }
     }
     void refresh()
     const off = window.nexgraph.gemini.onEvent((event) => {
@@ -40,7 +42,7 @@ export function GeminiAccountSettingsCard({ active, disabled = false, onConnect,
       if (!alive.current) return
       const next = await window.nexgraph.gemini.status()
       if (alive.current) { setStatus(next); onDisconnected() }
-    } catch (e) { if (alive.current) setError(e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)) }
+    } catch (e) { if (alive.current) setError(errorMsg(e)) }
     finally { if (alive.current) setBusy(false) }
   }
   const summary = status?.state === 'error' ? tr('Cần kiểm tra lại kết nối') : status?.authenticated ? active ? tr('Đang dùng tài khoản Google') : tr('Đã có kết nối Google')
@@ -56,6 +58,6 @@ export function GeminiAccountSettingsCard({ active, disabled = false, onConnect,
         {active && <button type="button" disabled={locked} onClick={() => void disconnect()}>{tr('Ngắt kết nối NexGraph')}</button>}</div>
     </div>
     <p className="muted small">{tr('Ngắt kết nối chỉ dừng trợ lý Google trong NexGraph. Tài khoản Google do Antigravity quản lý; lựa chọn API key dùng hạn mức riêng.')}</p>
-    {(error || status?.error) && <p role="alert" className="inline-message error">{tr(error || status?.error || '')}</p>}
+    {(error || status?.error) && <p role="alert" className="inline-message error">{tr(msgText(error) || status?.error || '')}</p>}
   </section>
 }

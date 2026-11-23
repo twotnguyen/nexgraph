@@ -13,6 +13,8 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const TRANSLATED = /(?<![\w.$])(vi\.|tr\()/
 /** Gọi hàm dịch ngay trong đối số setter = chốt câu theo ngôn ngữ lúc gọi, không đổi khi người dùng đổi ngôn ngữ. */
 const AT_CALL = /(?<![\w.$])(errorText|msgText|tr)\(|(?<![\w.$])(vi|en)\./
+/** `setX(e?.message ?? String(e))`: chép câu thô của main vào state, không qua `errorMsg`. */
+const RAW_ERROR = /\??\.message\s*\?\?\s*String\(|String\((?:e|err|error|ex)\)/
 /** `setAttribute`/`setTimeout`… không phải state: tham số là hiệu ứng DOM, không phải nhãn giữ lại. */
 const DOM_SETTERS = new Set(['setAttribute', 'setAttributeNS', 'setTimeout', 'setInterval', 'setImmediate', 'setProperty', 'setSelectionRange', 'setPointerCapture', 'setStart', 'setEnd'])
 /** Ngoại lệ có chủ đích: dữ liệu người dùng thấy nhưng không phải nhãn UI (đã ghi rõ lý do). */
@@ -21,6 +23,7 @@ const ALLOWED: { file: string; contains: string; why: string }[] = [
   { file: 'components/collab/CollabUi.tsx', contains: "name || tr('Người dùng')", why: 'tên hiển thị gửi sang phiên cộng tác là dữ liệu, không phải nhãn UI' },
   { file: 'state/debugState.ts', contains: 'output: [...state.output.slice(-500)', why: 'dòng console gỡ lỗi: ghi vào buffer văn bản, không phải nhãn UI' },
   { file: 'screens/WorkspaceScreen.tsx', contains: 'vi.path.noLink', why: 'câu dựng bằng hàm dictionary vi.path.found() (không có khoá phẳng) — ghi ở REPORT F11' },
+  { file: 'App.tsx', contains: "state: 'error', message: msgText(errorMsg(e))", why: 'EngineStatus.message là chuỗi theo hợp đồng IPC; các lần cập nhật sau dùng messageKey của supervisor' },
   { file: 'screens/WorkspaceScreen.tsx', contains: 'vi.search.askNone', why: 'câu dựng từ dictionary vi.search (không có khoá phẳng) — ghi ở REPORT F11' }
 ]
 
@@ -117,7 +120,8 @@ describe('nhãn dịch không bị chốt ngoài lúc render', () => {
         if (DOM_SETTERS.has(match[1])) continue
         const argument = callArgument(text, match.index + match[0].length - 1)
         // `msg(...)`/`msgError(...)` chỉ giữ khoá + biến nên phần bên trong hợp lệ.
-        if (!AT_CALL.test(stripCalls(argument, ['msg', 'msgError']))) continue
+        const plain = stripCalls(argument, ['msg', 'msgError'])
+        if (!AT_CALL.test(plain) && !(RAW_ERROR.test(plain) && !argument.includes('errorMsg('))) continue
         const rel = relative(ROOT, file)
         if (ALLOWED.some((rule) => rule.file === rel && argument.includes(rule.contains))) continue
         hits.push(`${rel}:${text.slice(0, match.index).split('\n').length} — ${match[0]}${argument.trim().slice(0, 90).replace(/\s+/g, ' ')}`)
