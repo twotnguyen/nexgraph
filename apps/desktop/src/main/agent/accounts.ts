@@ -139,6 +139,11 @@ class SecureCredentialStore {
   }
 }
 
+export type AccountDevHooks = {
+  /** Giả lập `setRuntimeApiKey` lỗi khi Đăng xuất để kiểm nhánh G2. Chỉ được nối khi app chưa đóng gói. */
+  failRestoreKey?: boolean
+}
+
 export type AccountDeps = {
   dataDir: string
   prefsFile: string
@@ -146,8 +151,14 @@ export type AccountDeps = {
   openExternal(url: string): void
   /** Sự kiện đăng nhập (auth_url, device_code…) gửi xuống renderer. */
   notify(event: AuthEventView): void
+  /** Thông báo không thuộc luồng đăng nhập (sau Đăng xuất): không đi kèm sự kiện đăng nhập. */
+  notice(message: string): void
+  /** Catalog model đổi ở main (refresh nền sau khi lưu key): renderer tải lại danh sách. */
+  modelsChanged(providerId: string): void
   /** Câu hỏi đăng nhập hiện ở renderer; trả về chuỗi nhập, `null` khi renderer huỷ. */
   ask(prompt: AuthPromptView): Promise<string | null>
+  /** Hook kiểm thử do lớp khởi tạo truyền vào; vắng ở bản đóng gói. */
+  devHooks?: AccountDevHooks
 }
 
 export const CUSTOM_MODEL_SPEC = (id: string, metadata?: CustomProvider) => ({
@@ -160,6 +171,11 @@ export const CUSTOM_MODEL_SPEC = (id: string, metadata?: CustomProvider) => ({
 const OLLAMA_ID = 'ollama-local'
 const OLLAMA_DEFAULT = 'http://127.0.0.1:11434/v1'
 const BLOCKED_OAUTH = new Set(['anthropic'])
+/**
+ * Provider có catalog pi.dev: pi phủ catalog mới qua mạng cho provider built-in. OpenCode Go/Zen đổi model
+ * thường xuyên nên làm mới ngay khi lưu key; provider khác để pi tự làm mới theo nhịp của nó.
+ */
+const CATALOG_REFRESH = new Set(['opencode-go', 'opencode'])
 const finitePositive = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0
 
 /** Local provider chỉ dùng địa chỉ loopback tường minh, không đọc URL do mô hình cung cấp. */
@@ -465,7 +481,22 @@ export class AccountService {
     rememberSecret(key.trim())
     this.deps.secrets.set(providerId, key.trim())
     await this.modelRuntime.setRuntimeApiKey(providerId, key.trim())
+    // Refresh catalog chạy nền: mạng chậm không được giữ nút "Lưu key"/ô key ở trạng thái bận.
+    void this.refreshModelCatalog(providerId)
     this.accountGeneration(providerId, true)
+  }
+
+  /**
+   * pi phủ catalog pi.dev qua mạng cho provider built-in (`refreshModels`, tối đa 4 giờ một lần, cần mạng).
+   * OpenCode Go/Zen đổi model thường xuyên: làm mới ngay khi lưu key để bộ chọn model thấy model mới.
+   * Mạng lỗi không được làm hỏng việc lưu key — catalog đóng gói sẵn vẫn dùng được.
+   */
+  private async refreshModelCatalog(providerId: string): Promise<void> {
+    if (!CATALOG_REFRESH.has(providerId) || !this.modelRuntime.getProvider(providerId)?.refreshModels) return
+    const result = await this.modelRuntime.refresh({ allowNetwork: true, providers: [providerId], signal: AbortSignal.timeout(6_000) })
+      .catch(() => null)
+    // Chỉ báo khi catalog thật sự đổi: renderer tải lại danh sách model (lưu key vẫn không chờ refresh).
+    if (result && !result.aborted && !result.errors.has(providerId)) this.deps.modelsChanged(providerId)
   }
 
   async removeApiKey(providerId: string): Promise<void> {
@@ -534,7 +565,9 @@ export class AccountService {
         ...(p.id === 'anthropic' ? { description: 'Claude qua Anthropic API key' }
           : p.id === 'openai' ? { description: 'API key hoặc tài khoản ChatGPT đủ điều kiện' }
             : p.id === 'google' ? { description: 'Gemini API key từ Google AI Studio; quota theo dự án' }
-              : p.id === 'openrouter' ? { description: 'Model miễn phí và trả phí theo tài khoản OpenRouter' } : {})
+              : p.id === 'openrouter' ? { description: 'Model miễn phí và trả phí theo tài khoản OpenRouter' }
+                : p.id === 'opencode-go' ? { description: 'Gói OpenCode Go: dùng API key OpenCode, model lấy từ danh mục của OpenCode' }
+                  : p.id === 'opencode' ? { description: 'OpenCode Zen: dùng API key OpenCode, tính phí theo lượng dùng' } : {})
       }))
   }
 
@@ -665,19 +698,34 @@ export class AccountService {
     } catch (e) {
       if (!(e instanceof Error) || e.name !== 'CredentialSynchronizationError') throw e
       const result = await this.modelRuntime.refresh({ allowNetwork: false, providers: [providerId] }).catch(() => null)
-      if (!result || result.errors.has(providerId)) throw new AgentError('ai_error', 'Đã xóa thông tin đăng nhập. Mở lại ứng dụng để đồng bộ danh sách tài khoản.')
+      if (!result || result.errors.has(providerId)) {
+        // Credential đã bị xoá nhưng runtime chưa đồng bộ: nạp lại key đã lưu trước khi báo lỗi (G1).
+        await this.restoreSavedKey(providerId)
+        throw new AgentError('ai_error', 'Đã xóa thông tin đăng nhập. Mở lại ứng dụng để đồng bộ danh sách tài khoản.')
+      }
     } finally {
       this.accountGeneration(providerId, true)
     }
-    // Pi xoá cả override runtime khi logout: nạp lại key đã lưu ngay, đúng cách create() nạp lúc khởi động.
+    await this.restoreSavedKey(providerId)
+    if (!revoked) this.deps.notice('Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.')
+  }
+
+  /**
+   * Pi xoá cả override runtime khi logout: nạp lại key đã lưu ngay, đúng cách create() nạp lúc khởi động.
+   * Lỗi đồng bộ không được nuốt im lặng: người dùng phải biết key chưa active trong phiên này (G2).
+   */
+  private async restoreSavedKey(providerId: string): Promise<void> {
     const savedKey = this.deps.secrets.get(providerId)
+    if (!savedKey) return
     try {
-      if (savedKey && (await this.credentials.read(providerId))?.type !== 'oauth') {
-        rememberSecret(savedKey)
-        await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)
-      }
-    } catch { /* key vẫn còn trong ai-key.json; lần khởi động sau sẽ nạp lại */ }
-    if (!revoked) this.deps.notify({ type: 'info', message: 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.' })
+      // Chỉ nối khi lớp khởi tạo cấp hook dev (app chưa đóng gói); bản cài không đọc env cho nhánh này.
+      if (this.deps.devHooks?.failRestoreKey) throw new Error('dev hook: setRuntimeApiKey lỗi')
+      if ((await this.credentials.read(providerId))?.type === 'oauth') return
+      rememberSecret(savedKey)
+      await this.modelRuntime.setRuntimeApiKey(providerId, savedKey)
+    } catch {
+      this.deps.notice('Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.')
+    }
   }
 
   // ----- kiểm tra kết nối: gọi provider thật với model đang chọn -----

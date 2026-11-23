@@ -28,14 +28,18 @@ afterEach(() => {
   rmSync(base, { recursive: true, force: true })
 })
 
-const make = async (over: { notify?: (e: unknown) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox } = {}) => {
+const make = async (over: { notify?: (e: unknown) => void; notice?: (m: string) => void; ask?: (p: unknown) => Promise<string | null>; secretBox?: SecretBox;
+  devHooks?: { failRestoreKey?: boolean }; modelsChanged?: (providerId: string) => void } = {}) => {
   const prefs = join(base, 'prefs.json')
   const svc = await AccountService.create({
     dataDir: base, prefsFile: prefs,
     secrets: new SecretStore(join(base, 'ai-key.json'), over.secretBox ?? box),
     openExternal: (url) => opens.push(url),
     notify: over.notify ?? (() => {}),
-    ask: over.ask ?? (async () => 'answer')
+    notice: over.notice ?? (() => {}),
+    ask: over.ask ?? (async () => 'answer'),
+    ...(over.devHooks ? { devHooks: over.devHooks } : {}),
+    modelsChanged: over.modelsChanged ?? (() => {})
   })
   return { svc, prefs }
 }
@@ -449,12 +453,25 @@ describe('AccountService', () => {
     mkdirSync(join(base, 'agent'), { recursive: true })
     writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
       expires: Date.now() + 3600000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
-    const notify = vi.fn()
+    const notice = vi.fn()
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({}, { status: 503 }))
-    const { svc } = await make({ notify })
+    const { svc } = await make({ notice })
     await svc.logout('openai')
     expect((await svc.modelRuntime.listCredentials()).some((c) => c.providerId === 'openai')).toBe(false)
-    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: expect.stringContaining('Chưa xác nhận được thu hồi phiên từ xa') }))
+    expect(notice).toHaveBeenCalledWith(expect.stringContaining('Chưa xác nhận được thu hồi phiên từ xa'))
+  })
+
+  it('info của luồng đăng nhập chỉ đi kênh sự kiện đăng nhập, không thành thông báo rời', async () => {
+    const notify = vi.fn()
+    const notice = vi.fn()
+    const { svc } = await make({ notify, notice })
+    vi.spyOn(svc.modelRuntime, 'login').mockImplementation(async (_id, _method, interaction) => {
+      interaction.notify({ type: 'info', message: 'Đang mở trình duyệt để đăng nhập' })
+      return { type: 'oauth', access: 'a', refresh: 'r', expires: Date.now() + 3_600_000 }
+    })
+    await svc.loginOAuth('openai')
+    expect(notify).toHaveBeenCalledWith(expect.objectContaining({ type: 'info', message: expect.stringContaining('Đang mở trình duyệt') }))
+    expect(notice).not.toHaveBeenCalled()
   })
 
   it('đăng xuất ChatGPT nạp lại API key đã lưu ngay, không cần khởi động lại', async () => {
@@ -570,6 +587,162 @@ describe('AccountService', () => {
     await svc.connectLocal('http://localhost:11434', 'small')
     expect((await svc.listModels()).find((m) => m.provider === 'ollama-local')).toMatchObject({
       contextWindow: 4096, maxTokens: 1024, supportsTools: false
+    })
+  })
+
+  describe('OpenCode Go (thẻ t_1499a87f)', () => {
+    /** Server giả pi.dev: chỉ nhận đúng URL catalog của opencode-go, trả model chỉ có ở catalog mới. */
+    const catalogHit = () => vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input)
+      if (!url.startsWith('https://pi.dev/api/models/providers/opencode-go')) throw new Error(`fetch ngoài dự kiến: ${url}`)
+      return new Response(JSON.stringify({ models: [{
+        id: 'go-catalog-moi', name: 'Go catalog mới', api: 'openai-completions',
+        baseUrl: 'https://opencode.ai/inference/go/openai/v1', reasoning: false, input: ['text'],
+        cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 1024
+      }] }), { status: 200, headers: { 'content-type': 'application/json', 'last-modified': 'Wed, 01 Jan 2031 00:00:00 GMT' } })
+    })
+
+    it('có trong listProviders với authMethods api_key và mô tả tiếng Việt', async () => {
+      const { svc } = await make()
+      const list = await svc.listProviders()
+      expect(list.find((p) => p.id === 'opencode-go')).toMatchObject({
+        label: 'OpenCode Go', hasKey: false, oauth: false, custom: false, authMethods: ['api_key']
+      })
+      expect(list.find((p) => p.id === 'opencode-go')?.description).toMatch(/OpenCode Go/)
+      expect(list.find((p) => p.id === 'opencode')?.description).toMatch(/OpenCode/)
+    })
+
+    it('lưu key: kho mã hoá, hasKey, model OpenCode Go xuất hiện; xoá key thì mất', async () => {
+      const { svc } = await make()
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+      await svc.setApiKey('opencode-go', 'oc_sk_test_khong_that')
+      expect(scan('oc_sk_test_khong_that')).toEqual([])
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(true)
+      expect((await svc.listModels()).filter((m) => m.provider === 'opencode-go').length).toBeGreaterThan(0)
+      await svc.removeApiKey('opencode-go')
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(false)
+      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go')).toBe(false)
+    })
+
+    it('khởi động lại giữ key và model OpenCode Go', async () => {
+      const { svc: first } = await make()
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+      await first.setApiKey('opencode-go', 'oc_sk_test_restart')
+      const { svc } = await make()
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')).toMatchObject({ hasKey: true, authMethods: ['api_key'] })
+      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go')).toBe(true)
+    })
+
+    it('làm mới catalog pi.dev ngay khi lưu key', async () => {
+      const { svc } = await make()
+      const fetchSpy = catalogHit()
+      await svc.setApiKey('opencode-go', 'oc_sk_test_catalog')
+      await vi.waitFor(() => expect(String(fetchSpy.mock.calls[0]?.[0])).toContain('https://pi.dev/api/models/providers/opencode-go'))
+      await vi.waitFor(async () => expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-moi')).toBe(true))
+    })
+
+    it('lưu key không chờ refresh catalog: mạng treo vẫn trả về ngay, catalog cập nhật ở nền', async () => {
+      const { svc } = await make()
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => { release = resolve })
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+        await gate
+        return new Response(JSON.stringify({ models: [{
+          id: 'go-catalog-nen', name: 'Go catalog nền', api: 'openai-completions',
+          baseUrl: 'https://opencode.ai/inference/go/openai/v1', reasoning: false, input: ['text'],
+          cost: { input: 1, output: 2, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 1024
+        }] }), { status: 200, headers: { 'content-type': 'application/json', 'last-modified': 'Wed, 01 Jan 2031 00:00:00 GMT' } })
+      })
+      const outcome = await Promise.race([
+        svc.setApiKey('opencode-go', 'oc_sk_test_nen').then(() => 'đã lưu'),
+        new Promise<string>((resolve) => setTimeout(() => resolve('bị chặn'), 300))
+      ])
+      expect(outcome).toBe('đã lưu')
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(true)
+      release()
+      await vi.waitFor(async () => expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-nen')).toBe(true))
+      expect(fetchSpy).toHaveBeenCalled()
+    })
+
+    it('refresh catalog nền xong thì báo renderer tải lại danh sách model', async () => {
+      const changed = vi.fn()
+      const { svc } = await make({ modelsChanged: changed })
+      catalogHit()
+      await svc.setApiKey('opencode-go', 'oc_sk_test_bao_catalog')
+      await vi.waitFor(() => expect(changed).toHaveBeenCalledWith('opencode-go'))
+      expect((await svc.listModels()).some((m) => m.provider === 'opencode-go' && m.id === 'go-catalog-moi')).toBe(true)
+    })
+
+    it('refresh catalog lỗi mạng không báo đổi model', async () => {
+      const changed = vi.fn()
+      const { svc } = await make({ modelsChanged: changed })
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+      await svc.setApiKey('opencode-go', 'oc_sk_test_loi_catalog')
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      expect(changed).not.toHaveBeenCalled()
+      expect((await svc.listProviders()).find((p) => p.id === 'opencode-go')?.hasKey).toBe(true)
+    })
+  })
+
+  describe('Minor #29: đăng xuất khi đồng bộ credential lỗi', () => {
+    /** Phiên OAuth openai + key đã lưu (như test I1); trả hàm logout thật của pi để test tự điều khiển lỗi. */
+    const seeded = async (over: { notify?: (e: unknown) => void; notice?: (m: string) => void; devHooks?: { failRestoreKey?: boolean } } = {}) => {
+      mkdirSync(join(base, 'agent'), { recursive: true })
+      writeFileSync(legacyAuth(), JSON.stringify({ openai: { type: 'oauth', access: 'test-access', refresh: 'test-refresh',
+        expires: Date.now() + 3_600_000, clientId: 'oaiapp_saved_registration', sub: 'test-subject' } }))
+      new SecretStore(join(base, 'ai-key.json'), box).set('openai', 'sk-fake-da-luu')
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => String(input).endsWith('openid-configuration')
+        ? Response.json({ revocation_endpoint: 'https://auth.openai.com/oauth/revoke' }) : new Response(null, { status: 200 }))
+      const { svc } = await make(over)
+      return { svc, realLogout: svc.modelRuntime.logout.bind(svc.modelRuntime) }
+    }
+
+    it('G1: refresh lỗi vẫn nạp lại key đã lưu trước khi báo lỗi', async () => {
+      const { svc, realLogout } = await seeded()
+      vi.spyOn(svc.modelRuntime, 'logout').mockImplementation(async (id) => {
+        await realLogout(id) // pi xoá credential trong kho rồi mới báo lỗi đồng bộ runtime
+        throw Object.assign(new Error('không ghi được models.json'), { name: 'CredentialSynchronizationError' })
+      })
+      // Lần refresh đầu (nhánh lỗi của logout) hỏng; lần refresh trong setRuntimeApiKey lúc nạp lại key thì được.
+      let refreshes = 0
+      vi.spyOn(svc.modelRuntime, 'refresh').mockImplementation(async () => {
+        refreshes++
+        return refreshes === 1
+          ? { aborted: false, errors: new Map([['openai', new Error('đồng bộ lỗi')]]) }
+          : { aborted: false, errors: new Map() }
+      })
+      await expect(svc.logout('openai')).rejects.toMatchObject({ code: 'ai_error' })
+      // Key phải active ngay, không phải chờ khởi động lại.
+      expect((await svc.modelRuntime.getAuth('openai'))?.auth.apiKey).toBe('sk-fake-da-luu')
+    })
+
+    it('G2: không nạp lại được key thì báo cho người dùng, không nuốt lỗi', async () => {
+      const notice = vi.fn()
+      const { svc } = await seeded({ notice })
+      vi.spyOn(svc.modelRuntime, 'setRuntimeApiKey').mockRejectedValue(new Error('models.json chỉ đọc'))
+      await expect(svc.logout('openai')).resolves.toBeUndefined()
+      expect(notice).toHaveBeenCalledWith(expect.stringContaining('API key'))
+    })
+
+    it('cờ NEXGRAPH_DEV_FAIL_RESTORE_KEY không có hiệu lực nếu không nối devHooks (bản đóng gói)', async () => {
+      process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY = '1'
+      let svc!: AccountService
+      const notice = vi.fn()
+      try {
+        svc = (await seeded({ notice })).svc // không devHooks: đúng như app.isPackaged
+        await svc.logout('openai')
+        expect((await svc.modelRuntime.getAuth('openai'))?.auth.apiKey).toBe('sk-fake-da-luu')
+      } finally {
+        delete process.env.NEXGRAPH_DEV_FAIL_RESTORE_KEY
+      }
+      expect(notice).not.toHaveBeenCalledWith(expect.stringContaining('chưa nạp lại được API key'))
+    })
+
+    it('devHooks.failRestoreKey (chỉ nối khi dev) mô phỏng setRuntimeApiKey lỗi khi Đăng xuất', async () => {
+      const notice = vi.fn()
+      const { svc } = await seeded({ notice, devHooks: { failRestoreKey: true } })
+      await expect(svc.logout('openai')).resolves.toBeUndefined()
+      expect(notice).toHaveBeenCalledWith(expect.stringContaining('chưa nạp lại được API key'))
     })
   })
 })

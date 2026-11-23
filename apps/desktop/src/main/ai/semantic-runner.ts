@@ -25,7 +25,7 @@ export type CompleteFn = (chunk: LlmChunk, signal: AbortSignal) => Promise<{ tex
 const TERMINAL = new Set(['done', 'error', 'cancelled'])
 
 export async function runSemanticJob(jobId: string, engine: SemanticEngine, complete: CompleteFn,
-  o: { signal: AbortSignal; budget: number; pollMs?: number }): Promise<{ sent: number; failed: number; tokens: number }> {
+  o: { signal: AbortSignal; budget: number; pollMs?: number; onUsage?: (usage: { inputTokens: number; outputTokens: number }) => void }): Promise<{ sent: number; failed: number; tokens: number }> {
   const out = { sent: 0, failed: 0, tokens: 0 }
   // Engine xếp hết khối vào hàng rồi mới chuyển sang waiting_llm: hỏi `next` sớm hơn sẽ nhận 204 nhầm.
   for (;;) {
@@ -45,6 +45,7 @@ export async function runSemanticJob(jobId: string, engine: SemanticEngine, comp
     try {
       const r = await complete(chunk, o.signal)
       out.tokens += r.inputTokens + r.outputTokens
+      o.onUsage?.({ inputTokens: r.inputTokens, outputTokens: r.outputTokens })
       body = { text: r.text }
     } catch (e) {
       if (o.signal.aborted) return out

@@ -69,7 +69,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       forgetRegistration: vi.fn(async () => {}), loginCancel: vi.fn(async () => {}), promptReply: vi.fn(async () => {}), logout: vi.fn(async () => {}),
       models: vi.fn(async () => []), selectModel: vi.fn(async () => {}), test: vi.fn(async () => ({ ok: true, message: '' })),
       discoverLocal: vi.fn(async () => []), connectLocal: vi.fn(async () => {}),
-      onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), ...over.auth
+      onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), onNotice: vi.fn(() => () => {}),
+      onModelsChanged: vi.fn(() => () => {}), ...over.auth
     },
     gemini: {
       status: vi.fn(async () => emptyGeminiStatus()), setup: vi.fn(async () => emptyGeminiStatus({ state: 'signed_out', installed: true })),
@@ -107,7 +108,7 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       list: vi.fn(), detail: vi.fn(), ...over.prs },
     semantic: { getSettings: vi.fn(async () => ({ enabled: false, transport: null, model: null })), setSettings: vi.fn(async (_pid: string, s: { enabled: boolean; transport: 'app' | 'direct' | null }) => ({ ...s, model: s.enabled ? 'openai / gpt-test' : null })),
       estimate: vi.fn(async () => ({ files: ['README.md'], chunks: 1, cached_chunks: 0, input_tokens: 1200, output_tokens: 300, model: 'openai / gpt-test' })),
-      start: vi.fn(async () => ({ jobId: 'sem1' })), cancel: vi.fn(async () => {}), ...over.semantic }
+      start: vi.fn(async () => ({ jobId: 'sem1' })), usage: vi.fn(async () => null), cancel: vi.fn(async () => {}), ...over.semantic }
   }
   ;(window as unknown as { nexgraph: unknown }).nexgraph = api
   return { api, emit: (e: EngineEvent) => handlers.forEach((h) => h(e)), emitAgent: (pid: string, e: AgentEvent) => agentHandlers.forEach((h) => h(pid, e)), emitGemini: (event: GeminiCliEvent) => geminiHandlers.forEach((handler) => handler(event)) }
