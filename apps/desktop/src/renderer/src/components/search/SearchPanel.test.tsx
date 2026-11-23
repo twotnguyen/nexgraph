@@ -70,7 +70,7 @@ describe('SearchPanel', () => {
     await user.type(screen.getByLabelText('Tìm trong đồ thị'), 'login')
     await tick(250)
     await user.click(await screen.findByRole('button', { name: /login/ }))
-    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 42)
+    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 42, 1)
     expect(onOpen).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Xem trên graph' }))
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'lib/a.dart::AuthService.login#method' }))
@@ -85,7 +85,7 @@ describe('SearchPanel', () => {
     await tick(250)
     await screen.findByText('one')
     await user.type(screen.getByLabelText('Tìm trong đồ thị'), '{Enter}')
-    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 7)
+    expect(onOpenCode).toHaveBeenCalledWith('lib/a.dart', 7, 1)
   })
 
   it('shows label, kind and file:line, and opens a result on click', async () => {

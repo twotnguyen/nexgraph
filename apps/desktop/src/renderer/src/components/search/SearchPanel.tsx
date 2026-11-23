@@ -9,7 +9,7 @@ interface Props {
   revision?: number
   onOpen: (node: GraphNode) => void
   /** Khi có: bấm kết quả "Tìm symbol" mở tệp:dòng trong editor; graph vẫn mở được bằng nút phụ. */
-  onOpenCode?: (file: string, line?: number) => void
+  onOpenCode?: (file: string, line?: number, column?: number) => void
   /** Khi có: bật chế độ "Hỏi graph", bấm "Xem trên graph" vẽ vùng con trả về. */
   onShowSubgraph?: (g: { nodes: GraphNode[]; edges: GraphEdge[] }) => void
   onOpenFlow?: (flowId: number) => void
@@ -24,7 +24,8 @@ const errMessage = (err: unknown): string =>
 function NodeButton({ node, onOpen, onOpenCode }: { node: GraphNode; onOpen: (n: GraphNode) => void; onOpenCode?: Props['onOpenCode'] }) {
   const source = node.file && (node.line_start ? `${node.file}:${node.line_start}` : node.file)
   const file = node.file
-  const openCode = onOpenCode && file ? () => onOpenCode(file, node.line_start ?? undefined) : null
+  // Cột 1 để con trỏ đặt đúng dòng của symbol, không chỉ cuộn tới đó.
+  const openCode = onOpenCode && file ? () => onOpenCode(file, node.line_start ?? undefined, 1) : null
   return (
     <div className="search-hit">
       <button type="button" className="entry" onClick={openCode ?? (() => onOpen(node))}>
@@ -78,7 +79,7 @@ function SymbolSearch({ projectId, revision = 0, onOpen, onOpenCode }: Props) {
         onKeyDown={(e) => {
           if (e.key !== 'Enter' || !hits || hits.length === 0) return
           const first = hits[0].node
-          if (onOpenCode && first.file) onOpenCode(first.file, first.line_start ?? undefined)
+          if (onOpenCode && first.file) onOpenCode(first.file, first.line_start ?? undefined, 1)
           else onOpen(first)
         }}
         autoFocus
