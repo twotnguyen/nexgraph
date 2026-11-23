@@ -14,6 +14,7 @@ const provider = (id: string, over: Record<string, unknown> = {}) =>
   ({ id, label: id, hasKey: false, oauth: false, loggedIn: false, custom: false, ...over })
 
 const RESTORE_FAILED = 'Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.'
+const REVOKE_FAILED = 'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.'
 
 afterEach(() => setLocale('vi'))
 
@@ -231,6 +232,20 @@ describe('SettingsScreen', () => {
     expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument()
     act(() => emitNotice({ message: RESTORE_FAILED }))
     expect(await screen.findByText('Signed out but could not reload the saved API key. The key is still in the keychain; reopen the app to use it.')).toBeInTheDocument()
+  })
+
+  it('nhiều auth:notice cùng lúc → hiện đủ cả hai, không che nhau', async () => {
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai', { oauth: true, loggedIn: true, hasKey: true })]) } })
+    const { emitNotice } = installAuthSinks(api)
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
+    act(() => {
+      emitNotice({ message: REVOKE_FAILED })
+      emitNotice({ message: RESTORE_FAILED })
+    })
+    expect(await screen.findByText(REVOKE_FAILED)).toBeInTheDocument()
+    expect(screen.getByText(RESTORE_FAILED)).toBeInTheDocument()
+    expect(screen.getAllByRole('status').filter((el) => el.closest('.toast'))).toHaveLength(2)
   })
 
   it('main báo catalog model đổi sau khi lưu key → danh sách tự tải lại, listener huỷ khi unmount', async () => {

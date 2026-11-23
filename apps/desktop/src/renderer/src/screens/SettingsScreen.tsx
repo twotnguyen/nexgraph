@@ -89,7 +89,11 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const [promptInput, setPromptInput] = useState('')
   const [loginProvider, setLoginProvider] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<string | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
+  // Hàng đợi toast: nhiều auth:notice cùng lúc phải hiện đủ, không ghi đè nhau.
+  const [toasts, setToasts] = useState<{ id: number; message: string }[]>([])
+  const toastSeq = useRef(0)
+  const dismissToast = useCallback((id: number) => setToasts((list) => list.filter((t) => t.id !== id)), [])
+  const pushToast = useCallback((message: string) => setToasts((list) => [...list, { id: ++toastSeq.current, message }]), [])
   const [error, setError] = useState<string | null>(null)
   const [working, setWorking] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -146,25 +150,25 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       setPromptInput('')
     })
     // Thông báo ngoài luồng đăng nhập (ví dụ Đăng xuất không nạp lại được key) — không phụ thuộc loginPending.
-    const offNotice = window.nexgraph.auth.onNotice((n) => setStatus(tr(n.message)))
+    const offNotice = window.nexgraph.auth.onNotice((n) => pushToast(tr(n.message)))
     return () => {
       offEvent()
       offPrompt()
       offNotice()
       if (loginPending.current) void window.nexgraph.auth.loginCancel()
     }
-  }, [])
+  }, [pushToast])
 
   const run = async (fn: () => Promise<void>, okMessage?: string) => {
     if (operation.current) return
     operation.current = true
     setWorking(true)
-    setStatus(null)
+    setToasts([])
     setError(null)
     setTestResult(null)
     try {
       await fn()
-      if (okMessage) setStatus(okMessage)
+      if (okMessage) pushToast(okMessage)
       await load()
     } catch (e) {
       setError(errCode(e) === 'no_keychain' ? vi.accounts.noKeychain : errMessage(e))
@@ -272,7 +276,9 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
       </nav>
       <div className="settings-content" onScroll={onScroll}>
       {error && <p role="alert" className="inline-message error">{error}</p>}
-      {status && <Toast message={status} onDismiss={() => setStatus(null)} />}
+      {toasts.length > 0 && <div className="toast-stack">
+        {toasts.map((t) => <Toast key={t.id} message={t.message} onDismiss={() => dismissToast(t.id)} />)}
+      </div>}
       {pages.length === 0 && <div className="settings-empty"><strong>{tr('Không có kết quả')}</strong><span className="muted">{tr('Không có cài đặt nào khớp “{query}”', { query: query.trim() })}</span></div>}
 
       {pages.some((p) => p.id === 'appearance') && <h1 id="settings-appearance" data-settings-page="appearance" className="settings-page-title">{tr('Giao diện')}</h1>}
