@@ -402,6 +402,82 @@ def test_callflow_section_labels_follow_lang(copy_fixture, index_project, tmp_pa
     assert "Cụm quanh" in vi
 
 
+def _arrow_chain(html: str) -> str:
+    match = re.search(r'<div class="arrow-chain">(.*?)</div>', html, re.S)
+    assert match, "không thấy thẻ luồng trong HTML callflow"
+    return match.group(1)
+
+
+def test_callflow_has_no_flow_without_inter_community_edges(copy_fixture, index_project, tmp_path):
+    """E9b-1 (review-62 Important 1): 0 cạnh giữa cộng đồng thì không in "Luồng chính" hay mũi tên nối mục."""
+    store, _, _ = index_project(copy_fixture("polyglot"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "polyglot", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    en, vi = exported("en"), exported("vi")
+    # Fixture polyglot: 8 cộng đồng, 0 cạnh liên cộng đồng → mọi mũi tên/chuỗi giữa mục đều là bịa.
+    assert " -.-> " not in en and " -.-> " not in vi
+    assert "java -&gt; cpp" not in en and "java -&gt; cpp" not in vi
+    assert _arrow_chain(en) == "No call flow between communities."
+    assert _arrow_chain(vi) == "Không có luồng gọi giữa các nhóm."
+    assert "<h4>Core Flow</h4>" not in en and "<h4>Luồng chính</h4>" not in vi
+
+
+def test_callflow_flow_uses_only_real_inter_community_edges(copy_fixture, index_project, tmp_path):
+    """E9b-1: có cạnh thật 1→2 thì chuỗi chỉ gồm hai mục đó, không nối tiếp mục "Khác" không có cạnh."""
+    store, _, _ = index_project(copy_fixture("bookstore_app"))
+
+    def exported(lang: str) -> str:
+        (tmp_path / lang).mkdir()
+        r = export_graph(store, "callflow_html", Scope(), tmp_path / lang, "bookstore_app", lang=lang)
+        return Path(r.files[0]).read_text(encoding="utf-8")
+
+    assert _arrow_chain(exported("en")) == "lib -&gt; Cluster around auth_service.dart"
+    assert _arrow_chain(exported("vi")) == "lib -&gt; Cụm quanh auth_service.dart"
+
+
+def _synthetic_bg():
+    """Đồ thị 3 cộng đồng: hai cạnh thật 1→2, một cạnh AMBIGUOUS 2→3 (không được tính)."""
+    import networkx as nx
+
+    from nexgraph_engine.bridge.to_nx import BridgeGraph
+
+    def edge(a: str, b: str, *, relation: str = "calls", confidence: str = "EXTRACTED", score: float = 0.9) -> dict:
+        return {"source": a, "target": b, "relation": relation, "confidence": confidence,
+                "confidence_score": score, "weight": 1, "source_file": ""}
+
+    graph = nx.Graph()
+    for node, cid in (("a1", 1), ("a2", 1), ("b1", 2), ("b2", 2), ("c1", 3), ("c2", 3)):
+        graph.add_node(node, id=node, community=cid, label=node)
+    graph.add_edge("a1", "b1", **edge("a1", "b1"))
+    graph.add_edge("a2", "b2", **edge("a2", "b2"))
+    graph.add_edge("a2", "c2", **edge("a2", "c2", confidence="AMBIGUOUS", score=0.2))
+    return BridgeGraph(G=graph, communities={1: ["a1", "a2"], 2: ["b1", "b2"], 3: ["c1", "c2"]},
+                       labels={1: "Alpha", 2: "Beta", 3: "Gamma"})
+
+
+def test_apply_callflow_flow_follows_real_edges_only():
+    """E9b-1: chuỗi theo hướng/trọng số cạnh thật; mục không có cạnh đi ra không bị nối tiếp."""
+    from nexgraph_engine.export.callflow_flow import apply_callflow_flow, flow_chain, section_edge_weights
+
+    bg = _synthetic_bg()
+    sections = [{"id": "community-1", "name": "Alpha", "communities": ["1"]},
+                {"id": "community-2", "name": "Beta", "communities": ["2"]},
+                {"id": "community-3", "name": "Gamma", "communities": ["3"]}]
+    weights = section_edge_weights(bg, sections)
+    assert weights == {("community-1", "community-2"): 2}
+    assert flow_chain(sections, weights) == ["community-1", "community-2"]
+
+    html = ('<h4>Core Flow</h4><div class="arrow-chain">Alpha -> Beta -> Gamma</div>'
+            '<pre class="mermaid">\n    COMMUNITY_1 -.-> COMMUNITY_2\n    COMMUNITY_2 -.-> COMMUNITY_3\n</pre>')
+    out = apply_callflow_flow(html, bg, sections, "en")
+    assert '<div class="arrow-chain">Alpha -&gt; Beta</div>' in out
+    assert " -.-> " not in out
+
+
 def test_markdown_export_follows_lang(copy_fixture, index_project, tmp_path):
     """F4 (A3b-P1): báo cáo Markdown nhận `lang` như callflow, không luôn tiếng Anh."""
     store, _, _ = index_project(copy_fixture("polyglot"))

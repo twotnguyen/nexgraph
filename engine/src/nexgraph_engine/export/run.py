@@ -222,8 +222,13 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
                 sections_path.write_text(json.dumps(sections, ensure_ascii=False), encoding="utf-8")
                 options["sections"] = sections_path
             write_callflow_html(None, graph=graph, **options)
+        from nexgraph_engine.export.callflow_flow import apply_callflow_flow
+        html = target.read_text(encoding="utf-8")
         if lang == "vi":  # graphify chỉ có zh/en: dịch ở lớp NexGraph, không sửa mã vendored
-            target.write_text(localize_callflow_html(target.read_text(encoding="utf-8"), lang), encoding="utf-8")
+            html = localize_callflow_html(html, lang)
+        # Mục lục theo cộng đồng thật: bỏ luồng/mũi tên mà fallback của vendor suy từ thứ tự mục (E9b-1).
+        html = apply_callflow_flow(html, bg, sections, lang)
+        target.write_text(html, encoding="utf-8")
     elif fmt == "obsidian":
         gx.to_obsidian(bg.G, bg.communities, str(target), community_labels=bg.labels, cohesion=bg.cohesion)
         gx.to_canvas(bg.G, bg.communities, str(target / "graph.canvas"), community_labels=bg.labels)
