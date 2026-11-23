@@ -90,6 +90,17 @@ def test_cli_mcp_logs_to_stderr_and_keeps_stdout_clean(tmp_path):
     assert "nexgraph_engine" in r.stderr and "INFO" in r.stderr
 
 
+def test_stderr_log_is_utf8_even_on_cp1252_console():
+    """Windows mặc định cp1252: chữ có dấu trong log phải vẫn ra UTF-8 (CI windows-latest bắt lỗi này)."""
+    code = ("from nexgraph_engine.logging_setup import configure_logging;"
+            "configure_logging().info('dự án có dấu')")
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONUTF8")}
+    env["PYTHONIOENCODING"] = "cp1252"
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, env=env, timeout=120)
+    assert r.returncode == 0, r.stderr
+    assert "dự án có dấu" in r.stderr.decode("utf-8")
+
+
 def test_failed_job_logs_error_with_traceback(caplog):
     manager = JobManager(None, EventBus())
 

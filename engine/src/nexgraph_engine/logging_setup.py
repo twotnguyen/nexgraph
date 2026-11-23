@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from typing import TextIO
 
 PACKAGE = "nexgraph_engine"
 DEFAULT_LEVEL = "INFO"
@@ -30,12 +31,24 @@ def level_from_env(value: str | int | None = None) -> int:
     return level
 
 
+def _utf8_stderr() -> TextIO:
+    """stderr của tiến trình, ép UTF-8 khi được: Windows mặc định cp1252 làm mất chữ có dấu trong log."""
+    stream = sys.stderr
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is not None:
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError, OSError):
+            pass
+    return stream
+
+
 def configure_logging(level: str | int | None = None, *, stream=None) -> logging.Logger:
     """Gắn handler stderr cho logger `nexgraph_engine` (gọi nhiều lần vẫn một handler)."""
     logger = logging.getLogger(PACKAGE)
     handler = getattr(logger, _HANDLER_ATTR, None)
     if handler is None:
-        handler = logging.StreamHandler(sys.stderr if stream is None else stream)
+        handler = logging.StreamHandler(_utf8_stderr() if stream is None else stream)
         handler.setFormatter(logging.Formatter(FORMAT))
         setattr(logger, _HANDLER_ATTR, handler)
         logger.addHandler(handler)
