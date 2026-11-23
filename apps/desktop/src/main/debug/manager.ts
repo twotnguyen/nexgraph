@@ -4,12 +4,17 @@ import { connect, type Socket } from 'node:net'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { DebugBreakpoint, DebugBreakpoints, DebugEvaluation, DebugEvent, DebugFrame, DebugLoadedSource, DebugModule, DebugScope, DebugVariable } from '../../shared/api'
 import { resolveInside } from '../fs/project-fs'
+import { safeProcessEnv } from '../process-env'
 import { ADAPTERS, adapterDir, findPython, type DebugKind } from './adapters'
 import { DapClient } from './dap-client'
 import { launchSpec, type DebugSpec } from './launch-config'
 import { UserError } from '../user-error'
 
 const fail = (code: string, message: string) => new UserError(code, message)
+
+/** Adapter debug chỉ nhận biến hệ thống; `extra` là phần NexGraph tự đặt (PYTHONPATH của adapter). */
+export const debugEnv = (extra: NodeJS.ProcessEnv = {}, source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv =>
+  safeProcessEnv(source, extra)
 
 export const toDapBreakpoints = (breakpoints: DebugBreakpoint[]) => breakpoints.filter((bp) => bp.enabled).map((bp) => ({
   line: bp.line,
@@ -145,7 +150,7 @@ export class DebugManager {
     } else {
       python = await findPython()
       adapter = spawn(python, ['-m', 'debugpy.adapter'], {
-        cwd: root, env: { ...process.env, PYTHONPATH: adapterDir(this.adaptersBase, 'python') }, stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true
+        cwd: root, env: debugEnv({ PYTHONPATH: adapterDir(this.adaptersBase, 'python') }), stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true
       })
       client = new DapClient(adapter.stdout!, adapter.stdin!)
       adapter.stdin!.on('error', () => {})
@@ -171,7 +176,7 @@ export class DebugManager {
   private async startNode(root: string, spec: DebugSpec, breakpoints: DebugBreakpoints): Promise<Session> {
     const server = join(adapterDir(this.adaptersBase, 'node'), ...ADAPTERS.node.entry)
     const adapter = spawn(process.execPath, [server, '0', '127.0.0.1'], {
-      cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }, stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true
+      cwd: root, env: debugEnv({ ELECTRON_RUN_AS_NODE: '1' }), stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true
     })
     const port = await new Promise<number>((resolvePort, reject) => {
       let text = ''
