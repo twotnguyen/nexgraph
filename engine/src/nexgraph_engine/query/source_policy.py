@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -13,9 +14,18 @@ from nexgraph_engine.errors import ApiError
 
 MAX_MODEL_SOURCE_BYTES = 5 * 1024 * 1024
 MAX_IGNORE_BYTES = 1024 * 1024
-_BLOCKED = {".git", ".nexgraph", ".npmrc", ".netrc", ".dart_tool", "node_modules", "build"}
+_BLOCKED = {".git", ".nexgraph", ".npmrc", ".netrc", ".kube", ".dart_tool", "node_modules", "build"}
 _PREFIXES = (".env", "credentials", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa")
 _SUFFIXES = (".pem", ".key")
+# Khoá cluster/cloud: `graphify.detect._is_sensitive` bỏ qua slug nhiều từ (`service-account-prod.json`) và không
+# biết `kubeconfig`, nên policy chặn thêm theo tên (re-review #52 Important 3). `.kube/config` chặn qua `_BLOCKED`.
+_CLOUD_CREDENTIAL_NAMES = (
+    re.compile(r"^kubeconfig.*$"),                          # kubeconfig, kubeconfig.yaml, kubeconfig-prod.yaml
+    re.compile(r"^.+\.kubeconfig$"),                        # prod.kubeconfig
+    re.compile(r"^service[._-]?account.*\.(json|ya?ml|toml)$"),  # service-account-prod.json
+    re.compile(r"^.+[-_]sa[-_]key.*\.json$"),               # prod-sa-key.json, *-sa-key*.json
+    re.compile(r"^gcp-.+\.json$"),                          # gcp-nexgraph.json
+)
 # Không có miễn trừ theo tên: tài liệu `docs/secrets.md` cũng là nguồn bị loại. Che bằng regex không bao giờ kín,
 # nên nó không được làm hàng rào duy nhất cho tệp có tên nhạy cảm (quyết định lead, re-review #52 vòng 3).
 
@@ -40,8 +50,11 @@ def safe_project_path(root: Path, name: str) -> Path:
 
 
 def _blocked_name(parts: tuple[str, ...]) -> bool:
-    return any(part in _BLOCKED or part.startswith(_PREFIXES) or part.endswith(_SUFFIXES)
-               for part in (p.lower() for p in parts))
+    for part in (p.lower() for p in parts):
+        if (part in _BLOCKED or part.startswith(_PREFIXES) or part.endswith(_SUFFIXES)
+                or any(pattern.match(part) for pattern in _CLOUD_CREDENTIAL_NAMES)):
+            return True
+    return False
 
 
 def _identity(st: os.stat_result) -> tuple[int, int, int, int]:
