@@ -902,12 +902,13 @@ describe('WorkspaceScreen: dock và trung tâm thông báo', () => {
     // Dự án khác thì bỏ qua.
     act(() => emitWatchError({ projectId: 'p-khac', message: 'disk I/O error' }))
     expect(screen.queryByText(/disk I\/O error/)).not.toBeInTheDocument()
-    act(() => emitWatchError({ projectId: 'p1', message: 'SQLITE_READONLY: attempt to write a readonly database' }))
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
     expect(await screen.findByText(/Cập nhật đồ thị sau khi tệp thay đổi bị lỗi/)).toBeInTheDocument()
-    expect(screen.getByText(/SQLITE_READONLY/)).toBeInTheDocument()
+    expect(screen.getByText(/Lỗi nội bộ engine\. Xem log để biết chi tiết\. Đồ thị/)).toBeInTheDocument()
+    expect(screen.queryByText(/\.\. Đồ thị/)).not.toBeInTheDocument()
     expect(within(bell).getByText('1')).toBeInTheDocument()
     // Cùng lỗi lặp lại: không thêm thông báo thứ hai.
-    act(() => emitWatchError({ projectId: 'p1', message: 'SQLITE_READONLY: attempt to write a readonly database' }))
+    act(() => emitWatchError({ projectId: 'p1', message: 'Lỗi nội bộ engine. Xem log để biết chi tiết.' }))
     expect(within(bell).getByText('1')).toBeInTheDocument()
   })
 

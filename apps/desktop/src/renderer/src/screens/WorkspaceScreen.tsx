@@ -188,7 +188,9 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     // UI-REFRESH-ERR: refresh nền lỗi phải hiện thông báo riêng (main đã lọc lỗi lặp), không chỉ cảnh báo graph cũ.
     const offWatchError = window.nexgraph.watch.onError((failure) => {
       if (!current || failure.projectId !== project.project_id) return
-      const message = tr('Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.', { error: failure.message })
+      // Câu lỗi của engine thường đã có dấu chấm cuối: bỏ để không thành ".." trong câu ghép.
+      const detail = failure.message.trim().replace(/\.+$/, '')
+      const message = tr('Cập nhật đồ thị sau khi tệp thay đổi bị lỗi: {error}. Đồ thị có thể cũ hơn mã nguồn.', { error: detail })
       if (message === lastWatchError) return
       lastWatchError = message
       setFeedback(message)
