@@ -14,7 +14,7 @@
 | **RC2** | `main` `8118db0` · app **0.1.2** · DMG macOS arm64 257.724.354 byte | Nghiệm thu bổ sung 23–24/11: xuất đồ thị (§3.4), AI thật và tab Pull request (§3.1/§3.7), hồi quy lỗi đã sửa + bước OS | Xuất: **5/9 dòng đạt, 4/9 đạt một phần, 0 không đạt**, 2 finding Important (HTML luồng gọi mất tên dự án/commit; hộp thoại Xuất thiếu phạm vi "Cộng đồng"). AI + PR: **10/11 dòng đạt**, 1 finding Important (ảnh trong dự án không index được trên bản đóng gói). Hồi quy + OS: đa số đạt, 1 Important (bundle thiếu `THIRD_PARTY_LICENSES.md`), 2 Minor (báo cáo EN còn nhãn cụm `Khác`; index dự án lớn còn thông điệp chuyển chế độ), 1 mục không chạy được (hộp thoại Gatekeeper cần người) |
 | **Alpha** | tag `v0.2.0-alpha.1` (chưa tạo) | Chưa nghiệm thu | Chờ dựng từ tag; nghiệm thu riêng sau khi phát hành |
 
-Hai bản RC đều là **0.1.2**: biên bản demo 23/11 chỉ áp dụng cho **RC1 `72dc4ec`**; **RC2 `8118db0`** không chạy lại demo 4 bước mà kiểm bổ sung như bảng trên. Bản alpha chỉ khác RC2 ở bốn chuỗi version, nhưng đây vẫn là **bộ cài khác** (dựng từ tag) và phải được cài, kiểm trên máy đích trước khi coi là đã nghiệm thu.
+Hai bản RC đều là **0.1.2**: biên bản demo 23/11 chỉ áp dụng cho **RC1 `72dc4ec`**; **RC2 `8118db0`** không chạy lại demo 4 bước mà kiểm bổ sung như bảng trên. Bản alpha **không phải RC2 đổi bốn chuỗi version**: nó là `main` sau RC2 **cộng các PR sửa finding nghiệm thu RC2 và PR phát hành** — #62 (E9: xuất callflow/báo cáo đúng dự án, commit, mục lục cộng đồng), #63 (F12: hộp thoại Xuất theo phạm vi "Cộng đồng" + giấy phép trong bản cài), #64 (E10: ảnh cục bộ + ngưỡng thông báo song song gián đoạn), #49 (menu native), #60 (X1: CI phát hành), #61 (V1: version + tài liệu). Diff so với RC2 vì thế gồm cả mã xuất, index ảnh và tài nguyên giấy phép, không chỉ chuỗi version. Danh sách và trạng thái từng PR ở mục [Dự kiến trong bản này — chưa merge](#dự-kiến-trong-bản-này--chưa-merge); tại 24/11/2026 cả sáu còn **OPEN**, nên đây là **dự kiến**, chưa khẳng định đã có trong bản. Bộ cài Alpha vì vậy là **bộ cài khác**, xác định bằng `ACCEPTED_SHA` và `.build.json` thực tế của artifact, và phải được cài, kiểm trên máy đích trước khi coi là đã nghiệm thu.
 
 ## Tính năng mới
 
@@ -110,7 +110,7 @@ Các PR dưới đây **chưa merge** tại 24/11/2026; không nằm trong phầ
 
 - **#60** — CI hardening phát hành (X1): `version-check` so tag với bốn nguồn version, pin action theo SHA, concurrency theo SHA, job `release` tạo Release với `--prerelease` khi tag có dấu `-`. Là điều kiện chặn trước khi tạo tag ([runbook](runbook.md#0-điều-kiện-vào)).
 - **#61** — tăng version bốn tệp lên `0.2.0-alpha.1` và chính tệp ghi chú này (V1).
-- **#49** — menu native File/Edit/View và hoàn thiện lệnh tệp: PR mở từ trước, chưa merge, không thuộc phạm vi 0.2.0-alpha.1.
+- **#49** — menu native File/Edit/View và hoàn thiện lệnh tệp: PR mở từ trước, chưa merge; **nếu merge trước khi tạo tag thì nằm trong bản**, nếu không thì không.
 - Các PR sửa finding nghiệm thu RC2 (E9, E10, F12) **chưa mở** tại thời điểm cập nhật.
 
 ## Ghi chú cho người bảo trì
