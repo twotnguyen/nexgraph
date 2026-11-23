@@ -89,6 +89,16 @@ jobs:
       - run: pnpm --filter ./apps/extension typecheck
       - run: pnpm --filter ./apps/extension test
 
+  version-check:
+    name: version-check
+    # REL-07: chỉ chạy khi push tag v* — tag phải khớp cả 4 nguồn version trước khi build/release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Tag phải khớp version ở 4 nguồn
+        run: node scripts/ci/check-version.mjs "$GITHUB_REF_NAME"
+
   package:
     name: package (${{ matrix.os }})
     # Chờ test: bản cài chỉ được dựng và tải lên khi engine/desktop đã xanh.
@@ -102,10 +112,10 @@ jobs:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - name: Tag phải khớp version của app
+      - name: Tag phải khớp version ở 4 nguồn
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
-        run: test "${GITHUB_REF_NAME}" = "v$(node -p "require('./apps/desktop/package.json').version")"
+        run: node scripts/ci/check-version.mjs "$GITHUB_REF_NAME"
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         with:
           enable-cache: true
@@ -142,7 +152,8 @@ jobs:
   release:
     name: release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [engine, desktop, package]
+    # REL-06: release chỉ chạy khi version-check xanh (tag khớp cả 4 nguồn version).
+    needs: [version-check, engine, desktop, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -155,10 +166,18 @@ jobs:
       - name: Tạo GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+        # REL-06: tag có dấu `-` (0.2.0-alpha.1, -beta.N, -rc.N) -> Release ở chế độ prerelease.
         # Chạy lại job sau khi release đã tạo dở thì chỉ tải đè tệp.
         run: |
+          prerelease=()
+          case "$GITHUB_REF_NAME" in
+            *-*) prerelease=(--prerelease) ;;
+          esac
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+            if [ "${#prerelease[@]}" -gt 0 ]; then
+              gh release edit "$GITHUB_REF_NAME" --prerelease
+            fi
           else
-            gh release create "$GITHUB_REF_NAME" dist/* --title "NexGraph $GITHUB_REF_NAME" --generate-notes
+            gh release create "$GITHUB_REF_NAME" dist/* --title "NexGraph $GITHUB_REF_NAME" --generate-notes "${prerelease[@]}"
           fi
