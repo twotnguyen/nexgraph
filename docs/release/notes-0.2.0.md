@@ -1,6 +1,6 @@
 # Ghi chú phát hành NexGraph 0.2.0-alpha.1 (bản nháp)
 
-> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0-alpha.1` (alpha, **prerelease**); chỉ dùng sau khi #60/#61 và các PR sửa nghiệm thu RC2 đã merge, CI `main` xanh 7/7, bản dựng từ `main` cuối được nghiệm thu, rồi Tình tạo tag ([runbook](runbook.md#0-điều-kiện-vào)). Bản cuối `0.2.0` dự kiến cuối 20/12/2026, dùng lại ghi chú này sau khi gỡ nhãn alpha. **Cập nhật 24/11/2026:** đợt V1 tăng version lên `0.2.0-alpha.1` (`0.2.0a1` phía engine); các PR đã merge của đợt (#32–#48, #50–#56, #58–#59) đã vào `main` (`8118db0`). **#57 bị đóng không merge** (đổi tên nhánh `bot/` → `fix/` làm GitHub đóng PR) và được thay bằng **#59** đã merge. Mọi số PR trong tệp đã kiểm `gh pr view N --json state`: tất cả `MERGED`; PR chưa merge xếp riêng ở mục [Dự kiến trong bản này — chưa merge](#dự-kiến-trong-bản-này--chưa-merge).
+> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là **bản nháp nội bộ** cho GitHub Release `v0.2.0-alpha.1` (alpha, **prerelease**); body để dán là [`notes-0.2.0-alpha.1-body.md`](notes-0.2.0-alpha.1-body.md), và chỉ dùng sau khi #60/#61 và các PR sửa nghiệm thu RC2 đã merge, CI `main` xanh 7/7, bản dựng từ `main` cuối được nghiệm thu, rồi Tình tạo tag ([runbook](runbook.md#0-điều-kiện-vào)). Bản cuối `0.2.0` dự kiến cuối 20/12/2026, dùng lại ghi chú này sau khi gỡ nhãn alpha. **Cập nhật 24/11/2026:** đợt V1 tăng version lên `0.2.0-alpha.1` (`0.2.0a1` phía engine); các PR đã merge của đợt (#32–#48, #50–#56, #58–#59) đã vào `main` (`8118db0`). **#57 bị đóng không merge** (đổi tên nhánh `bot/` → `fix/` làm GitHub đóng PR) và được thay bằng **#59** đã merge. **30 PR được tính vào bản đều `MERGED`** (đã kiểm `gh pr view N --json state` từng số); PR chưa merge xếp riêng ở mục [Dự kiến trong bản này — chưa merge](#dự-kiến-trong-bản-này--chưa-merge).
 
 ## Tóm tắt
 
@@ -111,7 +111,7 @@ Các PR dưới đây **chưa merge** tại 24/11/2026; không nằm trong phầ
 - **#60** — CI hardening phát hành (X1): `version-check` so tag với bốn nguồn version, pin action theo SHA, concurrency theo SHA, job `release` tạo Release với `--prerelease` khi tag có dấu `-`. Là điều kiện chặn trước khi tạo tag ([runbook](runbook.md#0-điều-kiện-vào)).
 - **#61** — tăng version bốn tệp lên `0.2.0-alpha.1` và chính tệp ghi chú này (V1).
 - **#49** — menu native File/Edit/View và hoàn thiện lệnh tệp: PR mở từ trước, chưa merge; **nếu merge trước khi tạo tag thì nằm trong bản**, nếu không thì không.
-- Các PR sửa finding nghiệm thu RC2 (E9, E10, F12) **chưa mở** tại thời điểm cập nhật.
+- Các PR sửa finding nghiệm thu RC2 đã **mở, chưa merge** tại thời điểm cập nhật: **#62** (E9), **#63** (F12), **#64** (E10).
 
 ## Ghi chú cho người bảo trì
 
