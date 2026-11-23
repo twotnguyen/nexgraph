@@ -715,6 +715,109 @@ def test_submit_error_in_sequential_fallback_reads_remaining_files_in_main_proce
     assert any(e.message and "tiến trình chính" in e.message for e in events)
 
 
+def test_crashed_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project, monkeypatch):
+    """Một lô làm chết worker: chỉ tệp của LÔ ĐÓ sang đường từng-tệp, phần còn lại vẫn N worker.
+
+    review-53 Important 2: bản trước gửi lại nguyên lô vào pool mới → chết lần 2 → `gave_up` → cả dự án
+    (kể cả lô tốt) đọc từng tệp bằng `max_workers=1`, đúng lớp hồi quy PERF-L nhưng kích hoạt bằng crash.
+    """
+    from concurrent.futures import Future
+    from concurrent.futures.process import BrokenProcessPool
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    crash = "z_crash.py"  # tệp LỚN NHẤT -> LPT đặt vào lô 0
+    batches: list[list[str]] = []
+    per_file: list[str] = []
+    parallel_pools = 0
+
+    class CrashOneBatchPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            nonlocal parallel_pools
+            self.parallel = max_workers > 1
+            if self.parallel:
+                parallel_pools += 1
+
+        def submit(self, fn, *args):
+            future = Future()
+            target = args[1]
+            if not self.parallel:  # pool của đường từng-tệp
+                per_file.append(target.rel_path)
+                future.set_result(fn(*args))
+                return future
+            batches.append([f.rel_path for f in target])
+            if any(f.rel_path == crash for f in target):
+                future.set_exception(BrokenProcessPool(f"worker chết ở {crash}"))
+            else:
+                future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 40)
+    (root / crash).write_text("# " + "z" * 300_000 + "\n\ndef z():\n    return 1\n", encoding="utf-8")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", CrashOneBatchPool)
+    store, result, events = index_project(root)
+
+    assert result.state == "hoan_tat"
+    assert graph_state(store) == graph_state(serial)  # không mất tệp, không trùng tệp
+    crash_batch = next(b for b in batches if crash in b)
+    assert sorted(per_file) == sorted(crash_batch)  # CHỈ tệp của lô hỏng đi đường từng-tệp
+    assert crash_batch is batches[0]
+    # Phần còn lại vẫn chạy song song: không pool nào bị hạ xuống 1 worker.
+    assert parallel_pools == 2
+    assert sum(1 for b in batches if crash in b) == 1  # lô hỏng KHÔNG được gửi lại nguyên lô
+    assert {f for b in batches for f in b} == {f"m{i}.py" for i in range(40)} | {crash}
+    assert result.workers_effective == 2 and result.fallback_serial is True
+
+
+def test_repeated_pool_creation_failure_gives_up_to_the_per_file_path(tmp_path, index_project, monkeypatch):
+    """`gave_up` chỉ dành cho lỗi HỆ THỐNG: không tạo được pool 2 lần liên tiếp.
+
+    review-53 Important 2: lỗi của MỘT lô không được biến thành `gave_up` cho cả dự án; ngược lại, khi
+    tiến trình con không thể spawn thì phải có đường thoát hữu hạn (đường từng-tệp) để job vẫn xong.
+    """
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    created = {"parallel": 0}
+
+    class CantSpawnParallelPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            if max_workers > 1:
+                created["parallel"] += 1
+                raise OSError("cannot spawn child process")
+            self.serial = True
+
+        def submit(self, fn, *args):
+            future = Future()
+            future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 40)
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", CantSpawnParallelPool)
+    recovered, result, events = index_project(root)
+
+    assert result.state == "hoan_tat"
+    assert graph_state(recovered) == graph_state(serial)
+    assert created["parallel"] == 2  # thử 2 lần rồi thôi, không quay vô hạn
+    assert recovered.conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 40
+    assert any(e.message and "gián đoạn" in e.message for e in events)
+
+
 def test_index_workers_policy(monkeypatch):
     from nexgraph_engine.index import indexer
     monkeypatch.delenv("NEXGRAPH_INDEX_WORKERS", raising=False)

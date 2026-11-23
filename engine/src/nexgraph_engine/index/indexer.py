@@ -385,6 +385,10 @@ class Indexer:
         pending = list(range(len(batches)))
         suspects: list[int] = []
         stalled_streak = 0  # số lần liên tiếp chưa xong lô nào; >= 2 thì coi là treo thật
+        # `gave_up` chỉ dành cho lỗi HỆ THỐNG: tạo/gửi pool thất bại 2 lần liên tiếp (không spawn được
+        # tiến trình con, fd cạn, chính sách chặn). Lỗi của MỘT lô cụ thể không bao giờ đặt cờ này —
+        # nếu đặt, cả dự án rơi xuống 1 worker, đúng hồi quy PERF-L mà PR này diệt (review-53 I2).
+        pool_failures = 0
         gave_up = False
         batch_files = 0
         if workers > 1:
@@ -393,19 +397,21 @@ class Indexer:
                 futures = {}
                 try:
                     executor = ProcessPoolExecutor(max_workers=workers)
-                    futures = {b: executor.submit(_extract_batch, self.root,
-                                                  [files[i] for i in batches[b]],
-                                                  self.transcript_dir) for b in pending}
+                    for b in pending:
+                        futures[b] = executor.submit(_extract_batch, self.root,
+                                                     [files[i] for i in batches[b]],
+                                                     self.transcript_dir)
                 except (BrokenProcessPool, OSError, RuntimeError):
                     # Worker có thể không khởi động được hoặc bị hệ điều hành chặn.
                     logger.warning("Bộ trích xuất song song gián đoạn; thử lại rồi đọc từng tệp", exc_info=True)
                     if executor is not None:
                         _kill_pool(executor)
-                    stalled_streak += 1
-                    if stalled_streak >= 2:
+                    pool_failures += 1
+                    if pool_failures >= 2:
                         gave_up = True
                         break
                     continue
+                pool_failures = 0  # gửi được cả lô: lỗi trước đó không phải lỗi hệ thống lặp lại
                 broken = False
                 try:
                     for b in list(pending):
@@ -431,7 +437,11 @@ class Indexer:
                             self.on_progress(ProgressEvent(
                                 "structure", consumed, total,
                                 "Không dùng được tiến trình trích xuất; đang làm lại pool cho phần còn lại."))
-                            stalled_streak += 1
+                            # Lô làm chết worker/pool hỏng: chỉ TỆP CỦA LÔ NÀY sang đường từng-tệp
+                            # (có FILE_EXTRACT_TIMEOUT_SECONDS). Gửi lại nguyên lô vào pool mới sẽ
+                            # chết lần 2 rồi hạ cả dự án xuống 1 worker (review-53 I2).
+                            suspects.extend(batches[b])
+                            pending.remove(b)
                             broken = True
                             break
                         # Ngoài `try` của pool: lỗi của callback/ghi CSDL không được nuốt (Minor #27 N2).
