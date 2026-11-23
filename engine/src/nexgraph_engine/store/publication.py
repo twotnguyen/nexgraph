@@ -16,6 +16,14 @@ class GraphWriteBusy(RuntimeError):
     """Một tiến trình khác đang ghi đồ thị."""
 
 
+def is_busy_error(exc: BaseException) -> bool:
+    """SQLite báo bận (khoá ghi) — khác lỗi thật như đầy đĩa hay CSDL hỏng."""
+    if not isinstance(exc, sqlite3.OperationalError):
+        return False
+    text = str(exc).lower()
+    return "locked" in text or "busy" in text
+
+
 @contextmanager
 def graph_writer(path: Path) -> Iterator[Path]:
     """Khóa ghi dùng chung giữa app và lệnh refresh; đóng tệp sẽ nhả khóa."""
