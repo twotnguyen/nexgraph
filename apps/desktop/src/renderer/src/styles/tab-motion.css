@@ -46,14 +46,9 @@
   background: color-mix(in srgb, var(--blue) 12%, var(--color-surface));
 }
 
-/* Nội dung đổi view: chỉ các phần tử mount mới chạy animation, không đụng key của React. */
-@keyframes tab-panel-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
-.workspace-shell .canvas-wrap > * {
-  animation: tab-panel-in .24s var(--tab-ease) backwards;
-}
+/* Nội dung đổi view: KHÔNG animate `.canvas-wrap > *` — đó là tổ tiên của `.code-viewer.editor-tab`
+   (chứa .monaco-editor). Animation transform/opacity trên tổ tiên đúng lớp rủi ro BUG-B (#42c):
+   Monaco đo widget trong lúc ancestor còn đang chuyển động. Bỏ hẳn phần này. */
 
 /* Chế độ Hỏi / Kế hoạch / Sửa của assistant. */
 .agent-panel .agent-composer-foot .mode button {
@@ -91,7 +86,6 @@
   .workspace-shell .ws-tabs::after,
   .workspace-shell .ws-tabs .tab,
   .workspace-shell .ws-tabs .file-tab,
-  .workspace-shell .canvas-wrap > *,
   .agent-panel .agent-composer-foot .mode button,
   .settings-nav-item,
   .segmented button {
