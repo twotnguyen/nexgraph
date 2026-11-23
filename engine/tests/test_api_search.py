@@ -46,3 +46,19 @@ def test_weird_queries_do_not_500(indexed):
 def test_search_needs_token(indexed):
     api, pid = indexed
     assert api.client.get(f"/v1/projects/{pid}/search?q=login").status_code == 401
+
+
+def test_all_stopword_query_gives_friendly_suggestion(indexed):
+    """M5 (review 23/11): câu toàn hư từ trả gợi ý như ask/context, không phải câu cụt."""
+    api, pid = indexed
+    r = api.get(f"/v1/projects/{pid}/search", params={"q": "làm sao"})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "bad_param"
+    assert "Chưa khớp từ khoá nào" in r.json()["error"]["message"]
+    assert "AuthService" in r.json()["error"]["message"]
+
+
+def test_meaningful_vietnamese_words_still_search(indexed):
+    """`người dùng` không còn bị coi là toàn từ dừng (I2/M5): 200 + danh sách, không 400."""
+    api, pid = indexed
+    r = api.get(f"/v1/projects/{pid}/search", params={"q": "người dùng"})
+    assert r.status_code == 200 and isinstance(r.json(), list)

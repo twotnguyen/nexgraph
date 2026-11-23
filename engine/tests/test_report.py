@@ -1,3 +1,5 @@
+import pytest
+
 from nexgraph_engine.report.build import report_json, report_markdown
 
 
@@ -223,3 +225,12 @@ def test_translate_every_graphify_message():
     assert vi[7]["why"] == "kết nối ngữ nghĩa giữa các tệp"
     assert translate_surprising(surprising, "en") == surprising
 
+
+
+def test_report_json_rejects_unknown_lang(copy_fixture, index_project):
+    """M3 (review 23/11): lang sai phải ném ValueError như build_tour, không lặng lẽ trả tiếng Anh."""
+    root = copy_fixture("py_mini")
+    store, _, _ = index_project(root)
+    with pytest.raises(ValueError, match="lang"):
+        report_json(store, root, lang="fr")
+    assert report_json(store, root, lang="vi")["questions"]

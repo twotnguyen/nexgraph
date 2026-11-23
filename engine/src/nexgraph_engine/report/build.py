@@ -11,7 +11,7 @@ from nexgraph_engine.bridge.to_nx import OTHER_COMMUNITY, BridgeGraph, build_nx,
 from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
 from nexgraph_engine.query.source_policy import SourcePolicy
-from nexgraph_engine.report.i18n import translate_questions, translate_surprising
+from nexgraph_engine.report.i18n import check_lang, translate_questions, translate_surprising
 from nexgraph_engine.store.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -77,6 +77,7 @@ def _benchmark(bg: BridgeGraph, warnings: list[str]) -> dict | None:
 def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = None,
                 sources_dir: Path | None = None, *, lang: str = "en") -> dict:
     """`lang="en"` giữ nguyên chuỗi Graphify (hành vi cũ); `lang="vi"` dịch ở lớp NexGraph."""
+    lang = check_lang(lang, "en")  # lang sai phải ném ValueError như build_tour (M3, review 23/11)
     from graphify.analyze import suggest_questions, surprising_connections
     bg = build_nx(store, keep_file=source.allows if source else None)
     communities = [{"id": f"com:{cid}", "label": bg.labels[cid], "size": len(members), "cohesion": bg.cohesion[cid]}
