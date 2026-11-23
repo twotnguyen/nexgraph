@@ -25,6 +25,26 @@ describe('CitationText', () => {
     expect(screen.getByRole('button', { name: 'x.py:7' })).toBeInTheDocument()
   })
 
+  it('AI-01: trích dẫn không ngoặc trong câu văn cũng thành chip, bấm mở đúng dòng', async () => {
+    const onOpen = vi.fn()
+    render(<CitationText onOpen={onOpen} text="lib/a.dart:10–42 là chỗ usage luôn 0."
+      citations={[{ raw: 'lib/a.dart:10–42', file: 'lib/a.dart', start: 10, end: 42, valid: true, reason: null }]} />)
+    const chip = screen.getByRole('button', { name: 'lib/a.dart:10–42' })
+    expect(screen.getByText(/là chỗ usage luôn 0/)).toBeInTheDocument()
+    await userEvent.click(chip)
+    expect(onOpen).toHaveBeenCalledWith('lib/a.dart', 10, 42)
+  })
+
+  it('AI-02: đường dẫn có dấu cách hiện chip, chữ đứng trước giữ nguyên', async () => {
+    const onOpen = vi.fn()
+    render(<CitationText onOpen={onOpen} text="Xem flow app/service.py:1-2 ngay."
+      citations={[{ raw: 'Xem flow app/service.py:1-2', file: 'flow app/service.py', start: 1, end: 2, valid: true, reason: null }]} />)
+    expect(screen.getByText(/Xem/)).toBeInTheDocument()
+    const chip = screen.getByRole('button', { name: 'flow app/service.py:1–2' })
+    await userEvent.click(chip)
+    expect(onOpen).toHaveBeenCalledWith('flow app/service.py', 1, 2)
+  })
+
   it('vẽ lại không dựng lại chip (bấm vẫn ăn khi cha re-render giữa mousedown và mouseup) và dùng onOpen mới nhất', async () => {
     const citations = [{ raw: '[[a.ts:3]]', file: 'a.ts', start: 3, end: 3, valid: true, reason: null }]
     const first = vi.fn()

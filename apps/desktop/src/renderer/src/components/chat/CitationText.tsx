@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { Citation } from '@shared/graph-types'
+import { CITATION_SOURCE } from '@shared/citations'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
 import './citation-text.css'
@@ -28,6 +29,33 @@ function externalUrl(value: string | undefined): string | undefined {
 }
 
 /** Chỉ text node được đổi thành chip. Code fence, inline code và nội dung liên kết giữ nguyên Markdown. */
+const CITATION_TEXT = new RegExp(CITATION_SOURCE, 'g')
+
+/** Tách một text node thành các mảnh text/chip theo đúng các trích dẫn đã kiểm chứng. */
+function splitCitations(value: string, byRaw: Map<string, number>, citations: Citation[]): MarkdownNode[] {
+  const out: MarkdownNode[] = []
+  let last = 0
+  for (const m of value.matchAll(CITATION_TEXT)) {
+    const index = byRaw.get(m[0])
+    if (index === undefined || m.index === undefined) continue
+    if (m.index > last) out.push({ type: 'text', value: value.slice(last, m.index) })
+    const citation = citations[index]
+    // Dạng không ngoặc có thể dính chữ của câu trước ("Theo flow app/x.py") mà main đã bỏ khi xác minh:
+    // giữ chữ đó làm text, chip chỉ bọc phần đường dẫn.
+    const keep = m[0].startsWith('[[') ? 0 : m[0].indexOf(citation.file)
+    if (keep > 0) out.push({ type: 'text', value: m[0].slice(0, keep) })
+    out.push({
+      type: 'link', url: '#nexgraph-citation',
+      data: { hProperties: { dataNexgraphCitation: String(index) } },
+      children: [{ type: 'text', value: label(citation) }]
+    })
+    last = m.index + m[0].length
+  }
+  if (out.length === 0) return [{ type: 'text', value }]
+  if (last < value.length) out.push({ type: 'text', value: value.slice(last) })
+  return out
+}
+
 function citationPlugin(citations: Citation[]) {
   const byRaw = new Map(citations.map((citation, index) => [citation.raw, index]))
   return () => (tree: MarkdownNode) => {
@@ -35,15 +63,7 @@ function citationPlugin(citations: Citation[]) {
       if (!node.children || ['code', 'inlineCode', 'link', 'linkReference'].includes(node.type)) return
       node.children = node.children.flatMap((child): MarkdownNode[] => {
         if (child.type !== 'text' || !child.value) { transform(child); return [child] }
-        return child.value.split(/(\[\[[^[\]]+\]\])/g).filter(Boolean).map((value) => {
-          const index = byRaw.get(value)
-          if (index === undefined) return { type: 'text', value }
-          return {
-            type: 'link', url: '#nexgraph-citation',
-            data: { hProperties: { dataNexgraphCitation: String(index) } },
-            children: [{ type: 'text', value: label(citations[index]) }]
-          }
-        })
+        return splitCitations(child.value, byRaw, citations)
       })
     }
     transform(tree)
