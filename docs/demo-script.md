@@ -2,7 +2,7 @@
 
 Dùng **NexGraph 0.2.0 Electron/Monaco** (bản ứng viên; 0.1.2 là bản đang phát hành) từ [bộ cài đúng commit bàn giao](release/README.md). Chạy trên bản sao dự án. Ghi tên và hash bộ cài, commit NexGraph, commit hoặc tên fixture của dự án, hệ điều hành và provider trước mỗi lượt. [Biên bản nghiệm thu 18/11](release/acceptance/2026-11-18.md) · [biên bản RC 23/11](release/acceptance/2026-11-23-macos.md).
 
-Nhãn nút trong tài liệu chép đúng chuỗi giao diện tiếng Việt ở `apps/desktop/src/renderer/src/strings.ts`; bản English ghi trong ngoặc khi khác (ví dụ **Tìm trong đồ thị** / *Search*, **Tô luồng trên graph** / *Highlight flow on graph*). Đổi ngôn ngữ trong **Cài đặt** có hiệu lực ngay, không cần khởi động lại.
+Nhãn nút trong tài liệu chép đúng chuỗi giao diện tiếng Việt ở `apps/desktop/src/renderer/src/strings.ts`; bản English ghi trong ngoặc khi khác (ví dụ **Tìm trong đồ thị** / *Search Graph*, **Tô luồng trên graph** / *Highlight flow on graph*). Đổi ngôn ngữ trong **Cài đặt** có hiệu lực ngay, không cần khởi động lại.
 
 ## Kiểm nhanh bằng fixture Python
 
@@ -58,7 +58,7 @@ NEXGRAPH_USER_DATA_DIR="$demo/user-data" NEXGRAPH_DATA_DIR="$demo/engine-data" \
 
 ## Demo NestJS trong 5 phút
 
-Chuẩn bị bản sao **`ecommerce-backend-nestjs`** — repo demo riêng của nhóm — tại baseline `d11f4ef7d906ba514cf9e3c2234116ad49789ee7` (268 tệp được lập chỉ mục). Đây **không phải** fixture `flow_app` ở mục trên: `flow_app` chỉ có 4 tệp Python, không có `src/auth`, nên không dùng cho các bước NestJS. Giữ lịch sử Git hoặc tạo một commit mốc trong bản sao để **Vùng ảnh hưởng** so với HEAD. Lập chỉ mục trước, mở app và thử kết nối model hỗ trợ tool calling nếu trình bày phần AI thật. Chuẩn bị bản sao sạch cho từng lượt. Nếu mất kết nối, dùng thẻ **Luồng** và thao tác chỉnh sửa tay.
+Chuẩn bị bản sao **`ecommerce-backend-nestjs`** — repo demo riêng của nhóm — tại baseline `d11f4ef7d906ba514cf9e3c2234116ad49789ee7` (280 tệp được lập chỉ mục; 268 là số trước khi W2 thêm 11 tệp `.sql` + 1 `.ps1` — [số đo 23/11](benchmarks/2026-11-23-nfr-va-do-lai.md)). Đây **không phải** fixture `flow_app` ở mục trên: `flow_app` chỉ có 4 tệp Python, không có `src/auth`, nên không dùng cho các bước NestJS. Giữ lịch sử Git hoặc tạo một commit mốc trong bản sao để **Vùng ảnh hưởng** so với HEAD. Lập chỉ mục trước, mở app và thử kết nối model hỗ trợ tool calling nếu trình bày phần AI thật. Chuẩn bị bản sao sạch cho từng lượt. Nếu mất kết nối, dùng thẻ **Luồng** và thao tác chỉnh sửa tay.
 
 | Bước | Thao tác | Thời lượng |
 | --- | --- | --- |

@@ -129,7 +129,6 @@ Script: `engine/scripts/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --
 |---|---|---|---|---|---|
 | Lập chỉ mục lần đầu (s) | ≤ 10 phút (600 s) | ≤ 5 phút (300 s) | 125,7 | 193,3 | đạt / đạt |
 | Mở lại (ms) | < 5 s | — | 149,4 [149,3–150,7] | 45,3 [45,0–45,9] | đạt / — |
-| Cập nhật sau khi sửa 1 tệp (ms) | < 2 s | — | 4729,3 [4646,0–4883,1] | 1226,5 [1215,5–1243,0] | KHÔNG ĐẠT / — |
 | Dựng luồng (s) | — | < 60 s | 2,05 [2,04–2,09] | 0,54 [0,54–0,56] | đạt / đạt |
 | Bản đồ, detail 400 (s) | — | < 5 s | 0,43 [0,43–0,44] | 0,15 [0,15–0,16] | đạt / đạt |
 | RAM đỉnh sau lập chỉ mục, **chỉ tiến trình cha** (MB) | < 2 GB (2.048) | ≤ 1,5 GB (1.536) | 965 | 436 | chỉ phần cha, xem §4.3: cả cây KHÔNG đạt trên `hermes-agent` |
@@ -141,6 +140,8 @@ Script: `engine/scripts/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --
 | Hàng xóm của nút bậc cao nhất (ms) | — | — | 129,7 [128,3–143,9] | 96,6 [95,3–109,3] | — |
 | Kích thước `graph.db` (MB) | — | — | 295,6 | 101,3 | — |
 | Số tệp / nút / cạnh / tham chiếu chưa nối | — | — | 17260 / 215015 / 684003 / 840309 | 5672 / 55343 / 213417 / 417391 | — |
+
+Dòng “cập nhật sau khi sửa 1 tệp” không còn trong bảng chính: số 4.729,3 ms của `hermes-agent` là bản đo lịch sử **trước tối ưu** `353c083` (xem §4.4 và [số hiện hành](2026-11-23-nfr-va-do-lai.md): 1,54 s).
 
 ### 4.3 RAM của cả cây tiến trình (tầng L)
 
@@ -160,7 +161,7 @@ Mỗi tiến trình con lớn nhất đạt 1.008 MB trên `hermes-agent` (232 M
 ### 4.4 Đạt / không đạt và nguyên nhân
 
 - **Tầng S đạt hết**: lập chỉ mục lần đầu ≤ 1.52 s (mục tiêu < 60 s), mở lại ≈ 1 ms (mục tiêu < 3 s).
-- **Tầng L: lập chỉ mục và mở lại đạt** (126 s và 193 s so với 600 s; mục tiêu nội bộ 300 s cũng đạt). Sau #53 đo lại `open-design` còn **85,2 s** (xem [số hiện hành](2026-11-23-nfr-va-do-lai.md)). Dựng luồng và bản đồ đạt mục tiêu nội bộ với biên lớn.
+- **Tầng L: lập chỉ mục và mở lại đạt** (`open-design` 193,3 s so với 600 s; mục tiêu nội bộ 300 s cũng đạt; `hermes-agent` 125,7 s là tầng **XL**, chỉ tham chiếu). Sau #53 đo lại `open-design` còn **85,2 s** (xem [số hiện hành](2026-11-23-nfr-va-do-lai.md)). Dựng luồng và bản đồ đạt mục tiêu nội bộ với biên lớn.
 - **Tầng L: cập nhật 1 tệp đạt** — `open-design` **0,50 s** (đo 23/11; bảng cũ 1,23 s). Với `hermes-agent` (tầng **XL**), số 4,73 s là **trước tối ưu** `353c083`; đo 23/11 còn **1,54 s**, đạt nếu áp ngưỡng L. Nguyên nhân cũ đã xác định bằng cProfile: dựng lại toàn bộ luồng 3,7 s, nối tham chiếu 1,7 s, quét thư mục có `.gitignore` 1,6 s — đã xử lý bằng luồng cục bộ, không còn "chưa làm".
 - **Lỗi hiệu năng tìm thấy và đã sửa nhờ phép đo này** (commit `d2d4ee5`): bước đồng bộ `TESTED_BY` quét cả bảng tạm cho mỗi cạnh (DELETE 41 s + UPDATE 41 s với 62.321 cạnh), làm mỗi lần refresh trên `hermes-agent` mất **84 s** (lần đo đầu, 3 lần lặp 83,8–85,0 s). Thêm chỉ mục cho bảng tạm đưa về 4.73 s. Bài kiểm tra hồi quy `test_derivation_scales_linearly_with_edge_count` đỏ trước sửa (16,4 s), xanh sau (< 1 s). H1 chỉ đo refresh trên NestJS nên không bắt được lỗi này.
 - **Lỗi chặn lập chỉ mục tìm thấy trên `open-design`** (commit `6d30c9e`): hàm cùng tên cùng dòng trong tệp JS rút gọn (`three.min.js`, chunk Next.js) làm hai nút trùng `id_nut`, lập chỉ mục kết thúc ở trạng thái `loi` (`UNIQUE constraint failed: nut.id_nut`). Lần đo đầu trên `open-design` thất bại vì lỗi này. Đã sửa, có test.

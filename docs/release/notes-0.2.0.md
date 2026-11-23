@@ -1,10 +1,10 @@
 # Ghi chú phát hành NexGraph 0.2.0 (bản nháp)
 
-> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0`; chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. **Cập nhật 23/11/2026:** mọi PR #32–#54 đã merge vào `main` (`caeb85e`); danh sách dưới chỉ gồm PR đã merge, không còn mục “chờ merge”.
+> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0`; chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. **Cập nhật 23/11/2026:** các PR đã merge của đợt (#32–#48, #50–#54) đã vào `main` (`caeb85e`); danh sách dưới chỉ gồm PR đã merge, không còn mục “chờ merge”.
 
 ## Tóm tắt
 
-0.2.0 gộp bộ công cụ phát triển kiểu Wu (F16, ADR 0020) vào bản Electron + Monaco: LSP, terminal, Git, gỡ lỗi DAP, cộng tác LAN và extension khai báo. Giao diện làm lại theo 5 vùng, có bảng lệnh, thanh trạng thái và chế độ tiếng Anh. Các luồng F1–F15 giữ nguyên hành vi. Bản RC dựng từ `main` (chuỗi phiên bản vẫn là 0.1.2) đã qua nghiệm thu demo trên macOS ([biên bản 23/11](acceptance/2026-11-23-macos.md)); các lỗi nghiệm thu được sửa trong cùng đợt (#50, #51, #54) và sẽ đóng khi chạy lại bản cài.
+0.2.0 gộp bộ công cụ phát triển kiểu Wu (F16, ADR 0020) vào bản Electron + Monaco: LSP, terminal, Git, gỡ lỗi DAP, cộng tác LAN và extension khai báo. Giao diện làm lại theo 5 vùng, có bảng lệnh, thanh trạng thái và chế độ tiếng Anh. Các luồng F1–F15 giữ nguyên hành vi. Bản RC dựng từ `main` (chuỗi phiên bản vẫn là 0.1.2) đã qua nghiệm thu demo trên macOS ([biên bản 23/11](acceptance/2026-11-23-macos.md)); các lỗi nghiệm thu được sửa trong cùng đợt (#50, #51, #52, #54) và sẽ đóng khi chạy lại bản cài.
 
 ## Tính năng mới
 
