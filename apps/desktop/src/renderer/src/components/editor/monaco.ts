@@ -38,6 +38,7 @@ import { createTokenizationSupport } from 'monaco-editor/languages/features/json
 import EditorWorker from 'monaco-editor/editor/editor.worker.js?worker'
 import { currentTheme, observeTheme } from '../../state/useTheme'
 import { installFontKeys, monacoOptions } from './monacoPrefs'
+import { mountOverflowWidgets, overflowWidgetsHost } from './overflowWidgets'
 import { applyProjectEdits, diagnosticMarker } from './lspEdits'
 import { getDiagnostics, subscribeDiagnostics } from '../../state/diagnostics'
 import { tr } from '../../strings'
@@ -411,11 +412,14 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     if (event.projectId === opts.projectId && event.file === opts.path) setMarkers()
   })
   setMarkers()
+  const overflowHost = overflowWidgetsHost()
   const editor = monaco.editor.create(el, {
     ...(model ? { model } : { value: opts.value, language: opts.language }), readOnly: opts.readOnly, theme: editorTheme(),
     automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, glyphMargin: true, ...monacoOptions(),
+    overflowWidgetsDomNode: overflowHost,
     ...(font ? { fontFamily: font } : {})
   })
+  const detachOverflowHost = mountOverflowWidgets(el, overflowHost)
   installFontKeys(editor)
   if (!opts.readOnly) installContinuations(editor)
   const detachConflicts = attachConflictWidgets(editor)
@@ -537,6 +541,7 @@ export function createEditor(el: HTMLElement, opts: { value: string; language: s
     },
     dispose: () => {
       setVim(null)
+      detachOverflowHost()
       detachConflicts()
       bookmarks.clear()
       const model = editor.getModel()
@@ -559,17 +564,20 @@ export function createMirror(el: HTMLElement, path: string, projectId?: string, 
   if (!model) return null
   retainModel(model)
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
+  const overflowHost = overflowWidgetsHost()
   const editor = monaco.editor.create(el, {
     model, theme: editorTheme(), readOnly, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
+    overflowWidgetsDomNode: overflowHost,
     ...(font ? { fontFamily: font } : {})
   })
+  const detachOverflowHost = mountOverflowWidgets(el, overflowHost)
   installFontKeys(editor)
   const setVim = vimAttacher(editor)
   return {
     setVim,
     setReadOnly: (value) => editor.updateOptions({ readOnly: value }),
     onDisposeModel: (cb) => void model.onWillDispose(cb),
-    dispose: () => { setVim(null); editor.dispose(); releaseModel(model) }
+    dispose: () => { setVim(null); detachOverflowHost(); editor.dispose(); releaseModel(model) }
   }
 }
 
@@ -580,16 +588,20 @@ export interface DiffHandle {
 /** Trình xem diff chỉ đọc; `automaticLayout` tự layout lại khi panel ẩn→hiện. */
 export function createDiffEditor(el: HTMLElement, opts: { before: string; after: string; language: string }): DiffHandle {
   const font = getComputedStyle(document.documentElement).getPropertyValue('--font-mono').trim()
+  const overflowHost = overflowWidgetsHost()
   const diff = monaco.editor.createDiffEditor(el, {
     readOnly: true, theme: editorTheme(), automaticLayout: true, renderSideBySide: false,
     minimap: { enabled: false }, scrollBeyondLastLine: false, ...monacoOptions(),
+    overflowWidgetsDomNode: overflowHost,
     ...(font ? { fontFamily: font } : {})
   })
+  const detachOverflowHost = mountOverflowWidgets(el, overflowHost)
   const original = monaco.editor.createModel(opts.before, opts.language)
   const modified = monaco.editor.createModel(opts.after, opts.language)
   diff.setModel({ original, modified })
   return {
     dispose: () => {
+      detachOverflowHost()
       diff.dispose()
       original.dispose()
       modified.dispose()
