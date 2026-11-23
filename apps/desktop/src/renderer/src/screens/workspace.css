@@ -512,7 +512,22 @@
 .workspace-shell .report-view { padding: clamp(14px, 2vw, 24px); }
 .workspace-shell .report-head { gap: 12px; flex-wrap: wrap; }
 .workspace-shell .report-view section { padding-top: 12px; border-top: 1px solid var(--color-border); }
-.workspace-shell .report-view table { min-width: 0; overflow-wrap: anywhere; }
+.workspace-shell .report-view table { min-width: 0; overflow-wrap: break-word; word-break: normal; }
+.workspace-shell .report-view th { white-space: nowrap; }
+.workspace-shell .report-view td { overflow-wrap: break-word; }
+/* Ở 1024 vùng báo cáo chỉ còn ~380px: mỗi dòng thành khối có nhãn, đường dẫn đủ chỗ trên một dòng. */
+@media (max-width: 1180px) {
+  .workspace-shell .report-view table.report-nodes,
+  .workspace-shell .report-view table.report-nodes tbody,
+  .workspace-shell .report-view table.report-nodes tr,
+  .workspace-shell .report-view table.report-nodes td { display: block; width: auto; }
+  .workspace-shell .report-view table.report-nodes thead { display: none; }
+  .workspace-shell .report-view table.report-nodes tr { padding: 6px 0; border-bottom: 1px solid var(--color-border); }
+  .workspace-shell .report-view table.report-nodes td { padding: 1px 8px; border: 0; }
+  .workspace-shell .report-view table.report-nodes td::before { content: attr(data-label) ': '; color: var(--color-muted); }
+  .workspace-shell .report-view table.report-nodes td:first-child { font-weight: 600; }
+  .workspace-shell .report-view table.report-nodes td:first-child::before { content: ''; }
+}
 
 .workspace-shell .canvas-wrap:has(> .flows-view) { container-type: inline-size; }
 .workspace-shell .flows-view { grid-template-columns: minmax(155px, .23fr) minmax(0, 1fr) minmax(185px, .26fr); }

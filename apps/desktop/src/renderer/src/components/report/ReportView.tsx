@@ -14,6 +14,10 @@ interface Props {
   onExportMarkdown: () => void
 }
 
+/** Chèn điểm ngắt sau dấu `/` để đường dẫn dài xuống dòng theo đoạn, không bẻ giữa tên tệp. */
+const breakablePath = (file: string) =>
+  file.split('/').flatMap((part, index, parts) => index < parts.length - 1 ? [`${part}/`, <wbr key={index} />] : [part])
+
 export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExportMarkdown }: Props) {
   const [report, setReport] = useState<GraphReport | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -47,16 +51,16 @@ export function ReportView({ projectId, revision = 0, onOpenNode, onAsk, onExpor
       <section>
         <h3>{vi.report.godNodes}</h3>
         <p className="muted small">{vi.report.godNodesHint}</p>
-        <table>
+        <table className="report-nodes">
           <thead><tr><th>{vi.report.colName}</th><th>{vi.report.colKind}</th><th>{vi.report.colFile}</th><th>{vi.report.colDegree}</th></tr></thead>
           <tbody>
             {report.god_nodes.length === 0 && <tr><td colSpan={4} className="muted">{tr('Chưa có nút phù hợp.')}</td></tr>}
             {report.god_nodes.map(({ node, degree }) => (
               <tr key={node.id}>
-                <td><button type="button" className="link" onClick={() => onOpenNode(node.id)}>{node.label}</button></td>
-                <td><span className="kind" style={{ color: kindStyle(node.kind).color }}>{kindLabel(node.kind)}</span></td>
-                <td className="mono muted">{node.file ? `${node.file}${node.line_start ? `:${node.line_start}` : ''}` : ''}</td>
-                <td>{formatNumber(degree)}</td>
+                <td data-label={vi.report.colName}><button type="button" className="link" onClick={() => onOpenNode(node.id)}>{node.label}</button></td>
+                <td data-label={vi.report.colKind}><span className="kind" style={{ color: kindStyle(node.kind).color }}>{kindLabel(node.kind)}</span></td>
+                <td className="mono muted" data-label={vi.report.colFile} title={node.file ? `${node.file}${node.line_start ? `:${node.line_start}` : ''}` : undefined}>{node.file ? <>{breakablePath(node.file)}{node.line_start ? `:${node.line_start}` : ''}</> : ''}</td>
+                <td data-label={vi.report.colDegree}>{formatNumber(degree)}</td>
               </tr>
             ))}
           </tbody>

@@ -27,10 +27,10 @@ const sum = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a +
 
 function Card({ title, desc, status, onClick, disabled, icon, tone = 'blue' }: { title: string; desc: string; status?: ReactNode; onClick?: () => void; disabled?: boolean; icon: IconName; tone?: Tone }) {
   return (
-    <button type="button" className="card" data-tone={tone} onClick={onClick} disabled={disabled}>
+    <button type="button" className="card" data-tone={tone} onClick={onClick} disabled={disabled} title={desc}>
       <span className="card-icon"><Icon name={icon} /></span>
       <b>{title}</b>
-      <span className="muted">{desc}</span>
+      <span className="muted" title={desc}>{desc}</span>
       {status && <small className="card-status">{status}</small>}
     </button>
   )
