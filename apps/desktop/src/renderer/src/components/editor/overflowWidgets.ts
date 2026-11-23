@@ -35,3 +35,18 @@ export function mountOverflowWidgets(container: HTMLElement, host: HTMLElement):
     if (wasStatic && container.style.position === 'relative') container.style.removeProperty('position')
   }
 }
+
+/**
+ * Host riêng cho một editor con của diff. `createDiffEditor` chỉ nhận một `overflowWidgetsDomNode`
+ * lúc tạo và Monaco dùng nó cho cả hai editor con; toạ độ widget của con thứ hai lệch theo bề rộng
+ * con thứ nhất. Vì vậy tạo diff không kèm host, rồi chuyển các node widget tràn của từng con vào
+ * host đặt tại gốc `.monaco-editor` của chính con đó.
+ */
+export function mountChildOverflowWidgets(root: HTMLElement): () => void {
+  const host = overflowWidgetsHost()
+  const moving = [...root.children].filter((node) =>
+    node.classList.contains('overflowingContentWidgets') || node.classList.contains('overflowingOverlayWidgets'))
+  root.appendChild(host)
+  host.append(...moving)
+  return () => host.remove()
+}

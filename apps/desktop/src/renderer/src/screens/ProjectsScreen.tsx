@@ -5,6 +5,7 @@ import { Toast } from '../components/common/Toast'
 import { waitJob } from '../state/waitJob'
 import { formatDate } from '../state/locale'
 import { vi, tr } from '../strings'
+import { msg, msgText, type Message } from '../state/messages'
 import './welcome.css'
 import './projects.css'
 
@@ -55,11 +56,11 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
   const [refresh, setRefresh] = useState(0)
   const [listError, setListError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Message | null>(null)
   const [pending, setPending] = useState<'open' | 'remove' | 'clone' | null>(null)
   const [removing, setRemoving] = useState<ProjectSummary | null>(null)
   const [cloneUrl, setCloneUrl] = useState<string | null>(null)
-  const [cloneStatus, setCloneStatus] = useState<string | null>(null)
+  const [cloneStatus, setCloneStatus] = useState<Message | null>(null)
   const cloneJob = useRef<string | null>(null)
   const [members, setMembers] = useState<GlobalMember[]>([])
   const [picked, setPicked] = useState<string[]>([])
@@ -126,7 +127,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
 
   function cloneFromUrl(url: string) {
     void run('clone', async () => {
-      setCloneStatus(vi.sources.cloneRunning)
+      setCloneStatus(msg('Đang tải mã nguồn…'))
       try {
         const { jobId } = await window.nexgraph.sources.clone(url.trim())
         cloneJob.current = jobId
@@ -150,7 +151,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
       }
       if (!mounted.current) return
       setRecent((projects) => projects.filter((item) => item.project_id !== project.project_id))
-      setNotice(tr('Đã gỡ {name} khỏi danh sách gần đây.', { name: project.name }))
+      setNotice(msg('Đã gỡ {name} khỏi danh sách gần đây.', { name: project.name }))
       window.requestAnimationFrame(() => openButton.current?.focus())
     })
   }
@@ -180,7 +181,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
               <input type="url" value={cloneUrl} placeholder={vi.sources.clonePlaceholder} disabled={pending === 'clone'}
                 onChange={(e) => setCloneUrl(e.target.value)} autoFocus />
             </label>
-            <p className="muted">{cloneStatus ?? vi.sources.cloneHint}</p>
+            <p className="muted">{cloneStatus ? msgText(cloneStatus) : vi.sources.cloneHint}</p>
             <div className="row">
               <button type="submit" className="primary" disabled={!engineReady || pending !== null || !cloneUrl.trim()}>{vi.sources.cloneSubmit}</button>
               {pending === 'clone'
@@ -192,7 +193,7 @@ export function ProjectsScreen({ engineReady, onOpened, onOpenSettings, onOpenGl
       </section>
       {!engineReady && <p role="status" className="inline-message">{vi.projects.engineWaiting}</p>}
       {error && <p role="alert" className="inline-message error">{error}</p>}
-      {notice && <Toast message={notice} onDismiss={() => setNotice(null)} />}
+      {notice && <Toast message={msgText(notice)} onDismiss={() => setNotice(null)} />}
 
       <section className="welcome-section" aria-labelledby="recent-heading" aria-busy={engineReady && loading}>
         <h2 id="recent-heading" className="welcome-section-title">{vi.projects.recent}</h2>

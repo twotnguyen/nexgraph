@@ -70,9 +70,16 @@ describe('CSS: cây Monaco miễn nhiễm transition khi giảm chuyển động
     throw new Error(`khối ${selectorStart} không đóng`)
   }
 
-  it('khối reduced-motion của app vẫn đặt transition cho * (lý do phải miễn trừ)', () => {
+  it('khối reduced-motion của app vẫn đặt transition > 0 cho * (lý do phải miễn trừ)', () => {
     const block = blockOf('@media (prefers-reduced-motion: reduce)')
-    expect(block).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{[^}]*transition-duration:\s*\.01ms\s*!important/)
+    // Không khoá nguyên văn `.01ms`: điều cần bảo vệ là luật toàn cục CÓ transition dương
+    // (nếu sau này đổi thành 0s thì miễn trừ cây editor là thừa và test phải báo).
+    const star = /\*,\s*\*::before,\s*\*::after\s*\{([^}]*)\}/.exec(block)
+    expect(star, 'không thấy luật * trong khối reduced-motion').not.toBeNull()
+    const duration = /transition-duration:\s*([\d.]+)\s*(ms|s)\s*!important/.exec(star![1])
+    expect(duration, 'luật * phải đặt transition-duration có đơn vị').not.toBeNull()
+    const milliseconds = Number(duration![1]) * (duration![2] === 's' ? 1000 : 1)
+    expect(milliseconds).toBeGreaterThan(0)
   })
 
   it('khối reduced-motion miễn trừ toàn bộ cây .monaco-editor khỏi transition và animation', () => {

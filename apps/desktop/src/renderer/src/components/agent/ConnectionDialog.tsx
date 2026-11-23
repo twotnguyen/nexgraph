@@ -1,4 +1,5 @@
 import { tr } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { AuthEventView, AuthPromptView, LocalModelInfo, ModelInfo, ProviderInfo } from '@shared/agent-types'
 import { consentTargetForSettings, sameConsentTarget } from '@shared/agent-types'
@@ -75,7 +76,7 @@ function PiConnectionForm({ projectId, onConnected, onClose, initialMethod = 'oa
   const [prompt, setPrompt] = useState<AuthPromptView | null>(null)
   const [answer, setAnswer] = useState('')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null)
   const [testedSettings, setTestedSettings] = useState<AiSettings | null>(null)
   const [consent, setConsent] = useState(false)
@@ -154,7 +155,7 @@ function PiConnectionForm({ projectId, onConnected, onClose, initialMethod = 'oa
     setLocalModels(items)
     setModel(items[0]?.id ?? '')
     setResult(null)
-    if (!items.length) setError(tr('Chưa có model local. Tải một model trong Ollama rồi tìm lại.'))
+    if (!items.length) setError(msg('Chưa có model local. Tải một model trong Ollama rồi tìm lại.'))
   })
   const test = () => void run(async () => {
     if (method === 'local') {
@@ -200,7 +201,7 @@ function PiConnectionForm({ projectId, onConnected, onClose, initialMethod = 'oa
           <button type="button" aria-pressed={method === 'oauth'} disabled={busy} onClick={() => reset('oauth')}>{tr('Tài khoản')}</button>
           <button type="button" aria-pressed={method === 'api_key'} disabled={busy} onClick={() => reset('api_key')}>API key</button>
         </div>}
-        {error && <p role="alert" className="inline-message error">{error}</p>}
+        {error && <p role="alert" className="inline-message error">{msgText(error)}</p>}
         {method === 'local' ? (
           <div className="field">
             <label htmlFor="connect-local-url">{tr('Địa chỉ Ollama')}</label>

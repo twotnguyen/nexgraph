@@ -4,6 +4,7 @@ import { tr } from '../../strings'
 import { useCommand } from '../../state/commands'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { errorText } from '../../state/errorText'
+import { msg, msgText, type Message } from '../../state/messages'
 import { useLocale } from '../../state/locale'
 import { largerSymbolAt, positionInRange, previousFromHistory, siblingSymbol, smallestSymbolAt } from '../../state/syntaxSelection'
 import { Highlight, Picker } from '../layout/Picker'
@@ -74,14 +75,14 @@ function RenameDialog({ projectId, editor, close }: { projectId: string; editor:
   const [position] = useState(() => editor.handle.getPosition?.())
   const [name, setName] = useState(() => editor.handle.getWordAtCursor?.() ?? '')
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const input = useRef<HTMLInputElement>(null)
   useEffect(() => { input.current?.select() }, [])
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (busy) return
-    if (!name.trim()) { setError(tr('Nhập tên mới.')); return }
-    if (!position || !window.nexgraph?.lsp?.rename) { setError(tr('Không thể đổi tên ký hiệu trong tệp này.')); return }
+    if (!name.trim()) { setError(msg('Nhập tên mới.')); return }
+    if (!position || !window.nexgraph?.lsp?.rename) { setError(msg('Không thể đổi tên ký hiệu trong tệp này.')); return }
     setBusy(true)
     setError(null)
     try {
@@ -98,7 +99,7 @@ function RenameDialog({ projectId, editor, close }: { projectId: string; editor:
       onKeyDown={(event) => { if (event.key === 'Escape' && !busy) { event.preventDefault(); close() } }}>
       <label htmlFor="rename-symbol-input">{tr('Tên mới')}</label>
       <input id="rename-symbol-input" ref={input} autoFocus value={name} onChange={(event) => setName(event.target.value)} disabled={busy} aria-invalid={!!error} />
-      {error && <p className="editor-tool-error" role="alert">{error}</p>}
+      {error && <p className="editor-tool-error" role="alert">{msgText(error)}</p>}
       <div className="editor-tool-actions"><button type="button" disabled={busy} onClick={() => close()}>{tr('Hủy')}</button><button type="submit" disabled={busy}>{tr('Đổi tên')}</button></div>
     </form>
   </div>
@@ -109,14 +110,14 @@ function WorkspaceSymbolPicker({ projectId, onOpen, close }: { projectId: string
   const [query, setQuery] = useState('')
   const [symbols, setSymbols] = useState<LspWorkspaceSymbol[]>([])
   // null = đang tìm: để nguyên trạng thái, nhãn dịch lúc render nên đổi ngôn ngữ là đổi ngay.
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, setStatus] = useState<Message | null>(null)
   useEffect(() => {
     let live = true
     const timer = setTimeout(() => {
       const api = window.nexgraph?.lsp?.workspaceSymbols
-      if (!api) { setStatus(tr('Không hỗ trợ tìm ký hiệu trong dự án.')); return }
+      if (!api) { setStatus(msg('Không hỗ trợ tìm ký hiệu trong dự án.')); return }
       void Promise.resolve().then(() => api(projectId, query)).then((items) => {
-        if (live) { setSymbols(items.slice(0, 100)); setStatus(tr('Không có ký hiệu khớp')) }
+        if (live) { setSymbols(items.slice(0, 100)); setStatus(msg('Không có ký hiệu khớp')) }
       }).catch((error: unknown) => { if (live) setStatus(errorText(error)) })
     }, 200)
     return () => { live = false; clearTimeout(timer) }
@@ -124,7 +125,7 @@ function WorkspaceSymbolPicker({ projectId, onOpen, close }: { projectId: string
   return <Picker label={tr('Tìm ký hiệu trong dự án')} placeholder={tr('Tìm ký hiệu trong dự án…')} items={symbols}
     itemKey={(item) => `${item.file}:${item.range.start.line}:${item.range.start.character}:${item.name}`} itemText={(item) => item.name}
     filter={(items) => items.map((item) => ({ item, positions: [] }))} onQueryChange={(value) => { setSymbols([]); setStatus(null); setQuery(value) }}
-    empty={status ?? tr('Đang tìm ký hiệu…')} onCancel={() => close()} onPick={(symbol) => { close(false); onOpen(symbol.file, symbol.range.start.line + 1, symbol.range.start.character + 1) }}
+    empty={msgText(status) || tr('Đang tìm ký hiệu…')} onCancel={() => close()} onPick={(symbol) => { close(false); onOpen(symbol.file, symbol.range.start.line + 1, symbol.range.start.character + 1) }}
     renderItem={(symbol) => <><span>{symbol.name}{symbol.containerName ? ` · ${symbol.containerName}` : ''}</span><small>{symbol.file}:{symbol.range.start.line + 1}</small></>} />
 }
 

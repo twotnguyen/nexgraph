@@ -8,6 +8,8 @@ interface Props {
   onOpenCode: (file: string, line: number, lineEnd?: number) => void
   onOpenNode: (nodeId: string) => void
   codeSlice?: string | null
+  /** CodeSlice.truncated: engine chỉ trả phần đầu của tệp dài. */
+  codeTruncated?: boolean
 }
 
 export function FlowStepPanel({
@@ -16,7 +18,8 @@ export function FlowStepPanel({
   onSelectStep,
   onOpenCode,
   onOpenNode,
-  codeSlice
+  codeSlice,
+  codeTruncated
 }: Props) {
   const currentStep = steps[currentIndex]
   const node = currentStep?.node
@@ -80,6 +83,7 @@ export function FlowStepPanel({
               <code>{codeSlice}</code>
             </pre>
           )}
+          {codeTruncated && <p role="status" className="muted small">{vi.code.truncated}</p>}
           <div className="detail-actions">
             <button
               type="button"

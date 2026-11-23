@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { IndexOptions, Job, JobState } from '@shared/graph-types'
 import { tr } from '../strings'
 import { errorText } from './errorText'
+import { msg, type Message } from './messages'
 
 const POLL_INTERVAL_MS = 1_000
 const REQUEST_TIMEOUT_MS = 5_000
@@ -30,7 +31,7 @@ function withTimeout<T>(request: Promise<T>, ms: number, message: string): Promi
 /** Nhận tiến độ qua SSE và kiểm tra trạng thái theo job ID khi luồng sự kiện bị gián đoạn. */
 export function useIndexJob(projectId: string, subdir?: string | null, options?: IndexOptions) {
   const [job, setJob] = useState<Job | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<Message | null>(null)
   const startRequest = useRef<{ key: string; result: Promise<{ jobId: string }> } | null>(null)
   const cancelCurrent = useRef<(() => void) | null>(null)
   const opts: IndexOptions = {
@@ -78,7 +79,7 @@ export function useIndexJob(projectId: string, subdir?: string | null, options?:
         failures += 1
         if (failures >= MAX_STATUS_FAILURES || (err as { code?: string })?.code === 'unknown_job') {
           setJob(null)
-          setError(tr('Không đọc được tiến độ lập chỉ mục. {detail}. Hãy quay lại và mở dự án.', { detail: errorText(err) }))
+          setError(msg('Không đọc được tiến độ lập chỉ mục. {detail}. Hãy quay lại và mở dự án.', { detail: errorText(err) }))
           return
         }
       } finally {

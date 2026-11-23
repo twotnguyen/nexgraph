@@ -5,6 +5,7 @@ import { fuzzyFilter } from '../../state/fuzzy'
 import { Icon } from '../common/icons'
 import { Highlight, Picker } from '../layout/Picker'
 import { tr } from '../../strings'
+import { msg, msgText, type Message } from '../../state/messages'
 import './git-panel.css'
 
 type Choice = { kind: 'worktree'; worktree: GitWorktree } | { kind: 'create'; branch: string; existing: boolean }
@@ -29,14 +30,14 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
 }) {
   const api = window.nexgraph.git
   const [data, setData] = useState<{ worktrees: GitWorktree[]; branches: string[] } | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<Message | null>(null)
+  const [actionError, setActionError] = useState<Message | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const busyRef = useRef(false)
   const mounted = useRef(true)
 
   const load = useCallback(async () => {
-    if (!api) return setLoadError(tr('Git không dùng được ở chế độ này.'))
+    if (!api) return setLoadError(msg('Git không dùng được ở chế độ này.'))
     try {
       const [worktrees, branches] = await Promise.all([api.worktrees(projectId), api.branches(projectId)])
       if (mounted.current) { setData({ worktrees, branches }); setLoadError(null) }
@@ -75,7 +76,7 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
         if (mounted.current) { onOpen(path); onClose() }
       })
     } else if (choice.worktree.current) onClose()
-    else if (choice.worktree.prunable) setActionError(tr('Thư mục của worktree này không còn trên đĩa. Hãy xóa nó rồi tạo lại.'))
+    else if (choice.worktree.prunable) setActionError(msg('Thư mục của worktree này không còn trên đĩa. Hãy xóa nó rồi tạo lại.'))
     else { onOpen(choice.worktree.path); onClose() }
   }
 
@@ -101,7 +102,7 @@ export function WorktreePicker({ projectId, onClose, onOpen }: {
       return matches
     }}
     empty={busy ?? (data ? tr('Không có worktree.') : loadError ? tr('Không thể tải worktree.') : tr('Đang tải worktree…'))}
-    error={actionError ?? loadError} onCancel={() => { if (!busyRef.current) onClose() }} onPick={pick}
+    error={actionError || loadError ? msgText(actionError ?? loadError) : undefined} onCancel={() => { if (!busyRef.current) onClose() }} onPick={pick}
     footer={(item, go) => {
       if (!item) return null
       if (item.kind === 'create') return <button type="button" onClick={go}>{tr('Tạo và mở')} <kbd>↵</kbd></button>
