@@ -1,6 +1,6 @@
 # Ghi chú phát hành NexGraph 0.2.0-alpha.1 (bản nháp)
 
-> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0-alpha.1` (alpha, đánh dấu **prerelease**); chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. Bản cuối `0.2.0` dự kiến cuối 20/12/2026, dùng lại ghi chú này sau khi gỡ nhãn alpha. **Cập nhật 24/11/2026:** đợt V1 tăng version lên `0.2.0-alpha.1` (`0.2.0a1` phía engine); các PR đã merge của đợt (#32–#48, #50–#59) đã vào `main` (`8118db0`); danh sách dưới chỉ gồm PR đã merge, không còn mục “chờ merge”.
+> **Trạng thái:** nháp, chưa phát hành. Bản đang phát hành là **0.1.2**. Tệp này là nội dung dự kiến cho GitHub Release `v0.2.0-alpha.1` (alpha, đánh dấu **prerelease**); chỉ dùng sau khi RC được nghiệm thu và Tình tạo tag. Bản cuối `0.2.0` dự kiến cuối 20/12/2026, dùng lại ghi chú này sau khi gỡ nhãn alpha. **Cập nhật 24/11/2026:** đợt V1 tăng version lên `0.2.0-alpha.1` (`0.2.0a1` phía engine); các PR đã merge của đợt (#32–#48, #50–#56, #58–#59) đã vào `main` (`8118db0`). **#57 bị đóng không merge** (đổi tên nhánh `bot/` → `fix/` làm GitHub đóng PR) và được thay bằng **#59** đã merge. Mọi số PR trong tệp đã kiểm `gh pr view N --json state`: tất cả `MERGED`; PR chưa merge xếp riêng ở mục [Dự kiến trong bản này — chưa merge](#dự-kiến-trong-bản-này--chưa-merge).
 
 ## Tóm tắt
 
@@ -93,6 +93,15 @@
 ## Cài đặt
 
 Theo [README](README.md): tải đúng tệp trong artifact của lượt CI xanh, đối chiếu `.build.json` (byte, SHA-256, commit), rồi mở theo hướng dẫn cho bộ cài chưa ký. Lần đầu mở bản macOS ad-hoc có thể hỏi Keychain — bấm **Always Allow** trước buổi demo ([kịch bản demo](../demo-script.md)).
+
+## Dự kiến trong bản này — chưa merge
+
+Các PR dưới đây **chưa merge** tại 24/11/2026; không nằm trong phần tính năng hay sửa lỗi ở trên và chỉ được tính vào bản phát hành nếu merge trước khi tạo tag:
+
+- **#60** — CI hardening phát hành (X1): `version-check` so tag với bốn nguồn version, pin action theo SHA, concurrency theo SHA, job `release` tạo Release với `--prerelease` khi tag có dấu `-`. Là điều kiện chặn trước khi tạo tag ([runbook](runbook.md#0-điều-kiện-vào)).
+- **#61** — tăng version bốn tệp lên `0.2.0-alpha.1` và chính tệp ghi chú này (V1).
+- **#49** — menu native File/Edit/View và hoàn thiện lệnh tệp: PR mở từ trước, chưa merge, không thuộc phạm vi 0.2.0-alpha.1.
+- Các PR sửa finding nghiệm thu RC2 (E9, E10, F12) **chưa mở** tại thời điểm cập nhật.
 
 ## Ghi chú cho người bảo trì
 
