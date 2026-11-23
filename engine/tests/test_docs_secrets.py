@@ -155,6 +155,52 @@ def test_markdown_table_without_secret_is_kept(row):
     assert redact_doc_secrets(row) == row
 
 
+# Review #58 Important 1: dòng header của bảng markdown có ô 1 là `Token`/`Key`/`Secret` từng bị che
+# (`| Token | Purpose |` → `| Token | [redacted] |`), làm hỏng tài liệu đã lập chỉ mục.
+@pytest.mark.parametrize("text", [
+    "| Token | Purpose |",
+    "| Key | Default | Meaning |",
+    "| Secret | Source |",
+    "| Token | Size | Weight |",
+    "| Token | Purpose |\n|---|---|\n| API_KEY | TblA8Zx2Nq7Vb4Xc9Mp5Rt1 |",
+    "| Key | Default |\n|:---|---:|",
+    "| Secret | Source |\n| :---: | :---: |",
+    # Bảng 3+ cột: regex chỉ ăn hai ô đầu, dòng header vẫn phải nhận ra (bản dịch nike/shopify/slack).
+    "| Token | Wartość | Zastosowanie |\n|---|---|---|",
+    "| Token | Значення | Використання |\n| --- | --- | --- |",
+])
+def test_markdown_table_header_rows_are_kept(text):
+    """Dòng header (dòng kế là `|---|`, kể cả căn lề `:---:`) không phải dữ liệu: giữ nguyên."""
+    out = redact_doc_secrets(text)
+    assert out.splitlines()[0] == text.splitlines()[0], out
+    assert out == redact_doc_secrets(out)
+
+
+@pytest.mark.parametrize("row", [
+    "| Tablet Dikey | 768–1023px |",                        # "Dikey" kết thúc bằng KEY nhưng là từ, không phải khoá
+    "| copilot_chat.time_to_first_token | Histogram |",     # ô giá trị là loại metric, không phải secret
+    "| gitlab_token | Đọc mã nguồn |",
+    "| API Key | string |",
+    "| SECRET_KEY | Mandatory |",
+    "| api_key | 1024 |",
+])
+def test_markdown_table_description_cells_are_kept(row):
+    """Important 1: chỉ che ô giá trị trông như secret; mô tả chữ, tên loại, số/đơn vị giữ nguyên."""
+    assert redact_doc_secrets(row) == row
+
+
+@pytest.mark.parametrize("row", [
+    "| NEO4J_PASSWORD | archviewer123 |",
+    "| API_KEY | TblA8Zx2Nq7Vb4Xc9Mp5Rt1 |",
+    "| `SECRET_KEY` | TblS3Wn8Qa4Zc7Vb2Xm9Lp6 |",
+])
+def test_markdown_table_secret_cells_still_redacted(row):
+    """Mặt ngược của Important 1: giá trị secret thật trong bảng vẫn bị che."""
+    out = redact_doc_secrets(row)
+    assert "[redacted]" in out, out
+    assert out.count("|") == row.count("|"), (row, out)
+
+
 def test_prose_with_verb_refresh_is_not_a_secret():
     """MIN-52(4): 'Token: refresh tokens rotate' là câu văn, không phải giá trị bí mật."""
     text = "Token: refresh tokens rotate"

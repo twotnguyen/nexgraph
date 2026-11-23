@@ -99,13 +99,62 @@ def _redact_pem_blocks(text: str) -> str:
 _TABLE_ROW = re.compile(r"(?m)^(?P<lead>[ \t]*)\|(?P<key>[^|\n]+)\|(?P<value>[^|\n]*)\|")
 # Ô tên khoá phải là một định danh (`API_KEY`, `db.password`, `Stripe secret key`), không phải câu mô tả.
 _TABLE_KEY = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\- ]*$")
+# Dòng phân cách header (`|---|---|`, `|:---:|---:|`): dòng ngay trước nó là header, không phải dữ liệu.
+_TABLE_DELIM = re.compile(r"^[ \t]*\|[ \t:|-]+\|[ \t]*$")
+# Cụm nhiều từ (`Stripe secret key`, `Tablet Dikey`) chỉ nhạy cảm khi từ cuối đúng là từ khoá, để
+# "Dikey" (từ tiếng Thổ Nhĩ Kỳ, kết thúc bằng KEY) không bị coi là tên khoá.
+_TABLE_KEY_WORDS = frozenset({"KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "PWD", "PASSPHRASE",
+                              "CREDENTIAL", "CREDENTIALS"})
+# Một từ chữ thuần ngắn (`Histogram`, `Mandatory`, `Default`) là mô tả/loại, không phải secret.
+_WORD_ONLY = re.compile(r"^[A-Za-z][A-Za-z'’-]*$")
+# Số + đơn vị (`768–1023px`, `2.5s`), và đường dẫn tệp (`docs/api.md`): giá trị kỹ thuật, không phải bí mật.
+_VALUE_WITH_UNIT = re.compile(r"^[\d.,:–\-/]+[ \t]*[A-Za-z]{1,3}$")
+_VALUE_PATH = re.compile(r"^[\w.@-]+(?:/[\w.@-]+)+\.(?:md|py|tsx?|jsx?|json|ya?ml|toml|txt|sh|go|rs|java|rb|css|html?)$")
+
+
+
+def _table_key_rule(key: str) -> bool:
+    """Tên khoá trong ô 1 của bảng: định danh (`API_KEY`) hoặc cụm từ khoá (`Stripe secret key`)."""
+    if " " in key or "\t" in key:
+        words = key.split()
+        if not words or re.sub(r"[^A-Z0-9]", "", words[-1].upper()) not in _TABLE_KEY_WORDS:
+            return False
+    return _key_rule(key)
+
+
+def _looks_like_table_secret(value: str) -> bool:
+    """Ô giá trị của bảng là secret: một token, không phải từ mô tả/loại, số có đơn vị hay đường dẫn."""
+    v = value.strip()
+    if not v or any(ch.isspace() for ch in v):
+        return False
+    if not _looks_like_secret(v) or _VALUE_WITH_UNIT.match(v) or _VALUE_PATH.match(v):
+        return False
+    # Từ chữ thuần ngắn (`Histogram`, `Mandatory`) là mô tả; chuỗi chữ dài (≥ 20) vẫn che vì giống khoá ngẫu nhiên.
+    return not (_WORD_ONLY.match(v) and len(v) < 20)
+
+
+def _is_table_header(text: str, match: re.Match[str]) -> bool:
+    """Dòng header của bảng: dòng ngay sau là dòng phân cách `|---|` (kể cả căn lề `:---:`).
+
+    Xét hết dòng của match (bảng 3+ cột thì match chỉ ăn hai ô đầu), rồi mới lấy dòng kế.
+    """
+    line_end = text.find("\n", match.end())
+    if line_end == -1:
+        return False
+    return bool(_TABLE_DELIM.match(text[line_end + 1:].split("\n", 1)[0].rstrip("\r")))
 
 
 def _redact_table_cells(text: str) -> str:
-    """Che cột giá trị của bảng markdown khi cột tên khoá là tên nhạy cảm (MIN-52)."""
+    """Che cột giá trị của bảng markdown khi cột tên khoá là tên nhạy cảm (MIN-52).
+
+    Bỏ qua dòng header và ô mô tả: bảng tài liệu có `| Token | Purpose |` hay `| Metric | Histogram |`
+    là dữ liệu thường, che đi là làm hỏng tài liệu đã lập chỉ mục (review #58 Important 1).
+    """
     def repl(match: re.Match[str]) -> str:
+        if _is_table_header(text, match):
+            return match.group(0)
         key = match["key"].strip().strip("`*_\"'")
-        if not _TABLE_KEY.match(key) or not _key_rule(key):
+        if not _TABLE_KEY.match(key) or not _table_key_rule(key):
             return match.group(0)
         raw = match["value"]
         cell = raw.strip()
@@ -113,8 +162,7 @@ def _redact_table_cells(text: str) -> str:
             return match.group(0)
         quote = cell[0] if cell[:1] in ("'", '"', "`") else ""
         value = cell[1:-1] if quote and cell.endswith(quote) and len(cell) > 1 else cell
-        # Ô giá trị của bảng secret là một token; câu văn (có khoảng trắng) là mô tả, không che.
-        if any(ch.isspace() for ch in value.strip()) or not _looks_like_secret(value):
+        if not _looks_like_table_secret(value):
             return match.group(0)
         lead = raw[:len(raw) - len(raw.lstrip())]
         trail = raw[len(raw.rstrip()):]
