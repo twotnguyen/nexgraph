@@ -287,6 +287,26 @@ describe('AgentPanel', () => {
     expect(screen.queryByText('m1')).toBeNull()
   })
 
+  it('models-changed khi đang có lượt: hoãn tới lúc lượt kết thúc rồi cập nhật (MIN-54)', async () => {
+    let fire: (e: { providerId: string }) => void = () => {}
+    const getSettings = vi.fn(async () => ({ ...target, model: 'm1', hasKey: true }))
+    const { emitAgent } = installNexgraph({
+      ai: { getSettings, hasConsent: vi.fn(async () => true) },
+      auth: { onModelsChanged: vi.fn((cb: (e: { providerId: string }) => void) => { fire = cb; return () => {} }) },
+      agent: { prompt: pending() }
+    })
+    render(<AgentPanel {...props()} />)
+    expect(await screen.findByText('m1')).toBeInTheDocument()
+    await ask('hỏi khi đang đổi model')
+    getSettings.mockResolvedValue({ ...target, model: 'm2', hasKey: true })
+    act(() => fire({ providerId: 'provider-one' }))
+    // Lượt đang chạy nên chưa đọc lại cấu hình; event bị bỏ trước đây làm panel giữ model cũ mãi.
+    expect(screen.getByText('m1')).toBeInTheDocument()
+    expect(screen.queryByText('m2')).toBeNull()
+    act(() => emitAgent('p1', done))
+    expect(await screen.findByText('m2')).toBeInTheDocument()
+  })
+
   it('xung đột khi ghi vẫn hiện sau câu trả lời và được xóa khi gửi câu hỏi mới', async () => {
     let settle!: () => void // prompt() thật settle ngay sau `done`, khi main dọn xong lượt
     const prompt = vi.fn().mockImplementationOnce(() => new Promise<void>((resolve) => { settle = resolve })).mockResolvedValue(undefined)
