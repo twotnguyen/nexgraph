@@ -26,6 +26,19 @@ describe('citations', () => {
     expect(parseCitations('[lib/a.dart:10-42](https://example.com/x)')).toEqual([{ raw: 'lib/a.dart:10-42', file: 'lib/a.dart', start: 10, end: 42 }])
   })
 
+  it('M1: bỏ tiền tố gạch đầu dòng/số thứ tự/tiêu đề để số đếm khớp đúng chip sẽ vẽ', () => {
+    // Markdown bỏ "- ", "1. ", "## " trước khi renderer thấy text node; `raw` phải bỏ luôn,
+    // nếu không panel báo "N/N đã xác minh" mà không có chip nào bấm được.
+    expect(parseCitations('- service.py:1-2\n1. app.py:8-9\n## flow app/service.py:4-7')).toEqual([
+      { raw: 'service.py:1-2', file: 'service.py', start: 1, end: 2 },
+      { raw: 'app.py:8-9', file: 'app.py', start: 8, end: 9 },
+      { raw: 'flow app/service.py:4-7', file: 'flow app/service.py', start: 4, end: 7 }])
+    // Trích dẫn trong inline code và trong danh sách có ngoặc vẫn đọc được, không dính dấu `.
+    expect(parseCitations('- [[service.py:4-7]]\n- `app.py:8-9`')).toEqual([
+      { raw: '[[service.py:4-7]]', file: 'service.py', start: 4, end: 7 },
+      { raw: 'app.py:8-9', file: 'app.py', start: 8, end: 9 }])
+  })
+
   it('AI-01: không bắt nhầm giờ, mục, URL, số phiên bản hay placeholder', () => {
     expect(parseCitations('Lúc 10:30 · mục 3:12-15 · https://example.com:8080/a · bản 1.2.3:45 · [[không phải]] · [[file:start-end]] · ngày 2026-11-23:5-7')).toEqual([])
   })

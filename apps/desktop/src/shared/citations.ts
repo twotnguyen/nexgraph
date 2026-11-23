@@ -17,6 +17,11 @@ export interface ParsedCitation {
   end: number
 }
 
+/** Một lần xuất hiện trong văn bản, kèm vị trí để renderer đặt chip đúng chỗ. */
+export interface ScannedCitation extends ParsedCitation {
+  index: number
+}
+
 /** Ký tự hợp lệ trong đường dẫn không ngoặc; cố ý hẹp để không bắt dấu câu của câu văn. */
 const BARE_PATH = '[A-Za-z0-9_./\\\\~#%@+&=-]'
 
@@ -31,6 +36,15 @@ export const CITATION_SOURCE = `(?:${BRACKETED}|${BARE})`
 const EXTENSION = /\.[A-Za-z][A-Za-z0-9_]{0,7}$/
 const TLD = /\.(com|org|net|edu|gov|io|dev|app|co|vn|info|biz|me)$/i
 const EXTENSIONLESS = /^(Makefile|Dockerfile|Jenkinsfile|LICENSE|README|Rakefile|Gemfile|Procfile)$/
+
+/**
+ * Tiền tố Markdown không thuộc trích dẫn: gạch đầu dòng, số thứ tự, tiêu đề. Markdown bỏ chúng
+ * trước khi renderer thấy text node, nên `raw` phải bỏ luôn — nếu không chip không khớp và panel
+ * đếm “đã xác minh” mà không có chip nào.
+ */
+const MARKDOWN_PREFIX = /^(?:#{1,6}[ \t]+|[-*+][ \t]+|\d{1,9}[.)][ \t]+)/
+/** Ký tự không thể bắt đầu một đường dẫn tương đối (dấu câu, gạch đầu dòng dính liền). */
+const JUNK_PREFIX = /^[^A-Za-z0-9_.\\/]+/
 
 const baseName = (file: string): string => file.split(/[\\/]/).at(-1) ?? file
 
@@ -50,28 +64,38 @@ function accept(file: string, bare: boolean): boolean {
   return file.includes('/') || !TLD.test(file)
 }
 
-function scan(re: RegExp, text: string, bare: boolean): (ParsedCitation & { index: number })[] {
-  const out: (ParsedCitation & { index: number })[] = []
+function scan(re: RegExp, text: string, bare: boolean): ScannedCitation[] {
+  const out: ScannedCitation[] = []
   for (const m of text.matchAll(re)) {
-    // Bỏ ký tự không thể bắt đầu đường dẫn mà regex nuốt vào (gạch đầu dòng "- ", "## ").
-    const file = (bare ? m[1].replace(/^[^A-Za-z0-9_.\\/]+/, '') : m[1]).trim()
-    if (!accept(file, bare)) continue
+    let file = bare ? m[1] : m[1].trim()
+    let skip = 0
+    if (bare) {
+      const markdown = file.match(MARKDOWN_PREFIX)?.[0] ?? ''
+      const junk = file.slice(markdown.length).match(JUNK_PREFIX)?.[0] ?? ''
+      skip = markdown.length + junk.length
+      file = file.slice(skip).trim()
+    }
     const start = Number(m[2])
-    out.push({ raw: m[0], file, start, end: m[3] ? Number(m[3]) : start, index: m.index ?? 0 })
+    if (!accept(file, bare)) continue
+    out.push({ raw: m[0].slice(skip), file, start, end: m[3] ? Number(m[3]) : start, index: (m.index ?? 0) + skip })
   }
   return out
 }
 
-export function parseCitations(text: string): ParsedCitation[] {
+/** Mọi lần xuất hiện (kể cả trùng) theo thứ tự trong văn bản; renderer cần từng vị trí để đặt chip. */
+export function scanCitations(text: string): ScannedCitation[] {
   const bracketed = scan(new RegExp(BRACKETED, 'g'), text, false)
   const taken = bracketed.map((c) => [c.index, c.index + c.raw.length] as const)
   // Trích dẫn trong ngoặc đã bắt trọn `[[a.ts:1-2]]`; bản không ngoặc lồng bên trong là trùng, bỏ.
   const bare = scan(new RegExp(BARE, 'g'), text, true)
     .filter((c) => !taken.some(([from, to]) => c.index >= from && c.index < to))
-  const found = [...bracketed, ...bare].sort((a, b) => a.index - b.index)
+  return [...bracketed, ...bare].sort((a, b) => a.index - b.index)
+}
+
+export function parseCitations(text: string): ParsedCitation[] {
   const seen = new Set<string>()
   const out: ParsedCitation[] = []
-  for (const { index: _index, ...citation } of found) {
+  for (const { index: _index, ...citation } of scanCitations(text)) {
     if (seen.has(citation.raw)) continue
     seen.add(citation.raw)
     out.push(citation)

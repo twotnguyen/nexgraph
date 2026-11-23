@@ -82,6 +82,23 @@ function complete(messages, maxTokens, advertised) {
     return { role: 'assistant', content: 'NEXGRAPH_SMOKE_CONTEXT_OK' }
   }
   if (maxTokens === 1) return { role: 'assistant', content: 'pong' }
+  // Kịch bản kiểm UI M1: trích dẫn nằm trong gạch đầu dòng, danh sách số, inline code, code fence.
+  if (question.includes('NEXGRAPH_CITE_MIX')) {
+    return { role: 'assistant', content: [
+      '## Luồng đăng nhập',
+      '',
+      '- service.py:1-2 mở đầu request.',
+      '1. app.py:8-9 gọi login.',
+      '- `flow app/service.py:4-7` là luồng chính.',
+      '',
+      '```py',
+      '# xem service.py:4-7',
+      'return save_session(user)',
+      '```',
+      '',
+      'Xem [[khong-co.ts:1-2]] để đối chiếu.'
+    ].join('\n') }
+  }
   const tools = messages.slice(lastUser).filter((m) => m.role === 'tool')
   if (Object.hasOwn(smokeCalls, question)) return smokePolicy(smokeCalls[question], advertised, tools, lastUser)
   if (tools.length === 0) return toolCall('list_flows', { query: 'login' })
