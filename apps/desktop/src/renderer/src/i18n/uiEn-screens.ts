@@ -293,4 +293,7 @@ export const uiEnScreens: Record<string, string> = {
   'Model miễn phí và trả phí theo tài khoản OpenRouter': 'Free and paid models on your OpenRouter account',
   'Gói OpenCode Go: dùng API key OpenCode, model lấy từ danh mục của OpenCode': 'OpenCode Go plan: use an OpenCode API key; models come from the OpenCode catalog',
   'OpenCode Zen: dùng API key OpenCode, tính phí theo lượng dùng': 'OpenCode Zen: use an OpenCode API key; pay as you go',
+  // SettingsScreen: thông báo main gửi qua auth:notice (ví dụ sau Đăng xuất)
+  'Đã đăng xuất nhưng chưa nạp lại được API key đã lưu. Key vẫn còn trong kho khoá; mở lại ứng dụng để dùng key.': 'Signed out but could not reload the saved API key. The key is still in the keychain; reopen the app to use it.',
+  'Đã đăng xuất trên máy. Chưa xác nhận được thu hồi phiên từ xa. Bạn có thể ngắt NexGraph trong ChatGPT Settings.': 'Signed out on this machine. Could not confirm remote session revocation. You can revoke NexGraph in ChatGPT Settings.',
 }

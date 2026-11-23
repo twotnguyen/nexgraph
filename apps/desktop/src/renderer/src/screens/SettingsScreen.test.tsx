@@ -221,6 +221,16 @@ describe('SettingsScreen', () => {
     act(() => emitNotice({ message: RESTORE_FAILED }))
     expect(await screen.findByText(RESTORE_FAILED)).toBeInTheDocument()
   })
+
+  it('thông báo Đăng xuất có bản English khi giao diện English', async () => {
+    setLocale('en')
+    const { api } = installNexgraph({ auth: { list: vi.fn(async () => [provider('openai', { oauth: true, loggedIn: true, hasKey: true })]) } })
+    const { emitNotice } = installAuthSinks(api)
+    render(<SettingsScreen onBack={() => {}} />)
+    expect(await screen.findByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    act(() => emitNotice({ message: RESTORE_FAILED }))
+    expect(await screen.findByText('Signed out but could not reload the saved API key. The key is still in the keychain; reopen the app to use it.')).toBeInTheDocument()
+  })
 })
 
 /** Nối các sink onEvent/onPrompt/onNotice của stub auth trong installNexgraph để bắn sự kiện từ main. */
