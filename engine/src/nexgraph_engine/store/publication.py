@@ -52,6 +52,12 @@ def backup_graph(source: sqlite3.Connection, target: sqlite3.Connection, *, time
     source.backup(target, pages=256, progress=check, sleep=0.05)
 
 
+def publish_stage(stage: sqlite3.Connection, live_path: Path, *, timeout: float = 30) -> None:
+    """Xuất bản bản staging đè lên CSDL thật; lỗi giữa chừng để nguyên bản đã công bố."""
+    with closing(sqlite3.connect(f"{live_path.as_uri()}?mode=rw", uri=True)) as live:
+        backup_graph(stage, live, timeout=timeout)
+
+
 @contextmanager
 def stage_graph(path: Path) -> Iterator[tuple[Path, sqlite3.Connection]]:
     """Tạo bản làm việc tách biệt, giữ khóa ghi và đóng graph hiện tại sau khi chép."""

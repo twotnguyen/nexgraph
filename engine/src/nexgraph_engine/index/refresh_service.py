@@ -11,7 +11,7 @@ from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectRegistry
-from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer
+from nexgraph_engine.store.publication import GraphWriteBusy, graph_writer, publish_stage, stage_graph
 
 
 class NotIndexed(Exception):
@@ -77,19 +77,24 @@ class RefreshService:
             lock.release()
 
     def refresh_now(self, project_id: str) -> dict:
-        """Refresh khi người gọi đã giữ khoá dự án (task của `JobManager.start_task` gắn với dự án này)."""
+        """Refresh khi người gọi đã giữ khoá dự án (task của `JobManager.start_task` gắn với dự án này).
+
+        Ghi vào bản staging rồi mới thay thế CSDL thật (REV-10): lỗi/kill giữa chừng để lại đồ thị cũ nguyên vẹn
+        thay vì một đồ thị cập nhật dở nhưng `has_published_graph()` vẫn báo true.
+        """
         info = self._registry.get(project_id)
         if info is None:
             raise UnknownProject(project_id)
         try:
-            with graph_writer(info.graph_db) as db, closing(open_graph_db(db)) as conn:
-                store = GraphStore(conn)
+            with stage_graph(info.graph_db) as (live_path, stage):
+                store = GraphStore(stage)
                 if not store.has_published_graph():
                     return self._skipped("not_indexed")
-                store.abort_stale_runs()  # lần refresh trước bị kill giữa chừng (xem cli._refresh)
+                store.abort_stale_runs()  # lần refresh trước bị kill giữa chừng không còn trên CSDL thật
                 result = refresh_project(store, info.path,
                                          transcript_dir=self._registry.app_data_dir / "transcripts" / project_id,
                                          sources_dir=sources_root(self._registry.app_data_dir, project_id))
+                publish_stage(stage, live_path)
         except GraphWriteBusy:
             return self._skipped("refresh_running")
         if result.added or result.changed or result.removed:

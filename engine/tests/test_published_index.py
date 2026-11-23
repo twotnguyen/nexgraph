@@ -210,3 +210,33 @@ def test_cancel_inside_structure_keeps_published_graph(api, copy_fixture):
         assert store.has_published_graph()
         assert graph_state(store) == baseline
 
+
+
+def test_failed_refresh_keeps_published_graph(api, copy_fixture, monkeypatch):
+    """REV-10: lỗi giữa lúc refresh tăng dần không được để lại đồ thị dở trên CSDL thật."""
+    root = copy_fixture("flow_app")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid)["state"] == "done"
+    previous = api.open(root)["last_indexed_at"]
+    db_path = root / ".nexgraph" / "graph.db"
+    with closing(open_graph_db(db_path, read_only=True)) as snapshot:
+        baseline = graph_state(GraphStore(snapshot))
+    (root / "refresh_probe.py").write_text("def refresh_probe():\n    return 1\n", encoding="utf-8")
+    app_py = root / "app.py"
+    app_py.write_text(app_py.read_text(encoding="utf-8") + "\n\ndef refresh_added():\n    return 2\n", encoding="utf-8")
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("Injected refresh failure")
+
+    # Sau `set_run_state(..., "phan_giai")` (mốc commit giữa lần refresh) và trước khi xong.
+    monkeypatch.setattr("nexgraph_engine.index.refresh.derive_tested_by", boom)
+    # TestClient dựng lại exception thay vì trả 500 như server thật.
+    with pytest.raises(RuntimeError, match="Injected refresh failure"):
+        api.post(f"/v1/projects/{pid}/refresh")
+
+    assert api.open(root)["last_indexed_at"] == previous
+    assert api.get(f"/v1/projects/{pid}/stats").json()["files"] == 4
+    assert api.get(f"/v1/projects/{pid}/search", params={"q": "refresh_probe"}).json() == []
+    assert api.get(f"/v1/projects/{pid}/search", params={"q": "refresh_added"}).json() == []
+    with closing(open_graph_db(db_path, read_only=True)) as conn:
+        assert graph_state(GraphStore(conn)) == baseline
