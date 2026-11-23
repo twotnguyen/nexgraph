@@ -1515,7 +1515,15 @@ export const uiEn: Record<string, string> = {
   'Kết nối được': 'Connection successful',
   'Kho khoá an toàn của hệ điều hành không khả dụng. Không thể lưu thông tin đăng nhập AI.': 'The operating system keychain is unavailable. AI credentials cannot be stored.',
   'Đã ghi {path}': 'Wrote {path}',
-  'Đã gỡ NexGraph khỏi các tệp trên': 'Removed NexGraph from the files above'
+  'Đã gỡ NexGraph khỏi các tệp trên': 'Removed NexGraph from the files above',
+  // Câu dự phòng theo mã lỗi (state/errorText codeErrors) — main trả câu cụ thể chưa có bản Anh.
+  'Engine không phản hồi kịp. Hãy thử lại.': 'The engine did not respond in time. Try again.',
+  'Không kết nối được engine.': 'Could not connect to the engine.',
+  'Không tìm thấy dự án': 'Project not found',
+  'Dự án không phải kho Git': 'The project is not a Git repository',
+  'Thao tác Git không thành công': 'The Git operation failed',
+  'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.': 'Only tasks declared in the project .vscode/tasks.json or .nexgraph/tasks.json can run.',
+  'Task không do NexGraph cấp, hãy chọn lại trong danh sách tác vụ.': 'The task was not issued by NexGraph; pick it again from the task list.'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}.

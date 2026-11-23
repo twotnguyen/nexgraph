@@ -1,4 +1,5 @@
 import { type Message, MsgError, msg, msgText } from './messages'
+import { getLocale } from './locale'
 
 /** Lỗi IPC tiếng Việt phổ biến: chỉ những câu có bản dịch mới đổi theo ngôn ngữ. */
 const knownErrors: Record<string, true> = {
@@ -91,6 +92,13 @@ const knownErrors: Record<string, true> = {
   'Yêu cầu không được phép trong kết nối NexGraph': true,
   'Không hỗ trợ': true,
   'Engine chưa sẵn sàng.': true,
+  'Engine không phản hồi kịp. Hãy thử lại.': true,
+  'Không kết nối được engine.': true,
+  'Không tìm thấy dự án': true,
+  'Dự án không phải kho Git': true,
+  'Thao tác Git không thành công': true,
+  'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.': true,
+  'Task không do NexGraph cấp, hãy chọn lại trong danh sách tác vụ.': true,
   'Quyền thực thi không hợp lệ': true,
   'Ngân sách phải là số nguyên dương và thời gian phải nằm trong giới hạn bộ đếm của hệ thống': true,
   'Chế độ trợ lý không hợp lệ': true,
@@ -120,6 +128,30 @@ const dynamicErrors: { re: RegExp; key: string }[] = [
   }
 ]
 
+/**
+ * Câu dự phòng theo **mã lỗi** của main/engine: câu cụ thể của main có thể chưa có bản Anh,
+ * nhưng mã thì ổn định — renderer dịch câu chuẩn của mã (I18N-IPC). Câu cụ thể trong
+ * `knownErrors` vẫn thắng vì nói rõ nguyên nhân hơn.
+ */
+export const codeErrors: Record<string, string> = {
+  engine_unavailable: 'Engine chưa sẵn sàng.',
+  engine_timeout: 'Engine không phản hồi kịp. Hãy thử lại.',
+  internal: 'Máy chủ nội bộ gặp lỗi. Vui lòng thử lại.',
+  unknown_project: 'Không tìm thấy dự án',
+  no_git: 'Dự án không phải kho Git',
+  git_failed: 'Thao tác Git không thành công',
+  conflict: 'Tệp đang có bản nháp chưa lưu trong trình soạn thảo. Lưu hoặc đóng bản nháp trước khi trợ lý sửa.',
+  consent_required: 'Chưa đồng ý gửi dữ liệu tới nhà cung cấp AI',
+  task_not_found: 'Không tìm thấy hội thoại của tác vụ',
+  image_not_supported: 'Mô hình đang chọn không hỗ trợ ảnh hoặc chưa xác định được khả năng nhận ảnh.',
+  agent_busy: 'Trợ lý đang trả lời',
+  ai_not_configured: 'Chưa cấu hình trợ lý AI',
+  session_not_found: 'Hội thoại không thuộc tài khoản và dự án đang chọn',
+  unapproved_task: 'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.'
+}
+
+const errorCode = (e: unknown): string => (e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '')
+
 const rawText = (e: unknown): string => e && typeof e === 'object' && 'message' in e ? String(e.message) : String(e)
 
 /**
@@ -135,6 +167,10 @@ export function errorMsg(e: unknown): Message {
     const match = rule.re.exec(text)
     if (match) return msg(rule.key, { n: match[1] })
   }
+  // Chỉ thay bằng câu theo mã khi UI đang English và câu cụ thể chưa có bản Anh: người dùng
+  // tiếng Việt vẫn thấy đúng câu chi tiết của main, không bị hạ xuống câu chung.
+  const code = errorCode(e)
+  if (code && codeErrors[code] && getLocale() === 'en') return msg(codeErrors[code])
   return msg(text)
 }
 
