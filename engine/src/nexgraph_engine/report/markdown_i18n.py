@@ -44,7 +44,7 @@ _RULES: list[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
     (re.compile(r"^## Hyperedges \(group relationships\)$"), "## Siêu cạnh (quan hệ nhóm)"),
     (re.compile(r"^## Communities \((?P<n>\d+) total, (?P<thin>\d+) thin omitted\)$"),
      r"## Cộng đồng (tổng \g<n>, bỏ qua \g<thin> mỏng)"),
-    (re.compile(r'^### Community (?P<cid>\d+) - "(?P<label>.*)"$'), r'### Cộng đồng \g<cid> - "\g<label>"'),
+    (re.compile(r'^### Community (?P<cid>-?\d+) - "(?P<label>.*)"$'), r'### Cộng đồng \g<cid> - "\g<label>"'),
     (re.compile(r"^## Ambiguous Edges - Review These$"), "## Cạnh AMBIGUOUS - cần xem lại"),
     (re.compile(r"^## Knowledge Gaps$"), "## Lỗ hổng kiến thức"),
     (re.compile(r"^## Suggested Questions$"), "## Câu hỏi gợi ý"),
@@ -90,10 +90,21 @@ _FRAGMENTS: tuple[tuple[str, str], ...] = (
 )
 
 
+_MORE = re.compile(r"\(\+(?P<n>\d+) more\)$")
+
+
+def _more_suffix(line: str) -> str:
+    """`Nodes (12): a, b (+4 more)` — dịch đuôi rút gọn, giữ nguyên tên ký hiệu/tệp phía trước."""
+    return _MORE.sub(r"(+\g<n> nữa)", line)
+
+
 def _translate_line(line: str) -> str:
     for pattern, replacement in _RULES:
         if pattern.match(line):
-            return pattern.sub(replacement, line)  # type: ignore[arg-type]
+            # `sub` chứ không `match`-rồi-return: phần khung dịch xong còn đuôi danh sách rút gọn.
+            line = pattern.sub(replacement, line)  # type: ignore[arg-type]
+            line = _more_suffix(line)
+            break
     for english, vietnamese in _FRAGMENTS:
         if english in line:
             line = line.replace(english, vietnamese)

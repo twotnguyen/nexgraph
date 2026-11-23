@@ -512,6 +512,31 @@ def test_markdown_export_follows_lang(copy_fixture, index_project, tmp_path):
     assert "## Summary" in en and "## Corpus Check" in en and "## Tóm tắt" not in en
 
 
+def test_markdown_vi_translates_negative_community_id_and_more_suffix():
+    """E9b-3 (review-62 Minor): `### Community -1` và `(+4 more)` từng còn tiếng Anh trên docs_app."""
+    from nexgraph_engine.report.markdown_i18n import localize_markdown
+
+    md = ('## Communities (1 total, 0 thin omitted)\n'
+          '\n### Community -1 - "Khác"\n'
+          'Cohesion: 0.00\n'
+          'Nodes (12): AuthService, login, helper (+4 more)\n'
+          '- **7 isolated node(s):** `helper`, `main.py` (+2 more)\n')
+    out = localize_markdown(md, "vi")
+    assert '### Cộng đồng -1 - "Khác"' in out
+    assert "Nút (12): AuthService, login, helper (+4 nữa)" in out
+    assert "- **7 nút cô lập:** `helper`, `main.py` (+2 nữa)" in out
+    assert "Community -1" not in out and "more)" not in out
+
+
+def test_markdown_export_translates_other_community_heading(copy_fixture, index_project, tmp_path):
+    """E9b-3: docs_app chỉ có cộng đồng -1 ("Khác") — tiêu đề dịch, ID và nhãn giữ nguyên."""
+    store, _, _ = index_project(copy_fixture("docs_app"))
+    r = export_graph(store, "markdown", Scope(), tmp_path, "docs_app", lang="vi")
+    md = Path(r.files[0]).read_text(encoding="utf-8")
+    assert '### Cộng đồng -1 - "Khác"' in md
+    assert "### Community" not in md
+
+
 _CALLFLOW_RULE_SAMPLES = [
     # (nguồn tiếng Anh, bản dịch phải có trong kết quả) — phủ MỌI quy tắc trong _RULES + _NOTE.
     (" — Complete Call Flow &amp; Architecture Documentation", " — Tài liệu luồng gọi &amp; kiến trúc đầy đủ"),
