@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from contextlib import closing
@@ -17,6 +18,9 @@ from nexgraph_engine.store.projects import ProjectInfo, ProjectRegistry
 from nexgraph_engine.store.publication import backup_graph, stage_graph
 
 ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting_llm: job semantic đường A chờ main (W9)
+# Job đã xong chỉ giữ để client hỏi kết quả một lúc: giới hạn số lượng và TTL để `_jobs` không phình mãi (REV-19).
+MAX_FINISHED_JOBS = 50
+FINISHED_JOB_TTL_SECONDS = 60 * 60
 
 
 class IndexAlreadyRunning(RuntimeError):
@@ -57,9 +61,12 @@ class TaskContext:
 
 class JobManager:
     def __init__(self, registry: ProjectRegistry, bus: EventBus, *, indexer_cls: type[Indexer] = Indexer,
-                 locks=None) -> None:
+                 locks=None, max_finished_jobs: int = MAX_FINISHED_JOBS,
+                 finished_job_ttl_seconds: float = FINISHED_JOB_TTL_SECONDS) -> None:
         self._registry, self._bus, self._indexer_cls = registry, bus, indexer_cls
         self._locks = locks
+        self._max_finished = max(0, max_finished_jobs)
+        self._finished_ttl = max(0.0, finished_job_ttl_seconds)
         self._jobs: dict[str, dict] = {}
         self._cancels: dict[str, threading.Event] = {}
         self._publishing: set[str] = set()
@@ -73,6 +80,7 @@ class JobManager:
                     include_config: bool | None = None, workers: int | None = None, force: bool = False,
                     sources: ExtraSources | None = None) -> str:
         with self._lock:
+            self._prune_finished_locked()
             info = self._registry.get(project_id)
             if info is None:
                 raise UnknownProject(project_id)
@@ -100,6 +108,7 @@ class JobManager:
         nên `work` được ghi CSDL của dự án (ví dụ qua `RefreshService.refresh_now`). `None`: không khoá gì.
         """
         with self._lock:
+            self._prune_finished_locked()
             if project_id is not None:
                 if self._registry.get(project_id) is None:
                     raise UnknownProject(project_id)
@@ -121,8 +130,29 @@ class JobManager:
         with self._lock:
             job = self._jobs[job_id]
             job.update(fields)
+            if job["state"] not in ACTIVE and fields.get("state") not in (None, "running", "waiting_llm"):
+                job["finished_at"] = time.time()
+                self._prune_finished_locked()
             snapshot = dict(job)
         self._bus.publish({"type": "job_progress", **snapshot})
+
+    def _forget_locked(self, job_id: str) -> None:
+        """Caller giữ `_lock`: bỏ job đã xong khỏi bộ nhớ (client cũ nhận 404 như job không tồn tại)."""
+        self._jobs.pop(job_id, None)
+        self._cancels.pop(job_id, None)
+        self._publishing.discard(job_id)
+
+    def _prune_finished_locked(self) -> None:
+        """Caller giữ `_lock`: dọn job đã xong quá TTL hoặc vượt giới hạn, rồi bỏ luồng đã chết (REV-19)."""
+        now = time.time()
+        finished = [(job_id, job) for job_id, job in self._jobs.items() if job["state"] not in ACTIVE]
+        for job_id, job in finished:
+            if now - job.get("finished_at", now) >= self._finished_ttl:
+                self._forget_locked(job_id)
+        finished = [(job_id, job) for job_id, job in self._jobs.items() if job["state"] not in ACTIVE]
+        for job_id, _job in finished[:max(0, len(finished) - self._max_finished)]:
+            self._forget_locked(job_id)
+        self._threads = [thread for thread in self._threads if thread.is_alive()]
 
     def _run_task(self, job_id: str, project_id: str | None, work: Callable[[TaskContext], dict],
                   cancel: threading.Event) -> None:
@@ -174,6 +204,7 @@ class JobManager:
 
     def get(self, job_id: str) -> dict | None:
         with self._lock:
+            self._prune_finished_locked()
             job = self._jobs.get(job_id)
             return dict(job) if job else None
 

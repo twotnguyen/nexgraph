@@ -1,5 +1,7 @@
 import hmac
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -51,8 +53,17 @@ class Guard:
 
 def create_app(token: str, allowed_hosts: set[str], *, data_dir: Path | None = None,
                sse_ping_seconds: float = 15.0) -> FastAPI:
-    app = FastAPI(title="NexGraph Engine", docs_url=None, redoc_url=None, openapi_url=None)
-    app.state.services = Services(data_dir)
+    services = Services(data_dir)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            services.shutdown()  # dừng job nền khi engine tắt (REV-19)
+
+    app = FastAPI(title="NexGraph Engine", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app.state.services = services
     app.state.sse_ping_seconds = sse_ping_seconds
 
     @app.exception_handler(ApiError)

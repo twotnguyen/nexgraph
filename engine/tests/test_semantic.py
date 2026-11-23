@@ -635,3 +635,20 @@ def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
     assert api.get(f"/v1/jobs/{job_id}").json()["state"] not in ("done", "error")
     release.set()
     assert wait_job(api, job_id)["state"] == "done"
+
+
+def test_load_prs_failure_closes_llm_queue(tmp_path):
+    """REV-19: `gh` lỗi trước khi mở CSDL vẫn phải đóng hàng đợi LLM (không rò job đường A)."""
+    from nexgraph_engine.index.jobs import TaskContext
+    from nexgraph_engine.semantic.run import Request, make_work
+    from nexgraph_engine.semantic.transport import LlmQueue
+
+    def boom() -> list[dict]:
+        raise RuntimeError("gh lỗi")
+
+    queue = LlmQueue()
+    work = make_work(graph_db=tmp_path / "graph.db", src=None,
+                     req=Request("pr_triage", 1), transport=queue, on_written=lambda: None, load_prs=boom)
+    with pytest.raises(RuntimeError, match="gh lỗi"):
+        work(TaskContext(threading.Event(), lambda *_args: None))
+    assert queue.closed is True

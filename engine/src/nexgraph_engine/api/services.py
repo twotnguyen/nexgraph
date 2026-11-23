@@ -18,6 +18,13 @@ class Services:
         self.jobs.on_index_done.append(self._relink_if_member)
         self.llm_queues: dict = {}  # job_id → LlmQueue của job semantic đường A (W9)
 
+    def shutdown(self) -> None:
+        """Tắt engine: huỷ/join job nền và đóng mọi hàng đợi LLM còn mở (REV-19)."""
+        self.jobs.shutdown()
+        for llm_queue in list(self.llm_queues.values()):
+            llm_queue.close()
+        self.llm_queues.clear()
+
     # --- graph chung (W8) ---------------------------------------------------------------------------
     def relink_global(self) -> str:
         """Job tính lại cạnh liên repo; không khoá dự án nào vì chỉ đọc CSDL của chúng."""
