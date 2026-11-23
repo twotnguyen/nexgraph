@@ -51,4 +51,25 @@ describe('runSemanticJob', () => {
     expect(complete).toHaveBeenCalledTimes(1)
     expect(answers).toEqual([])
   })
+
+  it('báo usage từng khối qua onUsage để hộp thoại hiện token đường A', async () => {
+    const { engine } = fakeEngine([chunk('c1'), chunk('c2')])
+    const seen: { inputTokens: number; outputTokens: number }[] = []
+    const complete = vi.fn(async (c: LlmChunk) => c.chunk_id === 'c1'
+      ? { text: '{}', inputTokens: 10, outputTokens: 5 }
+      : { text: '{}', inputTokens: 3, outputTokens: 2 })
+    const r = await runSemanticJob('j1', engine, complete,
+      { signal: new AbortController().signal, budget: 1000, pollMs: 1, onUsage: (u) => seen.push(u) })
+    expect(seen).toEqual([{ inputTokens: 10, outputTokens: 5 }, { inputTokens: 3, outputTokens: 2 }])
+    expect(r).toEqual({ sent: 2, failed: 0, tokens: 20 })
+  })
+
+  it('khối lỗi không báo usage', async () => {
+    const { engine } = fakeEngine([chunk('c1')])
+    const seen: { inputTokens: number; outputTokens: number }[] = []
+    const complete = vi.fn(async () => { throw new Error('model lỗi') })
+    await runSemanticJob('j1', engine, complete,
+      { signal: new AbortController().signal, budget: 1000, pollMs: 1, onUsage: (u) => seen.push(u) })
+    expect(seen).toEqual([])
+  })
 })

@@ -13,7 +13,7 @@ import { AgentFileScope } from './agent/file-scope'
 import { GENERATED_DIRS, replaceText, searchText } from './search/text-search'
 import { LspManager } from './lsp/manager'
 import { AgentError, AgentService } from './agent/session'
-import { AccountService } from './agent/accounts'
+import { AccountService, type AccountDevHooks } from './agent/accounts'
 import { validatePromptImages } from './agent/images'
 import type { AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, AgentExecutionSettings, AgentRunLimits, AgentPromptOptions, AgentEditorState } from '../shared/agent-types'
 import { detectProjectCommands } from './agent/process-tools'
@@ -31,6 +31,7 @@ import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
 import { IndexSourceStore } from './index-sources'
 import { runSemanticJob } from './ai/semantic-runner'
+import { SemanticUsageStore } from './ai/semantic-usage'
 import { directTransport, piComplete, selectedModelLabel } from './ai/semantic-models'
 import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
@@ -147,13 +148,20 @@ const cancelPendingAuthPrompts = (): void => {
 }
 
 /** Tạo một lần; mỗi handler chờ nó. `ask` giữ cầu nối prompt OAuth ↔ renderer. */
-const accounts = (getWindow: () => BrowserWindow | null, dataDir: string): Promise<AccountService> =>
+const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHooks?: AccountDevHooks): Promise<AccountService> =>
   (accountsPromise ??= AccountService.create({
     dataDir,
     prefsFile: prefsFile(),
     secrets: new SecretStore(join(app.getPath('userData'), 'ai-key.json'), secretBox),
     openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
-    notify: (event: AuthEventView) => getWindow()?.webContents.send('auth:login-event', event),
+    devHooks,
+    notify: (event: AuthEventView) => {
+      // Chỉ sự kiện của luồng đăng nhập: message 'info' của pi hiện ở loginEvent, không thành toast.
+      getWindow()?.webContents.send('auth:login-event', event)
+    },
+    // Thông báo sau Đăng xuất (ngoài luồng đăng nhập): kênh riêng để Cài đặt hiện toast dù loginPending=false.
+    notice: (message: string) => getWindow()?.webContents.send('auth:notice', { message }),
+    modelsChanged: (providerId: string) => getWindow()?.webContents.send('auth:models-changed', { providerId }),
     ask: (view: AuthPromptView) => new Promise<string | null>((resolve) => {
       pendingPrompts.set(view.id, resolve)
       getWindow()?.webContents.send('auth:login-prompt', view)
@@ -174,7 +182,8 @@ export function registerIpc(
   getHandle: () => EngineHandle | null,
   getWindow: () => BrowserWindow | null,
   getCommand: () => EngineCommand,
-  dataDir: string
+  dataDir: string,
+  devHooks?: AccountDevHooks
 ): void {
   mcpHttp = new McpHttpManager(getCommand, dataDir, safeKeyStore(), prefsPortStore())
   const mcp = mcpHttp
@@ -528,7 +537,7 @@ export function registerIpc(
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
 
   const win = (): BrowserWindow | null => getWindow()
-  const acc = (): Promise<AccountService> => accounts(win, dataDir)
+  const acc = (): Promise<AccountService> => accounts(win, dataDir, devHooks)
   // A local connection ID cannot verify a shared native Google account after restart.
   // Keep history local until the user explicitly checks and activates the connection again.
   const startupPrefs = readJson(prefsFile())
@@ -872,6 +881,7 @@ export function registerIpc(
   on('prs:detail', (pid: string, n: number) => api().prDetail(pid, n))
   // Phân tích ngữ nghĩa bằng AI (W9). Mặc định tắt theo dự án; key chỉ đọc ở đây và chỉ đi xuống engine ở đường B.
   const semanticRuns = new Map<string, AbortController>()
+  const semanticUsage = new SemanticUsageStore()
   on('semantic:get-settings', (pid: string) => api().aiSettings(pid))
   on('semantic:set-settings', async (pid: string, settings: ProjectAiSettings) => {
     await rootOf(pid)
@@ -906,16 +916,25 @@ export function registerIpc(
     if (!local && transport.kind === 'app') {
       const ac = new AbortController()
       semanticRuns.set(jobId, ac)
+      const used = { input: 0, output: 0 }
       void runSemanticJob(jobId, {
         jobState: async (id) => (await api().getJob(id)).state,
         next: (id) => api().llmNext(id),
         answer: (id, chunkId, body) => api().llmAnswer(id, chunkId, body)
-      }, piComplete(a), { signal: ac.signal, budget: max })
+      }, piComplete(a), {
+        signal: ac.signal, budget: max,
+        onUsage: (usage) => { used.input += usage.inputTokens; used.output += usage.outputTokens }
+      })
         .catch((e) => console.warn(`[semantic] ${jobId}: ${e instanceof Error ? e.message : String(e)}`))
-        .finally(() => semanticRuns.delete(jobId))
+        .finally(() => {
+          semanticUsage.set(jobId, used.input, used.output)
+          semanticRuns.delete(jobId)
+        })
     }
     return { jobId }
   })
+  // Chờ main ghi usage xong: engine có thể báo job done trước khi .finally của runSemanticJob chạy.
+  on('semantic:usage', async (jobId: string) => semanticUsage.wait(jobId))
   on('semantic:cancel', async (jobId: string) => {
     semanticRuns.get(jobId)?.abort()
     await api().cancelJob(jobId)
