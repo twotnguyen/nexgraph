@@ -431,6 +431,15 @@ def test_callflow_section_names_translated_only_as_labels():
     assert "<td>Serving API</td>" in out
 
 
+def test_callflow_mermaid_node_label_with_section_name_is_kept():
+    """review-58 Minor 1: nhãn node Mermaid trùng tên phần không bị dịch; chỉ nhãn subgraph mới dịch."""
+    node = 'n1["Serving API<br/><small>docs/api.md</small>"]'
+    assert localize_callflow_html(node, "vi") == node
+    sub = 'subgraph g1["Serving API<br/><small>12 nodes</small>"]'
+    out = localize_callflow_html(sub, "vi")
+    assert '"Phục vụ API<br/><small>12 nút</small>"' in out, out
+
+
 def test_export_route_accepts_lang(api, copy_fixture, tmp_path):
     pid = _indexed(api, copy_fixture)
     ok = api.post(f"/v1/projects/{pid}/export",

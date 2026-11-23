@@ -169,7 +169,10 @@ def _translate_section_names(html: str) -> str:
         html = re.sub(rf"(<tr><td>){esc}(</td>)", rf"\g<1>{vi}\g<2>", html)
         html = re.sub(rf"(<p>){esc}( gom phần triển khai)", rf"\g<1>{vi}\g<2>", html)
         html = re.sub(rf"(%% Section: ){esc}( \()", rf"\g<1>{vi}\g<2>", html)
-        html = html.replace(f'"{en}<br/><small>', f'"{vi}<br/><small>')  # nhãn subgraph Mermaid
+        # Nhãn subgraph Mermaid luôn kèm số nút (`"Tên phần<br/><small>12 nodes</small>"`); nhãn node
+        # cùng tên phần nhưng kèm đường dẫn tệp phải giữ nguyên (review-58 Minor 1).
+        html = re.sub(rf'"{esc}<br/><small>(?P<n>\d+) nodes</small>"',
+                      lambda m: f'"{vi}<br/><small>{m["n"]} nodes</small>"', html)
         html = re.sub(r'(<div class="arrow-chain">)([^<]+)(</div>)',
                       lambda m: m.group(1) + m.group(2).replace(en, vi) + m.group(3), html)
     return html
