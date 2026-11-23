@@ -818,6 +818,68 @@ def test_repeated_pool_creation_failure_gives_up_to_the_per_file_path(tmp_path, 
     assert any(e.message and "gián đoạn" in e.message for e in events)
 
 
+def test_two_overdue_batches_do_not_degrade_the_rest(tmp_path, index_project, monkeypatch):
+    """Hai lô quá hạn LIÊN TIẾP vẫn không hạ phần còn lại xuống tuần tự (review-53 Important 4).
+
+    Luật ">= 2 lần liên tiếp không tiến triển" bản trước đếm TOÀN CỤC: hai tệp treo nằm ở hai lô đầu (LPT
+    đặt tệp lớn nhất vào lô 0, lớn nhì vào lô 1) là đủ để 100 % phần còn lại rơi xuống 1 worker — đo bằng
+    tiến trình thật: `serial_files = 245/245`, wall 19,8 s cho 240 tệp lẽ ra chạy 4 worker trong 0,4 s.
+    """
+    from concurrent.futures import Future
+    from nexgraph_engine.index import indexer
+    from test_refresh import graph_state
+
+    hung = {"m2.py", "m3.py"}  # hai tệp LỚN NHẤT -> lô 0 và lô 1
+    batches: list[list[str]] = []
+    per_file: list[str] = []
+    parallel_pools = 0
+
+    class TwoHungBatchesPool:
+        _processes = {}
+
+        def __init__(self, *, max_workers):
+            nonlocal parallel_pools
+            self.parallel = max_workers > 1
+            if self.parallel:
+                parallel_pools += 1
+
+        def submit(self, fn, *args):
+            future = Future()
+            target = args[1]
+            if not self.parallel:
+                per_file.append(target.rel_path)
+                future.set_result(fn(*args))
+                return future
+            batches.append([f.rel_path for f in target])
+            if any(f.rel_path in hung for f in target):
+                return future  # treo: quá hạn ở cả hai lô đầu
+            future.set_result(fn(*args))
+            return future
+
+        def shutdown(self, *, wait, cancel_futures):
+            pass
+
+    root = _many_py(tmp_path / "p", 40)
+    for name in hung:  # lớn nhất để LPT đặt vào lô 0 và lô 1
+        (root / name).write_text("# " + "h" * 300_000 + f"\n\ndef {name[:-3]}():\n    return 1\n",
+                                 encoding="utf-8")
+    serial, _, _ = index_project(root)
+    monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)
+    monkeypatch.setattr(indexer, "ProcessPoolExecutor", TwoHungBatchesPool)
+    monkeypatch.setattr(indexer, "WORKER_PROGRESS_TIMEOUT_SECONDS", 0)
+    monkeypatch.setattr(indexer, "BATCH_DEADLINE_SECONDS_PER_MB", 0)  # hạn 0 s: hai lô treo quá hạn ngay
+    store, result, events = index_project(root)
+
+    assert result.state == "hoan_tat"
+    assert graph_state(store) == graph_state(serial)  # không mất/trùng tệp
+    over = sorted(batches[0] + batches[1])
+    assert sorted(per_file) == over  # chỉ tệp của HAI lô quá hạn đi đường từng-tệp
+    assert len(batches) >= 3 and not hung & set(batches[2])  # lô tốt vẫn được gửi vào pool song song
+    assert parallel_pools == 3  # mỗi vòng làm pool MỚI cùng 2 worker, không hạ xuống 1
+    assert result.fallback_serial is True  # có tệp đi đường từng-tệp, và tự khai đúng như vậy
+    assert any(e.message and "gián đoạn" in e.message for e in events)
+
+
 def test_single_worker_index_has_no_interruption_message(tmp_path, index_project, monkeypatch):
     """workers == 1 (mọi dự án < 200 tệp, mặc định trên Windows) không có gián đoạn nào để báo.
 

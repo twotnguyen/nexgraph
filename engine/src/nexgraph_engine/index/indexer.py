@@ -384,10 +384,9 @@ class Indexer:
         batches = extraction_batches(files)  # LPT: tệp lớn nhất trước (PERF-L mục 4)
         pending = list(range(len(batches)))
         suspects: list[int] = []
-        stalled_streak = 0  # số lần liên tiếp chưa xong lô nào; >= 2 thì coi là treo thật
         # `gave_up` chỉ dành cho lỗi HỆ THỐNG: tạo/gửi pool thất bại 2 lần liên tiếp (không spawn được
         # tiến trình con, fd cạn, chính sách chặn). Lỗi của MỘT lô cụ thể không bao giờ đặt cờ này —
-        # nếu đặt, cả dự án rơi xuống 1 worker, đúng hồi quy PERF-L mà PR này diệt (review-53 I2).
+        # nếu đặt, cả dự án rơi xuống 1 worker, đúng hồi quy PERF-L mà PR này diệt (review-53 I2/I4).
         pool_failures = 0
         gave_up = False
         batch_files = 0
@@ -423,9 +422,11 @@ class Indexer:
                             return False
                         if not batch.done():
                             # Quá hạn: coi tệp của lô là nghi treo, đẩy sang đường từng-tệp rồi làm lại pool.
+                            # Đếm theo LÔ chứ không toàn cục: hai tệp treo ở hai lô đầu không được kéo cả
+                            # phần còn lại xuống tuần tự (review-53 I4). Mỗi vòng bỏ được ít nhất một lô
+                            # khỏi `pending` nên vẫn kết thúc hữu hạn.
                             suspects.extend(batches[b])
                             pending.remove(b)
-                            stalled_streak += 1
                             broken = True
                             break
                         try:
@@ -451,17 +452,13 @@ class Indexer:
                             _consume(files[batches[b][k]], extracted)
                         pending.remove(b)
                         batch_files += len(batches[b])
-                        stalled_streak = 0
                 finally:
                     if broken:
                         _kill_pool(executor)  # dừng tiến trình con đang treo trước khi làm pool mới
                     else:
                         executor.shutdown(wait=False, cancel_futures=True)
-                if stalled_streak >= 2:
-                    gave_up = True
-                    break
             if gave_up and pending:
-                # Hai lần liên tiếp không tiến triển: treo thật, phần còn lại đi đường từng-tệp.
+                # Lỗi hệ thống lặp lại (không tạo/gửi được pool): phần còn lại đi đường từng-tệp.
                 for b in list(pending):
                     suspects.extend(batches[b])
                     pending.remove(b)
