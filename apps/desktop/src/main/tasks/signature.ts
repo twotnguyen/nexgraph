@@ -3,38 +3,51 @@ import type { TaskDefinition } from '../../shared/api'
 
 export type SignedTask = TaskDefinition & { signature: string }
 
+/** Dự án mà một chữ ký task thuộc về; chữ ký không dùng lại được ở dự án khác. */
+export type TaskScope = { projectId: string; root: string }
+
 /**
- * Chữ ký HMAC cho định nghĩa task đã resolve. `tasks:resolve` ký bằng khoá chỉ sống trong main;
- * `terminal:create` chỉ chạy task có chữ ký hợp lệ, nên renderer bị chiếm quyền không thể tự
- * đặt command/args/env (ví dụ LD_PRELOAD, BASH_ENV) rồi mở tiến trình.
+ * Nội dung task theo thứ tự cố định, bỏ chữ ký. Dùng để so task renderer gửi với task
+ * khai trong tệp của dự án (`listTasks`) — chỉ nội dung khớp mới được main ký (REV-13).
  */
-export type TaskSigner = {
-  sign(task: TaskDefinition): SignedTask
-  verify(task: unknown): task is SignedTask
+export function taskContentKey(task: TaskDefinition): string {
+  return JSON.stringify([
+    task.label,
+    task.command,
+    task.type ?? 'shell',
+    task.args ?? [],
+    task.cwd ?? '',
+    Object.entries(task.env ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  ])
 }
 
-/** Thứ tự khoá env không được đổi chữ ký. */
-const canonical = (task: TaskDefinition): string => JSON.stringify([
-  task.label,
-  task.command,
-  task.type ?? 'shell',
-  task.args ?? [],
-  task.cwd ?? '',
-  Object.entries(task.env ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-])
+/**
+ * Chữ ký HMAC cho task đã resolve. `tasks:resolve` chỉ ký task khai trong tệp của dự án và
+ * ràng buộc chữ ký với projectId + root; `terminal:create` chỉ chạy task có chữ ký hợp lệ của
+ * chính dự án đó, nên renderer bị chiếm quyền không thể tự đặt command/args/env (ví dụ
+ * LD_PRELOAD, BASH_ENV) rồi mở tiến trình, cũng không replay chữ ký sang dự án khác.
+ */
+export type TaskSigner = {
+  sign(scope: TaskScope, task: TaskDefinition): SignedTask
+  verify(scope: TaskScope, task: unknown): task is SignedTask
+}
+
+const canonical = (scope: TaskScope, task: TaskDefinition): string =>
+  JSON.stringify([scope.projectId, scope.root, taskContentKey(task)])
 
 export function createTaskSigner(key: Buffer): TaskSigner {
   if (key.length < 32) throw new Error('Khoá ký task phải dài ít nhất 32 byte')
-  const mac = (task: TaskDefinition) => createHmac('sha256', key).update(canonical(task)).digest('base64url')
+  const mac = (scope: TaskScope, task: TaskDefinition) =>
+    createHmac('sha256', key).update(canonical(scope, task)).digest('base64url')
   return {
-    sign(task) {
-      return { ...task, signature: mac(task) }
+    sign(scope, task) {
+      return { ...task, signature: mac(scope, task) }
     },
-    verify(task): task is SignedTask {
+    verify(scope, task): task is SignedTask {
       if (!task || typeof task !== 'object') return false
       const candidate = task as TaskDefinition & { signature?: unknown }
       if (typeof candidate.signature !== 'string' || !candidate.signature) return false
-      const expected = Buffer.from(mac(candidate), 'utf8')
+      const expected = Buffer.from(mac(scope, candidate), 'utf8')
       const actual = Buffer.from(candidate.signature, 'utf8')
       return expected.length === actual.length && timingSafeEqual(expected, actual)
     }
