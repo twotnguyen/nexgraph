@@ -80,6 +80,25 @@ class RunResult:
     serial_files: int = 0
 
 
+# E10 mục 2 (A3b-P3): chỉ báo "song song gián đoạn" khi phần đọc từng-tệp đáng kể — 16/5.644 tệp (0,3 %)
+# chạy tuần tự ở cuối không đáng làm người dùng tưởng cả bảng 8 worker đã hỏng. Log/telemetry luôn ghi đủ.
+SERIAL_FALLBACK_NOTICE_MIN_FILES = 200
+SERIAL_FALLBACK_NOTICE_MIN_RATIO = 0.05
+
+
+def serial_fallback_is_noticeable(serial_files: int, total: int, *, pool_broken: bool = False) -> bool:
+    """Phần đọc từng-tệp có đáng hiện banner cho người dùng không.
+
+    `pool_broken`: không tạo/gửi được pool song song (lỗi hệ thống lặp lại) — mọi tệp còn lại phải đi
+    đường từng-tệp nên luôn báo, kể cả dự án nhỏ. Không đổi cơ chế chống treo của #53: chỉ ngưỡng báo.
+    """
+    if serial_files <= 0:
+        return False
+    if pool_broken:
+        return True
+    return serial_files > SERIAL_FALLBACK_NOTICE_MIN_FILES or serial_files > total * SERIAL_FALLBACK_NOTICE_MIN_RATIO
+
+
 def index_workers(n_files: int, include_media: bool, requested: int | None = None) -> int:
     # Media/ít tệp luôn chạy đơn luồng: override không được trả sớm bỏ qua điều kiện này.
     if n_files < 200 or include_media:
@@ -516,9 +535,15 @@ class Indexer:
         # Chỉ báo "gián đoạn" khi thật sự có lớp song song bị mất. `workers == 1` (mọi dự án < 200 tệp,
         # mặc định trên Windows) chưa từng có pool song song nên đây không phải gián đoạn — bản trước
         # phát câu này ngay 0/N ở mọi lần index một worker (review-53 I3).
+        # E10 mục 2: phần từng-tệp nhỏ (ví dụ 16/5.644 tệp) chỉ ghi log + telemetry, không hiện banner.
         if workers > 1 and todo and not self.cancel.is_set():
-            self.on_progress(ProgressEvent("structure", consumed, total,
-                                           "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
+            noticeable = serial_fallback_is_noticeable(len(todo), total, pool_broken=gave_up)
+            logger.log(logging.WARNING if noticeable else logging.INFO,
+                       "Đọc từng-tệp %d/%d tệp sau sự cố trích xuất song song (workers=%d, pool hỏng=%s,"
+                       " báo người dùng=%s)", len(todo), total, workers, gave_up, noticeable)
+            if noticeable:
+                self.on_progress(ProgressEvent("structure", consumed, total,
+                                               "Bộ trích xuất song song gián đoạn. Đang đọc tiếp các tệp còn lại."))
 
         # Mỗi tệp còn lại chạy trong tiến trình con để tệp treo không treo cả engine; chỉ khi không dùng được
         # tiến trình con mới đọc trong tiến trình chính.
