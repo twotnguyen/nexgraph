@@ -22,7 +22,7 @@ Bản **alpha** (prerelease) đầu tiên của NexGraph 0.2.0, dựng từ tag 
 
 ## Sửa lỗi nghiệm thu RC2 và menu hệ thống (24/11)
 
-- **#49 — menu hệ thống File/Sửa/Xem/Cửa sổ/Trợ giúp** (đóng góp của Tùng). Thay menu mặc định Electron; Copy/Paste/Undo/Select All của hệ điều hành chạy trong editor, ô chat và terminal; menu ứng dụng macOS (About, Hide, ⌘Q); nhãn menu theo ngôn ngữ UI; **Cửa sổ mới**: mỗi cửa sổ giữ phiên trợ lý AI và terminal của mình, đóng hoặc reload một cửa sổ không ảnh hưởng cửa sổ khác; **Hoàn tác tệp** đọc lại nội dung trên đĩa.
+- **#49 — menu hệ thống File/Sửa/Xem/Cửa sổ/Trợ giúp** (đóng góp của Tùng). Thay menu mặc định Electron; menu Sửa dùng các lệnh soạn thảo của hệ điều hành (Copy/Paste/Undo/Select All) trong editor và ô chat; trong terminal, hoàn tác dòng đang nhập phụ thuộc shell; menu ứng dụng macOS (About, Hide, ⌘Q); nhãn menu theo ngôn ngữ UI; **Cửa sổ mới**: terminal thuộc cửa sổ đã mở nó; nếu hai cửa sổ mở cùng dự án, phản hồi AI đến cửa sổ gửi lượt được nhận, đóng hoặc tải lại cửa sổ kia không ngắt lượt; **Hoàn tác tệp** đọc lại nội dung trên đĩa.
 - **#62 — xuất HTML luồng gọi và báo cáo** đúng tên dự án, commit và mục lục theo cộng đồng; luồng chỉ vẽ từ cạnh thật giữa các nhóm; Markdown/HTML theo ngôn ngữ UI.
 - **#63 — hộp thoại Xuất có phạm vi "Cộng đồng"**; bộ cài kèm `LICENSE`, `NOTICE`, `THIRD_PARTY_LICENSES.md`; hộp thoại giữ focus bàn phím.
 - **#64 — lập chỉ mục ảnh cục bộ** (`include_images`) tách khỏi audio/video; bớt cảnh báo "song song bị gián đoạn" sai.
