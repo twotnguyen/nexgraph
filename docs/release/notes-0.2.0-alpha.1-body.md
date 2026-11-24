@@ -20,6 +20,14 @@ Bản **alpha** (prerelease) đầu tiên của NexGraph 0.2.0, dựng từ tag 
 - **Nhà cung cấp OpenCode Go (#37).** Thêm trong Cài đặt tài khoản AI; danh sách model tự cập nhật, thông báo khi khôi phục key lỗi, token usage đường A.
 - **Nhà cung cấp tuỳ chỉnh dùng được với provider thật (#46).** Tự nhận context window (có ô chỉnh), sàn `max_tokens`, báo đúng lỗi 4xx; **Tô luồng trên graph** tô cả nút được trích dẫn.
 
+## Sửa lỗi nghiệm thu RC2 và menu hệ thống (24/11)
+
+- **#49 — menu hệ thống File/Sửa/Xem/Cửa sổ/Trợ giúp** (đóng góp của Tùng). Thay menu mặc định Electron; Copy/Paste/Undo/Select All của hệ điều hành chạy trong editor, ô chat và terminal; menu ứng dụng macOS (About, Hide, ⌘Q); nhãn menu theo ngôn ngữ UI; **Cửa sổ mới**: mỗi cửa sổ giữ phiên trợ lý AI và terminal của mình, đóng hoặc reload một cửa sổ không ảnh hưởng cửa sổ khác; **Hoàn tác tệp** đọc lại nội dung trên đĩa.
+- **#62 — xuất HTML luồng gọi và báo cáo** đúng tên dự án, commit và mục lục theo cộng đồng; luồng chỉ vẽ từ cạnh thật giữa các nhóm; Markdown/HTML theo ngôn ngữ UI.
+- **#63 — hộp thoại Xuất có phạm vi "Cộng đồng"**; bộ cài kèm `LICENSE`, `NOTICE`, `THIRD_PARTY_LICENSES.md`; hộp thoại giữ focus bàn phím.
+- **#64 — lập chỉ mục ảnh cục bộ** (`include_images`) tách khỏi audio/video; bớt cảnh báo "song song bị gián đoạn" sai.
+- **#60, #61** — CI phát hành: kiểm version ở 4 nguồn, Release alpha tự gắn nhãn prerelease; version `0.2.0-alpha.1` (engine `0.2.0a1`).
+
 ## Sửa lỗi nghiệm thu RC1 (23/11)
 
 - **#50** — engine bị kill **tự khởi động lại** (backoff, tối đa 5 lần/10 phút rồi hiện nút khởi động lại); **Tìm symbol** mở đúng `tệp:dòng` trong editor; **Vùng ảnh hưởng** hiện node và test khi mở từ menu node; bỏ tên thương hiệu “Pi” khỏi panel trợ lý; **Index lại** nhớ tuỳ chọn index.
@@ -93,3 +101,7 @@ Bản **alpha** (prerelease) đầu tiên của NexGraph 0.2.0, dựng từ tag 
 ## Cài đặt
 
 Tải đúng tệp trong asset của Release, đối chiếu `.build.json` (byte, SHA-256, commit), rồi mở theo [hướng dẫn cho bộ cài chưa ký](https://github.com/twotnguyen/nexgraph/blob/main/docs/release/README.md#mở-bộ-cài-chưa-ký-số). Lần đầu mở bản macOS ad-hoc có thể hỏi Keychain — bấm **Always Allow** trước buổi demo (xem [kịch bản demo](https://github.com/twotnguyen/nexgraph/blob/main/docs/demo-script.md)).
+
+
+---
+Dựng từ commit `e754e7cab8caf27dca9f6c3b4debae8e891f0322`; CI của commit merge trên `main`: https://github.com/twotnguyen/nexgraph/actions/runs/45281841716 (7/7).
