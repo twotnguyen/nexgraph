@@ -82,6 +82,10 @@ const api: NexGraphApi = {
     map: (pid, opts) => call('graph:map', pid, opts),
     cycles: (pid, limit) => call('graph:cycles', pid, limit)
   },
+  graphPages: {
+    status: (pid) => call('graph-pages:status', pid),
+    onNodeSelected: (cb) => subscribe('graph-pages:node-selected', cb)
+  },
   fs: {
     list: (pid, directory) => call('fs:list', pid, directory),
     read: (pid, relPath) => call('fs:read', pid, relPath),

@@ -1,0 +1,4 @@
+# N1-D1: ba thư viện của trang đồ thị là tệp vendor phải giữ nguyên byte trên mọi OS.
+# `graph.html` ghim SRI sha384 của vis-network 9.1.6; checkout Windows (core.autocrlf) đổi LF→CRLF
+# làm script không chạy và trang trắng. `-text` tắt mọi chuyển đổi EOL cho thư mục này.
+apps/desktop/resources/graph-pages/** -text
