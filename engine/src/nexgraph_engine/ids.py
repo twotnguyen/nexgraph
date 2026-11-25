@@ -14,3 +14,6 @@ def file_node_id(rel_path: str) -> str:
 
 def directory_node_id(rel_path: str) -> str:
     return f"{rel_path}#{NodeKind.DIRECTORY.value}"
+
+
+# CI-1 probe engine: comment thử để đo CI chọn lọc; nhánh thử sẽ bị xoá.
