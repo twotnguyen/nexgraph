@@ -279,22 +279,24 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             redact_documents=True))
 
     @mcp.tool(annotations=READ_ONLY)
-    async def query_graph(question: str, mode: Literal["bfs", "dfs"] = "bfs", depth: int = 3,
-                          token_budget: int = 2000, context_filter: list[str] | None = None,
+    async def query_graph(question: str, mode: Literal["bfs", "dfs"] = "bfs", depth: int | None = None,
+                          token_budget: int | None = None, context_filter: list[str] | None = None,
                           demote_docs: bool = True, budget: int | None = None,
                           project_path: str | None = None) -> str | dict:
         """Search the knowledge graph using BFS or DFS. Returns relevant nodes and edges as text context.
 
         `question`: câu hỏi hoặc từ khoá. `mode`: bfs = ngữ cảnh rộng, dfs = lần theo một nhánh.
-        `depth` 1–6 (mặc định 3). `token_budget`: ngân sách token đầu ra (mặc định 2000).
+        `depth` 1–6 — bỏ trống thì 3 khi có `.nexgraph/graph.json` (như bản gốc), 2 khi chưa có
+        (như NexGraph trước đây). `token_budget`: ngân sách token đầu ra, bỏ trống thì 2000.
         `context_filter`: lọc ngữ cảnh cạnh, ví dụ ["call", "field"]. `demote_docs`: xếp hạng mã
         nguồn trên tài liệu. `budget`: tên cũ của `token_budget`, vẫn nhận.
-        Có `.nexgraph/graph.json` → văn bản như bản gốc; chưa có → JSON của NexGraph như trước.
         """
         def work() -> str | dict:
+            effective_budget = budget if budget is not None else (2000 if token_budget is None else token_budget)
             text = vendor_text("query_graph", {
-                "question": question, "mode": mode, "depth": depth,
-                "token_budget": budget if budget is not None else token_budget,
+                "question": question, "mode": mode,
+                "depth": 3 if depth is None else depth,
+                "token_budget": effective_budget,
                 "context_filter": context_filter, "demote_docs": demote_docs,
             }, project_path)
             if text is not None:
@@ -303,8 +305,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
 
             def body(s: GraphStore) -> dict:
                 try:
-                    out = ask_graph(s, question, max(1, min(depth, 6)),
-                                    max(1, min(budget if budget is not None else token_budget, 100_000)), mode)
+                    out = ask_graph(s, question, max(1, min(2 if depth is None else depth, 6)),
+                                    max(1, min(effective_budget, 100_000)), mode)
                 except ValueError as exc:
                     raise ToolError(str(exc)) from exc
                 touch_query_stamp(data_dir, s.project_id())  # hook-guard thôi nhắc trong 30 phút
@@ -314,27 +316,30 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         return await _offload("query_graph", work)
 
     @mcp.tool(annotations=READ_ONLY)
-    async def shortest_path(source: str, target: str, max_hops: int = 8, undirected: bool = False,
+    async def shortest_path(source: str, target: str, max_hops: int | None = None, undirected: bool = False,
                             directed: bool | None = None,
                             project_path: str | None = None) -> str | dict:
         """Find the shortest path between two concepts in the knowledge graph. Follows stored edge
         direction by default; set `undirected=true` to ignore it. Ends with the path's confidence.
 
-        `source`/`target`: nhãn hoặc id nút. `max_hops` mặc định 8. `directed` là tên cũ (nghịch đảo
-        của `undirected`), vẫn nhận. Chưa có `.nexgraph/graph.json` → JSON của NexGraph (tối đa 6 bước).
+        `source`/`target`: nhãn hoặc id nút. `max_hops`: số bước tối đa — bỏ trống thì 8 khi có
+        `.nexgraph/graph.json`, 4 khi chưa có (như NexGraph trước đây). `directed` là tên cũ
+        (nghịch đảo của `undirected`), vẫn nhận. Chưa có graph.json → JSON của NexGraph.
         """
         def work() -> str | dict:
             text = vendor_text("shortest_path", {
-                "source": source, "target": target, "max_hops": max_hops,
+                "source": source, "target": target,
+                "max_hops": 8 if max_hops is None else max_hops,
                 "undirected": (not directed) if directed is not None else undirected,
             }, project_path)
             if text is not None:
                 return text
             go_directed = directed if directed is not None else not undirected
+            hops = max(1, min(4 if max_hops is None else max_hops, 6))
 
             def body(s: GraphStore) -> dict:
                 try:
-                    return find_paths(s, [source, target], max(1, min(max_hops, 6)), go_directed)
+                    return find_paths(s, [source, target], hops, go_directed)
                 except KeyError as exc:
                     raise ToolError(f"Không có nút {exc.args[0]}") from exc
             return run_sync("shortest_path", body, (source, target))

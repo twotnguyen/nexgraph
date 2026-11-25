@@ -77,7 +77,9 @@ def test_eleven_tools_keep_original_params(indexed):
     community_schema = props("get_community")["community_id"]
     assert "anyOf" in community_schema or community_schema.get("type") in ("integer", "string")
     assert {"top_n", "exclude_hubs_percentile", "top"} <= set(props("god_nodes"))
-    assert props("shortest_path")["max_hops"]["default"] == 8
+    # Mặc định chọn theo nhánh (vendor/SQLite) nên schema KHÔNG được ghim sẵn giá trị.
+    for name, param in (("shortest_path", "max_hops"), ("query_graph", "depth"), ("query_graph", "token_budget")):
+        assert props(name)[param].get("default") is None, (name, param, props(name)[param])
     assert {"source", "target", "max_hops", "undirected", "directed"} <= set(props("shortest_path"))
     assert {"base", "repo"} <= set(props("list_prs"))
     assert {"pr_number", "repo"} <= set(props("get_pr_impact"))

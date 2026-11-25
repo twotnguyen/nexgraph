@@ -371,6 +371,98 @@ def test_template_phrase_rebranded(user_data_project):
     assert "graphify update" not in text
 
 
+# ── Finding 2 (QA #69): mặc định tham số theo từng nhánh ────────────────────
+
+@pytest.fixture(scope="module")
+def sqlite_project(tmp_path_factory):
+    """Dự án chỉ có graph.db (không có graph.json) → nhánh SQLite của 11 tool."""
+    root = tmp_path_factory.mktemp("sqlite") / "bookstore"
+    shutil.copytree(FIXTURES / "bookstore_app", root)
+    conn = open_graph_db(root / ".nexgraph" / "graph.db")
+    try:
+        store = GraphStore(conn)
+        store.init_project(root.name, has_git=False)
+        Indexer(store, root, on_progress=lambda _e: None, cancel=threading.Event()).run()
+    finally:
+        conn.close()
+    assert not (root / ".nexgraph" / "graph.json").exists()
+    graphify_view.clear_views()
+    return root
+
+
+def test_sqlite_query_graph_defaults(sqlite_project, monkeypatch):
+    """Không có graph.json: mặc định phải như trước PR — depth 2, budget 2000."""
+    import nexgraph_engine.mcp.server as server_module
+
+    seen: list[tuple[int, int, str]] = []
+    real = server_module.ask_graph
+
+    def spy(store, question, depth, budget, mode):
+        seen.append((depth, budget, mode))
+        return real(store, question, depth, budget, mode)
+
+    monkeypatch.setattr(server_module, "ask_graph", spy)
+    error, text = _server_call(sqlite_project, "query_graph", {"question": "login auth"})
+    assert error is False, text
+    assert seen == [(2, 2000, "bfs")]
+
+
+def test_sqlite_shortest_path_default_max_hops(sqlite_project, monkeypatch):
+    """Không có graph.json: mặc định max_hops 4 (bản cũ), không phải 8 của vendor."""
+    import nexgraph_engine.mcp.server as server_module
+
+    seen: list[tuple[int, bool]] = []
+    real = server_module.find_paths
+
+    def spy(store, node_ids, max_hops, directed):
+        seen.append((max_hops, directed))
+        return real(store, node_ids, max_hops, directed)
+
+    monkeypatch.setattr(server_module, "find_paths", spy)
+    error, text = _server_call(sqlite_project, "shortest_path", {
+        "source": "lib/services/auth_service.dart#file",
+        "target": "lib/screens/login_screen.dart#file",
+    })
+    assert error is False, text
+    assert seen == [(4, True)]
+
+
+def test_vendor_query_graph_defaults(parity, monkeypatch):
+    """Có graph.json: mặc định theo bản gốc — depth 3, token_budget 2000."""
+    import graphify.serve as vendor_serve
+
+    root, _ = parity
+    seen: dict = {}
+    real = vendor_serve._query_graph_text
+
+    def spy(G, question, **kwargs):
+        seen.update(kwargs)
+        return real(G, question, **kwargs)
+
+    monkeypatch.setattr(vendor_serve, "_query_graph_text", spy)
+    error, text = _server_call(root, "query_graph", {"question": "login auth"})
+    assert error is False, text
+    assert seen["depth"] == 3 and seen["token_budget"] == 2000
+
+
+def test_vendor_shortest_path_default_max_hops(parity, monkeypatch):
+    """Có graph.json: mặc định max_hops 8 như bản gốc."""
+    import graphify.serve as vendor_serve
+
+    root, _ = parity
+    seen: dict = {}
+    real = vendor_serve._shortest_path_text
+
+    def spy(G, arguments):
+        seen.update(arguments)
+        return real(G, arguments)
+
+    monkeypatch.setattr(vendor_serve, "_shortest_path_text", spy)
+    error, text = _server_call(root, "shortest_path", {"source": "LoginScreen", "target": "AuthService"})
+    assert error is False, text
+    assert seen["max_hops"] == 8 and seen["undirected"] is False
+
+
 def test_legacy_params_map_to_original(servers):
     """Tham số cũ của NexGraph vẫn nhận và cho cùng kết quả với tên mới (khi có graph.json)."""
     _, ours = servers
