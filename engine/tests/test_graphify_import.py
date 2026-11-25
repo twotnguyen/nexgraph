@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 
 from nexgraph_engine.changes.model import ChangeSet, FileChange
-from nexgraph_engine.graphify_import import import_graph_json
+from nexgraph_engine.graphify_import import changed_files_from_manifest, import_graph_json, replace_files
 from nexgraph_engine.impact import analyze as impact
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
@@ -147,5 +147,37 @@ def test_enrich_marks_estimated_fields_when_source_missing(tmp_path):
     # Tệp không có trên đĩa: giữ giá trị ước lượng và ghi cờ nguồn `resolver`
     assert (rows["ghost_g#function"]["dong_ket_thuc"], rows["ghost_g#function"]["nguon_goc"]) == (7, "resolver")
     assert conn.execute("SELECT ma_bam FROM tep WHERE duong_dan_tuong_doi = 'ghost.py'").fetchone()[0] == "0" * 64
+
+
+def _graph_snapshot(conn) -> tuple[set, set]:
+    nodes = {(r["id_nut"], r["loai_nut"], r["dong_bat_dau"], r["dong_ket_thuc"], r["chu_ky"], r["nguon_goc"])
+             for r in conn.execute("SELECT id_nut, loai_nut, dong_bat_dau, dong_ket_thuc, chu_ky, nguon_goc FROM nut")}
+    edges = {(r["s"], r["d"], r["loai_canh"], r["loai_con"], r["dong_bang_chung"]) for r in conn.execute(
+        "SELECT ns.id_nut AS s, nd.id_nut AS d, c.loai_canh, c.loai_con, c.dong_bang_chung"
+        " FROM canh c JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon JOIN nut nd ON nd.ma_nut = c.ma_nut_dich")}
+    return nodes, edges
+
+
+def test_replace_files_matches_full_import(tmp_path):
+    """NG-IMP-3: sửa 1 tệp, dựng lại graph.json, nạp tăng dần cho kết quả bằng nạp đầy đủ."""
+    root = make_project(tmp_path)
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+
+    changed = changed_files_from_manifest(
+        json.loads((SNAPSHOTS / "base" / "manifest.json").read_text(encoding="utf-8")),
+        json.loads((SNAPSHOTS / "updated" / "manifest.json").read_text(encoding="utf-8")))
+    assert "util.ts" in changed
+
+    # "Sửa" tệp fixture và thay graph.json bằng bản vendor dựng lại
+    shutil.copy(SNAPSHOTS / "updated" / "util.ts", root / "util.ts")
+    shutil.copy(SNAPSHOTS / "updated" / "graph.json", root / ".nexgraph" / "graph.json")
+    report = replace_files(store, changed, root / ".nexgraph" / "graph.json")
+    assert report.files_changed >= 1
+    assert store.get_node("util_triple#function") is not None
+
+    full_store, full_conn = open_store(tmp_path / "full")
+    import_graph_json(full_store, root, root / ".nexgraph" / "graph.json")
+    assert _graph_snapshot(conn) == _graph_snapshot(full_conn)
 
 

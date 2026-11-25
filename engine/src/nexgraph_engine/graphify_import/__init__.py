@@ -3,9 +3,13 @@ from nexgraph_engine.graphify_import.enrich import EnrichReport, enrich_missing_
 from nexgraph_engine.graphify_import.importer import (
     ImportReport, ParsedGraph, import_graph_json, parse_graph,
 )
+from nexgraph_engine.graphify_import.incremental import (
+    ReplaceReport, changed_files_from_manifest, replace_files,
+)
 from nexgraph_engine.graphify_import.mapping import EXTERNAL_FILE, RELATION
 
 __all__ = [
-    "EXTERNAL_FILE", "RELATION", "EnrichReport", "ImportReport", "ParsedGraph",
-    "enrich_missing_fields", "import_graph_json", "parse_graph",
+    "EXTERNAL_FILE", "RELATION", "EnrichReport", "ImportReport", "ParsedGraph", "ReplaceReport",
+    "changed_files_from_manifest", "enrich_missing_fields", "import_graph_json", "parse_graph",
+    "replace_files",
 ]
