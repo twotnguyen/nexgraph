@@ -13,6 +13,37 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # CI-1: job nhẹ tính vùng thay đổi. Job ma trận vẫn CHẠY (để check bắt buộc
+  # luôn có mặt), chỉ các BƯỚC nặng bị bỏ qua theo cờ. Không dùng
+  # `on.pull_request.paths`: workflow không chạy thì check bắt buộc treo, PR bị chặn.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    outputs:
+      engine: ${{ steps.areas.outputs.engine }}
+      desktop: ${{ steps.areas.outputs.desktop }}
+      packaging: ${{ steps.areas.outputs.packaging }}
+      ci: ${{ steps.areas.outputs.ci }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # PR cần đủ lịch sử để tính merge-base `origin/<base>...HEAD`.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+      - name: Test script phân loại vùng thay đổi
+        run: node --test scripts/ci/changed-areas.test.mjs
+      - name: Phân loại vùng thay đổi
+        id: areas
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+            node scripts/ci/changed-areas.mjs --base "origin/$BASE_REF" --github-output
+          else
+            # Push lên main hoặc tag v*: chạy đầy đủ.
+            node scripts/ci/changed-areas.mjs --all --github-output
+          fi
+
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -39,40 +70,66 @@ jobs:
 
   engine:
     name: engine (${{ matrix.os }})
+    # CI-1: job vẫn chạy để check `engine (<os>)` luôn có mặt; bước nặng chỉ khi
+    # PR đụng engine (hoặc .github → mọi cờ true). PR không đổi engine: job xanh ngay.
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     steps:
+      - name: Bỏ qua (PR không đổi engine)
+        if: needs.changes.outputs.engine != 'true'
+        run: echo "bỏ qua - PR không đổi engine"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: needs.changes.outputs.engine == 'true'
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        if: needs.changes.outputs.engine == 'true'
         with:
           enable-cache: true
       - run: uv sync --locked
+        if: needs.changes.outputs.engine == 'true'
         working-directory: engine
       - run: uv run --locked pytest tests -q
+        if: needs.changes.outputs.engine == 'true'
         working-directory: engine
 
   desktop:
     name: desktop (${{ matrix.os }})
+    # CI-1: desktop=true → chạy như cũ, nhưng trên PR vitest chỉ chạy test liên quan
+    # (`--changed <base>`). Chỉ engine=true → setup + smoke (smoke dùng engine thật),
+    # bỏ typecheck/vitest. Cả hai false → bỏ hết. Push main/tag → đầy đủ.
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     steps:
+      - name: Bỏ qua (PR không đổi engine/desktop)
+        if: needs.changes.outputs.desktop != 'true' && needs.changes.outputs.engine != 'true'
+        run: echo "bỏ qua - PR không đổi engine/desktop"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
+        with:
+          # PR cần đủ lịch sử cho `vitest --changed origin/<base>`.
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
         with:
           enable-cache: true
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm run setup:dev
+        if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
       - name: Smoke test checkout sạch
+        if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
         shell: bash
         timeout-minutes: 5
         env:
@@ -83,11 +140,34 @@ jobs:
           pnpm dev 2>&1 | tee nexgraph-dev-smoke.log
           grep -F 'SMOKE OK nodes=' nexgraph-dev-smoke.log
       - run: pnpm --filter @nexgraph/desktop typecheck
-      - run: pnpm --filter @nexgraph/desktop test
+        if: needs.changes.outputs.desktop == 'true'
+      - name: Unit test desktop (PR - chỉ test liên quan thay đổi)
+        if: needs.changes.outputs.desktop == 'true'
+        shell: bash
         env:
           NEXGRAPH_E2E: '1'
+        # Vitest 5.0.5: `--changed <ref>` chạy `git diff --name-only <ref>...HEAD`
+        # rồi mở rộng theo import tĩnh; forceRerunTriggers mặc định gồm
+        # `**/package.json` và `**/{vitest,vite}.config.*` nên đổi các tệp đó
+        # là chạy lại toàn bộ. Push main/tag (không phải PR) chạy đủ như cũ.
+        # Dùng `exec vitest run` chứ không `test -- --changed`: pnpm 11 chuyển
+        # nguyên dấu `--` cho script, vitest coi phần sau `--` là tên tệp và
+        # chạy TOÀN BỘ test (đo cục bộ: 212 tệp/1829 test) — ngược mục tiêu.
+        # `--passWithNoTests`: PR chỉ đổi tệp không test nào import (vd. CSS,
+        # resources) thì 0 test khớp, vẫn phải xanh.
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+            pnpm --filter @nexgraph/desktop exec vitest run \
+              --changed "origin/${{ github.base_ref }}" \
+              --passWithNoTests
+          else
+            pnpm --filter @nexgraph/desktop test
+          fi
       - run: pnpm --filter ./apps/extension typecheck
+        if: needs.changes.outputs.desktop == 'true'
       - run: pnpm --filter ./apps/extension test
+        if: needs.changes.outputs.desktop == 'true'
 
   version-check:
     name: version-check
@@ -101,8 +181,10 @@ jobs:
 
   package:
     name: package (${{ matrix.os }})
-    # Chờ test: bản cài chỉ được dựng và tải lên khi engine/desktop đã xanh.
-    needs: [engine, desktop]
+    # CI-1: không còn `needs: [engine, desktop]` — chạy SONG SONG với test cho nhanh.
+    # Release vẫn an toàn vì job `release` đã `needs: [version-check, engine, desktop, package]`.
+    # Chỉ dựng bộ cài khi `packaging` true; push main/tag luôn true nên luôn chạy đủ.
+    needs: [changes]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -111,37 +193,50 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
+      - name: Bỏ qua (PR không đổi vùng đóng gói)
+        if: needs.changes.outputs.packaging != 'true'
+        run: echo "bỏ qua - PR không đổi vùng đóng gói, không dựng bộ cài"
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: needs.changes.outputs.packaging == 'true'
       - name: Tag phải khớp version ở 4 nguồn
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: needs.changes.outputs.packaging == 'true' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
         run: node scripts/ci/check-version.mjs "$GITHUB_REF_NAME"
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        if: needs.changes.outputs.packaging == 'true'
         with:
           enable-cache: true
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        if: needs.changes.outputs.packaging == 'true'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: needs.changes.outputs.packaging == 'true'
         with:
           node-version: 22
           cache: pnpm
       - name: Đóng gói engine (PyInstaller)
+        if: needs.changes.outputs.packaging == 'true'
         run: |
           uv sync --locked
           uv run --locked pyinstaller packaging/nexgraph-engine.spec --noconfirm
         working-directory: engine
       - run: pnpm install --frozen-lockfile
+        if: needs.changes.outputs.packaging == 'true'
       - name: Đóng gói ứng dụng (electron-builder)
+        if: needs.changes.outputs.packaging == 'true'
         run: pnpm --filter @nexgraph/desktop run package
       - name: Kiểm tra tệp cài đặt
+        if: needs.changes.outputs.packaging == 'true'
         id: installer
         run: node apps/desktop/scripts/check-installer.mjs
       - name: Cài và smoke test bộ cài
+        if: needs.changes.outputs.packaging == 'true'
         shell: bash
         timeout-minutes: 8
         env:
           NEXGRAPH_INSTALLER: ${{ steps.installer.outputs.path }}
         run: node apps/desktop/scripts/smoke-packaged.mjs --installer "$NEXGRAPH_INSTALLER" --disable-webgl
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: needs.changes.outputs.packaging == 'true'
         with:
           name: ${{ steps.installer.outputs.name }}
           path: |
