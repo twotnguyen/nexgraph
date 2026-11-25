@@ -1,0 +1,43 @@
+.nex-accounts { display: grid; gap: 12px; }
+.nex-accounts-title { margin: 0; font-size: 13px; }
+.nex-account-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.nex-account-row {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: var(--panel);
+}
+.nex-account-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.nex-account-head strong { font-size: 12px; font-weight: 650; }
+.nex-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.nex-badge.connected { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--color-border)); }
+.nex-account-row .row { display: flex; flex-wrap: wrap; gap: 6px; }
+.nex-account-row .field { margin: 0; }
+.nex-device-code { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.nex-device-code code {
+  font-size: 16px;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--track);
+}
+.nex-account-attempt, .nex-account-hint {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+.nex-account-attempt p, .nex-account-hint p { margin: 0; overflow-wrap: anywhere; }
+.nex-model select { width: 100%; }

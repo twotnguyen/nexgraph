@@ -1,12 +1,13 @@
 import { tr } from '../../strings'
 import { Icon, type IconName } from '../common/icons'
 
-export type ConnectionProvider = 'gemini' | 'openai' | 'other' | 'local'
+export type ConnectionProvider = 'gemini' | 'openai' | 'other' | 'nex' | 'local'
 
 function providers(): { id: ConnectionProvider; title: string; description: string; icon: IconName }[] {
   return [
     { id: 'gemini', title: 'Gemini', description: tr('Tài khoản Google hoặc API key'), icon: 'spark' },
     { id: 'openai', title: 'ChatGPT / OpenAI', description: tr('Tài khoản hoặc API key'), icon: 'graph' },
+    { id: 'nex', title: 'Nex', description: tr('Tài khoản AI cho trợ lý Nex'), icon: 'spark' },
     { id: 'other', title: tr('Nhà cung cấp khác'), description: tr('Claude, OpenRouter và hơn nữa'), icon: 'plug' },
     { id: 'local', title: 'Ollama', description: tr('Model chạy trên máy'), icon: 'folder' }
   ]

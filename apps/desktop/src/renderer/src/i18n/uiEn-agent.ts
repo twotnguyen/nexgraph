@@ -319,4 +319,28 @@ export const uiEnAgent: Record<string, string> = {
   '{count} tuần': '{count} {count, plural, one {week} other {weeks}}',
   '{count} ngày': '{count} {count, plural, one {day} other {days}}',
   '{count} giờ': '{count} {count, plural, one {hour} other {hours}}',
+
+  // Khối "Tài khoản AI cho Nex" (N2-A2)
+  'Tài khoản AI cho trợ lý Nex': 'AI accounts for the Nex assistant',
+  'Tài khoản AI cho Nex': 'AI accounts for Nex',
+  'Đăng nhập bằng tài khoản gói hoặc API key. Nex lưu thông tin đăng nhập trong thư mục dữ liệu của NexGraph.': 'Sign in with a subscription account or an API key. Nex keeps sign-in data inside the NexGraph data folder.',
+  'Đang tải danh sách nhà cung cấp…': 'Loading providers…',
+  'Chưa tìm thấy runtime Nex trên máy này.': 'The Nex runtime was not found on this machine.',
+  'Không khởi động được dịch vụ tài khoản Nex.': 'Could not start the Nex accounts service.',
+  'Đã kết nối': 'Connected',
+  'Chưa kết nối': 'Not connected',
+  'Đăng xuất': 'Sign out',
+  'Nhập API key': 'Enter API key',
+  'Mã xác nhận': 'Verification code',
+  'Mở trang xác nhận': 'Open the verification page',
+  'Không mở được trình duyệt tự động. Hãy mở liên kết bên dưới.': 'Could not open the browser automatically. Open the link below.',
+  'Đang chờ xác nhận trong trình duyệt…': 'Waiting for confirmation in the browser…',
+  'Model mặc định': 'Default model',
+  'Đã kết nối {name}': 'Connected {name}',
+  'Đã đăng xuất {name}': 'Signed out of {name}',
+  'Đã lưu API key cho {name}': 'Saved the API key for {name}',
+  'Đã chọn model mặc định cho {name}': 'Selected the default model for {name}',
+  'Đã bỏ model mặc định của {name}': 'Cleared the default model for {name}',
+  'Đăng nhập không thành công. Hãy thử lại.': 'Sign-in did not complete. Try again.',
+  'Đăng nhập bằng công cụ chính thức của nhà cung cấp.': 'Sign in with the provider’s official tool.'
 }
