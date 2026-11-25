@@ -1529,7 +1529,7 @@ export const uiEn: Record<string, string> = {
   'Tìm trong giấy phép': 'Search licenses',
   'Tìm trong giấy phép…': 'Search licenses…',
   'Đang tải giấy phép…': 'Loading licenses…',
-  '{shown}/{total} mục': '{shown}/{total} sections',
+  '{shown}/{total} mục': '{shown}/{total} {total, plural, one {section} other {sections}}',
   'Không có mục nào khớp “{query}”': 'No sections match “{query}”',
   'Tệp: {name}': 'File: {name}',
   // ArchitectureCanvas, FlowsView, GraphCanvas, MapView

@@ -83,6 +83,22 @@ describe('màn Giấy phép mã nguồn mở (LIC-2)', () => {
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument()
   })
 
+  it('bản English chọn số ít/số nhiều theo tổng số mục: "1/1 section", "1/3 sections", "0/3 sections"', async () => {
+    setLocale('en')
+    open(vi.fn(async () => ({ text: '# Third-party software\n\n## d3\n\nISC License\n', path: '/x/THIRD_PARTY_LICENSES.md' })))
+    expect(await screen.findByText('1/1 section')).toBeInTheDocument()
+    cleanup()
+
+    open()
+    const search = await screen.findByRole('searchbox', { name: 'Search licenses' })
+    expect(screen.getByText('3/3 sections')).toBeInTheDocument()
+    await userEvent.type(search, 'apache')
+    expect(screen.getByText('1/3 sections')).toBeInTheDocument()
+    await userEvent.clear(search)
+    await userEvent.type(search, 'không-có-gì')
+    expect(screen.getByText('0/3 sections')).toBeInTheDocument()
+  })
+
   it('lỗi đọc tệp hiện thông báo thay vì màn hình trống', async () => {
     installNexgraph({ licenses: { read: vi.fn(async () => { throw Object.assign(new Error('Không đọc được tệp giấy phép mã nguồn mở đi kèm ứng dụng.'), { code: 'licenses_missing' }) }) } })
     render(<LicensesScreen onBack={vi.fn()} />)
