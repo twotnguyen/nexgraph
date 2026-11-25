@@ -48,10 +48,15 @@ def _build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--hook", choices=GIT_HOOKS, default=None, help="Tên git hook đang gọi; quyết định luật bỏ qua")
     refresh.add_argument("hook_args", nargs="*", help=argparse.SUPPRESS)
     imp = sub.add_parser("import-graph",
-                         help="Nạp đồ thị đã xuất vào <project>/.nexgraph/graph.db (chưa nối vào job lập chỉ mục)")
+                         help="Nạp đồ thị đã xuất trong <project>/.nexgraph vào graph.db")
     imp.add_argument("--project", required=True, type=Path)
     imp.add_argument("--graph-json", type=Path, default=None,
                      help="Đường dẫn graph.json; mặc định <project>/.nexgraph/graph.json")
+    pipe = sub.add_parser("pipeline-run", help="Chạy một bước pipeline phân tích trong tiến trình con (nội bộ)")
+    pipe.add_argument("--root", required=True, type=Path, help="Gốc dự án cần phân tích")
+    pipe.add_argument("--out", type=Path, default=None, help="Thư mục đầu ra; mặc định <root>/.nexgraph")
+    pipe.add_argument("vendor_args", nargs=argparse.REMAINDER,
+                      help="Lệnh và tham số cho pipeline (ví dụ: extract . --code-only)")
     guard = sub.add_parser("hook-guard", help="Hook PreToolUse/BeforeTool: nhắc trợ lý AI hỏi graph trước khi đọc tệp (luôn thoát 0)")
     guard.add_argument("kind", choices=["read", "search", "gemini"])
     guard.add_argument("--project", required=True, type=Path)
@@ -319,6 +324,11 @@ def main(argv: list[str] | None = None) -> int:
         return _refresh_cmd(args.project, args.data_dir, args.hook, args.hook_args)
     if args.command == "import-graph":
         return _import_graph_cmd(args.project, args.graph_json)
+    if args.command == "pipeline-run":
+        from nexgraph_engine.pipeline.child import run_vendor
+
+        out = args.out if args.out is not None else args.root / ".nexgraph"
+        return run_vendor(args.root, out, list(args.vendor_args))
     if args.command == "mcp":
         from nexgraph_engine.mcp.server import ProjectNotIndexed, run_http, run_stdio
         logger.info("MCP %s: dự án %s", "HTTP" if args.http else "stdio", args.project)
