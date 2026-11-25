@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ApprovalDecision, ApprovalRequest, CommandApprovalRequest, FileApprovalRequest } from '../../../shared/agent-types'
 import type { ApprovalGate } from '../approval'
+import type { ProviderFailure } from '../session'
 import { NEX_PROVIDER_ID } from './config'
 
 /** Tối thiểu của client HTTP mà adapter cần; test truyền bản giả. */
@@ -29,6 +30,10 @@ export type NexSessionOptions = {
   readFile?: (path: string) => string
   /** Dừng tiến trình Nex khi phiên bị bỏ (chuyển phiên, đóng dự án, thoát app). */
   stopSidecar?: () => Promise<void> | void
+  /** Sidecar chết/khởi động lại: phiên bỏ id cũ, lượt đang chạy kết thúc bằng lỗi rõ ràng. */
+  watchSidecar?: (listener: () => void) => () => void
+  /** Lỗi app phát hiện trước khi gửi (AgentService dùng để hiện mã/câu chính xác). */
+  onProviderFailure?: (failure: ProviderFailure) => void
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -96,14 +101,17 @@ export class NexSession {
   private unsubscribe: (() => void) | null = null
   private busy = false
   private aborted = false
+  private rejected = false
   private toolNames = new Map<string, string>()
-  private pending: { resolve: () => void; reject: (error: Error) => void; stopReason: StopReason; error?: string } | null = null
+  private unwatch: (() => void) | null = null
+  private pending: { resolve: () => void; reject: (error: Error) => void; stopReason: StopReason; error?: string; settled?: boolean } | null = null
   private synthetic: { role: 'user' | 'assistant'; stopReason?: StopReason; errorMessage?: string }[] = []
   private disposed = false
   private currentModel: { provider: string; id: string }
 
   constructor(private readonly o: NexSessionOptions) {
     this.currentModel = { ...o.model }
+    this.unwatch = o.watchSidecar?.(() => this.noticeSidecarRestarted()) ?? null
   }
 
   get model(): { provider: string; id: string } { return this.currentModel }
@@ -128,8 +136,12 @@ export class NexSession {
     if (this.disposed) throw new Error('Phiên Nex đã đóng')
     this.busy = true
     this.aborted = false
+    this.rejected = false
     this.synthetic.push({ role: 'user' })
     const done = new Promise<void>((resolve, reject) => { this.pending = { resolve, reject, stopReason: 'stop' } })
+    // Sidecar chết có thể reject lượt trước khi prompt kịp `await done`: nuốt bản sao để không
+    // thành unhandled rejection; kết quả vẫn đi qua `await done` bên dưới.
+    done.catch(() => {})
     try {
       if (!this.ocId) {
         const created = await this.o.client.createSession({
@@ -137,7 +149,18 @@ export class NexSession {
         })
         this.ocId = created.id
       }
-      await this.o.client.prompt(this.ocId, text)
+      try {
+        await this.o.client.prompt(this.ocId, text)
+      } catch (error) {
+        // Gửi prompt hỏng vì tiến trình vừa chết: kết thúc lượt bằng lỗi rõ ràng thay vì "fetch failed".
+        if (this.pending && !this.pending.settled) {
+          const message = 'Không gửi được câu hỏi tới runtime Nex. Tiến trình có thể đã dừng; hãy gửi lại.'
+          this.ocId = null
+          this.o.onProviderFailure?.({ code: 'ai_runtime_restarted', message })
+          this.finish('error', message)
+        }
+        if (!this.pending || this.pending.stopReason === 'stop') throw error
+      }
       await done
       if (this.pending?.stopReason === 'error') throw new Error(this.pending.error ?? 'Nex trả lỗi')
     } finally {
@@ -162,11 +185,28 @@ export class NexSession {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    this.unwatch?.()
+    this.unwatch = null
     this.unsubscribe?.()
     this.unsubscribe = null
     this.listeners.clear()
     if (this.busy) { try { await this.abort() } catch { /* đã dừng */ } }
     try { await this.o.stopSidecar?.() } catch { /* tiến trình có thể đã chết */ }
+  }
+
+  /**
+   * Sidecar chết/khởi động lại: id phiên cũ không còn hiệu lực. Lượt đang chạy phải kết thúc
+   * bằng lỗi rõ ràng thay vì treo chờ sự kiện không bao giờ tới; lượt sau mở phiên mới trên
+   * URL/mật khẩu mới (client đọc lại qua getter).
+   */
+  noticeSidecarRestarted(): void {
+    if (this.disposed) return
+    this.ocId = null
+    this.toolNames.clear()
+    if (!this.pending) return
+    const message = 'Runtime Nex đã khởi động lại. Hãy gửi lại câu hỏi.'
+    this.o.onProviderFailure?.({ code: 'ai_runtime_restarted', message })
+    this.finish('error', message)
   }
 
   /** Sự kiện SSE của OpenCode → sự kiện phiên mà AgentService/renderer đang dùng. */
@@ -237,8 +277,9 @@ export class NexSession {
   }
 
   private finish(stopReason: StopReason, error?: string): void {
-    if (!this.pending) return
+    if (!this.pending || this.pending.settled) return
     const pending = this.pending
+    pending.settled = true
     this.pending = { ...pending, stopReason, error }
     this.synthetic.push({ role: 'assistant', stopReason, ...(error ? { errorMessage: error } : {}) })
     if (stopReason === 'error') pending.reject(new Error(error ?? 'Nex trả lỗi'))

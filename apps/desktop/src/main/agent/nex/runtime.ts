@@ -47,11 +47,20 @@ export async function createNexSession(spec: SessionSpec, o: NexRuntimeOptions):
     envSource: o.env ?? process.env,
     log: o.log
   })
-  const ready = await sidecar.start()
-  const client = new NexClient({ baseUrl: ready.baseUrl, password: ready.password })
-  return new NexSession({
-    root, client, model: { provider: spec.model.provider, id: spec.model.id },
-    gate: spec.gate, isEdit: () => (spec.getMode?.() ?? 'edit') === 'edit',
-    stopSidecar: () => sidecar.stop()
-  }) as unknown as PiSession
+  try {
+    await sidecar.start()
+    // Getter, không chép URL/mật khẩu: sidecar khởi động lại thì client + SSE dùng cổng/mật khẩu mới.
+    const client = new NexClient({ baseUrl: () => sidecar.url, secret: () => sidecar.secret })
+    return new NexSession({
+      root, client, model: { provider: spec.model.provider, id: spec.model.id },
+      gate: spec.gate, isEdit: () => (spec.getMode?.() ?? 'edit') === 'edit',
+      stopSidecar: () => sidecar.stop(),
+      watchSidecar: (listener) => sidecar.onUnexpectedExit(listener),
+      onProviderFailure: spec.onProviderFailure
+    }) as unknown as PiSession
+  } catch (error) {
+    // Không để tiến trình mồ côi khi dựng client/phiên hỏng sau khi sidecar đã lên.
+    await sidecar.stop().catch(() => {})
+    throw error
+  }
 }

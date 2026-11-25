@@ -2,8 +2,9 @@
 export type NexEvent = { type: string; data?: Record<string, unknown> }
 
 export type NexClientOptions = {
-  baseUrl: string
-  password: string
+  /** Chuỗi hoặc getter: sidecar khởi động lại thì URL/mật khẩu đổi, client phải đọc lại mỗi request. */
+  baseUrl: string | (() => string)
+  secret: string | (() => string)
   fetchImpl?: typeof fetch
   /** Thời gian chờ trước khi nối lại SSE sau lỗi mạng. */
   reconnectDelayMs?: number
@@ -32,10 +33,13 @@ export class NexClient {
     this.reconnectDelayMs = o.reconnectDelayMs ?? 1_000
   }
 
+  private get baseUrl(): string { return typeof this.o.baseUrl === 'function' ? this.o.baseUrl() : this.o.baseUrl }
+  private get password(): string { return typeof this.o.secret === 'function' ? this.o.secret() : this.o.secret }
+
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const response = await this.fetchImpl(`${this.o.baseUrl}${path}`, {
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
-      headers: { Authorization: basic(this.o.password), 'Content-Type': 'application/json', ...(init.headers ?? {}) }
+      headers: { Authorization: basic(this.password), 'Content-Type': 'application/json', ...(init.headers ?? {}) }
     })
     if (!response.ok) throw new NexHttpError(response.status, `Nex trả lỗi HTTP ${response.status} cho ${path.split('?')[0]}`)
     if (response.status === 204) return undefined as T
@@ -92,8 +96,8 @@ export class NexClient {
   private async pump(listener: (event: NexEvent) => void, signal: AbortSignal): Promise<void> {
     while (!this.stopped && !signal.aborted) {
       try {
-        const response = await this.fetchImpl(`${this.o.baseUrl}/api/event`, {
-          headers: { Authorization: basic(this.o.password), Accept: 'text/event-stream' }, signal
+        const response = await this.fetchImpl(`${this.baseUrl}/api/event`, {
+          headers: { Authorization: basic(this.password), Accept: 'text/event-stream' }, signal
         })
         if (!response.ok || !response.body) throw new NexHttpError(response.status, 'Không mở được luồng sự kiện Nex')
         const reader = response.body.getReader()
