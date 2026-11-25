@@ -142,8 +142,8 @@ def _skip_reason(project: Path, hook: str | None, args: list[str]) -> str | None
 def _import_graph_cmd(project: Path, graph_json: Path | None) -> int:
     """Nạp graph.json vào `<project>/.nexgraph/graph.db`; in một dòng JSON cho script/CI.
 
-    Chưa nối vào job lập chỉ mục (việc của N2-E2): lệnh này chỉ dựng chỉ mục truy vấn từ
-    đồ thị đã xuất, gồm cả bước bổ sung trường thiếu bằng cách đọc lại tệp nguồn.
+    Job lập chỉ mục dùng cùng bộ nạp này qua `pipeline.job` (N2-E2); lệnh này giữ cho script/CI
+    nạp lại một đồ thị đã xuất mà không chạy lại pipeline.
     """
     from nexgraph_engine.graphify_import import import_graph_json
     from nexgraph_engine.schema.db import open_graph_db
@@ -258,8 +258,14 @@ def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
             # Lần refresh trước bị kill để lại dòng 'cho' (dữ liệu đã rollback khi mở CSDL).
             store.abort_stale_runs()
             pid = store.project_id()
-            r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, pid), keep_sources=data_dir is None,
-                                transcript_dir=data_dir / "transcripts" / pid if data_dir and pid else None)
+            from nexgraph_engine.pipeline.refresh import refresh_pipeline, use_pipeline_refresh
+
+            if use_pipeline_refresh(project):
+                # Đồ thị dựng bằng pipeline vendor: `update` tăng dần + replace_files theo manifest.
+                r = refresh_pipeline(store, project.resolve())
+            else:
+                r = refresh_project(store, project.resolve(), sources_dir=sources_root(data_dir, pid), keep_sources=data_dir is None,
+                                    transcript_dir=data_dir / "transcripts" / pid if data_dir and pid else None)
     except GraphWriteBusy:
         return 0, skipped
     except sqlite3.OperationalError as exc:
@@ -267,7 +273,7 @@ def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
             return 0, skipped
         raise
     out = {"status": "ok", "added": r.added, "changed": r.changed, "removed": r.removed,
-           "unchanged": r.unchanged, "seconds": round(r.seconds, 3)}
+           "unchanged": r.unchanged, "seconds": round(r.seconds, 3), "pipeline": r.pipeline}
     return 0, out
 
 
