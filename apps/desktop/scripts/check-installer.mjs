@@ -4,6 +4,7 @@ import { appendFileSync, createReadStream, existsSync, readFileSync, readdirSync
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { REQUIRED_LICENSE_FILES, assertLicenseFiles, resourcesDir } from './license-files.mjs'
+import { assertNoNexBinaryInAsar } from './nex-runtime.mjs'
 
 const targets = {
   darwin: { os: 'macos', ext: 'dmg' },
@@ -49,6 +50,9 @@ if (!appDir) throw new Error('Không thấy app chưa nén trong apps/desktop/di
 assertLicenseFiles(appDir, process.platform)
 console.log(`Tệp giấy phép trong ${resourcesDir(appDir, process.platform)}: ` +
   REQUIRED_LICENSE_FILES.map((name) => `${name} ${statSync(join(resourcesDir(appDir, process.platform), name)).size} B`).join(' · '))
+
+// PKG-NEX-2: binary runtime Nex phải nằm ngoài app.asar (resources/opencode/), không bị đóng vào asar.
+assertNoNexBinaryInAsar(appDir, process.platform)
 
 const path = `apps/desktop/dist/${filename}`
 const manifest = `apps/desktop/dist/${name}.build.json`

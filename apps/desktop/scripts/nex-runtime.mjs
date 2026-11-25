@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { closeSync, createReadStream, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { resourcesDir } from './license-files.mjs'
 
@@ -73,7 +73,9 @@ export async function isRuntimeCurrent(path, expectedSha256) {
 }
 
 export function packagedBinaryPath(appDir, platform = process.platform) {
-  return join(resourcesDir(appDir, platform), 'opencode', binaryName(platform))
+  // Dùng join của nền tảng đích để test trên macOS vẫn so được đường dẫn Windows (bài học QA #63).
+  const path = platform === 'win32' ? win32 : posix
+  return path.join(resourcesDir(appDir, platform), 'opencode', binaryName(platform))
 }
 
 /**

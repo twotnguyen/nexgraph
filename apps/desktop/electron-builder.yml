@@ -40,10 +40,20 @@ mac:
   identity: '-'
   hardenedRuntime: false
   category: public.app-category.developer-tools
+  # Runtime Nex (OpenCode) do scripts/fetch-nex-runtime.mjs tải về build-resources/opencode/.
+  # Chép nguyên binary vào Contents/Resources/opencode/ (ngoài app.asar) đúng vị trí thứ hai mà
+  # PR #66 tìm; @electron/osx-sign ký mọi binary trong Contents nên binary được ký ad-hoc cùng app.
+  extraResources:
+    - from: build-resources/opencode/opencode
+      to: opencode/opencode
 dmg:
   artifactName: 'NexGraph-${version}-macos-${arch}.${ext}'
 win:
   target: nsis
+  # Cùng lý do như macOS: binary .exe nằm ngoài asar trong resources/opencode/ (vị trí PR #66 tìm).
+  extraResources:
+    - from: build-resources/opencode/opencode.exe
+      to: opencode/opencode.exe
 nsis:
   artifactName: 'NexGraph-${version}-windows-${arch}.${ext}'
   oneClick: false
