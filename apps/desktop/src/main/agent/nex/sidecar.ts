@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { signalProcessTree } from '../../engine/launcher'
 import { safeProcessEnv } from '../../process-env'
 
 /** Biến môi trường trỏ tới binary Nex bản dev/QA (thay cho binary đóng gói). */
@@ -128,7 +129,8 @@ export class NexSidecar {
     })
     const spawnImpl = this.o.spawnImpl ?? spawn
     const child = spawnImpl(this.o.bin, ['serve', '--hostname', '127.0.0.1', '--port', '0'], {
-      cwd: this.o.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true
+      cwd: this.o.cwd, env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+      detached: process.platform !== 'win32' // Nhóm POSIX riêng cho sidecar và các worker.
     })
     this.child = child
     this.password = password
@@ -181,20 +183,24 @@ export class NexSidecar {
     }
   }
 
-  /** SIGTERM rồi SIGKILL sau thời gian chờ; resolve khi child đã thoát (hoặc không còn sống). */
   private async terminate(child: ChildProcess): Promise<void> {
-    if (child.exitCode !== null || child.signalCode !== null) return
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        resolve()
-      }, KILL_GRACE_MS)
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-      child.kill('SIGTERM')
-    })
+    const pid = child.pid
+    if (pid === undefined || child.exitCode !== null || child.signalCode !== null) return
+    const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
+    if (process.platform === 'win32') {
+      // taskkill /T /F phải xử lý cây khi PID gốc còn sống; đợi cả taskkill lẫn sidecar.
+      await Promise.all([signalProcessTree(child, 'SIGTERM'), exited])
+      return
+    }
+    const timer = setTimeout(() => void signalProcessTree(child, 'SIGKILL'), KILL_GRACE_MS)
+    try {
+      await signalProcessTree(child, 'SIGTERM')
+      await exited
+    } finally {
+      clearTimeout(timer)
+    }
+    // Sidecar có thể đã thoát nhưng worker cùng nhóm vẫn bỏ qua SIGTERM.
+    try { process.kill(-pid, 'SIGKILL') } catch { /* nhóm đã trống */ }
   }
 
   /** Chờ dòng `server listening on …` hoặc tiến trình thoát/lỗi spawn. */
@@ -273,17 +279,6 @@ export class NexSidecar {
     const child = this.child
     this.child = null
     this.baseUrl = ''
-    if (!child || child.exitCode !== null || child.signalCode !== null) return
-    await new Promise<void>((resolve) => {
-      const timer = setTimeout(() => {
-        child.kill('SIGKILL')
-        resolve()
-      }, KILL_GRACE_MS)
-      child.once('exit', () => {
-        clearTimeout(timer)
-        resolve()
-      })
-      child.kill('SIGTERM')
-    })
+    if (child) await this.terminate(child)
   }
 }
