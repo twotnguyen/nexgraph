@@ -30,6 +30,8 @@ import { WatchErrorNotifier } from './watch/error-notice'
 import { EditorStateRegistry } from './agent/editor-state'
 import { AgentRouter, type AgentRuntimeId } from './agent-router'
 import { createNexSession, nexAvailable } from './agent/nex/runtime'
+import { NexSidecar, resolveNexBinary } from './agent/nex/sidecar'
+import { NexAccountManager, withCustomProviders } from './agent/nex/accounts'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
@@ -216,6 +218,34 @@ export function stopAllWatchers(): void {
   watchers.clear()
 }
 
+// ----- Tài khoản AI cho Nex (integration của sidecar) -----
+
+let nexAccounts: NexAccountManager | null = null
+let nexAccountsSidecar: NexSidecar | null = null
+
+/** Dừng sidecar tài khoản Nex khi thoát app. */
+export const stopNexAccounts = (): Promise<void> => (nexAccounts as NexAccountManager | null)?.stop() ?? Promise.resolve()
+
+/** Sidecar riêng cho màn tài khoản: HOME dùng chung với phiên chat, config riêng. */
+const startNexAccountsSidecar = (dataDir: string): Promise<{ baseUrl: string; password: string }> => {
+  if (!nexAccountsSidecar) {
+    const bin = resolveNexBinary({ env: process.env, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath })
+    if (!bin) return Promise.reject(Object.assign(new Error('Chưa có runtime Nex'), { code: 'nex_not_available' }))
+    nexAccountsSidecar = new NexSidecar({
+      bin,
+      dataDir: join(dataDir, 'nex'),
+      projectKey: 'accounts',
+      cwd: dataDir,
+      // Không cần MCP/model cho màn tài khoản; cấu hình tối thiểu để sidecar chạy.
+      config: () => ({ $schema: 'https://opencode.ai/config.json' }),
+      envSource: process.env
+    })
+    nexAccountsSidecar.onUnexpectedExit(() => (nexAccounts as NexAccountManager | null)?.resetClient())
+  }
+  return nexAccountsSidecar.start()
+}
+
+
 /** Đăng ký các kênh IPC của dự án và đồ thị. `handle()` trả engine hiện tại hoặc null khi chưa sẵn sàng. */
 export function registerIpc(
   getHandle: () => EngineHandle | null,
@@ -240,6 +270,12 @@ export function registerIpc(
     return h
   }
   const api = (): EngineApi => new EngineApi(handle())
+  nexAccounts = new NexAccountManager({
+    connect: () => startNexAccountsSidecar(dataDir),
+    openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
+    prefsFile: prefsFile(),
+    close: async () => { await nexAccountsSidecar?.stop(); nexAccountsSidecar = null }
+  })
   const on = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
     ipcMain.handle(channel, (_e, ...args) => toIpcResult(() => fn(...(args as A))))
   /** Như on() nhưng truyền webContents đã gọi vào handler (tài nguyên gắn cửa sổ đã mở nó). */
@@ -830,6 +866,32 @@ export function registerIpc(
     }
   })
   on('auth:list', async () => (await acc()).listProviders())
+  on('nex:accounts', async () => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    const view = await manager.list()
+    try {
+      const a = await acc()
+      const providers = (await a.listProviders()).filter((p) => p.custom)
+      const models = await a.listModels()
+      return withCustomProviders(view, providers.map((p) => ({
+        id: p.id, label: p.label, hasKey: p.hasKey,
+        models: models.filter((m) => m.provider === p.id).map((m) => ({ id: m.id, label: m.label }))
+      })))
+    } catch { return view }
+  })
+  on('nex:select-model', async (provider: string, id: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    const a = await acc()
+    const custom = (await a.listProviders()).some((p) => p.custom && p.id === provider)
+    if (custom) {
+      if (!(await a.listModels()).some((m) => m.provider === provider && m.id === id)) throw new AgentError('bad_param', 'Không có model này')
+      a.selectModel(provider, id)
+      manager.saveSelection({ provider, id })
+    } else await manager.selectModel(provider, id)
+    agent.selectionChanged()
+  })
   on('auth:set-key', async (providerId: string, key: string) => {
     try { await (await acc()).setApiKey(providerId, key) } finally { agent.selectionChanged() }
   })

@@ -33,6 +33,51 @@ export type ProviderInfo = {
   description?: string
 }
 
+/** Một nhà cung cấp trong khối "Tài khoản AI cho Nex" (integration của sidecar). */
+export type NexAccountMethod = {
+  id: string
+  type: 'oauth' | 'command' | 'key' | 'external'
+  label: string
+  form?: { key: string; title: string; required: boolean; options?: { value: string; label: string }[] }[]
+}
+export type NexAccountConnection = {
+  id: string
+  label: string
+  method: 'key' | 'oauth' | 'external'
+  problem?: { message: string; url?: string }
+}
+export type NexAccountProvider = {
+  id: string
+  name: string
+  connected: boolean
+  connections: NexAccountConnection[]
+  methods: NexAccountMethod[]
+  models: { id: string; label: string }[]
+}
+export type NexAccountsView = {
+  /** Có runtime Nex trên máy và sidecar trả lời được. */
+  available: boolean
+  /** Lý do khi chưa dùng được (thiếu binary, sidecar lỗi) — câu đã dịch ở renderer bằng mã. */
+  reason?: 'no_runtime' | 'sidecar_error'
+  providers: NexAccountProvider[]
+  selected: { provider: string; id: string } | null
+}
+/** Kết quả bắt đầu một luồng đăng nhập qua sidecar. */
+export type NexAuthStartView = {
+  kind: 'oauth' | 'command' | 'external' | 'key'
+  integrationId: string
+  attemptId?: string
+  url?: string
+  instructions?: string
+  userCode?: string
+  /** URL đã được kiểm và mở bằng trình duyệt hệ thống. */
+  opened?: boolean
+  /** URL không mở vì không qua kiểm https + host cho phép. */
+  blockedReason?: 'invalid_url' | 'host_not_allowed'
+}
+export type NexAuthStatusView = { status: 'pending' | 'complete' | 'failed' | 'expired'; message?: string }
+
+
 export type PiConsentTarget = { runtime?: 'pi'; provider: string; baseUrl: string; accountId?: string }
 export type GeminiConsentTarget = { runtime: 'antigravity-cli'; provider: 'google-antigravity'; connectionId: string; accountId?: string; baseUrl?: never }
 export type AiConsentTarget = PiConsentTarget | GeminiConsentTarget

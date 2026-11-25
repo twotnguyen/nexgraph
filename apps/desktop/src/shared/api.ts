@@ -4,7 +4,7 @@ import type { GeminiCliApi } from './gemini-types'
 import type {
   AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo,
   LocalModelInfo, AgentPromptOptions, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot,
-  ProjectCommands, AgentCheckpointInfo, AgentRollbackResult, AgentEditorState
+  ProjectCommands, AgentCheckpointInfo, AgentRollbackResult, AgentEditorState, NexAccountsView
 } from './agent-types'
 import type {
   AiSettings,
@@ -415,6 +415,12 @@ export interface NexGraphApi {
     onNotice(cb: (n: { message: string }) => void): () => void
     /** Catalog model đổi ở main (refresh nền xong): renderer tải lại danh sách model. */
     onModelsChanged(cb: (e: { providerId: string }) => void): () => void
+  }
+  /** Tài khoản AI của Nex: integration của sidecar (đăng nhập gói/API key) + model mặc định. */
+  nex: {
+    /** Danh sách nhà cung cấp, trạng thái kết nối và model; gồm cả nhà cung cấp tuỳ chỉnh của app. */
+    accounts(): Promise<NexAccountsView>
+    selectModel(provider: string, id: string): Promise<void>
   }
   /** Phiên agent lưu theo dự án, tài khoản và đích nhận dữ liệu. */
   agent: {

@@ -237,6 +237,10 @@ const api: NexGraphApi = {
     onNotice: (cb) => subscribe<{ message: string }>('auth:notice', cb),
     onModelsChanged: (cb) => subscribe<{ providerId: string }>('auth:models-changed', cb)
   },
+  nex: {
+    accounts: () => call('nex:accounts'),
+    selectModel: (provider, id) => call('nex:select-model', provider, id)
+  },
   agent: {
     prompt: (pid, text, target, options) => call('agent:prompt', pid, text, target, options),
     abort: (pid) => call('agent:abort', pid),

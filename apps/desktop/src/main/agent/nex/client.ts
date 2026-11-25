@@ -1,6 +1,48 @@
 /** Sự kiện SSE của Nex; `type` là tên sự kiện, `data` là payload (đã bóc envelope). */
 export type NexEvent = { type: string; data?: Record<string, unknown> }
 
+/** Integration (nhà cung cấp đăng nhập) do sidecar Nex trả về. Chỉ giữ trường giao diện cần. */
+export type NexIntegrationMethod = {
+  id?: string
+  type: 'key' | 'env' | 'oauth' | 'command' | 'external'
+  label?: string
+  names?: string[]
+  command?: string[]
+  form?: { key: string; title?: string; type?: string; required?: boolean; options?: { value: string; label: string }[] }[]
+}
+export type NexIntegrationConnection = {
+  type: 'credential' | 'env'
+  id?: string
+  label?: string
+  name?: string
+  method?: 'key' | 'oauth' | 'external'
+  status?: { status: 'needs_auth'; message: string; url?: string }
+}
+export type NexIntegration = {
+  id: string
+  name: string
+  methods: NexIntegrationMethod[]
+  connections: NexIntegrationConnection[]
+}
+
+/** Model của sidecar; chỉ id/nhãn — KHÔNG giữ `settings` vì phản hồi đó có thể chứa API key đã resolve. */
+export type NexModelEntry = { providerID: string; id: string; name?: string }
+
+/** Lần đăng nhập OAuth/device do sidecar bắt đầu. */
+export type NexOAuthAttempt = {
+  attemptID: string
+  url: string
+  instructions?: string
+  mode?: 'auto' | 'code'
+  paste?: boolean
+}
+
+export type NexAttemptState = {
+  status: 'pending' | 'complete' | 'failed' | 'expired'
+  message?: string
+}
+
+
 export type NexClientOptions = {
   /** Chuỗi hoặc getter: sidecar khởi động lại thì URL/mật khẩu đổi, client phải đọc lại mỗi request. */
   baseUrl: string | (() => string)
@@ -77,6 +119,72 @@ export class NexClient {
 
   async messages(sessionId: string): Promise<unknown[]> {
     return this.request(`/api/session/${encodeURIComponent(sessionId)}/message`)
+  }
+
+  /** Danh sách integration + phương thức đăng nhập + kết nối hiện có. */
+  async integrations(): Promise<NexIntegration[]> {
+    const raw = await this.request<unknown>('/api/integration')
+    return Array.isArray(raw) ? (raw as NexIntegration[]) : []
+  }
+
+  /**
+   * Model của sidecar. Phản hồi thật chứa `settings.apiKey` (đã resolve từ `{env:…}`), nên chỉ
+   * giữ `providerID`/`id`/`name`; không trả nguyên phản hồi ra ngoài và không log.
+   */
+  async models(): Promise<NexModelEntry[]> {
+    const raw = await this.request<unknown>('/api/model')
+    if (!Array.isArray(raw)) return []
+    return raw.flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const value = item as Record<string, unknown>
+      if (typeof value.providerID !== 'string' || typeof value.id !== 'string') return []
+      return [{ providerID: value.providerID, id: value.id, ...(typeof value.name === 'string' ? { name: value.name } : {}) }]
+    })
+  }
+
+  async connectOAuth(integrationId: string, methodID: string, answer?: Record<string, unknown>): Promise<NexOAuthAttempt> {
+    return this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/oauth`, {
+      method: 'POST', body: JSON.stringify({ methodID, ...(answer ? { answer } : {}) })
+    })
+  }
+
+  async oauthStatus(integrationId: string, attemptID: string): Promise<NexAttemptState> {
+    return this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/oauth/${encodeURIComponent(attemptID)}`)
+  }
+
+  async completeOAuth(integrationId: string, attemptID: string, code?: string): Promise<void> {
+    await this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/oauth/${encodeURIComponent(attemptID)}/complete`, {
+      method: 'POST', body: JSON.stringify(code === undefined ? {} : { code })
+    })
+  }
+
+  async cancelOAuth(integrationId: string, attemptID: string): Promise<void> {
+    await this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/oauth/${encodeURIComponent(attemptID)}`, { method: 'DELETE' })
+  }
+
+  async connectCommand(integrationId: string, methodID: string): Promise<{ attemptID: string }> {
+    return this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/command`, {
+      method: 'POST', body: JSON.stringify({ methodID })
+    })
+  }
+
+  async commandStatus(integrationId: string, attemptID: string): Promise<NexAttemptState> {
+    return this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/command/${encodeURIComponent(attemptID)}`)
+  }
+
+  async cancelCommand(integrationId: string, attemptID: string): Promise<void> {
+    await this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/command/${encodeURIComponent(attemptID)}`, { method: 'DELETE' })
+  }
+
+  async connectExternal(integrationId: string, methodID: string): Promise<void> {
+    await this.request(`/api/integration/${encodeURIComponent(integrationId)}/connect/external`, {
+      method: 'POST', body: JSON.stringify({ methodID })
+    })
+  }
+
+  /** Xoá một credential (đăng xuất). Không dùng `GET /api/provider` ở bất kỳ đâu (trả key nguyên văn). */
+  async removeCredential(credentialID: string): Promise<void> {
+    await this.request(`/api/credential/${encodeURIComponent(credentialID)}`, { method: 'DELETE' })
   }
 
   /**
