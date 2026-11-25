@@ -107,6 +107,32 @@ describe('chỉ mục graph.json cho cầu nối chọn nút', () => {
   })
 })
 
+describe('neo thư mục .nexgraph vào gốc dự án', () => {
+  it('.nexgraph là symlink ra ngoài gốc → không phát hiện, không phục vụ, không đọc chỉ mục', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ng-link-root-'))
+    const outside = mkdtempSync(join(tmpdir(), 'ng-link-out-'))
+    writeFileSync(join(outside, 'graph.html'), '<html><head><title>graphify</title></head><body></body></html>')
+    writeFileSync(join(outside, 'graph.json'), JSON.stringify({ nodes: [{ id: 'x', source_file: 'a.ts', source_location: 'L1' }] }))
+    symlinkSync(outside, join(root, '.nexgraph'))
+    await expect(discoverGraphPages(root)).resolves.toMatchObject({ graph: false, tree: false, callflow: null })
+    await expect(resolveGraphPage(root, 'graph.html')).resolves.toBeNull()
+    await expect(readGraphJsonIndex(root)).resolves.toEqual(new Map())
+    const res = await handlePageRequest('nxpage://pid-x/graph.html', { roots: new Map([['pid-x', root]]), libsDir: libs() })
+    expect(res.status).toBe(404)
+  })
+
+  it('chặn tên có .. và backslash kiểu Windows', async () => {
+    const { root } = fixture()
+    for (const name of ['..\\secret.txt', 'sub\\graph.html', 'C:\\Windows\\win.ini', '..', '.']) {
+      await expect(resolveGraphPage(root, name), name).resolves.toBeNull()
+    }
+    for (const path of ['..%5Csecret.txt', '..%2Fsecret.txt', 'C:%5CWindows%5Cwin.ini', '%2e%2e%5Csecret.txt']) {
+      const res = await handlePageRequest(`nxpage://pid-1/${path}`, { roots: roots('pid-1', root), libsDir: libs() })
+      expect(res.status, path).toBe(403)
+    }
+  })
+})
+
 describe('phục vụ trang qua scheme riêng', () => {
   it('200 + CSP + đổi tên, chỉ đọc trong .nexgraph', async () => {
     const { root } = fixture()

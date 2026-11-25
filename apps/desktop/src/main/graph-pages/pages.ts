@@ -58,12 +58,29 @@ const isInside = (base: string, target: string): boolean => {
   return target === base || target.startsWith(prefix)
 }
 
+/**
+ * Thư mục `.nexgraph` THẬT của dự án, neo từ gốc: realpath(root) → realpath(root/.nexgraph)
+ * phải nằm trong gốc. `.nexgraph` là symlink trỏ ra ngoài gốc → null (không đọc gì cả).
+ * Mọi đường đọc (dò trang, phục vụ trang, chỉ mục graph.json) dùng chung hàm này.
+ */
+export async function resolvePagesDir(root: string): Promise<string | null> {
+  try {
+    const realRoot = await realpath(root)
+    const dir = await realpath(join(realRoot, PAGES_DIR))
+    return isInside(realRoot, dir) ? dir : null
+  } catch {
+    return null
+  }
+}
+
 /** Trang nào đã có trong .nexgraph (chưa có → giao diện cũ, R-N3). */
 export async function discoverGraphPages(root: string): Promise<GraphPagesFiles> {
   const dir = graphPagesDir(root)
   let names: string[] = []
   try {
-    names = await readdir(dir)
+    const realDir = await resolvePagesDir(root)
+    if (!realDir) return { dir, graph: false, tree: false, callflow: null }
+    names = await readdir(realDir)
   } catch {
     return { dir, graph: false, tree: false, callflow: null }
   }
@@ -73,16 +90,16 @@ export async function discoverGraphPages(root: string): Promise<GraphPagesFiles>
 
 /**
  * Đường dẫn thật của một tệp trong .nexgraph. `name` là một đoạn đường dẫn duy nhất;
- * realpath cả hai đầu để symlink trỏ ra ngoài cũng bị từ chối.
+ * thư mục phải neo trong gốc dự án và tệp phải nằm trong thư mục đó (chặn cả symlink).
  */
 export async function resolveGraphPage(root: string, name: string): Promise<string | null> {
   if (!name || name.includes('/') || name.includes('\\') || name.includes('\0') || name === '.' || name === '..') return null
   if (!SERVED_EXT.has(extname(name).toLowerCase())) return null
-  const dir = graphPagesDir(root)
+  const dir = await resolvePagesDir(root)
+  if (!dir) return null
   try {
-    const realDir = await realpath(dir)
-    const realFile = await realpath(join(realDir, name))
-    if (!isInside(realDir, realFile)) return null
+    const realFile = await realpath(join(dir, name))
+    if (!isInside(dir, realFile)) return null
     return (await stat(realFile)).isFile() ? realFile : null
   } catch {
     return null
@@ -201,7 +218,9 @@ const indexCache = new Map<string, { mtimeMs: number; index: Map<string, PageNod
  * nguồn tra cứu cho nút chọn từ trang. Đọc lười, cache theo mtime của tệp.
  */
 export async function readGraphJsonIndex(root: string): Promise<Map<string, PageNodeLocation>> {
-  const file = join(graphPagesDir(root), 'graph.json')
+  // Cùng phép kiểm containment với phục vụ trang: không đọc graph.json ngoài `<root>/.nexgraph/`.
+  const file = await resolveGraphPage(root, 'graph.json')
+  if (!file) return new Map()
   try {
     const info = await stat(file)
     const cached = indexCache.get(file)
