@@ -238,12 +238,6 @@ def tool_query_graph(view: LoadedGraph, arguments: dict) -> str:
     return result
 
 
-def vendor_query_graph_text(*args: Any, **kwargs: Any) -> str:
-    from graphify.serve import _query_graph_text
-
-    return _query_graph_text(*args, **kwargs)
-
-
 def tool_get_node(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3177–3212 ``_tool_get_node``."""
     import json
