@@ -54,6 +54,34 @@ def test_lists_only_read_only_tools(indexed):
     assert {t.name for t in tools if not (t.annotations and t.annotations.readOnlyHint)} == {"remember"}
 
 
+def test_eleven_tools_keep_original_params(indexed):
+    """ADR 0025 §2: 11 tool nhận tham số của bản gốc, vẫn giữ tên cũ của NexGraph."""
+    server = build_server(*indexed)
+
+    async def run():
+        async with create_connected_server_and_client_session(server._mcp_server) as client:
+            return {t.name: t.inputSchema for t in (await client.list_tools()).tools}
+    schemas = anyio.run(run)
+
+    def props(name: str) -> dict:
+        return schemas[name]["properties"]
+
+    assert {"label", "node_id", "id", "project_path"} <= set(props("get_node"))
+    assert {"label", "node_id", "id", "relation_filter", "token_budget",
+            "types", "direction", "depth", "limit"} <= set(props("get_neighbors"))
+    assert {"question", "mode", "depth", "token_budget", "context_filter",
+            "demote_docs", "budget"} <= set(props("query_graph"))
+    assert {"label", "node_id", "id", "max_chars"} <= set(props("get_section"))
+    assert {"community_id", "token_budget"} <= set(props("get_community"))
+    # Nhận cả số nguyên (bản gốc) lẫn chuỗi cũ `com:<n>`.
+    community_schema = props("get_community")["community_id"]
+    assert "anyOf" in community_schema or community_schema.get("type") in ("integer", "string")
+    assert {"top_n", "exclude_hubs_percentile", "top"} <= set(props("god_nodes"))
+    assert props("shortest_path")["max_hops"]["default"] == 8
+    assert {"source", "target", "max_hops", "undirected", "directed"} <= set(props("shortest_path"))
+    assert props("graph_stats") == {} or "project_path" in props("graph_stats")
+
+
 def test_search_and_node(indexed):
     server = build_server(*indexed)
     hits = payload(call(server, "search", {"query": "AuthService"}))
