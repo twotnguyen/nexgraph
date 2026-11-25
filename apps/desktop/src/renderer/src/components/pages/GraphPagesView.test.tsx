@@ -67,9 +67,9 @@ describe('chế độ xem trang đồ thị', () => {
 
   it('panel nhỏ hiện nút + tệp: dòng sau khi trang gửi lựa chọn, bỏ qua dự án khác', async () => {
     render(<GraphPagesView projectId="pid-1" status={status()} revision={0} />)
-    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-2', id: 'x', label: 'Sai', sourceFile: null, sourceLine: null, sourceLocation: null, via: null })) })
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-2', id: 'x', label: 'Sai', sourceFile: null, sourceLine: null, sourceLocation: null, via: null, community: null, memberCount: null })) })
     expect(screen.queryByRole('status', { name: 'Nút đã chọn' })).toBeNull()
-    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a.ts::run#function', label: 'run()', sourceFile: 'src/a.ts', sourceLine: 12, sourceLocation: 'src/a.ts:12', via: 'showInfo' })) })
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a.ts::run#function', label: 'run()', sourceFile: 'src/a.ts', sourceLine: 12, sourceLocation: 'src/a.ts:12', via: 'showInfo', community: null, memberCount: null })) })
     const panel = screen.getByRole('status', { name: 'Nút đã chọn' })
     expect(panel.textContent).toContain('run()')
     expect(panel.textContent).toContain('src/a.ts:12')
@@ -82,7 +82,7 @@ describe('chế độ xem trang đồ thị', () => {
     const onImpact = vi.fn()
     const onAsk = vi.fn()
     render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={onOpenCode} onImpact={onImpact} onAsk={onAsk} />)
-    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a.ts::run#function', label: 'run()', sourceFile: 'src/a.ts', sourceLine: 12, sourceLocation: 'src/a.ts:12', via: 'showInfo' })) })
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a.ts::run#function', label: 'run()', sourceFile: 'src/a.ts', sourceLine: 12, sourceLocation: 'src/a.ts:12', via: 'showInfo', community: null, memberCount: null })) })
     await userEvent.click(screen.getByRole('button', { name: 'Mở mã' }))
     expect(onOpenCode).toHaveBeenCalledWith('src/a.ts', 12)
     await userEvent.click(screen.getByRole('button', { name: 'Vùng ảnh hưởng' }))
@@ -94,18 +94,18 @@ describe('chế độ xem trang đồ thị', () => {
 
   it('nút không có tệp thật (nguồn ảo/ngoài dự án) → tắt Mở mã', () => {
     render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
-    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'nguon://cargo#x', label: 'x', sourceFile: 'nguon://cargo', sourceLine: null, sourceLocation: null, via: 'showInfo' })) })
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'nguon://cargo#x', label: 'x', sourceFile: 'nguon://cargo', sourceLine: null, sourceLocation: null, via: 'showInfo', community: null, memberCount: null })) })
     expect((screen.getByRole('button', { name: 'Mở mã' }) as HTMLButtonElement).disabled).toBe(true)
-    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'abs', label: 'abs', sourceFile: '/etc/passwd', sourceLine: 1, sourceLocation: '/etc/passwd:1', via: 'showInfo' })) })
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'abs', label: 'abs', sourceFile: '/etc/passwd', sourceLine: 1, sourceLocation: '/etc/passwd:1', via: 'showInfo', community: null, memberCount: null })) })
     expect((screen.getByRole('button', { name: 'Mở mã' }) as HTMLButtonElement).disabled).toBe(true)
-    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'no-file', label: 'no file', sourceFile: null, sourceLine: null, sourceLocation: null, via: 'showInfo' })) })
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'no-file', label: 'no file', sourceFile: null, sourceLine: null, sourceLocation: null, via: 'showInfo', community: null, memberCount: null })) })
     expect((screen.getByRole('button', { name: 'Mở mã' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('EN: nhãn 3 hành động', () => {
     setLocale('en')
     render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
-    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a', label: 'a', sourceFile: 'src/a.ts', sourceLine: 1, sourceLocation: 'src/a.ts:1', via: null })) })
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a', label: 'a', sourceFile: 'src/a.ts', sourceLine: 1, sourceLocation: 'src/a.ts:1', via: null, community: null, memberCount: null })) })
     expect(screen.getByRole('button', { name: 'Open code' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Impact' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Ask Nex' })).toBeTruthy()

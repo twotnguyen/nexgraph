@@ -25,7 +25,11 @@ const args = (over: Record<string, unknown> = {}) => ({
 describe('payload từ trang', () => {
   it('nhận đúng hình dạng, cắt chuỗi quá dài', () => {
     expect(validatePageNode({ id: 'n1', label: 'Nút', source_file: 'a.ts', source_location: 'a.ts:3', via: 'showInfo' }))
-      .toEqual({ id: 'n1', label: 'Nút', source_file: 'a.ts', source_location: 'a.ts:3', via: 'showInfo' })
+      .toEqual({ id: 'n1', label: 'Nút', source_file: 'a.ts', source_location: 'a.ts:3', via: 'showInfo', community: null, memberCount: null })
+    expect(validatePageNode({ id: '12', label: 'Community', community: 12, member_count: 44 }))
+      .toMatchObject({ id: '12', community: 12, memberCount: 44 })
+    expect(validatePageNode({ id: 'x', community: -1, member_count: 1.5 })).toMatchObject({ community: null, memberCount: null })
+    expect(validatePageNode({ id: 'x', community: '3', member_count: '4' })).toMatchObject({ community: null, memberCount: null })
     expect(validatePageNode({ id: 'n1', label: 'x'.repeat(2001) })?.label).toBeNull()
     expect(validatePageNode({ id: '__bridge__', bridge: true, via: 'boot' })).toBeNull()
     expect(validatePageNode({ id: '__boot__', via: 'boot' })).toBeNull()
@@ -66,8 +70,8 @@ describe('cầu nối chọn nút', () => {
 
   it('engine lỗi (nút cộng đồng bị gộp) vẫn trả thông tin từ trang', async () => {
     const getNode = vi.fn(async () => { throw new Error('not found') })
-    const result = await handlePageNodeMessage(args({ getNode, payload: { id: '12', label: 'Graphify Host API', source_file: 'a.ts', source_location: 'a.ts:44' } }) as never)
-    expect(result?.selection).toMatchObject({ id: '12', label: 'Graphify Host API', sourceFile: 'a.ts', sourceLine: 44 })
+    const result = await handlePageNodeMessage(args({ getNode, payload: { id: '12', label: 'Graphify Host API', source_file: 'a.ts', source_location: 'a.ts:44', community: 12, member_count: 44 } }) as never)
+    expect(result?.selection).toMatchObject({ id: '12', label: 'Graphify Host API', sourceFile: 'a.ts', sourceLine: 44, community: 12, memberCount: 44 })
     expect(lineFromLocation('a.ts:44-51')).toBe(44)
     expect(lineFromLocation(null)).toBeNull()
   })
