@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import * as electron from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
 import { closeAllAgents, closeWindowResources, registerIpc, stopAllMcpHttp, stopAllWatchers, stopEditorProcesses } from './ipc'
@@ -17,6 +18,12 @@ import { accountDevHooks } from './dev-hooks'
 import { installPermissionHandlers } from './security/permissions'
 import { installAppMenu } from './appMenu'
 import { WindowSet } from './windows'
+import { PAGES_PARTITION, attachGraphPageWebview, bindGraphPageGuest, installGraphPagesProtocol, registerGraphPageScheme, wireGraphPageContents } from './graph-pages/protocol'
+import { pageRoots } from './graph-pages/roots'
+import { pathToFileURL } from 'node:url'
+
+// Scheme `nxpage://` phải đăng ký trước khi app sẵn sàng (SRI/CORS của trang Graphify cần secure).
+registerGraphPageScheme()
 
 // Kiểm bản cài dùng kho tài khoản riêng, không đọc/ghi cấu hình AI thật của người dùng.
 if (process.env.NEXGRAPH_USER_DATA_DIR) {
@@ -54,6 +61,11 @@ function followEvents(handle: EngineHandle | null): void {
 }
 
 const engineCommand = () => resolveEngineCommand({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath, repoRoot })
+/** Thư viện 3 trang Graphify đóng gói kèm app (electron-builder extraResources). */
+const graphPagesLibsDir = (): string => app.isPackaged
+  ? join(process.resourcesPath, 'graph-pages')
+  : join(app.getAppPath(), 'resources', 'graph-pages')
+const graphPagePreloadUrl = (): string => pathToFileURL(join(__dirname, '../preload/graphPage.js')).toString()
 const supervisor = new EngineSupervisor(
   engineCommand,
   dataDir,
@@ -74,6 +86,9 @@ async function createWindow(show = true): Promise<void> {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Khung nhúng trang `.nexgraph/` là <webview>; `will-attach-webview` bên dưới chỉ cho
+      // đúng partition/preload/src của tính năng gắn vào, mọi thứ khác bị chặn.
+      webviewTag: true,
       webgl: !app.commandLine.hasSwitch('disable-webgl')
     }
   })
@@ -81,6 +96,9 @@ async function createWindow(show = true): Promise<void> {
   // Giữ tham chiếu webContents: sau khi cửa sổ đóng, `win.webContents` không truy cập được nữa
   // nhưng tài nguyên (agent/terminal) vẫn phải được dọn theo đúng chủ cũ.
   const contents = win.webContents
+  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    attachGraphPageWebview(event, webPreferences, params, { preloadUrl: graphPagePreloadUrl(), roots: pageRoots }, win.webContents)
+  })
   // REV-17: từ chối mặc định mọi quyền (camera, vị trí, thông báo, USB…); app không dùng quyền nào.
   installPermissionHandlers(win.webContents.session)
   const openExternal = (raw: string) => {
@@ -192,6 +210,15 @@ async function smoke(): Promise<void> {
 }
 
 app.whenReady().then(() => {
+  // Partition riêng cho trang nhúng: chỉ scheme nxpage + 3 URL thư viện, chặn mọi mạng khác.
+  // `electron.session?.` vì test main giả lập 'electron' không có session; tiến trình thật luôn có.
+  const pagesSession = electron.session?.fromPartition?.(PAGES_PARTITION)
+  if (pagesSession) installGraphPagesProtocol(pagesSession, { roots: pageRoots, libsDir: graphPagesLibsDir() })
+  app.on('web-contents-created', (_event, contents) => {
+    // Chỉ guest đã qua will-attach-webview mới có binding (owner + dự án + gốc dự án).
+    const binding = bindGraphPageGuest(contents)
+    if (binding) wireGraphPageContents(contents, binding)
+  })
   if (process.env.NEXGRAPH_SMOKE === '1') {
     void smoke()
     return

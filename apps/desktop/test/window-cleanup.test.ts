@@ -81,6 +81,8 @@ vi.mock('electron', () => ({
   dialog: { showMessageBoxSync: vi.fn() },
   ipcMain: { handle: vi.fn() },
   shell: { openExternal: vi.fn() },
+  // Entrypoint đăng ký scheme nxpage trước whenReady và tạo session của trang nhúng.
+  protocol: { registerSchemesAsPrivileged: vi.fn() }, session: { fromPartition: () => null },
   Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn(() => ({ items: [] })) }
 }))
 
