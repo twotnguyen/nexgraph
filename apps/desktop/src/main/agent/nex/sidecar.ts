@@ -152,32 +152,62 @@ export class NexSidecar {
       for (const line of chunk.toString().split('\n')) if (line) this.o.log?.(line)
     })
     child.once('exit', (code, signal) => this.onChildExit(code, signal))
-    const ready = await this.waitReady(child, () => port, this.o.startupTimeoutMs ?? STARTUP_TIMEOUT_MS)
-    const baseUrl = `http://127.0.0.1:${ready}`
-    const fetchImpl = this.o.fetchImpl ?? fetch
-    const deadline = Date.now() + 10_000
-    while (Date.now() < deadline) {
-      if (child.exitCode !== null || child.signalCode !== null) throw new NexStartError('Tiến trình Nex thoát khi khởi động', this.stderrTail)
-      try {
-        const response = await fetchImpl(`${baseUrl}/api/info`, { headers: { Authorization: basicAuth(password) }, signal: AbortSignal.timeout(2_000) })
-        if (response.ok) {
-          this.baseUrl = baseUrl
-          this._status = 'running'
-          this.startup = null
-          return { baseUrl, password }
-        }
-      } catch { /* chưa sẵn sàng */ }
-      await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS))
+    let spawnError: Error | null = null
+    child.once('error', (error: Error) => { spawnError = error })
+    try {
+      const ready = await this.waitReady(child, () => port, this.o.startupTimeoutMs ?? STARTUP_TIMEOUT_MS, () => spawnError)
+      const baseUrl = `http://127.0.0.1:${ready}`
+      const fetchImpl = this.o.fetchImpl ?? fetch
+      const deadline = Date.now() + 10_000
+      while (Date.now() < deadline) {
+        if (child.exitCode !== null || child.signalCode !== null) throw new NexStartError('Tiến trình Nex thoát khi khởi động', this.stderrTail)
+        try {
+          const response = await fetchImpl(`${baseUrl}/api/info`, { headers: { Authorization: basicAuth(password) }, signal: AbortSignal.timeout(2_000) })
+          if (response.ok) {
+            this.baseUrl = baseUrl
+            this._status = 'running'
+            this.startup = null
+            return { baseUrl, password }
+          }
+        } catch { /* chưa sẵn sàng */ }
+        await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS))
+      }
+      throw new NexStartError('Tiến trình Nex không phản hồi sau khi khởi động', this.stderrTail)
+    } catch (error) {
+      // Mọi lỗi khởi động đều phải thu hồi child và đợi nó thoát: binary sống nhưng không báo
+      // ready không được để lại tiến trình mồ côi.
+      await this.terminate(child)
+      throw error
     }
-    child.kill('SIGKILL')
-    throw new NexStartError('Tiến trình Nex không phản hồi sau khi khởi động', this.stderrTail)
   }
 
-  /** Chờ dòng `server listening on …` hoặc tiến trình thoát. */
-  private waitReady(child: ChildProcess, port: () => number, timeoutMs: number): Promise<number> {
+  /** SIGTERM rồi SIGKILL sau thời gian chờ; resolve khi child đã thoát (hoặc không còn sống). */
+  private async terminate(child: ChildProcess): Promise<void> {
+    if (child.exitCode !== null || child.signalCode !== null) return
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL')
+        resolve()
+      }, KILL_GRACE_MS)
+      child.once('exit', () => {
+        clearTimeout(timer)
+        resolve()
+      })
+      child.kill('SIGTERM')
+    })
+  }
+
+  /** Chờ dòng `server listening on …` hoặc tiến trình thoát/lỗi spawn. */
+  private waitReady(child: ChildProcess, port: () => number, timeoutMs: number, spawnError?: () => Error | null): Promise<number> {
     return new Promise((resolve, reject) => {
       const startedAt = Date.now()
       const timer = setInterval(() => {
+        const failed = spawnError?.()
+        if (failed) {
+          clearInterval(timer)
+          reject(new NexStartError(`Không chạy được tiến trình Nex: ${failed.message}`, this.stderrTail))
+          return
+        }
         if (port() > 0) {
           clearInterval(timer)
           resolve(port())

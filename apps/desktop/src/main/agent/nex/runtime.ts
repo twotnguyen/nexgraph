@@ -6,6 +6,10 @@ import { nexConfig, nexProjectKey, nexProviderEnv, type NexProvider } from './co
 import { NexSession } from './session'
 import { NexSidecar, resolveNexBinary } from './sidecar'
 
+/** Env bổ sung của test/QA: bỏ giá trị undefined để khớp Record<string, string>. */
+const extraEnv = (source: NodeJS.ProcessEnv = {}): Record<string, string> =>
+  Object.fromEntries(Object.entries(source).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+
 const coded = (code: string, message: string): Error => Object.assign(new Error(message), { name: 'AgentError', code })
 
 export type NexRuntimeOptions = {
@@ -18,6 +22,8 @@ export type NexRuntimeOptions = {
   env?: NodeJS.ProcessEnv
   /** Cho test/QA: bỏ qua tìm binary. */
   binPath?: string | null
+  /** Cho test/QA: hạn chờ sidecar báo ready (mặc định 30 s). */
+  startupTimeoutMs?: number
   log?: (line: string) => void
 }
 
@@ -43,8 +49,9 @@ export async function createNexSession(spec: SessionSpec, o: NexRuntimeOptions):
     projectKey: nexProjectKey(spec.projectId ?? root),
     cwd: root,
     config: () => nexConfig({ root, engine: o.engineCommand(), dataDir: o.dataDir, provider }),
-    env: nexProviderEnv(provider),
-    envSource: o.env ?? process.env,
+    env: { ...nexProviderEnv(provider), ...extraEnv(o.env) },
+    envSource: process.env,
+    startupTimeoutMs: o.startupTimeoutMs,
     log: o.log
   })
   try {
