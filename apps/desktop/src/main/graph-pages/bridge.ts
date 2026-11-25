@@ -3,7 +3,7 @@
 // `source_location` từ engine (route node hiện có) trước khi chuyển cho renderer.
 import type { GraphNode } from '@shared/graph-types'
 import { GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_NODE_SELECTED } from '@shared/graph-pages'
-import { projectFromPageUrl } from './protocol'
+import { projectFromPageUrl, type GuestBinding } from './protocol'
 
 export const PAGE_NODE_CHANNEL = GRAPH_PAGE_NODE_CHANNEL
 export const PAGE_NODE_SELECTED = GRAPH_PAGE_NODE_SELECTED
@@ -40,10 +40,13 @@ export function validatePageNode(payload: unknown): PageNodePayload | null {
 }
 
 export interface SenderLike {
+  id: number
   getType(): string
   getURL(): string
-  hostWebContents?: { send(channel: string, payload: unknown): void } | null
 }
+
+/** Frame gửi IPC: chỉ main frame của guest (frame con/iframe bị bỏ). */
+export interface SenderFrameLike { parent: unknown }
 
 /** `file:12`/`file:12-14` → dòng đầu; trang Graphify không xuất trường này nên đây là nguồn dự phòng. */
 export function lineFromLocation(location: string | null): number | null {
@@ -52,20 +55,24 @@ export function lineFromLocation(location: string | null): number | null {
 }
 
 /**
- * Xử lý một thông điệp chọn nút. Trả null khi người gửi không phải khung trang của app
- * hoặc payload sai — không ném lỗi để một trang hỏng không làm chết main.
+ * Xử lý một thông điệp chọn nút. Trả null khi người gửi không phải main frame của guest đã
+ * đăng ký, URL khác dự án đã gắn, hoặc payload sai — không ném lỗi để trang hỏng không làm chết main.
  */
 export async function handlePageNodeMessage(args: {
   sender: SenderLike | null | undefined
+  senderFrame?: SenderFrameLike | null
+  /** Binding ghi lúc will-attach-webview: guest ↔ owner ↔ dự án/gốc dự án. */
+  binding: GuestBinding | null
   payload: unknown
   getNode(projectId: string, id: string): Promise<GraphNode>
   /** Nguồn dự phòng cho id của Graphify (khác id graph.db): tra trong `.nexgraph/graph.json`. */
-  getPageNode?(projectId: string, id: string): Promise<{ file: string | null; line: number | null } | null>
-}): Promise<{ projectId: string; selection: GraphPageSelection } | null> {
-  const { sender } = args
-  if (!sender || sender.getType() !== 'webview') return null
+  getPageNode?(root: string, id: string): Promise<{ file: string | null; line: number | null } | null>
+}): Promise<{ ownerId: number; projectId: string; selection: GraphPageSelection } | null> {
+  const { sender, senderFrame, binding } = args
+  if (!sender || !senderFrame || senderFrame.parent !== null || sender.getType() !== 'webview') return null
+  if (!binding || binding.guestId !== sender.id) return null
   const projectId = projectFromPageUrl(sender.getURL())
-  if (!projectId) return null
+  if (!projectId || projectId !== binding.projectId) return null
   const payload = validatePageNode(args.payload)
   if (!payload) return null
   let node: GraphNode | null = null
@@ -77,7 +84,7 @@ export async function handlePageNodeMessage(args: {
   let pageNode: { file: string | null; line: number | null } | null = null
   if (!node && args.getPageNode) {
     try {
-      pageNode = await args.getPageNode(projectId, payload.id)
+      pageNode = await args.getPageNode(binding.root, payload.id)
     } catch {
       // Không có graph.json: dùng thông tin trang gửi.
     }
@@ -85,6 +92,7 @@ export async function handlePageNodeMessage(args: {
   const sourceFile = node?.file ?? pageNode?.file ?? payload.source_file
   const sourceLine = node?.line_start ?? pageNode?.line ?? lineFromLocation(payload.source_location)
   return {
+    ownerId: binding.ownerId,
     projectId,
     selection: {
       projectId,
@@ -96,4 +104,19 @@ export async function handlePageNodeMessage(args: {
       via: payload.via
     }
   }
+}
+
+export interface OwnerContents {
+  isDestroyed(): boolean
+  send(channel: string, payload: unknown): void
+}
+
+/**
+ * Chỉ gửi cho đúng owner của guest; owner đã đóng/không còn thì BỎ tin,
+ * không chuyển sang cửa sổ khác (tránh lộ dữ liệu dự án sang cửa sổ khác).
+ */
+export function deliverSelection(owner: OwnerContents | null | undefined, selection: GraphPageSelection): boolean {
+  if (!owner || owner.isDestroyed()) return false
+  owner.send(PAGE_NODE_SELECTED, selection)
+  return true
 }

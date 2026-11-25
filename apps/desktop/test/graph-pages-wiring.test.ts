@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  PAGES_PARTITION, attachGraphPageWebview, installGraphPagesProtocol, pageUrl, projectFromPageUrl
+  PAGES_PARTITION, attachGraphPageWebview, bindGraphPageGuest, guestBinding, installGraphPagesProtocol,
+  navigationAllowed, pageUrl, projectFromPageUrl, wireGraphPageContents
 } from '../src/main/graph-pages/protocol'
 
 vi.mock('electron', () => ({ protocol: { registerSchemesAsPrivileged: vi.fn() } }))
@@ -69,13 +70,16 @@ describe('gắn protocol vào session của partition', () => {
 describe('chỉ khung nhúng của tính năng được gắn vào cửa sổ', () => {
   // Dựng bằng API native: Windows trả `C:\…` và `file:///C:/…`, không phải chuỗi POSIX.
   const preloadPath = join(tmpdir(), 'ng-preload', 'graphPage.js')
-  const expected = { preloadUrl: pathToFileURL(preloadPath).toString() }
+  const root = join(tmpdir(), 'ng-project-one')
+  const preloadUrl = pathToFileURL(preloadPath).toString()
+  const roots = new Map([['pid-1', root]])
+  const expected = { preloadUrl, roots }
   const okParams = { partition: PAGES_PARTITION, src: pageUrl('pid-1', 'graph.html') }
 
   it('chấp nhận đúng partition/src/preload và ép sandbox', () => {
     const event = { preventDefault: vi.fn() }
     const prefs = { preload: expected.preloadUrl, nodeIntegration: false, contextIsolation: true, sandbox: true }
-    attachGraphPageWebview(event, prefs, okParams, expected)
+    expect(attachGraphPageWebview(event, prefs, okParams, expected, { id: 1 })).toBe(true)
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(prefs).toMatchObject({ nodeIntegration: false, contextIsolation: true, sandbox: true })
   })
@@ -83,19 +87,55 @@ describe('chỉ khung nhúng của tính năng được gắn vào cửa sổ', 
   it('chấp nhận preload dạng đường dẫn tuyệt đối (Electron chuẩn hoá từ file:// URL)', () => {
     const event = { preventDefault: vi.fn() }
     const prefs = { preload: preloadPath }
-    attachGraphPageWebview(event, prefs, okParams, expected)
+    expect(attachGraphPageWebview(event, prefs, okParams, expected, { id: 2 })).toBe(true)
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(prefs).toMatchObject({ nodeIntegration: false, contextIsolation: true, sandbox: true })
   })
 
-  it('chặn partition lạ, src lạ và preload lạ', () => {
-    for (const params of [{ ...okParams, partition: 'persist:x' }, { ...okParams, src: 'https://example.com' }, { partition: PAGES_PARTITION }]) {
+  it('chặn partition lạ, src lạ, preload lạ và dự án chưa mở', () => {
+    const bad = [
+      [{ ...okParams, partition: 'persist:x' }, expected],
+      [{ ...okParams, src: 'https://example.com' }, expected],
+      [{ partition: PAGES_PARTITION }, expected],
+      [okParams, { ...expected, roots: new Map() }]
+    ] as const
+    for (const [params, exp] of bad) {
       const event = { preventDefault: vi.fn() }
-      attachGraphPageWebview(event, { preload: expected.preloadUrl }, params as never, expected)
+      expect(attachGraphPageWebview(event, { preload: expected.preloadUrl }, params as never, exp as never, { id: 3 })).toBe(false)
       expect(event.preventDefault).toHaveBeenCalled()
     }
     const event = { preventDefault: vi.fn() }
-    attachGraphPageWebview(event, { preload: pathToFileURL(join(tmpdir(), 'ng-evil', 'evil.js')).toString() }, okParams, expected)
+    expect(attachGraphPageWebview(event, { preload: pathToFileURL(join(tmpdir(), 'ng-evil', 'evil.js')).toString() }, okParams, expected, { id: 3 })).toBe(false)
     expect(event.preventDefault).toHaveBeenCalled()
+  })
+
+  it('ghi binding owner + gốc dự án cho guest; điều hướng chỉ trong dự án đó', () => {
+    const owner = { id: 20 }
+    expect(attachGraphPageWebview({ preventDefault: vi.fn() }, { preload: preloadPath }, okParams, expected, owner)).toBe(true)
+    const guest = bindGraphPageGuest({ id: 71, getType: () => 'webview', getURL: () => pageUrl('pid-1', 'graph.html'), hostWebContents: owner })
+    expect(guest).toMatchObject({ guestId: 71, ownerId: 20, projectId: 'pid-1', root })
+    expect(guestBinding(71)).toEqual(guest)
+    expect(navigationAllowed(pageUrl('pid-1', 'GRAPH_TREE.html'), guest!)).toBe(true)
+    expect(navigationAllowed(pageUrl('pid-2', 'graph.html'), guest!)).toBe(false)
+    expect(navigationAllowed('https://example.com/x', guest!)).toBe(false)
+  })
+
+  it('guest không có attach hợp lệ thì không có binding', () => {
+    expect(bindGraphPageGuest({ id: 80, getType: () => 'webview', hostWebContents: { id: 99 } })).toBeNull()
+    expect(bindGraphPageGuest({ id: 81, getType: () => 'window', hostWebContents: { id: 20 } })).toBeNull()
+    expect(guestBinding(80)).toBeNull()
+  })
+
+  it('wireGraphPageContents chặn điều hướng sang dự án khác, cho phép cùng dự án', () => {
+    const listeners = new Map<string, (...args: never[]) => void>()
+    const contents = { id: 72, setWindowOpenHandler: vi.fn(), on: (name: string, cb: (...args: never[]) => void) => listeners.set(name, cb) }
+    wireGraphPageContents(contents as never, { guestId: 72, ownerId: 20, projectId: 'pid-1', root })
+    const navigate = listeners.get('will-navigate')!
+    const blocked = { preventDefault: vi.fn() }
+    navigate(blocked as never, pageUrl('pid-2', 'graph.html') as never)
+    expect(blocked.preventDefault).toHaveBeenCalled()
+    const allowed = { preventDefault: vi.fn() }
+    navigate(allowed as never, pageUrl('pid-1', 'GRAPH_TREE.html') as never)
+    expect(allowed.preventDefault).not.toHaveBeenCalled()
   })
 })

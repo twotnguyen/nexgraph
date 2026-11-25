@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, webContents } from 'electron'
 import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -62,8 +62,8 @@ import { CollabHub } from './collab/hub'
 import { ExtensionRegistry } from './extensions/registry'
 import { discoverGraphPages, readGraphJsonIndex } from './graph-pages/pages'
 import { pageRoots } from './graph-pages/roots'
-import { PAGES_PARTITION } from './graph-pages/protocol'
-import { PAGE_NODE_CHANNEL, PAGE_NODE_SELECTED, handlePageNodeMessage } from './graph-pages/bridge'
+import { PAGES_PARTITION, guestBinding } from './graph-pages/protocol'
+import { PAGE_NODE_CHANNEL, deliverSelection, handlePageNodeMessage } from './graph-pages/bridge'
 import { pathToFileURL } from 'node:url'
 
 const watchers = new Map<string, ProjectWatcher>()
@@ -707,24 +707,21 @@ export function registerIpc(
     pageRoots.set(pid, root)
     return { ...files, partition: PAGES_PARTITION, preload: pathToFileURL(join(__dirname, '../preload/graphPage.js')).toString() }
   })
-  // NG-UI-3: cầu nối chọn nút từ khung nhúng → panel của app. Sender/payload được kiểm trong bridge.
+  // NG-UI-3: cầu nối chọn nút từ khung nhúng → panel của app. Chỉ nhận từ main frame của guest
+  // đã đăng ký (guestBinding) và chỉ gửi về đúng owner; owner mất thì bỏ tin, không fallback.
   // `on?.` vì test main giả lập ipcMain chỉ có `handle`; tiến trình thật luôn có `on`.
   ipcMain.on?.(PAGE_NODE_CHANNEL, (event, payload: unknown) => {
+    const sender = event.sender
+    const binding = guestBinding(sender.id)
     void handlePageNodeMessage({
-      sender: event.sender, payload,
+      sender, senderFrame: event.senderFrame, binding, payload,
       getNode: (projectId, id) => api().getNode(projectId, id),
       // graph.html dùng id của Graphify (khác id graph.db) và không xuất source_location.
-      getPageNode: async (projectId, id) => {
-        const root = pageRoots.get(projectId)
-        return root ? (await readGraphJsonIndex(root)).get(id) ?? null : null
-      }
+      getPageNode: async (root, id) => (await readGraphJsonIndex(root)).get(id) ?? null
     })
       .then((result) => {
         if (!result) return
-        const sender = event.sender
-        if (!sender || sender.isDestroyed()) return
-        const host = sender.hostWebContents ?? getWindow()?.webContents
-        if (host && !host.isDestroyed()) host.send(PAGE_NODE_SELECTED, result.selection)
+        deliverSelection(webContents.fromId(result.ownerId), result.selection)
       })
       .catch(() => { /* trang hỏng không được làm chết main */ })
   })

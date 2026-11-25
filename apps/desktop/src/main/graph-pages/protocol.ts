@@ -52,24 +52,78 @@ export function installGraphPagesProtocol(ses: SessionLike, opts: PageServeOptio
   ses.on('will-download', (event) => event.preventDefault())
 }
 
-/** Trang nhúng không được điều hướng đi đâu khác và không mở cửa sổ. */
-export function wireGraphPageContents(contents: WebContents): void {
+/** Trang nhúng chỉ được điều hướng trong `nxpage://` của CHÍNH dự án đã gắn lúc attach. */
+export function navigationAllowed(url: string, binding: GuestBinding): boolean {
+  return projectFromPageUrl(url) === binding.projectId
+}
+
+export interface GuestBinding {
+  guestId: number
+  ownerId: number
+  projectId: string
+  root: string
+}
+
+interface PendingAttach { projectId: string; root: string }
+/** Hàng đợi attach theo cửa sổ chủ; web-contents-created lấy ra để gắn cho guest. */
+const pendingByOwner = new Map<number, PendingAttach[]>()
+const guestBindings = new Map<number, GuestBinding>()
+
+/** Binding của một guest đã gắn (dùng cho cả điều hướng lẫn IPC cầu nối). */
+export function guestBinding(guestId: number): GuestBinding | null {
+  return guestBindings.get(guestId) ?? null
+}
+
+export function forgetGraphPageGuest(guestId: number): void {
+  guestBindings.delete(guestId)
+}
+
+/**
+ * Gắn binding (owner + gốc dự án) cho guest vừa được tạo. Chỉ guest có pending attach
+ * (đã qua will-attach-webview) mới có binding; URL đầu tiên phải đúng dự án đã duyệt.
+ */
+export function bindGraphPageGuest(contents: {
+  id: number
+  getType(): string
+  getURL?(): string
+  hostWebContents?: { id: number } | null
+}): GuestBinding | null {
+  if (contents.getType() !== 'webview') return null
+  const owner = contents.hostWebContents
+  if (!owner) return null
+  const queue = pendingByOwner.get(owner.id)
+  if (!queue?.length) return null
+  const url = contents.getURL?.() ?? ''
+  const index = url ? queue.findIndex((pending) => pending.projectId === projectFromPageUrl(url)) : 0
+  if (index < 0) return null
+  const [pending] = queue.splice(index, 1)
+  if (!queue.length) pendingByOwner.delete(owner.id)
+  const binding: GuestBinding = { guestId: contents.id, ownerId: owner.id, ...pending }
+  guestBindings.set(contents.id, binding)
+  return binding
+}
+
+/** Trang nhúng không được điều hướng sang dự án khác/ra ngoài và không mở cửa sổ. */
+export function wireGraphPageContents(contents: WebContents, binding: GuestBinding): void {
   contents.setWindowOpenHandler(() => ({ action: 'deny' }))
   contents.on('will-navigate', (event, url) => {
-    if (projectFromPageUrl(url) === null) event.preventDefault()
+    if (!navigationAllowed(url, binding)) event.preventDefault()
   })
+  contents.on('destroyed', () => forgetGraphPageGuest(binding.guestId))
 }
 
 /**
  * `will-attach-webview`: chỉ cho khung nhúng của tính năng này gắn vào cửa sổ app.
- * Mọi `<webview>` khác (partition lạ, src lạ, preload lạ) bị chặn.
+ * Mọi `<webview>` khác (partition lạ, src lạ, preload lạ, dự án chưa mở) bị chặn; dự án
+ * và gốc dự án được ghi vào binding cho guest (owner = cửa sổ gọi).
  */
 export function attachGraphPageWebview(
   event: { preventDefault(): void },
   webPreferences: { preload?: string; nodeIntegration?: boolean; contextIsolation?: boolean; sandbox?: boolean },
   params: { partition?: string; src?: string },
-  expected: { preloadUrl: string }
-): void {
+  expected: { preloadUrl: string; roots: Map<string, string> },
+  owner: { id: number }
+): boolean {
   // Electron đưa preload vào webPreferences dạng đường dẫn tuyệt đối (không phải file:// URL).
   const preload = webPreferences.preload
   const preloadOk = preload === expected.preloadUrl || (() => {
@@ -79,11 +133,17 @@ export function attachGraphPageWebview(
       return false
     }
   })()
-  if (params.partition !== PAGES_PARTITION || !params.src || projectFromPageUrl(params.src) === null || !preloadOk) {
+  const projectId = params.src ? projectFromPageUrl(params.src) : null
+  const root = projectId ? expected.roots.get(projectId) : undefined
+  if (params.partition !== PAGES_PARTITION || !projectId || !root || !preloadOk) {
     event.preventDefault()
-    return
+    return false
   }
   webPreferences.nodeIntegration = false
   webPreferences.contextIsolation = true
   webPreferences.sandbox = true
+  const queue = pendingByOwner.get(owner.id) ?? []
+  queue.push({ projectId, root })
+  pendingByOwner.set(owner.id, queue)
+  return true
 }

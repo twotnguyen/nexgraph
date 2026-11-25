@@ -18,7 +18,7 @@ import { accountDevHooks } from './dev-hooks'
 import { installPermissionHandlers } from './security/permissions'
 import { installAppMenu } from './appMenu'
 import { WindowSet } from './windows'
-import { PAGES_PARTITION, attachGraphPageWebview, installGraphPagesProtocol, registerGraphPageScheme, wireGraphPageContents } from './graph-pages/protocol'
+import { PAGES_PARTITION, attachGraphPageWebview, bindGraphPageGuest, installGraphPagesProtocol, registerGraphPageScheme, wireGraphPageContents } from './graph-pages/protocol'
 import { pageRoots } from './graph-pages/roots'
 import { pathToFileURL } from 'node:url'
 
@@ -97,7 +97,7 @@ async function createWindow(show = true): Promise<void> {
   // nhưng tài nguyên (agent/terminal) vẫn phải được dọn theo đúng chủ cũ.
   const contents = win.webContents
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
-    attachGraphPageWebview(event, webPreferences, params, { preloadUrl: graphPagePreloadUrl() })
+    attachGraphPageWebview(event, webPreferences, params, { preloadUrl: graphPagePreloadUrl(), roots: pageRoots }, win.webContents)
   })
   // REV-17: từ chối mặc định mọi quyền (camera, vị trí, thông báo, USB…); app không dùng quyền nào.
   installPermissionHandlers(win.webContents.session)
@@ -215,7 +215,9 @@ app.whenReady().then(() => {
   const pagesSession = electron.session?.fromPartition?.(PAGES_PARTITION)
   if (pagesSession) installGraphPagesProtocol(pagesSession, { roots: pageRoots, libsDir: graphPagesLibsDir() })
   app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() === 'webview') wireGraphPageContents(contents)
+    // Chỉ guest đã qua will-attach-webview mới có binding (owner + dự án + gốc dự án).
+    const binding = bindGraphPageGuest(contents)
+    if (binding) wireGraphPageContents(contents, binding)
   })
   if (process.env.NEXGRAPH_SMOKE === '1') {
     void smoke()
