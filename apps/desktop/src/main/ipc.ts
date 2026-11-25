@@ -235,12 +235,14 @@ const startNexAccountsSidecar = (dataDir: string): Promise<{ baseUrl: string; pa
   if (!nexAccountsSidecar) {
     const bin = resolveNexBinary({ env: process.env, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath })
     if (!bin) return Promise.reject(Object.assign(new Error('Nex runtime is not available'), { code: 'nex_not_available' }))
+    // Token/tài khoản do sidecar lưu dưới `<userData>/nex/` (brief N2-A2), không chép ra nơi khác.
+    const nexRoot = join(app.getPath('userData'), 'nex')
     nexAccountsSidecar = new NexSidecar({
       bin,
-      dataDir: join(dataDir, 'nex'),
+      dataDir: nexRoot,
       projectKey: 'accounts',
-      homeDir: join(dataDir, 'nex', 'home'),
-      configDir: join(dataDir, 'nex', 'accounts', 'config'),
+      homeDir: join(nexRoot, 'home'),
+      configDir: join(nexRoot, 'accounts', 'config'),
       cwd: dataDir,
       // Không cần MCP/model cho màn tài khoản; cấu hình tối thiểu để sidecar chạy.
       config: () => ({ $schema: 'https://opencode.ai/config.json' }),
@@ -284,8 +286,9 @@ export function registerIpc(
       // Cờ QA: ghi URL đã kiểm vào `<userData>/nex/last-auth-url.txt` thay vì mở trình duyệt thật.
       if (/^(1|true)$/i.test(process.env.NEXGRAPH_NEX_AUTH_NO_OPEN ?? '')) {
         try {
-          mkdirSync(join(dataDir, 'nex'), { recursive: true })
-          writeFileSync(join(dataDir, 'nex', 'last-auth-url.txt'), `${check.url}\n`, { mode: 0o600 })
+          const nexRoot = join(app.getPath('userData'), 'nex')
+          mkdirSync(nexRoot, { recursive: true })
+          writeFileSync(join(nexRoot, 'last-auth-url.txt'), `${check.url}\n`, { mode: 0o600 })
         } catch { /* cờ QA: không làm hỏng luồng đăng nhập */ }
         return
       }
@@ -1036,6 +1039,7 @@ export function registerIpc(
     createSession: (spec) => createNexSession(spec, {
       dataDir, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath,
       engineCommand: getCommand,
+      nexDataDir: join(app.getPath('userData'), 'nex'),
       getProvider: async () => {
         const a = await acc()
         return a.nexProviderFor(a.nexSelectedModel()) ?? a.nexProvider()

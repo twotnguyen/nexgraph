@@ -22,6 +22,9 @@
 }
 .nex-badge.connected { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--color-border)); }
 .nex-account-row .row { display: flex; flex-wrap: wrap; gap: 6px; }
+.nex-account-form { display: grid; gap: 8px; }
+.nex-account-form label { display: grid; gap: 4px; font-size: 11px; color: var(--color-muted); }
+.nex-account-form select, .nex-account-form input { width: 100%; }
 .nex-account-row .field { margin: 0; }
 .nex-device-code { display: flex; align-items: baseline; gap: 8px; margin: 0; }
 .nex-device-code code {

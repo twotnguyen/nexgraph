@@ -21,6 +21,8 @@ export type NexRuntimeOptions = {
   getProvider: () => Promise<NexProvider | null>
   /** Model mặc định đã chọn trong khối tài khoản Nex; null thì dùng nhà cung cấp của app. */
   getAccountModel?: () => Promise<{ provider: string; id: string } | null>
+  /** Gốc dữ liệu Nex (mặc định `<dataDir>/nex`); tài khoản/token nằm trong `<userData>/nex`. */
+  nexDataDir?: string
   env?: NodeJS.ProcessEnv
   /** Cho test/QA: bỏ qua tìm binary. */
   binPath?: string | null
@@ -46,7 +48,7 @@ export async function createNexSession(spec: SessionSpec, o: NexRuntimeOptions):
   })
   if (!bin) throw coded('ai_not_configured', 'Chưa tìm thấy runtime Nex trên máy này. Hãy chọn runtime Pi trong Cài đặt.')
   const root = spec.cwd
-  const dataRoot = join(o.dataDir, 'nex')
+  const dataRoot = o.nexDataDir ?? join(o.dataDir, 'nex')
   const projectKey = nexProjectKey(spec.projectId ?? root)
   const sidecar = new NexSidecar({
     bin,

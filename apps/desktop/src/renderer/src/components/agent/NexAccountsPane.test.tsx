@@ -45,7 +45,7 @@ describe('NexAccountsPane', () => {
     expect(screen.getByRole('combobox', { name: 'Model mặc định GitHub Copilot' })).toHaveValue('gpt-4.1')
 
     await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập GitHub Copilot' }))
-    expect(api.nex.authStart).toHaveBeenCalledWith('github-copilot', 'device')
+    expect(api.nex.authStart).toHaveBeenCalledWith('github-copilot', 'device', undefined)
     expect(await screen.findByText('520C-1E7F')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Mở trang xác nhận' })).toHaveAttribute('href', 'https://github.com/login/device')
 

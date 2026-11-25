@@ -53,12 +53,13 @@ const methodView = (method: NexIntegrationMethod): NexAccountMethod => ({
   label: method.label ?? method.type,
   ...(method.form?.length
     ? {
-        form: method.form.flatMap((field) => typeof field.key === 'string'
+        form: method.form.flatMap((field) => typeof field.key === 'string' && !field.hidden
           ? [{
               key: field.key,
               title: field.title ?? field.key,
               required: field.required !== false,
-              ...(field.options?.length ? { options: field.options } : {})
+              ...(field.options?.length ? { options: field.options } : {}),
+              ...(field.when?.length ? { when: field.when } : {})
             }]
           : [])
       }
@@ -148,7 +149,17 @@ export class NexAccountManager {
       }
     }
     try {
-      const [integrations, models] = await Promise.all([client.integrations(), client.models().catch(() => [])])
+      // Catalog provider của sidecar nạp lazily: lần gọi đầu có thể trả [] hoặc thiếu phương thức
+      // OAuth do plugin provider chưa đăng ký (spike A2 §3.4). Gọi /api/model để đánh thức catalog
+      // rồi chờ tới khi integration openai có phương thức oauth (hoặc hết ~4 s).
+      const models = await client.models().catch(() => [])
+      const pluginsReady = (list: NexIntegration[]): boolean =>
+        list.find((item) => item.id === 'openai')?.methods.some((method) => method.type === 'oauth') ?? false
+      let integrations = await client.integrations()
+      for (let attempt = 0; attempt < 8 && !pluginsReady(integrations); attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        integrations = await client.integrations()
+      }
       const providers = NEX_ACCOUNT_INTEGRATIONS.flatMap((id): NexAccountProvider[] => {
         const integration = integrations.find((item) => item.id === id)
         if (!integration) return []

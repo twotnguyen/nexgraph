@@ -38,7 +38,7 @@ export type NexAccountMethod = {
   id: string
   type: 'oauth' | 'command' | 'key' | 'external'
   label: string
-  form?: { key: string; title: string; required: boolean; options?: { value: string; label: string }[] }[]
+  form?: { key: string; title: string; required: boolean; hidden?: boolean; options?: { value: string; label: string }[]; when?: { key: string; op: string; value: string }[] }[]
 }
 export type NexAccountConnection = {
   id: string

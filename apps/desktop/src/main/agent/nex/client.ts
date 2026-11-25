@@ -8,7 +8,7 @@ export type NexIntegrationMethod = {
   label?: string
   names?: string[]
   command?: string[]
-  form?: { key: string; title?: string; type?: string; required?: boolean; options?: { value: string; label: string }[] }[]
+  form?: { key: string; title?: string; type?: string; required?: boolean; hidden?: boolean; options?: { value: string; label: string }[]; when?: { key: string; op: string; value: string }[] }[]
 }
 export type NexIntegrationConnection = {
   type: 'credential' | 'env'

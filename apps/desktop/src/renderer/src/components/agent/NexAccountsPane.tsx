@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { NexAccountProvider, NexAccountsView, NexAuthStartView } from '@shared/agent-types'
+import type { NexAccountMethod, NexAccountProvider, NexAccountsView, NexAuthStartView } from '@shared/agent-types'
 import { tr } from '../../strings'
 import { errorMsg } from '../../state/errorText'
 import type { Message } from '../../state/messages'
@@ -57,6 +57,7 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
   const [busy, setBusy] = useState(false)
   const [keyFor, setKeyFor] = useState<string | null>(null)
   const [keyValue, setKeyValue] = useState('')
+  const [formValues, setFormValues] = useState<Record<string, string>>({})
   const alive = useRef(true)
   const operation = useRef(false)
 
@@ -117,8 +118,24 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
     return () => { active = false; clearInterval(timer) }
   }, [attempt, load, view])
 
+  /** Trường form hiển thị theo điều kiện `when` (ví dụ GitHub Enterprise URL chỉ khi chọn enterprise). */
+  const fieldsFor = (provider: NexAccountProvider, method: NexAccountMethod) =>
+    (method.form ?? []).filter((field) => !field.when?.length || field.when.every((condition) => {
+      const dependency = method.form?.find((item) => item.key === condition.key)
+      const value = formValues[`${provider.id}:${method.id}:${condition.key}`] ?? dependency?.options?.[0]?.value ?? ''
+      return condition.op !== 'eq' || value === condition.value
+    }))
+
   const start = (provider: NexAccountProvider, methodId: string) => void run(async () => {
-    const result: NexAuthStartView = await window.nexgraph.nex.authStart(provider.id, methodId)
+    const method = provider.methods.find((item) => item.id === methodId)
+    const fields = method ? fieldsFor(provider, method) : []
+    const answers = fields.length
+      ? Object.fromEntries(fields.flatMap((field) => {
+          const value = formValues[`${provider.id}:${methodId}:${field.key}`] ?? field.options?.[0]?.value
+          return value ? [[field.key, value]] : []
+        }))
+      : undefined
+    const result: NexAuthStartView = await window.nexgraph.nex.authStart(provider.id, methodId, answers)
     if (result.kind === 'key') {
       setKeyFor(provider.id)
       setKeyValue('')
@@ -197,6 +214,21 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
             {provider.connections.filter((connection) => connection.problem).map((connection) => <p key={connection.id || connection.label} role="status" className="inline-message error">
               {connection.problem?.message}
             </p>)}
+            {oauth?.form?.length ? <div className="nex-account-form">
+              {fieldsFor(provider, oauth).map((field) => {
+                const formKey = `${provider.id}:${oauth.id}:${field.key}`
+                const value = formValues[formKey] ?? field.options?.[0]?.value ?? ''
+                return <label key={field.key}>{field.title}
+                  {field.options?.length
+                    ? <select aria-label={`${field.title} ${displayName(provider)}`} value={value}
+                        onChange={(event) => setFormValues((current) => ({ ...current, [formKey]: event.target.value }))}>
+                        {field.options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    : <input aria-label={`${field.title} ${displayName(provider)}`} value={value}
+                        onChange={(event) => setFormValues((current) => ({ ...current, [formKey]: event.target.value }))} />}
+                </label>
+              })}
+            </div> : null}
             <div className="row">
               {oauth && <button type="button" className="primary" disabled={busy} aria-label={`${tr('Đăng nhập')} ${displayName(provider)}`}
                 onClick={() => start(provider, oauth.id)}>{tr('Đăng nhập')}</button>}
