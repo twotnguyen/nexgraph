@@ -167,7 +167,11 @@ export function buildAppMenu({ locale: lang, isPackaged, platform, send, appName
 
   template.push({
     label: lang === 'en' ? 'Help' : 'Trợ giúp',
-    submenu: [{ role: 'about', label: t.help.about }]
+    submenu: [
+      { role: 'about', label: t.help.about },
+      separator(),
+      command(t.help.licenses, 'licenses.open')
+    ]
   })
 
   return template
