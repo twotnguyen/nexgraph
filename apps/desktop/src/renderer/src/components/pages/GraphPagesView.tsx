@@ -2,7 +2,7 @@
 // Mỗi lúc chỉ giữ MỘT khung nhúng (spike A3: 3 trang cùng sống ~1 GB RAM).
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GraphPageSelection, GraphPagesStatus } from '@shared/graph-pages'
-import { graphPageUrl } from '@shared/graph-pages'
+import { GRAPH_PAGE_THEME_CHANNEL, graphPageUrl } from '@shared/graph-pages'
 import { tr, vi } from '../../strings'
 import { useTheme } from '../../state/useTheme'
 import './graph-pages.css'
@@ -19,8 +19,6 @@ interface Props {
 interface FrameElement extends HTMLElement {
   send?: (channel: string, ...args: unknown[]) => void
 }
-
-const THEME_CHANNEL = 'nxpage:theme'
 
 export function GraphPagesView({ projectId, status, revision }: Props) {
   const theme = useTheme()
@@ -46,7 +44,7 @@ export function GraphPagesView({ projectId, status, revision }: Props) {
     const frame = frameRef.current
     if (!frame?.send) return
     try {
-      frame.send(THEME_CHANNEL, theme)
+      frame.send(GRAPH_PAGE_THEME_CHANNEL, theme)
     } catch {
       // Khung chưa dom-ready: sự kiện dom-ready sẽ gửi lại.
     }

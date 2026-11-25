@@ -27,3 +27,8 @@ export interface GraphPageSelection {
 export const GRAPH_PAGE_SCHEME = 'nxpage'
 export const graphPageUrl = (projectId: string, file: string): string =>
   `${GRAPH_PAGE_SCHEME}://${projectId}/${encodeURIComponent(file)}`
+
+/** Kênh IPC giữa preload của trang, main và renderer của app (một chỗ để không lệch tên). */
+export const GRAPH_PAGE_NODE_CHANNEL = 'graph-pages:node'
+export const GRAPH_PAGE_NODE_SELECTED = 'graph-pages:node-selected'
+export const GRAPH_PAGE_THEME_CHANNEL = 'nxpage:theme'

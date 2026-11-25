@@ -63,6 +63,7 @@ import { ExtensionRegistry } from './extensions/registry'
 import { discoverGraphPages } from './graph-pages/pages'
 import { pageRoots } from './graph-pages/roots'
 import { PAGES_PARTITION } from './graph-pages/protocol'
+import { PAGE_NODE_CHANNEL, PAGE_NODE_SELECTED, handlePageNodeMessage } from './graph-pages/bridge'
 import { pathToFileURL } from 'node:url'
 
 const watchers = new Map<string, ProjectWatcher>()
@@ -705,6 +706,18 @@ export function registerIpc(
     const files = await discoverGraphPages(root)
     pageRoots.set(pid, root)
     return { ...files, partition: PAGES_PARTITION, preload: pathToFileURL(join(__dirname, '../preload/graphPage.js')).toString() }
+  })
+  // NG-UI-3: cầu nối chọn nút từ khung nhúng → panel của app. Sender/payload được kiểm trong bridge.
+  ipcMain.on(PAGE_NODE_CHANNEL, (event, payload: unknown) => {
+    void handlePageNodeMessage({ sender: event.sender, payload, getNode: (projectId, id) => api().getNode(projectId, id) })
+      .then((result) => {
+        if (!result) return
+        const sender = event.sender
+        if (!sender || sender.isDestroyed()) return
+        const host = sender.hostWebContents ?? getWindow()?.webContents
+        if (host && !host.isDestroyed()) host.send(PAGE_NODE_SELECTED, result.selection)
+      })
+      .catch(() => { /* trang hỏng không được làm chết main */ })
   })
 
   const win = (): BrowserWindow | null => getWindow()

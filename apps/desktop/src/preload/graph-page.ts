@@ -3,9 +3,10 @@
 // Chạy trong isolated world của trang; nói chuyện với main world qua postMessage vì
 // `network`/`nodesDS` của graph.html là khai báo top-level, không phải thuộc tính window.
 import { ipcRenderer, webFrame } from 'electron'
+import { GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_THEME_CHANNEL } from '../shared/graph-pages'
 
-export const PAGE_NODE_CHANNEL = 'graph-pages:node'
-export const PAGE_THEME_CHANNEL = 'nxpage:theme'
+export const PAGE_NODE_CHANNEL = GRAPH_PAGE_NODE_CHANNEL
+export const PAGE_THEME_CHANNEL = GRAPH_PAGE_THEME_CHANNEL
 
 const fileName = (): string => {
   try {
