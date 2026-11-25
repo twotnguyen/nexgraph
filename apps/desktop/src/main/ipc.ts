@@ -63,7 +63,7 @@ import { ExtensionRegistry } from './extensions/registry'
 import { discoverGraphPages, readGraphJsonIndex } from './graph-pages/pages'
 import { pageRoots } from './graph-pages/roots'
 import { PAGES_PARTITION, guestBinding } from './graph-pages/protocol'
-import { PAGE_NODE_CHANNEL, deliverSelection, handlePageNodeMessage } from './graph-pages/bridge'
+import { PAGE_NODE_CHANNEL, deliverLateSelection, handlePageNodeMessage } from './graph-pages/bridge'
 import { pathToFileURL } from 'node:url'
 
 const watchers = new Map<string, ProjectWatcher>()
@@ -720,8 +720,16 @@ export function registerIpc(
       getPageNode: async (root, id) => (await readGraphJsonIndex(root)).get(id) ?? null
     })
       .then((result) => {
-        if (!result) return
-        deliverSelection(webContents.fromId(result.ownerId), result.selection)
+        if (!result || !binding) return
+        // Tra nút là async: reload/đổi trang/đổi dự án có thể đã huỷ guest hoặc đổi binding.
+        // Gửi kết quả của trang cũ vào renderer là sai, kể cả khi cửa sổ chủ vẫn mở.
+        deliverLateSelection({
+          guest: sender,
+          snapshot: binding,
+          current: guestBinding(sender.id),
+          owner: webContents.fromId(binding.ownerId),
+          selection: result.selection
+        })
       })
       .catch(() => { /* trang hỏng không được làm chết main */ })
   })

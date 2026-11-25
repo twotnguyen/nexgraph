@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GraphNode } from '../src/shared/graph-types'
 import {
-  deliverSelection, handlePageNodeMessage, lineFromLocation, validatePageNode
+  deliverLateSelection, deliverSelection, handlePageNodeMessage, lineFromLocation, validatePageNode
 } from '../src/main/graph-pages/bridge'
 import { pageUrl, type GuestBinding } from '../src/main/graph-pages/protocol'
 
@@ -85,5 +85,44 @@ describe('chỉ gửi tới đúng owner, mất host thì bỏ', () => {
     const closed = { isDestroyed: () => true, send: vi.fn() }
     expect(deliverSelection(closed, selection)).toBe(false)
     expect(closed.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('phản hồi tra nút đến muộn sau khi guest/binding đổi', () => {
+  const selection = { projectId: 'pid-1', id: 'n1', label: 'run', sourceFile: null, sourceLine: null, sourceLocation: null, via: null }
+  const snapshot = binding()
+  const liveOwner = () => ({ isDestroyed: () => false, send: vi.fn() })
+  const liveGuest = () => ({ isDestroyed: () => false })
+
+  it('guest đã bị huỷ → bỏ tin', () => {
+    const owner = liveOwner()
+    expect(deliverLateSelection({ guest: { isDestroyed: () => true }, snapshot, current: snapshot, owner, selection })).toBe(false)
+    expect(owner.send).not.toHaveBeenCalled()
+  })
+
+  it('binding hiện hành khác snapshot (guest mới sau reload / owner khác / dự án khác) → bỏ tin', () => {
+    for (const current of [
+      binding({ guestId: 8, ownerId: 3 }),
+      binding({ guestId: 7, ownerId: 4 }),
+      binding({ guestId: 7, ownerId: 3, projectId: 'pid-2' }),
+      binding({ guestId: 7, ownerId: 3, root: '/proj/two' })
+    ]) {
+      const owner = liveOwner()
+      expect(deliverLateSelection({ guest: liveGuest(), snapshot, current, owner, selection }), JSON.stringify(current)).toBe(false)
+      expect(owner.send).not.toHaveBeenCalled()
+    }
+    expect(deliverLateSelection({ guest: liveGuest(), snapshot, current: null, owner: liveOwner(), selection })).toBe(false)
+  })
+
+  it('guest còn sống + binding không đổi → gửi đúng kênh (đối chứng)', () => {
+    const owner = liveOwner()
+    expect(deliverLateSelection({ guest: liveGuest(), snapshot, current: snapshot, owner, selection })).toBe(true)
+    expect(owner.send).toHaveBeenCalledWith('graph-pages:node-selected', selection)
+  })
+
+  it('owner đã đóng dù guest còn sống → bỏ tin', () => {
+    const owner = { isDestroyed: () => true, send: vi.fn() }
+    expect(deliverLateSelection({ guest: liveGuest(), snapshot, current: snapshot, owner, selection })).toBe(false)
+    expect(owner.send).not.toHaveBeenCalled()
   })
 })

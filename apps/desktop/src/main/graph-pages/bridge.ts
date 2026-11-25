@@ -120,3 +120,25 @@ export function deliverSelection(owner: OwnerContents | null | undefined, select
   owner.send(PAGE_NODE_SELECTED, selection)
   return true
 }
+
+/**
+ * Gửi kết quả tra nút đến MUỘN. Giữa lúc nhận tin và lúc tra xong, guest có thể đã bị huỷ
+ * (reload/đổi trang) hoặc binding đã đổi (guest mới, owner khác, dự án/gốc khác) — khi đó
+ * kết quả thuộc về trang cũ nên phải bỏ, kể cả khi cửa sổ chủ vẫn mở.
+ */
+export function deliverLateSelection(args: {
+  guest: { isDestroyed(): boolean } | null | undefined
+  /** Binding chụp lúc nhận tin. */
+  snapshot: GuestBinding
+  /** Binding hiện hành của đúng guest id đó. */
+  current: GuestBinding | null
+  owner: OwnerContents | null | undefined
+  selection: GraphPageSelection
+}): boolean {
+  const { guest, snapshot, current } = args
+  const same = !!guest && !guest.isDestroyed() && !!current &&
+    current.guestId === snapshot.guestId && current.ownerId === snapshot.ownerId &&
+    current.projectId === snapshot.projectId && current.root === snapshot.root
+  if (!same) return false
+  return deliverSelection(args.owner, args.selection)
+}
