@@ -1628,7 +1628,7 @@ export const uiEn: Record<string, string> = {
   'Giải thích nút "{label}" ({source}) trong đồ thị này.': 'Explain the node "{label}" ({source}) in this graph.',
   'Giải thích nút "{label}" trong đồ thị này.': 'Explain the node "{label}" in this graph.',
   'Cộng đồng: {name}': 'Community: {name}',
-  'Tóm tắt cộng đồng "{label}" ({count} thành phần) trong đồ thị này.': 'Summarize the community "{label}" ({count} members) in this graph.'
+  'Tóm tắt cộng đồng "{label}" ({count} thành phần) trong đồ thị này.': 'Summarize the community "{label}" ({count, plural, one {1 member} other {{count} members}}) in this graph.'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}.
