@@ -271,7 +271,8 @@ export class NexSession {
         this.finish('error', errorText(data.error) || 'Nex trả lỗi')
         break
       case 'session.execution.interrupted':
-        this.finish('aborted')
+        // Người dùng bấm Từ chối: nói rõ thao tác bị từ chối, không phải lượt bị huỷ.
+        this.finish(this.rejected ? 'error' : 'aborted', this.rejected ? 'Đã từ chối thao tác.' : undefined)
         break
     }
   }
@@ -314,6 +315,10 @@ export class NexSession {
     let decision: ApprovalDecision = { allow: false, reason: 'Không hiển thị được yêu cầu duyệt' }
     if (request && this.o.gate) {
       try { decision = await this.o.gate.request(request) } catch { decision = { allow: false, reason: 'Không gửi được yêu cầu duyệt' } }
+      if (!decision.allow && decision.reason === 'Người dùng từ chối thao tác này') {
+        this.rejected = true
+        this.o.onProviderFailure?.({ code: 'ai_tool_rejected', message: 'Đã từ chối thao tác.' })
+      }
     }
     try { await this.o.client.replyPermission(sessionId, requestId, decision.allow ? 'once' : 'reject') } catch { /* phiên đã đóng */ }
   }

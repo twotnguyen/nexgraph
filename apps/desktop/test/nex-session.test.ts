@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ApprovalDecision, ApprovalRequest } from '../src/shared/agent-types'
+import type { ProviderFailure } from '../src/main/agent/session'
 import { applyUnifiedPatch, NexSession, type NexSessionClient } from '../src/main/agent/nex/session'
 
 const flush = async (): Promise<void> => { for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0)) }
@@ -172,5 +173,25 @@ describe('NexSession (adapter sự kiện OpenCode → Pi)', () => {
     expect(calls.replies.at(-1)).toEqual({ id: 'per_dir', decision: 'reject' })
     emit({ type: 'session.execution.succeeded', data: { sessionID: 'ses_1' } })
     await running
+  })
+
+  it('người dùng Từ chối thao tác: lượt kết thúc bằng mã ai_tool_rejected, không phải "Đã dừng"', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'n1a1-session-'))
+    writeFileSync(join(root, 'note.txt'), 'old\n')
+    const { client, calls, emit } = fakeClient()
+    const failures: ProviderFailure[] = []
+    const gate = { request: vi.fn(async (): Promise<ApprovalDecision> => ({ allow: false, reason: 'Người dùng từ chối thao tác này' })) }
+    const session = sessionOf(client, { root, gate, onProviderFailure: (failure) => failures.push(failure) })
+    session.subscribe(() => {})
+    const running = session.prompt('sửa tệp')
+    await flush()
+    const diff = '--- a/note.txt\n+++ b/note.txt\n@@ -1,1 +1,1 @@\n-old\n+new\n'
+    emit({ type: 'permission.asked', data: { sessionID: 'ses_1', id: 'per_reject', action: 'edit', resources: ['note.txt'], metadata: { filepath: 'note.txt', diff } } })
+    await flush()
+    expect(calls.replies.at(-1)).toEqual({ id: 'per_reject', decision: 'reject' })
+    emit({ type: 'session.execution.interrupted', data: { sessionID: 'ses_1' } })
+    await expect(running).rejects.toThrow('Đã từ chối thao tác.')
+    expect(failures.at(-1)).toMatchObject({ code: 'ai_tool_rejected', message: 'Đã từ chối thao tác.' })
+    expect(session.messages.at(-1)).toMatchObject({ role: 'assistant', stopReason: 'error', errorMessage: 'Đã từ chối thao tác.' })
   })
 })
