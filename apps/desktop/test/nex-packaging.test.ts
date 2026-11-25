@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, win32 } from 'node:path'
+import { dirname, join, posix, win32 } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   assertNoNexBinaryInAsar,
@@ -47,9 +47,24 @@ describe('nex-packaging: electron-builder chép binary vào resources/opencode (
     expect(pkg.scripts['package:dir']).toMatch(/^node scripts\/fetch-nex-runtime\.mjs && /)
   })
 
-  it('đường dẫn binary trong gói đúng nền tảng', () => {
-    expect(packagedBinaryPath('/x/NexGraph.app', 'darwin')).toBe(join('/x/NexGraph.app', 'Contents', 'Resources', 'opencode', 'opencode'))
-    expect(packagedBinaryPath('C:\\x\\win-unpacked', 'win32')).toBe(win32.join('C:\\x\\win-unpacked', 'resources', 'opencode', 'opencode.exe'))
+  it('đường dẫn binary trong gói dựng bằng path của nền tảng đích', () => {
+    // Kỳ vọng tính độc lập bằng path.posix/win32 của nền tảng ĐÍCH, không dùng join của host:
+    // trên Windows join('/x/…') trả '\x\…' nên test đỏ dù mã đúng (CI run 45697839317).
+    expect(packagedBinaryPath('/x/NexGraph.app', 'darwin'))
+      .toBe(posix.join('/x/NexGraph.app', 'Contents', 'Resources', 'opencode', 'opencode'))
+    expect(packagedBinaryPath('C:\\x\\win-unpacked', 'win32'))
+      .toBe(win32.join('C:\\x\\win-unpacked', 'resources', 'opencode', 'opencode.exe'))
+  })
+
+  it('mô phỏng cả hai nền tảng đích trên host bất kỳ', () => {
+    const darwin = packagedBinaryPath('/x/NexGraph.app', 'darwin')
+    const windows = packagedBinaryPath('C:\\x\\win-unpacked', 'win32')
+    expect(darwin).toBe(posix.join('/x/NexGraph.app', 'Contents', 'Resources', 'opencode', 'opencode'))
+    expect(darwin).not.toContain('\\')
+    expect(windows).toBe(win32.join('C:\\x\\win-unpacked', 'resources', 'opencode', 'opencode.exe'))
+    expect(windows).not.toContain('/')
+    // Lỗi cũ: join của host Windows tạo '\x\NexGraph.app\…' khác đường dẫn darwin.
+    expect(win32.join('/x/NexGraph.app', 'Contents', 'Resources', 'opencode', 'opencode')).not.toBe(darwin)
   })
 
   it('asar không có binary thì qua, có thì fail kèm đường dẫn', () => {
