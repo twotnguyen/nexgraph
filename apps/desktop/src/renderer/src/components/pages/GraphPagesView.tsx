@@ -4,6 +4,7 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState } from
 import type { GraphPageSelection, GraphPagesStatus } from '@shared/graph-pages'
 import { GRAPH_PAGE_THEME_CHANNEL, canOpenPageSource, communityPageUrl, graphPageUrl } from '@shared/graph-pages'
 import { tr, vi } from '../../strings'
+import { useLocale } from '../../state/locale'
 import { useTheme } from '../../state/useTheme'
 import './graph-pages.css'
 
@@ -35,6 +36,8 @@ const askText = (selection: GraphPageSelection): string => selection.memberCount
 
 export function GraphPagesView({ projectId, status, revision, onOpenCode, onImpact, onAsk }: Props) {
   const theme = useTheme()
+  // Nhãn chế độ đọc qua `vi` (Proxy không tự phát lại): subscribe locale để đổi ngôn ngữ là đổi nhãn ngay.
+  const locale = useLocale()
   const frameRef = useRef<FrameElement | null>(null)
   const [selection, setSelection] = useState<GraphPageSelection | null>(null)
   // NG-ACT-3: đang xem đồ thị thành viên của một cộng đồng (null = trang tổng).
@@ -44,7 +47,7 @@ export function GraphPagesView({ projectId, status, revision, onOpenCode, onImpa
     ...(status.graph ? [{ id: 'graph' as const, file: 'graph.html', label: vi.workspace.pagesGraph }] : []),
     ...(status.tree ? [{ id: 'tree' as const, file: 'GRAPH_TREE.html', label: vi.workspace.pagesTree }] : []),
     ...(status.callflow ? [{ id: 'callflow' as const, file: status.callflow, label: vi.workspace.pagesCallflow }] : [])
-  ], [status.graph, status.tree, status.callflow])
+  ], [status.graph, status.tree, status.callflow, locale])
 
   const [page, setPage] = useState<Mode>(modes[0]?.id ?? 'graph')
   const active = modes.find((item) => item.id === page) ?? modes[0]

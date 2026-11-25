@@ -145,6 +145,16 @@ describe('chế độ xem trang đồ thị', () => {
     expect(document.querySelector('webview')?.getAttribute('src')).toBe('nxpage://pid-1/GRAPH_TREE.html')
   })
 
+  it('đổi ngôn ngữ khi đang mở → nhãn chế độ và panel đổi ngay', async () => {
+    render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a', label: 'a', sourceFile: 'src/a.ts', sourceLine: 1, sourceLocation: 'src/a.ts:1', via: null, community: null, memberCount: null })) })
+    expect(screen.getByRole('tab', { name: 'Đồ thị' })).toBeTruthy()
+    act(() => { setLocale('en') })
+    await waitFor(() => expect(screen.getByRole('tab', { name: 'Graph' })).toBeTruthy())
+    expect(screen.queryByRole('button', { name: 'Mở mã' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Open code' })).toBeTruthy()
+  })
+
   it('EN: nhãn mở cộng đồng và quay lại', async () => {
     setLocale('en')
     render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
