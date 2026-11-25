@@ -11,7 +11,8 @@ export type FetchDeps = MoveDeps & {
   extract?: (zip: string, destDir: string) => void
 }
 
-export function download(url: string, dest: string): Promise<void>
+export const DOWNLOAD_TIMEOUT_MS: number
+export function download(url: string, dest: string, options?: { timeoutMs?: number }): Promise<void>
 export function extract(zip: string, destDir: string): void
 export function findBinary(dir: string, name: string): string | null
 export function moveFileVerified(

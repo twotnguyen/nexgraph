@@ -10,10 +10,12 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo, Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { fetchNexRuntime, moveFileVerified } from '../scripts/nex-runtime-fetch.mjs'
+import { download, fetchNexRuntime, moveFileVerified } from '../scripts/nex-runtime-fetch.mjs'
 import {
   type NexRuntimeAsset,
   type NexRuntimeConfig,
@@ -264,4 +266,59 @@ describe('nex-runtime: moveFileVerified (rename, dự phòng EXDEV có kiểm sh
     })).rejects.toBe(denied)
     expect(copies).toBe(0)
   })
+})
+
+describe('nex-runtime: download có hạn chót (AbortSignal.timeout)', () => {
+  // Server thật trên 127.0.0.1: không mock fetch, nên test chứng minh đúng hành vi mạng bị treo.
+  let server: Server
+  let base = ''
+  const sockets = new Set<Socket>()
+
+  beforeEach(async () => {
+    server = createServer((req, res) => {
+      if (req.url === '/ok') {
+        res.writeHead(200, { 'content-length': '5' })
+        res.end('hello')
+      } else if (req.url === '/missing') {
+        res.writeHead(404, 'Not Found')
+        res.end()
+      } else if (req.url === '/stall') {
+        res.writeHead(200, { 'content-length': '1000' })
+        res.write('mới gửi dở') // gửi một phần rồi treo, không bao giờ end()
+      }
+      // '/hang': không trả lời gì.
+    })
+    server.on('connection', (socket) => {
+      sockets.add(socket)
+      socket.on('close', () => sockets.delete(socket))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  })
+  afterEach(async () => {
+    for (const socket of sockets) socket.destroy()
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+  })
+
+  it('tải thành công thì ghi đúng nội dung', async () => {
+    const dest = join(root, 'ok.bin')
+    await download(`${base}/ok`, dest, { timeoutMs: 5_000 })
+    expect(readFileSync(dest, 'utf8')).toBe('hello')
+  })
+
+  it('HTTP lỗi thì báo mã trạng thái', async () => {
+    await expect(download(`${base}/missing`, join(root, 'x.bin'), { timeoutMs: 5_000 })).rejects.toThrow(/HTTP 404/)
+  })
+
+  it('server không trả lời thì bị ngắt đúng hạn chót kèm thông báo rõ (không treo vô hạn)', async () => {
+    const started = Date.now()
+    await expect(download(`${base}/hang`, join(root, 'hang.bin'), { timeoutMs: 200 })).rejects.toThrow(/quá 0\.2 s/)
+    expect(Date.now() - started).toBeLessThan(3_000)
+  }, 4_000)
+
+  it('server gửi dở rồi treo giữa chừng cũng bị ngắt đúng hạn chót', async () => {
+    const started = Date.now()
+    await expect(download(`${base}/stall`, join(root, 'stall.bin'), { timeoutMs: 200 })).rejects.toThrow(/quá 0\.2 s/)
+    expect(Date.now() - started).toBeLessThan(3_000)
+  }, 4_000)
 })

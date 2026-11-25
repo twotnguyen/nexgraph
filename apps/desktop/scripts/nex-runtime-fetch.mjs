@@ -26,10 +26,22 @@ import {
   sha256File
 } from './nex-runtime.mjs'
 
-export async function download(url, dest) {
-  const res = await fetch(url, { redirect: 'follow' })
-  if (!res.ok || !res.body) throw new Error(`Tải ${url} thất bại: HTTP ${res.status} ${res.statusText}`)
-  await pipeline(Readable.fromWeb(res.body), createWriteStream(dest))
+/** Hạn chót cho cả lượt tải (zip 110–126 MB; runner GitHub tải xong trong vài giây). */
+export const DOWNLOAD_TIMEOUT_MS = 120_000
+
+export async function download(url, dest, { timeoutMs = DOWNLOAD_TIMEOUT_MS } = {}) {
+  // Một signal cho cả fetch lẫn đọc body: mạng treo ở bước nào cũng bị ngắt, không để job CI chờ vô hạn.
+  const signal = AbortSignal.timeout(timeoutMs)
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal })
+    if (!res.ok || !res.body) throw new Error(`Tải ${url} thất bại: HTTP ${res.status} ${res.statusText}`)
+    await pipeline(Readable.fromWeb(res.body), createWriteStream(dest), { signal })
+  } catch (error) {
+    if (signal.aborted) {
+      throw new Error(`Tải ${url} quá ${timeoutMs / 1000} s — mạng treo hoặc quá chậm; chạy lại hoặc kiểm tra kết nối.`, { cause: error })
+    }
+    throw error
+  }
 }
 
 export function extract(zip, destDir) {
