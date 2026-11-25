@@ -30,6 +30,18 @@ const libs = () => {
   return dir
 }
 
+describe('byte vendor trên mọi OS (SRI Windows)', () => {
+  it('.gitattributes đánh dấu thư viện là -text để checkout không đổi LF→CRLF', () => {
+    const attrs = readFileSync(new URL('../../../.gitattributes', import.meta.url), 'utf8')
+    expect(attrs).toMatch(/^apps\/desktop\/resources\/graph-pages\/\*\* -text$/m)
+  })
+
+  it('vis-network trong repo không có ký tự CR (SRI sha384 khớp sau checkout)', () => {
+    const bytes = readFileSync(new URL('../resources/graph-pages/vis-network-9.1.6.min.js', import.meta.url))
+    expect(bytes.includes(0x0d)).toBe(false)
+  })
+})
+
 const roots = (pid: string, root: string) => new Map([[pid, root]])
 
 describe('khám phá trang trong .nexgraph', () => {
