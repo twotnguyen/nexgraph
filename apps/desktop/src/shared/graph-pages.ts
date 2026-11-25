@@ -28,6 +28,16 @@ export const GRAPH_PAGE_SCHEME = 'nxpage'
 export const graphPageUrl = (projectId: string, file: string): string =>
   `${GRAPH_PAGE_SCHEME}://${projectId}/${encodeURIComponent(file)}`
 
+/**
+ * NG-ACT-1: "Mở mã" chỉ dùng được với tệp thật trong dự án. Nguồn ảo (`nguon://cargo`),
+ * đường dẫn tuyệt đối và đường dẫn thoát ra ngoài (`..`) đều không mở được trong editor.
+ */
+export function canOpenPageSource(file: string | null | undefined): boolean {
+  if (!file || file.includes('://')) return false
+  if (file.startsWith('/') || file.startsWith('\\') || /^[A-Za-z]:[\\/]/.test(file)) return false
+  return !file.split(/[\\/]/).includes('..')
+}
+
 /** Kênh IPC giữa preload của trang, main và renderer của app (một chỗ để không lệch tên). */
 export const GRAPH_PAGE_NODE_CHANNEL = 'graph-pages:node'
 export const GRAPH_PAGE_NODE_SELECTED = 'graph-pages:node-selected'

@@ -105,4 +105,15 @@ describe('AgentPanel composer', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Model hiện tại không nhận ảnh')
     expect(prompt).not.toHaveBeenCalled()
   })
+
+  it('nhận câu hỏi "Hỏi Nex" từ ngoài: điền ô soạn kèm ngữ cảnh, focus, không tự gửi', async () => {
+    const prompt = vi.fn()
+    installNexgraph({ ai, agent: { prompt } })
+    const { rerender } = render(<AgentPanel {...props} />)
+    const input = await box()
+    rerender(<AgentPanel {...props} ask={{ text: 'Giải thích nút "run()" (src/a.ts:12) trong đồ thị này.', nonce: 1 }} />)
+    await waitFor(() => expect(input).toHaveValue('Giải thích nút "run()" (src/a.ts:12) trong đồ thị này.'))
+    await waitFor(() => expect(input).toHaveFocus())
+    expect(prompt).not.toHaveBeenCalled()
+  })
 })

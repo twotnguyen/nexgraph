@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 // NG-UI-2: chế độ Đồ thị/Cây/Luồng gọi, chỉ giữ trang đang xem, đồng bộ theme, panel nút đã chọn.
 import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GraphPageSelection, GraphPagesStatus } from '@shared/graph-pages'
 import { setLocale } from '../../state/locale'
@@ -74,6 +75,40 @@ describe('chế độ xem trang đồ thị', () => {
     expect(panel.textContent).toContain('src/a.ts:12')
     act(() => { screen.getByRole('button', { name: 'Đóng nút đã chọn' }).click() })
     expect(screen.queryByRole('status', { name: 'Nút đã chọn' })).toBeNull()
+  })
+
+  it('panel có 3 hành động: Mở mã đúng tệp:dòng, Vùng ảnh hưởng đúng node, Hỏi Nex điền câu hỏi', async () => {
+    const onOpenCode = vi.fn()
+    const onImpact = vi.fn()
+    const onAsk = vi.fn()
+    render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={onOpenCode} onImpact={onImpact} onAsk={onAsk} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a.ts::run#function', label: 'run()', sourceFile: 'src/a.ts', sourceLine: 12, sourceLocation: 'src/a.ts:12', via: 'showInfo' })) })
+    await userEvent.click(screen.getByRole('button', { name: 'Mở mã' }))
+    expect(onOpenCode).toHaveBeenCalledWith('src/a.ts', 12)
+    await userEvent.click(screen.getByRole('button', { name: 'Vùng ảnh hưởng' }))
+    expect(onImpact).toHaveBeenCalledWith('a.ts::run#function')
+    await userEvent.click(screen.getByRole('button', { name: 'Hỏi Nex' }))
+    expect(onAsk).toHaveBeenCalledWith(expect.stringContaining('run()'))
+    expect(onAsk).toHaveBeenCalledWith(expect.stringContaining('src/a.ts:12'))
+  })
+
+  it('nút không có tệp thật (nguồn ảo/ngoài dự án) → tắt Mở mã', () => {
+    render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'nguon://cargo#x', label: 'x', sourceFile: 'nguon://cargo', sourceLine: null, sourceLocation: null, via: 'showInfo' })) })
+    expect((screen.getByRole('button', { name: 'Mở mã' }) as HTMLButtonElement).disabled).toBe(true)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'abs', label: 'abs', sourceFile: '/etc/passwd', sourceLine: 1, sourceLocation: '/etc/passwd:1', via: 'showInfo' })) })
+    expect((screen.getByRole('button', { name: 'Mở mã' }) as HTMLButtonElement).disabled).toBe(true)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'no-file', label: 'no file', sourceFile: null, sourceLine: null, sourceLocation: null, via: 'showInfo' })) })
+    expect((screen.getByRole('button', { name: 'Mở mã' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('EN: nhãn 3 hành động', () => {
+    setLocale('en')
+    render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a', label: 'a', sourceFile: 'src/a.ts', sourceLine: 1, sourceLocation: 'src/a.ts:1', via: null })) })
+    expect(screen.getByRole('button', { name: 'Open code' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Impact' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Ask Nex' })).toBeTruthy()
   })
 
   it('không có trang nào → không vẽ khung nhúng (giao diện cũ giữ nguyên)', () => {
