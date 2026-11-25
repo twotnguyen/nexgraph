@@ -1,4 +1,5 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import * as electron from 'electron'
 import type { EngineHandle } from './engine/launcher'
 import { subscribeEvents } from './engine/events'
 import { closeAllAgents, closeWindowResources, registerIpc, stopAllMcpHttp, stopAllWatchers, stopEditorProcesses } from './ipc'
@@ -210,7 +211,9 @@ async function smoke(): Promise<void> {
 
 app.whenReady().then(() => {
   // Partition riêng cho trang nhúng: chỉ scheme nxpage + 3 URL thư viện, chặn mọi mạng khác.
-  installGraphPagesProtocol(session.fromPartition(PAGES_PARTITION), { roots: pageRoots, libsDir: graphPagesLibsDir() })
+  // `electron.session?.` vì test main giả lập 'electron' không có session; tiến trình thật luôn có.
+  const pagesSession = electron.session?.fromPartition?.(PAGES_PARTITION)
+  if (pagesSession) installGraphPagesProtocol(pagesSession, { roots: pageRoots, libsDir: graphPagesLibsDir() })
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() === 'webview') wireGraphPageContents(contents)
   })

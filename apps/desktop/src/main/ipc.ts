@@ -708,7 +708,8 @@ export function registerIpc(
     return { ...files, partition: PAGES_PARTITION, preload: pathToFileURL(join(__dirname, '../preload/graphPage.js')).toString() }
   })
   // NG-UI-3: cầu nối chọn nút từ khung nhúng → panel của app. Sender/payload được kiểm trong bridge.
-  ipcMain.on(PAGE_NODE_CHANNEL, (event, payload: unknown) => {
+  // `on?.` vì test main giả lập ipcMain chỉ có `handle`; tiến trình thật luôn có `on`.
+  ipcMain.on?.(PAGE_NODE_CHANNEL, (event, payload: unknown) => {
     void handlePageNodeMessage({ sender: event.sender, payload, getNode: (projectId, id) => api().getNode(projectId, id) })
       .then((result) => {
         if (!result) return

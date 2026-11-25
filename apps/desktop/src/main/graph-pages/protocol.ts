@@ -1,6 +1,7 @@
 // NG-UI-1: nối lớp phục vụ (`pages.ts`) vào Electron — scheme riêng, partition riêng,
 // allowlist mạng, chặn điều hướng/popup/quyền của khung nhúng.
-import { protocol, type WebContents } from 'electron'
+import * as electron from 'electron'
+import type { WebContents } from 'electron'
 import { handlePageRequest, handleWebRequest, isAllowedRequest, type PageServeOptions } from './pages'
 
 export const PAGES_SCHEME = 'nxpage'
@@ -18,7 +19,8 @@ export interface SessionLike {
 
 /** Gọi MỘT lần trước app.whenReady(): scheme phải privileged mới chạy được SRI/CORS như https. */
 export function registerGraphPageScheme(): void {
-  protocol.registerSchemesAsPrivileged([
+  // Namespace + `?.`: test main giả lập 'electron' có thể thiếu `protocol`; tiến trình thật luôn có.
+  electron.protocol?.registerSchemesAsPrivileged?.([
     { scheme: PAGES_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
   ])
 }
