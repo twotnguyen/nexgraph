@@ -2,6 +2,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
   PAGES_PARTITION, attachGraphPageWebview, installGraphPagesProtocol, pageUrl, projectFromPageUrl
@@ -66,7 +67,9 @@ describe('gắn protocol vào session của partition', () => {
 })
 
 describe('chỉ khung nhúng của tính năng được gắn vào cửa sổ', () => {
-  const expected = { preloadUrl: 'file:///preload/graphPage.js' }
+  // Dựng bằng API native: Windows trả `C:\…` và `file:///C:/…`, không phải chuỗi POSIX.
+  const preloadPath = join(tmpdir(), 'ng-preload', 'graphPage.js')
+  const expected = { preloadUrl: pathToFileURL(preloadPath).toString() }
   const okParams = { partition: PAGES_PARTITION, src: pageUrl('pid-1', 'graph.html') }
 
   it('chấp nhận đúng partition/src/preload và ép sandbox', () => {
@@ -79,7 +82,7 @@ describe('chỉ khung nhúng của tính năng được gắn vào cửa sổ', 
 
   it('chấp nhận preload dạng đường dẫn tuyệt đối (Electron chuẩn hoá từ file:// URL)', () => {
     const event = { preventDefault: vi.fn() }
-    const prefs = { preload: '/preload/graphPage.js' }
+    const prefs = { preload: preloadPath }
     attachGraphPageWebview(event, prefs, okParams, expected)
     expect(event.preventDefault).not.toHaveBeenCalled()
     expect(prefs).toMatchObject({ nodeIntegration: false, contextIsolation: true, sandbox: true })
@@ -92,7 +95,7 @@ describe('chỉ khung nhúng của tính năng được gắn vào cửa sổ', 
       expect(event.preventDefault).toHaveBeenCalled()
     }
     const event = { preventDefault: vi.fn() }
-    attachGraphPageWebview(event, { preload: 'file:///evil.js' }, okParams, expected)
+    attachGraphPageWebview(event, { preload: pathToFileURL(join(tmpdir(), 'ng-evil', 'evil.js')).toString() }, okParams, expected)
     expect(event.preventDefault).toHaveBeenCalled()
   })
 })
