@@ -18,6 +18,7 @@ import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from './graph-ty
 import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from './graph-types'
 import type { PrAvailability, PrDetail, PrList } from './graph-types'
 import type { ProjectAiSettings, SemanticEstimate, SemanticTarget } from './graph-types'
+import type { GraphPagesStatus, GraphPageSelection } from './graph-pages'
 
 export type FileRevision = { mtimeMs: number; version: string }
 export type FileContent = FileRevision & {
@@ -211,6 +212,13 @@ export interface NexGraphApi {
     context(projectId: string, question: string, budget?: number): Promise<ContextPack>
     map(projectId: string, opts?: { parent?: string; detail?: number }): Promise<ProjectMap>
     cycles(projectId: string, limit?: number): Promise<ImportCycles>
+  }
+  /** Các trang HTML trong `<project>/.nexgraph/` (Đồ thị/Cây/Luồng gọi, ADR 0024). */
+  graphPages: {
+    /** Trang nào đã có; `null` nghĩa là dự án chưa có `.nexgraph/` (giao diện cũ, R-N3). */
+    status(projectId: string): Promise<GraphPagesStatus>
+    /** Nút được chọn trong trang nhúng; trả về hàm huỷ đăng ký. */
+    onNodeSelected(cb: (selection: GraphPageSelection) => void): () => void
   }
   fs: {
     /** Liệt kê một cấp trong thư mục dự án, dùng đường dẫn tương đối hoặc `.` cho gốc. */

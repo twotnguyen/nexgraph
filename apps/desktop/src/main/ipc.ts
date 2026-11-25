@@ -60,6 +60,10 @@ import { adapterInstalled, installAdapter, type DebugKind } from './debug/adapte
 import { attachSpec, ensureConfigFile, listConfigs, resolveConfig, type DebugSpec } from './debug/launch-config'
 import { CollabHub } from './collab/hub'
 import { ExtensionRegistry } from './extensions/registry'
+import { discoverGraphPages } from './graph-pages/pages'
+import { pageRoots } from './graph-pages/roots'
+import { PAGES_PARTITION } from './graph-pages/protocol'
+import { pathToFileURL } from 'node:url'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -315,6 +319,7 @@ export function registerIpc(
   }
   on('project:remove', async (pid: string) => {
     await api().removeProject(pid)
+    pageRoots.delete(pid)
     indexSources.forget(pid)
     indexOptions.forget(pid)
     removalVersions.set(pid, Symbol())
@@ -692,6 +697,15 @@ export function registerIpc(
   on('graph:context', (pid: string, q: string, budget?: number) => api().context(pid, q, budget))
   on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
+
+  // NG-UI-1: trang HTML trong <root>/.nexgraph/. Đăng ký gốc dự án TẠI ĐÂY (chỉ dự án đã mở mới
+  // phục vụ được qua nxpage://) và chỉ trả tên tệp, không trả đường dẫn tuyệt đối cho renderer.
+  onTrusted('graph-pages:status', async (pid: string) => {
+    const root = await rootOf(pid)
+    const files = await discoverGraphPages(root)
+    pageRoots.set(pid, root)
+    return { ...files, partition: PAGES_PARTITION, preload: pathToFileURL(join(__dirname, '../preload/graphPage.js')).toString() }
+  })
 
   const win = (): BrowserWindow | null => getWindow()
   const acc = (): Promise<AccountService> => accounts(win, dataDir, devHooks)
