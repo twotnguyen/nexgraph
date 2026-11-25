@@ -7,7 +7,13 @@ export default defineConfig({
     resolve: { alias: { '@shared': resolve('src/shared') } }
   },
   preload: {
-    resolve: { alias: { '@shared': resolve('src/shared') } }
+    resolve: { alias: { '@shared': resolve('src/shared') } },
+    build: {
+      rollupOptions: {
+        // Hai preload: `index` cho cửa sổ app, `graphPage` cho khung nhúng `.nexgraph/` (ADR 0024).
+        input: { index: resolve('src/preload/index.ts'), graphPage: resolve('src/preload/graph-page.ts') }
+      }
+    }
   },
   renderer: {
     resolve: {

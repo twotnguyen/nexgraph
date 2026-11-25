@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, webContents } from 'electron'
 import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -61,6 +61,11 @@ import { adapterInstalled, installAdapter, type DebugKind } from './debug/adapte
 import { attachSpec, ensureConfigFile, listConfigs, resolveConfig, type DebugSpec } from './debug/launch-config'
 import { CollabHub } from './collab/hub'
 import { ExtensionRegistry } from './extensions/registry'
+import { discoverGraphPages, readGraphJsonIndex } from './graph-pages/pages'
+import { pageRoots } from './graph-pages/roots'
+import { PAGES_PARTITION, guestBinding } from './graph-pages/protocol'
+import { PAGE_NODE_CHANNEL, deliverLateSelection, handlePageNodeMessage } from './graph-pages/bridge'
+import { pathToFileURL } from 'node:url'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()
@@ -319,6 +324,7 @@ export function registerIpc(
   }
   on('project:remove', async (pid: string) => {
     await api().removeProject(pid)
+    pageRoots.delete(pid)
     indexSources.forget(pid)
     indexOptions.forget(pid)
     removalVersions.set(pid, Symbol())
@@ -696,6 +702,41 @@ export function registerIpc(
   on('graph:context', (pid: string, q: string, budget?: number) => api().context(pid, q, budget))
   on('graph:map', (pid: string, o?: { parent?: string; detail?: number }) => api().map(pid, o))
   on('graph:cycles', (pid: string, limit?: number) => api().cycles(pid, limit))
+
+  // NG-UI-1: trang HTML trong <root>/.nexgraph/. Đăng ký gốc dự án TẠI ĐÂY (chỉ dự án đã mở mới
+  // phục vụ được qua nxpage://) và chỉ trả tên tệp, không trả đường dẫn tuyệt đối cho renderer.
+  onTrusted('graph-pages:status', async (pid: string) => {
+    const root = await rootOf(pid)
+    const files = await discoverGraphPages(root)
+    pageRoots.set(pid, root)
+    return { ...files, partition: PAGES_PARTITION, preload: pathToFileURL(join(__dirname, '../preload/graphPage.js')).toString() }
+  })
+  // NG-UI-3: cầu nối chọn nút từ khung nhúng → panel của app. Chỉ nhận từ main frame của guest
+  // đã đăng ký (guestBinding) và chỉ gửi về đúng owner; owner mất thì bỏ tin, không fallback.
+  // `on?.` vì test main giả lập ipcMain chỉ có `handle`; tiến trình thật luôn có `on`.
+  ipcMain.on?.(PAGE_NODE_CHANNEL, (event, payload: unknown) => {
+    const sender = event.sender
+    const binding = guestBinding(sender.id)
+    void handlePageNodeMessage({
+      sender, senderFrame: event.senderFrame, binding, payload,
+      getNode: (projectId, id) => api().getNode(projectId, id),
+      // graph.html dùng id của Graphify (khác id graph.db) và không xuất source_location.
+      getPageNode: async (root, id) => (await readGraphJsonIndex(root)).get(id) ?? null
+    })
+      .then((result) => {
+        if (!result || !binding) return
+        // Tra nút là async: reload/đổi trang/đổi dự án có thể đã huỷ guest hoặc đổi binding.
+        // Gửi kết quả của trang cũ vào renderer là sai, kể cả khi cửa sổ chủ vẫn mở.
+        deliverLateSelection({
+          guest: sender,
+          snapshot: binding,
+          current: guestBinding(sender.id),
+          owner: webContents.fromId(binding.ownerId),
+          selection: result.selection
+        })
+      })
+      .catch(() => { /* trang hỏng không được làm chết main */ })
+  })
 
   const win = (): BrowserWindow | null => getWindow()
   const acc = (): Promise<AccountService> => accounts(win, dataDir, devHooks)

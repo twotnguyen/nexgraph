@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react'
 import type { WorkspaceTab } from '../../screens/ProjectOverviewScreen'
 
-export type Tone = 'blue' | 'teal' | 'magenta' | 'violet' | 'green' | 'amber'
+export type Tone = 'blue' | 'teal' | 'magenta' | 'violet' | 'green' | 'amber' | 'orange'
 
 // Mỗi thẻ xem có một màu riêng, dùng lại ở Tổng quan và thanh thẻ để người dùng nhận ra thẻ bằng màu.
 export const VIEW_TONE: Record<WorkspaceTab, Tone> = {
-  arch: 'blue', map: 'teal', flows: 'magenta', graph: 'violet', tree: 'green', report: 'amber'
+  arch: 'blue', pages: 'orange', map: 'teal', flows: 'magenta', graph: 'violet', tree: 'green', report: 'amber'
 }
 
 const PATHS = {
   arch: <><rect x="3" y="3" width="7" height="6" rx="1.5" /><rect x="14" y="3" width="7" height="6" rx="1.5" /><rect x="8.5" y="15" width="7" height="6" rx="1.5" /><path d="M6.5 9v3h11V9M12 12v3" /></>,
+  pages: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M8 4v5M8 14h4M8 17h7" /></>,
   map: <path d="M9 4 3 6.5V20l6-2.5 6 2.5 6-2.5V4l-6 2.5zM9 4v13.5M15 6.5V20" />,
   flows: <><circle cx="5" cy="6" r="2" /><circle cx="19" cy="18" r="2" /><path d="M7 6h4a3 3 0 0 1 3 3v6a3 3 0 0 0 3 3" /></>,
   graph: <><circle cx="6" cy="6" r="2.2" /><circle cx="18" cy="8" r="2.2" /><circle cx="12" cy="18" r="2.2" /><path d="M8.1 6.4l7.7 1.2M7 8l4 8M16.9 9.9l-3.8 6.2" /></>,

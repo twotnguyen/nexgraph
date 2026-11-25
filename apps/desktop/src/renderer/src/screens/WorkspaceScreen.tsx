@@ -29,6 +29,8 @@ import { WorkbenchCenter } from '../components/layout/WorkbenchCenter'
 import { ChatDock } from '../components/layout/ChatDock'
 import { WORKBENCH_PANELS, getWorkbenchPanel, type WorkbenchPanelContext } from '../state/workbenchPanels'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
+import { GraphPagesView } from '../components/pages/GraphPagesView'
+import type { GraphPagesStatus } from '@shared/graph-pages'
 import type { HighlightKind } from '../components/graph/kindStyle'
 import { NodeContextMenu } from '../components/graph/NodeContextMenu'
 import { NodeInspector } from '../components/graph/NodeInspector'
@@ -59,15 +61,15 @@ import { msg, msgId, msgText, type Message, type Msg } from '../state/messages'
 import { askNotice, pathFound, pathNoLink } from '../state/pathNotice'
 import './workspace.css'
 
-type Tab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
+type Tab = 'arch' | 'pages' | 'map' | 'flows' | 'graph' | 'tree' | 'report' | 'prs' | 'collab' | `file:${string}` | `preview:${string}` | `task:${string}` | `diff:${string}` | `multi:${string}`
 type SplitSide = 'right' | 'left' | 'up' | 'down'
 /** Thẻ diff có thể xem working tree, stage hoặc một commit lịch sử. */
 type DiffTab = { file: string; staged: boolean; rev?: string; from?: string }
 const diffKey = (d: DiffTab): Tab => `diff:${d.rev ?? (d.staged ? 's' : 'u')}:${d.from ?? ''}:${d.file}`
-const MAIN_TABS = ['arch', 'map', 'flows', 'graph', 'tree', 'report'] as const
+const MAIN_TABS = ['arch', 'pages', 'map', 'flows', 'graph', 'tree', 'report'] as const
 /** Nhãn thẻ đọc tại chỗ render: đổi ngôn ngữ phải áp dụng ngay, không giữ bản dịch lúc nạp module. */
 const tabLabels = (): Record<(typeof MAIN_TABS)[number], string> => ({
-  arch: vi.workspace.archTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
+  arch: vi.workspace.archTab, pages: vi.workspace.pagesTab, map: vi.workspace.mapTab, flows: vi.workspace.flowsTab,
   graph: vi.workspace.graphTab, tree: vi.workspace.treeTab, report: vi.workspace.reportTab
 })
 /** `seq`: mỗi lần mở một số mới, để mở lại đúng dòng cũ (đã cuộn đi chỗ khác) vẫn cuộn về. */
@@ -245,6 +247,28 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     window.nexgraph.prs.status(project.project_id).then((s) => alive && setPrsAvailable(s.available)).catch(() => {})
     return () => { alive = false }
   }, [project.project_id])
+  // Trang Đồ thị/Cây/Luồng gọi trong <root>/.nexgraph/: có tệp mới hiện thẻ, không có thì giữ
+  // nguyên giao diện cũ (R-N3). Dò lại khi đồ thị cập nhật vì pipeline có thể vừa ghi thêm trang.
+  const [pagesStatus, setPagesStatus] = useState<GraphPagesStatus | null>(null)
+  const pagesAutoOpened = useRef<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    const api = window.nexgraph.graphPages
+    if (!api) { setPagesStatus(null); return }
+    api.status(project.project_id).then((status) => { if (alive) setPagesStatus(status) }).catch(() => { if (alive) setPagesStatus(null) })
+    return () => { alive = false }
+  }, [project.project_id, revision])
+  const hasPages = !!pagesStatus && (pagesStatus.graph || pagesStatus.tree || pagesStatus.callflow !== null)
+  // Mặc định mở trang đồ thị khi dự án có (brief N1-D1); chỉ khi người dùng chưa đi đâu khác.
+  useEffect(() => {
+    if (!hasPages || initialTab || pagesAutoOpened.current === project.project_id || tab !== 'arch') return
+    pagesAutoOpened.current = project.project_id
+    setTab('pages')
+  }, [hasPages, initialTab, project.project_id, tab])
+  // Trang biến mất (đổi dự án, xoá .nexgraph) thì rơi về thẻ mặc định, không báo lỗi.
+  useEffect(() => {
+    if (tab === 'pages' && pagesStatus && !hasPages) setTab('arch')
+  }, [tab, pagesStatus, hasPages])
   const activeFile = tab.startsWith('file:') ? tab.slice('file:'.length) : undefined
   const previewFile = tab.startsWith('preview:') ? tab.slice('preview:'.length) : undefined
   const [lastMain, setLastMain] = useState<Tab>(initialTab ?? 'arch')
@@ -1102,7 +1126,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
         )}
         <QuickActionBar />
         <div className="tabs ws-tabs" role="tablist" aria-label={tr('Các thẻ không gian làm việc')} ref={tabList} onKeyDown={onTabKeys}>
-          {MAIN_TABS.map((t) => (
+          {MAIN_TABS.filter((t) => t !== 'pages' || hasPages).map((t) => (
             <button key={t} id={tabId(t)} type="button" role="tab" aria-selected={tab === t} aria-controls={viewId} tabIndex={tab === t ? 0 : -1}
               data-tone={VIEW_TONE[t]} className={`tab${tab === t ? ' active' : ''}`} onClick={() => selectView(t)}>
               <Icon name={t} size={16} /><span>{tabLabels()[t]}</span>
@@ -1190,6 +1214,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           </div>
         </>}
         <div data-split={sideShown ? splitSide : undefined} className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
+          {tab === 'pages' && pagesStatus && hasPages && <GraphPagesView projectId={project.project_id} status={pagesStatus} revision={revision} />}
           {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} onOpenProjects={onOpenProjects ? guardLeave(onOpenProjects) : undefined} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} openRequest={openSeq} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
