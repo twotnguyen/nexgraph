@@ -384,6 +384,7 @@
 [data-tone='violet'] { --tone: var(--violet); }
 [data-tone='green'] { --tone: var(--green); }
 [data-tone='amber'] { --tone: var(--amber); }
+[data-tone='orange'] { --tone: var(--orange); }
 
 
 * {

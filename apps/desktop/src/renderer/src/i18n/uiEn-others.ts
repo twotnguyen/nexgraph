@@ -388,4 +388,6 @@ export const uiEnOthers: Record<string, string> = {
   'trích từ mã': 'from code',
   'suy luận': 'inferred',
   'chưa chắc': 'uncertain',
+  // N1-D1: panel nút đã chọn của trang đồ thị nhúng.
+  'Chọn qua {via}': 'Selected via {via}',
 }

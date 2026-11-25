@@ -15,7 +15,7 @@ import './welcome.css'
 import './overview.css'
 import { errorMsg } from '../state/errorText'
 
-export type WorkspaceTab = 'arch' | 'map' | 'flows' | 'graph' | 'tree' | 'report'
+export type WorkspaceTab = 'arch' | 'pages' | 'map' | 'flows' | 'graph' | 'tree' | 'report'
 
 interface Props {
   project: ProjectSummary
