@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
@@ -9,10 +10,17 @@ import { describe, expect, it } from 'vitest'
  * Test đọc thẳng tệp ở gốc repo (đường dẫn tương đối theo test, không theo cwd).
  */
 const root = fileURLToPath(new URL('../../..', import.meta.url))
-const read = (name: string): string => readFileSync(`${root}/${name}`, 'utf8')
+const read = (name: string): string => readFileSync(join(root, name), 'utf8')
 
-/** Nội dung một mục `## <heading>` tới mục kế tiếp. */
-function section(text: string, heading: string): string {
+/**
+ * Xuống dòng về LF. Checkout Windows (`core.autocrlf`) đổi `\n` thành `\r\n` trong tệp .md nên marker
+ * `\n## X\n` và các chuỗi nhiều dòng không khớp (CI Windows của PR #74 đỏ vì vậy).
+ */
+const toLf = (text: string): string => text.replace(/\r\n/g, '\n')
+
+/** Nội dung một mục `## <heading>` tới mục kế tiếp (đã chuẩn hoá LF, nên so được trên mọi hệ điều hành). */
+function section(source: string, heading: string): string {
+  const text = toLf(source)
   const marker = `\n## ${heading}\n`
   const start = text.indexOf(marker)
   expect(start, `thiếu mục ## ${heading}`).toBeGreaterThan(-1)
@@ -82,5 +90,15 @@ describe('THIRD_PARTY_LICENSES.md (LIC-1)', () => {
     expect(mermaid).toContain('11.17.2')
     expect(mermaid).toContain('Copyright (c) 2014 - 2022 Knut Sveidqvist')
     expect(mermaid).toContain('MIT')
+  })
+
+  it('chịu được checkout CRLF (Windows core.autocrlf): mỗi mục có nội dung y như bản LF (B3)', () => {
+    const lf = text.replace(/\r\n/g, '\n')
+    const crlf = lf.replace(/\n/g, '\r\n')
+    expect(crlf).toContain('\r\n')
+    for (const heading of ['Graphify', 'OpenCode', 'vis-network', 'd3', 'Mermaid']) {
+      expect(section(crlf, heading), heading).toBe(section(lf, heading))
+      expect(section(crlf, heading), heading).not.toContain('\r')
+    }
   })
 })

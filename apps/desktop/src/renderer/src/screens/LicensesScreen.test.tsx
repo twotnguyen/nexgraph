@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../test-utils'
 import { setLocale } from '../state/locale'
-import { LicensesScreen } from './LicensesScreen'
+import { LicensesScreen, splitLicenseSections } from './LicensesScreen'
 
 const TEXT = `# Phần mềm bên thứ ba
 
@@ -97,6 +97,21 @@ describe('màn Giấy phép mã nguồn mở (LIC-2)', () => {
     await userEvent.clear(search)
     await userEvent.type(search, 'không-có-gì')
     expect(screen.getByText('0/3 sections')).toBeInTheDocument()
+  })
+
+  it('nội dung checkout CRLF (Windows core.autocrlf) tách mục, tìm kiếm và hiển thị y như LF (B3)', async () => {
+    const crlf = TEXT.replace(/\n/g, '\r\n')
+    // Mục, tiêu đề và thân mục giống hệt bản LF: không sót `\r` trong dữ liệu đưa lên DOM.
+    expect(splitLicenseSections(crlf)).toEqual(splitLicenseSections(TEXT))
+    expect(splitLicenseSections(crlf).sections.map((section) => section.title)).toEqual(['Graphify', 'Monaco Editor', 'd3'])
+
+    open(vi.fn(async () => ({ text: crlf, path: 'C:\\x\\THIRD_PARTY_LICENSES.md' })))
+    expect(await screen.findByRole('heading', { name: 'Graphify' })).toBeInTheDocument()
+    expect(screen.getByText('3/3 mục')).toBeInTheDocument()
+    for (const pre of document.querySelectorAll('pre')) expect(pre.textContent, pre.textContent ?? '').not.toContain('\r')
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Tìm trong giấy phép' }), 'apache')
+    expect(screen.getByText('1/3 mục')).toBeInTheDocument()
+    expect([...document.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(['Apache'])
   })
 
   it('lỗi đọc tệp hiện thông báo thay vì màn hình trống', async () => {

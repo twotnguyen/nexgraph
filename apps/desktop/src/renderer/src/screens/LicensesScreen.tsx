@@ -9,8 +9,11 @@ type Section = { title: string; body: string }
 /**
  * Tách `THIRD_PARTY_LICENSES.md` thành các mục `## …` để ô tìm lọc theo mục.
  * Phần trước tiêu đề đầu tiên là lời dẫn, luôn hiện.
+ * Xuống dòng được chuẩn hoá về LF trước khi tách: bản cài Windows dựng từ checkout CRLF
+ * (`core.autocrlf`) nếu không sẽ mang `\r` vào thân mục trên DOM.
  */
-export function splitLicenseSections(text: string): { intro: string; sections: Section[] } {
+export function splitLicenseSections(raw: string): { intro: string; sections: Section[] } {
+  const text = raw.replace(/\r\n?/g, '\n')
   const first = text.search(/^## /m)
   if (first < 0) return { intro: '', sections: [{ title: '', body: text.trim() }] }
   const intro = text.slice(0, first).trim()
