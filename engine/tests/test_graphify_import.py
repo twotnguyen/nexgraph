@@ -149,13 +149,18 @@ def test_enrich_marks_estimated_fields_when_source_missing(tmp_path):
     assert conn.execute("SELECT ma_bam FROM tep WHERE duong_dan_tuong_doi = 'ghost.py'").fetchone()[0] == "0" * 64
 
 
-def _graph_snapshot(conn) -> tuple[set, set]:
-    nodes = {(r["id_nut"], r["loai_nut"], r["dong_bat_dau"], r["dong_ket_thuc"], r["chu_ky"], r["nguon_goc"])
-             for r in conn.execute("SELECT id_nut, loai_nut, dong_bat_dau, dong_ket_thuc, chu_ky, nguon_goc FROM nut")}
+def _graph_snapshot(conn) -> tuple[set, set, set]:
+    nodes = {(r["id_nut"], r["loai_nut"], r["dong_bat_dau"], r["dong_ket_thuc"], r["chu_ky"],
+              r["nguon_goc"], r["cong_dong"])
+             for r in conn.execute(
+                 "SELECT n.id_nut, n.loai_nut, n.dong_bat_dau, n.dong_ket_thuc, n.chu_ky, n.nguon_goc,"
+                 " k.ten AS cong_dong FROM nut n LEFT JOIN khoi_kien_truc k ON k.ma_khoi = n.ma_khoi")}
     edges = {(r["s"], r["d"], r["loai_canh"], r["loai_con"], r["dong_bang_chung"]) for r in conn.execute(
         "SELECT ns.id_nut AS s, nd.id_nut AS d, c.loai_canh, c.loai_con, c.dong_bang_chung"
         " FROM canh c JOIN nut ns ON ns.ma_nut = c.ma_nut_nguon JOIN nut nd ON nd.ma_nut = c.ma_nut_dich")}
-    return nodes, edges
+    communities = {(r["ma_khoi"], r["ten"], r["do_gan_ket"]) for r in conn.execute(
+        "SELECT ma_khoi, ten, do_gan_ket FROM khoi_kien_truc")}
+    return nodes, edges, communities
 
 
 def test_replace_files_matches_full_import(tmp_path):
@@ -179,6 +184,34 @@ def test_replace_files_matches_full_import(tmp_path):
     full_store, full_conn = open_store(tmp_path / "full")
     import_graph_json(full_store, root, root / ".nexgraph" / "graph.json")
     assert _graph_snapshot(conn) == _graph_snapshot(full_conn)
+
+
+def test_replace_files_syncs_communities_on_new_symbol(tmp_path):
+    """QA #67.1 (repro của QA): thêm hàm vào app.py, manifest chỉ đổi app.py.
+
+    Cộng đồng + quan hệ thành viên phải được đồng bộ như nạp đầy đủ, kể cả nút ở tệp
+    không đổi nếu graph.json mới phân nhóm lại.
+    """
+    root = make_project(tmp_path)
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+
+    changed = changed_files_from_manifest(
+        json.loads((SNAPSHOTS / "base" / "manifest.json").read_text(encoding="utf-8")),
+        json.loads((SNAPSHOTS / "app_change" / "manifest.json").read_text(encoding="utf-8")))
+    assert changed == ["app.py"]
+    shutil.copy(SNAPSHOTS / "app_change" / "app.py", root / "app.py")
+    shutil.copy(SNAPSHOTS / "app_change" / "graph.json", root / ".nexgraph" / "graph.json")
+    replace_files(store, changed, root / ".nexgraph" / "graph.json")
+
+    full_store, full_conn = open_store(tmp_path / "full-app")
+    import_graph_json(full_store, root, root / ".nexgraph" / "graph.json")
+    assert _graph_snapshot(conn) == _graph_snapshot(full_conn)
+
+    # Ký hiệu mới phải có cộng đồng như bản nạp đầy đủ, không phải NULL.
+    assert conn.execute(
+        "SELECT k.ten FROM nut n JOIN khoi_kien_truc k ON k.ma_khoi = n.ma_khoi"
+        " WHERE n.id_nut = 'app_farewell#function'").fetchone()[0] == "Community 0"
 
 
 def test_cli_import_graph(tmp_path, capsys):

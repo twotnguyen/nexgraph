@@ -1,0 +1,147 @@
+{
+  "communities": {
+    "0": [
+      "app",
+      "app_farewell",
+      "app_greet",
+      "app_rationale_1",
+      "app_shout",
+      "test_app",
+      "test_app_test_greet",
+      "test_app_test_shout"
+    ],
+    "1": [
+      "main",
+      "main_run",
+      "util",
+      "util_add",
+      "util_counter",
+      "util_counter_increment",
+      "util_twice"
+    ],
+    "2": [
+      "app_greeter",
+      "app_greeter_hello",
+      "app_greeter_init",
+      "test_app_test_greeter"
+    ]
+  },
+  "cohesion": {
+    "0": 0.42857142857142855,
+    "1": 0.6190476190476191,
+    "2": 0.5
+  },
+  "gods": [
+    {
+      "id": "app_greeter",
+      "label": "Greeter",
+      "degree": 5
+    },
+    {
+      "id": "app_greet",
+      "label": "greet()",
+      "degree": 4
+    },
+    {
+      "id": "app_shout",
+      "label": "shout()",
+      "degree": 4
+    },
+    {
+      "id": "main_run",
+      "label": "run()",
+      "degree": 4
+    },
+    {
+      "id": "util_twice",
+      "label": "twice()",
+      "degree": 4
+    },
+    {
+      "id": "util_add",
+      "label": "add()",
+      "degree": 3
+    },
+    {
+      "id": "test_app_test_greet",
+      "label": "test_greet()",
+      "degree": 2
+    },
+    {
+      "id": "test_app_test_shout",
+      "label": "test_shout()",
+      "degree": 2
+    },
+    {
+      "id": "test_app_test_greeter",
+      "label": "test_greeter()",
+      "degree": 2
+    },
+    {
+      "id": "app_rationale_1",
+      "label": "Fixture nh\u1ecf (Python + TypeScript + test) cho b\u1ed9 n\u1ea1p graph.json.",
+      "degree": 1
+    }
+  ],
+  "surprises": [
+    {
+      "source": "test_greeter()",
+      "target": "Greeter",
+      "source_files": [
+        "test_app.py",
+        "app.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "peripheral node `test_greeter()` unexpectedly reaches hub `Greeter`"
+    },
+    {
+      "source": "test_greet()",
+      "target": "greet()",
+      "source_files": [
+        "test_app.py",
+        "app.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    },
+    {
+      "source": "test_shout()",
+      "target": "shout()",
+      "source_files": [
+        "test_app.py",
+        "app.py"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    },
+    {
+      "source": "run()",
+      "target": "Counter",
+      "source_files": [
+        "main.ts",
+        "util.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    },
+    {
+      "source": "run()",
+      "target": "twice()",
+      "source_files": [
+        "main.ts",
+        "util.ts"
+      ],
+      "confidence": "EXTRACTED",
+      "relation": "calls",
+      "why": "cross-file semantic connection"
+    }
+  ],
+  "tokens": {
+    "input": 0,
+    "output": 0
+  }
+}

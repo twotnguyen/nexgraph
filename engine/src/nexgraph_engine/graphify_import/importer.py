@@ -316,6 +316,38 @@ def file_records(root: Path, files: list[str]) -> tuple[dict[str, FileRec], list
     return records, missing
 
 
+def sync_communities(store: GraphStore, parsed: ParsedGraph) -> int:
+    """Đồng bộ bảng cộng đồng + quan hệ thành viên toàn bộ theo `graph.json` (QA #67.1).
+
+    Nạp đầy đủ và nạp tăng dần dùng chung bước này: cộng đồng được đánh số lại từ 1 theo
+    `community` của graph.json, mọi nút (kể cả nút ở tệp không đổi) nhận lại `ma_khoi`.
+    Rẻ (một bảng tạm + một UPDATE) nên chạy mỗi lần thay vì diff cộng đồng.
+    """
+    conn = store.conn
+    conn.execute("UPDATE nut SET ma_khoi = NULL")
+    conn.execute("DELETE FROM khoi_kien_truc")
+    block_of = {row.key: index for index, row in enumerate(parsed.communities, start=1)}
+    if block_of:
+        conn.executemany("INSERT INTO khoi_kien_truc (ma_khoi, ten, do_gan_ket) VALUES (?, ?, ?)",
+                         [(block_of[row.key], row.name, row.cohesion) for row in parsed.communities])
+    members: dict[str, int] = {}
+    for row in parsed.nodes:
+        if row.community is not None and row.community in block_of:
+            members[row.node_id] = block_of[row.community]
+            members.setdefault(row.gid, block_of[row.community])  # khớp cả khi enrich đã đổi loại nút
+    if members:
+        conn.execute("CREATE TEMP TABLE _thanh_vien_cong_dong (id TEXT PRIMARY KEY, ma_khoi INTEGER)")
+        conn.executemany("INSERT OR REPLACE INTO temp._thanh_vien_cong_dong (id, ma_khoi) VALUES (?, ?)",
+                         list(members.items()))
+        conn.execute(
+            "UPDATE nut SET ma_khoi = COALESCE("
+            " (SELECT ma_khoi FROM temp._thanh_vien_cong_dong t WHERE t.id = nut.id_nut),"
+            " (SELECT ma_khoi FROM temp._thanh_vien_cong_dong t"
+            "  WHERE nut.id_nut = t.id || '#' || nut.loai_nut))")
+        conn.execute("DROP TABLE temp._thanh_vien_cong_dong")
+    return len(parsed.communities)
+
+
 def edge_insert_rows(parsed: ParsedGraph, pk_of_id: dict[str, int]) -> list[tuple]:
     rows: list[tuple] = []
     for edge in parsed.edges:
@@ -355,10 +387,6 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
             if rel in missing:
                 store.add_file_error(rel, "read", "graph.json nhắc tới nhưng không có trên đĩa")
 
-        block_of = {row.key: index for index, row in enumerate(parsed.communities, start=1)}
-        conn.executemany("INSERT INTO khoi_kien_truc (ma_khoi, ten, do_gan_ket) VALUES (?, ?, ?)",
-                         [(block_of[row.key], row.name, row.cohesion) for row in parsed.communities])
-
         pk_of_id: dict[str, int] = {}
         for index, row in enumerate(parsed.nodes, start=1):
             pk_of_id[row.node_id] = index
@@ -369,7 +397,7 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
             is_test = 1 if is_test_path(row.file) else 0
             node_rows.append((pk, row.node_id, row.kind.value, row.label, row.qualified_name,
                               row.line_start, row.line_end, is_test, row.origin.value, None, row.doc,
-                              file_pk[row.file], block_of.get(row.community) if row.community is not None else None))
+                              file_pk[row.file], None))
             fts_rows.append((pk, row.label, row.qualified_name, None, row.doc,
                              search_keywords(row.label, row.qualified_name)))
         for part in _chunks(node_rows):
@@ -381,6 +409,7 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
             conn.executemany(
                 "INSERT INTO nut_fts (rowid, nhan, ten_day_du, chu_ky, tai_lieu, tu_khoa)"
                 " VALUES (?, ?, ?, ?, ?, ?)", part)
+        sync_communities(store, parsed)
 
         edge_rows = edge_insert_rows(parsed, pk_of_id)
         inserted = 0
