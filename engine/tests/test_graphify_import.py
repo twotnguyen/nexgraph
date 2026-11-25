@@ -1,8 +1,10 @@
 """NG-IMP-1/2/3: nạp graph.json của vendor Graphify vào graph.db (ADR 0023)."""
+import hashlib
 import json
+import os
 import shutil
 import sqlite3
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from nexgraph_engine.changes.model import ChangeSet, FileChange
 from nexgraph_engine.graphify_import import changed_files_from_manifest, import_graph_json, replace_files
@@ -275,6 +277,46 @@ def test_file_records_and_enrich_skip_outside_root(tmp_path, monkeypatch):
     report = enrich_module.enrich_missing_fields(store, root, ["link.py", "../ngoai.py", str(outside)])
     assert called == [] and report.files_read == 0
     assert report.rejected == ("../ngoai.py", str(outside), "link.py")
+
+
+def test_windows_absolute_and_unc_paths_pure():
+    """QA vòng 2.1: nhận dạng/đổi đường Windows bằng hàm thuần (chạy được trên macOS)."""
+    from nexgraph_engine.graphify_import.paths import (
+        is_absolute_source, relative_posix_in_root, windows_relative_source,
+    )
+
+    assert is_absolute_source(r"C:\proj\app.py")
+    assert is_absolute_source("C:/proj/app.py")
+    assert is_absolute_source(r"\\server\share\proj\app.py")
+    assert is_absolute_source("/etc/passwd")
+    assert not is_absolute_source("src/app.py")
+
+    root = PureWindowsPath("C:/proj")
+    assert windows_relative_source(r"C:\proj\app.py", root) == "app.py"
+    assert windows_relative_source("C:/proj/src/app.py", root) == "src/app.py"
+    assert windows_relative_source(r"C:\khac\app.py", root) is None
+    assert windows_relative_source(
+        r"\\server\share\proj\app.py", PureWindowsPath("//server/share/proj")) == "app.py"
+    assert relative_posix_in_root(root, PureWindowsPath("C:/proj/sub/a.py")) == "sub/a.py"
+    assert relative_posix_in_root(root, PureWindowsPath("C:/proj")) is None
+    assert relative_posix_in_root(root, PureWindowsPath("C:/other/a.py")) is None
+
+
+def test_windows_absolute_path_rejected_verbatim_on_posix(tmp_path):
+    """Trên nền POSIX không thể xác thực realpath của đường Windows → từ chối, giữ nguyên văn."""
+    if os.name == "nt":
+        return  # Windows: ca đường tuyệt đối nằm trong root đã có ở test_rejects_paths_outside_root_before_io
+    root = make_project(tmp_path)
+    raw = r"C:\proj\graphify app\app.py"
+    (root / ".nexgraph" / "graph.json").write_text(json.dumps({
+        "nodes": [{"id": "win_abs", "label": "win_abs()", "_callable": True, "_origin": "ast",
+                   "source_file": raw, "source_location": "L1"}],
+        "links": [],
+    }), encoding="utf-8")
+    store, conn = open_store(tmp_path)
+    report = import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+    assert report.rejected_paths == (raw,)
+    assert store.get_node("win_abs#function").file == "__(graphify-external)"
 
 
 def test_cli_import_graph(tmp_path, capsys):

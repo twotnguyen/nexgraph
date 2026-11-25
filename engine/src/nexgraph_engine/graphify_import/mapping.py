@@ -6,11 +6,14 @@ tăng dần (NG-IMP-3) không lệch nhau. Bảng theo spike A1 §4.3; quan hệ
 """
 from __future__ import annotations
 
+import os
 import re
 from functools import lru_cache
 from pathlib import Path
 
-from nexgraph_engine.graphify_import.paths import resolve_inside_root
+from nexgraph_engine.graphify_import.paths import (
+    is_absolute_source, is_windows_absolute, relative_posix_in_root, resolve_inside_root,
+)
 from nexgraph_engine.schema.enums import EdgeType, Origin
 
 # graph.json không có nút gốc/khái niệm ngoài tệp: mọi nút thiếu `source_file` được gắn vào
@@ -105,19 +108,24 @@ def _inside_root(root_str: str, rel_path: str) -> bool:
 def normalise_rel_path(raw: object, root) -> str:
     """Đưa `source_file` về đường dẫn tương đối kiểu POSIX (RB3: không mở đầu `/`, không `\\`).
 
-    Trả `""` khi đường dẫn thoát gốc dự án: tuyệt đối ở ngoài, có `..`, hoặc symlink có đích
-    thật ra ngoài (QA #67.2). Nút khi đó gắn vào tệp tổng hợp thay vì tạo hàng `tep` giả.
+    Đường tuyệt đối (POSIX, Windows có ổ đĩa, UNC) được resolve rồi mới đổi thành tương đối;
+    chỉ nhận khi đích thật nằm trong `root`. Trả `""` khi đường dẫn thoát gốc dự án: tuyệt đối
+    ở ngoài, có `..`, hoặc symlink có đích thật ra ngoài (QA #67.2, QA vòng 2.1).
     """
     if not isinstance(raw, str) or not raw.strip():
         return ""
-    text = raw.strip().replace("\\", "/")
+    text = raw.strip()
+    if is_absolute_source(text):
+        if is_windows_absolute(text) and os.name != "nt":
+            return ""  # nền POSIX không thể xác thực realpath của đường Windows
+        try:
+            candidate = Path(text).resolve()
+        except (OSError, RuntimeError):
+            return ""
+        return relative_posix_in_root(Path(root).resolve(), candidate) or ""
+    text = text.replace("\\", "/")
     while text.startswith("./"):
         text = text[2:]
-    if text.startswith("/"):
-        try:
-            text = str(Path(text).resolve().relative_to(Path(root).resolve()))
-        except (ValueError, OSError):
-            return ""
     if any(part == ".." for part in text.split("/")):
         return ""
     if not _inside_root(str(Path(root)), text):

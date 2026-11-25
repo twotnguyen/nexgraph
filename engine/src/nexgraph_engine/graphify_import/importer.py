@@ -167,7 +167,7 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
             files.add(rel)
         else:
             if isinstance(raw, str) and raw.strip():
-                rejected.add(raw.strip().replace("\\", "/"))
+                rejected.add(raw.strip())
             if sourceless == "external":
                 need_external = True
     for link in raw_links:
@@ -176,7 +176,7 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
         if rel:
             files.add(rel)
         elif isinstance(raw, str) and raw.strip():
-            rejected.add(raw.strip().replace("\\", "/"))
+            rejected.add(raw.strip())
     if need_external:
         files.add(EXTERNAL_FILE)
 
