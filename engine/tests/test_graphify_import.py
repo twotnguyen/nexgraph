@@ -370,6 +370,71 @@ def test_label_decision_counts_members_of_removed_files(tmp_path):
     assert [row[0] for row in conn.execute("SELECT duong_dan_tuong_doi FROM tep")] == ["app.py"]
 
 
+def _community_1_shown(store) -> dict:
+    from nexgraph_engine.mcp.server import community_json
+
+    return community_json(store, "com:1", 20)["community"]
+
+
+@pytest.mark.parametrize("mode", ["incremental", "full"])
+def test_vendor_rename_without_override_uses_current_name(tmp_path, mode):
+    """QA vòng 3.3 (repro rv67c-members, ca 5 nút không nhãn): cùng thành viên, `Vendor A` → `Vendor B`."""
+    root = tmp_path / "du-an"
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, _vendor_community(root, {"app.py": 5}, "Vendor A"))
+    assert _community_1_shown(store)["label"] == "Vendor A"
+    assert conn.execute("SELECT count(*) FROM nhan_cum").fetchone()[0] == 0  # không có nhãn AI/người dùng
+    before = _members(conn)
+
+    _reload(store, root, _vendor_community(root, {"app.py": 5}, "Vendor B"), mode, ["app.py"])
+
+    assert _members(conn) == before  # id cộng đồng và thành viên ổn định
+    assert _community_1_shown(store) == {"id": "com:1", "label": "Vendor B", "size": 5, "cohesion": None}
+
+
+@pytest.mark.parametrize("mode", ["incremental", "full"])
+@pytest.mark.parametrize("vendor_name", ["Vendor B", None])
+def test_override_beats_vendor_name_while_members_unchanged(tmp_path, mode, vendor_name):
+    """Nhãn AI/người dùng giữ khi tập thành viên không đổi, kể cả khi graph.json đổi hoặc bỏ tên."""
+    root = tmp_path / "du-an"
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, _vendor_community(root, {"app.py": 5}, "Vendor A"))
+    _label_community_1(store, conn, "QA custom")
+
+    _reload(store, root, _vendor_community(root, {"app.py": 5}, vendor_name), mode, ["app.py"])
+
+    assert _community_1_shown(store) == {"id": "com:1", "label": "QA custom", "size": 5, "cohesion": None}
+
+
+@pytest.mark.parametrize("mode", ["incremental", "full"])
+def test_default_name_when_no_override_and_no_vendor_name(tmp_path, mode):
+    root = tmp_path / "du-an"
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, _vendor_community(root, {"app.py": 5}, "Vendor A"))
+
+    _reload(store, root, _vendor_community(root, {"app.py": 5}, None), mode, ["app.py"])
+
+    assert _community_1_shown(store)["label"] == "Community 1"
+
+
+def test_dropped_override_does_not_come_back_through_a_reused_id(tmp_path):
+    """Nhãn hết áp dụng (5 → 1 thành viên) còn nằm ở nhan_cum, cum_id '1'; id 1 vẫn thuộc cộng đồng mới.
+
+    Lần nạp sau graph.json đổi tên cộng đồng đó: hàng nhan_cum cũ không được coi là nhãn đặt tay của nó.
+    """
+    root = tmp_path / "du-an"
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, _vendor_community(root, {"app.py": 5}, "Vendor A"))
+    _label_community_1(store, conn, "QA custom")
+
+    replace_files(store, ["app.py"], _vendor_community(root, {"app.py": 1}, "Vendor B"), root=root)
+    assert _community_1_shown(store)["label"] == "Vendor B"
+    assert [row[0] for row in conn.execute("SELECT cum_id FROM nhan_cum")] == ["1"]
+
+    replace_files(store, ["app.py"], _vendor_community(root, {"app.py": 1}, "Vendor C"), root=root)
+    assert _community_1_shown(store) == {"id": "com:1", "label": "Vendor C", "size": 1, "cohesion": None}
+
+
 def test_negative_path_cache_is_per_import(tmp_path):
     """QA vòng 2.3 (repro của QA): tệp bị từ chối ở lần nạp 1, thay bằng tệp thật → lần nạp 2 nhận."""
     root = make_project(tmp_path)

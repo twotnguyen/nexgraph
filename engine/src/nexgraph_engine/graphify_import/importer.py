@@ -345,6 +345,7 @@ class PriorCommunity:
 
     ma_khoi: int
     name: str
+    override: bool  # nguồn tên: True = AI/người dùng đặt (`nhan_cum` còn khớp), False = tên từ graph.json
     members: frozenset[str]  # `member_key` của từng nút thành viên
 
 
@@ -358,27 +359,39 @@ def member_key(node_id: str) -> str:
 
 
 def snapshot_communities(store: GraphStore) -> dict[int, PriorCommunity]:
-    """Chụp (ma_khoi, tên, tập thành viên) của mọi cộng đồng hiện có.
+    """Chụp (ma_khoi, tên, nguồn tên, tập thành viên) của mọi cộng đồng hiện có.
 
     Phải gọi TRƯỚC khi lần nạp thay/gỡ bất kỳ nút nào (`clear_graph`, `replace_file`, `remove_file`):
     chụp sau thì thành viên đã xoá biến mất khỏi tập "cũ" và phần còn lại bị coi là khớp tuyệt đối.
+
+    Nguồn tên: chỉ tên do `semantic.ingest.write_labels` ghi (hàng `nhan_cum` có `cum_id` = `ma_khoi`
+    VÀ `ten` đúng bằng tên hiện tại của khối) mới là override. Hàng `nhan_cum` còn sót từ cộng đồng
+    đã đổi tên khác đi (id được tái dùng) không khớp `ten` nên không bị gán nhầm cho khối mới.
     """
     conn = store.conn
+    overrides = {int(row[0]) for row in conn.execute(
+        "SELECT k.ma_khoi FROM khoi_kien_truc k"
+        " JOIN nhan_cum l ON l.cum_id = CAST(k.ma_khoi AS TEXT) AND l.ten = k.ten")}
     members: dict[int, set[str]] = {}
     for row in conn.execute("SELECT ma_khoi, id_nut FROM nut WHERE ma_khoi IS NOT NULL"):
         members.setdefault(int(row["ma_khoi"]), set()).add(member_key(row["id_nut"]))
     return {int(row["ma_khoi"]): PriorCommunity(ma_khoi=int(row["ma_khoi"]), name=row["ten"],
+                                                override=int(row["ma_khoi"]) in overrides,
                                                 members=frozenset(members.get(int(row["ma_khoi"]), ())))
             for row in conn.execute("SELECT ma_khoi, ten FROM khoi_kien_truc")}
 
 
 def sync_communities(store: GraphStore, parsed: ParsedGraph, prior: dict[int, PriorCommunity]) -> int:
-    """Đồng bộ bảng cộng đồng + quan hệ thành viên toàn bộ theo `graph.json` (QA #67.1, vòng 2.2, 3.2).
+    """Đồng bộ bảng cộng đồng + quan hệ thành viên toàn bộ theo `graph.json` (QA #67.1, vòng 2.2, 3.2, 3.3).
 
     Nạp đầy đủ và nạp tăng dần dùng chung bước này. `prior` là ảnh chụp cộng đồng TRƯỚC lần nạp
-    (`snapshot_communities`): cộng đồng có tập thành viên không đổi giữ nguyên `ma_khoi`/id và tên;
-    tập đổi nhận tên cũ nếu Jaccard ≥ 0.8 với đúng một cộng đồng cũ (tính trên tập cũ ĐẦY ĐỦ, kể cả
-    thành viên bị xoá trong lần nạp này). Còn lại dùng tên mặc định của graph.json.
+    (`snapshot_communities`). Cộng đồng có tập thành viên không đổi giữ nguyên `ma_khoi` (id ổn định);
+    tập đổi nhận `ma_khoi` cũ nếu Jaccard ≥ 0.8 với đúng một cộng đồng cũ (tính trên tập cũ ĐẦY ĐỦ,
+    kể cả thành viên bị xoá trong lần nạp này). Tên theo thứ tự:
+
+    a) tên AI/người dùng đặt (override): giữ khi cộng đồng khớp như trên;
+    b) không có override: luôn tên HIỆN TẠI trong graph.json (tên vendor cũ không bị ghim lại);
+    c) không có cả hai: tên mặc định `Community <id vendor>`.
     """
     conn = store.conn
 
@@ -403,20 +416,25 @@ def sync_communities(store: GraphStore, parsed: ParsedGraph, prior: dict[int, Pr
     keys = sorted(set(meta) | set(member_sets))
 
     used_old: set[int] = set()
-    assigned: dict[int, tuple[int | None, str]] = {}
+    # khoá cộng đồng graph.json → (ma_khoi cũ được giữ, tên override cần giữ; None = lấy tên từ graph.json)
+    assigned: dict[int, tuple[int, str | None]] = {}
+
+    def kept_name(old_id: int) -> str | None:
+        old = prior[old_id]
+        return old.name if old.override else None
 
     exact: dict[frozenset[str], list[int]] = {}
     for old_id, old in prior.items():
         if old.members:
             exact.setdefault(old.members, []).append(old_id)
-    for key in keys:  # 1) tập thành viên không đổi → giữ nguyên id + tên
+    for key in keys:  # 1) tập thành viên không đổi → giữ nguyên id (và tên nếu là override)
         members = member_sets.get(key, set())
         candidates = exact.get(frozenset(members)) if members else None
         if candidates and len(candidates) == 1 and candidates[0] not in used_old:
             old_id = candidates[0]
             used_old.add(old_id)
-            assigned[key] = (old_id, prior[old_id].name)
-    for key in keys:  # 2) Jaccard ≥ 0.8 với đúng một cộng đồng cũ → giữ tên cũ
+            assigned[key] = (old_id, kept_name(old_id))
+    for key in keys:  # 2) Jaccard ≥ 0.8 với đúng một cộng đồng cũ → giữ id (và tên nếu là override)
         if key in assigned or not member_sets.get(key):
             continue
         new_set = member_sets[key]
@@ -432,19 +450,19 @@ def sync_communities(store: GraphStore, parsed: ParsedGraph, prior: dict[int, Pr
                 tie = True
         if best is not None and best_score >= _KEEP_NAME_JACCARD and not tie:
             used_old.add(best)
-            assigned[key] = (best, prior[best].name)
+            assigned[key] = (best, kept_name(best))
 
-    used_ids = {old_id for old_id, _ in assigned.values() if old_id is not None}
+    used_ids = {old_id for old_id, _ in assigned.values()}
     next_id = 1
     final: dict[int, tuple[int, str, float | None]] = {}
-    for key in keys:  # 3) còn lại: id trống nhỏ nhất + tên mặc định
-        old_id, name = assigned.get(key, (None, ""))
+    for key in keys:  # 3) id còn lại: id trống nhỏ nhất; tên: override đã giữ > tên hiện tại graph.json > mặc định
+        old_id, override_name = assigned.get(key, (None, None))
         if old_id is None:
             while next_id in used_ids:
                 next_id += 1
             old_id = next_id
             used_ids.add(old_id)
-            name = meta[key].name if key in meta else f"Community {key}"
+        name = override_name or (meta[key].name if key in meta else f"Community {key}")
         final[key] = (old_id, name, meta[key].cohesion if key in meta else None)
 
     conn.execute("UPDATE nut SET ma_khoi = NULL")
