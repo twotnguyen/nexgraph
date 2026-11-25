@@ -261,6 +261,115 @@ def test_sync_communities_carries_label_when_regrouped(tmp_path):
     assert community_json(store, f"com:{new_id}", 50)["community"]["label"] == "Nhóm app"
 
 
+def _vendor_community(root: Path, nodes_by_file: dict[str, int], name: str | None) -> Path:
+    """graph.json vendor có MỘT cộng đồng (id 1) với `n` nút biến ở mỗi tệp — repro rv67c-members của QA."""
+    root.mkdir(parents=True, exist_ok=True)
+    graph_nodes = []
+    for rel, count in nodes_by_file.items():
+        (root / rel).write_text("".join(f"{rel[:-3]}_{i} = {i}\n" for i in range(count)), encoding="utf-8")
+        graph_nodes += [{"id": f"{rel[:-3]}_{i}", "label": f"{rel[:-3]}_{i}", "community": 1,
+                         "source_file": rel, "source_location": f"L{i + 1}",
+                         **({"community_name": name} if name else {})} for i in range(count)]
+    graph = root / ".nexgraph" / "graph.json"
+    graph.parent.mkdir(parents=True, exist_ok=True)
+    graph.write_text(json.dumps({"nodes": graph_nodes, "links": []}), encoding="utf-8")
+    return graph
+
+
+def _members(conn) -> set[str]:
+    return {row[0] for row in conn.execute("SELECT id_nut FROM nut WHERE ma_khoi = 1")}
+
+
+def _label_community_1(store, conn, name: str) -> None:
+    """Đặt nhãn AI/người dùng đúng như pipeline: `write_labels` ghi `nhan_cum` + `khoi_kien_truc.ten`."""
+    from nexgraph_engine.semantic.chunks import membership_signature
+    from nexgraph_engine.semantic.ingest import write_labels
+
+    group = next(c for c in store.communities() if c["id"] == 1)
+    assert write_labels(store, {"1": [1, membership_signature(group["files"])]}, {"1": name}) == {1: name}
+    conn.commit()
+
+
+def _reload(store, root: Path, graph: Path, mode: str, changed: list[str]) -> None:
+    if mode == "full":
+        import_graph_json(store, root, graph)
+    else:
+        replace_files(store, changed, graph, root=root)
+
+
+@pytest.mark.parametrize("mode", ["incremental", "full"])
+@pytest.mark.parametrize(("kept", "jaccard", "expected"), [
+    (4, 0.8, "QA custom"),  # 4/5: đúng ngưỡng sau khi xoá → vẫn là cộng đồng đó, giữ nhãn đã đặt
+    (1, 0.2, "Vendor B"),   # 1/5: dưới ngưỡng → nhãn không còn áp dụng, dùng tên HIỆN TẠI của graph.json
+])
+def test_label_decision_uses_membership_from_before_the_import(tmp_path, mode, kept, jaccard, expected):
+    """QA vòng 3.2 (repro rv67c-members): xoá thành viên rồi nạp lại — so với tập TRƯỚC lần nạp."""
+    from nexgraph_engine.mcp.server import community_json
+
+    root = tmp_path / "Đồ án" / "du-an"
+    graph = _vendor_community(root, {"app.py": 5}, "Vendor A")
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, graph)
+    _label_community_1(store, conn, "QA custom")
+    before = _members(conn)
+    assert len(before) == 5 and community_json(store, "com:1", 20)["community"]["label"] == "QA custom"
+
+    _reload(store, root, _vendor_community(root, {"app.py": kept}, "Vendor B"), mode, ["app.py"])
+
+    after = _members(conn)
+    assert len(after) == kept
+    assert len(before & after) / len(before | after) == pytest.approx(jaccard)  # kịch bản đúng như mô tả
+    shown = community_json(store, "com:1", 20)
+    assert shown["community"] == {"id": "com:1", "label": expected, "size": kept, "cohesion": None}
+    assert {node["id"] for node in shown["nodes"]} == after
+    # Nhãn người dùng/AI không bị xoá khỏi nhan_cum dù không còn áp dụng cho cộng đồng này.
+    assert [row[0] for row in conn.execute("SELECT ten FROM nhan_cum")] == ["QA custom"]
+
+
+@pytest.mark.parametrize("mode", ["incremental", "full"])
+def test_label_survives_noop_reload_when_enrich_changed_node_kind(tmp_path, mode):
+    """Enrich đổi `a_run#function` → `a_run#method`: thành viên so theo nút vendor, không theo `#kind`."""
+    from nexgraph_engine.mcp.server import community_json
+
+    root = tmp_path / "du-an"
+    (root / ".nexgraph").mkdir(parents=True)
+    (root / "a.py").write_text("class A:\n    def run(self):\n        return 1\n\n    def stop(self):\n"
+                               "        return 2\n", encoding="utf-8")
+    graph = root / ".nexgraph" / "graph.json"
+    graph.write_text(json.dumps({"nodes": [
+        {"id": f"a_{name}", "label": f"{name}()", "_callable": True, "_origin": "ast", "source_file": "a.py",
+         "source_location": f"L{line}", "community": 1, "community_name": "Vendor A"}
+        for name, line in (("run", 2), ("stop", 5))], "links": []}), encoding="utf-8")
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, graph)
+    assert _members(conn) == {"a_run#method", "a_stop#method"}  # enrich đã đổi loại nút → đổi id_nut
+    _label_community_1(store, conn, "QA custom")
+
+    _reload(store, root, graph, mode, ["a.py"])
+
+    assert _members(conn) == {"a_run#method", "a_stop#method"}
+    assert community_json(store, "com:1", 20)["community"]["label"] == "QA custom"
+
+
+def test_label_decision_counts_members_of_removed_files(tmp_path):
+    """Gỡ hẳn một tệp (nhánh `remove_file`) cũng bị tính vào thành viên đã mất: 5 → 1 = Jaccard 0,2."""
+    from nexgraph_engine.mcp.server import community_json
+
+    root = tmp_path / "du-an"
+    graph = _vendor_community(root, {"app.py": 1, "old.py": 4}, "Vendor A")
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, graph)
+    _label_community_1(store, conn, "QA custom")
+    assert community_json(store, "com:1", 20)["community"]["size"] == 5
+
+    (root / "old.py").unlink()
+    replace_files(store, ["old.py"], _vendor_community(root, {"app.py": 1}, "Vendor B"), root=root)
+
+    shown = community_json(store, "com:1", 20)
+    assert (shown["community"]["label"], shown["community"]["size"]) == ("Vendor B", 1)
+    assert [row[0] for row in conn.execute("SELECT duong_dan_tuong_doi FROM tep")] == ["app.py"]
+
+
 def test_negative_path_cache_is_per_import(tmp_path):
     """QA vòng 2.3 (repro của QA): tệp bị từ chối ở lần nạp 1, thay bằng tệp thật → lần nạp 2 nhận."""
     root = make_project(tmp_path)

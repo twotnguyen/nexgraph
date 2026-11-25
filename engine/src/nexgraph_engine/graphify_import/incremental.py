@@ -14,7 +14,7 @@ from pathlib import Path
 
 from nexgraph_engine.graphify_import.enrich import enrich_missing_fields
 from nexgraph_engine.graphify_import.importer import (
-    ParsedGraph, file_records, parse_graph, sync_communities,
+    ParsedGraph, file_records, parse_graph, snapshot_communities, sync_communities,
 )
 from nexgraph_engine.graphify_import.paths import resolve_inside_root, root_realpath
 from nexgraph_engine.impact.tested_by import derive_tested_by
@@ -89,6 +89,7 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
 
     conn = store.conn
     with store.atomic():
+        prior = snapshot_communities(store)  # TRƯỚC replace_file/remove_file xoá nút (QA vòng 3.2)
         existing = {row[0] for row in conn.execute("SELECT duong_dan_tuong_doi FROM tep")}
         removed = [path for path in requested if path not in in_graph and path in existing]
         reload = {path for path in requested if path in in_graph}
@@ -122,7 +123,7 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
             edges = [edge for edge in edge_rows[path] if edge.source in known and edge.target in known]
             inserted += store.add_edges(edges)
 
-        sync_communities(store, parsed)
+        sync_communities(store, parsed, prior)
         enrich_missing_fields(store, root, sorted(reload))
         tested_by = derive_tested_by(store)
         store.snapshot_baseline()
