@@ -128,10 +128,13 @@ def test_index_job_has_kind_and_result(api, copy_fixture):
     job = api.index(p["project_id"])
     # Hợp đồng đổi ở PERF-L mục 3 (job index có `result` chứa số liệu lần chạy, trước đây luôn None) và
     # A1 F6 (trường ổn định cho cảnh báo thư mục không đọc được) — MỘT dict, đủ cả hai phía.
+    # N2-E2 thêm `pipeline`/`fallback_reason` (đường đã chạy + lý do rơi về legacy): sửa khẳng định
+    # thay vì ẩn hai khoá ở đường cũ để client luôn đọc được cùng một hợp đồng.
     assert job["kind"] == "index"
     assert job["result"] == {"files_skipped": 0, "skipped": {}, "workers_effective": 1,
                              "fallback_serial": False, "parallel_files": 0, "serial_files": 0,
-                             "unreadable_paths": [], "unreadable_count": 0}
+                             "unreadable_paths": [], "unreadable_count": 0,
+                             "pipeline": "legacy", "fallback_reason": "env_legacy"}
 
 
 def test_project_task_can_refresh_now(api, copy_fixture):
