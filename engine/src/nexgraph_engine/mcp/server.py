@@ -196,7 +196,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             source_file = data.get("source_file")
             if not source_file:
                 continue
-            name = str(source_file)
+            name = str(source_file).replace("\\", "/")  # chuẩn hoá như đường dẫn trong graph.db
             ok = allowed.get(name)
             if ok is None:
                 ok = policy.allows(name)
