@@ -47,6 +47,11 @@ def _build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--data-dir", type=Path, default=None)
     refresh.add_argument("--hook", choices=GIT_HOOKS, default=None, help="Tên git hook đang gọi; quyết định luật bỏ qua")
     refresh.add_argument("hook_args", nargs="*", help=argparse.SUPPRESS)
+    imp = sub.add_parser("import-graph",
+                         help="Nạp đồ thị đã xuất vào <project>/.nexgraph/graph.db (chưa nối vào job lập chỉ mục)")
+    imp.add_argument("--project", required=True, type=Path)
+    imp.add_argument("--graph-json", type=Path, default=None,
+                     help="Đường dẫn graph.json; mặc định <project>/.nexgraph/graph.json")
     guard = sub.add_parser("hook-guard", help="Hook PreToolUse/BeforeTool: nhắc trợ lý AI hỏi graph trước khi đọc tệp (luôn thoát 0)")
     guard.add_argument("kind", choices=["read", "search", "gemini"])
     guard.add_argument("--project", required=True, type=Path)
@@ -127,6 +132,38 @@ def _skip_reason(project: Path, hook: str | None, args: list[str]) -> str | None
     if "CHERRY_PICK_HEAD" in state:
         return "cherry_pick"
     return None
+
+
+def _import_graph_cmd(project: Path, graph_json: Path | None) -> int:
+    """Nạp graph.json vào `<project>/.nexgraph/graph.db`; in một dòng JSON cho script/CI.
+
+    Chưa nối vào job lập chỉ mục (việc của N2-E2): lệnh này chỉ dựng chỉ mục truy vấn từ
+    đồ thị đã xuất, gồm cả bước bổ sung trường thiếu bằng cách đọc lại tệp nguồn.
+    """
+    from nexgraph_engine.graphify_import import import_graph_json
+    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.store.graph_store import GraphStore
+
+    root = project.expanduser().resolve()
+    if not root.is_dir():
+        print(f"Không phải thư mục dự án: {root}", file=sys.stderr)
+        return 2
+    source = graph_json.expanduser() if graph_json is not None else root / ".nexgraph" / "graph.json"
+    if not source.is_file():
+        print(f"Không thấy graph.json: {source}", file=sys.stderr)
+        return 3
+    conn = open_graph_db(root / ".nexgraph" / "graph.db")
+    try:
+        report = import_graph_json(GraphStore(conn), root, source)
+    finally:
+        conn.close()
+    print(json.dumps({
+        "status": "ok", "graph_json": report.graph_json, "files": report.files, "nodes": report.nodes,
+        "edges": report.edges, "communities": report.communities, "tested_by": report.tested_by,
+        "enriched_nodes": report.enriched_nodes, "estimated_nodes": report.estimated_nodes,
+        "missing_files": list(report.missing_files), "seconds": report.seconds,
+    }, ensure_ascii=False))
+    return 0
 
 
 def _refresh_logger(data_dir: Path | None, hook: str | None):
@@ -279,6 +316,8 @@ def main(argv: list[str] | None = None) -> int:
         return _serve(args.data_dir, args.port, args.exit_on_stdin_close)
     if args.command == "refresh":
         return _refresh_cmd(args.project, args.data_dir, args.hook, args.hook_args)
+    if args.command == "import-graph":
+        return _import_graph_cmd(args.project, args.graph_json)
     if args.command == "mcp":
         from nexgraph_engine.mcp.server import ProjectNotIndexed, run_http, run_stdio
         logger.info("MCP %s: dự án %s", "HTTP" if args.http else "stdio", args.project)

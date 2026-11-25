@@ -181,3 +181,32 @@ def test_replace_files_matches_full_import(tmp_path):
     assert _graph_snapshot(conn) == _graph_snapshot(full_conn)
 
 
+def test_cli_import_graph(tmp_path, capsys):
+    """NG-IMP-4: lệnh nội bộ `nexgraph-engine import-graph --project <root>`."""
+    from nexgraph_engine.cli import main
+
+    root = make_project(tmp_path)
+    assert main(["import-graph", "--project", str(root)]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["status"] == "ok" and out["nodes"] == 18 and out["files"] == 4
+    assert out["enriched_nodes"] > 0
+    conn = open_graph_db(root / ".nexgraph" / "graph.db", read_only=True)
+    try:
+        assert conn.execute("SELECT count(*) FROM tep").fetchone()[0] == 4
+        assert conn.execute("SELECT count(*) FROM canh WHERE loai_canh = 'TESTED_BY'").fetchone()[0] == 3
+    finally:
+        conn.close()
+
+
+def test_cli_import_graph_custom_json_and_missing(tmp_path, capsys):
+    from nexgraph_engine.cli import main
+
+    root = tmp_path / "trong"
+    root.mkdir()
+    assert main(["import-graph", "--project", str(root),
+                 "--graph-json", str(SNAPSHOTS / "base" / "graph.json")]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["nodes"] == 18 and len(out["missing_files"]) == 4
+
+
+
