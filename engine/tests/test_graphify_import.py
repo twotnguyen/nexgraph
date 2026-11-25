@@ -259,6 +259,33 @@ def test_sync_communities_carries_label_when_regrouped(tmp_path):
     assert community_json(store, f"com:{new_id}", 50)["community"]["label"] == "Nhóm app"
 
 
+def test_negative_path_cache_is_per_import(tmp_path):
+    """QA vòng 2.3 (repro của QA): tệp bị từ chối ở lần nạp 1, thay bằng tệp thật → lần nạp 2 nhận."""
+    root = make_project(tmp_path)
+    outside = tmp_path / "ngoai.py"
+    outside.write_text("def secret():\n    pass\n", encoding="utf-8")
+    (root / "link.py").symlink_to(outside)
+    (root / ".nexgraph" / "graph.json").write_text(json.dumps({
+        "nodes": [{"id": "f_link", "label": "f_link()", "_callable": True, "_origin": "ast",
+                   "source_file": "link.py", "source_location": "L1"}],
+        "links": [],
+    }), encoding="utf-8")
+    store, conn = open_store(tmp_path)
+    first = import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+    assert first.rejected_paths == ("link.py",)
+    external_node = store.get_node("f_link#function")
+    assert external_node is not None and external_node.file == "__(graphify-external)"
+
+    (root / "link.py").unlink()
+    (root / "link.py").write_text("def f_link():\n    return 1\n", encoding="utf-8")
+    second = import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+    assert second.rejected_paths == ()
+    node = store.get_node("f_link#function")
+    assert node is not None and node.file == "link.py"
+    assert conn.execute("SELECT ma_bam FROM tep WHERE duong_dan_tuong_doi = 'link.py'").fetchone()[0] == \
+        hashlib.sha256((root / "link.py").read_bytes()).hexdigest()
+
+
 def test_rejects_paths_outside_root_before_io(tmp_path):
     """QA #67.2: symlink ra ngoài, `../`, đường dẫn tuyệt đối bị bỏ trước khi đọc tệp."""
     root = make_project(tmp_path)

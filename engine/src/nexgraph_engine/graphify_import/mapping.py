@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import os
 import re
-from functools import lru_cache
 from pathlib import Path
 
 from nexgraph_engine.graphify_import.paths import (
@@ -94,27 +93,29 @@ def origin_of(raw: object) -> Origin:
     return Origin.RESOLVER
 
 
-@lru_cache(maxsize=4096)
-def _root_real(root_str: str) -> Path:
-    return Path(root_str).resolve()
-
-
-@lru_cache(maxsize=32768)
-def _inside_root(root_str: str, rel_path: str) -> bool:
-    # Cache chỉ để khỏi resolve lặp cho từng nút; nơi đọc tệp thật vẫn kiểm lại (TOCTOU).
-    return resolve_inside_root(_root_real(root_str), rel_path) is not None
-
-
-def normalise_rel_path(raw: object, root) -> str:
+def normalise_rel_path(raw: object, root, *, cache: dict[str, str] | None = None) -> str:
     """Đưa `source_file` về đường dẫn tương đối kiểu POSIX (RB3: không mở đầu `/`, không `\\`).
 
     Đường tuyệt đối (POSIX, Windows có ổ đĩa, UNC) được resolve rồi mới đổi thành tương đối;
     chỉ nhận khi đích thật nằm trong `root`. Trả `""` khi đường dẫn thoát gốc dự án: tuyệt đối
     ở ngoài, có `..`, hoặc symlink có đích thật ra ngoài (QA #67.2, QA vòng 2.1).
+
+    `cache` (tuỳ chọn) chỉ sống trong **một lần parse/nạp** — không dùng cache toàn cục, để
+    quyết định từ chối của lần nạp trước không ảnh hưởng lần sau trong cùng tiến trình
+    (QA vòng 2.3). `root` phải là đường dẫn thật (đã resolve).
     """
     if not isinstance(raw, str) or not raw.strip():
         return ""
     text = raw.strip()
+    if cache is not None and text in cache:
+        return cache[text]
+    result = _normalise(text, root)
+    if cache is not None:
+        cache[text] = result
+    return result
+
+
+def _normalise(text: str, root) -> str:
     if is_absolute_source(text):
         if is_windows_absolute(text) and os.name != "nt":
             return ""  # nền POSIX không thể xác thực realpath của đường Windows
@@ -122,12 +123,12 @@ def normalise_rel_path(raw: object, root) -> str:
             candidate = Path(text).resolve()
         except (OSError, RuntimeError):
             return ""
-        return relative_posix_in_root(Path(root).resolve(), candidate) or ""
+        return relative_posix_in_root(Path(root), candidate) or ""
     text = text.replace("\\", "/")
     while text.startswith("./"):
         text = text[2:]
     if any(part == ".." for part in text.split("/")):
         return ""
-    if not _inside_root(str(Path(root)), text):
+    if resolve_inside_root(Path(root), text) is None:
         return ""
     return text

@@ -161,9 +161,10 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
     node_file: dict[int, str] = {}
     rejected: set[str] = set()
     need_external = False
+    path_cache: dict[str, str] = {}  # chỉ sống trong lần parse này (QA vòng 2.3)
     for index, node in enumerate(raw_nodes):
         raw = node.get("source_file")
-        rel = normalise_rel_path(raw, root)
+        rel = normalise_rel_path(raw, root, cache=path_cache)
         node_file[index] = rel
         if rel:
             files.add(rel)
@@ -174,7 +175,7 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
                 need_external = True
     for link in raw_links:
         raw = link.get("source_file")
-        rel = normalise_rel_path(raw, root)
+        rel = normalise_rel_path(raw, root, cache=path_cache)
         if rel:
             files.add(rel)
         elif isinstance(raw, str) and raw.strip():
