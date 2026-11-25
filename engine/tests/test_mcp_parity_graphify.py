@@ -371,6 +371,91 @@ def test_template_phrase_rebranded(user_data_project):
     assert "graphify update" not in text
 
 
+# ── Finding 3 (QA #69): nhánh vendor áp cùng chính sách nguồn như SQLite ────
+
+POLICY_GRAPH = {
+    "directed": False,
+    "multigraph": False,
+    "graph": {},
+    "nodes": [
+        {"id": "hasher", "label": "hasher", "file_type": "code",
+         "source_file": "lib/main.py", "source_location": "L1", "community": 0},
+        {"id": "safe_node", "label": "safe_node", "file_type": "code",
+         "source_file": "lib/main.py", "source_location": "L4", "community": 0},
+        {"id": "secret_pem", "label": "secret_pem", "file_type": "code",
+         "source_file": "secrets/keys.pem", "source_location": "L1", "community": 0},
+        {"id": "private_node", "label": "private_node", "file_type": "code",
+         "source_file": "private/secret.py", "source_location": "L1", "community": 0},
+        {"id": "outside_node", "label": "outside_node", "file_type": "code",
+         "source_file": "../outside.py", "source_location": "L1", "community": 0},
+    ],
+    "links": [
+        {"source": "hasher", "target": "safe_node", "relation": "calls", "confidence": "EXTRACTED",
+         "source_file": "lib/main.py", "source_location": "L5", "weight": 1.0},
+        {"source": "hasher", "target": "secret_pem", "relation": "calls", "confidence": "EXTRACTED",
+         "source_file": "lib/main.py", "source_location": "L6", "weight": 1.0},
+        {"source": "hasher", "target": "private_node", "relation": "calls", "confidence": "EXTRACTED",
+         "source_file": "lib/main.py", "source_location": "L7", "weight": 1.0},
+        {"source": "hasher", "target": "outside_node", "relation": "calls", "confidence": "EXTRACTED",
+         "source_file": "lib/main.py", "source_location": "L8", "weight": 1.0},
+    ],
+}
+POLICY_LEAKS = ("secret_pem", "private_node", "outside_node",
+                "secrets/keys.pem", "private/secret.py", "../outside.py")
+
+
+@pytest.fixture
+def policy_project(tmp_path):
+    """Dự án có tệp bị chính sách nguồn loại (đuôi .pem, mẫu exclude, ngoài dự án)."""
+    root = tmp_path / "policy"
+    (root / "lib").mkdir(parents=True)
+    (root / "lib" / "main.py").write_text("def hasher():\n    return 1\n", encoding="utf-8")
+    (root / "private").mkdir()
+    (root / "private" / "secret.py").write_text("TOKEN = 'x'\n", encoding="utf-8")
+    (root / "secrets").mkdir()
+    (root / "secrets" / "keys.pem").write_text("-----BEGIN-----\n", encoding="utf-8")
+    (root / ".nexgraph").mkdir()
+    (root / ".nexgraph" / "graph.json").write_text(
+        json.dumps(POLICY_GRAPH, ensure_ascii=False), encoding="utf-8")
+    conn = open_graph_db(root / ".nexgraph" / "graph.db")
+    try:
+        store = GraphStore(conn)
+        store.init_project(root.name, has_git=False)
+        Indexer(store, root, on_progress=lambda _e: None, cancel=threading.Event(),
+                exclude=["private/**"]).run()
+    finally:
+        conn.close()
+    graphify_view.clear_views()
+    yield root
+    graphify_view.clear_views()
+
+
+def test_vendor_branch_applies_source_policy(policy_project):
+    """Finding 3: tệp bị loại/biên dự án không được xuất hiện trong tool nhánh vendor."""
+    root = policy_project
+    cases = [
+        ("get_neighbors", {"label": "hasher", "token_budget": 4000}),
+        ("get_community", {"community_id": 0, "token_budget": 4000}),
+        ("god_nodes", {"top_n": 10}),
+        ("query_graph", {"question": "secret_pem", "token_budget": 4000}),
+    ]
+    for tool, arguments in cases:
+        error, text = _server_call(root, tool, arguments)
+        assert error is False, (tool, text)
+        for leaked in POLICY_LEAKS:
+            assert leaked not in text, (tool, text)
+        assert "safe_node" in text or tool == "query_graph", (tool, text)
+
+
+def test_vendor_branch_filters_before_lookup(policy_project):
+    """Nút bị loại không tra được như bản gốc, dù đồ thị có nút đó."""
+    error, text = _server_call(policy_project, "get_node", {"label": "secret_pem"})
+    assert error is False
+    assert text.startswith("No node matching")
+    error, text = _server_call(policy_project, "get_node", {"label": "safe_node"})
+    assert error is False and text.startswith("Node: safe_node")
+
+
 # ── Finding 2 (QA #69): mặc định tham số theo từng nhánh ────────────────────
 
 @pytest.fixture(scope="module")

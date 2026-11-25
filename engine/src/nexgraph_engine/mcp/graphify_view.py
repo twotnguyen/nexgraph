@@ -27,6 +27,10 @@ OUT_DIR_NAME = ".nexgraph"
 GRAPH_JSON_NAME = "graph.json"
 IDLE_TTL_SECONDS = 600.0
 
+#: Khoá vendor tự ghi vào ``G.graph`` để cache chỉ mục; view đã lọc phải có dict riêng, sạch các
+#: khoá này, kẻo tái dùng chỉ mục tính trên đồ thị chưa lọc.
+_VENDOR_CACHE_KEYS = frozenset({"_trigram_index", "_idf_cache", "_traversal_view"})
+
 #: Cụm mẫu **do vendor sinh ra** cần đổi tên, khớp chính xác từng chuỗi — không regex, không đổi
 #: id/nhãn/đường dẫn/nội dung người dùng (QA #69 finding 1). Mỗi cặp ghi rõ nguồn sinh câu.
 _REBRAND_PHRASES = (
@@ -62,6 +66,7 @@ class LoadedGraph:
     communities: dict[int, list[str]]
     graph_path: Path
     root: Path
+    dropped_nodes: int = 0  # số nút bị chính sách nguồn loại khỏi view này
 
 
 def graph_json_path(project: Path) -> Path:
@@ -83,6 +88,10 @@ class GraphView:
         self._key: tuple[int, int] | None = None
         self._last_used = 0.0
         self._timer: threading.Timer | None = None
+        # View đã lọc theo chính sách nguồn: chỉ giữ bản gần nhất, khoá theo (graph, chính sách).
+        self._filtered_entry: LoadedGraph | None = None
+        self._filtered_key: tuple | None = None
+        self._filtered_source_key: tuple[int, int] | None = None
         self.loads = 0  # số lần nạp thật (test dùng)
 
     # -- trạng thái ---------------------------------------------------------
@@ -96,6 +105,9 @@ class GraphView:
         with self._lock:
             self._entry = None
             self._key = None
+            self._filtered_entry = None
+            self._filtered_key = None
+            self._filtered_source_key = None
             timer, self._timer = self._timer, None
         if timer is not None:
             timer.cancel()
@@ -126,6 +138,9 @@ class GraphView:
     def _drop_locked(self) -> None:
         self._entry = None
         self._key = None
+        self._filtered_entry = None
+        self._filtered_key = None
+        self._filtered_source_key = None
 
     def _load_locked(self) -> LoadedGraph | None:
         """Nạp bằng đúng hàm vendor; lỗi tệp hỏng/thiếu → coi như chưa có đồ thị."""
@@ -145,6 +160,48 @@ class GraphView:
         resolved = self.graph_path.resolve()
         return LoadedGraph(G=G, communities=vendor_serve._communities_from_graph(G),
                            graph_path=resolved, root=resolved.parent.parent)
+
+    # -- chính sách nguồn ---------------------------------------------------
+    def policy_view(self, fingerprint: tuple, compute_drop: Any) -> LoadedGraph | None:
+        """Bản xem đã bỏ nút bị chính sách nguồn loại, cache theo ``(graph, fingerprint)``.
+
+        ``compute_drop(G)`` trả tập id nút cần bỏ; chỉ gọi khi chính sách hoặc tệp đồ thị đổi.
+        Không bỏ nút nào → trả nguyên bản gốc (không tốn thêm bộ nhớ).
+        """
+        base = self.get()
+        if base is None:
+            return None
+        with self._lock:
+            source_key = self._key
+            if (self._filtered_entry is not None and self._filtered_key == fingerprint
+                    and self._filtered_source_key == source_key):
+                return self._filtered_entry
+        drop = compute_drop(base.G)
+        with self._lock:
+            if (self._filtered_entry is not None and self._filtered_key == fingerprint
+                    and self._filtered_source_key == source_key):
+                return self._filtered_entry
+            if not drop:
+                entry = base
+            else:
+                import networkx as nx
+
+                from graphify import serve as vendor_serve
+
+                view = nx.subgraph_view(base.G, filter_node=lambda node: node not in drop)
+                # Cache của vendor (`_trigram_index`, `_idf_cache`, `_traversal_view`) nằm trong
+                # `G.graph` dùng chung với đồ thị gốc; tách ra để không tái dùng chỉ mục đã tính
+                # trên đồ thị CHƯA lọc (sẽ trả về nút đã bị bỏ).
+                view.graph = {k: v for k, v in base.G.graph.items() if k not in _VENDOR_CACHE_KEYS}
+                entry = LoadedGraph(G=view, communities=vendor_serve._communities_from_graph(view),
+                                    graph_path=base.graph_path, root=base.root,
+                                    dropped_nodes=len(drop))
+            if self._key != source_key:  # đồ thị vừa được nạp lại trong lúc lọc: không cache bản cũ
+                return entry
+            self._filtered_entry = entry
+            self._filtered_key = fingerprint
+            self._filtered_source_key = source_key
+            return entry
 
     # -- nhả sau khi rảnh ---------------------------------------------------
     def _arm_timer_locked(self) -> None:
@@ -194,10 +251,6 @@ def clear_views() -> None:
         _VIEWS.clear()
     for view in views:
         view.release()
-
-
-def load_for(project: Path) -> LoadedGraph | None:
-    return view_for(project).get()
 
 
 # ── 8 tool đồ thị: thân hàm chép 1:1 từ graphify/serve.py ────────────────────

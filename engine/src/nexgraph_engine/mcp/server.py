@@ -147,6 +147,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
 
     # ── Lớp xem đồ thị vendor (ADR 0025 mục 2) ────────────────────────────
     pid_cache: list[str] = []
+    root_resolved = root.resolve()
 
     def project_id() -> str | None:
         """Id dự án trong graph.db, đọc một lần; None khi chưa có CSDL."""
@@ -164,11 +165,54 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             pid_cache.append(pid)
         return pid
 
+    def source_policy(project_root: Path) -> tuple[SourcePolicy, tuple]:
+        """Chính sách nguồn của dự án + khoá cache cho lớp xem vendor.
+
+        Cùng quy tắc với nhánh SQLite (`ModelGraph`): mẫu `exclude` của lần lập chỉ mục gần nhất,
+        `.gitignore`, tên tệp nhạy cảm, và biên dự án.
+        """
+        exclude: list[str] = []
+        try:
+            db = resolve_graph_db(project_root, data_dir if project_root == root_resolved else None)
+            conn = open_graph_db(db, read_only=True)
+        except (ProjectNotIndexed, sqlite3.Error, OSError):
+            pass
+        else:
+            try:
+                exclude = GraphStore(conn).last_exclude()
+            finally:
+                conn.close()
+        try:
+            gitignore = (project_root / ".gitignore").stat().st_mtime_ns
+        except OSError:
+            gitignore = 0
+        return SourcePolicy(project_root, exclude), (str(project_root), tuple(exclude), gitignore)
+
+    def blocked_nodes(G: Any, policy: SourcePolicy) -> set[str]:
+        """Id các nút có `source_file` bị chính sách loại; nút không có tệp thì giữ lại."""
+        allowed: dict[str, bool] = {}
+        dropped: set[str] = set()
+        for node_id, data in G.nodes(data=True):
+            source_file = data.get("source_file")
+            if not source_file:
+                continue
+            name = str(source_file)
+            ok = allowed.get(name)
+            if ok is None:
+                ok = policy.allows(name)
+                allowed[name] = ok
+            if not ok:
+                dropped.add(node_id)
+        return dropped
+
     def vendor_view(project_path: str | None) -> graphify_view.LoadedGraph | None:
         """Đồ thị `.nexgraph/graph.json` của dự án hiện tại (hoặc `project_path`); None khi chưa có."""
-        if project_path:
-            return graphify_view.load_for(Path(project_path))
-        return graphify_view.view_for(root).get()
+        project_root = Path(project_path).resolve() if project_path else root_resolved
+        view = graphify_view.view_for(project_root)
+        if view.get() is None:
+            return None
+        policy, key = source_policy(project_root)
+        return view.policy_view(key, lambda graph: blocked_nodes(graph, policy))
 
     def vendor_text(tool_name: str, arguments: dict, project_path: str | None) -> str | None:
         """Văn bản của tool vendor đã đổi tên hiển thị; None để rơi về hành vi NexGraph (R-N3)."""
