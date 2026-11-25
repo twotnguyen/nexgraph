@@ -11,6 +11,17 @@ from nexgraph_engine.store.graph_store import GraphStore
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def _legacy_pipeline_for_existing_fixtures(monkeypatch):
+    """Đường lập chỉ mục mặc định đã đổi sang pipeline vendor (N2-E2).
+
+    Fixture hiện có dựng cho bộ trích xuất cũ (Dart, tài liệu, nguồn bổ sung, thư mục con…) nên
+    test cũ chạy đường legacy như trước — giữ khẳng định cũ thay vì sửa. Test của đường mới tự
+    đặt `NEXGRAPH_PIPELINE=graphify`. Đây là môi trường, không phải skip hay nới test.
+    """
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "legacy")
+
+
 @pytest.fixture
 def fixtures_dir() -> Path:
     return FIXTURES
