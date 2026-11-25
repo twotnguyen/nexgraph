@@ -838,11 +838,12 @@ export function registerIpc(
       keepRuntime()
     }
   })
-  on('ai:get-runtime', async () => {
+  onTrusted('ai:get-runtime', async () => {
     const a = await acc().catch(() => null)
     return { runtime: selectedRuntime(), nexAvailable: nexRuntime(), nexReady: !!a?.nexProvider() }
   })
-  on('ai:set-runtime', async (runtime: 'nex' | 'pi') => {
+  onTrusted('ai:set-runtime', async (runtime: unknown) => {
+    if (runtime !== 'nex' && runtime !== 'pi') throw new AgentError('bad_param', 'Runtime không hợp lệ')
     if (runtime === 'nex') {
       if (!nexRuntime()) throw new AgentError('ai_not_configured', 'Chưa tìm thấy runtime Nex trên máy này. Hãy dùng runtime Pi.')
       if (!(await acc()).nexProvider()) throw new AgentError('ai_not_configured', 'Nex đợt này cần nhà cung cấp OpenAI-compatible có API key. Hãy thêm trong Cài đặt.')

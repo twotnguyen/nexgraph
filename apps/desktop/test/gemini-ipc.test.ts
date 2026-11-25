@@ -16,8 +16,9 @@ const h = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => h.userData },
+  app: { getPath: () => h.userData, isPackaged: false },
   ipcMain: { handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => Promise<unknown>) => h.handlers.set(channel, fn) },
+  BrowserWindow: { fromWebContents: () => ({}) },
   dialog: {}, shell: {}, safeStorage: { isEncryptionAvailable: () => false }
 }))
 vi.mock('../src/main/engine/api', async (original) => {
@@ -64,7 +65,9 @@ vi.mock('../src/main/gemini/service', () => ({ GeminiAgentService: class {
 import { registerIpc } from '../src/main/ipc'
 
 type Result<T = unknown> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
-const invoke = <T = unknown,>(channel: string, ...args: unknown[]) => h.handlers.get(channel)!({}, ...args) as Promise<Result<T>>
+const trustedFrame = {}
+const trustedEvent = { sender: { mainFrame: trustedFrame }, senderFrame: trustedFrame }
+const invoke = <T = unknown,>(channel: string, ...args: unknown[]) => h.handlers.get(channel)!(trustedEvent, ...args) as Promise<Result<T>>
 const prefs = () => JSON.parse(readFileSync(join(h.userData, 'prefs.json'), 'utf8')) as Record<string, unknown>
 const pending = <T,>() => {
   let resolve!: (result: T) => void
@@ -275,5 +278,20 @@ describe('Gemini/Pi model list isolation', () => {
     h.piModels.mockRejectedValueOnce(new Error('API provider unavailable'))
     expect(await invoke('auth:models')).toMatchObject({ ok: true, data: [{ runtime: 'antigravity-cli', provider: 'google-antigravity', id: 'auto' }] })
     expect(prefs().aiRuntime).toBe('pi')
+  })
+})
+
+describe('Runtime agent IPC (review #66 Important 4)', () => {
+  it('chỉ nhận nex|pi tại runtime, giá trị khác trả bad_param', async () => {
+    expect(await invoke('ai:set-runtime', 'gemini-cli')).toMatchObject({ ok: false, error: { code: 'bad_param' } })
+    expect(await invoke('ai:set-runtime', 'nex/../pi')).toMatchObject({ ok: false, error: { code: 'bad_param' } })
+    expect(prefs().aiRuntime).toBe('pi')
+  })
+
+  it('từ chối khung không phải cửa sổ NexGraph (onTrusted)', async () => {
+    const handler = h.handlers.get('ai:set-runtime')!
+    expect(await handler({}, 'pi')).toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
+    const getter = h.handlers.get('ai:get-runtime')!
+    expect(await getter({})).toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
   })
 })
