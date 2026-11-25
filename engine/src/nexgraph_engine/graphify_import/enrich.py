@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nexgraph_engine.graphify_import.mapping import EXTERNAL_FILE
+from nexgraph_engine.graphify_import.paths import resolve_inside_root, root_realpath
 from nexgraph_engine.graphify_import.spans import Span, file_spans
 from nexgraph_engine.schema.enums import NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
@@ -28,6 +29,7 @@ class EnrichReport:
     files_refreshed: int
     nodes_enriched: int
     nodes_estimated: int
+    rejected: tuple[str, ...] = ()
 
 
 def _names(label: str, qualified_name: str) -> set[str]:
@@ -105,6 +107,7 @@ def enrich_missing_fields(store: GraphStore, root: Path, rel_paths: list[str] | 
     Chạy trong giao dịch hiện tại của người gọi (import đầy đủ hoặc nạp tăng dần).
     """
     root = Path(root)
+    root_real = root_realpath(root)
     conn = store.conn
     paths = [path for path in _file_paths(conn, rel_paths) if path != EXTERNAL_FILE]
     if not paths:
@@ -112,12 +115,20 @@ def enrich_missing_fields(store: GraphStore, root: Path, rel_paths: list[str] | 
     rows = _node_rows(conn, paths)
     evidence = _evidence_lines(conn, {row["ma_nut"] for row in rows})
     files_read = files_refreshed = enriched = estimated = 0
+    rejected: list[str] = []
     by_path: dict[str, list] = {}
     for row in rows:
         by_path.setdefault(row["path"], []).append(row)
 
     for rel_path in paths:
-        path = root / rel_path
+        path = resolve_inside_root(root_real, rel_path)
+        if path is None:  # thoát gốc dự án (symlink/tuyệt đối/..): không mở, không băm
+            rejected.append(rel_path)
+            for row in by_path.get(rel_path, []):
+                if row["loai_nut"] in _SPAN_KINDS:
+                    store.mark_node_estimated(row["id_nut"])
+                    estimated += 1
+            continue
         digest = None
         try:
             stat = path.stat()
@@ -146,4 +157,5 @@ def enrich_missing_fields(store: GraphStore, root: Path, rel_paths: list[str] | 
             enriched += 1
     store.commit()
     return EnrichReport(files_read=files_read, files_refreshed=files_refreshed,
-                        nodes_enriched=enriched, nodes_estimated=estimated)
+                        nodes_enriched=enriched, nodes_estimated=estimated,
+                        rejected=tuple(sorted(rejected)))

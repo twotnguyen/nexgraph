@@ -7,8 +7,10 @@ tăng dần (NG-IMP-3) không lệch nhau. Bảng theo spike A1 §4.3; quan hệ
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from pathlib import Path
 
+from nexgraph_engine.graphify_import.paths import resolve_inside_root
 from nexgraph_engine.schema.enums import EdgeType, Origin
 
 # graph.json không có nút gốc/khái niệm ngoài tệp: mọi nút thiếu `source_file` được gắn vào
@@ -89,8 +91,23 @@ def origin_of(raw: object) -> Origin:
     return Origin.RESOLVER
 
 
+@lru_cache(maxsize=4096)
+def _root_real(root_str: str) -> Path:
+    return Path(root_str).resolve()
+
+
+@lru_cache(maxsize=32768)
+def _inside_root(root_str: str, rel_path: str) -> bool:
+    # Cache chỉ để khỏi resolve lặp cho từng nút; nơi đọc tệp thật vẫn kiểm lại (TOCTOU).
+    return resolve_inside_root(_root_real(root_str), rel_path) is not None
+
+
 def normalise_rel_path(raw: object, root) -> str:
-    """Đưa `source_file` về đường dẫn tương đối kiểu POSIX (RB3: không mở đầu `/`, không `\\`)."""
+    """Đưa `source_file` về đường dẫn tương đối kiểu POSIX (RB3: không mở đầu `/`, không `\\`).
+
+    Trả `""` khi đường dẫn thoát gốc dự án: tuyệt đối ở ngoài, có `..`, hoặc symlink có đích
+    thật ra ngoài (QA #67.2). Nút khi đó gắn vào tệp tổng hợp thay vì tạo hàng `tep` giả.
+    """
     if not isinstance(raw, str) or not raw.strip():
         return ""
     text = raw.strip().replace("\\", "/")
@@ -98,9 +115,11 @@ def normalise_rel_path(raw: object, root) -> str:
         text = text[2:]
     if text.startswith("/"):
         try:
-            return str(Path(text).resolve().relative_to(Path(root).resolve()))
+            text = str(Path(text).resolve().relative_to(Path(root).resolve()))
         except (ValueError, OSError):
             return ""
     if any(part == ".." for part in text.split("/")):
-        return ""  # thoát gốc dự án: không có tệp để băm, quy về nút ngoài (EXTERNAL_FILE)
+        return ""
+    if not _inside_root(str(Path(root)), text):
+        return ""
     return text

@@ -214,6 +214,69 @@ def test_replace_files_syncs_communities_on_new_symbol(tmp_path):
         " WHERE n.id_nut = 'app_farewell#function'").fetchone()[0] == "Community 0"
 
 
+def test_rejects_paths_outside_root_before_io(tmp_path):
+    """QA #67.2: symlink ra ngoài, `../`, đường dẫn tuyệt đối bị bỏ trước khi đọc tệp."""
+    root = make_project(tmp_path)
+    outside = tmp_path / "ngoai.py"
+    outside.write_text("def secret():\n    pass\n", encoding="utf-8")
+    (root / "link.py").symlink_to(outside)
+    (root / "alias.py").symlink_to(root / "app.py")
+
+    (root / ".nexgraph" / "graph.json").write_text(json.dumps({
+        "nodes": [
+            {"id": "abs_ok", "label": "abs_ok()", "_callable": True, "_origin": "ast",
+             "source_file": str(root / "app.py"), "source_location": "L1"},
+            {"id": "alias_ok", "label": "alias_ok()", "_callable": True, "_origin": "ast",
+             "source_file": "alias.py", "source_location": "L1"},
+            {"id": "link_out", "label": "link_out()", "_callable": True, "_origin": "ast",
+             "source_file": "link.py", "source_location": "L1"},
+            {"id": "escape", "label": "escape()", "_callable": True, "_origin": "ast",
+             "source_file": "../ngoai.py", "source_location": "L1"},
+            {"id": "abs_out", "label": "abs_out()", "_callable": True, "_origin": "ast",
+             "source_file": str(outside), "source_location": "L1"},
+        ],
+        "links": [],
+    }), encoding="utf-8")
+
+    store, conn = open_store(tmp_path)
+    report = import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+    assert report.rejected_paths == ("../ngoai.py", str(outside), "link.py")
+    assert report.missing_files == ()
+    assert report.files == 3  # app.py, alias.py, __(graphify-external)
+    assert {r[0] for r in conn.execute("SELECT duong_dan_tuong_doi FROM tep")} == {
+        "app.py", "alias.py", "__(graphify-external)"}
+    # Symlink trỏ trong root vẫn đọc được, cùng nội dung đích
+    import hashlib
+    assert conn.execute("SELECT ma_bam FROM tep WHERE duong_dan_tuong_doi = 'alias.py'").fetchone()[0] == \
+        hashlib.sha256((root / "app.py").read_bytes()).hexdigest()
+    # Nút trỏ ra ngoài vẫn có trong đồ thị nhưng gắn tệp tổng hợp, không có hàng tep giả
+    assert store.get_node("link_out#function").file == "__(graphify-external)"
+
+
+def test_file_records_and_enrich_skip_outside_root(tmp_path, monkeypatch):
+    """Cùng một bước xác thực cho hash (file_records) và span (enrich): không I/O trước khi chặn."""
+    from nexgraph_engine.graphify_import import enrich as enrich_module
+    from nexgraph_engine.graphify_import.importer import file_records
+
+    root = make_project(tmp_path)
+    outside = tmp_path / "ngoai.py"
+    outside.write_text("def secret():\n    pass\n", encoding="utf-8")
+    (root / "link.py").symlink_to(outside)
+
+    records, missing, rejected = file_records(root, ["app.py", "link.py", "../ngoai.py", str(outside)])
+    assert set(records) == {"app.py"}
+    assert missing == [] and rejected == ["../ngoai.py", str(outside), "link.py"]
+
+    store, conn = open_store(tmp_path / "db")
+    import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+    called: list = []
+    monkeypatch.setattr(enrich_module, "file_spans", lambda p: called.append(p))
+    monkeypatch.setattr(enrich_module, "hashlib", None, raising=False)
+    report = enrich_module.enrich_missing_fields(store, root, ["link.py", "../ngoai.py", str(outside)])
+    assert called == [] and report.files_read == 0
+    assert report.rejected == ("../ngoai.py", str(outside), "link.py")
+
+
 def test_cli_import_graph(tmp_path, capsys):
     """NG-IMP-4: lệnh nội bộ `nexgraph-engine import-graph --project <root>`."""
     from nexgraph_engine.cli import main

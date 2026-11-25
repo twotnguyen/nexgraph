@@ -161,7 +161,8 @@ def _import_graph_cmd(project: Path, graph_json: Path | None) -> int:
         "status": "ok", "graph_json": report.graph_json, "files": report.files, "nodes": report.nodes,
         "edges": report.edges, "communities": report.communities, "tested_by": report.tested_by,
         "enriched_nodes": report.enriched_nodes, "estimated_nodes": report.estimated_nodes,
-        "missing_files": list(report.missing_files), "seconds": report.seconds,
+        "missing_files": list(report.missing_files), "rejected_paths": list(report.rejected_paths),
+        "seconds": report.seconds,
     }, ensure_ascii=False))
     return 0
 

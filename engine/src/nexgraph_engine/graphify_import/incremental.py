@@ -16,6 +16,7 @@ from nexgraph_engine.graphify_import.enrich import enrich_missing_fields
 from nexgraph_engine.graphify_import.importer import (
     ParsedGraph, file_records, parse_graph, sync_communities,
 )
+from nexgraph_engine.graphify_import.paths import resolve_inside_root, root_realpath
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.index.discovery import is_test_path
 from nexgraph_engine.store.graph_store import GraphStore
@@ -27,6 +28,7 @@ class ReplaceReport:
     files_changed: int
     files_removed: int
     expanded_files: tuple[str, ...]
+    rejected_files: tuple[str, ...]
     nodes: int
     edges: int
     tested_by: int
@@ -75,10 +77,15 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
     """
     graph_json_path = Path(graph_json_path)
     root = Path(root) if root is not None else graph_json_path.parent.parent
+    root_real = root_realpath(root)
     analysis_path = analysis_path or graph_json_path.parent / ".graphify_analysis.json"
     parsed = parse_graph(graph_json_path, root=root, analysis_path=analysis_path)
-    requested = sorted(set(changed_paths))
     in_graph = set(parsed.files)
+
+    requested: list[str] = []
+    rejected: list[str] = []
+    for path in sorted(set(changed_paths)):
+        (requested if resolve_inside_root(root_real, path) is not None else rejected).append(path)
 
     conn = store.conn
     with store.atomic():
@@ -90,11 +97,12 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
         reload |= expanded
 
         run_id = store.begin_run(files_total=len(reload), kind="tang_dan")
-        records: dict[str, tuple] = {}
         nodes_total = 0
         for path in sorted(reload):
-            rec, missing = file_records(root, [path])
-            records[path] = (rec[path], missing)
+            rec, missing, rejected_read = file_records(root, [path])
+            if path in rejected_read:  # đích đổi giữa chừng: bỏ, không đọc
+                rejected.append(path)
+                continue
             if path not in existing:
                 store.add_file(run_id, rec[path])
             errors = [("read", "graph.json nhắc tới nhưng không có trên đĩa")] if missing else []
@@ -103,6 +111,9 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
             store.replace_file(run_id, rec[path], nodes, [], [], {}, errors)
         for path in removed:
             store.remove_file(path)
+        for path in rejected:  # tệp không còn hợp lệ trong dự án: gỡ khỏi chỉ mục
+            if path in existing:
+                store.remove_file(path)
 
         edge_rows = {path: _edges_of(parsed, path) for path in reload}
         known = {row[0] for row in conn.execute("SELECT id_nut FROM nut")}
@@ -118,5 +129,5 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
         store.set_run_state(run_id, "hoan_tat", files_done=len(reload), files_total=len(reload))
 
     return ReplaceReport(files_changed=len(reload), files_removed=len(removed),
-                         expanded_files=tuple(sorted(expanded)), nodes=nodes_total, edges=inserted,
-                         tested_by=tested_by)
+                         expanded_files=tuple(sorted(expanded)), rejected_files=tuple(sorted(set(rejected))),
+                         nodes=nodes_total, edges=inserted, tested_by=tested_by)

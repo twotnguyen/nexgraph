@@ -21,6 +21,7 @@ from nexgraph_engine.graphify_import.enrich import enrich_missing_fields
 from nexgraph_engine.graphify_import.mapping import (
     EXTERNAL_FILE, NEEDS_EVIDENCE, normalise_rel_path, origin_of, parse_location, relation_to_edge,
 )
+from nexgraph_engine.graphify_import.paths import resolve_inside_root, root_realpath
 from nexgraph_engine.ids import file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.index.discovery import is_test_path, language_of
@@ -83,6 +84,7 @@ class ParsedGraph:
     degraded_no_line: int = 0
     skipped_nodes: int = 0
     skipped_edges: int = 0
+    rejected_paths: list[str] = field(default_factory=list)
 
     def node_by_id(self) -> dict[str, NodeRow]:
         return {n.node_id: n for n in self.nodes}
@@ -103,6 +105,7 @@ class ImportReport:
     kinds: dict[str, int]
     enriched_nodes: int
     estimated_nodes: int
+    rejected_paths: tuple[str, ...]
     seconds: float
 
 
@@ -154,18 +157,26 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
     # ---- tệp ---------------------------------------------------------------------
     files: set[str] = set()
     node_file: dict[int, str] = {}
+    rejected: set[str] = set()
     need_external = False
     for index, node in enumerate(raw_nodes):
-        rel = normalise_rel_path(node.get("source_file"), root)
+        raw = node.get("source_file")
+        rel = normalise_rel_path(raw, root)
         node_file[index] = rel
         if rel:
             files.add(rel)
-        elif sourceless == "external":
-            need_external = True
+        else:
+            if isinstance(raw, str) and raw.strip():
+                rejected.add(raw.strip().replace("\\", "/"))
+            if sourceless == "external":
+                need_external = True
     for link in raw_links:
-        rel = normalise_rel_path(link.get("source_file"), root)
+        raw = link.get("source_file")
+        rel = normalise_rel_path(raw, root)
         if rel:
             files.add(rel)
+        elif isinstance(raw, str) and raw.strip():
+            rejected.add(raw.strip().replace("\\", "/"))
     if need_external:
         files.add(EXTERNAL_FILE)
 
@@ -179,7 +190,6 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
     community_ids = sorted({int(node["community"]) for node in raw_nodes if node.get("community") is not None})
     communities = [CommunityRow(key=cid, name=names.get(cid, f"Community {cid}"),
                                cohesion=cohesion.get(str(cid))) for cid in community_ids]
-    block_of = {row.key: index for index, row in enumerate(communities, start=1)}
 
     # ---- nút -----------------------------------------------------------------------
     file_node_gid: dict[str, str] = {}
@@ -290,19 +300,29 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
         files=sorted(files), communities=communities, nodes=nodes, edges=edges, kinds=dict(kinds),
         built_at_commit=commit if isinstance(commit, str) and 40 <= len(commit) <= 64 else None,
         degraded_no_line=degraded, skipped_nodes=skipped, skipped_edges=skipped_edges,
+        rejected_paths=sorted(rejected),
     )
 
 
-def file_records(root: Path, files: list[str]) -> tuple[dict[str, FileRec], list[str]]:
-    """`(FileRec theo đường dẫn, tệp graph.json nhắc tới nhưng không có trên đĩa)`."""
+def file_records(root: Path, files: list[str]) -> tuple[dict[str, FileRec], list[str], list[str]]:
+    """`(FileRec, tệp thiếu trên đĩa, đường dẫn bị chặn vì thoát gốc dự án)`.
+
+    Đường dẫn được xác thực đích thật **trước khi** stat/đọc (QA #67.2): tuyệt đối, `..` hoặc
+    symlink ra ngoài bị bỏ và ghi vào danh sách thứ ba, không đọc nội dung.
+    """
     root = Path(root)
+    root_real = root_realpath(root)
     records: dict[str, FileRec] = {}
     missing: list[str] = []
+    rejected: list[str] = []
     for rel in files:
         if rel == EXTERNAL_FILE:
             records[rel] = FileRec(rel_path=rel, language="external", size=0, mtime=0, sha256=_ZERO_SHA)
             continue
-        path = root / rel
+        path = resolve_inside_root(root_real, rel)
+        if path is None:
+            rejected.append(rel)
+            continue
         try:
             stat = path.stat()
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -313,7 +333,7 @@ def file_records(root: Path, files: list[str]) -> tuple[dict[str, FileRec], list
         language = (language_of(rel, root) or Path(rel).suffix.lstrip(".").lower() or "unknown")[:20]
         records[rel] = FileRec(rel_path=rel, language=language, size=size, mtime=mtime,
                                sha256=digest, is_test=is_test_path(rel))
-    return records, missing
+    return records, missing, sorted(rejected)
 
 
 def sync_communities(store: GraphStore, parsed: ParsedGraph) -> int:
@@ -371,7 +391,7 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
     graph_json_path = Path(graph_json_path)
     analysis_path = analysis_path or graph_json_path.parent / ".graphify_analysis.json"
     parsed = parse_graph(graph_json_path, root=root, analysis_path=analysis_path)
-    records, missing = file_records(root, parsed.files)
+    records, missing, rejected_disk = file_records(root, parsed.files)
 
     conn = store.conn
     with store.atomic():
@@ -382,18 +402,21 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
 
         file_pk: dict[str, int] = {}
         for rel in parsed.files:
-            record = records[rel]
+            record = records.get(rel)
+            if record is None:  # bị chặn ở bước đọc (symlink đổi đích giữa parse và đọc)
+                continue
             file_pk[rel] = store.add_file(run_id, record)
             if rel in missing:
                 store.add_file_error(rel, "read", "graph.json nhắc tới nhưng không có trên đĩa")
 
         pk_of_id: dict[str, int] = {}
-        for index, row in enumerate(parsed.nodes, start=1):
-            pk_of_id[row.node_id] = index
         node_rows: list[tuple] = []
         fts_rows: list[tuple] = []
         for row in parsed.nodes:
-            pk = pk_of_id[row.node_id]
+            if row.file not in file_pk:
+                continue
+            pk = len(pk_of_id) + 1
+            pk_of_id[row.node_id] = pk
             is_test = 1 if is_test_path(row.file) else 0
             node_rows.append((pk, row.node_id, row.kind.value, row.label, row.qualified_name,
                               row.line_start, row.line_end, is_test, row.origin.value, None, row.doc,
@@ -422,14 +445,15 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
         enrich = enrich_missing_fields(store, root)
         tested_by = derive_tested_by(store)
         store.snapshot_baseline()
-        store.set_run_state(run_id, "hoan_tat", files_done=len(records), files_total=len(records))
+        store.set_run_state(run_id, "hoan_tat", files_done=len(file_pk), files_total=len(file_pk))
 
     conn.execute("PRAGMA optimize")
     return ImportReport(
-        graph_json=str(graph_json_path), files=len(records), nodes=len(node_rows), edges=inserted,
+        graph_json=str(graph_json_path), files=len(file_pk), nodes=len(node_rows), edges=inserted,
         communities=len(parsed.communities), tested_by=tested_by, skipped_nodes=parsed.skipped_nodes,
         skipped_edges=len(parsed.edges) - len(edge_rows) + parsed.skipped_edges,
         degraded_no_line=parsed.degraded_no_line, missing_files=tuple(missing), kinds=parsed.kinds,
         enriched_nodes=enrich.nodes_enriched, estimated_nodes=enrich.nodes_estimated,
+        rejected_paths=tuple(sorted(set(parsed.rejected_paths) | set(rejected_disk))),
         seconds=round(time.perf_counter() - started, 3),
     )
