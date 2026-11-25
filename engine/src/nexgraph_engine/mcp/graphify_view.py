@@ -27,21 +27,25 @@ OUT_DIR_NAME = ".nexgraph"
 GRAPH_JSON_NAME = "graph.json"
 IDLE_TTL_SECONDS = 600.0
 
-#: Thứ tự thay thế quan trọng: ``graphify-out`` trước để không bị ``graphify`` nuốt mất.
-_REBRAND_PAIRS = (
-    ("graphify-out", OUT_DIR_NAME),
-    ("Graphify", "NexGraph"),
-    ("GRAPHIFY", "NEXGRAPH"),
-    ("graphify", "nexgraph"),
+#: Cụm mẫu **do vendor sinh ra** cần đổi tên, khớp chính xác từng chuỗi — không regex, không đổi
+#: id/nhãn/đường dẫn/nội dung người dùng (QA #69 finding 1). Mỗi cặp ghi rõ nguồn sinh câu.
+_REBRAND_PHRASES = (
+    # graphify/sections.py:148 (lý do khi heading không còn ở dòng đã ghi)
+    ("Run `graphify update .` to refresh the graph.",
+     "Run `nexgraph update .` to refresh the graph."),
+    # graphify/sections.py:168 (ghi chú khi heading bị dời dòng)
+    ("run `graphify update .` to refresh the graph.",
+     "run `nexgraph update .` to refresh the graph."),
 )
 
 
 def rebrand_text(text: str) -> str:
-    """Đổi tên nguồn trong văn bản hiển thị sang NexGraph (ADR 0025 mục 3).
+    """Đổi **chỉ các cụm mẫu cố định** của vendor sang tên NexGraph (ADR 0025 mục 3).
 
-    Chỉ đổi ở lớp đầu ra — mã vendor giữ nguyên để còn thay thư mục vendor được.
+    Không thay id, nhãn, đường dẫn tệp hay nội dung mã/tài liệu của người dùng, kể cả khi
+    chúng chứa chữ "graphify" — dữ liệu phải trùng byte với bản gốc (QA #69 finding 1).
     """
-    for old, new in _REBRAND_PAIRS:
+    for old, new in _REBRAND_PHRASES:
         text = text.replace(old, new)
     return text
 

@@ -2,7 +2,9 @@
 
 ADR 0025 mục 2 — nghiệm thu: chạy `python -m graphify.serve <graph.json>` qua MCP stdio
 (như `research/cmp11-cmp.py`) và tool NexGraph trên CÙNG một `graph.json`, so từng tool với
-≥ 2 bộ tham số; đầu ra NexGraph phải bằng ``rebrand_text(đầu ra gốc)``.
+≥ 2 bộ tham số. Kỳ vọng tính **độc lập** với mã sản phẩm: phần dữ liệu (nhãn, id, đường dẫn,
+`NODE …`/`Source: …`) phải trùng byte với vendor; chỉ các cụm mẫu đã chốt được đổi, ghi tay
+trong ``_TEMPLATE_EXPECTED`` dưới đây.
 
 Fixture (module, dựng một lần):
 - bản sao `tests/fixtures/bookstore_app` + `README.md` có heading;
@@ -51,6 +53,27 @@ Chạy `helper()` trước.
 
 Văn bản hướng dẫn.
 """
+
+# Kỳ vọng viết TAY cho các cụm mẫu do vendor sinh ra (không gọi hàm sản phẩm để tính).
+# Chỉ câu hướng dẫn của vendor đổi tên lệnh; mọi dữ liệu khác phải giữ nguyên byte.
+_TEMPLATE_EXPECTED = (
+    ("Run `graphify update .` to refresh the graph.",
+     "Run `nexgraph update .` to refresh the graph."),
+    ("run `graphify update .` to refresh the graph.",
+     "run `nexgraph update .` to refresh the graph."),
+)
+
+
+def expected_from_vendor(text: str) -> str:
+    """Đầu ra NexGraph kỳ vọng: chỉ thay các cụm mẫu đã chốt, phần còn lại giữ nguyên byte."""
+    for old, new in _TEMPLATE_EXPECTED:
+        text = text.replace(old, new)
+    # Dòng đầu `Graph: …` in đường dẫn tệp đồ thị mà **mỗi server** mở: vendor đọc bản trong
+    # `graphify-out/`, Nex đọc bản sao ở `.nexgraph/` (thiết lập fixture). Chuẩn hoá đúng dòng
+    # này, không đụng bất kỳ dữ liệu nào khác.
+    if text.startswith("Graph: graphify-out/graph.json"):
+        text = "Graph: .nexgraph/graph.json" + text[len("Graph: graphify-out/graph.json"):]
+    return text
 
 
 # ── Fixture: đồ thị vendor + bản sao .nexgraph ──────────────────────────────
@@ -220,7 +243,7 @@ def test_graph_tools_match_original(servers, parity, tool):
         our_error, our_text = ours.call(tool, sent)
         assert orig_error is False, (tool, sent, orig_text)
         assert our_error is False, (tool, sent, our_text)
-        assert our_text == graphify_view.rebrand_text(orig_text), (tool, sent)
+        assert our_text == expected_from_vendor(orig_text), (tool, sent)
 
 
 def test_query_graph_header_rebranded(servers):
@@ -229,7 +252,7 @@ def test_query_graph_header_rebranded(servers):
     _, our_text = ours.call("query_graph", {"question": "login auth"})
     assert "graphify" not in our_text.lower()
     assert our_text.startswith("Graph: .nexgraph/graph.json")
-    assert our_text == graphify_view.rebrand_text(orig_text)
+    assert our_text == expected_from_vendor(orig_text)
 
 
 def test_get_section_reads_markdown(servers):
@@ -238,6 +261,114 @@ def test_get_section_reads_markdown(servers):
     assert error is False
     assert text.startswith("Section: Docs app  [README.md:L1-")
     assert "Giới thiệu ngắn." in text
+
+
+# ── Finding 1 (QA #69): rebrand không được đổi dữ liệu người dùng ────────────
+
+USER_DATA_README = """# Docs
+
+Giới thiệu.
+
+## Cài đặt
+
+Chạy `helper()` trước.
+
+## Cách dùng
+
+Văn bản.
+"""
+
+USER_DATA_GRAPH = {
+    "directed": False,
+    "multigraph": False,
+    "graph": {},
+    "nodes": [
+        {"id": "graphify_qa", "label": "graphify_qa", "file_type": "code",
+         "source_file": "engine/src/graphify/serve.py", "source_location": "L2", "community": 0},
+        {"id": "app_main_py", "label": "main", "file_type": "code",
+         "source_file": "app/main.py", "source_location": "L1", "community": 0},
+        {"id": "caller", "label": "caller", "file_type": "code",
+         "source_file": "app/main.py", "source_location": "L3", "community": 0},
+        {"id": "readme_heading", "label": "Cài đặt", "file_type": "document",
+         "node_kind": "heading", "source_file": "README.md", "source_location": "L1", "community": 1},
+    ],
+    "links": [
+        {"source": "caller", "target": "graphify_qa", "relation": "calls", "confidence": "EXTRACTED",
+         "source_file": "app/main.py", "source_location": "L3", "weight": 1.0},
+        {"source": "caller", "target": "app_main_py", "relation": "references", "confidence": "EXTRACTED",
+         "source_file": "app/main.py", "source_location": "L3", "weight": 1.0},
+    ],
+}
+
+
+@pytest.fixture
+def user_data_project(tmp_path):
+    """Dự án nhỏ có id/nhãn/đường dẫn mang chữ "graphify" (dữ liệu người dùng) + heading bị dời dòng."""
+    root = tmp_path / "Đồ án user data"
+    (root / "engine" / "src" / "graphify").mkdir(parents=True)
+    (root / "app").mkdir()
+    (root / "engine" / "src" / "graphify" / "serve.py").write_text(
+        "def serve():\n    return 1\n", encoding="utf-8")
+    (root / "app" / "main.py").write_text("def caller():\n    return serve()\n", encoding="utf-8")
+    (root / "README.md").write_text(USER_DATA_README, encoding="utf-8")
+    (root / ".nexgraph").mkdir()
+    (root / ".nexgraph" / "graph.json").write_text(
+        json.dumps(USER_DATA_GRAPH, ensure_ascii=False), encoding="utf-8")
+    conn = open_graph_db(root / ".nexgraph" / "graph.db")
+    try:
+        store = GraphStore(conn)
+        store.init_project(root.name, has_git=False)
+        Indexer(store, root, on_progress=lambda _e: None, cancel=threading.Event()).run()
+    finally:
+        conn.close()
+    graphify_view.clear_views()
+    yield root
+    graphify_view.clear_views()
+
+
+def _server_call(root: Path, tool: str, arguments: dict) -> tuple[bool, str]:
+    server = build_server(root, None)
+
+    async def run():
+        async with create_connected_server_and_client_session(server._mcp_server) as client:
+            return await client.call_tool(tool, arguments)
+
+    result = anyio.run(run)
+    return bool(result.isError), "\n".join(item.text for item in result.content)
+
+
+def test_rebrand_keeps_user_data(user_data_project):
+    """Finding 1: id `graphify_qa` và đường dẫn `engine/src/graphify/serve.py` phải giữ nguyên."""
+    root = user_data_project
+    for tool, arguments in [
+        ("get_node", {"label": "graphify_qa"}),
+        ("get_neighbors", {"label": "caller"}),
+        ("query_graph", {"question": "graphify_qa"}),
+        ("get_community", {"community_id": 0}),
+    ]:
+        error, text = _server_call(root, tool, arguments)
+        assert error is False, (tool, text)
+        assert "graphify_qa" in text, (tool, text)
+        if tool != "get_neighbors":  # get_neighbors chỉ in nhãn + tệp của cạnh
+            assert "engine/src/graphify/serve.py" in text, (tool, text)
+        for wrong in ("nexgraph_qa", "engine/src/nexgraph/serve.py"):
+            assert wrong not in text, (tool, text)
+
+
+def test_template_phrase_rebranded(user_data_project):
+    """Finding 1c: câu hướng dẫn mẫu của vendor đổi tên lệnh; kỳ vọng viết tay, không dùng hàm sản phẩm."""
+    error, text = _server_call(user_data_project, "get_section", {"label": "Cài đặt"})
+    assert error is False
+    expected = (
+        "Section: Cài đặt  [README.md:L5-L7]\n"
+        "Note: The heading moved since indexing; run `nexgraph update .` to refresh the graph.\n"
+        "\n"
+        "## Cài đặt\n"
+        "\n"
+        "Chạy `helper()` trước."
+    )
+    assert text == expected
+    assert "graphify update" not in text
 
 
 def test_legacy_params_map_to_original(servers):

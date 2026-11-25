@@ -113,10 +113,15 @@ def test_view_for_shares_instance_per_project(tmp_path):
         graphify_view.clear_views()
 
 
-def test_rebrand_text():
-    assert graphify_view.rebrand_text("graphify-out/graph.json") == ".nexgraph/graph.json"
-    assert graphify_view.rebrand_text("Graphify Report") == "NexGraph Report"
-    assert graphify_view.rebrand_text("GRAPHIFY_OUT") == "NEXGRAPH_OUT"
-    assert graphify_view.rebrand_text("graphify serve") == "nexgraph serve"
-    # Đổi graphify-out trước để "graphify" không nuốt mất tiền tố
-    assert "graphify" not in graphify_view.rebrand_text("graphify-out")
+def test_rebrand_text_only_changes_template_phrases():
+    """Chỉ câu mẫu của vendor đổi; id, nhãn, đường dẫn, nội dung người dùng giữ nguyên byte."""
+    assert graphify_view.rebrand_text(
+        "Run `graphify update .` to refresh the graph."
+    ) == "Run `nexgraph update .` to refresh the graph."
+    assert graphify_view.rebrand_text(
+        "The heading moved since indexing; run `graphify update .` to refresh the graph."
+    ) == "The heading moved since indexing; run `nexgraph update .` to refresh the graph."
+    # Dữ liệu người dùng: không đổi, kể cả khi mang đúng chữ của nguồn.
+    for data in ("graphify_qa", "engine/src/graphify/serve.py", "Graphify Report", "GRAPHIFY_OUT",
+                 "graphify-out/graph.json", "def graphify(): pass"):
+        assert graphify_view.rebrand_text(data) == data
