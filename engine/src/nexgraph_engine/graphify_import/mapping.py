@@ -101,4 +101,6 @@ def normalise_rel_path(raw: object, root) -> str:
             return str(Path(text).resolve().relative_to(Path(root).resolve()))
         except (ValueError, OSError):
             return ""
+    if any(part == ".." for part in text.split("/")):
+        return ""  # thoát gốc dự án: không có tệp để băm, quy về nút ngoài (EXTERNAL_FILE)
     return text

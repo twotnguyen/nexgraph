@@ -17,6 +17,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from nexgraph_engine.graphify_import.enrich import enrich_missing_fields
 from nexgraph_engine.graphify_import.mapping import (
     EXTERNAL_FILE, NEEDS_EVIDENCE, normalise_rel_path, origin_of, parse_location, relation_to_edge,
 )
@@ -100,6 +101,8 @@ class ImportReport:
     degraded_no_line: int
     missing_files: tuple[str, ...]
     kinds: dict[str, int]
+    enriched_nodes: int
+    estimated_nodes: int
     seconds: float
 
 
@@ -387,6 +390,7 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
                 " muc_tin_cay, diem_tin_cay, nguon_goc, dong_bang_chung, cot_bang_chung)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", part)
             inserted += cur.rowcount
+        enrich = enrich_missing_fields(store, root)
         tested_by = derive_tested_by(store)
         store.snapshot_baseline()
         store.set_run_state(run_id, "hoan_tat", files_done=len(records), files_total=len(records))
@@ -397,5 +401,6 @@ def import_graph_json(store: GraphStore, root: Path, graph_json_path: Path,
         communities=len(parsed.communities), tested_by=tested_by, skipped_nodes=parsed.skipped_nodes,
         skipped_edges=len(parsed.edges) - len(edge_rows) + parsed.skipped_edges,
         degraded_no_line=parsed.degraded_no_line, missing_files=tuple(missing), kinds=parsed.kinds,
+        enriched_nodes=enrich.nodes_enriched, estimated_nodes=enrich.nodes_estimated,
         seconds=round(time.perf_counter() - started, 3),
     )
