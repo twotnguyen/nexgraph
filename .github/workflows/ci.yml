@@ -27,8 +27,10 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          # PR cần đủ lịch sử để tính merge-base `origin/<base>...HEAD`.
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          # Luôn đủ lịch sử: PR cần merge-base `origin/<base>...HEAD` để tính
+          # vùng thay đổi. KHÔNG dùng `&& 0 || 1`: trong biểu thức GitHub số 0
+          # là falsy nên `... && 0 || 1` trả 1 (shallow) → "no merge base".
+          fetch-depth: 0
       - name: Test script phân loại vùng thay đổi
         run: node --test scripts/ci/changed-areas.test.mjs
       - name: Phân loại vùng thay đổi
@@ -38,7 +40,12 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
-            node scripts/ci/changed-areas.mjs --base "origin/$BASE_REF" --github-output
+            # Không tính được vùng thay đổi (git lạ, ref biến mất) thì chạy đầy đủ
+            # kèm cảnh báo, KHÔNG để job đỏ làm treo cả 7 check bắt buộc.
+            node scripts/ci/changed-areas.mjs --base "origin/$BASE_REF" --github-output || {
+              echo "::warning::Không tính được vùng thay đổi — chạy đầy đủ để không chặn PR"
+              node scripts/ci/changed-areas.mjs --all --github-output
+            }
           else
             # Push lên main hoặc tag v*: chạy đầy đủ.
             node scripts/ci/changed-areas.mjs --all --github-output
@@ -113,8 +120,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
         with:
-          # PR cần đủ lịch sử cho `vitest --changed origin/<base>`.
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
+          # Đủ lịch sử cho `vitest --changed origin/<base>` (cần merge-base).
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
         if: needs.changes.outputs.desktop == 'true' || needs.changes.outputs.engine == 'true'
         with:
