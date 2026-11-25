@@ -239,6 +239,11 @@ const api: NexGraphApi = {
   },
   nex: {
     accounts: () => call('nex:accounts'),
+    authStart: (integrationId, methodId, answers) => call('nex:auth-start', integrationId, methodId, answers),
+    authStatus: (kind, integrationId, attemptId) => call('nex:auth-status', kind, integrationId, attemptId),
+    authCancel: (kind, integrationId, attemptId) => call('nex:auth-cancel', kind, integrationId, attemptId),
+    saveKey: (integrationId, key) => call('nex:save-key', integrationId, key),
+    logout: (integrationId) => call('nex:auth-logout', integrationId),
     selectModel: (provider, id) => call('nex:select-model', provider, id)
   },
   agent: {

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NexAccountManager, withCustomProviders } from '../src/main/agent/nex/accounts'
+import { NexAccountManager, checkNexAuthUrl, deviceCodeFromInstructions, withCustomProviders } from '../src/main/agent/nex/accounts'
 import type { NexAccountsView } from '../src/shared/agent-types'
 
 const SECRET = 'sk-live-should-never-leave-main'
@@ -24,10 +24,15 @@ async function fakeSidecar(input: {
   integrations?: unknown[]
   models?: unknown[]
   fail?: boolean
+  routes?: Record<string, (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => void>
 }): Promise<{ baseUrl: string; requests: string[] }> {
   const requests: string[] = []
   const server = createServer((req, res) => {
     requests.push(`${req.method} ${req.url}`)
+    if (input.routes?.[`${req.method} ${req.url}`]) {
+      input.routes[`${req.method} ${req.url}`](req, res)
+      return
+    }
     if (input.fail) { res.statusCode = 500; res.end(JSON.stringify({ error: 'boom' })); return }
     res.setHeader('content-type', 'application/json')
     if (req.url === '/api/integration') {
@@ -48,17 +53,22 @@ async function fakeSidecar(input: {
   return { baseUrl: `http://127.0.0.1:${port}`, requests }
 }
 
-async function managerFor(input: Parameters<typeof fakeSidecar>[0]): Promise<{ manager: NexAccountManager; prefsFile: string; requests: string[] }> {
+async function managerFor(input: Parameters<typeof fakeSidecar>[0]): Promise<{
+  manager: NexAccountManager; prefsFile: string; requests: string[]; opened: string[]; logs: string[]
+}> {
   const { baseUrl, requests } = await fakeSidecar(input)
   const dir = mkdtempSync(join(tmpdir(), 'n2a2-accounts-'))
   const prefsFile = join(dir, 'prefs.json')
   writeFileSync(prefsFile, '{}')
+  const opened: string[] = []
+  const logs: string[] = []
   const manager = new NexAccountManager({
     connect: async () => ({ baseUrl, password: 'test' }),
-    openExternal: () => {},
-    prefsFile
+    openExternal: (url) => { opened.push(url) },
+    prefsFile,
+    log: (line) => { logs.push(line) }
   })
-  return { manager, prefsFile, requests }
+  return { manager, prefsFile, requests, opened, logs }
 }
 
 describe('NexAccountManager.list', () => {
@@ -121,6 +131,119 @@ describe('chọn model mặc định', () => {
     expect(manager.selected()).toEqual({ provider: 'openai', id: 'gpt-x' })
     const prefs = JSON.parse(readFileSync(prefsFile, 'utf8')) as Record<string, unknown>
     expect(prefs.nexSelectedModel).toEqual({ provider: 'openai', id: 'gpt-x' })
+  })
+})
+
+describe('checkNexAuthUrl', () => {
+  it('chỉ cho https + host trong danh sách (kể cả tên miền con), chặn http/userinfo/host giả', () => {
+    expect(checkNexAuthUrl('https://auth.openai.com/api/accounts/authorize?x=1')).toMatchObject({ ok: true })
+    expect(checkNexAuthUrl('https://console.opencode.ai/auth/device')).toMatchObject({ ok: true })
+    expect(checkNexAuthUrl('https://github.com/login/device')).toMatchObject({ ok: true })
+    expect(checkNexAuthUrl('http://auth.openai.com/x')).toEqual({ ok: false, reason: 'invalid_url' })
+    expect(checkNexAuthUrl('https://user:pass@auth.openai.com/x')).toEqual({ ok: false, reason: 'invalid_url' })
+    expect(checkNexAuthUrl('https://github.com.evil.example/x')).toEqual({ ok: false, reason: 'host_not_allowed' })
+    expect(checkNexAuthUrl('not a url')).toEqual({ ok: false, reason: 'invalid_url' })
+    expect(deviceCodeFromInstructions('Enter code: 520C-1E7F')).toBe('520C-1E7F')
+    expect(deviceCodeFromInstructions(undefined)).toBeUndefined()
+  })
+})
+
+describe('đăng nhập qua sidecar', () => {
+  const json = (res: import('node:http').ServerResponse, body: unknown, status = 200): void => {
+    res.statusCode = status
+    res.setHeader('content-type', 'application/json')
+    res.end(JSON.stringify(body))
+  }
+
+  it('OAuth: mở đúng URL auth.openai.com sau khi kiểm và theo dõi trạng thái tới complete', async () => {
+    const { manager, opened } = await managerFor({
+      integrations: [integration('openai', 'OpenAI')],
+      routes: {
+        'POST /api/integration/openai/connect/oauth': (_req, res) => json(res, {
+          data: { attemptID: 'con_1', url: 'https://auth.openai.com/api/accounts/authorize?client_id=x', instructions: 'Complete authorization in your browser.', mode: 'auto' }
+        }),
+        'GET /api/integration/openai/connect/oauth/con_1': (_req, res) => json(res, { data: { status: 'complete' } })
+      }
+    })
+    const view = await manager.startAuth('openai', 'chatgpt-token-sharing')
+    expect(view).toMatchObject({ kind: 'oauth', attemptId: 'con_1', opened: true, integrationId: 'openai' })
+    expect(opened).toEqual(['https://auth.openai.com/api/accounts/authorize?client_id=x'])
+    expect(await manager.authStatus('oauth', 'openai', 'con_1')).toEqual({ status: 'complete' })
+  })
+
+  it('device flow: hiện mã trong instructions và mở trang xác nhận', async () => {
+    const { manager, opened } = await managerFor({
+      integrations: [integration('github-copilot', 'GitHub Copilot', { methods: [{ id: 'device', type: 'oauth', label: 'Login with GitHub Copilot' }] })],
+      routes: {
+        'POST /api/integration/github-copilot/connect/oauth': (_req, res) => json(res, {
+          data: { attemptID: 'con_dev', url: 'https://github.com/login/device', instructions: 'Enter code: 520C-1E7F', mode: 'auto' }
+        })
+      }
+    })
+    const view = await manager.startAuth('github-copilot', 'device', { deploymentType: 'github.com' })
+    expect(view).toMatchObject({ kind: 'oauth', userCode: '520C-1E7F', opened: true })
+    expect(opened).toEqual(['https://github.com/login/device'])
+  })
+
+  it('URL host lạ: không gọi openExternal, trả blockedReason', async () => {
+    const { manager, opened } = await managerFor({
+      integrations: [integration('openai', 'OpenAI')],
+      routes: {
+        'POST /api/integration/openai/connect/oauth': (_req, res) => json(res, {
+          data: { attemptID: 'con_x', url: 'https://evil.example/oauth', instructions: 'Sign in' }
+        })
+      }
+    })
+    const view = await manager.startAuth('openai', 'chatgpt-token-sharing')
+    expect(view.blockedReason).toBe('host_not_allowed')
+    expect(view.opened).toBe(false)
+    expect(opened).toEqual([])
+  })
+
+  it('API key không đi qua sidecar; Claude cần CLI trả hướng dẫn', async () => {
+    const keyed = await managerFor({ integrations: [integration('anthropic', 'Anthropic', { methods: [{ type: 'key' }, { type: 'env', names: ['ANTHROPIC_API_KEY'] }] })] })
+    const key = await keyed.manager.startAuth('anthropic', 'key')
+    expect(key).toEqual({ kind: 'key', integrationId: 'anthropic' })
+    expect(keyed.requests.filter((line) => line.startsWith('POST'))).toEqual([])
+
+    const claude = await managerFor({
+      integrations: [integration('claude-agent', 'Claude Agent', { methods: [{ id: 'claude-login', type: 'external', label: 'Claude Code login (claude auth login)' }] })],
+      routes: { 'POST /api/integration/claude-agent/connect/external': (_req, res) => { res.statusCode = 204; res.end() } }
+    })
+    const external = await claude.manager.startAuth('claude-agent', 'claude-login')
+    expect(external.kind).toBe('external')
+    expect(external.instructions).toContain('claude auth login')
+  })
+
+  it('đăng xuất xoá mọi credential của integration và bỏ model đang chọn', async () => {
+    const { manager, prefsFile, requests } = await managerFor({
+      integrations: [integration('openai', 'OpenAI', {
+        connections: [{ type: 'credential', id: 'cred_1', label: 'ChatGPT', method: 'oauth' }]
+      })],
+      routes: { 'DELETE /api/credential/cred_1': (_req, res) => { res.statusCode = 204; res.end() } }
+    })
+    writeFileSync(prefsFile, JSON.stringify({ nexSelectedModel: { provider: 'openai', id: 'gpt-x' } }))
+    await manager.logout('openai')
+    expect(requests).toContain('DELETE /api/credential/cred_1')
+    expect(manager.selected()).toBeNull()
+    expect(JSON.parse(readFileSync(prefsFile, 'utf8')).nexSelectedModel).toBeUndefined()
+  })
+
+  it('không log token/key trong phản hồi sidecar (kể cả khi lỗi)', async () => {
+    const { manager, logs } = await managerFor({
+      integrations: [integration('openai', 'OpenAI')],
+      models: [{ providerID: 'openai', id: 'gpt-x', settings: { apiKey: SECRET } }]
+    })
+    await manager.list()
+    expect(logs.join('\n')).not.toContain(SECRET)
+    const broken = await managerFor({
+      integrations: [integration('openai', 'OpenAI')],
+      models: [{ providerID: 'openai', id: 'gpt-x', settings: { apiKey: SECRET } }],
+      fail: true,
+      routes: { 'GET /api/integration': (_req, res) => { res.statusCode = 500; res.end(JSON.stringify({ error: SECRET })) } }
+    })
+    await broken.manager.list()
+    expect(broken.logs.join('\n')).not.toContain(SECRET)
   })
 })
 

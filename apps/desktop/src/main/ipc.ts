@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, webContents } from 'electron'
 import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import type { CollabHello, DebugBreakpoints, LspCallHierarchyItem, LspRange, TaskDefinition, TextSearchQuery, WriteOpts } from '../shared/api'
@@ -31,7 +31,7 @@ import { EditorStateRegistry } from './agent/editor-state'
 import { AgentRouter, type AgentRuntimeId } from './agent-router'
 import { createNexSession, nexAvailable } from './agent/nex/runtime'
 import { NexSidecar, resolveNexBinary } from './agent/nex/sidecar'
-import { NexAccountManager, withCustomProviders } from './agent/nex/accounts'
+import { NexAccountManager, checkNexAuthUrl, withCustomProviders } from './agent/nex/accounts'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
@@ -272,7 +272,19 @@ export function registerIpc(
   const api = (): EngineApi => new EngineApi(handle())
   nexAccounts = new NexAccountManager({
     connect: () => startNexAccountsSidecar(dataDir),
-    openExternal: (raw) => { const url = externalWebUrl(raw); if (url) void shell.openExternal(url).catch(() => {}) },
+    openExternal: (raw) => {
+      const check = checkNexAuthUrl(raw)
+      if (!check.ok) return
+      // Cờ QA: ghi URL đã kiểm vào `<userData>/nex/last-auth-url.txt` thay vì mở trình duyệt thật.
+      if (/^(1|true)$/i.test(process.env.NEXGRAPH_NEX_AUTH_NO_OPEN ?? '')) {
+        try {
+          mkdirSync(join(dataDir, 'nex'), { recursive: true })
+          writeFileSync(join(dataDir, 'nex', 'last-auth-url.txt'), `${check.url}\n`, { mode: 0o600 })
+        } catch { /* cờ QA: không làm hỏng luồng đăng nhập */ }
+        return
+      }
+      void shell.openExternal(check.url).catch(() => {})
+    },
     prefsFile: prefsFile(),
     close: async () => { await nexAccountsSidecar?.stop(); nexAccountsSidecar = null }
   })
@@ -891,6 +903,32 @@ export function registerIpc(
       manager.saveSelection({ provider, id })
     } else await manager.selectModel(provider, id)
     agent.selectionChanged()
+  })
+  onTrusted('nex:auth-start', async (integrationId: string, methodId: string, answers?: Record<string, unknown>) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    return manager.startAuth(integrationId, methodId, answers)
+  })
+  on('nex:auth-status', async (kind: 'oauth' | 'command', integrationId: string, attemptId: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    return manager.authStatus(kind, integrationId, attemptId)
+  })
+  onTrusted('nex:auth-cancel', async (kind: 'oauth' | 'command', integrationId: string, attemptId: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    await manager.cancelAuth(kind, integrationId, attemptId)
+  })
+  onTrusted('nex:auth-logout', async (integrationId: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    try { await manager.logout(integrationId) } finally { agent.selectionChanged() }
+  })
+  onTrusted('nex:save-key', async (integrationId: string, key: string) => {
+    const a = await acc()
+    if (!(await a.listProviders()).some((p) => p.id === integrationId))
+      throw new AgentError('bad_param', 'Nhà cung cấp này chưa hỗ trợ nhập API key trong NexGraph')
+    try { await a.setApiKey(integrationId, key) } finally { agent.selectionChanged() }
   })
   on('auth:set-key', async (providerId: string, key: string) => {
     try { await (await acc()).setApiKey(providerId, key) } finally { agent.selectionChanged() }

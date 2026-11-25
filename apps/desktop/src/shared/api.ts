@@ -4,7 +4,7 @@ import type { GeminiCliApi } from './gemini-types'
 import type {
   AgentEvent, AgentMode, AiConsentTarget, AuthEventView, AuthPromptView, CustomProvider, ModelInfo, ProviderInfo,
   LocalModelInfo, AgentPromptOptions, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot,
-  ProjectCommands, AgentCheckpointInfo, AgentRollbackResult, AgentEditorState, NexAccountsView
+  ProjectCommands, AgentCheckpointInfo, AgentRollbackResult, AgentEditorState, NexAccountsView, NexAuthStartView, NexAuthStatusView
 } from './agent-types'
 import type {
   AiSettings,
@@ -420,6 +420,13 @@ export interface NexGraphApi {
   nex: {
     /** Danh sách nhà cung cấp, trạng thái kết nối và model; gồm cả nhà cung cấp tuỳ chỉnh của app. */
     accounts(): Promise<NexAccountsView>
+    /** Bắt đầu đăng nhập (OAuth/device/CLI/key); URL chỉ được mở sau khi main kiểm https + host. */
+    authStart(integrationId: string, methodId: string, answers?: Record<string, unknown>): Promise<NexAuthStartView>
+    authStatus(kind: 'oauth' | 'command', integrationId: string, attemptId: string): Promise<NexAuthStatusView>
+    authCancel(kind: 'oauth' | 'command', integrationId: string, attemptId: string): Promise<void>
+    /** Lưu API key vào kho bí mật của app (không gửi key qua sidecar). */
+    saveKey(integrationId: string, key: string): Promise<void>
+    logout(integrationId: string): Promise<void>
     selectModel(provider: string, id: string): Promise<void>
   }
   /** Phiên agent lưu theo dự án, tài khoản và đích nhận dữ liệu. */
