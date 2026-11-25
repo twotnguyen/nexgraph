@@ -6,12 +6,11 @@ tăng dần (NG-IMP-3) không lệch nhau. Bảng theo spike A1 §4.3; quan hệ
 """
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 
 from nexgraph_engine.graphify_import.paths import (
-    is_absolute_source, is_windows_absolute, relative_posix_in_root, resolve_inside_root,
+    is_absolute_source, is_host_absolute, relative_posix_in_root, resolve_inside_root,
 )
 from nexgraph_engine.schema.enums import EdgeType, Origin
 
@@ -117,8 +116,8 @@ def normalise_rel_path(raw: object, root, *, cache: dict[str, str] | None = None
 
 def _normalise(text: str, root) -> str:
     if is_absolute_source(text):
-        if is_windows_absolute(text) and os.name != "nt":
-            return ""  # nền POSIX không thể xác thực realpath của đường Windows
+        if not is_host_absolute(text):
+            return ""  # cú pháp của nền tảng khác (Windows trên POSIX, `/…` trên Windows): không xác thực được
         try:
             candidate = Path(text).resolve()
         except (OSError, RuntimeError):

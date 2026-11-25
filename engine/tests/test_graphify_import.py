@@ -4,7 +4,9 @@ import json
 import os
 import shutil
 import sqlite3
-from pathlib import Path, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
+
+import pytest
 
 from nexgraph_engine.changes.model import ChangeSet, FileChange
 from nexgraph_engine.graphify_import import changed_files_from_manifest, import_graph_json, replace_files
@@ -372,12 +374,52 @@ def test_windows_absolute_and_unc_paths_pure():
     assert relative_posix_in_root(root, PureWindowsPath("C:/other/a.py")) is None
 
 
-def test_windows_absolute_path_rejected_verbatim_on_posix(tmp_path):
-    """Trên nền POSIX không thể xác thực realpath của đường Windows → từ chối, giữ nguyên văn."""
-    if os.name == "nt":
-        return  # Windows: ca đường tuyệt đối nằm trong root đã có ở test_rejects_paths_outside_root_before_io
+ABSOLUTE_SOURCES = (
+    r"C:\proj\app.py", "C:/proj/app.py", r"\\server\share\proj\app.py",  # Windows: ổ đĩa, ổ đĩa + `/`, UNC
+    "/etc/passwd", "/Users/dev/proj/app.py",  # POSIX
+)
+RELATIVE_SOURCES = ("app.py", "src/app.py", "./src/app.py", "Đồ án/app.py")
+
+
+@pytest.mark.parametrize("host_path", [PureWindowsPath, PurePosixPath], ids=["host-windows", "host-posix"])
+def test_absolute_recognition_ignores_host_path_flavour(monkeypatch, host_path):
+    """QA vòng 3.1 (CI Windows run 45698036717, `/etc/passwd` → False): nhận dạng theo dạng CHUỖI.
+
+    `Path` của Windows (WindowsPath) không coi `/etc/passwd` là tuyệt đối còn Path của POSIX thì
+    có; mô phỏng từng kiểu host bằng lớp Pure tương ứng để cùng một kết quả được kiểm trên mọi OS.
+    """
+    from nexgraph_engine.graphify_import import paths
+
+    monkeypatch.setattr(paths, "Path", host_path)
+    for text in ABSOLUTE_SOURCES:
+        assert paths.is_absolute_source(text), text
+    for text in RELATIVE_SOURCES:
+        assert not paths.is_absolute_source(text), text
+
+
+def test_host_absolute_accepts_only_the_native_syntax():
+    """Dạng đường của nền tảng kia không xác thực được realpath → không phải đường tuyệt đối "của host"."""
+    from nexgraph_engine.graphify_import.paths import is_host_absolute
+
+    for text in ("/etc/passwd", "/Users/dev/proj/app.py"):
+        assert is_host_absolute(text, windows=False) and not is_host_absolute(text, windows=True), text
+    for text in (r"C:\proj\app.py", "C:/proj/app.py", r"\\server\share\proj\app.py"):
+        assert is_host_absolute(text, windows=True) and not is_host_absolute(text, windows=False), text
+    for text in RELATIVE_SOURCES:
+        assert not is_host_absolute(text, windows=True) and not is_host_absolute(text, windows=False), text
+
+
+def test_foreign_absolute_path_rejected_verbatim(tmp_path):
+    """Đường tuyệt đối ở cú pháp của nền tảng KHÁC (Windows trên POSIX, `/…` trên Windows) bị từ chối.
+
+    Chạy trên cả hai nền tảng (mỗi nền tảng dùng dạng "lạ" của mình): không xác thực được realpath thì
+    không diễn giải (vd. `/Users/…` thành ổ đĩa hiện hành của Windows), giữ nguyên văn trong báo cáo.
+    """
     root = make_project(tmp_path)
-    raw = r"C:\proj\graphify app\app.py"
+    if os.name == "nt":
+        raw = (root / "app.py").as_posix().removeprefix(root.drive)  # `/Users/…/app.py`, không ổ đĩa
+    else:
+        raw = r"C:\proj\graphify app\app.py"
     (root / ".nexgraph" / "graph.json").write_text(json.dumps({
         "nodes": [{"id": "win_abs", "label": "win_abs()", "_callable": True, "_origin": "ast",
                    "source_file": raw, "source_location": "L1"}],
