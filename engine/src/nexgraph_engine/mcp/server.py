@@ -511,22 +511,60 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             raise ToolError(str(exc)) from exc
 
     @mcp.tool(annotations=READ_ONLY)
-    async def list_prs(limit: int = 50) -> dict:
-        """PR đang mở trên GitHub: nhãn (WRONG-BASE, CI-FAIL, CHANGES-REQ, DRAFT, STALE, PENDING, APPROVED, READY),
-        tệp đổi, số nút bị ảnh hưởng, và các cặp PR xung đột (cùng tệp hoặc cùng vùng ảnh hưởng). Cần `gh` đã đăng nhập."""
-        return await run("list_prs", lambda s: pr_call(lambda: list_prs_json(s, root, max(1, min(limit, 100)),
-                                                                                   model=ModelGraph(s, root))))
+    async def list_prs(base: str | None = None, repo: str | None = None, limit: int = 50,
+                       project_path: str | None = None) -> str | dict:
+        """List open GitHub PRs with CI status, review state, and graph impact (which communities
+        each PR touches, blast radius). Use this before starting work to check if a PR already
+        covers the area you're about to change.
+
+        `base`: nhánh gốc để lọc (tự dò nếu bỏ trống). `repo`: chủ/tên repo trên GitHub (mặc định
+        repo hiện tại). Cần `gh` đã đăng nhập. Chưa có `.nexgraph/graph.json` → JSON của NexGraph
+        (kèm cặp PR xung đột; `limit` là số PR tối đa).
+        """
+        def work() -> str | dict:
+            text = vendor_text("list_prs", {"base": base, "repo": repo}, project_path)
+            if text is not None:
+                return text
+            return run_sync("list_prs", lambda s: pr_call(lambda: list_prs_json(
+                s, root, max(1, min(limit, 100)), model=ModelGraph(s, root))))
+
+        return await _offload("list_prs", work)
 
     @mcp.tool(annotations=READ_ONLY)
-    async def get_pr_impact(pr_number: int) -> dict:
-        """Ảnh hưởng và review cục bộ của một PR (không checkout): nút đổi, vùng ảnh hưởng có điểm, test liên quan,
-        symbol đổi thiếu test, tài liệu có thể cũ, code có thể không còn ai gọi, test nên chạy và lệnh gợi ý."""
-        return await run("get_pr_impact", lambda s: pr_call(lambda: pr_detail_json(s, root, pr_number, model=ModelGraph(s, root), data_dir=data_dir)))
+    async def get_pr_impact(pr_number: int, repo: str | None = None,
+                            project_path: str | None = None) -> str | dict:
+        """Get detailed graph impact for a specific PR: which files it changes, which knowledge-graph
+        communities are affected, and how many nodes are touched.
+
+        `pr_number`: số PR. `repo`: chủ/tên repo trên GitHub (mặc định repo hiện tại). Chưa có
+        `.nexgraph/graph.json` → JSON của NexGraph (vùng ảnh hưởng có điểm, test liên quan…).
+        """
+        def work() -> str | dict:
+            text = vendor_text("get_pr_impact", {"pr_number": pr_number, "repo": repo}, project_path)
+            if text is not None:
+                return text
+            return run_sync("get_pr_impact", lambda s: pr_call(lambda: pr_detail_json(
+                s, root, pr_number, model=ModelGraph(s, root), data_dir=data_dir)))
+
+        return await _offload("get_pr_impact", work)
 
     @mcp.tool(annotations=READ_ONLY)
-    async def triage_prs() -> dict:
-        """Hàng đợi review xếp theo luật (bỏ PR sai nhánh gốc và PR cũ), kèm việc nên làm cho từng PR."""
-        return await run("triage_prs", lambda s: pr_call(lambda: triage_json(list_prs_json(s, root, model=ModelGraph(s, root)))))
+    async def triage_prs(base: str | None = None, repo: str | None = None,
+                         project_path: str | None = None) -> str | dict:
+        """Return all actionable open PRs (correct base, not stale) with full graph impact data so
+        you can reason about review priority, merge order, and conflict risk.
+
+        `base`: nhánh gốc (tự dò nếu bỏ trống). `repo`: chủ/tên repo trên GitHub (mặc định repo
+        hiện tại). Chưa có `.nexgraph/graph.json` → JSON của NexGraph (hàng đợi review theo luật).
+        """
+        def work() -> str | dict:
+            text = vendor_text("triage_prs", {"base": base, "repo": repo}, project_path)
+            if text is not None:
+                return text
+            return run_sync("triage_prs", lambda s: pr_call(lambda: triage_json(
+                list_prs_json(s, root, model=ModelGraph(s, root)))))
+
+        return await _offload("triage_prs", work)
 
     @mcp.tool(annotations=READ_ONLY)
     async def review_status(pr_number: int) -> dict:

@@ -79,6 +79,9 @@ def test_eleven_tools_keep_original_params(indexed):
     assert {"top_n", "exclude_hubs_percentile", "top"} <= set(props("god_nodes"))
     assert props("shortest_path")["max_hops"]["default"] == 8
     assert {"source", "target", "max_hops", "undirected", "directed"} <= set(props("shortest_path"))
+    assert {"base", "repo"} <= set(props("list_prs"))
+    assert {"pr_number", "repo"} <= set(props("get_pr_impact"))
+    assert {"base", "repo"} <= set(props("triage_prs"))
     assert props("graph_stats") == {} or "project_path" in props("graph_stats")
 
 

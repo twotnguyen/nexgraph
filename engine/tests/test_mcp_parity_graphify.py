@@ -1,4 +1,4 @@
-"""NG-PAR-2: 8 tool đồ thị MCP NexGraph phải ra **đúng văn bản** của bản gốc.
+"""NG-PAR-2/NG-PAR-3: 11 tool MCP NexGraph phải ra **đúng văn bản** của bản gốc.
 
 ADR 0025 mục 2 — nghiệm thu: chạy `python -m graphify.serve <graph.json>` qua MCP stdio
 (như `research/cmp11-cmp.py`) và tool NexGraph trên CÙNG một `graph.json`, so từng tool với
@@ -282,3 +282,105 @@ def test_no_graph_json_keeps_nexgraph_behaviour(tmp_path):
     body = json.loads(result.content[0].text)
     assert body["files"] == 9  # JSON của NexGraph, không phải văn bản vendor
 
+
+# ── NG-PAR-3: 3 tool PR với `gh` giả ────────────────────────────────────────
+
+PR_LIST = [
+    {"number": 1, "title": "Sai nhánh gốc", "state": "OPEN", "headRefName": "nhanh-1",
+     "baseRefName": "develop", "author": {"login": "an"}, "isDraft": False, "reviewDecision": "",
+     "statusCheckRollup": [], "updatedAt": "2026-11-20T10:00:00Z"},
+    {"number": 2, "title": "CI hỏng", "state": "OPEN", "headRefName": "nhanh-2",
+     "baseRefName": "main", "author": {"login": "binh"}, "isDraft": False, "reviewDecision": "",
+     "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "FAILURE"}],
+     "updatedAt": "2026-11-21T10:00:00Z"},
+    {"number": 3, "title": "Bản nháp", "state": "OPEN", "headRefName": "nhanh-3",
+     "baseRefName": "main", "author": {"login": "chi"}, "isDraft": True, "reviewDecision": "",
+     "statusCheckRollup": [], "updatedAt": "2026-11-22T10:00:00Z"},
+    {"number": 4, "title": "Sẵn sàng", "state": "OPEN", "headRefName": "nhanh-4",
+     "baseRefName": "main", "author": {"login": "dung"}, "isDraft": False,
+     "reviewDecision": "APPROVED", "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "SUCCESS"}],
+     "updatedAt": "2026-11-23T10:00:00Z"},
+]
+
+PR_FILES = {
+    2: ["lib/services/auth_service.dart"],
+    3: ["lib/screens/login_screen.dart", "README.md"],
+    4: ["lib/widgets/primary_button.dart", "lib/router.dart"],
+}
+
+PR_VIEW = {
+    2: {**PR_LIST[1], "statusCheckRollup": [{"status": "COMPLETED", "conclusion": "FAILURE"}]},
+    4: {**PR_LIST[3]},
+}
+
+
+@pytest.fixture
+def fake_gh(monkeypatch):
+    """Gh giả: chỉ vá các hàm `graphify.prs` mà 3 tool PR gọi (không ra mạng)."""
+    import graphify.prs as prs
+
+    def _gh(*args: str):
+        if args[:2] == ("repo", "view"):
+            return {"defaultBranchRef": {"name": "main"}}
+        if args[:2] == ("pr", "list"):
+            return PR_LIST
+        if args[:2] == ("pr", "view") and len(args) >= 3:
+            return PR_VIEW.get(int(args[2]))
+        return None
+
+    monkeypatch.setattr(prs, "_gh", _gh)
+    monkeypatch.setattr(prs, "fetch_worktrees", lambda: {"nhanh-2": "/tmp/wt-nhanh-2"})
+    monkeypatch.setattr(prs, "fetch_pr_files", lambda number, repo=None: PR_FILES.get(number, []))
+    return prs
+
+
+def _call_low_level(server, tool: str, arguments: dict) -> tuple[bool, str]:
+    async def run():
+        async with create_connected_server_and_client_session(server) as client:
+            return await client.call_tool(tool, arguments)
+    result = anyio.run(run)
+    text = "\n".join(getattr(item, "text", "") for item in result.content)
+    return bool(result.isError), text
+
+
+@pytest.fixture
+def pr_servers(parity, fake_gh, monkeypatch):
+    from graphify import serve as vendor_serve
+
+    root, graph_json = parity
+    monkeypatch.chdir(root)
+    graphify_view.clear_views()
+    vendor_server = vendor_serve._build_server(str(graph_json))
+    ours = build_server(root, None)
+    return vendor_server, ours._mcp_server
+
+
+@pytest.mark.parametrize("tool,arguments", [
+    ("list_prs", {}),
+    ("list_prs", {"base": "develop"}),
+    ("get_pr_impact", {"pr_number": 4}),
+    ("get_pr_impact", {"pr_number": 2}),
+    ("triage_prs", {}),
+    ("triage_prs", {"base": "main"}),
+])
+def test_pr_tools_match_original(pr_servers, tool, arguments):
+    vendor_server, our_server = pr_servers
+    vendor_error, vendor_text = _call_low_level(vendor_server, tool, arguments)
+    our_error, our_text = _call_low_level(our_server, tool, arguments)
+    assert vendor_error is False, (tool, vendor_text)
+    assert our_error is False, (tool, our_text)
+    assert our_text == graphify_view.rebrand_text(vendor_text), (tool, arguments)
+
+
+def test_pr_tool_reports_gh_failure(pr_servers, monkeypatch):
+    """`gh` hỏng → lỗi tool đọc được, không phải văn bản rỗng (như bản gốc ném ToolError)."""
+    import graphify.prs as prs
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("gh CLI not found or not authenticated. Run: gh auth login")
+
+    monkeypatch.setattr(prs, "fetch_prs", boom)
+    _, our_server = pr_servers
+    error, text = _call_low_level(our_server, "list_prs", {})
+    assert error is True
+    assert "gh CLI not found" in text
