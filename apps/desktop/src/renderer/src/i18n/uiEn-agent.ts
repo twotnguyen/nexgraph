@@ -322,6 +322,7 @@ export const uiEnAgent: Record<string, string> = {
 
   // Khối "Tài khoản AI cho Nex" (N2-A2)
   'Tài khoản AI cho trợ lý Nex': 'AI accounts for the Nex assistant',
+  'API key': 'API key',
   'Tài khoản AI cho Nex': 'AI accounts for Nex',
   'Đăng nhập bằng tài khoản gói hoặc API key. Nex lưu thông tin đăng nhập trong thư mục dữ liệu của NexGraph.': 'Sign in with a subscription account or an API key. Nex keeps sign-in data inside the NexGraph data folder.',
   'Đang tải danh sách nhà cung cấp…': 'Loading providers…',

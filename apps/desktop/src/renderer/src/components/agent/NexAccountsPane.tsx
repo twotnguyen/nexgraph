@@ -3,7 +3,7 @@ import type { NexAccountProvider, NexAccountsView, NexAuthStartView } from '@sha
 import { tr } from '../../strings'
 import { errorMsg } from '../../state/errorText'
 import type { Message } from '../../state/messages'
-import { msgText } from '../../state/messages'
+import { msg, msgText } from '../../state/messages'
 import './nex-accounts.css'
 
 /** Tên hiển thị tiếng Việt của nhà cung cấp; tên khác lấy từ sidecar. */
@@ -51,8 +51,8 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
 }) {
   const [view, setView] = useState<NexAccountsView | null>(null)
   const [error, setError] = useState<Message | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [hint, setHint] = useState<{ providerId: string; text: string } | null>(null)
+  const [notice, setNotice] = useState<Message | null>(null)
+  const [hint, setHint] = useState<{ providerId: string; text: Message } | null>(null)
   const [attempt, setAttempt] = useState<Attempt | null>(null)
   const [busy, setBusy] = useState(false)
   const [keyFor, setKeyFor] = useState<string | null>(null)
@@ -101,11 +101,11 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
         active = false
         setAttempt(null)
         if (status.status === 'complete') {
-          setNotice(tr('Đã kết nối {name}', { name: nameOfId(attempt.providerId) }))
+          setNotice(msg('Đã kết nối {name}', { name: nameOfId(attempt.providerId) }))
           setHint(null)
           await load()
         } else {
-          setError(status.message ?? tr('Đăng nhập không thành công. Hãy thử lại.'))
+          setError(status.message ?? msg('Đăng nhập không thành công. Hãy thử lại.'))
         }
       }).catch((e) => {
         if (!active || !alive.current) return
@@ -125,7 +125,7 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
       return
     }
     if (result.kind === 'external') {
-      setHint({ providerId: provider.id, text: result.instructions ?? tr('Đăng nhập bằng công cụ chính thức của nhà cung cấp.') })
+      setHint({ providerId: provider.id, text: result.instructions ?? msg('Đăng nhập bằng công cụ chính thức của nhà cung cấp.') })
       return
     }
     if (result.attemptId) {
@@ -152,7 +152,7 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
   const logout = (provider: NexAccountProvider) => void run(async () => {
     if (attempt?.providerId === provider.id) cancel()
     await window.nexgraph.nex.logout(provider.id)
-    setNotice(tr('Đã đăng xuất {name}', { name: displayName(provider) }))
+    setNotice(msg('Đã đăng xuất {name}', { name: displayName(provider) }))
     await load()
   })
 
@@ -160,14 +160,14 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
     await window.nexgraph.nex.saveKey(provider.id, keyValue)
     setKeyFor(null)
     setKeyValue('')
-    setNotice(tr('Đã lưu API key cho {name}', { name: displayName(provider) }))
+    setNotice(msg('Đã lưu API key cho {name}', { name: displayName(provider) }))
     await load()
   })
 
   const chooseModel = (provider: NexAccountProvider, id: string) => void run(async () => {
     await window.nexgraph.nex.selectModel(provider.id, id)
     await load()
-    setNotice(id ? tr('Đã chọn model mặc định cho {name}', { name: displayName(provider) }) : tr('Đã bỏ model mặc định của {name}', { name: displayName(provider) }))
+    setNotice(id ? msg('Đã chọn model mặc định cho {name}', { name: displayName(provider) }) : msg('Đã bỏ model mặc định của {name}', { name: displayName(provider) }))
   })
 
   return (
@@ -175,7 +175,7 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
       <h3 className="nex-accounts-title">{tr('Tài khoản AI cho Nex')}</h3>
       <p className="muted">{tr('Đăng nhập bằng tài khoản gói hoặc API key. Nex lưu thông tin đăng nhập trong thư mục dữ liệu của NexGraph.')}</p>
       {error && <p role="alert" className="inline-message error">{msgText(error)}</p>}
-      {notice && <p role="status" className="connection-success">{notice}</p>}
+      {notice && <p role="status" className="connection-success">{msgText(notice)}</p>}
       {!view && !error && <p className="muted" role="status">{tr('Đang tải danh sách nhà cung cấp…')}</p>}
       {view && !view.available && <p role="alert" className="inline-message error">
         {view.reason === 'no_runtime' ? tr('Chưa tìm thấy runtime Nex trên máy này.') : tr('Không khởi động được dịch vụ tài khoản Nex.')}
@@ -208,7 +208,7 @@ export function NexAccountsPane({ onConnected, onClose, onBusyChange }: {
                 onClick={() => logout(provider)}>{tr('Đăng xuất')}</button>}
             </div>
             {hint?.providerId === provider.id && <div className="nex-account-hint" role="status">
-              <p>{hint.text}</p>
+              <p>{msgText(hint.text)}</p>
               <button type="button" disabled={busy} onClick={() => void run(load)}>{tr('Kiểm tra lại')}</button>
             </div>}
             {activeAttempt && <div className="nex-account-attempt" role="status">

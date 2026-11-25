@@ -234,7 +234,7 @@ export const stopNexAccounts = (): Promise<void> => (nexAccounts as NexAccountMa
 const startNexAccountsSidecar = (dataDir: string): Promise<{ baseUrl: string; password: string }> => {
   if (!nexAccountsSidecar) {
     const bin = resolveNexBinary({ env: process.env, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath })
-    if (!bin) return Promise.reject(Object.assign(new Error('Chưa có runtime Nex'), { code: 'nex_not_available' }))
+    if (!bin) return Promise.reject(Object.assign(new Error('Nex runtime is not available'), { code: 'nex_not_available' }))
     nexAccountsSidecar = new NexSidecar({
       bin,
       dataDir: join(dataDir, 'nex'),

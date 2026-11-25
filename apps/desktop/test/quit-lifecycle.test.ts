@@ -38,7 +38,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../src/main/ipc', () => ({
   registerIpc: vi.fn(), closeAllAgents: h.closeAgents, closeWindowResources: h.closeResources,
-  stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopEditorProcesses: vi.fn()
+  stopAllWatchers: h.stopWatchers, stopAllMcpHttp: h.stopMcp, stopEditorProcesses: vi.fn(), stopNexAccounts: vi.fn(async () => {})
 }))
 vi.mock('../src/main/engine/supervisor', () => ({ EngineSupervisor: class {
   startEngine = vi.fn(async () => {})
