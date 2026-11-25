@@ -1532,6 +1532,8 @@ export const uiEn: Record<string, string> = {
   '{shown}/{total} mục': '{shown}/{total} {total, plural, one {section} other {sections}}',
   'Không có mục nào khớp “{query}”': 'No sections match “{query}”',
   'Tệp: {name}': 'File: {name}',
+  // Câu dự phòng theo mã lỗi licenses_missing (state/errorText codeErrors): main trả câu Việt.
+  'Không đọc được tệp giấy phép mã nguồn mở đi kèm ứng dụng.': 'Could not read the open source license file included with the app.',
   // ArchitectureCanvas, FlowsView, GraphCanvas, MapView
   'Đang tải kiến trúc…': 'Loading architecture…',
   'Đang tải các bước…': 'Loading steps…',

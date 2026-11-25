@@ -104,4 +104,13 @@ describe('màn Giấy phép mã nguồn mở (LIC-2)', () => {
     render(<LicensesScreen onBack={vi.fn()} />)
     expect(await screen.findByRole('alert')).toHaveTextContent('Không đọc được tệp giấy phép mã nguồn mở đi kèm ứng dụng.')
   })
+
+  it('lỗi đọc tệp ở UI English hiện câu English theo mã licenses_missing, không lộ câu Việt (B1)', async () => {
+    setLocale('en')
+    installNexgraph({ licenses: { read: vi.fn(async () => { throw Object.assign(new Error('Không đọc được tệp giấy phép mã nguồn mở đi kèm ứng dụng.'), { code: 'licenses_missing' }) }) } })
+    render(<LicensesScreen onBack={vi.fn()} />)
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Could not read the open source license file included with the app.')
+    expect(alert.textContent).not.toMatch(/[ăâđêôơư]/i)
+  })
 })
