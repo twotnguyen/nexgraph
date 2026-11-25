@@ -111,6 +111,49 @@ describe('chế độ xem trang đồ thị', () => {
     expect(screen.getByRole('button', { name: 'Ask Nex' })).toBeTruthy()
   })
 
+  it('chọn nút cộng đồng → "Mở cộng đồng" mở đồ thị thành viên, quay lại trang tổng', async () => {
+    const { container } = render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: '12', label: 'Thanh toán', sourceFile: null, sourceLine: null, sourceLocation: null, via: 'showInfo', community: 12, memberCount: 44 })) })
+    await userEvent.click(screen.getByRole('button', { name: 'Mở cộng đồng' }))
+    expect(container.querySelector('webview')?.getAttribute('src')).toBe('nxpage://pid-1/community.html?c=12')
+    expect(screen.getByText('Cộng đồng: Thanh toán')).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'Nút đã chọn' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: '← Quay lại trang tổng' }))
+    expect(container.querySelector('webview')?.getAttribute('src')).toBe('nxpage://pid-1/graph.html')
+    expect(screen.queryByRole('button', { name: '← Quay lại trang tổng' })).toBeNull()
+  })
+
+  it('nút thường không có "Mở cộng đồng"; nút cộng đồng tắt Vùng ảnh hưởng', () => {
+    render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'a', label: 'a', sourceFile: 'src/a.ts', sourceLine: 1, sourceLocation: 'src/a.ts:1', via: null, community: 3, memberCount: null })) })
+    expect(screen.queryByRole('button', { name: 'Mở cộng đồng' })).toBeNull()
+    expect((screen.getByRole('button', { name: 'Vùng ảnh hưởng' }) as HTMLButtonElement).disabled).toBe(false)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: '12', label: 'C12', sourceFile: null, sourceLine: null, sourceLocation: null, via: 'showInfo', community: 12, memberCount: 44 })) })
+    expect((screen.getByRole('button', { name: 'Vùng ảnh hưởng' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('trong trang cộng đồng: chọn hàm → 3 hành động vẫn chạy; đổi chế độ thì về trang tổng', async () => {
+    const onOpenCode = vi.fn()
+    render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={onOpenCode} onImpact={vi.fn()} onAsk={vi.fn()} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: '12', label: 'Thanh toán', sourceFile: null, sourceLine: null, sourceLocation: null, via: 'showInfo', community: 12, memberCount: 44 })) })
+    await userEvent.click(screen.getByRole('button', { name: 'Mở cộng đồng' }))
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: 'fn-1', label: 'charge()', sourceFile: 'src/pay.ts', sourceLine: 9, sourceLocation: 'src/pay.ts:9', via: 'showInfo', community: 12, memberCount: null })) })
+    await userEvent.click(screen.getByRole('button', { name: 'Mở mã' }))
+    expect(onOpenCode).toHaveBeenCalledWith('src/pay.ts', 9)
+    await userEvent.click(screen.getByRole('tab', { name: 'Cây' }))
+    expect(screen.queryByRole('button', { name: '← Quay lại trang tổng' })).toBeNull()
+    expect(document.querySelector('webview')?.getAttribute('src')).toBe('nxpage://pid-1/GRAPH_TREE.html')
+  })
+
+  it('EN: nhãn mở cộng đồng và quay lại', async () => {
+    setLocale('en')
+    render(<GraphPagesView projectId="pid-1" status={status()} revision={0} onOpenCode={vi.fn()} onImpact={vi.fn()} onAsk={vi.fn()} />)
+    act(() => { listeners.forEach((cb) => cb({ projectId: 'pid-1', id: '12', label: 'Payments', sourceFile: null, sourceLine: null, sourceLocation: null, via: null, community: 12, memberCount: 44 })) })
+    await userEvent.click(screen.getByRole('button', { name: 'Open community' }))
+    expect(screen.getByText('Community: Payments')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '← Back to overview' })).toBeTruthy()
+  })
+
   it('không có trang nào → không vẽ khung nhúng (giao diện cũ giữ nguyên)', () => {
     const { container } = render(<GraphPagesView projectId="pid-1" status={status({ graph: false, tree: false, callflow: null })} revision={0} />)
     expect(container.querySelector('webview')).toBeNull()

@@ -2,7 +2,7 @@
 // Mỗi lúc chỉ giữ MỘT khung nhúng (spike A3: 3 trang cùng sống ~1 GB RAM).
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GraphPageSelection, GraphPagesStatus } from '@shared/graph-pages'
-import { GRAPH_PAGE_THEME_CHANNEL, canOpenPageSource, graphPageUrl } from '@shared/graph-pages'
+import { GRAPH_PAGE_THEME_CHANNEL, canOpenPageSource, communityPageUrl, graphPageUrl } from '@shared/graph-pages'
 import { tr, vi } from '../../strings'
 import { useTheme } from '../../state/useTheme'
 import './graph-pages.css'
@@ -26,15 +26,19 @@ interface FrameElement extends HTMLElement {
   send?: (channel: string, ...args: unknown[]) => void
 }
 
-/** NG-ACT-1: câu hỏi gửi agent có đủ tên nút + tệp:dòng để trả lời đúng ngữ cảnh. */
-const askText = (selection: GraphPageSelection): string => selection.sourceLocation
-  ? tr('Giải thích nút "{label}" ({source}) trong đồ thị này.', { label: selection.label, source: selection.sourceLocation })
-  : tr('Giải thích nút "{label}" trong đồ thị này.', { label: selection.label })
+/** NG-ACT-1/3: câu hỏi gửi agent có đủ ngữ cảnh (nút + tệp:dòng, hoặc cộng đồng + số thành viên). */
+const askText = (selection: GraphPageSelection): string => selection.memberCount !== null
+  ? tr('Tóm tắt cộng đồng "{label}" ({count} thành phần) trong đồ thị này.', { label: selection.label, count: selection.memberCount })
+  : selection.sourceLocation
+    ? tr('Giải thích nút "{label}" ({source}) trong đồ thị này.', { label: selection.label, source: selection.sourceLocation })
+    : tr('Giải thích nút "{label}" trong đồ thị này.', { label: selection.label })
 
 export function GraphPagesView({ projectId, status, revision, onOpenCode, onImpact, onAsk }: Props) {
   const theme = useTheme()
   const frameRef = useRef<FrameElement | null>(null)
   const [selection, setSelection] = useState<GraphPageSelection | null>(null)
+  // NG-ACT-3: đang xem đồ thị thành viên của một cộng đồng (null = trang tổng).
+  const [community, setCommunity] = useState<{ id: number; name: string } | null>(null)
 
   const modes = useMemo(() => [
     ...(status.graph ? [{ id: 'graph' as const, file: 'graph.html', label: vi.workspace.pagesGraph }] : []),
@@ -49,7 +53,7 @@ export function GraphPagesView({ projectId, status, revision, onOpenCode, onImpa
   useEffect(() => {
     if (!modes.some((item) => item.id === page) && modes[0]) setPage(modes[0].id)
   }, [modes, page])
-  useEffect(() => { setSelection(null) }, [page, revision, projectId])
+  useEffect(() => { setSelection(null); setCommunity(null) }, [page, revision, projectId])
 
   const sendTheme = useCallback(() => {
     const frame = frameRef.current
@@ -67,7 +71,7 @@ export function GraphPagesView({ projectId, status, revision, onOpenCode, onImpa
     const onReady = () => sendTheme()
     frame.addEventListener('dom-ready', onReady)
     return () => frame.removeEventListener('dom-ready', onReady)
-  }, [sendTheme, page, revision])
+  }, [sendTheme, page, revision, community?.id])
 
   // Panel nhỏ của app (NG-UI-3): nút vừa chọn trong trang + tệp:dòng từ engine.
   useEffect(() => {
@@ -91,16 +95,24 @@ export function GraphPagesView({ projectId, status, revision, onOpenCode, onImpa
           </button>
         ))}
       </div>
+      {community && (
+        <div className="graph-pages-community-bar">
+          <button type="button" className="graph-pages-back" onClick={() => { setCommunity(null); setSelection(null) }}>
+            {vi.workspace.pagesBackOverview}
+          </button>
+          <span className="graph-pages-community-name">{tr('Cộng đồng: {name}', { name: community.name })}</span>
+        </div>
+      )}
       <div className="graph-pages-body">
         {createElement('webview', {
-          key: `${active.id}:${revision}`,
+          key: `${active.id}:${community?.id ?? ''}:${revision}`,
           ref: (element: FrameElement | null) => { frameRef.current = element },
           className: 'graph-pages-frame',
-          src: graphPageUrl(projectId, active.file),
+          src: community ? communityPageUrl(projectId, community.id) : graphPageUrl(projectId, active.file),
           partition: status.partition,
           preload: status.preload,
           webpreferences: 'sandbox=yes, contextIsolation=yes, nodeIntegration=no',
-          title: active.label
+          title: community ? tr('Cộng đồng: {name}', { name: community.name }) : active.label
         })}
         {selection && (
           <aside role="status" aria-label={vi.workspace.pagesSelection} className="graph-pages-selection">
@@ -122,12 +134,23 @@ export function GraphPagesView({ projectId, status, revision, onOpenCode, onImpa
                 onClick={() => { if (selection.sourceFile && onOpenCode) onOpenCode(selection.sourceFile, selection.sourceLine ?? 1) }}>
                 {vi.workspace.pagesOpenCode}
               </button>
-              <button type="button" className="graph-pages-action" disabled={!onImpact} onClick={() => onImpact?.(selection.id)}>
+              <button type="button" className="graph-pages-action" disabled={!onImpact || selection.memberCount !== null} onClick={() => onImpact?.(selection.id)}>
                 {vi.workspace.pagesImpact}
               </button>
               <button type="button" className="graph-pages-action" disabled={!onAsk} onClick={() => onAsk?.(askText(selection))}>
                 {vi.workspace.pagesAskNex}
               </button>
+              {selection.memberCount !== null && (
+                <button type="button" className="graph-pages-action graph-pages-open-community"
+                  onClick={() => {
+                    const id = selection.community ?? Number(selection.id)
+                    if (!Number.isInteger(id) || id < 0) return
+                    setCommunity({ id, name: selection.label })
+                    setSelection(null)
+                  }}>
+                  {vi.workspace.pagesOpenCommunity}
+                </button>
+              )}
             </div>
             {selection.via && <p className="muted">{tr('Chọn qua {via}', { via: selection.via })}</p>}
           </aside>
