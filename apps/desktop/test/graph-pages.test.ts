@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   PAGE_CSP, VIS_INTEGRITY, discoverGraphPages, handlePageRequest, handleWebRequest,
-  injectCsp, isAllowedRequest, localLibFor, rebrandHtml, resolveGraphPage
+  injectCsp, isAllowedRequest, lineFromSourceLocation, localLibFor, readGraphJsonIndex, rebrandHtml, resolveGraphPage
 } from '../src/main/graph-pages/pages'
 
 const fixture = () => {
@@ -70,6 +70,28 @@ describe('rebrand + CSP ở lớp phục vụ (ADR 0025)', () => {
   it('chèn meta CSP ngay sau <head>', () => {
     const out = injectCsp('<html><head><meta charset="utf-8"></head><body></body></html>', PAGE_CSP)
     expect(out).toContain(`<head><meta http-equiv="Content-Security-Policy" content="${PAGE_CSP.replace(/"/g, '&quot;')}">`)
+  })
+})
+
+describe('chỉ mục graph.json cho cầu nối chọn nút', () => {
+  it('id Graphify → tệp:dòng, đọc lại theo mtime', async () => {
+    const { root, dir } = fixture()
+    writeFileSync(join(dir, 'graph.json'), JSON.stringify({ nodes: [
+      { id: 'src_service_order_createorder', source_file: 'src/service/order.ts', source_location: 'L5' },
+      { id: 'no_source', label: 'x' }
+    ] }))
+    const index = await readGraphJsonIndex(root)
+    expect(index.get('src_service_order_createorder')).toEqual({ file: 'src/service/order.ts', line: 5 })
+    expect(index.get('no_source')).toEqual({ file: null, line: null })
+    expect(index.get('missing')).toBeUndefined()
+    expect(lineFromSourceLocation('L12-L20')).toBe(12)
+    expect(lineFromSourceLocation('src/a.ts:L44')).toBe(44)
+    expect(lineFromSourceLocation(null)).toBeNull()
+  })
+
+  it('không có graph.json → chỉ mục rỗng, không ném', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'ng-nograph-'))
+    await expect(readGraphJsonIndex(root)).resolves.toEqual(new Map())
   })
 })
 

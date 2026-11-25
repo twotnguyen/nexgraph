@@ -34,7 +34,8 @@ export function validatePageNode(payload: unknown): PageNodePayload | null {
   if (!payload || typeof payload !== 'object') return null
   const raw = payload as Record<string, unknown>
   const id = clean(raw.id, 512)
-  if (!id) return null
+  // Preload gửi tin nhắn khởi động/theme với id `__bridge__`, `__boot__` — không phải nút người dùng chọn.
+  if (!id || id.startsWith('__')) return null
   return { id, label: clean(raw.label, 2000), source_file: clean(raw.source_file, 1024), source_location: clean(raw.source_location, 1024), via: clean(raw.via, 64) }
 }
 
@@ -58,6 +59,8 @@ export async function handlePageNodeMessage(args: {
   sender: SenderLike | null | undefined
   payload: unknown
   getNode(projectId: string, id: string): Promise<GraphNode>
+  /** Nguồn dự phòng cho id của Graphify (khác id graph.db): tra trong `.nexgraph/graph.json`. */
+  getPageNode?(projectId: string, id: string): Promise<{ file: string | null; line: number | null } | null>
 }): Promise<{ projectId: string; selection: GraphPageSelection } | null> {
   const { sender } = args
   if (!sender || sender.getType() !== 'webview') return null
@@ -69,10 +72,18 @@ export async function handlePageNodeMessage(args: {
   try {
     node = await args.getNode(projectId, payload.id)
   } catch {
-    // Nút cộng đồng của đồ thị bị gộp hoặc engine chưa sẵn sàng: vẫn hiện được thông tin từ trang.
+    // Nút cộng đồng của đồ thị bị gộp hoặc engine chưa sẵn sàng: thử chỉ mục graph.json.
   }
-  const sourceFile = node?.file ?? payload.source_file
-  const sourceLine = node?.line_start ?? lineFromLocation(payload.source_location)
+  let pageNode: { file: string | null; line: number | null } | null = null
+  if (!node && args.getPageNode) {
+    try {
+      pageNode = await args.getPageNode(projectId, payload.id)
+    } catch {
+      // Không có graph.json: dùng thông tin trang gửi.
+    }
+  }
+  const sourceFile = node?.file ?? pageNode?.file ?? payload.source_file
+  const sourceLine = node?.line_start ?? pageNode?.line ?? lineFromLocation(payload.source_location)
   return {
     projectId,
     selection: {

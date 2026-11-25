@@ -2,6 +2,7 @@
 // allowlist mạng, chặn điều hướng/popup/quyền của khung nhúng.
 import * as electron from 'electron'
 import type { WebContents } from 'electron'
+import { fileURLToPath } from 'node:url'
 import { handlePageRequest, handleWebRequest, isAllowedRequest, type PageServeOptions } from './pages'
 
 export const PAGES_SCHEME = 'nxpage'
@@ -69,8 +70,16 @@ export function attachGraphPageWebview(
   params: { partition?: string; src?: string },
   expected: { preloadUrl: string }
 ): void {
-  if (params.partition !== PAGES_PARTITION || !params.src || projectFromPageUrl(params.src) === null ||
-    webPreferences.preload !== expected.preloadUrl) {
+  // Electron đưa preload vào webPreferences dạng đường dẫn tuyệt đối (không phải file:// URL).
+  const preload = webPreferences.preload
+  const preloadOk = preload === expected.preloadUrl || (() => {
+    try {
+      return preload === fileURLToPath(expected.preloadUrl)
+    } catch {
+      return false
+    }
+  })()
+  if (params.partition !== PAGES_PARTITION || !params.src || projectFromPageUrl(params.src) === null || !preloadOk) {
     event.preventDefault()
     return
   }

@@ -60,7 +60,7 @@ import { adapterInstalled, installAdapter, type DebugKind } from './debug/adapte
 import { attachSpec, ensureConfigFile, listConfigs, resolveConfig, type DebugSpec } from './debug/launch-config'
 import { CollabHub } from './collab/hub'
 import { ExtensionRegistry } from './extensions/registry'
-import { discoverGraphPages } from './graph-pages/pages'
+import { discoverGraphPages, readGraphJsonIndex } from './graph-pages/pages'
 import { pageRoots } from './graph-pages/roots'
 import { PAGES_PARTITION } from './graph-pages/protocol'
 import { PAGE_NODE_CHANNEL, PAGE_NODE_SELECTED, handlePageNodeMessage } from './graph-pages/bridge'
@@ -710,7 +710,15 @@ export function registerIpc(
   // NG-UI-3: cầu nối chọn nút từ khung nhúng → panel của app. Sender/payload được kiểm trong bridge.
   // `on?.` vì test main giả lập ipcMain chỉ có `handle`; tiến trình thật luôn có `on`.
   ipcMain.on?.(PAGE_NODE_CHANNEL, (event, payload: unknown) => {
-    void handlePageNodeMessage({ sender: event.sender, payload, getNode: (projectId, id) => api().getNode(projectId, id) })
+    void handlePageNodeMessage({
+      sender: event.sender, payload,
+      getNode: (projectId, id) => api().getNode(projectId, id),
+      // graph.html dùng id của Graphify (khác id graph.db) và không xuất source_location.
+      getPageNode: async (projectId, id) => {
+        const root = pageRoots.get(projectId)
+        return root ? (await readGraphJsonIndex(root)).get(id) ?? null : null
+      }
+    })
       .then((result) => {
         if (!result) return
         const sender = event.sender

@@ -19,6 +19,8 @@ describe('payload từ trang', () => {
     expect(validatePageNode({ id: 'n1', label: 'Nút', source_file: 'a.ts', source_location: 'a.ts:3', via: 'showInfo' }))
       .toEqual({ id: 'n1', label: 'Nút', source_file: 'a.ts', source_location: 'a.ts:3', via: 'showInfo' })
     expect(validatePageNode({ id: 'n1', label: 'x'.repeat(2001) })?.label).toBeNull()
+    expect(validatePageNode({ id: '__bridge__', bridge: true, via: 'boot' })).toBeNull()
+    expect(validatePageNode({ id: '__boot__', via: 'boot' })).toBeNull()
     expect(validatePageNode({ label: 'no id' })).toBeNull()
     expect(validatePageNode('n1')).toBeNull()
     expect(validatePageNode({ id: 42 })).toBeNull()
@@ -34,6 +36,14 @@ describe('cầu nối chọn nút', () => {
     expect(await handlePageNodeMessage({ sender: sender('window'), payload: { id: 'x' }, getNode })).toBeNull()
     expect(await handlePageNodeMessage({ sender: sender('webview', 'https://evil.example/x'), payload: { id: 'x' }, getNode })).toBeNull()
     expect(await handlePageNodeMessage({ sender: sender(), payload: null, getNode })).toBeNull()
+  })
+
+  it('engine lỗi (id Graphify) → tra graph.json của dự án', async () => {
+    const getNode = vi.fn(async () => { throw new Error('not found') })
+    const getPageNode = vi.fn(async () => ({ file: 'src/service/order.ts', line: 5 }))
+    const result = await handlePageNodeMessage({ sender: sender(), payload: { id: 'src_service_order_createorder', label: 'createOrder()' }, getNode, getPageNode })
+    expect(getPageNode).toHaveBeenCalledWith('pid-1', 'src_service_order_createorder')
+    expect(result?.selection).toMatchObject({ label: 'createOrder()', sourceFile: 'src/service/order.ts', sourceLine: 5, sourceLocation: 'src/service/order.ts:5' })
   })
 
   it('engine lỗi (nút cộng đồng bị gộp) vẫn trả thông tin từ trang', async () => {

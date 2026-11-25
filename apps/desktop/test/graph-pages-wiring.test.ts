@@ -77,6 +77,14 @@ describe('chỉ khung nhúng của tính năng được gắn vào cửa sổ', 
     expect(prefs).toMatchObject({ nodeIntegration: false, contextIsolation: true, sandbox: true })
   })
 
+  it('chấp nhận preload dạng đường dẫn tuyệt đối (Electron chuẩn hoá từ file:// URL)', () => {
+    const event = { preventDefault: vi.fn() }
+    const prefs = { preload: '/preload/graphPage.js' }
+    attachGraphPageWebview(event, prefs, okParams, expected)
+    expect(event.preventDefault).not.toHaveBeenCalled()
+    expect(prefs).toMatchObject({ nodeIntegration: false, contextIsolation: true, sandbox: true })
+  })
+
   it('chặn partition lạ, src lạ và preload lạ', () => {
     for (const params of [{ ...okParams, partition: 'persist:x' }, { ...okParams, src: 'https://example.com' }, { partition: PAGES_PARTITION }]) {
       const event = { preventDefault: vi.fn() }

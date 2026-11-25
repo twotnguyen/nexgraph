@@ -183,3 +183,44 @@ export async function handleWebRequest(url: string, opts: { libsDir: string }): 
 export function libIntegrity(bytes: Buffer): string {
   return createHash('sha384').update(bytes).digest('base64')
 }
+
+/** `source_location` của graph.json dạng "L5" / "L5-L9" / "src/a.ts:L5" → dòng đầu. */
+export function lineFromSourceLocation(value: unknown): number | null {
+  if (typeof value !== 'string') return null
+  const match = value.match(/L(\d+)/) ?? value.match(/:(\d+)/)
+  return match ? Number(match[1]) : null
+}
+
+export interface PageNodeLocation { file: string | null; line: number | null }
+
+const indexCache = new Map<string, { mtimeMs: number; index: Map<string, PageNodeLocation> }>()
+
+/**
+ * Chỉ mục id → tệp:dòng đọc từ `<root>/.nexgraph/graph.json`. `graph.html` không xuất
+ * `source_location` (spike A3 §6) và id của Graphify khác id graph.db của NexGraph, nên đây là
+ * nguồn tra cứu cho nút chọn từ trang. Đọc lười, cache theo mtime của tệp.
+ */
+export async function readGraphJsonIndex(root: string): Promise<Map<string, PageNodeLocation>> {
+  const file = join(graphPagesDir(root), 'graph.json')
+  try {
+    const info = await stat(file)
+    const cached = indexCache.get(file)
+    if (cached && cached.mtimeMs === info.mtimeMs) return cached.index
+    const data = JSON.parse(await readFile(file, 'utf8')) as { nodes?: unknown }
+    const index = new Map<string, PageNodeLocation>()
+    for (const raw of Array.isArray(data.nodes) ? data.nodes : []) {
+      if (!raw || typeof raw !== 'object') continue
+      const node = raw as { id?: unknown; source_file?: unknown; source_location?: unknown }
+      if (typeof node.id !== 'string') continue
+      index.set(node.id, {
+        file: typeof node.source_file === 'string' ? node.source_file : null,
+        line: lineFromSourceLocation(node.source_location)
+      })
+    }
+    indexCache.set(file, { mtimeMs: info.mtimeMs, index })
+    return index
+  } catch {
+    return new Map()
+  }
+}
+
