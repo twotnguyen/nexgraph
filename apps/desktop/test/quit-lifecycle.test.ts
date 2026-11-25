@@ -31,6 +31,8 @@ vi.mock('electron', () => ({
     on(name: string, cb: () => void) { if (name === 'closed') h.closed = cb }
   },
   dialog: { showMessageBoxSync: vi.fn() }, ipcMain: { handle: vi.fn() }, shell: { openExternal: h.externalOpen },
+  // Entrypoint đăng ký scheme nxpage trước whenReady và tạo session của trang nhúng.
+  protocol: { registerSchemesAsPrivileged: vi.fn() }, session: { fromPartition: () => null },
   // appMenu dựng menu hệ thống lúc whenReady; mock đủ để entrypoint nạp được.
   Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn(() => ({ items: [] })) }
 }))
