@@ -212,6 +212,10 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHoo
     throw e
   }))
 
+/** Nex dùng được khi có model đã chọn (tài khoản sidecar, API key built-in, hoặc provider tuỳ chỉnh). */
+const nexReadyFor = (a: AccountService | null): boolean =>
+  !!a && !!(a.nexProviderFor(a.nexSelectedModel()) ?? a.nexProvider())
+
 export function stopAllWatchers(): void {
   watchStarts.clear()
   for (const w of watchers.values()) w.stop()
@@ -235,6 +239,8 @@ const startNexAccountsSidecar = (dataDir: string): Promise<{ baseUrl: string; pa
       bin,
       dataDir: join(dataDir, 'nex'),
       projectKey: 'accounts',
+      homeDir: join(dataDir, 'nex', 'home'),
+      configDir: join(dataDir, 'nex', 'accounts', 'config'),
       cwd: dataDir,
       // Không cần MCP/model cho màn tài khoản; cấu hình tối thiểu để sidecar chạy.
       config: () => ({ $schema: 'https://opencode.ai/config.json' }),
@@ -985,7 +991,7 @@ export function registerIpc(
   })
   onTrusted('ai:get-runtime', async () => {
     const a = await acc().catch(() => null)
-    return { runtime: selectedRuntime(), nexAvailable: nexRuntime(), nexReady: !!a?.nexProvider() }
+    return { runtime: selectedRuntime(), nexAvailable: nexRuntime(), nexReady: nexReadyFor(a) }
   })
   onTrusted('ai:set-runtime', async (runtime: unknown) => {
     if (runtime !== 'nex' && runtime !== 'pi') throw new AgentError('bad_param', 'Runtime không hợp lệ')
@@ -994,7 +1000,7 @@ export function registerIpc(
     }
     if (runtime === 'nex') {
       if (!nexRuntime()) throw new AgentError('ai_not_configured', 'Chưa tìm thấy runtime Nex trên máy này. Hãy dùng runtime Pi.')
-      if (!(await acc()).nexProvider()) throw new AgentError('ai_not_configured', 'Nex đợt này cần nhà cung cấp OpenAI-compatible có API key. Hãy thêm trong Cài đặt.')
+      if (!nexReadyFor(await acc())) throw new AgentError('ai_not_configured', 'Nex chưa có tài khoản AI. Hãy đăng nhập hoặc thêm nhà cung cấp OpenAI-compatible trong Cài đặt.')
     }
     selectRuntime(runtime)
   })
@@ -1029,7 +1035,17 @@ export function registerIpc(
     emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event }),
     createSession: (spec) => createNexSession(spec, {
       dataDir, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath,
-      engineCommand: getCommand, getProvider: async () => (await acc()).nexProvider()
+      engineCommand: getCommand,
+      getProvider: async () => {
+        const a = await acc()
+        return a.nexProviderFor(a.nexSelectedModel()) ?? a.nexProvider()
+      },
+      getAccountModel: async () => {
+        const a = await acc()
+        const selected = a.nexSelectedModel()
+        // Nhà cung cấp tuỳ chỉnh / API key của app đi qua provider env, không phải tài khoản sidecar.
+        return selected && !a.nexProviderFor(selected) ? selected : null
+      }
     })
   })
   const agent = (agents = new AgentRouter(piAgent, googleAgent, selectedRuntime, nexAgent))

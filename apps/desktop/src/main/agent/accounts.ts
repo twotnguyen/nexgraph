@@ -468,6 +468,39 @@ export class AccountService {
     }
   }
 
+  /** Model mặc định đã chọn trong khối tài khoản Nex (`prefs.nexSelectedModel`). */
+  nexSelectedModel(): { provider: string; id: string } | null {
+    const value = readJson(this.deps.prefsFile).nexSelectedModel
+    if (!value || typeof value !== 'object') return null
+    const { provider, id } = value as { provider?: unknown; id?: unknown }
+    return typeof provider === 'string' && typeof id === 'string' ? { provider, id } : null
+  }
+
+  /**
+   * Provider OpenAI-compatible cho một lựa chọn cụ thể: nhà cung cấp tuỳ chỉnh của app, hoặc
+   * provider built-in có baseUrl + API key trong kho bí mật (key chỉ vào env tiến trình con).
+   * Trả null khi lựa chọn là tài khoản đăng nhập trong sidecar (OAuth/external) hoặc thiếu key.
+   */
+  nexProviderFor(selected: { provider: string; id: string } | null): NexProvider | null {
+    if (!selected) return null
+    const custom = this.customs().find((p) => p.id === selected.provider)
+    if (custom) {
+      const apiKey = this.deps.secrets.get(custom.id) ?? ''
+      return {
+        id: custom.id, label: custom.label, baseUrl: custom.baseUrl, apiKey: apiKey || 'unused', model: selected.id,
+        ...(custom.contextWindow ? { contextWindow: custom.contextWindow } : {}),
+        ...(custom.maxTokens ? { maxTokens: custom.maxTokens } : {}),
+        ...(typeof custom.supportsTools === 'boolean' ? { supportsTools: custom.supportsTools } : {})
+      }
+    }
+    const provider = this.modelRuntime.getProvider(selected.provider)
+    const key = this.deps.secrets.get(selected.provider)
+    if (!provider?.baseUrl || !key) return null
+    return {
+      id: selected.provider, label: provider.name, baseUrl: provider.baseUrl, apiKey: key, model: selected.id
+    }
+  }
+
   /** shortcut: SDK OpenAI trong pi không gửi được request thiếu Authorization; khi chưa có key,
    *  endpoint nhận giá trị sentinel 'unused' của chính pi (server không cần key sẽ bỏ qua). */
   private registerCustom(p: CustomProvider): void {

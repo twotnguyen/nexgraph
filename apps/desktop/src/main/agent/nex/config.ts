@@ -70,6 +70,13 @@ export function nexConfig(input: NexConfigInput): Record<string, unknown> {
         }
       }
     },
+    ...nexBaseConfig(input)
+  }
+}
+
+/** Phần chung của cấu hình Nex: MCP engine + quyền. */
+function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'>): Record<string, unknown> {
+  return {
     mcp: {
       servers: {
         nexgraph: {
@@ -94,6 +101,21 @@ export function nexConfig(input: NexConfigInput): Record<string, unknown> {
       { action: 'edit', resource: '*', effect: 'ask' },
       { action: 'shell', resource: '*', effect: 'ask' }
     ]
+  }
+}
+
+/**
+ * Cấu hình cho nhà cung cấp đã đăng nhập trong sidecar (ChatGPT, Copilot, OpenCode…):
+ * model trỏ thẳng `<integration>/<model>`, không khai báo `providers` và không cần key trên đĩa.
+ */
+export function nexAccountConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'> & {
+  providerID: string
+  model: string
+}): Record<string, unknown> {
+  return {
+    $schema: 'https://opencode.ai/config.json',
+    model: `${input.providerID}/${input.model}`,
+    ...nexBaseConfig(input)
   }
 }
 
