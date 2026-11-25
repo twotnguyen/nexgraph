@@ -8,6 +8,7 @@ Bốn tầng, tách được để test riêng:
 - `job`: nối vào job lập chỉ mục (nạp `graph.json` bằng `graphify_import`), refresh tăng dần, hậu xử lý đổi tên.
 """
 from nexgraph_engine.pipeline.mode import GRAPHIFY, LEGACY, PIPELINE_ENV, pipeline_mode
+from nexgraph_engine.pipeline.rebrand import rebrand_exported, rebrand_text
 from nexgraph_engine.pipeline.runner import (
     FULL_STEPS, INCREMENTAL_STEPS, PipelineResult, Step, StepResult, child_argv, run_pipeline, run_step,
     spawn_and_wait,
@@ -15,5 +16,6 @@ from nexgraph_engine.pipeline.runner import (
 
 __all__ = [
     "FULL_STEPS", "GRAPHIFY", "INCREMENTAL_STEPS", "LEGACY", "PIPELINE_ENV", "PipelineResult", "Step",
-    "StepResult", "child_argv", "pipeline_mode", "run_pipeline", "run_step", "spawn_and_wait",
+    "StepResult", "child_argv", "pipeline_mode", "rebrand_exported", "rebrand_text", "run_pipeline",
+    "run_step", "spawn_and_wait",
 ]

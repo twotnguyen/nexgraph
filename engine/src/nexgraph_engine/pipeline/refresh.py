@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 from nexgraph_engine.pipeline.mode import LEGACY, pipeline_mode
+from nexgraph_engine.pipeline.rebrand import rebrand_exported
 from nexgraph_engine.pipeline.runner import INCREMENTAL_STEPS, run_step
 
 
@@ -63,6 +64,7 @@ def refresh_pipeline(store, root: Path, *, timeout: float | None = None):
 
     before = _paths(store)
     report = replace_files(store, changed, out / "graph.json", root=root)
+    rebrand_exported(out)  # ADR 0025: trang HTML vừa vẽ lại cũng phải sạch tên nguồn
     after = _paths(store)
     added = [path for path in changed if path in after and path not in before]
     modified = [path for path in changed if path in before and path in after]

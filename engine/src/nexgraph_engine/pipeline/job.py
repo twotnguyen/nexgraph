@@ -17,10 +17,11 @@ from pathlib import Path
 
 from nexgraph_engine.index.indexer import ProgressEvent
 from nexgraph_engine.pipeline.mode import GRAPHIFY, LEGACY, pipeline_mode
+from nexgraph_engine.pipeline.rebrand import rebrand_exported
 from nexgraph_engine.pipeline.runner import FULL_STEPS, run_pipeline
 from nexgraph_engine.graphify_import import import_graph_json
 
-_ERROR_HINT = re.compile(r"warning|error|failed|skipped|unsupported", re.I)
+_ERROR_HINT = re.compile(r"AST extraction (?:incomplete|failed)|failed to extract|extract(?:ion)? error", re.I)
 _FILE_IN_LINE = re.compile(r"([\w][\w./\\-]*\.[A-Za-z0-9]{1,8})\b")
 
 
@@ -104,6 +105,7 @@ def run_index_pipeline(store, root: Path, *, exclude: list[str] | None = None,
 
     on_event(ProgressEvent("resolve", total, total, "Đang nạp đồ thị vào chỉ mục"))
     report = import_graph_json(store, root, graph_json)
+    rebrand_exported(out)  # ADR 0025: tên hiển thị trong báo cáo/trang HTML, không đổi id/đường dẫn
 
     vendor_lines = [line for step in result.steps for line in step.tail]
     errors = _record_vendor_errors(store, vendor_lines)
