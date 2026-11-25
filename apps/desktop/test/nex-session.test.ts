@@ -1,3 +1,6 @@
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ApprovalDecision, ApprovalRequest } from '../src/shared/agent-types'
 import { applyUnifiedPatch, NexSession, type NexSessionClient } from '../src/main/agent/nex/session'
@@ -96,7 +99,9 @@ describe('NexSession (adapter sự kiện OpenCode → Pi)', () => {
     const { client, calls, emit } = fakeClient()
     const decisions: ApprovalDecision[] = [{ allow: true }, { allow: false, reason: 'x' }]
     const request = vi.fn(async (_req: ApprovalRequest): Promise<ApprovalDecision> => decisions.shift() ?? { allow: false, reason: 'x' })
-    const session = sessionOf(client, { gate: { request }, readFile: () => 'old\n' })
+    const root = mkdtempSync(join(tmpdir(), 'n1a1-session-'))
+    writeFileSync(join(root, 'note.txt'), 'old\n')
+    const session = sessionOf(client, { root, gate: { request } })
     session.subscribe(() => {})
     const running = session.prompt('tạo tệp')
     await flush()
@@ -123,6 +128,48 @@ describe('NexSession (adapter sự kiện OpenCode → Pi)', () => {
     await flush()
     expect(request).not.toHaveBeenCalled()
     expect(calls.replies.at(-1)).toEqual({ id: 'per_3', decision: 'reject' })
+    emit({ type: 'session.execution.succeeded', data: { sessionID: 'ses_1' } })
+    await running
+  })
+
+  it('symlink ra ngoài dự án: không đọc ngoài, không hỏi duyệt, trả reject', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'n1a1-session-'))
+    const outside = mkdtempSync(join(tmpdir(), 'n1a1-outside-'))
+    writeFileSync(join(outside, 'secret.txt'), 'secret\n')
+    symlinkSync(outside, join(root, 'link'), 'dir')
+    const { client, calls, emit } = fakeClient()
+    const request = vi.fn(async (): Promise<ApprovalDecision> => ({ allow: true }))
+    const session = sessionOf(client, { root, gate: { request } })
+    session.subscribe(() => {})
+    const running = session.prompt('sửa')
+    await flush()
+    const diff = '--- a/secret.txt\n+++ b/secret.txt\n@@ -1,1 +1,1 @@\n-secret\n+leaked\n'
+    emit({ type: 'permission.asked', data: { sessionID: 'ses_1', id: 'per_link', action: 'edit', resources: ['link/secret.txt'], metadata: { filepath: 'link/secret.txt', diff } } })
+    await flush()
+    expect(request).not.toHaveBeenCalled()
+    expect(calls.replies.at(-1)).toEqual({ id: 'per_link', decision: 'reject' })
+    emit({ type: 'session.execution.succeeded', data: { sessionID: 'ses_1' } })
+    await running
+  })
+
+  it('đường dẫn .. hoặc không đọc được an toàn bị từ chối, không coi là tệp rỗng', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'n1a1-session-'))
+    mkdirSync(join(root, 'dir'))
+    const { client, calls, emit } = fakeClient()
+    const request = vi.fn(async (): Promise<ApprovalDecision> => ({ allow: true }))
+    const session = sessionOf(client, { root, gate: { request } })
+    session.subscribe(() => {})
+    const running = session.prompt('sửa')
+    await flush()
+    const diff = '--- a/x\n+++ b/x\n@@ -1,1 +1,1 @@\n-a\n+b\n'
+    emit({ type: 'permission.asked', data: { sessionID: 'ses_1', id: 'per_dotdot', action: 'edit', resources: ['../outside.txt'], metadata: { filepath: '../outside.txt', diff } } })
+    await flush()
+    expect(request).not.toHaveBeenCalled()
+    expect(calls.replies.at(-1)).toEqual({ id: 'per_dotdot', decision: 'reject' })
+    emit({ type: 'permission.asked', data: { sessionID: 'ses_1', id: 'per_dir', action: 'edit', resources: ['dir'], metadata: { filepath: 'dir', diff } } })
+    await flush()
+    expect(request).not.toHaveBeenCalled()
+    expect(calls.replies.at(-1)).toEqual({ id: 'per_dir', decision: 'reject' })
     emit({ type: 'session.execution.succeeded', data: { sessionID: 'ses_1' } })
     await running
   })

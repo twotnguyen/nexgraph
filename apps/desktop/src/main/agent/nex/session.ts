@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { readFileSync, existsSync, realpathSync } from 'node:fs'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { ApprovalDecision, ApprovalRequest, CommandApprovalRequest, FileApprovalRequest } from '../../../shared/agent-types'
 import type { ApprovalGate } from '../approval'
 import type { ProviderFailure } from '../session'
@@ -300,8 +300,12 @@ export class NexSession {
       const path = this.projectRelative(target)
       if (path) {
         const before = this.readProjectFile(path)
-        const after = applyUnifiedPatch(before, asString(metadata.diff))
-        if (after !== null) request = { id: requestId, tool: 'write', path, before, after } satisfies FileApprovalRequest
+        // Không đọc được an toàn (symlink ra ngoài, lỗi quyền, đường dẫn lạ) → từ chối thao tác,
+        // không coi là tệp rỗng để dựng diff giả.
+        if (before !== null) {
+          const after = applyUnifiedPatch(before, asString(metadata.diff))
+          if (after !== null) request = { id: requestId, tool: 'write', path, before, after } satisfies FileApprovalRequest
+        }
       }
     } else if (action === 'shell' && this.o.isEdit?.() !== false) {
       const command = asString(metadata.command) || resources[0] || ''
@@ -322,7 +326,49 @@ export class NexSession {
     return rel.split(sep).join('/')
   }
 
-  private readProjectFile(path: string): string {
-    try { return (this.o.readFile ?? ((file: string) => readFileSync(file, 'utf8')))(resolve(this.o.root, path)) } catch { return '' }
+  /** realpath gốc dự án, tính một lần; lỗi đọc thì giữ nguyên đường dẫn cấu hình. */
+  private realRoot(): string {
+    try { return realpathSync.native(this.o.root) } catch { return this.o.root }
+  }
+
+  private insideRoot(root: string, target: string): boolean {
+    const rel = relative(root, target)
+    return rel === '' || (rel !== '..' && !rel.startsWith('..' + sep) && !isAbsolute(rel))
+  }
+
+  /**
+   * Đường dẫn tuyệt đối an toàn để đọc trong dự án: kiểm `..`/tuyệt đối trước, rồi realpath của
+   * tổ tiên gần nhất đang tồn tại (tệp mới chưa có) và của chính tệp nếu đã có — chặn symlink
+   * trỏ ra ngoài. Trả null khi không xác định được.
+   */
+  private resolveProjectFile(path: string): string | null {
+    const root = this.realRoot()
+    const absolute = isAbsolute(path) ? path : resolve(this.o.root, path)
+    if (!this.insideRoot(this.o.root, absolute)) return null
+    let probe = absolute
+    while (!existsSync(probe)) {
+      const parent = dirname(probe)
+      if (parent === probe) return null
+      probe = parent
+    }
+    try {
+      if (!this.insideRoot(root, realpathSync.native(probe))) return null
+      if (existsSync(absolute) && !this.insideRoot(root, realpathSync.native(absolute))) return null
+    } catch {
+      return null
+    }
+    return absolute
+  }
+
+  /** null khi không đọc được an toàn; tệp chưa có (ENOENT) trả '' cho bản xem trước tệp mới. */
+  private readProjectFile(path: string): string | null {
+    const absolute = this.resolveProjectFile(path)
+    if (!absolute) return null
+    try {
+      return (this.o.readFile ?? ((file: string) => readFileSync(file, 'utf8')))(absolute)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
+      return null
+    }
   }
 }
