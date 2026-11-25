@@ -99,7 +99,21 @@ export async function assertPackagedNexRuntime({
   if (platform !== 'win32' && (stat.mode & 0o111) === 0) {
     throw new Error(`Runtime Nex ${bin} không có quyền thực thi (mode ${(stat.mode & 0o777).toString(8)}).`)
   }
-  assertSha256(await sha256File(bin), asset.binarySha256, `${bin} (binary OpenCode ${config.version})`)
+  // Windows chép nguyên .exe nên sha phải khớp tệp ghim. macOS bị @electron/osx-sign ký ad-hoc
+  // cùng app nên byte đổi; khi đó chấp nhận nếu chữ ký codesign hợp lệ.
+  const actual = await sha256File(bin)
+  if (platform !== 'win32' && actual !== asset.binarySha256) {
+    try {
+      execFileSync('codesign', ['--verify', '--strict', bin], { stdio: 'pipe', timeout: 60_000 })
+    } catch {
+      throw new Error(
+        `Sai sha256 của ${bin} (binary OpenCode ${config.version}): mong đợi ${asset.binarySha256}, nhận ${actual}; ` +
+        'binary cũng không có chữ ký codesign hợp lệ.'
+      )
+    }
+  } else {
+    assertSha256(actual, asset.binarySha256, `${bin} (binary OpenCode ${config.version})`)
+  }
   const printed = execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 120_000 }).trim()
   if (!printed.includes(config.version)) {
     throw new Error(`Runtime Nex in "${printed}", mong đợi bản ${config.version}.`)
@@ -112,22 +126,23 @@ export async function assertPackagedNexRuntime({
 export function assertNoNexBinaryInAsar(appDir, platform = process.platform) {
   const archive = join(resourcesDir(appDir, platform), 'app.asar')
   if (!existsSync(archive)) throw new Error(`Không thấy ${archive} để kiểm asar.`)
-  const head = Buffer.alloc(8)
+  // Định dạng asar: [pickle 8 B: độ dài headerBuf][headerBuf: 4 B độ dài + 4 B độ dài JSON + JSON].
+  const size = Buffer.alloc(8)
   const fd = openSync(archive, 'r')
   try {
-    readSync(fd, head, 0, 8, 0)
+    readSync(fd, size, 0, 8, 0)
   } finally {
     closeSync(fd)
   }
-  const jsonSize = head.readUInt32LE(4)
-  const json = Buffer.alloc(jsonSize)
+  const headerBuf = Buffer.alloc(size.readUInt32LE(4))
   const fd2 = openSync(archive, 'r')
   try {
-    readSync(fd2, json, 0, jsonSize, 8)
+    readSync(fd2, headerBuf, 0, headerBuf.length, 8)
   } finally {
     closeSync(fd2)
   }
-  const header = JSON.parse(json.toString('utf8'))
+  const jsonSize = headerBuf.readUInt32LE(4)
+  const header = JSON.parse(headerBuf.subarray(8, 8 + jsonSize).toString('utf8'))
   const hits = []
   const walk = (node, prefix) => {
     for (const [name, child] of Object.entries(node ?? {})) {

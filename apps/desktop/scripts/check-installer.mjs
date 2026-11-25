@@ -4,7 +4,7 @@ import { appendFileSync, createReadStream, existsSync, readFileSync, readdirSync
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { REQUIRED_LICENSE_FILES, assertLicenseFiles, resourcesDir } from './license-files.mjs'
-import { assertNoNexBinaryInAsar } from './nex-runtime.mjs'
+import { assertNoNexBinaryInAsar, assertPackagedNexRuntime } from './nex-runtime.mjs'
 
 const targets = {
   darwin: { os: 'macos', ext: 'dmg' },
@@ -53,6 +53,10 @@ console.log(`Tệp giấy phép trong ${resourcesDir(appDir, process.platform)}:
 
 // PKG-NEX-2: binary runtime Nex phải nằm ngoài app.asar (resources/opencode/), không bị đóng vào asar.
 assertNoNexBinaryInAsar(appDir, process.platform)
+
+// PKG-NEX-3: binary trong gói phải đúng sha256 đã ghim, có quyền thực thi và chạy được `--version`.
+// Chạy trên app chưa nén để job `package` đỏ ngay nếu runtime thiếu/hỏng, không chờ tới lúc cài.
+await assertPackagedNexRuntime({ appDir, platform: process.platform })
 
 const path = `apps/desktop/dist/${filename}`
 const manifest = `apps/desktop/dist/${name}.build.json`
