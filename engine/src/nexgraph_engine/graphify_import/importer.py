@@ -33,6 +33,8 @@ from nexgraph_engine.store.models import FileRec
 CHUNK = 2000
 _ZERO_SHA = "0" * 64
 _CODE_KINDS = (NodeKind.CLASS, NodeKind.FUNCTION, NodeKind.METHOD)
+# Tên cộng đồng đã đặt (AI/người dùng) được giữ khi tập thành viên đổi nhưng còn đủ trùng.
+_KEEP_NAME_JACCARD = 0.8
 
 
 @dataclass(frozen=True)
@@ -337,35 +339,102 @@ def file_records(root: Path, files: list[str]) -> tuple[dict[str, FileRec], list
 
 
 def sync_communities(store: GraphStore, parsed: ParsedGraph) -> int:
-    """Đồng bộ bảng cộng đồng + quan hệ thành viên toàn bộ theo `graph.json` (QA #67.1).
+    """Đồng bộ bảng cộng đồng + quan hệ thành viên toàn bộ theo `graph.json` (QA #67.1, vòng 2.2).
 
-    Nạp đầy đủ và nạp tăng dần dùng chung bước này: cộng đồng được đánh số lại từ 1 theo
-    `community` của graph.json, mọi nút (kể cả nút ở tệp không đổi) nhận lại `ma_khoi`.
-    Rẻ (một bảng tạm + một UPDATE) nên chạy mỗi lần thay vì diff cộng đồng.
+    Nạp đầy đủ và nạp tăng dần dùng chung bước này. Giữ tên đã đặt (AI/người dùng ghi vào
+    `nhan_cum` + `khoi_kien_truc.ten`): cộng đồng có tập thành viên không đổi giữ nguyên
+    `ma_khoi`/id và tên; tập đổi thì nhận tên cũ nếu Jaccard ≥ 0.8 với đúng một cộng đồng cũ.
+    Còn lại dùng tên mặc định của graph.json.
     """
     conn = store.conn
+    old_rows = conn.execute("SELECT ma_khoi, ten FROM khoi_kien_truc").fetchall()
+    old_names = {int(row["ma_khoi"]): row["ten"] for row in old_rows}
+    old_members: dict[int, set[str]] = {int(row["ma_khoi"]): set() for row in old_rows}
+    for row in conn.execute("SELECT ma_khoi, id_nut FROM nut WHERE ma_khoi IS NOT NULL"):
+        old_members.setdefault(int(row["ma_khoi"]), set()).add(row["id_nut"])
+
+    # `id_nut` thật trong CSDL cho từng nút parse (bước enrich có thể đã đổi `#kind`).
+    db_ids = {row[0] for row in conn.execute("SELECT id_nut FROM nut")}
+    by_gid: dict[str, list[str]] = {}
+    for node_id in db_ids:
+        by_gid.setdefault(node_id.rpartition("#")[0], []).append(node_id)
+
+    def db_id(row: NodeRow) -> str:
+        if row.node_id in db_ids:
+            return row.node_id
+        candidates = by_gid.get(row.gid) or []
+        return candidates[0] if len(candidates) == 1 else row.node_id
+
+    member_sets: dict[int, set[str]] = {}
+    for row in parsed.nodes:
+        if row.community is not None:
+            member_sets.setdefault(row.community, set()).add(db_id(row))
+    meta = {row.key: row for row in parsed.communities}
+    keys = sorted(set(meta) | set(member_sets))
+
+    used_old: set[int] = set()
+    assigned: dict[int, tuple[int | None, str]] = {}
+
+    exact: dict[frozenset[str], list[int]] = {}
+    for old_id, members in old_members.items():
+        if members:
+            exact.setdefault(frozenset(members), []).append(old_id)
+    for key in keys:  # 1) tập thành viên không đổi → giữ nguyên id + tên
+        members = member_sets.get(key, set())
+        candidates = exact.get(frozenset(members)) if members else None
+        if candidates and len(candidates) == 1 and candidates[0] not in used_old:
+            old_id = candidates[0]
+            used_old.add(old_id)
+            assigned[key] = (old_id, old_names[old_id])
+    for key in keys:  # 2) Jaccard ≥ 0.8 với đúng một cộng đồng cũ → giữ tên cũ
+        if key in assigned or not member_sets.get(key):
+            continue
+        new_set = member_sets[key]
+        best: int | None = None
+        best_score, tie = 0.0, False
+        for old_id, old_set in old_members.items():
+            if old_id in used_old or not old_set:
+                continue
+            score = len(new_set & old_set) / len(new_set | old_set)
+            if score > best_score + 1e-9:
+                best, best_score, tie = old_id, score, False
+            elif abs(score - best_score) <= 1e-9 and score >= _KEEP_NAME_JACCARD:
+                tie = True
+        if best is not None and best_score >= _KEEP_NAME_JACCARD and not tie:
+            used_old.add(best)
+            assigned[key] = (best, old_names[best])
+
+    used_ids = {old_id for old_id, _ in assigned.values() if old_id is not None}
+    next_id = 1
+    final: dict[int, tuple[int, str, float | None]] = {}
+    for key in keys:  # 3) còn lại: id trống nhỏ nhất + tên mặc định
+        old_id, name = assigned.get(key, (None, ""))
+        if old_id is None:
+            while next_id in used_ids:
+                next_id += 1
+            old_id = next_id
+            used_ids.add(old_id)
+            name = meta[key].name if key in meta else f"Community {key}"
+        final[key] = (old_id, name, meta[key].cohesion if key in meta else None)
+
     conn.execute("UPDATE nut SET ma_khoi = NULL")
     conn.execute("DELETE FROM khoi_kien_truc")
-    block_of = {row.key: index for index, row in enumerate(parsed.communities, start=1)}
-    if block_of:
+    if final:
         conn.executemany("INSERT INTO khoi_kien_truc (ma_khoi, ten, do_gan_ket) VALUES (?, ?, ?)",
-                         [(block_of[row.key], row.name, row.cohesion) for row in parsed.communities])
-    members: dict[str, int] = {}
+                         [(old_id, name, cohesion) for old_id, name, cohesion in final.values()])
+    member_map: dict[str, int] = {}
     for row in parsed.nodes:
-        if row.community is not None and row.community in block_of:
-            members[row.node_id] = block_of[row.community]
-            members.setdefault(row.gid, block_of[row.community])  # khớp cả khi enrich đã đổi loại nút
-    if members:
+        if row.community is not None and row.community in final:
+            member_map[db_id(row)] = final[row.community][0]
+    if member_map:
         conn.execute("CREATE TEMP TABLE _thanh_vien_cong_dong (id TEXT PRIMARY KEY, ma_khoi INTEGER)")
         conn.executemany("INSERT OR REPLACE INTO temp._thanh_vien_cong_dong (id, ma_khoi) VALUES (?, ?)",
-                         list(members.items()))
+                         list(member_map.items()))
         conn.execute(
-            "UPDATE nut SET ma_khoi = COALESCE("
-            " (SELECT ma_khoi FROM temp._thanh_vien_cong_dong t WHERE t.id = nut.id_nut),"
-            " (SELECT ma_khoi FROM temp._thanh_vien_cong_dong t"
-            "  WHERE nut.id_nut = t.id || '#' || nut.loai_nut))")
+            "UPDATE nut SET ma_khoi = (SELECT ma_khoi FROM temp._thanh_vien_cong_dong t"
+            " WHERE t.id = nut.id_nut)")
         conn.execute("DROP TABLE temp._thanh_vien_cong_dong")
-    return len(parsed.communities)
+    return len(final)
 
 
 def edge_insert_rows(parsed: ParsedGraph, pk_of_id: dict[str, int]) -> list[tuple]:
