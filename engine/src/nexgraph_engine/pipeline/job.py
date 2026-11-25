@@ -24,6 +24,17 @@ from nexgraph_engine.graphify_import import import_graph_json
 _ERROR_HINT = re.compile(r"AST extraction (?:incomplete|failed)|failed to extract|extract(?:ion)? error", re.I)
 _FILE_IN_LINE = re.compile(r"([\w][\w./\\-]*\.[A-Za-z0-9]{1,8})\b")
 
+#: Thư mục NexGraph luôn bỏ khi quét (`index.discovery.SKIP_DIRS`) — vendor code-only không tự bỏ,
+#: nên ánh xạ sang `--exclude` (gitignore-style, mẫu không dấu `/` khớp ở mọi cấp). `.nexgraph` là
+#: thư mục đầu ra của chính pipeline nên vendor đã bỏ.
+DEFAULT_EXCLUDES = ("build", ".dart_tool", "node_modules", "dist", "__pycache__", ".venv", "venv",
+                    "vendor", "third_party")
+
+
+def exclude_args(exclude: list[str] | None = None) -> tuple[str, ...]:
+    """Mẫu bỏ qua của NexGraph (mặc định + người dùng chọn) thành tham số `--exclude` của vendor."""
+    return tuple(f"--exclude={pattern}" for pattern in (*DEFAULT_EXCLUDES, *(exclude or ())))
+
 
 def fallback_reason(*, subdir: str | None, sources, include_docs: bool, include_media: bool,
                     include_images: bool, include_config: bool) -> str | None:
@@ -93,8 +104,7 @@ def run_index_pipeline(store, root: Path, *, exclude: list[str] | None = None,
         on_event(ProgressEvent("structure" if done < 2 else "resolve", done, steps_total, message))
 
     result = run_pipeline(root, out, steps=FULL_STEPS, on_progress=progress, cancel=cancel,
-                          extra_args=tuple(f"--exclude={pattern}" for pattern in (exclude or ())),
-                          timeout=step_timeout())
+                          extra_args=exclude_args(exclude), timeout=step_timeout())
     if result.cancelled:
         on_event(ProgressEvent("cancelled", 0, 0))
         return None

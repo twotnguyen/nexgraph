@@ -1,5 +1,6 @@
 """NG-PIPE-2: job lập chỉ mục dùng pipeline vendor; cờ `NEXGRAPH_PIPELINE=legacy` giữ đường cũ."""
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -75,6 +76,38 @@ def test_legacy_flag_keeps_old_extractor(api, copy_fixture, monkeypatch):
     stats = api.get(f"/v1/projects/{job['project_id']}/stats").json()
     assert stats["nodes_by_kind"]["widget"] == 3  # Dart: chỉ bộ trích xuất cũ hiểu
     assert not (root / ".nexgraph" / "graph.html").exists()
+
+
+def test_pipeline_maps_ignore_dirs_to_vendor_excludes(api, pipeline_root, monkeypatch):
+    """Thư mục NexGraph luôn bỏ (`third_party`, `vendor`…) và mẫu người dùng chọn phải được vendor tôn trọng."""
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "graphify")
+    vendored = pipeline_root / "engine" / "third_party" / "lib"
+    vendored.mkdir(parents=True)
+    (vendored / "vendored.py").write_text("def vendored_helper():\n    return 1\n", encoding="utf-8")
+    private = pipeline_root / "private"
+    private.mkdir()
+    (private / "secret.py").write_text("def secret_helper():\n    return 2\n", encoding="utf-8")
+    p = api.open(pipeline_root)
+
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"exclude": ["private"]})
+    assert r.status_code == 202, r.text
+    job_id = r.json()["job_id"]
+    job: dict = {}
+    for _ in range(3000):
+        job = api.get(f"/v1/jobs/{job_id}").json()
+        if job["state"] in ("done", "error", "cancelled"):
+            break
+        time.sleep(0.02)
+
+    assert job["state"] == "done", job
+    conn = open_graph_db(pipeline_root / ".nexgraph" / "graph.db")
+    try:
+        files = {row[0] for row in conn.execute("SELECT duong_dan_tuong_doi FROM tep")}
+    finally:
+        conn.close()
+    assert "app.py" in files
+    assert not any(path.startswith("engine/third_party/") for path in files)
+    assert not any(path.startswith("private/") for path in files)
 
 
 def test_subdir_index_falls_back_to_legacy(api, copy_fixture, monkeypatch):
