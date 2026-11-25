@@ -405,6 +405,15 @@ export class AgentService {
   }
   pending(projectId: string): number { return this.entries.get(projectId)?.gate.pending() ?? 0 }
 
+  /** Có lượt đang chạy hoặc đang chờ duyệt ở bất kỳ dự án nào (chặn đổi runtime giữa lượt). */
+  hasActiveTurn(): boolean {
+    if (this.starting.size > 0 || this.forking.size > 0) return true
+    for (const entry of this.entries.values()) {
+      if (entry.busy || entry.gate.pending() > 0) return true
+    }
+    return false
+  }
+
   private assertIdle(projectId: string): void {
     if (this.rollbacks.has(projectId) || this.forking.has(projectId) || this.starting.has(projectId) || this.entries.get(projectId)?.busy) {
       throw new AgentError('agent_busy', 'Trợ lý đang chạy tác vụ. Bấm Dừng trước khi đổi hội thoại hoặc quyền thực thi.')

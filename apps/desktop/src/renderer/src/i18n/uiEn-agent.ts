@@ -1,6 +1,7 @@
 /** Bản Anh cho các khoá tr(...) trong components/agent và components/chat. */
 export const uiEnAgent: Record<string, string> = {
   'Runtime agent': 'Agent runtime',
+  'Không đổi runtime khi trợ lý đang chạy hoặc đang chờ duyệt. Hãy dừng lượt hiện tại trước.': 'Cannot switch runtime while the assistant is running or waiting for approval. Stop the current turn first.',
   'Nex là runtime mặc định khi máy có sẵn; Pi là bản dự phòng. Đổi runtime áp dụng cho lượt chat tiếp theo.': 'Nex is the default runtime when available; Pi is the fallback. A runtime change applies to the next chat turn.',
   'Nex (khuyến nghị)': 'Nex (recommended)',
   'Pi (dự phòng)': 'Pi (fallback)',

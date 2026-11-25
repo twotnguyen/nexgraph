@@ -12,7 +12,7 @@ const h = vi.hoisted(() => ({
   googleModels: vi.fn(), piModels: vi.fn(), googleTest: vi.fn<() => Promise<GeminiConnectionTest>>(), piTest: vi.fn(),
   googleSelect: vi.fn(), googleDisconnect: vi.fn(), googleForget: vi.fn(), googleLogin: vi.fn(),
   googlePrompt: vi.fn(), piPrompt: vi.fn(), googleFork: vi.fn(), piFork: vi.fn(), googleChanged: vi.fn(), piChanged: vi.fn(),
-  piSelect: vi.fn(), setApiKey: vi.fn(), cancelLogin: vi.fn()
+  piSelect: vi.fn(), setApiKey: vi.fn(), cancelLogin: vi.fn(), piBusy: false
 }))
 
 vi.mock('electron', () => ({
@@ -41,6 +41,7 @@ vi.mock('../src/main/agent/session', () => ({
     prompt(...args: unknown[]) { return h.piPrompt(...args) }
     forkSession(...args: unknown[]) { return h.piFork(...args) }
     snapshot() { return { runtime: 'pi' } }
+    hasActiveTurn() { return h.piBusy }
   }
 }))
 vi.mock('../src/main/gemini/connection', () => ({ GeminiConnectionManager: class {
@@ -90,7 +91,9 @@ beforeEach(() => {
   h.userData = join(base, 'user'); h.root = join(base, 'source')
   mkdirSync(h.userData); mkdirSync(h.root)
   writeFileSync(join(h.userData, 'prefs.json'), JSON.stringify({ aiRuntime: 'pi', aiGeminiEnabled: '0' }))
-  h.cid = 'account-a'; h.model = 'auto'; h.authenticated = true; h.piProvider = 'google'; h.piModel = 'api-model'
+  h.cid = 'account-a'; h.model = 'auto'; h.authenticated = true; h.piProvider = 'google'; h.piModel = 'api-model'; h.piBusy = false
+  writeFileSync(join(h.userData, 'opencode-bin'), '')
+  process.env.NEX_OPENCODE_BIN = join(h.userData, 'opencode-bin')
   h.status.mockImplementation(async () => currentStatus())
   h.googleModels.mockResolvedValue([{ runtime: 'antigravity-cli', provider: 'google-antigravity', id: 'auto', label: 'Auto' }])
   h.piModels.mockResolvedValue([{ provider: 'google', id: 'api-model', label: 'Google API key' }])
@@ -281,7 +284,14 @@ describe('Gemini/Pi model list isolation', () => {
   })
 })
 
-describe('Runtime agent IPC (review #66 Important 4)', () => {
+describe('Runtime agent IPC (review #66 Important 2, 4)', () => {
+  it('chặn đổi runtime khi có lượt đang chạy hoặc đang chờ duyệt, không đổi prefs', async () => {
+    h.piBusy = true
+    expect(await invoke('ai:set-runtime', 'nex')).toMatchObject({ ok: false, error: { code: 'runtime_switch_blocked' } })
+    expect(prefs().aiRuntime).toBe('pi')
+    h.piBusy = false
+  })
+
   it('chỉ nhận nex|pi tại runtime, giá trị khác trả bad_param', async () => {
     expect(await invoke('ai:set-runtime', 'gemini-cli')).toMatchObject({ ok: false, error: { code: 'bad_param' } })
     expect(await invoke('ai:set-runtime', 'nex/../pi')).toMatchObject({ ok: false, error: { code: 'bad_param' } })
@@ -293,5 +303,10 @@ describe('Runtime agent IPC (review #66 Important 4)', () => {
     expect(await handler({}, 'pi')).toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
     const getter = h.handlers.get('ai:get-runtime')!
     expect(await getter({})).toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
+  })
+
+  it('đổi sang Pi khi rảnh vẫn chạy', async () => {
+    expect(await invoke('ai:set-runtime', 'pi')).toMatchObject({ ok: true })
+    expect(prefs().aiRuntime).toBe('pi')
   })
 })
