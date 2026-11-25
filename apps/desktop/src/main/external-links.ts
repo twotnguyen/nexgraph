@@ -13,3 +13,6 @@ export function isSameDocument(current: string, target: string): boolean {
     return before.protocol === after.protocol && before.host === after.host && before.pathname === after.pathname && before.search === after.search
   } catch { return false }
 }
+
+// CI-1 probe desktop: comment thử để đo CI chọn lọc; nhánh thử sẽ bị xoá.
+
