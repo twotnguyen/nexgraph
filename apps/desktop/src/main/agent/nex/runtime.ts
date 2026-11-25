@@ -1,0 +1,57 @@
+import { join } from 'node:path'
+import type { EngineCommand } from '../../engine/launcher'
+import type { PiSession, SessionSpec } from '../session'
+import { NexClient } from './client'
+import { nexConfig, nexProjectKey, nexProviderEnv, type NexProvider } from './config'
+import { NexSession } from './session'
+import { NexSidecar, resolveNexBinary } from './sidecar'
+
+const coded = (code: string, message: string): Error => Object.assign(new Error(message), { name: 'AgentError', code })
+
+export type NexRuntimeOptions = {
+  /** `<userData>` của app; Nex dùng `<userData>/nex/<dự án>`. */
+  dataDir: string
+  isPackaged: boolean
+  resourcesPath: string
+  engineCommand: () => EngineCommand
+  getProvider: () => Promise<NexProvider | null>
+  env?: NodeJS.ProcessEnv
+  /** Cho test/QA: bỏ qua tìm binary. */
+  binPath?: string | null
+  log?: (line: string) => void
+}
+
+/** Binary Nex nếu máy có; dùng cho cài đặt runtime (Nex mặc định khi tìm thấy). */
+export function nexAvailable(o: { isPackaged: boolean; resourcesPath: string; env?: NodeJS.ProcessEnv }): boolean {
+  return resolveNexBinary({ env: o.env ?? process.env, isPackaged: o.isPackaged, resourcesPath: o.resourcesPath }) !== null
+}
+
+/** Một tiến trình Nex cho mỗi dự án; phiên đóng thì tiến trình dừng theo. */
+export async function createNexSession(spec: SessionSpec, o: NexRuntimeOptions): Promise<PiSession> {
+  const provider = await o.getProvider()
+  if (!provider) {
+    throw coded('ai_not_configured', 'Nex chỉ hỗ trợ nhà cung cấp OpenAI-compatible có API key. Hãy thêm nhà cung cấp trong Cài đặt hoặc chuyển runtime sang Pi.')
+  }
+  const bin = o.binPath === null ? null : o.binPath ?? resolveNexBinary({
+    env: o.env ?? process.env, isPackaged: o.isPackaged, resourcesPath: o.resourcesPath
+  })
+  if (!bin) throw coded('ai_not_configured', 'Chưa tìm thấy runtime Nex trên máy này. Hãy chọn runtime Pi trong Cài đặt.')
+  const root = spec.cwd
+  const sidecar = new NexSidecar({
+    bin,
+    dataDir: join(o.dataDir, 'nex'),
+    projectKey: nexProjectKey(spec.projectId ?? root),
+    cwd: root,
+    config: () => nexConfig({ root, engine: o.engineCommand(), dataDir: o.dataDir, provider }),
+    env: nexProviderEnv(provider),
+    envSource: o.env ?? process.env,
+    log: o.log
+  })
+  const ready = await sidecar.start()
+  const client = new NexClient({ baseUrl: ready.baseUrl, password: ready.password })
+  return new NexSession({
+    root, client, model: { provider: spec.model.provider, id: spec.model.id },
+    gate: spec.gate, isEdit: () => (spec.getMode?.() ?? 'edit') === 'edit',
+    stopSidecar: () => sidecar.stop()
+  }) as unknown as PiSession
+}

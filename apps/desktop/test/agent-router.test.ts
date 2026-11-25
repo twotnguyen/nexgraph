@@ -27,4 +27,19 @@ describe('Agent runtime router', () => {
     expect(pi.close).toHaveBeenCalledWith('p'); expect(google.close).toHaveBeenCalledWith('p')
     expect(pi.closeAll).toHaveBeenCalledOnce(); expect(google.closeAll).toHaveBeenCalledOnce()
   })
+  it('routes to Nex when selected and falls back to Pi when Nex is absent', async () => {
+    const pi = runtime('pi'), google = runtime('google'), nex = runtime('nex')
+    let selected: AgentRuntimeId = 'nex'
+    const router = new AgentRouter(pi as unknown as AgentRuntime, google as unknown as AgentRuntime, () => selected, nex as unknown as AgentRuntime)
+    await router.prompt('p', 'hello', { provider: 'custom-1', baseUrl: 'https://ai.test/v1' })
+    expect(nex.prompt).toHaveBeenCalledOnce()
+    expect(pi.prompt).not.toHaveBeenCalled()
+    router.selectionChanged(); await router.close('p'); router.closeAll()
+    expect(nex.selectionChanged).toHaveBeenCalledOnce(); expect(nex.closeAll).toHaveBeenCalledOnce()
+    const fallbackPi = runtime('pi'), fallbackGoogle = runtime('google')
+    const fallback = new AgentRouter(fallbackPi as unknown as AgentRuntime, fallbackGoogle as unknown as AgentRuntime, () => selected)
+    await fallback.prompt('p', 'hello', { provider: 'custom-1', baseUrl: 'https://ai.test/v1' })
+    expect(fallbackPi.prompt).toHaveBeenCalledOnce()
+    selected = 'pi'
+  })
 })

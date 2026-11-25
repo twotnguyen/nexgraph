@@ -28,7 +28,8 @@ import { McpHttpManager, mcpStdioConfig, type McpKeyStore, type McpPortStore } f
 import { ProjectWatcher } from './watch/project-watcher'
 import { WatchErrorNotifier } from './watch/error-notice'
 import { EditorStateRegistry } from './agent/editor-state'
-import { AgentRouter } from './agent-router'
+import { AgentRouter, type AgentRuntimeId } from './agent-router'
+import { createNexSession, nexAvailable } from './agent/nex/runtime'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
@@ -704,14 +705,24 @@ export function registerIpc(
   let googleProbe: string | null = null
   let googleProbeVersion = 0
   const invalidateGoogleProbe = () => { googleProbe = null; googleProbeVersion++ }
-  const selectedRuntime = (): 'pi' | 'antigravity-cli' => readJson(prefsFile()).aiRuntime === 'antigravity-cli' ? 'antigravity-cli' : 'pi'
+  /** Binary Nex (OpenCode) có trên máy/bản cài: điều kiện để Nex là runtime mặc định. */
+  const nexRuntime = (): boolean => nexAvailable({ isPackaged: app.isPackaged, resourcesPath: process.resourcesPath })
+  const selectedRuntime = (): AgentRuntimeId => {
+    const pref = readJson(prefsFile()).aiRuntime
+    if (pref === 'antigravity-cli') return 'antigravity-cli'
+    if (pref === 'pi') return 'pi'
+    // Chưa chọn (hoặc đã chọn Nex): Nex là mặc định khi máy có binary, Pi là dự phòng.
+    return nexRuntime() ? 'nex' : 'pi'
+  }
   const geminiEnabled = (): boolean => selectedRuntime() === 'antigravity-cli' && readJson(prefsFile()).aiGeminiEnabled === '1'
-  const selectRuntime = (runtime: 'pi' | 'antigravity-cli', enabled = runtime === 'antigravity-cli') => {
+  const selectRuntime = (runtime: AgentRuntimeId, enabled = runtime === 'antigravity-cli') => {
     runtimeVersion++
     invalidateGoogleProbe()
     agent.selectionChanged()
     writeJson(prefsFile(), { ...readJson(prefsFile()), aiRuntime: runtime, aiGeminiEnabled: enabled ? '1' : '0' })
   }
+  /** Giữ Nex khi đổi model; rời Google/Antigravity về Pi (chọn model API không thể chạy bằng CLI Google). */
+  const keepRuntime = (): void => { selectRuntime(selectedRuntime() === 'nex' ? 'nex' : 'pi') }
   const google = (geminiConnection = new GeminiConnectionManager({
     dataDir,
     binaryPath: !app.isPackaged ? process.env.NEXGRAPH_ANTIGRAVITY_BINARY_PATH : undefined,
@@ -732,6 +743,7 @@ export function registerIpc(
     const target = await a.getConsentTarget()
     const model = a.getSelectedModel()
     return {
+      runtime: selectedRuntime() === 'nex' ? 'nex' : 'pi',
       baseUrl: target?.baseUrl ?? '',
       model: model?.id ?? '',
       hasKey: !!target && a.hasKey(target.provider),
@@ -823,8 +835,19 @@ export function registerIpc(
       selectRuntime('antigravity-cli')
     } else {
       (await acc()).selectModel(provider, id)
-      selectRuntime('pi')
+      keepRuntime()
     }
+  })
+  on('ai:get-runtime', async () => {
+    const a = await acc().catch(() => null)
+    return { runtime: selectedRuntime(), nexAvailable: nexRuntime(), nexReady: !!a?.nexProvider() }
+  })
+  on('ai:set-runtime', async (runtime: 'nex' | 'pi') => {
+    if (runtime === 'nex') {
+      if (!nexRuntime()) throw new AgentError('ai_not_configured', 'Chưa tìm thấy runtime Nex trên máy này. Hãy dùng runtime Pi.')
+      if (!(await acc()).nexProvider()) throw new AgentError('ai_not_configured', 'Nex đợt này cần nhà cung cấp OpenAI-compatible có API key. Hãy thêm trong Cài đặt.')
+    }
+    selectRuntime(runtime)
   })
   on('auth:test', async () => selectedRuntime() === 'antigravity-cli' ? googleAgent.testConnection() : (await acc()).test())
   on('auth:discover-local', async (baseUrl?: string) => (await acc()).discoverLocal(baseUrl))
@@ -848,7 +871,19 @@ export function registerIpc(
     editorState: (pid) => editorStates.get(pid),
     emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event })
   })
-  const agent = (agents = new AgentRouter(piAgent, googleAgent, selectedRuntime))
+  // Cùng AgentService (phiên, transcript, checklist, giới hạn) nhưng phiên do Nex/OpenCode phụ trách.
+  const nexAgent = new AgentService({
+    api: liveApi, dataDir,
+    accounts: acc,
+    rootOf,
+    editorState: (projectId) => editorStates.get(projectId),
+    emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event }),
+    createSession: (spec) => createNexSession(spec, {
+      dataDir, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath,
+      engineCommand: getCommand, getProvider: async () => (await acc()).nexProvider()
+    })
+  })
+  const agent = (agents = new AgentRouter(piAgent, googleAgent, selectedRuntime, nexAgent))
   const probeKey = () => JSON.stringify([google.connectionIdentity(), google.selectedModel()])
   on('gemini:status', () => google.status())
   on('gemini:setup', () => google.setup())

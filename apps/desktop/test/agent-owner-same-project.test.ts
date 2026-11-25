@@ -38,10 +38,14 @@ vi.mock('../src/main/engine/api', async (importOriginal) => {
 vi.mock('../src/main/agent/session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/agent/session')>()
   class FakeAgentService {
-    constructor(deps: { emit: (projectId: string, event: unknown) => void }) { h.agentDeps = deps }
+    private readonly tag: string
+    constructor(deps: { emit: (projectId: string, event: unknown) => void; createSession?: unknown }) {
+      h.agentDeps = deps
+      this.tag = deps.createSession ? 'nex:' : ''
+    }
     getMode() { return 'ask' }
     /** Như AgentService thật: đóng phiên xoá luôn quyền thực thi đã đặt. */
-    close(projectId: string) { h.closed.push(projectId); h.execution.delete(projectId) }
+    close(projectId: string) { h.closed.push(`${this.tag}${projectId}`); h.execution.delete(projectId) }
     getExecution(projectId: string): AgentExecutionSettings {
       return h.execution.get(projectId) ?? { policy: 'review', allowCommands: false }
     }
@@ -159,7 +163,7 @@ describe('cùng dự án ở hai cửa sổ', () => {
       .toEqual({ ok: true, data: { policy: 'review', allowCommands: true } })
     // Chủ rời màn thì phiên đóng thật.
     expect(await invokeAs({ sender: a }, 'agent:close', 'p4')).toMatchObject({ ok: true })
-    expect(h.closed).toEqual(['p4', 'gemini:p4'])
+    expect(h.closed).toEqual(['p4', 'gemini:p4', 'nex:p4'])
     expect(await invokeAs({ sender: a }, 'agent:get-execution', 'p4'))
       .toEqual({ ok: true, data: { policy: 'review', allowCommands: false } })
   })

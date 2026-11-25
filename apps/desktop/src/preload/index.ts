@@ -205,6 +205,8 @@ const api: NexGraphApi = {
   },
   ai: {
     getSettings: () => call('ai:get-settings'),
+    getRuntime: () => call('ai:get-runtime'),
+    setRuntime: (runtime) => call('ai:set-runtime', runtime),
     hasConsent: (pid, target) => call('ai:has-consent', pid, target),
     grantConsent: (pid, target) => call('ai:grant-consent', pid, target)
   },
