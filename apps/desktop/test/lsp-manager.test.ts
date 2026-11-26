@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
-import { LspManager } from '../src/main/lsp/manager'
+import { LspManager } from '../src/main/features/lsp/manager'
 
 // Chạy language server thật (typescript-language-server, pyright) qua Node hiện tại.
 let root: string

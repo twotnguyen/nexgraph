@@ -1,10 +1,10 @@
 import { app } from 'electron'
 import { join } from 'node:path'
 import type { DebugBreakpoints } from '../../../shared/api'
-import { adapterInstalled, installAdapter, type DebugKind } from '../../debug/adapters'
-import { attachSpec, ensureConfigFile, listConfigs, resolveConfig, type DebugSpec } from '../../debug/launch-config'
-import { DebugManager } from '../../debug/manager'
-import { FsError, resolveInside } from '../../fs/project-fs'
+import { adapterInstalled, installAdapter, type DebugKind } from './adapters'
+import { attachSpec, ensureConfigFile, listConfigs, resolveConfig, type DebugSpec } from './launch-config'
+import { DebugManager } from './manager'
+import { FsError, resolveInside } from '../../platform/project-fs'
 import type { IpcContext } from '../../platform/ipc-context'
 
 let debugManager: DebugManager | null = null

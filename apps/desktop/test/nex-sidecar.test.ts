@@ -3,8 +3,8 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { NexSidecar, resolveNexBinary } from '../src/main/agent/nex/sidecar'
-import { nexConfig } from '../src/main/agent/nex/config'
+import { NexSidecar, resolveNexBinary } from '../src/main/features/agent/nex/sidecar'
+import { nexConfig } from '../src/main/features/agent/nex/config'
 
 const FAKE = `#!/usr/bin/env node
 import { appendFileSync, writeFileSync } from 'node:fs'

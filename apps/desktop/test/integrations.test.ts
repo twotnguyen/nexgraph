@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { agentsMdBlock, applyIntegration, applyPlatform, planIntegration, planPlatform } from '../src/main/integrations'
-import { skillMarkdown } from '../src/main/agent/skill'
+import { agentsMdBlock, applyIntegration, applyPlatform, planIntegration, planPlatform } from '../src/main/features/integrations/integrations'
+import { skillMarkdown } from '../src/main/features/agent/skill'
 
 const cmd = { command: '/Apps/NexGraph/engine', args: [] as string[] }
 const dataDir = '/data dir'

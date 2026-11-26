@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { GeminiConsentStore } from '../src/main/gemini-consent'
+import { GeminiConsentStore } from '../src/main/features/agent/gemini-consent'
 import { consentTargetForSettings, sameConsentTarget, type GeminiConsentTarget } from '../src/shared/agent-types'
 
 const fixtures: string[] = []

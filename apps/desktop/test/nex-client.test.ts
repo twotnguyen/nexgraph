@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NexClient, NexHttpError } from '../src/main/agent/nex/client'
+import { NexClient, NexHttpError } from '../src/main/features/agent/nex/client'
 
 const servers: Server[] = []
 afterEach(() => { for (const server of servers.splice(0)) server.close() })

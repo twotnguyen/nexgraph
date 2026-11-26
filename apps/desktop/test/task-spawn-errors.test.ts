@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { TerminalManager } from '../src/main/terminal/manager'
+import { TerminalManager } from '../src/main/features/terminal/manager'
 
 it.skipIf(process.platform === 'win32')('báo thất bại khi không tìm thấy lệnh process', async () => {
   const root = mkdtempSync(join(tmpdir(), 'ng-task-error-'))

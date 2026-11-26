@@ -16,7 +16,7 @@ const h = vi.hoisted(() => {
 vi.mock('electron', () => ({ Notification: h.FakeNotification, app: { setAppUserModelId: vi.fn() } }))
 
 import type { BrowserWindow } from 'electron'
-import { notifyAgent } from '../src/main/agent/notify'
+import { notifyAgent } from '../src/main/features/agent/notify'
 
 const windowState = { destroyed: false, minimized: false }
 const win = { isDestroyed: () => windowState.destroyed, isMinimized: () => windowState.minimized, restore: vi.fn(), show: vi.fn(), focus: vi.fn() }

@@ -124,4 +124,4 @@ Với Antigravity CLI, NexGraph thực thi giới hạn thời gian và nút D�
 
 Các kiểm thử tự động dùng Pi SDK, ACP transport, broker MCP và CLI chính thức được ghim. Chúng xác nhận giao thức, lưu/khôi phục lịch sử, cách ly kết nối, quyền ghi/chạy lệnh, checkpoint và giới hạn. Chúng không thay thế nghiệm thu token/model thật của từng nhà cung cấp. Đăng nhập Google hoặc ChatGPT thật cần kiểm riêng trên tài khoản của người dùng; chưa được coi là đạt chỉ vì test giả lập đã qua.
 
-Các tệp kiểm thử chính: `apps/desktop/test/agent-session-pi.test.ts`, `agent-session.test.ts`, `agent-session-store.test.ts`, `task-execution.test.ts`, cùng smoke Electron trong `apps/desktop/src/main/smoke-desktop.ts`.
+Các tệp kiểm thử chính: `apps/desktop/test/agent-session-pi.test.ts`, `agent-session.test.ts`, `agent-session-store.test.ts`, `task-execution.test.ts`, cùng smoke Electron trong `apps/desktop/src/main/app/smoke-desktop.ts`.

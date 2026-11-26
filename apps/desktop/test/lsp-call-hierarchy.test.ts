@@ -10,7 +10,7 @@ import type { LspCallHierarchyItem } from '../src/shared/api'
 const mocked = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: mocked.spawn }))
 
-import { LspManager } from '../src/main/lsp/manager'
+import { LspManager } from '../src/main/features/lsp/manager'
 
 type Message = { id?: number; method: string; params?: { item?: { uri?: string; data?: unknown }; textDocument?: { version?: number }; capabilities?: { textDocument?: { callHierarchy?: unknown } } } }
 const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 8 } }

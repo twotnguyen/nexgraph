@@ -2,10 +2,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import type { SessionSpec } from '../src/main/agent/session'
-import { nexConfig } from '../src/main/agent/nex/config'
-import { createNexSession } from '../src/main/agent/nex/runtime'
-import { NexSidecar } from '../src/main/agent/nex/sidecar'
+import type { SessionSpec } from '../src/main/features/agent/session'
+import { nexConfig } from '../src/main/features/agent/nex/config'
+import { createNexSession } from '../src/main/features/agent/nex/runtime'
+import { NexSidecar } from '../src/main/features/agent/nex/sidecar'
 
 // Nex gọi `<bin> serve …` trong cwd. Với Node thật, `serve` là tệp script, không cần shell.
 const SERVER_WITH_WORKER = `

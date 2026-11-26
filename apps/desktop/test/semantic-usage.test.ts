@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SemanticUsageStore } from '../src/main/ai/semantic-usage'
+import { SemanticUsageStore } from '../src/main/features/semantic/semantic-usage'
 
 describe('SemanticUsageStore', () => {
   it('cộng dồn và trả bản sao usage của job đường A', () => {

@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { DebugEvent } from '../src/shared/api'
-import { DapClient } from '../src/main/debug/dap-client'
-import { adapterInstalled, installAdapter, type DebugKind } from '../src/main/debug/adapters'
-import { DebugManager, toDapBreakpoints } from '../src/main/debug/manager'
+import { DapClient } from '../src/main/features/debug/dap-client'
+import { adapterInstalled, installAdapter, type DebugKind } from '../src/main/features/debug/adapters'
+import { DebugManager, toDapBreakpoints } from '../src/main/features/debug/manager'
 
 const frame = (message: object) => { const body = JSON.stringify(message); return `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}` }
 

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { EditorStateRegistry } from '../src/main/agent/editor-state'
+import { EditorStateRegistry } from '../src/main/features/agent/editor-state'
 
 const fixture = () => {
   const root = mkdtempSync(join(tmpdir(), 'ng-edit-state-'))

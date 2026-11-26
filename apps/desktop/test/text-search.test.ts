@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { replaceText, searchText } from '../src/main/search/text-search'
+import { replaceText, searchText } from '../src/main/features/files/text-search'
 
 let root: string
 beforeEach(() => {

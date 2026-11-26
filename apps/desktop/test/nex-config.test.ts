@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { nexAccountConfig, nexConfig, nexProviderEnv, nexProjectKey, NEX_PROVIDER_ENV } from '../src/main/agent/nex/config'
+import { nexAccountConfig, nexConfig, nexProviderEnv, nexProjectKey, NEX_PROVIDER_ENV } from '../src/main/features/agent/nex/config'
 
 const engine = { command: '/opt/nexgraph/engine/nexgraph-engine', args: [] as string[] }
 const provider = { id: 'custom-1', label: 'NexGraph QA', baseUrl: 'https://ai.example.test/v1', apiKey: 'sk-sentinel-key', model: 'gpt-6-luna' }

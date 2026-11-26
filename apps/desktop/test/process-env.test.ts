@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { safeProcessEnv, userShellEnv } from '../src/main/process-env'
-import { gitEnv } from '../src/main/git/repo'
-import { lspEnv } from '../src/main/lsp/manager'
-import { debugEnv } from '../src/main/debug/manager'
+import { safeProcessEnv, userShellEnv } from '../src/main/platform/process-env'
+import { gitEnv } from '../src/main/features/git/repo'
+import { lspEnv } from '../src/main/features/lsp/manager'
+import { debugEnv } from '../src/main/features/debug/manager'
 
 /** Môi trường "bẩn" như khi người dùng mở app từ shell có credential. */
 const dirty: NodeJS.ProcessEnv = {

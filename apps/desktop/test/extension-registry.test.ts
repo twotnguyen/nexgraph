@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, expect, it } from 'vitest'
-import { ExtensionRegistry, readExtension } from '../src/main/extensions/registry'
+import { ExtensionRegistry, readExtension } from '../src/main/features/extensions/registry'
 
 const base = mkdtempSync(join(tmpdir(), 'ng-ext-'))
 afterAll(() => rmSync(base, { recursive: true, force: true }))

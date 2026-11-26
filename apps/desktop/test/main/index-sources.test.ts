@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { SecretStore } from '../../src/main/ai/settings'
-import { IndexSourceStore } from '../../src/main/index-sources'
+import { SecretStore } from '../../src/main/platform/settings'
+import { IndexSourceStore } from '../../src/main/features/indexing/index-sources'
 
 const box = { available: () => true, encrypt: (s: string) => Buffer.from(s).toString('base64').split('').reverse().join(''),
   decrypt: (b: string) => Buffer.from(b.split('').reverse().join(''), 'base64').toString() }

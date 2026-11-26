@@ -76,7 +76,7 @@ function displaySources(): SourceFile[] {
   const targets = [
     join(APP, 'src/renderer/src/strings.ts'),
     ...readdirSync(join(APP, 'src/renderer/src/i18n')).filter((name) => /^uiEn-.*\.ts$/.test(name)).map((name) => join(APP, 'src/renderer/src/i18n', name)),
-    join(APP, 'src/main/app-menu-labels.ts'),
+    join(APP, 'src/main/app/app-menu-labels.ts'),
     ...sources(join(APP, 'src/shared')),
     join(APP, 'src/renderer/src/screens/LicensesScreen.tsx')
   ]
@@ -138,7 +138,7 @@ describe('quét tên nguồn trong chuỗi hiển thị (LIC-3)', () => {
       expect(scanSourceNames([{ file: providers, text }]), text).toEqual([])
     }
     // Cùng chuỗi ở tệp khác: báo (trước đây khớp chuỗi con ở mọi tệp).
-    for (const file of ['src/renderer/src/strings.ts', 'src/renderer/src/i18n/uiEn-agent.ts', 'src/shared/api.ts', 'src/main/app-menu-labels.ts']) {
+    for (const file of ['src/renderer/src/strings.ts', 'src/renderer/src/i18n/uiEn-agent.ts', 'src/shared/api.ts', 'src/main/app/app-menu-labels.ts']) {
       expect(scanSourceNames([{ file, text: "'OpenCode Zen: dùng API key'" }]), file).toHaveLength(1)
     }
     // Đúng tệp nhưng không neo đầu chuỗi hoặc sai ranh giới từ: báo.

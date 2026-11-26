@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   COMMUNITY_NODE_LIMIT, COMMUNITY_PAGE_FILE, handlePageRequest, readGraphJsonCommunity, renderCommunityPage
-} from '../src/main/graph-pages/pages'
+} from '../src/main/features/graph-pages/pages'
 import { communityPageUrl } from '../src/shared/graph-pages'
 
 const graphFile = (nodes: unknown[], links: unknown[]) => JSON.stringify({ directed: false, nodes, links })

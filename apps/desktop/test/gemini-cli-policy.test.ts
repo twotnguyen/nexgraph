@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Type } from 'typebox'
-import { AcpClient } from '../src/main/gemini/acp-client'
-import { prepareGeminiProfile, buildGeminiEnvironment } from '../src/main/gemini/profile'
-import { GeminiInstallation } from '../src/main/gemini/installation'
-import { brokerPermission, GeminiMcpBroker } from '../src/main/gemini/broker'
+import { AcpClient } from '../src/main/features/agent/gemini/acp-client'
+import { prepareGeminiProfile, buildGeminiEnvironment } from '../src/main/features/agent/gemini/profile'
+import { GeminiInstallation } from '../src/main/features/agent/gemini/installation'
+import { brokerPermission, GeminiMcpBroker } from '../src/main/features/agent/gemini/broker'
 
 // CI installs the verified official native CLI. Inference uses only this local
 // synthetic Gemini provider, with no Google account or real API key.

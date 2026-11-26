@@ -24,16 +24,16 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() }
 }))
 
-vi.mock('../src/main/engine/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/engine/api')>()
+vi.mock('../src/main/platform/engine/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/platform/engine/api')>()
   class FakeEngineApi {
     listProjects() { return [{ project_id: 'p1', path: h.root }] }
   }
   return { ...actual, EngineApi: FakeEngineApi }
 })
 
-vi.mock('../src/main/terminal/manager', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/terminal/manager')>()
+vi.mock('../src/main/features/terminal/manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/features/terminal/manager')>()
   class FakeTerminalManager {
     private readonly owners = new Map<number, unknown>()
     private next = 1

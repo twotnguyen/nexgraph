@@ -2,9 +2,9 @@ import { chmodSync, statSync, existsSync, mkdirSync, mkdtempSync, readdirSync, r
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { FsError, fsHandlers, readProjectFile, resolveInside, writeProjectFile } from '../src/main/fs/project-fs'
-import { toIpcResult } from '../src/main/ipc-result'
-import { UserError } from '../src/main/user-error'
+import { FsError, fsHandlers, readProjectFile, resolveInside, writeProjectFile } from '../src/main/platform/project-fs'
+import { toIpcResult } from '../src/main/platform/ipc-result'
+import { UserError } from '../src/main/platform/user-error'
 
 let root: string
 let outsideDir: string

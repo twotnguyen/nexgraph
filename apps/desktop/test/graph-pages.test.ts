@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest'
 import {
   PAGE_CSP, VIS_INTEGRITY, discoverGraphPages, handlePageRequest, handleWebRequest,
   injectCsp, isAllowedRequest, lineFromSourceLocation, localLibFor, readGraphJsonIndex, rebrandHtml, resolveGraphPage
-} from '../src/main/graph-pages/pages'
+} from '../src/main/features/graph-pages/pages'
 import { canOpenPageSource } from '../src/shared/graph-pages'
 
 const fixture = () => {

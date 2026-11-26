@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { BEGIN, HOOKS, hookBlock, hookPreview, hookStatus, installHook, uninstallHook } from '../src/main/git-hook'
+import { BEGIN, HOOKS, hookBlock, hookPreview, hookStatus, installHook, uninstallHook } from '../src/main/features/integrations/git-hook'
 
 const cmd = { command: '/Apps/NexGraph/engine', args: [] as string[] }
 const dataDir = '/d'

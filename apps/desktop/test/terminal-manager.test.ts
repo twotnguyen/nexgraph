@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { TerminalManager, defaultShell, resolveTerminalPath } from '../src/main/terminal/manager'
+import { TerminalManager, defaultShell, resolveTerminalPath } from '../src/main/features/terminal/manager'
 
 it('chọn shell của người dùng, có dự phòng khi $SHELL không tồn tại', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ng-shell-'))

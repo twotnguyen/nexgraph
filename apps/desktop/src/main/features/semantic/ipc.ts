@@ -1,8 +1,8 @@
 import type { ProjectAiSettings, SemanticTarget } from '../../../shared/graph-types'
-import { AgentError } from '../../agent/session'
-import { directTransport, piComplete, selectedModelLabel } from '../../ai/semantic-models'
-import { runSemanticJob } from '../../ai/semantic-runner'
-import { SemanticUsageStore } from '../../ai/semantic-usage'
+import { AgentError } from '../agent/session'
+import { directTransport, piComplete, selectedModelLabel } from './semantic-models'
+import { runSemanticJob } from './semantic-runner'
+import { SemanticUsageStore } from './semantic-usage'
 import type { IpcContext } from '../../platform/ipc-context'
 import { aiAccounts } from '../agent/ipc'
 

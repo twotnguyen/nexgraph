@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DebugEvent } from '../src/shared/api'
-import { adapterDir, adapterInstalled, installAdapter, type DebugKind } from '../src/main/debug/adapters'
-import { attachSpec, ensureConfigFile, launchSpec, listConfigs, parseConfigs, resolveConfig, toSpec } from '../src/main/debug/launch-config'
-import { DebugManager } from '../src/main/debug/manager'
+import { adapterDir, adapterInstalled, installAdapter, type DebugKind } from '../src/main/features/debug/adapters'
+import { attachSpec, ensureConfigFile, launchSpec, listConfigs, parseConfigs, resolveConfig, toSpec } from '../src/main/features/debug/launch-config'
+import { DebugManager } from '../src/main/features/debug/manager'
 
 const LAUNCH_JSON = `{
   // Cấu hình mẫu: chú thích và dấu phẩy cuối đều hợp lệ trong launch.json của VS Code.

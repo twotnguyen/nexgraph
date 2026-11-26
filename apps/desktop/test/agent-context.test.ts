@@ -2,10 +2,10 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { prepareAgentContext } from '../src/main/agent/context'
-import { readProjectFile } from '../src/main/fs/project-fs'
-import type { EngineApi } from '../src/main/engine/api'
-import { externalWebUrl, isSameDocument } from '../src/main/external-links'
+import { prepareAgentContext } from '../src/main/features/agent/context'
+import { readProjectFile } from '../src/main/platform/project-fs'
+import type { EngineApi } from '../src/main/platform/engine/api'
+import { externalWebUrl, isSameDocument } from '../src/main/platform/external-links'
 
 function setup() {
   const root = mkdtempSync(join(tmpdir(), 'ng-context-'))

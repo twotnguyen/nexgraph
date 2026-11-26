@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GraphNode } from '../src/shared/graph-types'
 import {
   deliverLateSelection, deliverSelection, handlePageNodeMessage, lineFromLocation, validatePageNode
-} from '../src/main/graph-pages/bridge'
-import { pageUrl, type GuestBinding } from '../src/main/graph-pages/protocol'
+} from '../src/main/features/graph-pages/bridge'
+import { pageUrl, type GuestBinding } from '../src/main/features/graph-pages/protocol'
 
 vi.mock('electron', () => ({ protocol: { registerSchemesAsPrivileged: vi.fn() } }))
 

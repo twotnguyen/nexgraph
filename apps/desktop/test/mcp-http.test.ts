@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { McpHttpManager, mcpStdioConfig } from '../src/main/mcp-http'
+import { McpHttpManager, mcpStdioConfig } from '../src/main/features/integrations/mcp-http'
 
 const fake = {
   command: process.execPath,

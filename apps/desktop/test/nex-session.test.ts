@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ApprovalDecision, ApprovalRequest } from '../src/shared/agent-types'
-import type { ProviderFailure } from '../src/main/agent/session'
-import { applyUnifiedPatch, NexSession, type NexSessionClient } from '../src/main/agent/nex/session'
+import type { ProviderFailure } from '../src/main/features/agent/session'
+import { applyUnifiedPatch, NexSession, type NexSessionClient } from '../src/main/features/agent/nex/session'
 
 const flush = async (): Promise<void> => { for (let i = 0; i < 8; i++) await new Promise((resolve) => setTimeout(resolve, 0)) }
 

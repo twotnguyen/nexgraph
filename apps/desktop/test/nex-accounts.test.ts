@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NexAccountManager, checkNexAuthUrl, deviceCodeFromInstructions, withAppKeys, withCustomProviders } from '../src/main/agent/nex/accounts'
+import { NexAccountManager, checkNexAuthUrl, deviceCodeFromInstructions, withAppKeys, withCustomProviders } from '../src/main/features/agent/nex/accounts'
 import type { NexAccountsView } from '../src/shared/agent-types'
 
 const SECRET = 'sk-live-should-never-leave-main'

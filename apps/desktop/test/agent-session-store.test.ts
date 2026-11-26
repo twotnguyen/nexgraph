@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { loadPi } from '../src/main/agent/session'
-import { SessionStore, type SessionScope } from '../src/main/agent/session-store'
+import { loadPi } from '../src/main/features/agent/session'
+import { SessionStore, type SessionScope } from '../src/main/features/agent/session-store'
 
 const roots: string[] = []
 function setup() {

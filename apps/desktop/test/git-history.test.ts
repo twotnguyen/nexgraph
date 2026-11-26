@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { gitCommitDiff, gitCommitFiles, gitHistory, parseGitLog } from '../src/main/git/history'
+import { gitCommitDiff, gitCommitFiles, gitHistory, parseGitLog } from '../src/main/features/git/history'
 
 let repo: string
 let root: string

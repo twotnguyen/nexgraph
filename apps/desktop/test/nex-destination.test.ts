@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { NexConsentStore, nexAgentAccounts, nexDestination, nexReady, type NexDestinationSource } from '../src/main/agent/nex/destination'
+import { NexConsentStore, nexAgentAccounts, nexDestination, nexReady, type NexDestinationSource } from '../src/main/features/agent/nex/destination'
 import { consentTargetForSettings, sameConsentTarget } from '../src/shared/agent-types'
 
 const piModel = { provider: 'pi-a', id: 'model-a', baseUrl: 'https://a.example/v1', contextWindow: 128_000, maxTokens: 8000, input: ['text'] }

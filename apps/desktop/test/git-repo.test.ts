@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction,
   gitStashSave, gitStashes, gitStatus, gitSwitchBranch, gitUnstage
-} from '../src/main/git/repo'
+} from '../src/main/features/git/repo'
 
 // Các test dưới đây chạy git thật (init/clone/push/fetch), không phải stub. Trên Windows CI ca push/fetch/pull
 // (tạo kho bare + clone + push + pull) từng mất 6,3 s và chạm trần 5 s; số đo sau đó ~2,9 s. Chỉ ca đó có timeout

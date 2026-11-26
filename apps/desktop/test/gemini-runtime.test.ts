@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Type } from 'typebox'
-import type { EngineApi } from '../src/main/engine/api'
+import type { EngineApi } from '../src/main/platform/engine/api'
 import type { AgentEvent, GeminiConsentTarget } from '../src/shared/agent-types'
-import { GeminiAgentService, type GeminiAcpClient } from '../src/main/gemini/service'
-import { brokerPermission, GeminiMcpBroker } from '../src/main/gemini/broker'
-import { GeminiSessions } from '../src/main/gemini/sessions'
+import { GeminiAgentService, type GeminiAcpClient } from '../src/main/features/agent/gemini/service'
+import { brokerPermission, GeminiMcpBroker } from '../src/main/features/agent/gemini/broker'
+import { GeminiSessions } from '../src/main/features/agent/gemini/sessions'
 
 const roots: string[] = []
 const services: GeminiAgentService[] = []

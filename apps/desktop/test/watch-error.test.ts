@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { WatchErrorNotifier, WATCH_ERROR_REPEAT_MS } from '../src/main/watch/error-notice'
+import { WatchErrorNotifier, WATCH_ERROR_REPEAT_MS } from '../src/main/features/indexing/error-notice'
 
 const setup = () => {
   let clock = 1_000_000

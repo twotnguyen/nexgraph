@@ -1,11 +1,11 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { WebContents } from 'electron'
-import { EngineApi, EngineApiError } from '../engine/api'
-import type { EngineCommand, EngineHandle } from '../engine/launcher'
-import type { AccountDevHooks } from '../agent/accounts'
-import { projectRoot } from '../fs/project-fs'
-import { toIpcResult } from '../ipc-result'
-import { UserError } from '../user-error'
+import { EngineApi, EngineApiError } from './engine/api'
+import type { EngineCommand, EngineHandle } from './engine/launcher'
+import type { AccountDevHooks } from '../features/agent/accounts'
+import { projectRoot } from './project-fs'
+import { toIpcResult } from './ipc-result'
+import { UserError } from './user-error'
 
 type Handler<A extends unknown[], R> = (...args: A) => Promise<R>
 type ProjectRemoveHook = (projectId: string) => void | Promise<void>

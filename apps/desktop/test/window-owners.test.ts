@@ -1,7 +1,7 @@
 // PR #49 vòng 2 (Important 2): tài nguyên dùng chung của app (phiên agent, terminal) thuộc về
 // cửa sổ đã mở nó — reload/crash/đóng một cửa sổ chỉ được dọn tài nguyên của chính cửa sổ đó.
 import { describe, expect, it } from 'vitest'
-import { WindowOwners } from '../src/main/window-owners'
+import { WindowOwners } from '../src/main/features/agent/window-owners'
 
 describe('WindowOwners', () => {
   it('cửa sổ đầu tiên mở phiên là chủ; cửa sổ khác không giành mất phiên đang sống', () => {

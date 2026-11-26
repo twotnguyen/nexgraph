@@ -14,22 +14,22 @@ vi.mock('electron', () => ({
   ipcMain: { handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => Promise<unknown>) => h.handlers.set(channel, fn) },
   dialog: {}, shell: {}, safeStorage: { isEncryptionAvailable: () => false }
 }))
-vi.mock('../src/main/engine/api', async (original) => {
-  const actual = await original<typeof import('../src/main/engine/api')>()
+vi.mock('../src/main/platform/engine/api', async (original) => {
+  const actual = await original<typeof import('../src/main/platform/engine/api')>()
   return { ...actual, EngineApi: class { listProjects() { return [] } } }
 })
-vi.mock('../src/main/mcp-http', () => ({ McpHttpManager: class {} }))
-vi.mock('../src/main/agent/accounts', () => ({ AccountService: { create: (...args: unknown[]) => h.create(...args) } }))
-vi.mock('../src/main/agent/session', () => ({
+vi.mock('../src/main/features/integrations/mcp-http', () => ({ McpHttpManager: class {} }))
+vi.mock('../src/main/features/agent/accounts', () => ({ AccountService: { create: (...args: unknown[]) => h.create(...args) } }))
+vi.mock('../src/main/features/agent/session', () => ({
   AgentError: class extends Error { constructor(public code: string, message: string) { super(message) } },
   AgentService: class { selectionChanged() {} prompt() {} forkSession() {} snapshot() { return { runtime: 'pi' } } }
 }))
-vi.mock('../src/main/gemini/connection', () => ({ GeminiConnectionManager: class {
+vi.mock('../src/main/features/agent/gemini/connection', () => ({ GeminiConnectionManager: class {
   status() { return { state: 'disconnected', installed: false, platformSupported: true, authenticated: false, connectionId: '', model: '', version: '' } }
   connectionIdentity() { return '' }
   selectedModel() { return '' }
 } }))
-vi.mock('../src/main/gemini/service', () => ({ GeminiAgentService: class { selectionChanged() {} testConnection() {} prompt() {} forkSession() {} snapshot() { return { runtime: 'antigravity-cli' } } } }))
+vi.mock('../src/main/features/agent/gemini/service', () => ({ GeminiAgentService: class { selectionChanged() {} testConnection() {} prompt() {} forkSession() {} snapshot() { return { runtime: 'antigravity-cli' } } } }))
 
 import { registerIpc } from '../src/main/ipc'
 

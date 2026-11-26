@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { runSemanticJob, type LlmChunk, type SemanticEngine } from '../src/main/ai/semantic-runner'
+import { runSemanticJob, type LlmChunk, type SemanticEngine } from '../src/main/features/semantic/semantic-runner'
 
 const chunk = (id: string): LlmChunk => ({ chunk_id: id, system: 's', user: `u-${id}`, max_output_tokens: 100 })
 

@@ -25,16 +25,16 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() }
 }))
 
-vi.mock('../src/main/engine/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/engine/api')>()
+vi.mock('../src/main/platform/engine/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/platform/engine/api')>()
   class FakeEngineApi {
     listProjects() { return [{ project_id: 'p1', path: h.root }] }
   }
   return { ...actual, EngineApi: FakeEngineApi }
 })
 
-vi.mock('../src/main/agent/session', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/agent/session')>()
+vi.mock('../src/main/features/agent/session', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/features/agent/session')>()
   class FakeAgentService {
     private readonly tag: string
     constructor(deps: { emit: (projectId: string, event: unknown) => void; createSession?: unknown }) {
@@ -49,8 +49,8 @@ vi.mock('../src/main/agent/session', async (importOriginal) => {
   return { ...actual, AgentService: FakeAgentService }
 })
 
-vi.mock('../src/main/gemini/service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/gemini/service')>()
+vi.mock('../src/main/features/agent/gemini/service', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/features/agent/gemini/service')>()
   class FakeGeminiAgentService {
     getMode() { return 'ask' }
     close(projectId: string) { h.closed.push(`gemini:${projectId}`) }
@@ -58,7 +58,7 @@ vi.mock('../src/main/gemini/service', async (importOriginal) => {
   return { ...actual, GeminiAgentService: FakeGeminiAgentService }
 })
 
-import { AgentError } from '../src/main/agent/session'
+import { AgentError } from '../src/main/features/agent/session'
 import { closeWindowResources, registerIpc } from '../src/main/ipc'
 
 type Result<T = unknown> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }

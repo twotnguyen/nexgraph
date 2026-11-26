@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { LICENSES_FILE, licensesPath, readLicensesText } from '../src/main/license-file'
+import { LICENSES_FILE, licensesPath, readLicensesText } from '../src/main/app/license-file'
 
 /**
  * LIC-2: tệp `THIRD_PARTY_LICENSES.md` được electron-builder chép vào Resources

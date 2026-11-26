@@ -6,7 +6,7 @@ import { errorText } from './errorText'
 
 afterEach(() => setLocale('vi'))
 
-/** Câu lỗi cứng trong main/agent/session.ts phải đi qua cơ chế i18n của renderer (knownErrors + tr). */
+/** Câu lỗi cứng trong main/features/agent/session.ts phải đi qua cơ chế i18n của renderer (knownErrors + tr). */
 const sessionErrors = [
   'Chọn mô hình trước khi tạo hội thoại',
   'Chọn mô hình trước khi tách hội thoại',
@@ -23,7 +23,7 @@ const sessionErrors = [
 ]
 
 /** Đọc thẳng mã nguồn main để không bỏ sót câu mới thêm; chỉ hai literal không phải câu lỗi được miễn. */
-const sessionSource = readFileSync(fileURLToPath(new URL('../../../main/agent/session.ts', import.meta.url)), 'utf8')
+const sessionSource = readFileSync(fileURLToPath(new URL('../../../main/features/agent/session.ts', import.meta.url)), 'utf8')
 const NON_ERROR_LITERALS: (string | RegExp)[] = [
   /^Bạn là trợ lý mã nguồn NexGraph\./, // system prompt gửi model
   'Hãy phân tích ảnh đính kèm.' // câu mặc định khi người dùng chỉ gửi ảnh
@@ -47,7 +47,7 @@ describe('errorText', () => {
     for (const message of sessionErrors) expect(errorText({ message })).not.toBe(message)
   })
 
-  it('phủ TOÀN BỘ literal tiếng Việt trong main/agent/session.ts (MIN-46 M1)', () => {
+  it('phủ TOÀN BỘ literal tiếng Việt trong main/features/agent/session.ts (MIN-46 M1)', () => {
     expect(vietnameseLiterals.length).toBeGreaterThan(35)
     setLocale('en')
     const missing = vietnameseLiterals.filter((text) => errorText({ message: text }) === text)

@@ -1,9 +1,9 @@
 import { shell } from 'electron'
-import { gitCommitDiff, gitCommitFiles, gitHistory } from '../../git/history'
-import { gitApplyHunk, gitHunks } from '../../git/hunks'
-import { gitPermalink } from '../../git/permalink'
-import { gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from '../../git/repo'
-import { gitWorktreeAdd, gitWorktreeRemove, gitWorktrees } from '../../git/worktree'
+import { gitCommitDiff, gitCommitFiles, gitHistory } from './history'
+import { gitApplyHunk, gitHunks } from './hunks'
+import { gitPermalink } from './permalink'
+import { gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './repo'
+import { gitWorktreeAdd, gitWorktreeRemove, gitWorktrees } from './worktree'
 import type { IpcContext } from '../../platform/ipc-context'
 
 /** Source control trong gốc dự án. Viết thông điệp commit bằng AI nằm ở tính năng agent (`git:suggest-message`). */

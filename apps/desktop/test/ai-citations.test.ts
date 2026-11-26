@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EngineApiError, type EngineApi } from '../src/main/engine/api'
-import { parseCitations, verifyCitations } from '../src/main/ai/citations'
-import { NEXGRAPH_RULES, acpRules } from '../src/main/agent/skill'
+import { EngineApiError, type EngineApi } from '../src/main/platform/engine/api'
+import { parseCitations, verifyCitations } from '../src/main/features/agent/citations'
+import { NEXGRAPH_RULES, acpRules } from '../src/main/features/agent/skill'
 
 describe('citations', () => {
   it('đọc các dạng trích dẫn', () => {

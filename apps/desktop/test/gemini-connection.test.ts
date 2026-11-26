@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GeminiConnectionManager } from '../src/main/gemini/connection'
+import { GeminiConnectionManager } from '../src/main/features/agent/gemini/connection'
 const roots: string[] = [],
   managers: GeminiConnectionManager[] = []
 const fixtureFile = fileURLToPath(new URL('./fixtures/gemini-acp.mjs', import.meta.url))

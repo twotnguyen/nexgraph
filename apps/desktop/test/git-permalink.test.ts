@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { gitPermalink, headLine, permalinkUrl } from '../src/main/git/permalink'
+import { gitPermalink, headLine, permalinkUrl } from '../src/main/features/git/permalink'
 
 const SHA = 'e6ebe7974deb6bb6cc0e2595c8ec31f0c71084b7'
 const FILE = 'crates/editor/src/git/permalink.rs'

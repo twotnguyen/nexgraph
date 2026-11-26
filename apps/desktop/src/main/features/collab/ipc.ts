@@ -1,6 +1,6 @@
 import type { CollabHello } from '../../../shared/api'
-import { CollabHub } from '../../collab/hub'
-import { FsError } from '../../fs/project-fs'
+import { CollabHub } from './hub'
+import { FsError } from '../../platform/project-fs'
 import type { IpcContext } from '../../platform/ipc-context'
 
 let collab: CollabHub | null = null

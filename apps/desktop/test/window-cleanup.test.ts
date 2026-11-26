@@ -95,7 +95,7 @@ vi.mock('../src/main/ipc', () => ({
   stopEditorProcesses: vi.fn()
 }))
 
-vi.mock('../src/main/engine/supervisor', () => ({
+vi.mock('../src/main/platform/engine/supervisor', () => ({
   EngineSupervisor: class {
     startEngine = vi.fn(async () => {})
     stop = vi.fn(async () => {})

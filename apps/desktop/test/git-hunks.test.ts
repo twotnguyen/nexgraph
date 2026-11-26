@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { gitApplyHunk, gitHunks } from '../src/main/git/hunks'
+import { gitApplyHunk, gitHunks } from '../src/main/features/git/hunks'
 
 let repo: string
 let root: string
