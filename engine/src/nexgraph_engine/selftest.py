@@ -5,7 +5,7 @@ import tempfile
 from importlib import resources
 from pathlib import Path
 
-from graphify.extract import extract
+from nexgraph_engine.adapters.graphify.extract import extract
 
 from nexgraph_engine.schema.db import load_sql
 

@@ -53,7 +53,7 @@ def _write_index(directory: Path, data: dict[str, str]) -> None:
 
 def ingest_url(url: str, directory: Path) -> str:
     """Tải `url` qua `graphify.ingest` (guard SSRF, giới hạn kích thước) vào `directory`; trả đường dẫn `sources/<tên>`."""
-    from graphify.ingest import ingest
+    from nexgraph_engine.adapters.graphify.ingest import ingest
     out = ingest(url, directory)
     data = _read_index(directory)
     data[out.name] = url

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import PurePosixPath
 
-from graphify.extract import _file_node_id
+from nexgraph_engine.adapters.graphify.extract import _file_node_id
 
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.graph_store import GraphStore

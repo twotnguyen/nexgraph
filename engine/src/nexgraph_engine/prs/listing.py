@@ -7,7 +7,7 @@ from datetime import timezone
 from itertools import combinations
 from pathlib import Path
 
-from graphify.prs import _PR_JSON_FIELDS, _STATUS_ORDER, PRInfo, _parse_pr_dict
+from nexgraph_engine.adapters.graphify.serve import _PR_JSON_FIELDS, _STATUS_ORDER, PRInfo, _parse_pr_dict
 
 from nexgraph_engine.changes.model import ChangeSet, FileChange
 from nexgraph_engine.impact.analyze import map_to_nodes, propagate

@@ -227,8 +227,8 @@ def _row(src: str, dst: str, type_: str, sub: str, score: float, file: str | Non
 
 
 def compute_links(members: list[Member]) -> list[dict]:
-    from graphify.cross_repo_calls import CROSS_REPO_CALL_MARKER, link_cross_repo_member_calls
-    from graphify.cross_repo_types import SHARED_TYPE_RELATION, link_shared_type_declarations
+    from nexgraph_engine.adapters.graphify.serve import CROSS_REPO_CALL_MARKER, link_cross_repo_member_calls
+    from nexgraph_engine.adapters.graphify.serve import SHARED_TYPE_RELATION, link_shared_type_declarations
 
     merged = nx.Graph()
     facts: dict[str, dict] = {}

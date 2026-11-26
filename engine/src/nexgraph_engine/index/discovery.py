@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
 
 import pathspec
-from graphify.detect import DOC_EXTENSIONS as _GRAPHIFY_DOC_EXTS
-from graphify.extract import _get_extractor
-from graphify.rcfile import activate_language_overrides
-from graphify.extractors.json_config import _CONFIG_JSON_NAMES
+from nexgraph_engine.adapters.graphify.extract import DOC_EXTENSIONS as _GRAPHIFY_DOC_EXTS
+from nexgraph_engine.adapters.graphify.extract import _get_extractor
+from nexgraph_engine.adapters.graphify.extract import activate_language_overrides
+from nexgraph_engine.adapters.graphify.extract import _CONFIG_JSON_NAMES
 
 from nexgraph_engine.docs import media as _media
 

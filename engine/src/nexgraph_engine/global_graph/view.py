@@ -86,8 +86,8 @@ def _tags(members: list[Member]) -> dict[str, str]:
 def export_global(members: list[Member], cross: list[dict], out_dir: Path) -> dict:
     """Ghi `graph.json` gộp theo cách của `graphify merge-graphs`: tiền tố `tag::`, lệch id cộng đồng, cạnh liên repo."""
     import networkx as nx
-    from graphify.build import prefix_graph_for_global
-    from graphify.paths import write_json_atomic
+    from nexgraph_engine.adapters.graphify.serve import prefix_graph_for_global
+    from nexgraph_engine.adapters.graphify.serve import write_json_atomic
     from networkx.readwrite import json_graph
 
     from nexgraph_engine.export.run import write_new_file

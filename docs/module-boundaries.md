@@ -30,7 +30,15 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
 | Lưu trữ | `store` | `storage` |
 | Lõi | `schema`, `ids`, `errors`, `logging_setup`, `subprocesses` | `core` |
 
-**`graphify-gateway`**: chỉ `nexgraph_engine.adapters.graphify` được import `graphify`. Package này chưa có, sẽ dựng ở pha 4.
+**`graphify-gateway`**: chỉ `nexgraph_engine.adapters.graphify` được import `graphify`. **`graphify-gateway-core-only`**: cổng không phụ thuộc tầng nào của engine trừ lõi.
+
+Cổng (pha 4a) chia theo nhóm năng lực của ADR 0026 mục A.4: `extract`, `analysis`, `export`, `llm`, `security`, `ingest`, `serve`, `runner`. Mỗi module có bảng `NAMES` (tên → module vendor, thuộc tính) và `__getattr__` tra tên mỗi lần import. Cách này giữ hai tính chất của import trực tiếp cũ:
+- import trễ trong hàm vẫn chỉ tải module vendor khi gọi;
+- `monkeypatch` trên module vendor vẫn có tác dụng.
+
+Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tên mới của Graphify thì thêm vào `NAMES` và `TYPE_CHECKING` của nhóm, rồi chụp lại chữ ký: `UPDATE_GRAPHIFY_GATEWAY=1 pytest tests/test_graphify_gateway.py`. Test đó (chạy trong job bắt buộc `engine`) kiểm:
+- mọi tên còn tồn tại với đúng chữ ký đã chụp (`tests/fixtures/graphify_gateway_signatures.json`);
+- không tệp nào ngoài cổng import `graphify`.
 
 **`graphify-one-way`**: mã vendor `graphify` không import `nexgraph_engine`.
 
@@ -42,7 +50,7 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
   - `index → arch`, `index → flows`, `index → impact`: `indexer`/`refresh` chạy hậu xử lý cộng đồng, luồng, `TESTED_BY`. Cần chuyển lên điều phối.
   - `index → pipeline`: `jobs`, `refresh_service` chọn đường pipeline, import trễ trong hàm.
   - `graphify_import → impact`: `importer`, `incremental` sinh `TESTED_BY`.
-- `graphify-gateway`: **59 cặp import** từ 32 module thuộc 16 package, tới 36 module `graphify`.
+- `graphify-gateway`: **59 cặp import** từ 32 module thuộc 16 package, tới 36 module `graphify`. Pha 4a (cổng): **giữ**, 74 câu import đổi sang cổng, 102 tên.
 
 ## Desktop (`apps/desktop/.dependency-cruiser.cjs`)
 

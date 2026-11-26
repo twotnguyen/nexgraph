@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Literal
 
-from graphify.serve import (
+from nexgraph_engine.adapters.graphify.serve import (
     _RELATIONAL_INTENT_TERMS,
     _find_node_tiers,
     _pick_seeds,

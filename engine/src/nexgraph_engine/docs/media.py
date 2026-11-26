@@ -6,7 +6,7 @@ import threading
 from importlib.util import find_spec
 from pathlib import Path
 
-import graphify.transcribe as gt
+from nexgraph_engine.adapters.graphify.ingest import transcribe as gt
 
 MISSING_WHISPER = "Cần cài faster-whisper để chép lời"
 
@@ -28,8 +28,8 @@ def google_text(path: Path, sha: str, out_dir: Path) -> str:
     """Chữ của lối tắt Google Workspace, xuất bằng `gws` qua graphify và lưu theo mã băm như bản chép lời."""
     from tempfile import TemporaryDirectory
 
-    from graphify.detect import xlsx_to_markdown
-    from graphify.google_workspace import convert_google_workspace_file
+    from nexgraph_engine.adapters.graphify.extract import xlsx_to_markdown
+    from nexgraph_engine.adapters.graphify.ingest import convert_google_workspace_file
     cached = Path(out_dir) / f"{sha}.txt"
     if cached.is_file():
         return cached.read_text(encoding="utf-8")

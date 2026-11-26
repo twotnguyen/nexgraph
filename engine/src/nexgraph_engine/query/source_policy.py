@@ -8,7 +8,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from pathspec import GitIgnoreSpec
 
-from graphify.detect import _AMBIGUOUS_SENSITIVE_DIRS, _CREDENTIAL_STORE_DIRS, _is_sensitive
+from nexgraph_engine.adapters.graphify.extract import _AMBIGUOUS_SENSITIVE_DIRS, _CREDENTIAL_STORE_DIRS, _is_sensitive
 
 from nexgraph_engine.errors import ApiError
 

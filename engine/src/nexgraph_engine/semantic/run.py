@@ -11,7 +11,7 @@ from collections.abc import Callable
 from contextlib import closing
 from dataclasses import dataclass, field, replace
 
-from graphify.llm import _LLM_JSON_MAX_BYTES
+from nexgraph_engine.adapters.graphify.llm import _LLM_JSON_MAX_BYTES
 
 from nexgraph_engine.index.jobs import TaskCancelled, TaskContext
 from nexgraph_engine.schema.db import open_graph_db

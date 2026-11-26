@@ -144,7 +144,7 @@ class GraphView:
 
     def _load_locked(self) -> LoadedGraph | None:
         """Nạp bằng đúng hàm vendor; lỗi tệp hỏng/thiếu → coi như chưa có đồ thị."""
-        from graphify import serve as vendor_serve
+        from nexgraph_engine.adapters.graphify.serve import serve as vendor_serve
 
         try:
             G = vendor_serve._load_graph(str(self.graph_path))
@@ -186,7 +186,7 @@ class GraphView:
             else:
                 import networkx as nx
 
-                from graphify import serve as vendor_serve
+                from nexgraph_engine.adapters.graphify.serve import serve as vendor_serve
 
                 view = nx.subgraph_view(base.G, filter_node=lambda node: node not in drop)
                 # Cache của vendor (`_trigram_index`, `_idf_cache`, `_traversal_view`) nằm trong
@@ -260,8 +260,8 @@ def tool_query_graph(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3143–3175 ``_tool_query_graph``."""
     import time as _time
 
-    from graphify import querylog
-    from graphify.serve import _query_graph_text
+    from nexgraph_engine.adapters.graphify.serve import querylog
+    from nexgraph_engine.adapters.graphify.serve import _query_graph_text
 
     question = arguments["question"]
     mode = arguments.get("mode", "bfs")
@@ -299,9 +299,9 @@ def tool_get_node(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3177–3212 ``_tool_get_node``."""
     import json
 
-    from graphify.security import sanitize_label
-    from graphify.sections import is_section_node as _is_section_node
-    from graphify.serve import _CONTROL_CHAR_RE, _node_arg, _resolve_single_node
+    from nexgraph_engine.adapters.graphify.security import sanitize_label
+    from nexgraph_engine.adapters.graphify.serve import is_section_node as _is_section_node
+    from nexgraph_engine.adapters.graphify.serve import _CONTROL_CHAR_RE, _node_arg, _resolve_single_node
 
     G = view.G
     raw = _node_arg(arguments)
@@ -347,14 +347,14 @@ def tool_get_section(view: LoadedGraph, arguments: dict) -> str:
     ``graphify-out/`` thì ``section_root`` trả về gốc dự án, còn ``.nexgraph/``
     không khớp mẫu ``graphify-out`` nên helper đó sẽ trả về chính ``.nexgraph/``.
     """
-    from graphify.security import sanitize_label
-    from graphify.sections import (
+    from nexgraph_engine.adapters.graphify.security import sanitize_label
+    from nexgraph_engine.adapters.graphify.serve import (
         DEFAULT_MAX_CHARS,
         format_section,
         read_section,
         resolve_section_query,
     )
-    from graphify.serve import _node_arg
+    from nexgraph_engine.adapters.graphify.serve import _node_arg
 
     G = view.G
     raw = _node_arg(arguments)
@@ -373,8 +373,8 @@ def tool_get_section(view: LoadedGraph, arguments: dict) -> str:
 
 def tool_get_neighbors(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3236–3250 ``_tool_get_neighbors``."""
-    from graphify.security import sanitize_label
-    from graphify.serve import _cut_lines_to_budget, _neighbor_lines, _node_arg, _resolve_single_node
+    from nexgraph_engine.adapters.graphify.security import sanitize_label
+    from nexgraph_engine.adapters.graphify.serve import _cut_lines_to_budget, _neighbor_lines, _node_arg, _resolve_single_node
 
     G = view.G
     raw = _node_arg(arguments)
@@ -395,8 +395,8 @@ def tool_get_neighbors(view: LoadedGraph, arguments: dict) -> str:
 
 def tool_get_community(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3252–3269 ``_tool_get_community``."""
-    from graphify.security import sanitize_label
-    from graphify.serve import _community_header, _cut_lines_to_budget
+    from nexgraph_engine.adapters.graphify.security import sanitize_label
+    from nexgraph_engine.adapters.graphify.serve import _community_header, _cut_lines_to_budget
 
     G = view.G
     cid = int(arguments["community_id"])
@@ -420,7 +420,7 @@ def tool_get_community(view: LoadedGraph, arguments: dict) -> str:
 
 def tool_god_nodes(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3271–3280 ``_tool_god_nodes``."""
-    from graphify.analyze import god_nodes as _god_nodes
+    from nexgraph_engine.adapters.graphify.analysis import god_nodes as _god_nodes
 
     _pct = arguments.get("exclude_hubs_percentile")
     nodes = _god_nodes(
@@ -442,7 +442,7 @@ def _build_commit_line(view: LoadedGraph) -> str:
     commit = getattr(G, "graph", {}).get("_built_at_commit")
     if not commit:
         return ""
-    from graphify.export import _git_head
+    from nexgraph_engine.adapters.graphify.export import _git_head
 
     head = _git_head(view.graph_path.parent)
     if not head:
@@ -473,7 +473,7 @@ def tool_graph_stats(view: LoadedGraph, _arguments: dict) -> str:
 
 def tool_shortest_path(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3317–3318 ``_tool_shortest_path``."""
-    from graphify.serve import _shortest_path_text
+    from nexgraph_engine.adapters.graphify.serve import _shortest_path_text
 
     return _shortest_path_text(view.G, arguments)
 
@@ -483,7 +483,7 @@ def tool_shortest_path(view: LoadedGraph, arguments: dict) -> str:
 
 def tool_list_prs(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3320–3331 ``_tool_list_prs``."""
-    from graphify.prs import _detect_default_branch, fetch_prs, fetch_worktrees, format_prs_text
+    from nexgraph_engine.adapters.graphify.serve import _detect_default_branch, fetch_prs, fetch_worktrees, format_prs_text
 
     repo = arguments.get("repo") or None
     base = arguments.get("base") or _detect_default_branch(repo)
@@ -499,7 +499,7 @@ def tool_list_prs(view: LoadedGraph, arguments: dict) -> str:
 
 def tool_get_pr_impact(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3333–3361 ``_tool_get_pr_impact``."""
-    from graphify.prs import _gh, _parse_ci, compute_pr_impact, fetch_pr_files
+    from nexgraph_engine.adapters.graphify.serve import _gh, _parse_ci, compute_pr_impact, fetch_pr_files
 
     G = view.G
     number = int(arguments["pr_number"])
@@ -535,7 +535,7 @@ def tool_triage_prs(view: LoadedGraph, arguments: dict) -> str:
     """graphify/serve.py:3363–3403 ``_tool_triage_prs``."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    from graphify.prs import (
+    from nexgraph_engine.adapters.graphify.serve import (
         _STATUS_ORDER,
         _detect_default_branch,
         compute_pr_impact,

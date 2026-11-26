@@ -7,8 +7,8 @@ import posixpath
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from graphify.detect import _is_sensitive
-from graphify.llm import _IMAGE_MEDIA_TYPES, _IMAGE_TOKEN_ESTIMATE, _MAX_IMAGE_BYTES, _estimate_prompt_tokens
+from nexgraph_engine.adapters.graphify.extract import _is_sensitive
+from nexgraph_engine.adapters.graphify.llm import _IMAGE_MEDIA_TYPES, _IMAGE_TOKEN_ESTIMATE, _MAX_IMAGE_BYTES, _estimate_prompt_tokens
 from nexgraph_engine.docs.secrets import redact_doc_secrets
 
 from nexgraph_engine.docs.text import doc_text

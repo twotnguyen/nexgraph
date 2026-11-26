@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from pathlib import Path
 
-from graphify.extract import extract
+from nexgraph_engine.adapters.graphify.extract import extract
 
 from nexgraph_engine.index.generic import _cache_root, _line
 from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin

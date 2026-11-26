@@ -13,7 +13,7 @@ import urllib.error
 import urllib.request
 from collections import deque
 
-from graphify.llm import _LLM_JSON_MAX_BYTES, _openai_max_tokens_kwarg, _resolve_temperature, provider_base_url_ok
+from nexgraph_engine.adapters.graphify.llm import _LLM_JSON_MAX_BYTES, _openai_max_tokens_kwarg, _resolve_temperature, provider_base_url_ok
 
 from nexgraph_engine.semantic.chunks import Chunk
 from nexgraph_engine.semantic.url_guard import validate_provider_url

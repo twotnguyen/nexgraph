@@ -172,7 +172,7 @@ def validate_push_uri(uri: str) -> str:
 
 def export_graph(store: GraphStore, fmt: ExportFormat, scope: Scope, out_dir: Path, project_name: str,
                  *, lang: str = "en") -> ExportResult:
-    from graphify import export as gx
+    from nexgraph_engine.adapters.graphify.export import export as gx
     from nexgraph_engine.report.i18n import check_lang
     if fmt not in FORMATS:
         raise ValueError(f"Định dạng không hỗ trợ: {fmt}")
@@ -206,11 +206,11 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
         })
         target.write_text(render_report_markdown(bg, project_name, files, lang=lang), encoding="utf-8")
     elif fmt == "html":
-        from graphify.exporters.html import to_html
+        from nexgraph_engine.adapters.graphify.export import to_html
         to_html(bg.G, bg.communities, str(target), community_labels=bg.labels, node_limit=scope.limit)
         _retitle_html(target, f"{project_name} — NexGraph")
     elif fmt == "callflow_html":
-        from graphify.callflow_html import write_callflow_html
+        from nexgraph_engine.adapters.graphify.analysis import write_callflow_html
         from nexgraph_engine.export.callflow_i18n import localize_callflow_html
         sections = _callflow_sections(bg, lang)
         with tempfile.TemporaryDirectory(prefix="nexgraph-callflow-") as d:
@@ -236,8 +236,8 @@ def _write(store: GraphStore, fmt: ExportFormat, scope: Scope, target: Path, pro
         gx.to_obsidian(bg.G, bg.communities, str(target), community_labels=bg.labels, cohesion=bg.cohesion)
         gx.to_canvas(bg.G, bg.communities, str(target / "graph.canvas"), community_labels=bg.labels)
     elif fmt == "wiki":
-        from graphify.analyze import god_nodes
-        from graphify.wiki import to_wiki
+        from nexgraph_engine.adapters.graphify.analysis import god_nodes
+        from nexgraph_engine.adapters.graphify.analysis import to_wiki
         to_wiki(bg.G, bg.communities, target, community_labels=bg.labels, cohesion=bg.cohesion,
                 god_nodes_data=god_nodes(bg.G))
     elif fmt == "svg":
@@ -255,7 +255,7 @@ def push_graph(store: GraphStore, target: Literal["neo4j", "falkordb"], uri: str
                password: str | None, scope: Scope) -> dict:
     """Mật khẩu chỉ dùng cho lần đẩy này; không lưu, không ghi log (spec F10 §4.3)."""
     validate_push_uri(uri)  # chặn file://, http(s)://... trước khi đưa URI cho driver
-    from graphify.exporters.graphdb import push_to_falkordb, push_to_neo4j
+    from nexgraph_engine.adapters.graphify.export import push_to_falkordb, push_to_neo4j
     bg = build_nx(store, scope)
     if target == "neo4j":
         counts = push_to_neo4j(bg.G, uri, user or "neo4j", password or "", communities=bg.communities)

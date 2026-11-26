@@ -4,7 +4,7 @@ from __future__ import annotations
 from html.parser import HTMLParser
 from pathlib import Path
 
-from graphify.detect import docx_to_markdown, extract_pdf_text, xlsx_to_markdown
+from nexgraph_engine.adapters.graphify.extract import docx_to_markdown, extract_pdf_text, xlsx_to_markdown
 
 
 def doc_text(path: Path, language: str) -> str:

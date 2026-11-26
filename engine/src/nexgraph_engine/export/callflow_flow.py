@@ -42,7 +42,7 @@ def section_edge_weights(bg, sections: list[dict]) -> dict[tuple[str, str], int]
     Dùng cùng bộ lọc `should_include_edge` của bản vendor để không tính cạnh AMBIGUOUS/tin cậy thấp.
     Không có `sections` (graphify tự suy mục lục) thì đếm theo cộng đồng, đủ để biết có luồng hay không.
     """
-    from graphify.callflow_html import should_include_edge
+    from nexgraph_engine.adapters.graphify.analysis import should_include_edge
 
     by_community = _community_sections(sections) if sections else {cid: str(cid) for cid in bg.communities}
     community_of = {node: cid for cid, members in bg.communities.items() for node in members}

@@ -116,6 +116,21 @@ ignore_imports = ["nexgraph_engine.adapters.graphify.** -> graphify.**"]
 unmatched_ignore_imports_alerting = "none"
 
 [[tool.importlinter.contracts]]
+id = "graphify-gateway-core-only"
+name = "Cổng adapters.graphify chỉ phụ thuộc tầng lõi"
+type = "forbidden"
+source_modules = ["nexgraph_engine.adapters"]
+forbidden_modules = [
+    "nexgraph_engine.cli", "nexgraph_engine.api", "nexgraph_engine.mcp", "nexgraph_engine.hook_guard",
+    "nexgraph_engine.selftest", "nexgraph_engine.pipeline",
+    "nexgraph_engine.query", "nexgraph_engine.arch", "nexgraph_engine.flows", "nexgraph_engine.impact",
+    "nexgraph_engine.changes", "nexgraph_engine.prs", "nexgraph_engine.semantic", "nexgraph_engine.tour",
+    "nexgraph_engine.report", "nexgraph_engine.memory", "nexgraph_engine.global_graph", "nexgraph_engine.bridge",
+    "nexgraph_engine.export", "nexgraph_engine.index", "nexgraph_engine.graphify_import", "nexgraph_engine.sources",
+    "nexgraph_engine.dart", "nexgraph_engine.docs", "nexgraph_engine.store",
+]
+
+[[tool.importlinter.contracts]]
 id = "graphify-one-way"
 name = "Mã vendor graphify không import nexgraph_engine"
 type = "forbidden"

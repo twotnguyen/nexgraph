@@ -14,7 +14,7 @@ import os
 import socket
 from urllib.parse import urlsplit
 
-from graphify.security import _CGN_NETWORK, _ip_is_blocked
+from nexgraph_engine.adapters.graphify.security import _CGN_NETWORK, _ip_is_blocked
 
 ALLOW_ENV = "NEXGRAPH_ALLOW_HTTP_PROVIDER"
 _LOOPBACK_NAMES = frozenset({"localhost", "localhost.localdomain"})

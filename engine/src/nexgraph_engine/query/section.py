@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from graphify.sections import _BODY_CONTROL_RE, DEFAULT_MAX_CHARS
+from nexgraph_engine.adapters.graphify.serve import _BODY_CONTROL_RE, DEFAULT_MAX_CHARS
 
 from nexgraph_engine.docs.secrets import redact_doc_secrets
 from nexgraph_engine.errors import ApiError

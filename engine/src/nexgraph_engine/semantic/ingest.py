@@ -5,8 +5,8 @@ import json
 import re
 import time
 
-from graphify.llm import _LABEL_FENCE_RE, _parse_label_response, _parse_llm_json
-from graphify.validate import validate_extraction
+from nexgraph_engine.adapters.graphify.llm import _LABEL_FENCE_RE, _parse_label_response, _parse_llm_json
+from nexgraph_engine.adapters.graphify.llm import validate_extraction
 
 from nexgraph_engine.ids import file_node_id, node_id
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
@@ -174,7 +174,7 @@ def write_labels(store: GraphStore, meta: dict, names: dict[str, str]) -> dict[i
 
 def dedup_concepts(store: GraphStore, root) -> int:
     """Gộp nút concept do AI tạo bị trùng bằng `graphify.dedup` (chạy cục bộ, không gọi model). Trả số nút đã gộp."""
-    from graphify.dedup import deduplicate_entities
+    from nexgraph_engine.adapters.graphify.llm import deduplicate_entities
     conn = store.conn
     rows = conn.execute("SELECT n.id_nut, n.nhan, t.duong_dan_tuong_doi FROM nut n JOIN tep t ON t.ma_tep = n.ma_tep"
                         " WHERE n.nguon_goc = 'llm' AND n.loai_nut = 'concept' ORDER BY n.ma_nut").fetchall()
