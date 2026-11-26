@@ -2,7 +2,7 @@
 
 `package` chạy song song với test để rút đường găng CI của mọi PR (13 → ~7,5 phút), nhưng
 phát hành vẫn chỉ xảy ra khi test xanh: `release` phải chờ `engine`, `desktop` và `package`.
-Tên 7 check bắt buộc của ruleset `main-guard` không được đổi.
+Tên 8 check bắt buộc của ruleset `main-guard` không được đổi (7 job + `module-rules`, ADR 0026 pha 4e).
 """
 
 from pathlib import Path
@@ -37,23 +37,25 @@ def test_required_check_names_unchanged():
     for job in ("engine", "desktop", "package"):
         assert jobs[job]["name"] == f"{job} (${{{{ matrix.os }}}})"
         assert jobs[job]["strategy"]["matrix"]["os"] == ["macos-latest", "windows-latest"]
+    assert jobs["module-rules"]["name"] == "module-rules"
 
 
-def test_module_rules_job_reports_without_gating():
-    """ADR 0026 pha 0: luật phụ thuộc chỉ báo cáo, không chặn phát hành, chạy đúng script ở gốc repo."""
+def test_module_rules_job_blocks():
+    """ADR 0026 pha 4e: luật phụ thuộc là check bắt buộc thứ 8 (`module-rules`), chạy chế độ chặn, release chờ nó."""
     jobs = _jobs()
     job = jobs["module-rules"]
-    assert job["name"] not in {"lint", "engine", "desktop", "package"}
+    assert job["name"] == "module-rules"
     runs = [s.get("run", "") for s in job["steps"]]
-    assert "pnpm rules:report" in runs
-    assert "module-rules" not in _needs(jobs["release"])
+    assert "pnpm rules:strict" in runs
+    assert "pnpm rules:report" not in runs
+    assert "module-rules" in _needs(jobs["release"])
 
 
 def test_labs_job_reports_without_gating():
     """ADR 0026 pha 1: labs/ (Code-OSS thử nghiệm) có job riêng, không thuộc check bắt buộc, không chặn phát hành."""
     jobs = _jobs()
     job = jobs["labs"]
-    assert job["name"] not in {"lint", "engine", "desktop", "package"}
+    assert job["name"] not in {"lint", "engine", "desktop", "package", "module-rules"}
     runs = [s.get("run", "") for s in job["steps"]]
     assert "pnpm --dir labs/extension test" in runs
     assert "labs" not in _needs(jobs["release"])

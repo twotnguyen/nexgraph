@@ -4,9 +4,10 @@ Repo đang chuyển sang cấu trúc module hoá theo ADR 0026 (tài liệu dự
 
 | Pha | Trạng thái luật |
 |---|---|
-| **0 (hiện tại)** | Chỉ báo cáo. Job CI `module-rules (báo cáo)` ghi vi phạm vào summary, không thuộc 7 check bắt buộc, không chặn merge. |
+| 0 | Chỉ báo cáo (`pnpm rules:report`), job `module-rules (báo cáo)` không chặn merge. |
 | 1–3 | Chuyển thư mục (labs, tools, desktop theo tính năng, `packages/contracts`); thêm luật theo tính năng. |
-| 4 | Engine chia tầng, cổng `adapters/graphify`; hết vi phạm thì đổi CI sang `pnpm rules:strict` và đưa vào ruleset. |
+| 4 | Engine chia tầng, cổng `adapters/graphify`, gỡ vòng. |
+| **4e (hiện tại)** | Chặn. Job `module-rules` chạy `pnpm rules:strict`, là **check bắt buộc thứ 8** của ruleset `main-guard`; `release` chờ nó. Vi phạm mới, kể cả cảnh báo vòng phụ thuộc, làm đỏ PR. |
 
 ## Chạy
 

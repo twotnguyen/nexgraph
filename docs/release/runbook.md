@@ -9,7 +9,7 @@ Không tạo tag khi còn bất kỳ điều kiện nào dưới đây chưa đ�
 - **#60 (X1)** đã merge: workflow trên `main` có job `version-check` và job `release` tạo Release với `--prerelease` ngay khi tag có dấu `-`.
 - **#61 (V1)** đã merge: version `0.2.0-alpha.1` (`0.2.0a1` phía engine) ở bốn tệp cộng `uv.lock`, cùng tài liệu phát hành.
 - Các PR sửa finding nghiệm thu **RC2** (`main` `8118db0`, app 0.1.2) đã merge — tối thiểu các finding Important: HTML luồng gọi mất tên dự án/commit, hộp thoại Xuất thiếu phạm vi "Cộng đồng", ảnh trong dự án không index được trên bản đóng gói, bundle thiếu `THIRD_PARTY_LICENSES.md`.
-- CI của **commit merge cuối trên `main`** xanh đủ 7 check: `lint`, `engine (macos-latest)`, `engine (windows-latest)`, `desktop (macos-latest)`, `desktop (windows-latest)`, `package (macos-latest)`, `package (windows-latest)`. Job `release` chỉ chạy khi có tag và sau `version-check` (X1).
+- CI của **commit merge cuối trên `main`** xanh đủ 8 check: `lint`, `engine (macos-latest)`, `engine (windows-latest)`, `desktop (macos-latest)`, `desktop (windows-latest)`, `package (macos-latest)`, `package (windows-latest)`, `module-rules` (từ ADR 0026 pha 4e). Job `release` chỉ chạy khi có tag và sau `version-check` (X1).
 - Bản dựng từ `main` cuối đã được nghiệm thu: cài đúng bộ cài, làm checklist trên máy macOS (và Windows nếu có máy), QA duyệt, biên bản trong [acceptance/](acceptance/) ghi Đạt các mục chặn. Biên bản RC1 (`72dc4ec`) và nghiệm thu RC2 (`8118db0`) là bằng chứng của bản ứng viên, **không thay** cho lượt nghiệm thu bộ cài dựng từ tag.
 - Ruleset `main-guard` xanh.
 
