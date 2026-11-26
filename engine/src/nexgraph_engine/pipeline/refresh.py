@@ -11,6 +11,7 @@ import json
 import time
 from pathlib import Path
 
+from nexgraph_engine.pipeline.applied import applied_manifest, mark_applied
 from nexgraph_engine.pipeline.mode import LEGACY, pipeline_mode
 from nexgraph_engine.pipeline.rebrand import rebrand_exported
 from nexgraph_engine.pipeline.runner import INCREMENTAL_STEPS, run_step
@@ -43,7 +44,8 @@ def refresh_pipeline(store, root: Path, *, timeout: float | None = None):
     out = root / ".nexgraph"
     started = time.perf_counter()
     manifest_path = out / "manifest.json"
-    old = _read_manifest(manifest_path)
+    # So với manifest ĐÃ NẠP, không với manifest.json: job/refresh dở có thể đã cho nó đi trước graph.db.
+    old = applied_manifest(root, _paths(store))
 
     update = run_step(root, out, INCREMENTAL_STEPS[0], timeout=timeout)
     if update.returncode != 0:
@@ -53,6 +55,7 @@ def refresh_pipeline(store, root: Path, *, timeout: float | None = None):
     new = _read_manifest(manifest_path) or {}
     changed = changed_files_from_manifest(old, new)
     if not changed:
+        mark_applied(root, new)
         with store.atomic():  # giống refresh cũ: HEAD dịch mà nội dung không đổi vẫn ghi mốc commit
             store.set_last_run_commit(_git_head(root))
         return RefreshResult(0, 0, 0, len(new), round(time.perf_counter() - started, 3), (), pipeline="graphify")
@@ -68,6 +71,7 @@ def refresh_pipeline(store, root: Path, *, timeout: float | None = None):
 
     if (flow_warning := rebuild_flows_safely(store, root)) is not None:  # tệp đổi làm đổi luồng đi qua nó
         warnings.append(flow_warning)
+    mark_applied(root, new)  # chỉ sau khi graph.db đã chứa manifest mới
     rebrand_exported(out)  # ADR 0025: trang HTML vừa vẽ lại cũng phải sạch tên nguồn
     after = _paths(store)
     added = [path for path in changed if path in after and path not in before]

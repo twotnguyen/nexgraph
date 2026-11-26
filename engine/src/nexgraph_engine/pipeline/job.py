@@ -18,6 +18,7 @@ from pathlib import Path
 
 from nexgraph_engine.flows.build import rebuild_flows
 from nexgraph_engine.index.indexer import ProgressEvent
+from nexgraph_engine.pipeline.applied import forget_applied
 from nexgraph_engine.pipeline.mode import GRAPHIFY, LEGACY, pipeline_mode
 from nexgraph_engine.pipeline.rebrand import rebrand_exported
 from nexgraph_engine.pipeline.runner import FULL_STEPS, run_pipeline
@@ -120,6 +121,8 @@ def run_index_pipeline(store, root: Path, *, exclude: list[str] | None = None,
     def progress(done: int, steps_total: int, message: str) -> None:
         on_event(ProgressEvent("structure" if done < 2 else "resolve", done, steps_total, message))
 
+    # extract sắp ghi đè manifest.json: tới khi công bố xong, graph.db không khớp manifest nào đã biết.
+    forget_applied(root)
     result = run_pipeline(root, out, steps=FULL_STEPS, on_progress=progress, cancel=cancel,
                           extra_args=exclude_args(exclude), timeout=step_timeout())
     if result.cancelled:

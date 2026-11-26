@@ -360,6 +360,13 @@ class JobManager:
                 # Qua `publish_stage` (không backup tay) để WAL của bản thật được cắt ngay sau khi xong (F7).
                 publish_stage(stage, live_path)
                 published = True
+                if index_result.get("pipeline") == GRAPHIFY:
+                    from nexgraph_engine.pipeline.applied import mark_applied
+
+                    try:  # mốc refresh tăng dần; lỗi ở đây chỉ làm refresh sau nạp lại toàn bộ
+                        mark_applied(info.path)
+                    except OSError:
+                        logger.warning("Không ghi được manifest đã nạp (dự án %s)", info.project_id, exc_info=True)
         except Exception as exc:
             logger.exception("Lập chỉ mục thất bại (job %s, dự án %s, đã công bố: %s)",
                              job_id, info.project_id, published)
