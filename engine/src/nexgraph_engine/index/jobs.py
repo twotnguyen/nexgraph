@@ -18,6 +18,9 @@ from nexgraph_engine.store.publication import publish_stage, stage_graph
 
 ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting_llm: job semantic đường A chờ main (W9)
 # Job đã xong chỉ giữ để client hỏi kết quả một lúc: giới hạn số lượng và TTL để `_jobs` không phình mãi (REV-19).
+# Gỡ dự án chờ refresh nền nhả khoá tối đa chừng này (refresh qua pipeline mất cỡ giây);
+# DELETE của desktop hết hạn sau 15 s (apps/desktop/src/main/engine/api.ts `removeProject`).
+REMOVE_WAIT_SECONDS = 10.0
 MAX_FINISHED_JOBS = 50
 FINISHED_JOB_TTL_SECONDS = 60 * 60
 logger = logging.getLogger(__name__)
@@ -202,8 +205,10 @@ class JobManager:
     def remove_project(self, project_id: str) -> None:
         if self._registry.get(project_id) is None:
             raise UnknownProject(project_id)
+        if self.is_active(project_id):  # job do người dùng chạy: từ chối ngay, họ huỷ được
+            raise IndexAlreadyRunning(project_id)
         lock = self._locks.get(project_id) if self._locks else None
-        if lock is not None and not lock.acquire(blocking=False):
+        if lock is not None and not lock.acquire(timeout=REMOVE_WAIT_SECONDS):  # refresh nền: chờ xong
             raise IndexAlreadyRunning(project_id)
         try:
             with self._lock:
@@ -309,21 +314,41 @@ class JobManager:
                 store = GraphStore(stage)
                 store.abort_stale_runs()
                 last_docs, last_media = store.last_doc_flags()
-                indexer = self._indexer_cls(
-                    store, info.path, on_progress=on_event, cancel=cancel, subdir=subdir, exclude=exclude,
-                    include_docs=last_docs if include_docs is None else include_docs,
-                    include_media=last_media if include_media is None else include_media,
-                    include_config=store.last_config_flag() if include_config is None else include_config,
-                    include_images=store.last_image_flag() if include_images is None else include_images,
-                    workers=workers, force=force, **({"sources": sources} if sources is not None else {}),
-                    transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id,
-                    sources_dir=sources_root(self._registry.app_data_dir, info.project_id),
-                )
-                result = indexer.run()
-                # (A1 F6) Thư mục/tệp không đọc được khi quét + số liệu PERF-L đi CÙNG một dict kết quả job.
-                unreadable = indexer.unreadable_paths
-                index_result = {**self._job_result(indexer, result),
-                                "unreadable_paths": unreadable, "unreadable_count": len(unreadable)}
+                docs = last_docs if include_docs is None else include_docs
+                media = last_media if include_media is None else include_media
+                config = store.last_config_flag() if include_config is None else include_config
+                images = store.last_image_flag() if include_images is None else include_images
+                # Đường mặc định là pipeline vendor (N2-E2); bộ trích xuất cũ chạy khi
+                # NEXGRAPH_PIPELINE=legacy hoặc job cần thứ pipeline code-only chưa làm.
+                from nexgraph_engine.pipeline.job import fallback_reason, legacy_result, run_index_pipeline
+                from nexgraph_engine.pipeline.mode import GRAPHIFY, LEGACY, pipeline_mode
+
+                mode = pipeline_mode()
+                reason = "env_legacy" if mode == LEGACY else fallback_reason(
+                    subdir=subdir, sources=sources, include_docs=docs, include_media=media,
+                    include_images=images, include_config=config)
+                if mode == GRAPHIFY and reason is None:
+                    index_result = run_index_pipeline(store, info.path, exclude=exclude,
+                                                      on_event=on_event, cancel=cancel)
+                    if index_result is None:
+                        return  # đã phát sự kiện kết thúc (huỷ/lỗi), không công bố staging
+                else:
+                    if mode == GRAPHIFY:
+                        on_event(ProgressEvent("structure", 0, 0,
+                                               f"Dùng bộ trích xuất cũ cho lần này ({reason})"))
+                    indexer = self._indexer_cls(
+                        store, info.path, on_progress=on_event, cancel=cancel, subdir=subdir, exclude=exclude,
+                        include_docs=docs, include_media=media, include_config=config, include_images=images,
+                        workers=workers, force=force, **({"sources": sources} if sources is not None else {}),
+                        transcript_dir=self._registry.app_data_dir / "transcripts" / info.project_id,
+                        sources_dir=sources_root(self._registry.app_data_dir, info.project_id),
+                    )
+                    result = indexer.run()
+                    # (A1 F6) Thư mục/tệp không đọc được khi quét + số liệu PERF-L đi CÙNG một dict kết quả job.
+                    unreadable = indexer.unreadable_paths
+                    index_result = legacy_result(
+                        {**self._job_result(indexer, result), "unreadable_paths": unreadable,
+                         "unreadable_count": len(unreadable)}, reason)
 
                 if terminal_event is None:
                     raise RuntimeError("Lập chỉ mục kết thúc mà chưa báo kết quả")
@@ -340,6 +365,13 @@ class JobManager:
                 # Qua `publish_stage` (không backup tay) để WAL của bản thật được cắt ngay sau khi xong (F7).
                 publish_stage(stage, live_path)
                 published = True
+                if index_result.get("pipeline") == GRAPHIFY:
+                    from nexgraph_engine.pipeline.applied import mark_applied
+
+                    try:  # mốc refresh tăng dần; lỗi ở đây chỉ làm refresh sau nạp lại toàn bộ
+                        mark_applied(info.path)
+                    except OSError:
+                        logger.warning("Không ghi được manifest đã nạp (dự án %s)", info.project_id, exc_info=True)
         except Exception as exc:
             logger.exception("Lập chỉ mục thất bại (job %s, dự án %s, đã công bố: %s)",
                              job_id, info.project_id, published)

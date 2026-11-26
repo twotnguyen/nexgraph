@@ -22,6 +22,10 @@ vi.mock('../components/map/MapView', () => ({
   )
 }))
 
+vi.mock('../components/pages/GraphPagesView', () => ({
+  GraphPagesView: () => <div>Trang đồ thị nhúng</div>
+}))
+
 // jsdom không chạy Monaco: thay bằng <textarea> có giao diện EditorHandle.
 const revealLines = vi.hoisted(() => vi.fn())
 vi.mock('../components/editor/monaco', () => ({
@@ -117,6 +121,35 @@ describe('WorkspaceScreen', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Bản đồ' }))
     await userEvent.click(screen.getByRole('button', { name: 'Mở kiến trúc từ bản đồ' }))
     await waitFor(() => expect(architecture).toHaveBeenCalledWith('p1', 'dir:src'))
+  })
+
+  describe('thẻ Sơ đồ tự mở khi dự án có trang đồ thị', () => {
+    const pages = { dir: '/Đồ án/demo/.nexgraph', graph: true, tree: true, callflow: null, partition: 'nexgraph-pages', preload: 'file:///preload/graphPage.js' }
+    function installPages() {
+      installNexgraph({ graph: { architecture: vi.fn(async () => ({ parent: null, blocks: [], links: [] })) } })
+      let resolve!: (status: typeof pages) => void
+      const status = vi.fn(() => new Promise<typeof pages>((done) => { resolve = done }))
+      ;(window as unknown as { nexgraph: Record<string, unknown> }).nexgraph.graphPages = { status }
+      return { publish: () => act(async () => { resolve(pages) }) }
+    }
+
+    it('mở Sơ đồ khi người dùng chưa chọn thẻ nào', async () => {
+      const { publish } = installPages()
+      render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+      await publish()
+      await waitFor(() => expect(screen.getByRole('tab', { name: 'Sơ đồ' })).toHaveAttribute('aria-selected', 'true'))
+    })
+
+    it('không cướp thẻ Kiến trúc khi người dùng đã đi thẻ khác rồi quay lại', async () => {
+      const { publish } = installPages()
+      render(<div style={{ width: 1000, height: 700 }}><WorkspaceScreen project={project()} /></div>)
+      await userEvent.click(screen.getByRole('tab', { name: 'Bản đồ' }))
+      await publish() // trạng thái trang về muộn, lúc người dùng đang ở Bản đồ
+      await userEvent.click(await screen.findByRole('tab', { name: 'Kiến trúc' }))
+      await act(async () => { await new Promise((done) => setTimeout(done, 20)) })
+      expect(screen.getByRole('tab', { name: 'Kiến trúc' })).toHaveAttribute('aria-selected', 'true')
+      expect(screen.queryByText('Trang đồ thị nhúng')).toBeNull()
+    })
   })
 
   it('mục Tham quan của thanh hoạt động mở panel và nạp chuyến tham quan', async () => {

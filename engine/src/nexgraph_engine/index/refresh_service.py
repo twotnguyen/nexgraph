@@ -97,9 +97,15 @@ class RefreshService:
                     return self._skipped("not_indexed")
                 # Lần refresh trước bị kill để lại dòng 'cho' (dữ liệu đã rollback khi mở CSDL).
                 store.abort_stale_runs()
-                result = refresh_project(store, info.path,
-                                         transcript_dir=self._registry.app_data_dir / "transcripts" / project_id,
-                                         sources_dir=sources_root(self._registry.app_data_dir, project_id))
+                from nexgraph_engine.pipeline.refresh import refresh_pipeline, use_pipeline_refresh
+
+                if use_pipeline_refresh(info.path):
+                    # Đồ thị dựng bằng pipeline vendor: `update` tăng dần + replace_files theo manifest.
+                    result = refresh_pipeline(store, info.path)
+                else:
+                    result = refresh_project(store, info.path,
+                                             transcript_dir=self._registry.app_data_dir / "transcripts" / project_id,
+                                             sources_dir=sources_root(self._registry.app_data_dir, project_id))
         except GraphWriteBusy:
             return self._skipped("refresh_running")
         except sqlite3.OperationalError as exc:
@@ -113,7 +119,8 @@ class RefreshService:
             for callback in self.on_refresh_done:
                 callback(project_id)
         payload = {"status": "ok", "reason": None, "added": result.added, "changed": result.changed,
-                   "removed": result.removed, "seconds": round(result.seconds, 3)}
+                   "removed": result.removed, "seconds": round(result.seconds, 3),
+                   "pipeline": result.pipeline, "replaced_files": result.replaced_files}
         if result.warnings:
             # Phần phụ phải fallback: không báo "ok" im lặng khi luồng/cụm được giữ lại hoặc dựng lại.
             payload["warnings"] = list(result.warnings)

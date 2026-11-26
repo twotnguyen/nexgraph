@@ -107,6 +107,53 @@ def test_index_twice_409_while_running(api, copy_fixture):
         Blocking.gate.set()
 
 
+def test_remove_waits_for_background_refresh(api, copy_fixture):
+    """Refresh nền (pipeline mất cỡ giây) giữ khoá dự án: Gỡ dự án chờ nó xong, không báo đang bận.
+
+    Smoke bộ cài: rời workspace rồi gỡ ngay thì gặp `project_busy` vì refresh nền chưa xong.
+    """
+    pid = api.open(copy_fixture("bookstore_app"))["project_id"]
+    lock = api.app.state.services.jobs._locks.get(pid)
+    assert lock.acquire(blocking=False)  # đóng vai refresh nền đang chạy
+    threading.Timer(0.3, lock.release).start()
+
+    removal = api.delete(f"/v1/projects/{pid}")
+
+    assert removal.status_code == 200, removal.json()
+    assert api.get("/v1/projects").json() == []
+
+
+def test_remove_still_busy_when_refresh_outlasts_wait(api, copy_fixture, monkeypatch):
+    from nexgraph_engine.index import jobs as jobs_module
+
+    monkeypatch.setattr(jobs_module, "REMOVE_WAIT_SECONDS", 0.2)
+    pid = api.open(copy_fixture("bookstore_app"))["project_id"]
+    lock = api.app.state.services.jobs._locks.get(pid)
+    assert lock.acquire(blocking=False)
+    try:
+        removal = api.delete(f"/v1/projects/{pid}")
+    finally:
+        lock.release()
+    assert removal.status_code == 409 and removal.json()["error"]["code"] == "project_busy"
+    assert api.get("/v1/projects").json()[0]["project_id"] == pid
+
+
+def test_remove_refuses_running_index_job_without_waiting(api, copy_fixture):
+    """Job lập chỉ mục do người dùng chạy: từ chối ngay, không ngồi chờ hết hạn khoá."""
+    p = api.open(copy_fixture("bookstore_app"))
+    Blocking.gate = threading.Event()
+    api.app.state.services.jobs._indexer_cls = Blocking
+    try:
+        job_id = api.post(f"/v1/projects/{p['project_id']}/index").json()["job_id"]
+        started = time.monotonic()
+        removal = api.delete(f"/v1/projects/{p['project_id']}")
+        assert time.monotonic() - started < 2
+        assert removal.status_code == 409 and removal.json()["error"]["code"] == "project_busy"
+        assert api.delete(f"/v1/jobs/{job_id}").json() == {"cancelled": True}
+    finally:
+        Blocking.gate.set()
+
+
 def test_unknown_project_and_job(api):
     assert api.post("/v1/projects/nope/index").status_code == 404
     assert api.post("/v1/projects/nope/index").json()["error"]["code"] == "unknown_project"
