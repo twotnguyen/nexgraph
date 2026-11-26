@@ -80,3 +80,9 @@ tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[p
 tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel-deploy-.tf]  # NexGraph in dòng AST cache ra stderr
 tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel-deploy-.hcl]  # NexGraph in dòng AST cache ra stderr
 tests/test_terraform_modules.py::test_copied_ast_cache_preserves_terraform_ids[parallel-deploy-.tfvars]  # NexGraph in dòng AST cache ra stderr
+
+# --- Nâng lên 0.9.120 (2026-11-26, ADR 0026) ---
+# SDK mcp trong uv.lock của engine (1.30.0) kiểm inputSchema trước handler: đầu vào sai vẫn bị từ chối, nhưng câu lỗi là của SDK
+# ("Input validation error: ...") chứ không phải của graphify. NexGraph không đưa tool `affected` ra MCP (ADR 0026 A.6).
+tests/test_serve_affected_seeds.py::test_affected_rejects_bad_arguments  # câu lỗi của SDK mcp 1.30.0, không phải của graphify
+tests/test_serve_affected_seeds.py::test_query_graph_rejects_malformed_seeds  # câu lỗi của SDK mcp 1.30.0, không phải của graphify

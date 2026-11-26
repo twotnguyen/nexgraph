@@ -12,9 +12,9 @@ Mỗi mục ghi nguồn, giấy phép, commit được dùng và phần nào c�
 ## Graphify
 
 - Nguồn: https://github.com/Graphify-Labs/graphify
-- Commit: `c60eea01cf87dcfb33787808cd534cc7afc5ffff` (v0.9.112 + 1 commit nâng phụ thuộc, 2026-11-18; trước 2026-11-20 là `86c57be`, v0.9.92)
+- Commit: `16127eb30892f997d758efdd894e5e04264edbbb` (v0.9.120, 2026-11-25; trước 2026-11-26 là `c60eea0`, v0.9.112; trước 2026-11-20 là `86c57be`, v0.9.92)
 - Giấy phép: Apache-2.0; phần đóng góp trước 2026-07-22 còn khả dụng theo MIT. Bản đầy đủ ở `engine/third_party/graphify/` (`LICENSE`, `NOTICE`, `LICENSE-MIT`).
-- Dùng ở: `engine/src/graphify/` (chép nguyên, ghim commit, không đồng bộ upstream).
+- Dùng ở: `engine/src/graphify/` (chép nguyên, ghim commit, đóng băng ở v0.9.120, chỉ backport bản vá bảo mật).
 - **Tệp đã sửa đổi so với bản gốc (Apache-2.0 §4(b)):** các tệp trong `engine/src/graphify/` đã được sửa đổi so với bản gốc. Hiện có `extract.py` — chuyển dòng "AST cache:" sang stderr để không làm hỏng JSON của `refresh` và kênh MCP stdio (commit `e484705`); tệp giữ dòng đầu `# Modified by NexGraph contributors, 2026`. Tệp nào sửa tiếp phải thêm dòng tương tự.
 
 Tệp `NOTICE` nguyên văn (`engine/third_party/graphify/NOTICE`):

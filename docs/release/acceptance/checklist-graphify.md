@@ -140,7 +140,7 @@ Số tool trên `main` tại `83e49b7` (`engine/tests/test_mcp.py`; đối chi�
 | # | graphify | Nơi bấm | Cách thử, kết quả mong đợi | macOS | Windows | Ghi chú |
 |---|---|---|---|---|---|---|
 | 8.1 | ~40 họ ngôn ngữ | Index `polyglot` | Trang tổng quan có dòng **Ngôn ngữ ở mức chung (…)**. Lời gọi `main → helper` có ở cả 8 ngôn ngữ. `cpp/main.cpp` có cạnh IMPORTS tới `cpp/util.h`. | ☐ | ☐ | Rust `use crate::…` chưa thành cạnh tệp (Ruling "không sửa") |
-| 8.2 | Bản vendor 0.9.112 | `THIRD_PARTY_LICENSES.md` / thông tin bản cài | Ghi đúng 0.9.112. | ☐ | ☐ | |
+| 8.2 | Bản vendor 0.9.120 (đóng băng, ADR 0026) | `THIRD_PARTY_LICENSES.md` / thông tin bản cài | Ghi đúng 0.9.120, commit `16127eb`. | ☐ | ☐ | |
 | 8.3 | Resource MCP `report`, `stats`, `god-nodes`, `surprises`, `audit`, `questions` | MCP `resources/read` | Đọc được cả 6 resource. | ☐ | ☐ | |
 | 8.4 | Chấm điểm `query` | Hỏi graph | Như 3.4. | ☐ | ☐ | |
 | 8.5 | Import Cycles, Freshness, Knowledge Gaps | Tab Báo cáo | Như 3.3. | ☐ | ☐ | |
