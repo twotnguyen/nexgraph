@@ -39,6 +39,8 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       tools: vi.fn(async () => ({ ffmpeg: true, faster_whisper: true, git: true, gh: true, yt_dlp: true })), onStatus: vi.fn(() => () => {}), ...over.engine },
     project: { pickFolder: vi.fn(async () => '/Đồ án/demo'), open: vi.fn(async () => project()),
       list: vi.fn(async () => []), remove: vi.fn(async () => {}), ...over.project },
+    licenses: { read: vi.fn(async () => ({ text: '# Phần mềm bên thứ ba\n', path: '/x/THIRD_PARTY_LICENSES.md' })), ...over.licenses },
+    app: { version: vi.fn(async () => '0.0.0-test'), ...over.app },
     index: {
       scan: vi.fn(async () => ({ files: 10, by_language: {}, large: false, threshold: 5000, top_dirs: [] })),
       start: vi.fn(async () => ({ jobId: 'j1' })), options: vi.fn(async () => null), status: vi.fn(async () => progress('queued', 0, 0)), cancel: vi.fn(async () => {}),
