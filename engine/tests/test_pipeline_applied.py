@@ -107,3 +107,30 @@ def test_missing_applied_manifest_reloads_everything_without_losing_nodes(api, i
         conn.close()
     assert applied.is_file()
     assert api.post(f"/v1/projects/{pid}/refresh").json()["replaced_files"] == 0  # mốc đã ghi lại
+
+
+def test_refresh_with_changes_records_head_commit(api, tmp_path, monkeypatch):
+    """Như refresh cũ: lần tăng dần ghi commit HEAD, nên freshness còn so được HEAD với chỉ mục."""
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "graphify")
+    root = tmp_path / "git app"
+    shutil.copytree(FIXTURES / "graphify_import_app", root)
+    git = ["git", "-c", "user.email=qa@example.invalid", "-c", "user.name=qa"]
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run([*git, "add", "-A"], cwd=root, check=True)
+    subprocess.run([*git, "commit", "-qm", "init"], cwd=root, check=True)
+    pid = api.open(root)["project_id"]
+    assert api.index(pid, timeout=180)["state"] == "done"
+    _add_function(root, "zzz_commit")
+    subprocess.run([*git, "commit", "-qam", "thêm hàm"], cwd=root, check=True)
+    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True,
+                          text=True).stdout.strip()
+
+    body = api.post(f"/v1/projects/{pid}/refresh").json()
+
+    assert body["status"] == "ok" and body["changed"] == 1, body
+    conn = open_graph_db(root / ".nexgraph" / "graph.db")
+    try:
+        state = freshness(GraphStore(conn), root)
+    finally:
+        conn.close()
+    assert state["index_commit"] == head and state["stale"] is False, state

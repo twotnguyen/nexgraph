@@ -71,6 +71,8 @@ def refresh_pipeline(store, root: Path, *, timeout: float | None = None):
 
     if (flow_warning := rebuild_flows_safely(store, root)) is not None:  # tệp đổi làm đổi luồng đi qua nó
         warnings.append(flow_warning)
+    with store.atomic():  # như refresh cũ: lần tăng dần ghi commit HEAD (freshness/hook guard so mốc này)
+        store.set_last_run_commit(_git_head(root))
     mark_applied(root, new)  # chỉ sau khi graph.db đã chứa manifest mới
     rebrand_exported(out)  # ADR 0025: trang HTML vừa vẽ lại cũng phải sạch tên nguồn
     after = _paths(store)
