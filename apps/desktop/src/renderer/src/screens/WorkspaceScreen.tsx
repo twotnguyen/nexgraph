@@ -260,6 +260,11 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   }, [project.project_id, revision])
   const hasPages = !!pagesStatus && (pagesStatus.graph || pagesStatus.tree || pagesStatus.callflow !== null)
   // Mặc định mở trang đồ thị khi dự án có (brief N1-D1); chỉ khi người dùng chưa đi đâu khác.
+  // Rời thẻ Kiến trúc lần nào là coi như đã chọn: trạng thái trang về muộn không được kéo người dùng
+  // khỏi Kiến trúc khi họ tự quay lại (smoke bộ cài: Bản đồ → Kiến trúc bị chuyển sang Sơ đồ).
+  useEffect(() => {
+    if (tab !== 'arch') pagesAutoOpened.current = project.project_id
+  }, [tab, project.project_id])
   useEffect(() => {
     if (!hasPages || initialTab || pagesAutoOpened.current === project.project_id || tab !== 'arch') return
     pagesAutoOpened.current = project.project_id

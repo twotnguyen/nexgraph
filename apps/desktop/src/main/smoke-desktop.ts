@@ -388,9 +388,10 @@ export async function runWorkspaceAcceptanceSmoke(projectName: string, expectWeb
     map.click()
     await waitFor(() => Array.from(document.querySelectorAll('.map-view [role="alert"]')).find((alert) =>
       alert.textContent?.includes('không bật được WebGL')), 'cảnh báo WebGL của Bản đồ')
-    const architecture = await button('button[role="tab"]', 'Kiến trúc')
-    architecture.click()
   }
+  // Dự án có trang đồ thị (pipeline) mặc định mở thẻ Sơ đồ, nên luôn chọn Kiến trúc trước khi kiểm.
+  const architecture = await button('button[role="tab"]', 'Kiến trúc')
+  architecture.click()
   await waitFor(() => document.querySelector('.arch-canvas .react-flow__node'), 'nút Kiến trúc')
 
   const projectPath = document.querySelector('.ws-head .mono')?.textContent?.normalize('NFC') ?? ''
