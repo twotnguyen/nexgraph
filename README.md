@@ -2,7 +2,7 @@
 
 NexGraph là ứng dụng desktop cho Windows và macOS dùng để lập chỉ mục thư mục mã nguồn cục bộ, khám phá kiến trúc, tìm ký hiệu và xem vùng ảnh hưởng khi sửa mã. Đề tài ưu tiên **TypeScript/JavaScript và Python**. Đồ thị dẫn đến vị trí mã nguồn, hỗ trợ truy vết luồng thực thi và cung cấp ngữ cảnh cho trợ lý AI qua MCP.
 
-Ứng dụng có trình soạn thảo tích hợp và trợ lý hỗ trợ Pi coding-agent SDK cùng Antigravity CLI chính thức qua ACP. Gemini có hai lựa chọn riêng: **Tài khoản Google** qua Antigravity và **API key** qua Pi. **Hỏi** và **Kế hoạch** chỉ đọc. **Sửa** hỗ trợ duyệt từng thay đổi hoặc tự động trong phiên đã cấp quyền; quyền chạy lệnh build/test được bật riêng. Hội thoại, kết quả công cụ và checkpoint được lưu để mở lại và tiếp tục. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
+Ứng dụng có trình soạn thảo tích hợp và trợ lý AI **Nex**: runtime chạy như tiến trình đi kèm thứ hai (cạnh engine), được nạp sẵn MCP của NexGraph, đăng nhập ChatGPT, Claude, GitHub Copilot, OpenRouter, Ollama hoặc API tương thích OpenAI. Runtime Pi giữ làm dự phòng; Gemini qua tài khoản Google dùng Antigravity CLI chính thức qua ACP. **Hỏi** và **Kế hoạch** chỉ đọc. **Sửa** hỗ trợ duyệt từng thay đổi hoặc tự động trong phiên đã cấp quyền; quyền chạy lệnh build/test được bật riêng. Hội thoại, kết quả công cụ và checkpoint được lưu để mở lại và tiếp tục. Các chức năng đồ thị cục bộ hoạt động khi chưa cấu hình AI.
 
 ## Bắt đầu
 
@@ -19,20 +19,20 @@ Nếu đã clone repo, sau khi nhóm hợp nhất thay đổi, chạy `git pull 
 
 Mở thư mục mã nguồn trong cửa sổ NexGraph. Dự án nhỏ được quét và lập chỉ mục tự động. Khi hoàn tất, bấm **Bắt đầu khám phá**. Cây tệp nằm bên trái, các thẻ mã nguồn và sơ đồ ở giữa, trợ lý AI ở bên phải. Mở dự án gần đây đã có chỉ mục sẽ vào thẳng không gian làm việc. Nút **← Tổng quan** mở thống kê, tùy chọn lập chỉ mục, Git hook và tích hợp MCP.
 
-- [Bản bàn giao Electron/Monaco 0.1.0, cách cài và ảnh giao diện](docs/release/README.md)
+- [Cài và nghiệm thu bản phát hành, ảnh giao diện](docs/release/README.md)
 - [Cài đặt và chạy từ mã nguồn trên Windows/macOS](docs/install-notes.md)
 - [Demo nhanh với mẫu Python và kịch bản bảo vệ trên NestJS](docs/demo-script.md)
 - [Danh sách kiểm trên Windows](docs/windows-checklist.md)
 - [Trợ lý AI: tài khoản, ngữ cảnh, quyền thực thi, lịch sử và hoàn tác](docs/ai-workbench.md)
 
-**NexGraph 0.1.0 Electron/Monaco** là bản dùng để bàn giao và bảo vệ. Bộ cài có engine đi kèm. Lệnh `pnpm dev` khởi động cùng giao diện và chạy engine từ mã nguồn. Tích hợp **Code-OSS** là bản thử nghiệm, dùng chung engine và có quy trình build riêng. [Quy trình build Code-OSS](labs/shell/README.md)
+**NexGraph Electron/Monaco** là bản dùng để bàn giao và bảo vệ (bản đang phát hành 0.1.2, ứng viên 0.2.0-alpha.1). Bộ cài có engine đi kèm. Lệnh `pnpm dev` khởi động cùng giao diện và chạy engine từ mã nguồn. Tích hợp **Code-OSS** là bản thử nghiệm, dùng chung engine và có quy trình build riêng. [Quy trình build Code-OSS](labs/shell/README.md)
 
 ## Đặc tả và trạng thái
 
 - [Đặc tả hiện hành](docs/srs/SRS.md) ghi phạm vi và tiêu chí nghiệm thu.
 - [Ma trận truy vết F1–F15](docs/srs/traceability.md) liên kết yêu cầu với use case, thao tác, kiểm thử và bằng chứng.
 - [Kiến trúc và luồng xử lý](docs/srs/architecture.md), [ERD và lưu trữ hiện hành](docs/srs/data-model.md).
-- Các tài liệu trong [`docs/superpowers/`](docs/superpowers/) ghi lại lịch sử thiết kế và kế hoạch theo tuần.
+- [Thiết kế CSDL lúc lập kế hoạch](docs/srs/csdl/) (phân tích chức năng, tân từ, chuẩn hoá); SQL thiết kế hiện hành ở [`design/database/`](design/database/).
 
 CI chạy setup từ checkout sạch rồi kiểm trên Windows và macOS. Job đóng gói mở ứng dụng từ chính bộ cài sẽ tải lên, lập chỉ mục dự án mẫu bằng engine đi kèm và kiểm đọc, ghi tệp cùng trợ lý giả lập. Biên bản nghiệm thu ghi riêng lần cài và chạy trên máy đích. [Workflow](.github/workflows/ci.yml) · [Biên bản thử editor và agent](docs/benchmarks/2026-11-15-editor-agent.md)
 

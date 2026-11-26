@@ -1,6 +1,6 @@
 # Đặc tả yêu cầu phần mềm NexGraph
 
-Đặc tả này mô tả phạm vi bàn giao NexGraph 0.1.2 và bản ứng viên 0.2.0 dựa trên các yêu cầu đã điều chỉnh ở tuần 5. Dùng tài liệu này cùng [ma trận truy vết](traceability.md) để phát triển và nghiệm thu. Mỗi yêu cầu tách tiêu chí cần đạt khỏi bằng chứng đã có. Các bản thiết kế theo tuần trước đó được giữ trong [kho lưu trữ](../superpowers/).
+Đặc tả này mô tả phạm vi bàn giao NexGraph 0.1.2 và bản ứng viên 0.2.0 dựa trên các yêu cầu đã điều chỉnh ở tuần 5. Dùng tài liệu này cùng [ma trận truy vết](traceability.md) để phát triển và nghiệm thu. Mỗi yêu cầu tách tiêu chí cần đạt khỏi bằng chứng đã có. Thiết kế CSDL lúc lập kế hoạch nằm ở [csdl/](csdl/).
 
 ## Mục tiêu và đối tượng
 

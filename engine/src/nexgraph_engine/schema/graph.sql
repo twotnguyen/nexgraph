@@ -1,5 +1,5 @@
 -- NexGraph: CSDL đồ thị của một dự án (.nexgraph/graph.db). SQLite >= 3.43 (FTS5 contentless_delete).
--- Lược đồ theo docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md. Số RBn là mã ràng buộc toàn vẹn ở tài liệu đó.
+-- Lược đồ theo docs/srs/csdl/2026-10-24-nexgraph-csdl-chuan-hoa.md. Số RBn là mã ràng buộc toàn vẹn ở tài liệu đó.
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;  (SQLite tắt mặc định, không lưu trong tệp)
 
 PRAGMA user_version = 8;

@@ -74,3 +74,6 @@ Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài re
 |---|---|---|---|
 | 1 | `apps/extension/` | `labs/extension/` | Ngoài pnpm workspace mặc định, lockfile riêng `labs/extension/pnpm-lock.yaml` (cùng phiên bản đã khoá trước đó). Cài: `pnpm --dir labs/extension install --ignore-workspace`. CI: job `labs (báo cáo)`, không bắt buộc. |
 | 1 | `apps/shell/` | `labs/shell/` | Không phải gói pnpm. `node labs/shell/build.mjs` |
+| 1 | `docs/superpowers/specs/2026-10-24-nexgraph-{csdl-chuan-hoa,csdl-design,csdl-tan-tu,phan-tich-chuc-nang}.md` | `docs/srs/csdl/` (cùng tên tệp) | Bản công khai; bản có ghi chú nội bộ ở tài liệu dự án |
+| 1 | `docs/superpowers/specs/2026-10-18-nexgraph-desktop-design.md`, `docs/superpowers/plans/` | bỏ khỏi repo | Bản cũ đã lệch; spec và kế hoạch hiện hành ở tài liệu dự án |
+| 1 | `design/` (hai bản: workspace và repo) | `design/` của repo | Thêm `diagrams/uml-hd-lap-chi-muc.html` |
