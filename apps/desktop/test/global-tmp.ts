@@ -1,9 +1,11 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const PREFIX = 'ng-vitest-'
 const KEYS = ['TMPDIR', 'TMP', 'TEMP'] as const
+// Tên ngắn có chủ ý: đường dẫn socket Unix tối đa 103 ký tự trên macOS, và test tạo socket sâu bên trong
+// (`…/T/ngv-<pid>/ng-fs-ops-xxxxxx/project/src/socket` ≈ 94 ký tự; tên dài hơn làm listen() lỗi EINVAL).
+const ROOT = /^ngv-(\d+)$/
 
 function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM' }
@@ -20,10 +22,11 @@ function alive(pid: number): boolean {
 export default function setup(): () => void {
   const base = tmpdir()
   for (const name of readdirSync(base)) {
-    const pid = Number(/^ng-vitest-(\d+)-/.exec(name)?.[1])
-    if (pid && !alive(pid)) rmSync(join(base, name), { recursive: true, force: true })
+    const pid = Number(ROOT.exec(name)?.[1])
+    if (pid && (pid === process.pid || !alive(pid))) rmSync(join(base, name), { recursive: true, force: true })
   }
-  const root = mkdtempSync(join(base, `${PREFIX}${process.pid}-`))
+  const root = join(base, `ngv-${process.pid}`)  // pid đang sống là duy nhất; trùng pid cũ thì vừa xoá ở trên
+  mkdirSync(root)
   const saved = KEYS.map((key) => [key, process.env[key]] as const)
   for (const key of KEYS) process.env[key] = root
   return () => {

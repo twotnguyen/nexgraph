@@ -9,7 +9,7 @@ import setup from './global-tmp'
 // lượt chạy kết thúc — kể cả thư mục do tiến trình con của test tạo ra.
 describe('thư mục tạm của lượt test', () => {
   it('os.tmpdir() trong test là thư mục gốc riêng của lượt vitest', () => {
-    expect(basename(tmpdir())).toMatch(/^ng-vitest-\d+-/)
+    expect(basename(tmpdir())).toMatch(/^ngv-\d+$/)
   })
 
   it('tiến trình con của test thấy cùng thư mục tạm', () => {
@@ -20,8 +20,8 @@ describe('thư mục tạm của lượt test', () => {
   it('teardown xoá thư mục gốc và trả biến môi trường; lượt sau dọn gốc của lượt đã chết', () => {
     const base = tmpdir()
     const deadPid = spawnSync(process.execPath, ['-e', '']).pid
-    const dead = join(base, `ng-vitest-${deadPid}-bo-lai`)
-    const live = join(base, `ng-vitest-${process.pid}-dang-chay`)
+    const dead = join(base, `ngv-${deadPid}`)
+    const live = join(base, `ngv-${process.ppid}`)  // tiến trình cha còn sống
     mkdirSync(join(dead, 'ng-sess-x'), { recursive: true })
     mkdirSync(live)
 
