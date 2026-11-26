@@ -72,7 +72,7 @@ export function WorkbenchHistory({ work, busy, onPicked }: { work: AgentWorkbenc
   </section>
 }
 
-export function WorkbenchSettings({ projectId, work, busy, mode, runtime, onSuggest }: { projectId: string; work: AgentWorkbench; busy: boolean; mode: AgentMode | null; runtime?: 'pi' | 'antigravity-cli'; onSuggest?: (text: string) => void }) {
+export function WorkbenchSettings({ projectId, work, busy, mode, runtime, onSuggest }: { projectId: string; work: AgentWorkbench; busy: boolean; mode: AgentMode | null; runtime?: 'nex' | 'pi' | 'antigravity-cli'; onSuggest?: (text: string) => void }) {
   const [commands, setCommands] = useState<ProjectCommands | null>(null)
   const [localError, setLocalError] = useState<Message | null>(null)
   const [commandsLoading, setCommandsLoading] = useState(false)

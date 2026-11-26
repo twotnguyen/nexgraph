@@ -36,9 +36,13 @@ vi.mock('../src/main/engine/api', async (importOriginal) => {
 vi.mock('../src/main/agent/session', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/main/agent/session')>()
   class FakeAgentService {
-    constructor(deps: { emit: (projectId: string, event: unknown) => void }) { h.agentDeps = deps }
+    private readonly tag: string
+    constructor(deps: { emit: (projectId: string, event: unknown) => void; createSession?: unknown }) {
+      h.agentDeps = deps
+      this.tag = deps.createSession ? 'nex:' : ''
+    }
     getMode() { return 'ask' }
-    close(projectId: string) { h.closed.push(projectId) }
+    close(projectId: string) { h.closed.push(`${this.tag}${projectId}`) }
     prompt() { return h.prompt ? h.prompt() : Promise.resolve() }
     approve(projectId: string, id: string) { h.approvals.push(`${projectId}:${id}`) }
   }
@@ -108,7 +112,7 @@ describe('phiên agent thuộc cửa sổ đã mở', () => {
     expect(a.sent.at(-1)).toEqual(['agent:event', { projectId: 'p2', event: { type: 'text', delta: 'còn sống' } }])
     expect(c.sent).toEqual([])
     closeWindowResources(a as never)
-    expect(h.closed).toEqual(['p2', 'gemini:p2'])
+    expect(h.closed).toEqual(['p2', 'gemini:p2', 'nex:p2'])
     // Cửa sổ đã dọn thì không còn chủ: sự kiện không bị gửi sang cửa sổ đang focus.
     h.agentDeps!.emit('p2', { type: 'text', delta: 'muộn' })
     expect(c.sent).toEqual([])

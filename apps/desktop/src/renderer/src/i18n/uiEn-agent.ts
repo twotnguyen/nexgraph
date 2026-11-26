@@ -1,5 +1,14 @@
 /** Bản Anh cho các khoá tr(...) trong components/agent và components/chat. */
 export const uiEnAgent: Record<string, string> = {
+  'Runtime agent': 'Agent runtime',
+  'Không đổi runtime khi trợ lý đang chạy hoặc đang chờ duyệt. Hãy dừng lượt hiện tại trước.': 'Cannot switch runtime while the assistant is running or waiting for approval. Stop the current turn first.',
+  'Nex là runtime mặc định khi máy có sẵn; Pi là bản dự phòng. Đổi runtime áp dụng cho lượt chat tiếp theo.': 'Nex is the default runtime when available; Pi is the fallback. A runtime change applies to the next chat turn.',
+  'Nex (khuyến nghị)': 'Nex (recommended)',
+  'Pi (dự phòng)': 'Pi (fallback)',
+  'Đã đổi runtime agent.': 'Agent runtime changed.',
+  'Chưa tìm thấy runtime Nex trên máy này; app dùng Pi.': 'Nex runtime was not found on this machine; the app uses Pi.',
+  'Nex cần nhà cung cấp OpenAI-compatible có API key; thêm ở mục Tài khoản AI.': 'Nex needs an OpenAI-compatible provider with an API key; add one under AI accounts.',
+  'Mô hình model runtime Nex Pi kiểm tra kết nối': 'Model runtime Nex Pi test connection',
   ' Xung đột: {items}': ' Conflicts: {items}',
   ' · {turns}/{max} lượt': ' · {turns}/{max} {max, plural, one {turn} other {turns}}',
   'Antigravity CLI chính thức': 'Official Antigravity CLI',

@@ -391,7 +391,7 @@ export interface IndexSources {
 }
 
 export interface AiSettings {
-  runtime?: 'pi' | 'antigravity-cli'
+  runtime?: 'nex' | 'pi' | 'antigravity-cli'
   baseUrl: string
   model: string
   hasKey: boolean
