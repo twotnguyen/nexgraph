@@ -4,8 +4,8 @@ from __future__ import annotations
 import re
 import sqlite3
 
-from nexgraph_engine.index.keywords import split_identifier
-from nexgraph_engine.query.terms import drop_vi_stopwords, has_vietnamese
+from nexgraph_engine.text.keywords import split_identifier
+from nexgraph_engine.text.terms import drop_vi_stopwords, has_vietnamese
 from nexgraph_engine.schema.enums import NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Node

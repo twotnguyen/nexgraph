@@ -1,6 +1,6 @@
 import pytest
 
-from nexgraph_engine.impact.tested_by import derive_tested_by
+from nexgraph_engine.index.tested_by import derive_tested_by
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.graph_store import GraphStore

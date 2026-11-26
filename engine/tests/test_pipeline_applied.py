@@ -13,7 +13,7 @@ import pytest
 import nexgraph_engine.graphify_import as graphify_import
 import nexgraph_engine.pipeline.job as pipeline_job
 from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.freshness import freshness
+from nexgraph_engine.changes.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
 FIXTURES = Path(__file__).parent / "fixtures"

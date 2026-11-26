@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.index.extra_sources import ExtraSources
-from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
+from nexgraph_engine.pipeline.job_manager import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.index import scan as scan_module
 from nexgraph_engine.schema.db import (
     SchemaOutdatedError, SchemaVersionError, UnsupportedSqliteError, open_graph_db,
@@ -181,7 +181,7 @@ def scan_project(project_id: str, request: Request) -> dict:
 
 @router.post("/projects/{project_id}/communities")
 def recluster(project_id: str, request: Request) -> dict:
-    from nexgraph_engine.index.refresh_service import NotIndexed
+    from nexgraph_engine.pipeline.refresh_service import NotIndexed
     try:
         return {"communities": request.app.state.services.refresh.recluster(project_id)}
     except UnknownProject as exc:

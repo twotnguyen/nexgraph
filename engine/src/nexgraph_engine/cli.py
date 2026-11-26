@@ -234,7 +234,7 @@ def _refresh(project: Path, data_dir: Path | None) -> tuple[int, dict]:
     """(0, kết quả) kể cả khi bỏ qua (không bao giờ làm lệnh git thất bại); (3, …) khi dự án chưa lập chỉ mục."""
     import sqlite3
 
-    from nexgraph_engine.index.refresh import refresh_project
+    from nexgraph_engine.pipeline.legacy_refresh import refresh_project
     from nexgraph_engine.store.projects import ProjectNotIndexed, resolve_graph_db
     from nexgraph_engine.sources import sources_root
     from nexgraph_engine.schema.db import open_graph_db

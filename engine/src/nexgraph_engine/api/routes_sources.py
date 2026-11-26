@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError, error_response
 from nexgraph_engine.api.routes_projects import _summary
-from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
+from nexgraph_engine.pipeline.job_manager import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.sources import ingest_url, list_sources, remove_source, sources_root, url_error
 from nexgraph_engine.sources.clone import MAX_CLONE_DEPTH, clone_repo, parse_repo_url, remove_tree
 

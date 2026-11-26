@@ -1,5 +1,5 @@
 from nexgraph_engine.index.discovery import discover
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 
 
 def test_discover_exclude(tmp_path):
@@ -14,7 +14,7 @@ def test_exclude_persists_for_refresh(tmp_path, index_project, monkeypatch):
     (tmp_path / "keep.py").write_text("x = 1\n")
     (tmp_path / "gen").mkdir()
     (tmp_path / "gen" / "skip.py").write_text("y = 1\n")
-    import nexgraph_engine.index.indexer as ix
+    import nexgraph_engine.pipeline.legacy_indexer as ix
     real = ix.Indexer.__init__
     monkeypatch.setattr(ix.Indexer, "__init__", lambda self, *a, **k: real(self, *a, exclude=["gen/"], **k))
     store, _, _ = index_project(tmp_path)

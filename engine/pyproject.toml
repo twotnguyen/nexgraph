@@ -103,7 +103,7 @@ layers = [
     "query : arch : flows : impact : changes : prs : semantic : tour : report : memory : global_graph : bridge : export",
     "index : graphify_import : sources : dart : docs",
     "store",
-    "schema : ids : errors : logging_setup : subprocesses",
+    "schema : ids : errors : logging_setup : subprocesses : text : tasks",
 ]
 
 [[tool.importlinter.contracts]]

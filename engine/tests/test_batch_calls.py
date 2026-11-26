@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -35,7 +35,7 @@ def test_cross_file_call_comes_from_the_calling_function(calls, lang):
 def test_refresh_keeps_cross_file_calls(tmp_path):
     import shutil
 
-    from nexgraph_engine.index.refresh import refresh_project
+    from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 
     root = tmp_path / "rust"
     shutil.copytree(POLYGLOT / "rust", root)

@@ -2,7 +2,7 @@ import json
 import shutil
 import time
 
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.query.paths import impact_of
 from nexgraph_engine.schema.enums import EdgeType
 

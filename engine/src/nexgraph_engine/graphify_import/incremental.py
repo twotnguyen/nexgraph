@@ -17,7 +17,7 @@ from nexgraph_engine.graphify_import.importer import (
     ParsedGraph, file_records, parse_graph, snapshot_communities, sync_communities,
 )
 from nexgraph_engine.graphify_import.paths import has_nul, report_path, resolve_inside_root, root_realpath
-from nexgraph_engine.impact.tested_by import derive_tested_by
+from nexgraph_engine.index.tested_by import derive_tested_by
 from nexgraph_engine.index.discovery import is_test_path
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, Node

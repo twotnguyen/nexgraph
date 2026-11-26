@@ -13,7 +13,7 @@ from nexgraph_engine.flows.query import flow_json, flows_for_nodes
 from nexgraph_engine.query.contracts import node_json, read_code
 from nexgraph_engine.query.model_view import ModelGraph
 from nexgraph_engine.query.source_policy import SourcePolicy
-from nexgraph_engine.query.terms import NO_MATCH_SUGGESTION, has_words
+from nexgraph_engine.text.terms import NO_MATCH_SUGGESTION, has_words
 from nexgraph_engine.schema.enums import EdgeType
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.search import search

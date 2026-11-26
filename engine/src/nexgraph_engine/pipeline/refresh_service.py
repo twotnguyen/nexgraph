@@ -7,8 +7,8 @@ from collections.abc import Callable
 from contextlib import closing
 
 from nexgraph_engine.index.events import EventBus
-from nexgraph_engine.index.jobs import JobManager, UnknownProject
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.job_manager import JobManager, UnknownProject
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
@@ -45,7 +45,7 @@ class RefreshService:
     def recluster(self, project_id: str) -> int:
         """Gom cụm lại trên đồ thị hiện có (`graphify cluster-only`). Ném IndexAlreadyRunning khi đang index/refresh."""
         from nexgraph_engine.arch.communities import detect_communities
-        from nexgraph_engine.index.jobs import IndexAlreadyRunning
+        from nexgraph_engine.pipeline.job_manager import IndexAlreadyRunning
         if self._registry.get(project_id) is None:
             raise UnknownProject(project_id)
         lock = self._locks.get(project_id)

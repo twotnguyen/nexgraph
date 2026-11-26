@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError, error_response, open_graph_readonly
-from nexgraph_engine.index.jobs import IndexAlreadyRunning, UnknownProject
+from nexgraph_engine.pipeline.job_manager import IndexAlreadyRunning, UnknownProject
 from nexgraph_engine.semantic.chunks import TARGETS, Sources, plan
 from nexgraph_engine.semantic.run import Request as SemanticRequest
 from nexgraph_engine.semantic.run import estimate, make_work

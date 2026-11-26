@@ -12,7 +12,7 @@ from nexgraph_engine.query.common import edges_by_id, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
 from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.report.i18n import check_lang, community_label, translate_questions, translate_surprising, warning_text
-from nexgraph_engine.store.freshness import freshness
+from nexgraph_engine.changes.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
 
 os.environ.setdefault("GRAPHIFY_BACKEND", "none")  # không bao giờ để Graphify tự dò claude-cli (spec F10 §5)

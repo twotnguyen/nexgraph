@@ -1,6 +1,7 @@
 """Cổng Graphify — Truy vấn đồ thị kiểu `graphify serve` và các tool MCP: `serve`, `sections`, `prs`, `reflect`, `paths`, `build`, `cross_repo_*`, `querylog`.
 
-Sinh và kiểm bởi `tests/test_graphify_gateway.py` (ADR 0026 mục A.4–A.5). Mã engine chỉ import Graphify qua đây.
+Kiểm bởi `tests/test_graphify_gateway.py` (ADR 0026 mục A.4–A.5); thêm tên thì sửa tay `NAMES` và khối
+`TYPE_CHECKING`, rồi chụp lại chữ ký. Mã engine chỉ import Graphify qua đây.
 
 Tên được tra **mỗi lần** `from nexgraph_engine.adapters.graphify.serve import X` chạy (module `__getattr__`,
 không lưu lại), nên import trễ trong hàm vẫn tải module vendor lúc gọi như trước và `monkeypatch` trên

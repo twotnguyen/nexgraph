@@ -1,5 +1,5 @@
 from nexgraph_engine.flows.build import MAX_DEPTH, MAX_STEPS, Step, trace
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 
 
 def flows(store):

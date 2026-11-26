@@ -88,7 +88,7 @@ def test_broken_file_does_not_stop_job(copy_fixture, index_project):
 
 
 def test_index_workers_override_does_not_bypass_media(monkeypatch):
-    from nexgraph_engine.index.indexer import index_workers
+    from nexgraph_engine.pipeline.legacy_indexer import index_workers
 
     monkeypatch.setenv("NEXGRAPH_INDEX_WORKERS", "8")
     assert index_workers(1000, True) == 1  # media luôn đơn luồng
@@ -139,7 +139,7 @@ def test_oversized_file_recorded_not_parsed(tmp_path, index_project):
 def test_reindex_is_idempotent(copy_fixture, index_project):
     root = copy_fixture("bookstore_app")
     store, first, _ = index_project(root)
-    from nexgraph_engine.index.indexer import Indexer
+    from nexgraph_engine.pipeline.legacy_indexer import Indexer
     second = Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event()).run()
     assert (second.nodes, second.edges, second.unresolved) == (first.nodes, first.edges, first.unresolved)
     assert store.conn.execute("SELECT count(*) FROM lan_lap_chi_muc WHERE trang_thai='hoan_tat'").fetchone()[0] == 2
@@ -186,7 +186,7 @@ def test_full_index_persists_bindings_and_baseline(copy_fixture, index_project):
     assert b["lib/screens/login_screen.dart::_LoginScreenState#class"]["_auth"] == "AuthService"
     assert len(store.baseline()) == store.stats()["files"] == 9
     assert store.last_scope() is None
-    from nexgraph_engine.index.indexer import Indexer
+    from nexgraph_engine.pipeline.legacy_indexer import Indexer
     Indexer(store, root, on_progress=lambda e: None, cancel=threading.Event(), subdir="lib/services").run()
     assert store.last_scope() == "lib/services"
 
@@ -333,7 +333,7 @@ def _many_py(tmp_path, n=40):
 
 
 def test_parallel_index_equals_serial(tmp_path, index_project, monkeypatch):
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
     root = _many_py(tmp_path / "p")
     monkeypatch.setenv("NEXGRAPH_INDEX_WORKERS", "1")
@@ -346,7 +346,7 @@ def test_parallel_index_equals_serial(tmp_path, index_project, monkeypatch):
 
 
 def test_cancel_during_parallel_index(tmp_path, index_project, monkeypatch):
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     monkeypatch.setattr(indexer, "index_workers", lambda *_: 3)
     cancel = threading.Event()
     store, r, _ = index_project(_many_py(tmp_path / "p", 60), cancel=cancel,
@@ -356,7 +356,7 @@ def test_cancel_during_parallel_index(tmp_path, index_project, monkeypatch):
 
 
 def test_broken_file_in_worker_does_not_stop_job(tmp_path, index_project, monkeypatch):
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     monkeypatch.setattr(indexer, "index_workers", lambda *_: 3)
     root = _many_py(tmp_path / "p", 30)
     (root / "bad.py").write_bytes(b"def broken(:\n\x00\xff")
@@ -367,7 +367,7 @@ def test_broken_file_in_worker_does_not_stop_job(tmp_path, index_project, monkey
 
 def test_stalled_workers_fall_back_without_repeating_completed_files(tmp_path, index_project, monkeypatch):
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     class StalledPool:
@@ -408,7 +408,7 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
     chạy từng tệp một (534 s thay vì 177 s).
     """
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     slow = "m2.py"  # nằm trong lô đầu (m0..m15)
@@ -466,7 +466,7 @@ def test_slow_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_project,
 def test_largest_files_are_batched_first(tmp_path, index_project, monkeypatch):
     """LPT: tệp lớn nhất nằm ở lô gửi đầu tiên, không phải lô cuối theo đường dẫn (PERF-L mục 4)."""
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
 
     submitted: list[list[str]] = []
 
@@ -499,7 +499,7 @@ def test_largest_files_are_batched_first(tmp_path, index_project, monkeypatch):
 
 
 def test_extraction_batches_are_longest_processing_time_first():
-    from nexgraph_engine.index.indexer import DiscoveredFile, extraction_batches
+    from nexgraph_engine.pipeline.legacy_indexer import DiscoveredFile, extraction_batches
 
     def f(rel: str, size: int) -> DiscoveredFile:
         return DiscoveredFile(rel, "python", size, 0, False, False)
@@ -534,7 +534,7 @@ def test_index_reports_skipped_bundle_files(tmp_path, index_project):
 
 def test_batch_deadline_scales_with_batch_bytes():
     """Hạn chờ một lô theo khối lượng: nền 20 s cho lô nhỏ, +60 s mỗi MB (PERF-L mục 2)."""
-    from nexgraph_engine.index.indexer import DiscoveredFile, batch_timeout_seconds
+    from nexgraph_engine.pipeline.legacy_indexer import DiscoveredFile, batch_timeout_seconds
 
     def f(size: int) -> DiscoveredFile:
         return DiscoveredFile("a.js", "javascript", size, 0, False, False)
@@ -554,7 +554,7 @@ def test_batch_deadline_has_a_ceiling_and_ignores_unparsed_bytes():
     watchdog sinh ra để chặn thì index đứng im, `ProgressEvent` không tăng. Byte của tệp oversized cũng
     không được cộng vì `extract_file` chỉ băm rồi trả về, không parse.
     """
-    from nexgraph_engine.index.indexer import DiscoveredFile, batch_timeout_seconds
+    from nexgraph_engine.pipeline.legacy_indexer import DiscoveredFile, batch_timeout_seconds
 
     def f(size: int, oversized: bool = False) -> DiscoveredFile:
         return DiscoveredFile("a.js", "javascript", size, 0, False, oversized)
@@ -570,7 +570,7 @@ def test_heavy_batch_is_not_treated_as_stalled(tmp_path, index_project, monkeypa
     """Lô nặng chạy lâu hơn hạn nền 20 s nhưng trong hạn theo khối lượng thì không bị coi là treo."""
     import threading
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     per_file: list[str] = []
@@ -615,7 +615,7 @@ def test_heavy_batch_is_not_treated_as_stalled(tmp_path, index_project, monkeypa
 def test_hung_file_in_sequential_fallback_is_skipped_with_a_report(tmp_path, index_project, monkeypatch):
     """Worker song song gián đoạn, rồi tệp treo trong fallback: chỉ tệp đó bị bỏ qua, có báo, các tệp khác vẫn vào đồ thị."""
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
 
     hung = "m2.py"
 
@@ -651,7 +651,7 @@ def test_hung_file_in_sequential_fallback_is_skipped_with_a_report(tmp_path, ind
 def test_crashed_extraction_pool_recovers_same_graph(tmp_path, index_project, monkeypatch):
     from concurrent.futures import Future
     from concurrent.futures.process import BrokenProcessPool
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     class CrashedPool:
@@ -683,7 +683,7 @@ def test_submit_error_in_sequential_fallback_reads_remaining_files_in_main_proce
     """Pool fallback không spawn được tiến trình (`submit` ném OSError): đọc tiếp trong tiến trình chính,
     không xử lý lại các tệp đã ghi và job vẫn hoàn tất."""
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     class SubmitFailsPool:
@@ -725,7 +725,7 @@ def test_crashed_batch_keeps_parallel_workers_for_the_rest(tmp_path, index_proje
     """
     from concurrent.futures import Future
     from concurrent.futures.process import BrokenProcessPool
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     crash = "z_crash.py"  # tệp LỚN NHẤT -> LPT đặt vào lô 0
@@ -784,7 +784,7 @@ def test_repeated_pool_creation_failure_gives_up_to_the_per_file_path(tmp_path, 
     tiến trình con không thể spawn thì phải có đường thoát hữu hạn (đường từng-tệp) để job vẫn xong.
     """
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     created = {"parallel": 0}
@@ -827,7 +827,7 @@ def test_two_overdue_batches_do_not_degrade_the_rest(tmp_path, index_project, mo
     tiến trình thật: `serial_files = 245/245`, wall 19,8 s cho 240 tệp lẽ ra chạy 4 worker trong 0,4 s.
     """
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     hung = {"m2.py", "m3.py"}  # hai tệp LỚN NHẤT -> lô 0 và lô 1
@@ -888,7 +888,7 @@ def test_batches_finished_before_a_timeout_are_not_read_again(tmp_path, index_pr
     ~80–100 s trên open-design khi có treo thật.
     """
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     hung = "m7.py"
@@ -936,7 +936,7 @@ def test_timeout_resends_only_batches_without_results(tmp_path, index_project, m
     gửi đúng một lần.
     """
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     hung = {f"h{i}.py" for i in range(5)}
@@ -990,7 +990,7 @@ def test_single_worker_index_has_no_interruption_message(tmp_path, index_project
     luôn khác rỗng ⇒ engine phát "Bộ trích xuất song song gián đoạn…" ngay 0/N dù chưa từng có pool song
     song. `IndexingScreen` render `job.message` ở pha `structure` nên người dùng thấy banner sai.
     """
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
 
     monkeypatch.setattr(indexer, "index_workers", lambda *_: 1)
     root = _many_py(tmp_path / "p", 30)
@@ -1005,7 +1005,7 @@ def test_single_worker_index_has_no_interruption_message(tmp_path, index_project
 
 
 def test_index_workers_policy(monkeypatch):
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     monkeypatch.delenv("NEXGRAPH_INDEX_WORKERS", raising=False)
     monkeypatch.setattr(indexer, "IS_WINDOWS", False)
     monkeypatch.setattr(indexer.os, "cpu_count", lambda: 12)
@@ -1017,7 +1017,7 @@ def test_index_workers_policy(monkeypatch):
 
 
 def test_windows_index_defaults_to_serial_and_accepts_explicit_workers(monkeypatch):
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     monkeypatch.delenv("NEXGRAPH_INDEX_WORKERS", raising=False)
     monkeypatch.setattr(indexer, "IS_WINDOWS", True)
     monkeypatch.setattr(indexer.os, "cpu_count", lambda: 12)
@@ -1054,7 +1054,7 @@ def test_extracting_twice_through_a_symlinked_root_gives_the_same_references(tmp
 def test_submit_runtimeerror_in_parallel_batch_falls_back(tmp_path, index_project, monkeypatch):
     """Minor #27 N3: `submit` ném RuntimeError (pool đã đóng) phải rơi về đọc tuần tự, đủ tệp."""
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     class SubmitRuntimeFailsPool:
@@ -1093,7 +1093,7 @@ def test_submit_runtimeerror_in_parallel_batch_falls_back(tmp_path, index_projec
 def test_future_result_runtimeerror_reports_and_falls_back(tmp_path, index_project, monkeypatch):
     """Minor #27 N1+N3: `future.result()` ném RuntimeError phải báo cho người dùng và đọc tuần tự."""
     from concurrent.futures import Future
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from test_refresh import graph_state
 
     class ResultRuntimeFailsPool:
@@ -1131,7 +1131,7 @@ def test_future_result_runtimeerror_reports_and_falls_back(tmp_path, index_proje
 
 def test_progress_callback_runtimeerror_is_not_swallowed(tmp_path, index_project, monkeypatch):
     """Minor #27 N2: lỗi trong on_progress không được nuốt (job 'loi') và không add_file hai lần."""
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
     from nexgraph_engine.store.graph_store import GraphStore
 
     root = _many_py(tmp_path / "p")
@@ -1159,7 +1159,7 @@ def test_progress_callback_runtimeerror_is_not_swallowed(tmp_path, index_project
 
 def test_serial_fallback_notice_threshold_both_sides():
     """E10 mục 2: ngưỡng báo "song song gián đoạn" — > 5 % tệp hoặc > 200 tệp, hoặc pool hỏng thật."""
-    from nexgraph_engine.index.indexer import serial_fallback_is_noticeable
+    from nexgraph_engine.pipeline.legacy_indexer import serial_fallback_is_noticeable
 
     # open-design (A3b-P3): 16/5.644 tệp = 0,3 % chạy tuần tự ở cuối ⇒ KHÔNG báo người dùng.
     assert serial_fallback_is_noticeable(16, 5644) is False
@@ -1198,7 +1198,7 @@ class _OneHungBatchPool:
 
 
 def _one_hung_batch(tmp_path, index_project, monkeypatch, n_files: int):
-    from nexgraph_engine.index import indexer
+    from nexgraph_engine.pipeline import legacy_indexer as indexer
 
     root = _many_py(tmp_path / "p", n_files)
     # Tệp lớn nhất để LPT đặt nó vào lô đầu tiên (16 tệp) — mô phỏng một lô quá hạn của open-design.
@@ -1213,7 +1213,7 @@ def test_tiny_serial_portion_is_logged_but_not_shown(tmp_path, index_project, mo
     """16/400 tệp (4 %) chạy tuần tự: vẫn ghi log + telemetry, nhưng không có banner cho người dùng."""
     import logging
 
-    with caplog.at_level(logging.INFO, logger="nexgraph_engine.index.indexer"):
+    with caplog.at_level(logging.INFO, logger="nexgraph_engine.pipeline.legacy_indexer"):
         _store, result, events = _one_hung_batch(tmp_path, index_project, monkeypatch, 400)
     assert result.state == "hoan_tat"
     assert result.fallback_serial is True and result.serial_files == 16  # có gián đoạn thật

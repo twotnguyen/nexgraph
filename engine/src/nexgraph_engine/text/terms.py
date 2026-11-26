@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from nexgraph_engine.index.keywords import split_identifier
+from nexgraph_engine.text.keywords import split_identifier
 
 NO_MATCH_SUGGESTION = (
     "Chưa khớp từ khoá nào trong đồ thị. Hãy hỏi bằng tên hàm/lớp/tệp hoặc định danh tiếng Anh, "

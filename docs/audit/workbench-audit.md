@@ -69,7 +69,7 @@ Các lệnh dùng môi trường Python của checkout và lockfile đã commit.
 
 ## Tệp chính
 
-- [Vòng đời dự án](../../engine/src/nexgraph_engine/store/projects.py), [bộ lập chỉ mục](../../engine/src/nexgraph_engine/index/indexer.py) và [định tuyến IPC](../../apps/desktop/src/main/ipc.ts).
+- [Vòng đời dự án](../../engine/src/nexgraph_engine/store/projects.py), [bộ lập chỉ mục](../../engine/src/nexgraph_engine/pipeline/legacy_indexer.py) và [định tuyến IPC](../../apps/desktop/src/main/ipc.ts).
 - [Workspace](../../apps/desktop/src/renderer/src/app/screens/WorkspaceScreen.tsx), [sắc thái hai theme](../../apps/desktop/src/renderer/src/styles.css) và [đồng bộ lựa chọn theme](../../apps/desktop/src/renderer/src/shared/lib/useTheme.ts).
 - [Dự án gần đây](../../apps/desktop/src/renderer/src/app/screens/ProjectsScreen.tsx), [Tổng quan](../../apps/desktop/src/renderer/src/app/screens/ProjectOverviewScreen.tsx), [Tiến độ](../../apps/desktop/src/renderer/src/app/screens/IndexingScreen.tsx) và [Cài đặt](../../apps/desktop/src/renderer/src/app/screens/SettingsScreen.tsx).
 - [Engine launcher](../../apps/desktop/src/main/platform/engine/launcher.ts), [MCP HTTP](../../apps/desktop/src/main/features/integrations/mcp-http.ts), [xuất graph](../../engine/src/nexgraph_engine/export/run.py) và [bridge Code-OSS](../../labs/extension/src/host-command.ts).

@@ -28,7 +28,7 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
 | Phân tích | `query`, `arch`, `flows`, `impact`, `changes`, `prs`, `semantic`, `tour`, `report`, `memory`, `global_graph`, `bridge`, `export` | `analysis` |
 | Lập chỉ mục | `index`, `graphify_import`, `sources`, `dart`, `docs` | `indexing` |
 | Lưu trữ | `store` | `storage` |
-| Lõi | `schema`, `ids`, `errors`, `logging_setup`, `subprocesses` | `core` |
+| Lõi | `schema`, `ids`, `errors`, `logging_setup`, `subprocesses`, `text`, `tasks` | `core` |
 
 **`graphify-gateway`**: chỉ `nexgraph_engine.adapters.graphify` được import `graphify`. **`graphify-gateway-core-only`**: cổng không phụ thuộc tầng nào của engine trừ lõi.
 
@@ -51,6 +51,24 @@ Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tê
   - `index → pipeline`: `jobs`, `refresh_service` chọn đường pipeline, import trễ trong hàm.
   - `graphify_import → impact`: `importer`, `incremental` sinh `TESTED_BY`.
 - `graphify-gateway`: **59 cặp import** từ 32 module thuộc 16 package, tới 36 module `graphify`. Pha 4a (cổng): **giữ**, 74 câu import đổi sang cổng, 102 tên.
+
+### Sau pha 4b (gỡ vòng, 27/11/2026)
+
+- `engine-layers`: **giữ**. Mọi hợp đồng: 4 giữ, 0 vi phạm.
+- Vòng giữa package: 5 → **0**. `tests/test_package_cycles.py` khoá điều này (tìm thành phần liên thông mạnh, tính cả import trễ). Test bắt thêm vòng ba package `arch → semantic → query → arch` mà phép dò vòng hai chiều bỏ sót.
+- Cách gỡ: chỉ chuyển chỗ, không đổi logic. Đồ thị (nút, cạnh theo loại, tệp, luồng, bước luồng, cụm) giống hệt `main` sau lập chỉ mục và refresh trên 5 fixture, ở cả chế độ `graphify` lẫn `legacy`.
+
+| Cũ | Mới | Lý do |
+|---|---|---|
+| `index/keywords.py`, `query/terms.py` | `text/keywords.py`, `text/terms.py` (lõi) | `store` dùng để dựng FTS; là tiện ích văn bản |
+| `index/jobs.py` (`TaskCancelled`, `TaskContext`) | `tasks.py` (lõi) | `semantic` dùng ngữ cảnh job |
+| `index/jobs.py` (phần còn lại), `index/refresh_service.py` | `pipeline/job_manager.py`, `pipeline/refresh_service.py` | Điều phối job, chọn đường pipeline |
+| `index/indexer.py`, `index/refresh.py` | `pipeline/legacy_indexer.py`, `pipeline/legacy_refresh.py` | Bộ trích xuất cũ (`NEXGRAPH_PIPELINE=legacy`) gọi luồng, cụm, `TESTED_BY` sau khi trích xuất, nên là điều phối |
+| `index/indexer.py` (`RACY_SECONDS`, `_git_head`), `index/refresh.py` (`real_file_records`) | `index/source_state.py` | Kiểm độ mới (tầng phân tích) dùng chung |
+| `impact/tested_by.py` | `index/tested_by.py` | Sinh cạnh lúc lập chỉ mục, `graphify_import` dùng |
+| `store/freshness.py` | `changes/freshness.py` | Phân tích độ mới, cần `discover` của tầng lập chỉ mục |
+| `query/contracts.py` (`node_json`, `edge_json`) | `store/json_v1.py` (`contracts` import lại) | `flows` cần mà không phụ thuộc `query` |
+| `semantic/chunks.py` (`membership_signature`) | `ids.py` (`chunks` import lại) | `arch` cần mà không phụ thuộc `semantic` |
 
 ## Desktop (`apps/desktop/.dependency-cruiser.cjs`)
 

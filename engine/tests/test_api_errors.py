@@ -56,7 +56,7 @@ def test_refresh_of_newer_graph_reports_schema_version_code(api, copy_fixture):
 
 def test_refresh_on_readonly_graph_reports_graph_readonly_code(api, copy_fixture, monkeypatch):
     """`chmod 444 graph.db` (toast lỗi refresh nền của desktop) phải có mã riêng để desktop dịch."""
-    import nexgraph_engine.index.refresh_service as refresh_service
+    import nexgraph_engine.pipeline.refresh_service as refresh_service
 
     project_id = _indexed(api, copy_fixture)
 

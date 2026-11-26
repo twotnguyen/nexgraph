@@ -80,7 +80,7 @@ def test_root_with_more_files_than_detail_keeps_most_symbols(tmp_path, index_pro
     spec = {f"f{i}.py": [] for i in range(5)}
     store = make(tmp_path, spec, index_project)
     (tmp_path / "f3.py").write_text("def a():\n    pass\n\ndef b():\n    pass\n")
-    from nexgraph_engine.index.refresh import refresh_project
+    from nexgraph_engine.pipeline.legacy_refresh import refresh_project
     refresh_project(store, tmp_path)
     m = build_map(store.conn, None, detail=2)
     assert len(m["nodes"]) == 2 and m["truncated"] is True and "file:f3.py" in {n["id"] for n in m["nodes"]}

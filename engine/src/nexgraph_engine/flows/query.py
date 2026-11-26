@@ -6,7 +6,7 @@ from typing import Any
 
 from nexgraph_engine.errors import ApiError
 from nexgraph_engine.flows.build import MAX_DEPTH, load_adjacency, trace
-from nexgraph_engine.query.contracts import node_json
+from nexgraph_engine.store.json_v1 import node_json
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Node
 

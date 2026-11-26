@@ -15,16 +15,17 @@ from pathlib import Path
 
 from nexgraph_engine.arch.communities import detect_communities
 from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
-from nexgraph_engine.impact.tested_by import derive_tested_by
+from nexgraph_engine.index.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import flows_before, rebuild_flows, update_flows
 from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
 from nexgraph_engine.index.discovery import SOURCES_PREFIX, is_batch_language
-from nexgraph_engine.index.extra_sources import is_source_path
-from nexgraph_engine.index.indexer import RACY_SECONDS, ExtractedFile, _git_head, add_batch_calls, extract_file
+from nexgraph_engine.index.source_state import RACY_SECONDS, _git_head
+from nexgraph_engine.pipeline.legacy_indexer import ExtractedFile, add_batch_calls, extract_file
 from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
+from nexgraph_engine.index.source_state import real_file_records
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Edge, FileRec, Node
+from nexgraph_engine.store.models import Edge, Node
 
 _RESOLVABLE_KINDS = [k.value for k in (*TYPE_KINDS, NodeKind.FUNCTION)]
 logger = logging.getLogger(__name__)
@@ -40,11 +41,6 @@ class RefreshResult:
     warnings: tuple[str, ...] = ()  # phần phụ (luồng/cụm) phải fallback: API/SSE không được báo "ok" im lặng
     pipeline: str = "legacy"  # đường đã chạy: "legacy" (bộ trích xuất cũ) hay "graphify" (pipeline vendor)
     replaced_files: int = 0  # số tệp thật sự nạp lại (gồm tệp phụ thuộc) — chỉ pipeline mới có
-
-
-def real_file_records(store: GraphStore) -> dict[str, FileRec]:
-    """Tệp trên đĩa đã index; tệp ảo của nguồn bổ sung (W11) chỉ đổi khi index đầy đủ."""
-    return {p: r for p, r in store.file_records().items() if not is_source_path(p)}
 
 
 def _hash(path: Path) -> str | None:

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field, replace
 
 from nexgraph_engine.adapters.graphify.llm import _LLM_JSON_MAX_BYTES
 
-from nexgraph_engine.index.jobs import TaskCancelled, TaskContext
+from nexgraph_engine.tasks import TaskCancelled, TaskContext
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.semantic import cache, ingest
 from nexgraph_engine.semantic.chunks import Chunk, Sources, plan

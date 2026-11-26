@@ -10,7 +10,7 @@ from contextlib import closing
 
 import pytest
 
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.mcp.server import build_server
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
@@ -55,7 +55,7 @@ def test_rebuild_keeps_published_graph_until_commit(api, copy_fixture, tmp_path,
         def fail_flows(*_):
             raise sqlite3.OperationalError("Injected SQLite write failure")
 
-        monkeypatch.setattr("nexgraph_engine.index.indexer.rebuild_flows", fail_flows)
+        monkeypatch.setattr("nexgraph_engine.pipeline.legacy_indexer.rebuild_flows", fail_flows)
 
     jobs = api.app.state.services.jobs
     jobs._indexer_cls = PausedIndexer
@@ -118,8 +118,8 @@ def test_engine_crash_during_rebuild_keeps_old_graph_and_allows_retry(api, copy_
 import os, sqlite3, sys, time
 from pathlib import Path
 from nexgraph_engine.index.events import EventBus
-from nexgraph_engine.index.indexer import Indexer
-from nexgraph_engine.index import jobs
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
+from nexgraph_engine.pipeline import job_manager as jobs
 from nexgraph_engine.store.projects import ProjectRegistry
 
 def pause():
@@ -230,7 +230,7 @@ def test_failed_refresh_keeps_published_graph(api, copy_fixture, monkeypatch):
         raise RuntimeError("Injected refresh failure")
 
     # Sau `set_run_state(..., "phan_giai")` (mốc commit giữa lần refresh) và trước khi xong.
-    monkeypatch.setattr("nexgraph_engine.index.refresh.derive_tested_by", boom)
+    monkeypatch.setattr("nexgraph_engine.pipeline.legacy_refresh.derive_tested_by", boom)
     # TestClient dựng lại exception thay vì trả 500 như server thật.
     with pytest.raises(RuntimeError, match="Injected refresh failure"):
         api.post(f"/v1/projects/{pid}/refresh")

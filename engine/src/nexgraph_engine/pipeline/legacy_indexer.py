@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 import os
 import sqlite3
-import subprocess
 import threading
 import time
 from collections.abc import Callable, Sequence
@@ -25,20 +24,19 @@ from nexgraph_engine.docs.extract import extract_document
 from nexgraph_engine.docs.text import doc_text
 from nexgraph_engine.index.extra_sources import ExtraSources, ingest_sources
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, DiscoveredFile, discover, is_batch_language, sha256_file
-from nexgraph_engine.impact.tested_by import derive_tested_by
+from nexgraph_engine.index.tested_by import derive_tested_by
 from nexgraph_engine.flows.build import rebuild_flows
 from nexgraph_engine.index.generic import extract_generic
 from nexgraph_engine.index.batch_calls import batch_cross_file_calls
 from nexgraph_engine.index.generic import reset_cache_root
 from nexgraph_engine.index.resolver import _package_name, resolve_references
+from nexgraph_engine.index.source_state import RACY_SECONDS, _git_head
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import Edge, FileRec, Node, RunState, UnresolvedRef
-from nexgraph_engine.subprocesses import run_captured
 
 logger = logging.getLogger(__name__)
 
-RACY_SECONDS = 2  # mtime gần hiện tại hơn mức này thì luôn băm lại (hai lần sửa trong cùng một giây)
 
 COMMIT_EVERY = 100
 EXTRACTION_BATCH_SIZE = 16
@@ -178,16 +176,6 @@ def _kill_pool(executor: ProcessPoolExecutor) -> None:
             process.terminate()
     executor.shutdown(wait=False, cancel_futures=True)
 
-
-def _git_head(root: Path) -> str | None:
-    if not (root / ".git").exists():
-        return None
-    try:
-        out = run_captured(["git", "rev-parse", "HEAD"], cwd=root, timeout=10)
-        sha = out.stdout.decode("ascii", "replace").strip()
-        return sha if out.returncode == 0 and 40 <= len(sha) <= 64 else None
-    except (OSError, subprocess.SubprocessError):
-        return None
 
 
 @dataclass(frozen=True)

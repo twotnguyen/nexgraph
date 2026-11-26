@@ -4,8 +4,8 @@ import time
 import pytest
 
 from nexgraph_engine.index.events import EventBus
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent
-from nexgraph_engine.index.jobs import IndexAlreadyRunning, JobManager, UnknownProject
+from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent
+from nexgraph_engine.pipeline.job_manager import IndexAlreadyRunning, JobManager, UnknownProject
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.projects import ProjectRegistry
 

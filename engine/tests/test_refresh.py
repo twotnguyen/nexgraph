@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index import refresh as refresh_mod
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline import legacy_refresh as refresh_mod
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.schema.enums import EdgeType
 
 
@@ -167,7 +167,7 @@ def test_racy_edit_same_second_same_size(tmp_path, index_project):
 
 
 def test_respects_subdir_scope(copy_fixture, tmp_path):
-    from nexgraph_engine.index.indexer import Indexer
+    from nexgraph_engine.pipeline.legacy_indexer import Indexer
     from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.store.graph_store import GraphStore
 

@@ -129,7 +129,7 @@ def test_transcription_cancel_mid_file(tmp_path, monkeypatch):
 
 def test_cancel_during_transcription_stops_index(docs_root, tmp_path, monkeypatch):
     import threading
-    from nexgraph_engine.index.indexer import Indexer
+    from nexgraph_engine.pipeline.legacy_indexer import Indexer
     from nexgraph_engine.schema.db import open_graph_db
     from nexgraph_engine.store.graph_store import GraphStore
     cancel = threading.Event()

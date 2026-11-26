@@ -5,8 +5,7 @@ import time
 from pathlib import Path
 
 from nexgraph_engine.index.discovery import discover, sha256_file
-from nexgraph_engine.index.indexer import _git_head
-from nexgraph_engine.index.refresh import RACY_SECONDS, real_file_records
+from nexgraph_engine.index.source_state import RACY_SECONDS, _git_head, real_file_records
 from nexgraph_engine.store.graph_store import GraphStore
 
 

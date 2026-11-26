@@ -32,7 +32,7 @@ import anyio
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.mcp import graphify_view
 from nexgraph_engine.mcp.server import build_server
 from nexgraph_engine.schema.db import open_graph_db

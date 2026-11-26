@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="cần git trong PATH")
 GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
