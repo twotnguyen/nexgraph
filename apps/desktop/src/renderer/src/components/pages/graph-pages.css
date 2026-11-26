@@ -89,3 +89,49 @@
 .graph-pages-selection dt { color: var(--color-text-muted); }
 .graph-pages-selection dd { margin: 0; overflow-wrap: anywhere; }
 .graph-pages-selection p { margin: 6px 0 0; }
+
+/* NG-ACT-1: 3 hành động trên nút đã chọn */
+.graph-pages-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.graph-pages-action {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.graph-pages-action:hover:not(:disabled) { border-color: var(--color-accent, #4e79a7); }
+.graph-pages-action:disabled { opacity: 0.45; cursor: default; }
+
+/* NG-ACT-3: thanh quay lại khi đang xem đồ thị thành viên một cộng đồng */
+.graph-pages-community-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+  font-size: 12px;
+}
+
+.graph-pages-back {
+  padding: 3px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.graph-pages-community-name { color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

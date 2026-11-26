@@ -3,7 +3,7 @@
 // Chạy trong isolated world của trang; nói chuyện với main world qua postMessage vì
 // `network`/`nodesDS` của graph.html là khai báo top-level, không phải thuộc tính window.
 import { ipcRenderer, webFrame } from 'electron'
-import { GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_THEME_CHANNEL } from '../shared/graph-pages'
+import { COMMUNITY_PAGE_FILE, GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_THEME_CHANNEL } from '../shared/graph-pages'
 
 export const PAGE_NODE_CHANNEL = GRAPH_PAGE_NODE_CHANNEL
 export const PAGE_THEME_CHANNEL = GRAPH_PAGE_THEME_CHANNEL
@@ -16,8 +16,9 @@ const fileName = (): string => {
   }
 }
 const PAGE = fileName()
+// Trang cộng đồng do main sinh cũng có `showInfo`/`nodesDS` như graph.html → dùng chung cầu nối.
 const KIND: 'graph' | 'tree' | 'callflow' | 'other' =
-  PAGE === 'graph.html' ? 'graph' : PAGE === 'GRAPH_TREE.html' ? 'tree' : PAGE.endsWith('-callflow.html') ? 'callflow' : 'other'
+  PAGE === 'graph.html' || PAGE === COMMUNITY_PAGE_FILE ? 'graph' : PAGE === 'GRAPH_TREE.html' ? 'tree' : PAGE.endsWith('-callflow.html') ? 'callflow' : 'other'
 
 /** Bọc `showInfo` — vis-network 9.1.6 không phát `selectNode` khi `selectNodes()` (spike A3 §3.3). */
 const BRIDGE = `(function () {
@@ -28,7 +29,10 @@ const BRIDGE = `(function () {
     try { n = (typeof nodesDS !== 'undefined') ? nodesDS.get(id) : null; } catch (e) {}
     window.postMessage({ __nx: true, kind: 'node', via: via, id: String(id),
       label: n ? n.label : null, source_file: n ? n.source_file : null,
-      source_location: n ? (n.source_location || null) : null, tab: ${JSON.stringify(KIND)} }, '*');
+      source_location: n ? (n.source_location || null) : null,
+      community: n && typeof n.community === 'number' ? n.community : null,
+      member_count: n && typeof n.member_count === 'number' ? n.member_count : null,
+      tab: ${JSON.stringify(KIND)} }, '*');
   }
   var orig = window.showInfo;
   if (typeof orig === 'function' && !window.__nxOrigShowInfo) {
@@ -58,7 +62,7 @@ async function installBridge(): Promise<boolean> {
 
 let lastId = ''
 let lastAt = 0
-function onNode(data: { id: string; label?: string | null; source_file?: string | null; source_location?: string | null; via?: string | null }): void {
+function onNode(data: { id: string; label?: string | null; source_file?: string | null; source_location?: string | null; via?: string | null; community?: number | null; member_count?: number | null }): void {
   const now = Date.now()
   // Một cú bấm đi qua cả showInfo lẫn network click → gửi hai lần.
   if (data.id === lastId && now - lastAt < 250) return
@@ -66,7 +70,9 @@ function onNode(data: { id: string; label?: string | null; source_file?: string 
   lastAt = now
   ipcRenderer.send(PAGE_NODE_CHANNEL, {
     id: data.id, label: data.label ?? null, source_file: data.source_file ?? null,
-    source_location: data.source_location ?? null, via: data.via ?? null, tab: KIND
+    source_location: data.source_location ?? null, via: data.via ?? null, tab: KIND,
+    community: typeof data.community === 'number' ? data.community : null,
+    member_count: typeof data.member_count === 'number' ? data.member_count : null
   })
 }
 

@@ -9,6 +9,7 @@ import {
   PAGE_CSP, VIS_INTEGRITY, discoverGraphPages, handlePageRequest, handleWebRequest,
   injectCsp, isAllowedRequest, lineFromSourceLocation, localLibFor, readGraphJsonIndex, rebrandHtml, resolveGraphPage
 } from '../src/main/graph-pages/pages'
+import { canOpenPageSource } from '../src/shared/graph-pages'
 
 const fixture = () => {
   const root = mkdtempSync(join(tmpdir(), 'ng-pages-'))
@@ -82,6 +83,19 @@ describe('rebrand + CSP ở lớp phục vụ (ADR 0025)', () => {
   it('chèn meta CSP ngay sau <head>', () => {
     const out = injectCsp('<html><head><meta charset="utf-8"></head><body></body></html>', PAGE_CSP)
     expect(out).toContain(`<head><meta http-equiv="Content-Security-Policy" content="${PAGE_CSP.replace(/"/g, '&quot;')}">`)
+  })
+})
+
+describe('hành động Mở mã từ panel nút đã chọn', () => {
+  it('chỉ mở tệp thật nằm trong dự án; nguồn ảo/đường dẫn tuyệt đối/.. đều tắt', () => {
+    expect(canOpenPageSource('src/a.ts')).toBe(true)
+    expect(canOpenPageSource('apps\\desktop\\src\\a.ts')).toBe(true)
+    expect(canOpenPageSource('nguon://cargo')).toBe(false)
+    expect(canOpenPageSource('/etc/passwd')).toBe(false)
+    expect(canOpenPageSource('C:\\Users\\x\\a.ts')).toBe(false)
+    expect(canOpenPageSource('../outside.ts')).toBe(false)
+    expect(canOpenPageSource('src/../../outside.ts')).toBe(false)
+    expect(canOpenPageSource(null)).toBe(false)
   })
 })
 

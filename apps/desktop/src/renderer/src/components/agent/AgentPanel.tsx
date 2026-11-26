@@ -42,6 +42,8 @@ interface Props {
   /** Khung đang nằm bên nào; có thì menu ⋯ hiện mục chuyển sang bên kia. */
   dock?: 'left' | 'right'
   onToggleDock?: () => void
+  /** NG-ACT-1: câu hỏi điền sẵn từ "Hỏi Nex" (nonce đổi mỗi lần bấm). Không tự gửi. */
+  ask?: { text: string; nonce: number } | null
 }
 
 type FileContext = { file: string; line: number; lineEnd?: number }
@@ -129,7 +131,7 @@ export function AgentPanel(props: Props) {
   return <ProjectAgentPanel key={props.projectId} {...props} />
 }
 
-function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, activeFile, getEditorContext, graphContext, beforePrompt, onInspect, onClose, onConnectOpenCode, onOpenCode, onHighlight, onOpenSettings, dock, onToggleDock }: Props) {
+function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, activeFile, getEditorContext, graphContext, beforePrompt, onInspect, onClose, onConnectOpenCode, onOpenCode, onHighlight, onOpenSettings, dock, onToggleDock, ask }: Props) {
   const [view, setView] = useState<'chat' | 'history' | 'settings'>('chat')
   const [cfg, setCfg] = useState<AiSettings | null>(null)
   const [msgs, setMsgs] = useState<Msg[]>([])
@@ -223,6 +225,13 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
     setImages(value.images)
     setCursor(value.text.length)
   }
+  // NG-ACT-1: "Hỏi Nex" từ trang đồ thị điền câu hỏi + ngữ cảnh vào ô soạn, focus, không tự gửi.
+  useEffect(() => {
+    if (!ask) return
+    setView('chat')
+    setComposer({ text: ask.text, attachments: [], images: [] })
+    requestAnimationFrame(() => input.current?.focus())
+  }, [ask?.nonce])
   const updateQueue = (update: (current: QueuedPrompt[]) => QueuedPrompt[]) => {
     queueRef.current = update(queueRef.current)
     setQueue(queueRef.current)
