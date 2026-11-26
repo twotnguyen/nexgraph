@@ -38,6 +38,8 @@ class RefreshResult:
     unchanged: int
     seconds: float
     warnings: tuple[str, ...] = ()  # phần phụ (luồng/cụm) phải fallback: API/SSE không được báo "ok" im lặng
+    pipeline: str = "legacy"  # đường đã chạy: "legacy" (bộ trích xuất cũ) hay "graphify" (pipeline vendor)
+    replaced_files: int = 0  # số tệp thật sự nạp lại (gồm tệp phụ thuộc) — chỉ pipeline mới có
 
 
 def real_file_records(store: GraphStore) -> dict[str, FileRec]:

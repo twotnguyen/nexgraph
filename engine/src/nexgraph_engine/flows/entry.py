@@ -97,12 +97,14 @@ def detect_entry_points(conn: sqlite3.Connection, root: Path, *, only_temp_pks: 
         lines = file_lines.get(c["file"], [])
         decs = decorators_above(lines, c["dong_bat_dau"]) if c["dong_bat_dau"] else []
         label = c["nhan"]
+        # Nhãn nút của pipeline vendor có `()` (`main()`); luật đặt tên khớp theo tên trần như đường cũ.
+        name = label[:-2] if label.endswith("()") else label
 
         kind: str | None = None
         detail: str | None = None
 
         # 1. main
-        if MAIN_NAME_RE.match(label):
+        if MAIN_NAME_RE.match(name):
             kind = "main"
             detail = None
         # 2. route
@@ -114,7 +116,7 @@ def detect_entry_points(conn: sqlite3.Connection, root: Path, *, only_temp_pks: 
             kind = "cli"
             detail = dec.lstrip("@").strip()[:200]
         # 4. event
-        elif (dec := next((d for d in decs if EVENT_RE.search(d)), None)) or EVENT_NAME_RE.match(label):
+        elif (dec := next((d for d in decs if EVENT_RE.search(d)), None)) or EVENT_NAME_RE.match(name):
             kind = "event"
             detail = dec.lstrip("@").strip()[:200] if dec else None
         # 5. root
