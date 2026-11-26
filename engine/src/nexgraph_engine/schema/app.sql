@@ -1,5 +1,5 @@
 -- NexGraph: CSDL cá nhân (thư mục dữ liệu của ứng dụng, app.db).
--- Lược đồ theo docs/superpowers/specs/2026-10-24-nexgraph-csdl-chuan-hoa.md.
+-- Lược đồ theo docs/srs/csdl/2026-10-24-nexgraph-csdl-chuan-hoa.md.
 -- Mỗi kết nối phải chạy: PRAGMA foreign_keys = ON;
 -- Khóa API KHÔNG nằm trong CSDL này; chỉ lưu tên mục trong kho khóa hệ điều hành (muc_keychain).
 

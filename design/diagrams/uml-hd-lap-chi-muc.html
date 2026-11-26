@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Hoạt động lập chỉ mục</title><link rel="stylesheet" href="uml.css"></head><body>
+<svg id="s"></svg>
+<script src="uml.js"></script>
+<script>
+document.fonts.ready.then(() => UML.activity({
+  w: 1100, h: 1000,
+  lanes: [{ id: 'u', label: 'Giao diện' }, { id: 'j', label: 'Tác vụ nền' }, { id: 'x', label: 'Bộ lập chỉ mục' }],
+  nodes: [
+    { id: 's', lane: 'u', y: 80, type: 'start' },
+    { id: 'a1', lane: 'u', y: 140, text: 'Gửi yêu cầu lập chỉ mục cho dự án' },
+    { id: 'a2', lane: 'j', y: 140, text: 'Kiểm tra dự án chưa có lần chạy khác, tạo tác vụ, phát sự kiện' },
+    { id: 'd1', lane: 'j', y: 270, type: 'dec', text: 'Đang chạy?' },
+    { id: 'a3', lane: 'u', y: 270, text: 'Báo dự án đang được lập chỉ mục' },
+    { id: 'x1', lane: 'u', y: 360, type: 'end' },
+    { id: 'a4', lane: 'x', y: 380, text: 'Quét tệp: bỏ thư mục build, tệp sinh tự động, liên kết tượng trưng; theo .gitignore' },
+    { id: 'a5', lane: 'x', y: 500, text: 'Giai đoạn 1: mỗi tệp tạo nút, cạnh cấu trúc và tham chiếu chưa phân giải; ghi CSDL mỗi 100 tệp' },
+    { id: 'd2', lane: 'x', y: 630, type: 'dec', text: 'Có yêu cầu hủy?' },
+    { id: 'a6', lane: 'j', y: 630, text: 'Ghi trạng thái đã hủy, phát sự kiện' },
+    { id: 'x2', lane: 'j', y: 688, type: 'end' },
+    { id: 'a7', lane: 'x', y: 750, text: 'Giai đoạn 2: nối tham chiếu thành cạnh có điểm tin cậy; nhiều ứng viên thì không đoán' },
+    { id: 'a8', lane: 'j', y: 750, text: 'Phát tiến độ và sự kiện đồ thị đã cập nhật qua SSE' },
+    { id: 'a9', lane: 'u', y: 750, text: 'Cập nhật thanh tiến độ, nạp lại đồ thị' },
+    { id: 'a10', lane: 'x', y: 880, text: 'Ghi trạng thái hoàn tất' },
+    { id: 'x3', lane: 'x', y: 960, type: 'end' },
+  ],
+  edges: [
+    { from: 's', to: 'a1' }, { from: 'a1', to: 'a2', mode: 'hh' }, { from: 'a2', to: 'd1' },
+    { from: 'd1', to: 'a3', mode: 'hh', label: 'có' }, { from: 'a3', to: 'x1' },
+    { from: 'd1', to: 'a4', label: 'không' }, { from: 'a4', to: 'a5' }, { from: 'a5', to: 'd2' },
+    { from: 'd2', to: 'a6', mode: 'hh', label: 'có' }, { from: 'a6', to: 'x2' },
+    { from: 'd2', to: 'a7', label: 'không' },
+    { from: 'a7', to: 'a8', mode: 'hh' }, { from: 'a8', to: 'a9', mode: 'hh' },
+    { from: 'a7', to: 'a10' }, { from: 'a10', to: 'x3' },
+  ],
+}
+));
+</script></body></html>

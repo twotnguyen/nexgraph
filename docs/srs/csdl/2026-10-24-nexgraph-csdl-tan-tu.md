@@ -1,5 +1,7 @@
 # NexGraph — Mô tả dữ liệu, tân từ và mô hình thực thể kết hợp (bản nháp)
 
+> **Cập nhật 2026-11-24:** tài liệu này mô tả lược đồ lúc thiết kế (Sprint 2, 24/10/2026). Mã hiện ở lược đồ đồ thị **v8**, CSDL app **v3**, CSDL graph chung **v1** (`engine/src/nexgraph_engine/schema/db.py:8-10`); SQL thiết kế đã cập nhật theo ở `design/database/`.
+
 > Bản nháp cho báo cáo tuần 2, chưa duyệt. Cập nhật 2026-10-24. Nền: `2026-10-24-nexgraph-csdl-design.md` (thực thể, thuộc tính, quyết định đã chốt).
 > Sơ đồ: `design/diagrams/erd-do-thi.html`, `design/diagrams/erd-ca-nhan.html`.
 > Văn phong dưới đây viết theo kiểu báo cáo (không nêu tên repo khác). Tên thực thể/thuộc tính viết không dấu như giáo trình (MSSV, TenKH…).

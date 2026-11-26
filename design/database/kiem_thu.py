@@ -302,7 +302,7 @@ def kiem_thu_ca_nhan():
     duong(P, "Dữ liệu mẫu nạp được (đồng ý trước khi ghi đoạn mã đã gửi)", True)
     for dd in ["C:\\Users\\tinh\\app", "C:/Users/tinh/app", "\\\\server\\share\\app"]:
         duong_chay(P, f"RB24 đường dẫn tuyệt đối hợp lệ: {dd}", con,
-                   "insert into du_an_da_mo values (?, ?, 'x', 'thu_muc_app', 1)", (str(uuid.uuid4()), dd))
+                   "insert into du_an_da_mo (ma_du_an, duong_dan_tuyet_doi, ten, noi_luu, mo_lan_cuoi) values (?, ?, 'x', 'thu_muc_app', 1)", (str(uuid.uuid4()), dd))
     con.execute("savepoint s")
     con.execute("delete from ket_noi_ai where ma_ket_noi=?", (k_acp,))
     duong(P, "Xóa kết nối đặt ma_ket_noi của phiên về NULL và xóa dòng đồng ý",
