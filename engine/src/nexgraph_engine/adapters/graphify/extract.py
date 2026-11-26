@@ -1,6 +1,6 @@
 """Cổng Graphify — Trích xuất AST và phát hiện tệp: `extract`, `detect`, `rcfile`, `extractors`.
 
-Kiểm bởi `tests/test_graphify_gateway.py` (ADR 0026 mục A.4–A.5); thêm tên thì sửa tay `NAMES` và khối
+Kiểm bởi `tests/adapters/test_graphify_gateway.py` (ADR 0026 mục A.4–A.5); thêm tên thì sửa tay `NAMES` và khối
 `TYPE_CHECKING`, rồi chụp lại chữ ký. Mã engine chỉ import Graphify qua đây.
 
 Tên được tra **mỗi lần** `from nexgraph_engine.adapters.graphify.extract import X` chạy (module `__getattr__`,

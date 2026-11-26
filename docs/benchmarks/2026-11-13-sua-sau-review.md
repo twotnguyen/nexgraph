@@ -28,7 +28,7 @@ Kết quả: **3 test files, 23 tests passed**. Kiểm cả thao tác thay key r
 
 ## Engine: phạm vi và nội dung đồ thị
 
-Đã chạy `uv run pytest tests/test_indexer.py::test_typescript_typed_receivers_are_scoped_to_their_function tests/test_freshness.py -q`: **11 passed**. Kiểm receiver typed cùng tên ở hai hàm, hoàn nguyên source về HEAD sau index dirty, thay hash nhưng giữ size/mtime, subdir/exclude và tài liệu được index.
+Đã chạy `uv run pytest tests/pipeline/test_indexer.py::test_typescript_typed_receivers_are_scoped_to_their_function tests/analysis/test_freshness.py -q`: **11 passed**. Kiểm receiver typed cùng tên ở hai hàm, hoàn nguyên source về HEAD sau index dirty, thay hash nhưng giữ size/mtime, subdir/exclude và tài liệu được index.
 
 Freshness dùng discovery theo tuỳ chọn đã index rồi so hash, không chỉ dùng Git diff. Đo trên CSDL/bản sao Hermes có sẵn `/tmp/eval/hermes-fresh.db` và `/tmp/eval/hermes-copy`: **17.260 tệp, 3,714 s**, `changed_files=0`, `stale=false` (một lần, đang chạy kiểm khác; không phải benchmark cô lập). Đây là chi phí thật của việc phát hiện cả thay đổi giữ nguyên size/mtime; không đưa số này vào thời gian refresh 4,7 s cũ hay gọi là đạt mục tiêu 2 s.
 
