@@ -264,6 +264,44 @@ class GraphStore:
             (self._file(rel_path), kind, detail),
         )
 
+    def update_node_span(self, node_id: str, *, kind: NodeKind, line_end: int,
+                         signature: str | None, origin: Origin = Origin.AST) -> str:
+        """Cập nhật loại nút/khoảng dòng/chữ ký sau khi đọc lại tệp nguồn (NG-IMP-2).
+
+        `id_nut` là `<id vendor>#<kind>`: loại nút đổi thì id đổi theo, còn cạnh trỏ `ma_nut`
+        nên không mất liên kết. Trả về `id_nut` mới.
+        """
+        row = self.conn.execute(
+            "SELECT ma_nut, id_nut, nhan, ten_day_du, tai_lieu FROM nut WHERE id_nut = ?", (node_id,)).fetchone()
+        if row is None:
+            raise KeyError(node_id)
+        pk, old_id = row["ma_nut"], row["id_nut"]
+        gid = old_id.rpartition("#")[0]
+        new_id = f"{gid}#{kind.value}" if gid else old_id
+        signature = (signature or None) and signature[:2000]
+        self.conn.execute(
+            "UPDATE nut SET id_nut = ?, loai_nut = ?, dong_ket_thuc = ?, chu_ky = ?, nguon_goc = ? WHERE ma_nut = ?",
+            (new_id, kind.value, line_end, signature, origin.value, pk))
+        self.conn.execute("DELETE FROM nut_fts WHERE rowid = ?", (pk,))
+        if kind != NodeKind.REPOSITORY:
+            self.conn.execute(
+                "INSERT INTO nut_fts (rowid, nhan, ten_day_du, chu_ky, tai_lieu, tu_khoa) VALUES (?, ?, ?, ?, ?, ?)",
+                (pk, row["nhan"], row["ten_day_du"], signature, row["tai_lieu"],
+                 search_keywords(row["nhan"], row["ten_day_du"])))
+        self._node_pk.pop(old_id, None)
+        self._node_pk[new_id] = pk
+        return new_id
+
+    def mark_node_estimated(self, node_id: str) -> None:
+        """Ghi cờ `resolver` cho nút còn trường ước lượng (không đọc lại được nguồn, NG-IMP-2)."""
+        self.conn.execute("UPDATE nut SET nguon_goc = 'resolver' WHERE id_nut = ? AND nguon_goc <> 'llm'",
+                          (node_id,))
+
+    def update_file_stat(self, rel_path: str, *, size: int, mtime: int, sha256: str) -> None:
+        """Làm mới kích thước/mtime/sha256 của tệp đã có, đọc từ đĩa (NG-IMP-2)."""
+        self.conn.execute("UPDATE tep SET kich_thuoc = ?, mtime = ?, ma_bam = ? WHERE duong_dan_tuong_doi = ?",
+                          (size, mtime, sha256, rel_path))
+
     def add_nodes(self, nodes: Iterable[Node]) -> None:
         for n in nodes:
             cur = self.conn.execute(
