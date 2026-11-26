@@ -21,7 +21,7 @@ from nexgraph_engine.graphify_import.enrich import enrich_missing_fields
 from nexgraph_engine.graphify_import.mapping import (
     EXTERNAL_FILE, NEEDS_EVIDENCE, normalise_rel_path, origin_of, parse_location, relation_to_edge,
 )
-from nexgraph_engine.graphify_import.paths import resolve_inside_root, root_realpath
+from nexgraph_engine.graphify_import.paths import report_path, resolve_inside_root, root_realpath
 from nexgraph_engine.ids import file_node_id
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.index.discovery import is_test_path, language_of
@@ -170,7 +170,7 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
             files.add(rel)
         else:
             if isinstance(raw, str) and raw.strip():
-                rejected.add(raw.strip())
+                rejected.add(report_path(raw.strip()))
             if sourceless == "external":
                 need_external = True
     for link in raw_links:
@@ -179,7 +179,7 @@ def parse_graph(graph_json_path: Path, *, root: Path, analysis_path: Path | None
         if rel:
             files.add(rel)
         elif isinstance(raw, str) and raw.strip():
-            rejected.add(raw.strip())
+            rejected.add(report_path(raw.strip()))
     if need_external:
         files.add(EXTERNAL_FILE)
 

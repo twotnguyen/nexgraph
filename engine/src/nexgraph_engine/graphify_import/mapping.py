@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 from nexgraph_engine.graphify_import.paths import (
-    is_absolute_source, is_host_absolute, relative_posix_in_root, resolve_inside_root,
+    has_nul, is_absolute_source, is_host_absolute, relative_posix_in_root, resolve_inside_root,
 )
 from nexgraph_engine.schema.enums import EdgeType, Origin
 
@@ -115,12 +115,14 @@ def normalise_rel_path(raw: object, root, *, cache: dict[str, str] | None = None
 
 
 def _normalise(text: str, root) -> str:
+    if has_nul(text):
+        return ""  # QA #67 vòng 4: NUL làm `resolve()` ném ValueError, hỏng cả lần nạp
     if is_absolute_source(text):
         if not is_host_absolute(text):
             return ""  # cú pháp của nền tảng khác (Windows trên POSIX, `/…` trên Windows): không xác thực được
         try:
             candidate = Path(text).resolve()
-        except (OSError, RuntimeError):
+        except (OSError, RuntimeError, ValueError):
             return ""
         return relative_posix_in_root(Path(root), candidate) or ""
     text = text.replace("\\", "/")

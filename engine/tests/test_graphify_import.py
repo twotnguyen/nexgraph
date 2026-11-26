@@ -605,6 +605,43 @@ def test_foreign_absolute_path_rejected_verbatim(tmp_path):
     assert store.get_node("win_abs#function").file == "__(graphify-external)"
 
 
+def _add_nul_node(graph_json: Path) -> None:
+    """Thêm một nút có `source_file` chứa NUL (graph.json hỏng/bị sửa tay) vào graph.json sẵn có."""
+    data = json.loads(graph_json.read_text(encoding="utf-8"))
+    data["nodes"].append({"id": "nul_node", "label": "nul_node()", "_callable": True, "_origin": "ast",
+                          "source_file": "app.py\x00evil.py", "source_location": "L1"})
+    graph_json.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_nul_source_file_is_rejected_not_fatal(tmp_path):
+    """QA #67 vòng 4: `source_file` chứa NUL không làm hỏng cả lần nạp.
+
+    Trước bản sửa: `ValueError: lstat: embedded null character in path` thoát khỏi `import_graph_json`.
+    Mục NUL vào `rejected_paths` dạng an toàn (NUL viết thành `\\x00`), mục hợp lệ vẫn được nạp.
+    """
+    root = make_project(tmp_path)
+    _add_nul_node(root / ".nexgraph" / "graph.json")
+    store, conn = open_store(tmp_path)
+    report = import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+    assert report.rejected_paths == ("app.py\\x00evil.py",)
+    assert report.files == 5 and report.nodes == 19  # 4 tệp thật + tệp ảo external; 18 nút + nút NUL
+    assert store.get_node("app_greet#function").file == "app.py"
+    assert store.get_node("nul_node#function").file == "__(graphify-external)"
+
+
+def test_nul_changed_path_is_rejected_by_replace_files(tmp_path):
+    """QA #67 vòng 4: `replace_files` với graph.json có NUL và đường thay đổi có NUL vẫn chạy xong."""
+    root = make_project(tmp_path)
+    store, conn = open_store(tmp_path)
+    import_graph_json(store, root, root / ".nexgraph" / "graph.json")
+    _add_nul_node(root / ".nexgraph" / "graph.json")
+    report = replace_files(store, ["app.py", "app.py\x00evil.py"], root / ".nexgraph" / "graph.json")
+    assert report.rejected_files == ("app.py\\x00evil.py",)
+    assert report.files_changed >= 1
+    assert store.get_node("app_greet#function").file == "app.py"
+    assert conn.execute("SELECT count(*) FROM tep WHERE duong_dan_tuong_doi = 'app.py'").fetchone()[0] == 1
+
+
 def test_cli_import_graph(tmp_path, capsys):
     """NG-IMP-4: lệnh nội bộ `nexgraph-engine import-graph --project <root>`."""
     from nexgraph_engine.cli import main

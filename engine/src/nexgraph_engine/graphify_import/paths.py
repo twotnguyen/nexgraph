@@ -47,6 +47,16 @@ def is_host_absolute(text: str, *, windows: bool | None = None) -> bool:
     return is_windows_absolute(text) if on_windows else is_posix_absolute(text)
 
 
+def has_nul(text: str) -> bool:
+    """Chuỗi có NUL: không phải đường dẫn hợp lệ trên nền tảng nào; `os.lstat` ném `ValueError` (QA #67 vòng 4)."""
+    return "\x00" in text
+
+
+def report_path(text: str) -> str:
+    """Dạng an toàn để ghi vào báo cáo nạp: NUL viết thành `\\x00`, phần còn lại giữ nguyên văn."""
+    return text.replace("\x00", "\\x00")
+
+
 def relative_posix_in_root(root: PurePath, candidate: PurePath) -> str | None:
     """Đường tương đối POSIX nếu `candidate` nằm trong `root`; `None` nếu ngoài/bằng gốc.
 
@@ -74,11 +84,11 @@ def resolve_inside_root(root_real: Path, rel_path: str) -> Path | None:
     Chặn trước I/O: đường dẫn tuyệt đối, `..`, và symlink có đích thật ra ngoài gốc.
     `root_real` phải là kết quả của `root_realpath` (đã resolve).
     """
-    if not rel_path or is_absolute_source(rel_path):
+    if not rel_path or has_nul(rel_path) or is_absolute_source(rel_path):
         return None
     try:
         candidate = (root_real / rel_path).resolve()
-    except (OSError, RuntimeError):
+    except (OSError, RuntimeError, ValueError):
         return None
     if candidate == root_real:
         return None

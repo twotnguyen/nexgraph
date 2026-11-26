@@ -16,7 +16,7 @@ from nexgraph_engine.graphify_import.enrich import enrich_missing_fields
 from nexgraph_engine.graphify_import.importer import (
     ParsedGraph, file_records, parse_graph, snapshot_communities, sync_communities,
 )
-from nexgraph_engine.graphify_import.paths import resolve_inside_root, root_realpath
+from nexgraph_engine.graphify_import.paths import has_nul, report_path, resolve_inside_root, root_realpath
 from nexgraph_engine.impact.tested_by import derive_tested_by
 from nexgraph_engine.index.discovery import is_test_path
 from nexgraph_engine.store.graph_store import GraphStore
@@ -84,7 +84,11 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
 
     requested: list[str] = []
     rejected: list[str] = []
+    invalid: list[str] = []  # NUL: không phải đường dẫn, không thể có trong chỉ mục; chỉ ghi báo cáo
     for path in sorted(set(changed_paths)):
+        if has_nul(path):
+            invalid.append(report_path(path))
+            continue
         (requested if resolve_inside_root(root_real, path) is not None else rejected).append(path)
 
     conn = store.conn
@@ -130,5 +134,5 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
         store.set_run_state(run_id, "hoan_tat", files_done=len(reload), files_total=len(reload))
 
     return ReplaceReport(files_changed=len(reload), files_removed=len(removed),
-                         expanded_files=tuple(sorted(expanded)), rejected_files=tuple(sorted(set(rejected))),
+                         expanded_files=tuple(sorted(expanded)), rejected_files=tuple(sorted(set(rejected) | set(invalid))),
                          nodes=nodes_total, edges=inserted, tested_by=tested_by)
