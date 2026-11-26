@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
