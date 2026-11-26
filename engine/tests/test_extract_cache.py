@@ -1,4 +1,5 @@
 """ENG-extract-killed: cache trích xuất của engine bị dừng cứng không nằm lại trong thư mục tạm."""
+import json
 import os
 import signal
 import subprocess
@@ -74,3 +75,30 @@ def test_sweep_keeps_caches_of_live_processes_and_recent_legacy(watched_tmp, mon
         assert left == {live.name, legacy_new.name, other.name}
     finally:
         generic.reset_cache_root()
+
+
+def test_serve_removes_orphan_caches_on_start(watched_tmp, tmp_path):
+    """Đường lập chỉ mục mặc định (pipeline) có thể không bao giờ tạo cache trong tiến trình engine, nên
+    `serve` dọn cache mồ côi ngay khi khởi động — mỗi lần mở app là một lần dọn."""
+    orphan = watched_tmp / f"nexgraph-extract-{_dead_pid()}-mocoi"
+    (orphan / "ast").mkdir(parents=True)
+    env = {**os.environ, "NEXGRAPH_TOKEN": "k" * 40}
+    p = subprocess.Popen([sys.executable, "-m", "nexgraph_engine.cli", "serve", "--data-dir", str(tmp_path / "data"),
+                          "--port", "0"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+                         encoding="utf-8", env=env)
+    ready = None
+    try:
+        for line in p.stdout:
+            if '"ready"' in line:
+                ready = json.loads(line)
+                break
+        assert ready is not None
+        deadline = time.monotonic() + 10
+        while orphan.exists() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert not orphan.exists()
+    finally:
+        if ready:  # Windows: Popen.pid là launcher của venv, engine thật là pid trong dòng ready
+            os.kill(ready["pid"], getattr(signal, "SIGKILL", signal.SIGTERM))
+        p.kill()
+        p.wait(timeout=60)

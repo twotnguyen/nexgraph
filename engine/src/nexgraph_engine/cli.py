@@ -289,6 +289,7 @@ def _serve(data_dir: Path, port: int, exit_on_stdin_close: bool) -> int:
     import uvicorn
 
     from nexgraph_engine.api.app import create_app
+    from nexgraph_engine.index.extract_cache import sweep_orphan_caches
 
     token = os.environ.get("NEXGRAPH_TOKEN", "")
     if len(token) < MIN_TOKEN_LEN:
@@ -305,6 +306,8 @@ def _serve(data_dir: Path, port: int, exit_on_stdin_close: bool) -> int:
     print(json.dumps({"event": "ready", "port": real_port, "pid": os.getpid()}), flush=True)
     logger.info("HTTP API tại 127.0.0.1:%s (pid %s), dữ liệu %s", real_port, os.getpid(), data_dir)
     server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
+    # Dọn cache trích xuất của engine trước bị dừng cứng (ENG-extract-killed); nền, không làm chậm lúc sẵn sàng.
+    threading.Thread(target=sweep_orphan_caches, name="don-cache-trich-xuat", daemon=True).start()
     if exit_on_stdin_close:
         threading.Thread(target=_exit_when_stdin_closes, args=(server,), daemon=True).start()
     server.run(sockets=[sock])
