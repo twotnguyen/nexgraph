@@ -4,7 +4,7 @@ import threading
 import time
 from pathlib import Path
 
-from nexgraph_engine.index.indexer import Indexer, index_workers
+from nexgraph_engine.pipeline.legacy_indexer import Indexer, index_workers
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -56,14 +56,14 @@ def test_requested_workers_respect_media_and_small_projects():
 
 def test_refresh_skips_batch_when_no_generic_file_changed(tmp_path, monkeypatch):
     from nexgraph_engine.index import batch_calls
-    from nexgraph_engine.index.refresh import refresh_project
+    from nexgraph_engine.pipeline.legacy_refresh import refresh_project
     root = tmp_path / "p"
     shutil.copytree(POLYGLOT / "rust", root)
     (root / "x.py").write_text("def f():\n    return 1\n")
     store = _index(root, tmp_path / "g.db")
     calls = []
     real = batch_calls.batch_cross_file_calls
-    monkeypatch.setattr("nexgraph_engine.index.indexer.batch_cross_file_calls",
+    monkeypatch.setattr("nexgraph_engine.pipeline.legacy_indexer.batch_cross_file_calls",
                         lambda *a, **k: calls.append(1) or real(*a, **k))
     time.sleep(1.1)
     (root / "x.py").write_text("def f():\n    return 2\n")

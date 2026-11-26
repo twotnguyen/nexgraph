@@ -9,8 +9,8 @@ import time
 import zlib
 
 from nexgraph_engine.index.discovery import discover
-from nexgraph_engine.index.indexer import Indexer
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
@@ -125,8 +125,11 @@ def test_large_image_does_not_inflate_parser_batch_deadline(tmp_path):
     `index_workers(208, False, 2)`, rồi so `batch_timeout_seconds` của lô có ảnh với lô chỉ có mã.
     Trước khi sửa, lô 15 tệp mã + 1 PNG đòi 300 s (trần) thay vì 20 s như lô không ảnh.
     """
-    from nexgraph_engine.index.indexer import (
-        batch_timeout_seconds, extraction_batches, index_workers)
+    from nexgraph_engine.pipeline.legacy_indexer import (
+        batch_timeout_seconds,
+        extraction_batches,
+        index_workers,
+    )
 
     _write_large_png(tmp_path / "photo.png")
     assert (tmp_path / "photo.png").stat().st_size > 6_000_000

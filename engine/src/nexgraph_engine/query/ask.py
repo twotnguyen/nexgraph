@@ -23,7 +23,7 @@ from nexgraph_engine.bridge.to_nx import Scope, build_nx
 from nexgraph_engine.flows.query import flows_for_nodes
 from nexgraph_engine.query.common import edges_between, nodes_by_pk
 from nexgraph_engine.query.contracts import edge_json, node_json
-from nexgraph_engine.query.terms import (
+from nexgraph_engine.text.terms import (
     NO_MATCH_SUGGESTION,
     drop_vi_stopwords,
     has_vietnamese,

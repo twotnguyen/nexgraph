@@ -19,30 +19,15 @@ from nexgraph_engine.impact.analyze import analyze
 from nexgraph_engine.index.extra_sources import is_source_language, is_source_path
 from nexgraph_engine.index.discovery import DOC_LANGUAGES, FULL_SUPPORT, language_of, sha256_file, source_path
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source, safe_project_path
-from nexgraph_engine.query.terms import NO_MATCH_SUGGESTION, has_words
+from nexgraph_engine.text.terms import NO_MATCH_SUGGESTION, has_words
 from nexgraph_engine.schema.enums import EdgeType, NodeKind
-from nexgraph_engine.store.freshness import freshness
+from nexgraph_engine.changes.freshness import freshness
 from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Node, StoredEdge
+from nexgraph_engine.store.json_v1 import edge_json, node_json
 from nexgraph_engine.store.search import build_match_query, search
 
 MAX_CODE_LINES = 2000
 CONVERTED_LANGUAGES = ("docx", "xlsx", "pdf", "html")  # HTML index qua bản Markdown: đọc lại cùng bản để khớp dòng
-
-
-def node_json(n: Node) -> dict:
-    """Chuyển nút sang JSON v1 (hình dạng ghi ở roadmap, mục "Hình dạng JSON v1")."""
-    return {"id": n.id, "kind": n.kind.value, "label": n.label, "qualified_name": n.qualified_name,
-            "language": n.language, "file": n.file, "line_start": n.line_start, "line_end": n.line_end,
-            "is_test": n.is_test, "origin": n.origin.value, "signature": n.signature, "community": None}
-
-
-def edge_json(se: StoredEdge) -> dict:
-    e = se.edge
-    evidence = {"file": se.file, "line": e.line, "col": e.col} if e.line is not None else None
-    return {"id": se.id, "source": e.source, "target": e.target, "type": e.type.value, "subtype": e.subtype,
-            "confidence": e.confidence.value, "confidence_score": e.confidence_score, "origin": e.origin.value,
-            "evidence": evidence}
 
 
 def stats_json(store: GraphStore, root: Path, sources_dir: Path | None = None) -> dict:

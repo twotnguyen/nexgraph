@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.changes import gitdiff
-from nexgraph_engine.index import refresh_service
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.pipeline import refresh_service
+from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent
 
 needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="cần git trong PATH")
 GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
@@ -82,7 +82,7 @@ def test_refresh_reports_counts_and_events(api, opened):
 
 
 def test_refresh_response_shows_fallback_warning(api, opened, monkeypatch):
-    from nexgraph_engine.index.refresh import RefreshResult
+    from nexgraph_engine.pipeline.legacy_refresh import RefreshResult
 
     real = refresh_service.refresh_project
 

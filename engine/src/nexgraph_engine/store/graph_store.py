@@ -9,7 +9,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from typing import Literal
 
-from nexgraph_engine.index.keywords import search_keywords
+from nexgraph_engine.text.keywords import search_keywords
 from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.models import (

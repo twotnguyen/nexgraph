@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from nexgraph_engine.flows.build import rebuild_flows
-from nexgraph_engine.index.indexer import ProgressEvent
+from nexgraph_engine.pipeline.legacy_indexer import ProgressEvent
 from nexgraph_engine.pipeline.applied import forget_applied
 from nexgraph_engine.pipeline.mode import GRAPHIFY, LEGACY, pipeline_mode
 from nexgraph_engine.pipeline.rebrand import rebrand_exported

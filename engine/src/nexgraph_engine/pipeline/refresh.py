@@ -37,8 +37,8 @@ def _paths(store) -> set[str]:
 def refresh_pipeline(store, root: Path, *, timeout: float | None = None):
     """Chạy `update` rồi nạp lại đúng các tệp manifest báo đổi; trả `RefreshResult` (pipeline=graphify)."""
     from nexgraph_engine.graphify_import import changed_files_from_manifest, replace_files
-    from nexgraph_engine.index.indexer import _git_head
-    from nexgraph_engine.index.refresh import RefreshResult
+    from nexgraph_engine.index.source_state import _git_head
+    from nexgraph_engine.pipeline.legacy_refresh import RefreshResult
 
     root = Path(root)
     out = root / ".nexgraph"

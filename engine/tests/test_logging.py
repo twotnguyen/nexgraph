@@ -11,7 +11,7 @@ import pytest
 
 from nexgraph_engine.api.routes_projects import _last_run
 from nexgraph_engine.index.events import EventBus
-from nexgraph_engine.index.jobs import JobManager
+from nexgraph_engine.pipeline.job_manager import JobManager
 from nexgraph_engine.logging_setup import configure_logging, level_from_env, reset_logging
 from nexgraph_engine.store.projects import ProjectInfo
 
@@ -74,7 +74,7 @@ def test_level_defaults_to_info_and_ignores_garbage(monkeypatch):
 
 
 def test_import_does_not_configure_logging():
-    code = ("import logging, nexgraph_engine.index.jobs, nexgraph_engine.api.app;"
+    code = ("import logging, nexgraph_engine.pipeline.job_manager, nexgraph_engine.api.app;"
             "print(len(logging.getLogger('nexgraph_engine').handlers))")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=_env(), timeout=120)
     assert r.returncode == 0, r.stderr

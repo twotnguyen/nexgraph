@@ -12,6 +12,7 @@ from nexgraph_engine.adapters.graphify.llm import _IMAGE_MEDIA_TYPES, _IMAGE_TOK
 from nexgraph_engine.docs.secrets import redact_doc_secrets
 
 from nexgraph_engine.docs.text import doc_text
+from nexgraph_engine.ids import membership_signature
 from nexgraph_engine.query.source_policy import SourcePolicy
 from nexgraph_engine.semantic import prompt
 from nexgraph_engine.store.graph_store import GraphStore
@@ -152,11 +153,6 @@ def _images(store: GraphStore, src: Sources) -> list[Chunk]:
         chunks.append(Chunk(id=f"c{len(chunks) + 1}", files=[rel], system=system, user=prompt.image_user(rel),
                             images=[base64.standard_b64encode(raw).decode("ascii")], image_types=[media_type]))
     return chunks
-
-
-def membership_signature(files: list[str]) -> str:
-    """Chữ ký thành viên của một cụm (như `.graphify_labels.json.sig`): SHA256 danh sách tệp đã sắp xếp."""
-    return hashlib.sha256("\n".join(sorted(files)).encode("utf-8")).hexdigest()
 
 
 def _labels(store: GraphStore, src: Sources) -> list[Chunk]:

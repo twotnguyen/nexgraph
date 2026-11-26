@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 
 from nexgraph_engine.docs.media import MISSING_WHISPER, has_whisper
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import NodeKind
 from nexgraph_engine.store.graph_store import GraphStore

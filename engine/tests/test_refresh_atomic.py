@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index import refresh as refresh_mod
+from nexgraph_engine.pipeline import legacy_refresh as refresh_mod
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from test_refresh import graph_state
@@ -114,8 +114,8 @@ def test_killed_refresh_keeps_old_graph_and_leaves_no_stage_files(api, copy_fixt
     script = """
 import os, sys, time
 from pathlib import Path
-from nexgraph_engine.index import refresh as refresh_mod
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline import legacy_refresh as refresh_mod
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.publication import graph_writer

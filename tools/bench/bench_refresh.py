@@ -16,8 +16,8 @@ from pathlib import Path
 from nexgraph_engine.changes.model import read_changes
 from nexgraph_engine.impact.analyze import analyze
 from nexgraph_engine.index.discovery import discover
-from nexgraph_engine.index.indexer import Indexer
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 

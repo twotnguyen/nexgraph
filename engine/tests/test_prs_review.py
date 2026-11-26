@@ -3,7 +3,7 @@ import threading
 import pytest
 
 import gh_fake
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.prs.review import pr_detail_json, review_status_json
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore

@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
-import nexgraph_engine.index.indexer as indexer_module
+import nexgraph_engine.pipeline.legacy_indexer as indexer_module
 from nexgraph_engine.arch.communities import detect_communities, file_graph
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 
 
 def write(root: Path, rel: str, text: str) -> None:

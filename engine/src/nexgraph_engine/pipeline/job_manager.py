@@ -9,12 +9,13 @@ from collections.abc import Callable
 
 from nexgraph_engine.index.events import EventBus
 from nexgraph_engine.index.extra_sources import ExtraSources
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent, RunResult
+from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent, RunResult
 from nexgraph_engine.index.scan import resolve_subdir
 from nexgraph_engine.sources import sources_root
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.projects import ProjectInfo, ProjectRegistry
 from nexgraph_engine.store.publication import publish_stage, stage_graph
+from nexgraph_engine.tasks import TaskCancelled, TaskContext
 
 ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting_llm: job semantic đường A chờ main (W9)
 # Job đã xong chỉ giữ để client hỏi kết quả một lúc: giới hạn số lượng và TTL để `_jobs` không phình mãi (REV-19).
@@ -36,30 +37,6 @@ class IndexAlreadyRunning(RuntimeError):
 
 class UnknownProject(KeyError):
     pass
-
-
-class TaskCancelled(Exception):
-    """`work` ném lỗi này (hoặc bất kỳ lỗi nào sau khi `cancel` đã bật) để job kết thúc ở `cancelled`."""
-
-
-class TaskContext:
-    """Truyền vào `work` của `start_task`: cờ huỷ và hàm báo tiến độ."""
-
-    def __init__(self, cancel: threading.Event, report: Callable[[int, int, str], None],
-                 set_state: Callable[[str], None] | None = None) -> None:
-        self.cancel = cancel
-        self._report = report
-        self._set_state = set_state
-
-    def progress(self, done: int, total: int, message: str) -> None:
-        self._report(done, total, message)
-
-    def set_state(self, state: str) -> None:
-        """Chỉ đổi giữa `running` và `waiting_llm`; trạng thái kết thúc do JobManager đặt."""
-        if state not in ("running", "waiting_llm"):
-            raise ValueError(state)
-        if self._set_state is not None:
-            self._set_state(state)
 
 
 class JobManager:

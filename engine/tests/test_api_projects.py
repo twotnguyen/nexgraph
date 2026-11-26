@@ -4,7 +4,7 @@ import threading
 
 import pytest
 
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent
+from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent
 from nexgraph_engine.schema.db import SchemaVersionError
 import time
 
@@ -124,7 +124,7 @@ def test_remove_waits_for_background_refresh(api, copy_fixture):
 
 
 def test_remove_still_busy_when_refresh_outlasts_wait(api, copy_fixture, monkeypatch):
-    from nexgraph_engine.index import jobs as jobs_module
+    from nexgraph_engine.pipeline import job_manager as jobs_module
 
     monkeypatch.setattr(jobs_module, "REMOVE_WAIT_SECONDS", 0.2)
     pid = api.open(copy_fixture("bookstore_app"))["project_id"]

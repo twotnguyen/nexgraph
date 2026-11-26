@@ -3,8 +3,8 @@ import threading
 from pathlib import Path
 
 from nexgraph_engine.index.events import EventBus
-from nexgraph_engine.index.jobs import JobManager
-from nexgraph_engine.index.refresh_service import ProjectLocks, RefreshService
+from nexgraph_engine.pipeline.job_manager import JobManager
+from nexgraph_engine.pipeline.refresh_service import ProjectLocks, RefreshService
 from nexgraph_engine.store.projects import ProjectRegistry
 
 

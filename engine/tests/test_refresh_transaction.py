@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.store.graph_store import GraphStore
 
 

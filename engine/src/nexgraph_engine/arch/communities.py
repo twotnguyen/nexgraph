@@ -49,7 +49,7 @@ def _name(files: list[str], g: nx.Graph, dir_counts: Counter[str]) -> str:
 
 def _ai_name(store: GraphStore, files: list[str]) -> str | None:
     """Tên do AI/người dùng đặt (`nhan_cum`) khi cụm vẫn đúng các tệp như lúc đặt tên (W9)."""
-    from nexgraph_engine.semantic.chunks import membership_signature
+    from nexgraph_engine.ids import membership_signature
     row = store.conn.execute("SELECT ten FROM nhan_cum WHERE chu_ky_thanh_vien = ? ORDER BY nguon = 'nguoi_dung' DESC,"
                              " tao_luc DESC LIMIT 1", (membership_signature(files),)).fetchone()
     return row[0] if row else None

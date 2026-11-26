@@ -23,9 +23,9 @@ from nexgraph_engine.graphify_import.mapping import (
 )
 from nexgraph_engine.graphify_import.paths import report_path, resolve_inside_root, root_realpath
 from nexgraph_engine.ids import file_node_id
-from nexgraph_engine.impact.tested_by import derive_tested_by
+from nexgraph_engine.index.tested_by import derive_tested_by
 from nexgraph_engine.index.discovery import is_test_path, language_of
-from nexgraph_engine.index.keywords import search_keywords
+from nexgraph_engine.text.keywords import search_keywords
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.models import FileRec

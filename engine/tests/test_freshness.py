@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index.refresh import refresh_project
-from nexgraph_engine.store.freshness import freshness
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
+from nexgraph_engine.changes.freshness import freshness
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="cần git trong PATH")
 GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
@@ -40,7 +40,7 @@ def test_fresh_right_after_index(git_project):
 
 def test_source_change_is_detected_without_git_metadata(git_project, monkeypatch):
     store, root = git_project
-    monkeypatch.setattr("nexgraph_engine.store.freshness._git_head", lambda _root: None)
+    monkeypatch.setattr("nexgraph_engine.changes.freshness._git_head", lambda _root: None)
     (root / "util.py").write_text("def helper(x):\n    return x + 3\n")
     result = freshness(store, root)
     assert result["head_commit"] is None
@@ -100,8 +100,8 @@ def test_recent_edit_with_unchanged_stat_is_still_hashed(copy_fixture, index_pro
     root = copy_fixture("py_mini")
     source = root / "util.py"
     # Máy CI chậm lập chỉ mục lâu hơn RACY_SECONDS thật, nên nới ngưỡng để mtime vẫn tính là "vừa mới đây".
-    monkeypatch.setattr("nexgraph_engine.store.freshness.RACY_SECONDS", 3600)
-    monkeypatch.setattr("nexgraph_engine.index.refresh.RACY_SECONDS", 3600)
+    monkeypatch.setattr("nexgraph_engine.changes.freshness.RACY_SECONDS", 3600)
+    monkeypatch.setattr("nexgraph_engine.pipeline.legacy_refresh.RACY_SECONDS", 3600)
     source.touch()  # mtime = bây giờ, như tệp vừa lưu ngay trước khi lập chỉ mục
     store, _, _ = index_project(root)
     stat = source.stat()
@@ -121,7 +121,7 @@ def test_freshness_only_counts_discovered_scope_and_excludes(tmp_path, index_pro
     (tmp_path / "src" / "ignored.py").write_text("def ignored():\n    return 1\n")
     (tmp_path / "outside.py").write_text("def outside():\n    return 1\n")
     store, _, _ = index_project(tmp_path)
-    from nexgraph_engine.index.indexer import Indexer
+    from nexgraph_engine.pipeline.legacy_indexer import Indexer
     import threading
 
     Indexer(store, tmp_path, on_progress=lambda event: None, cancel=threading.Event(),
@@ -138,7 +138,7 @@ def test_freshness_counts_indexed_documents_not_unindexed_media(tmp_path, index_
     (tmp_path / "notes.md").write_text("initial\n")
     (tmp_path / "audio.mp3").write_bytes(b"initial")
     store, _, _ = index_project(tmp_path)
-    from nexgraph_engine.index.indexer import Indexer
+    from nexgraph_engine.pipeline.legacy_indexer import Indexer
     import threading
 
     Indexer(store, tmp_path, on_progress=lambda event: None, cancel=threading.Event(), include_docs=True).run()

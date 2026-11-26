@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.errors import ApiError
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.query.contracts import read_code
 from nexgraph_engine.query.section import section_json
 from nexgraph_engine.query.source_policy import SourcePolicy

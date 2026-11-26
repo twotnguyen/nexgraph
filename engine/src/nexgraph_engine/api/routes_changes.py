@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, Request
 
 from nexgraph_engine.api.errors import ApiError
 from nexgraph_engine.api.routes_graph import model_payload, open_store
-from nexgraph_engine.index.jobs import UnknownProject
+from nexgraph_engine.pipeline.job_manager import UnknownProject
 from nexgraph_engine.query.contracts import changes_json
 
 router = APIRouter(prefix="/v1/projects/{project_id}")

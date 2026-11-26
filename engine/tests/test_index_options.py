@@ -1,7 +1,7 @@
 """W2 Task 5: tuỳ chọn index tệp cấu hình, số tiến trình, index lại từ đầu."""
 import time
 
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 
 
 def _wait(api, job_id):
@@ -16,7 +16,7 @@ def _wait(api, job_id):
 def test_config_flag_persists_for_refresh(tmp_path, index_project, monkeypatch):
     (tmp_path / "a.py").write_text("x = 1\n")
     (tmp_path / "package.json").write_text('{"name": "a", "dependencies": {"left-pad": "1"}}\n')
-    import nexgraph_engine.index.indexer as ix
+    import nexgraph_engine.pipeline.legacy_indexer as ix
     real = ix.Indexer.__init__
     monkeypatch.setattr(ix.Indexer, "__init__", lambda self, *a, **k: real(self, *a, include_config=True, **k))
     store, _, _ = index_project(tmp_path)
@@ -50,7 +50,7 @@ def test_force_starts_a_fresh_ast_cache(tmp_path, index_project, monkeypatch):
     from nexgraph_engine.index import generic
     (tmp_path / "a.go").write_text("package main\nfunc main() {}\n")
     before = generic._cache_root()
-    import nexgraph_engine.index.indexer as ix
+    import nexgraph_engine.pipeline.legacy_indexer as ix
     real = ix.Indexer.__init__
     monkeypatch.setattr(ix.Indexer, "__init__", lambda self, *a, **k: real(self, *a, force=True, **k))
     index_project(tmp_path)

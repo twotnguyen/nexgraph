@@ -3,7 +3,7 @@ import pytest
 
 from nexgraph_engine.query.ask import ask_graph
 from nexgraph_engine.query.context import build_context
-from nexgraph_engine.query.terms import VI_STOPWORDS, has_vietnamese, name_matches
+from nexgraph_engine.text.terms import VI_STOPWORDS, has_vietnamese, name_matches
 from nexgraph_engine.store.search import build_match_query, search
 
 

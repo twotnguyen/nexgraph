@@ -10,7 +10,7 @@ from nexgraph_engine.changes import gitdiff
 from nexgraph_engine.changes.baseline import baseline_changes
 from nexgraph_engine.changes.gitdiff import MAX_FILES, git_changes
 from nexgraph_engine.changes.model import read_changes
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="cần git trong PATH")
 

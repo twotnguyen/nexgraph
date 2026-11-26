@@ -99,7 +99,7 @@ def test_refresh_linked_worktree_reads_its_own_git_dir(api, copy_fixture, tmp_pa
 
 def test_refresh_timeout_exits_124_and_logs(api, copy_fixture, tmp_path):
     root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
-    code = ("import time, nexgraph_engine.index.refresh as r; r.refresh_project = lambda *a, **k: time.sleep(30); "
+    code = ("import time, nexgraph_engine.pipeline.legacy_refresh as r; r.refresh_project = lambda *a, **k: time.sleep(30); "
             "from nexgraph_engine.cli import main; raise SystemExit(main(['refresh', '--project', %r, '--data-dir', %r]))"
             % (str(root), str(appdata)))
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=20,

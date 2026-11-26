@@ -2,7 +2,7 @@
 
 Chạy: uv run --project engine python tools/bench/bench_all.py <thư-mục-project> [--repeat 3] [--index-repeat N] --out perf.json
 Mỗi chỉ số: {median, min, max, n} (ms, trừ khi tên có hậu tố khác). Hàm chưa có thì ghi null.
-Chạy từ thư mục engine/ (script dùng `git` để ghi commit). Cần `if __name__ == "__main__"` vì lập chỉ mục dùng ProcessPoolExecutor.
+Chạy từ gốc repo (script dùng `git` để ghi commit của repo). Cần `if __name__ == "__main__"` vì lập chỉ mục dùng ProcessPoolExecutor.
 """
 import argparse
 import json
@@ -25,8 +25,8 @@ except ImportError:  # Windows không có module này (ENG-04)
 
 from nexgraph_engine.arch.builder import build_view
 from nexgraph_engine.index.discovery import discover
-from nexgraph_engine.index.indexer import Indexer
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 from nexgraph_engine.store.search import search
@@ -158,7 +158,7 @@ def main() -> None:
         m["index_full_ms"] = stat(index_ms)
         m["peak_rss_after_index_mb"] = _rounded(peak_rss_mb())  # tiến trình cha, tích luỹ qua các lần lặp; KHÔNG gồm worker
         m["worker_peak_rss_mb"] = _rounded(peak_children_rss_mb())  # worker lớn nhất (null nếu không đo được)
-        from nexgraph_engine.index.indexer import index_workers
+        from nexgraph_engine.pipeline.legacy_indexer import index_workers
         m["index_workers"] = index_workers(store.stats()["files"], False)
         # Số worker THẬT SỰ dùng và cờ rơi về tuần tự: thiếu hai số này thì bảng NFR so 1 worker với 8
         # worker mà không ai biết (đúng như A5 đã xảy ra — PERF-L mục 4).

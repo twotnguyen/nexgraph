@@ -10,10 +10,10 @@ import threading
 import pytest
 
 from nexgraph_engine.ids import file_node_id
-from nexgraph_engine.index import indexer as indexer_module
+from nexgraph_engine.pipeline import legacy_indexer as indexer_module
 from nexgraph_engine.index.events import EventBus
-from nexgraph_engine.index.indexer import ExtractedFile, Indexer, ProgressEvent, RunResult
-from nexgraph_engine.index.jobs import JobManager
+from nexgraph_engine.pipeline.legacy_indexer import ExtractedFile, Indexer, ProgressEvent, RunResult
+from nexgraph_engine.pipeline.job_manager import JobManager
 from nexgraph_engine.index.scan import scan_project
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.schema.enums import NodeKind

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index.indexer import Indexer
+from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 

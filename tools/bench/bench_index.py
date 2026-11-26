@@ -12,7 +12,7 @@ import threading
 import time
 from pathlib import Path
 
-from nexgraph_engine.index.indexer import Indexer, ProgressEvent, index_workers
+from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent, index_workers
 from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 

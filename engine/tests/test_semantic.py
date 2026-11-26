@@ -641,7 +641,7 @@ def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
 
 def test_load_prs_failure_closes_llm_queue(tmp_path):
     """REV-19: `gh` lỗi trước khi mở CSDL vẫn phải đóng hàng đợi LLM (không rò job đường A)."""
-    from nexgraph_engine.index.jobs import TaskContext
+    from nexgraph_engine.tasks import TaskContext
     from nexgraph_engine.semantic.run import Request, make_work
     from nexgraph_engine.semantic.transport import LlmQueue
 

@@ -1,7 +1,7 @@
 import time
 
 from nexgraph_engine.index.discovery import discover
-from nexgraph_engine.index.refresh import refresh_project
+from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 
 
 def _tree(root):
@@ -45,7 +45,7 @@ def test_large_doc_is_oversized(tmp_path):
 def test_doc_flags_persist_for_refresh(tmp_path, index_project, monkeypatch):
     (tmp_path / "a.py").write_text("x = 1\n")
     (tmp_path / "README.md").write_text("# Title\n")
-    import nexgraph_engine.index.indexer as ix
+    import nexgraph_engine.pipeline.legacy_indexer as ix
     real = ix.Indexer.__init__
     flags = {"include_docs": True}
     monkeypatch.setattr(ix.Indexer, "__init__", lambda self, *a, **k: real(self, *a, **flags, **k))
