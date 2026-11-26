@@ -15,11 +15,12 @@ const EN: Record<string, readonly [title: string, category: string]> = {
   'file.save_as': ['Save As…', 'File'],
   'file.revert': ['Revert File', 'File'],
   'folder.close': ['Close Folder', 'File'],
-  'editor.close_f4': ['Close Editor', 'File'],
+  'editor.close_f4': ['Close Editor', 'Tabs'],
   'window.new': ['New Window', 'Application'],
   'window.close': ['Close Window', 'Application'],
   'theme_selector.toggle': ['Select Theme', 'Appearance'],
   'settings.open': ['Open Settings', 'Application'],
+  'licenses.open': ['Open Source Licenses', 'Application'],
   'keymap.open': ['Open Keyboard Shortcuts', 'Application'],
   'notification.clear': ['Clear All Notifications', 'Application'],
   'notifications.toggle': ['Open Notification Center', 'Application'],
@@ -156,6 +157,11 @@ const EN: Record<string, readonly [title: string, category: string]> = {
   'hierarchy.back': ['Go Back in Call Hierarchy', 'Editor'],
 }
 for (let n = 0; n < 10; n++) EN[`tab.activate_${n}`] = [n ? `Open Tab ${n}` : 'Open Last Tab', 'Tabs']
+
+/** Bản Anh đã đăng ký cho một lệnh (test dùng để kiểm mọi lệnh đều có bản Anh). */
+export function englishCommandLabel(id: string): readonly [title: string, category: string] | undefined {
+  return EN[id]
+}
 
 export function localizeCommand(def: CommandDef): { title: string; category: string } {
   const entry = getLocale() === 'en' ? EN[def.id] : undefined
