@@ -1,6 +1,6 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
-import { createOpenAiOAuth, revokeOpenAiSession, type OpenAiRegistration } from '../src/main/agent/openai-auth'
+import { createOpenAiOAuth, revokeOpenAiSession, type OpenAiRegistration } from '../src/main/features/agent/openai-auth'
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'test-key', alg: 'RS256' }

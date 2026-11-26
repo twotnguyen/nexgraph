@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { resolveEngineCommand } from '../src/main/engine/resolve-command'
+import { resolveEngineCommand } from '../src/main/platform/engine/resolve-command'
 
 it('packaged darwin', () =>
   expect(resolveEngineCommand({ isPackaged: true, resourcesPath: '/R', repoRoot: '/X', platform: 'darwin' })).toEqual({

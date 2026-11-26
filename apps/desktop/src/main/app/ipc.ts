@@ -1,10 +1,10 @@
 import { app, dialog } from 'electron'
 import { isAbsolute, relative, sep } from 'node:path'
-import { isMenuLocale, pickFileTitle } from '../app-menu-labels'
-import { getMenuLocale, setMenuLocale } from '../app-menu-locale'
-import { readCurrentLicenses } from '../licenses'
+import { isMenuLocale, pickFileTitle } from './app-menu-labels'
+import { getMenuLocale, setMenuLocale } from './app-menu-locale'
+import { readCurrentLicenses } from './licenses'
 import type { IpcContext } from '../platform/ipc-context'
-import { UserError } from '../user-error'
+import { UserError } from '../platform/user-error'
 
 /** Kênh của khung ứng dụng: chọn thư mục/tệp, cửa sổ mới, menu native, giấy phép, phiên bản. */
 export function registerAppIpc(ctx: IpcContext): void {

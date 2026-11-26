@@ -21,12 +21,12 @@ vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: () => ({}) },
   dialog: {}, shell: {}, safeStorage: { isEncryptionAvailable: () => false }
 }))
-vi.mock('../src/main/engine/api', async (original) => {
-  const actual = await original<typeof import('../src/main/engine/api')>()
+vi.mock('../src/main/platform/engine/api', async (original) => {
+  const actual = await original<typeof import('../src/main/platform/engine/api')>()
   return { ...actual, EngineApi: class { listProjects() { return [{ project_id: 'p1', path: h.root }] } } }
 })
-vi.mock('../src/main/mcp-http', () => ({ McpHttpManager: class {} }))
-vi.mock('../src/main/agent/accounts', () => ({ AccountService: {
+vi.mock('../src/main/features/integrations/mcp-http', () => ({ McpHttpManager: class {} }))
+vi.mock('../src/main/features/agent/accounts', () => ({ AccountService: {
   create: async () => ({
     getConsentTarget: async () => ({ provider: h.piProvider, baseUrl: 'https://api.example.com/v1' }),
     getSelectedModel: () => ({ provider: h.piProvider, id: h.piModel }), hasKey: () => true,
@@ -34,7 +34,7 @@ vi.mock('../src/main/agent/accounts', () => ({ AccountService: {
     selectModel: (...args: unknown[]) => h.piSelect(...args), setApiKey: (...args: unknown[]) => h.setApiKey(...args)
   })
 } }))
-vi.mock('../src/main/agent/session', () => ({
+vi.mock('../src/main/features/agent/session', () => ({
   AgentError: class extends Error { constructor(public code: string, message: string) { super(message) } },
   AgentService: class {
     selectionChanged() { h.piChanged() }
@@ -44,7 +44,7 @@ vi.mock('../src/main/agent/session', () => ({
     hasActiveTurn() { return h.piBusy }
   }
 }))
-vi.mock('../src/main/gemini/connection', () => ({ GeminiConnectionManager: class {
+vi.mock('../src/main/features/agent/gemini/connection', () => ({ GeminiConnectionManager: class {
   status() { return h.status() }
   connectionIdentity() { return h.cid }
   selectedModel() { return h.model }
@@ -55,7 +55,7 @@ vi.mock('../src/main/gemini/connection', () => ({ GeminiConnectionManager: class
   login() { return h.googleLogin() }
   cancelLogin() { h.cancelLogin() }
 } }))
-vi.mock('../src/main/gemini/service', () => ({ GeminiAgentService: class {
+vi.mock('../src/main/features/agent/gemini/service', () => ({ GeminiAgentService: class {
   selectionChanged() { h.googleChanged() }
   testConnection() { return h.googleTest() }
   prompt(...args: unknown[]) { return h.googlePrompt(...args) }

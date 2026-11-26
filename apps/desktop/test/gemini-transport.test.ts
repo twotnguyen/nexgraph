@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
-import { AcpClient, safeGeminiMessage } from '../src/main/gemini/acp-client'
+import { AcpClient, safeGeminiMessage } from '../src/main/features/agent/gemini/acp-client'
 
 class Child extends EventEmitter {
   stdout = new PassThrough()

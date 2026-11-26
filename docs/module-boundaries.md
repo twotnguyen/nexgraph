@@ -63,7 +63,7 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
   - `state/appMenuBridge.ts` → `components/common/NotificationCenter.tsx`.
 - **6 cảnh báo vòng:**
   - `components/common/icons.tsx` ↔ `screens/ProjectOverviewScreen.tsx`, kéo theo 4 dialog/card của màn Tổng quan.
-  - `main/git/operations.ts` ↔ `main/git/repo.ts`.
+  - `main/git/operations.ts` ↔ `main/git/repo.ts` (sau pha 2b: `main/features/git/`).
 - Các luật ranh giới tiến trình và `shared` đang giữ.
 
 ### IPC của main theo tính năng (pha 2a)
@@ -75,7 +75,7 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
 - Hàm vòng đời (`closeAllAgents`, `stopAllWatchers`, `stopEditorProcesses`…) vẫn xuất từ `ipc.ts` cho `index.ts` và `labs/extension`.
 - `test/ipc-channels.test.ts` khoá: tập kênh main đăng ký bằng đúng tập kênh preload gọi, không kênh nào đăng ký hai lần, việc dọn khi gỡ dự án chạy đủ.
 
-Pha 2b chuyển các thư mục còn lại của `src/main` (agent, ai, engine, fs, git, …) vào `features/<x>/` và `platform/`.
+Pha 2b đưa mọi module của `src/main` vào ba nhóm: `app/` (lắp ráp: menu, cửa sổ, khởi động, smoke), `platform/` (dùng chung: engine, an toàn đường dẫn, lỗi, cài đặt), `features/<x>/` (mã và IPC của một tính năng). Ở gốc chỉ còn `index.ts` (điểm vào electron-vite) và `ipc.ts`. Test của main vẫn ở `apps/desktop/test/`.
 
 ## Đường dẫn đã chuyển
 
@@ -91,3 +91,14 @@ Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài re
 | 1 | `scripts/ci/` | `tools/ci/` | `pnpm rules:report`, `node tools/ci/check-version.mjs <tag>` |
 | 1 | `engine/scripts/{bench_all,bench_index,bench_refresh,bench_search_arch,demo_check}.py` | `tools/bench/` | Chạy từ gốc repo: `env -u PYTHONPATH uv run --project engine python tools/bench/<script>.py` |
 | 1 | `engine/scripts/{eval_sample,eval_score}.py` | `tools/eval/` | Như trên |
+| 2 | `apps/desktop/src/main/ipc.ts` (1.338 dòng) | `ipc.ts` (lắp ráp) + `app/ipc.ts` + `features/<x>/ipc.ts` | Pha 2a, xem mục IPC ở trên |
+| 2 | `src/main/engine/` | `src/main/platform/engine/` | Tiến trình engine, HTTP client |
+| 2 | `src/main/{user-error,ipc-result,process-env,external-links}.ts`, `fs/project-fs.ts`, `watch/ignore.ts`, `ai/settings.ts` | `src/main/platform/` (cùng tên; `ai/settings.ts` → `platform/settings.ts`) | Dùng chung bởi nhiều tính năng |
+| 2 | `src/main/{appMenu,app-menu-labels,app-menu-locale,windows,unload-guard,licenses,license-file,smoke,smoke-desktop,dev-hooks}.ts`, `security/permissions.ts` | `src/main/app/` (cùng tên; `security/permissions.ts` → `app/permissions.ts`) | Lắp ráp app |
+| 2 | `src/main/agent/`, `gemini/`, `agent-router.ts`, `window-owners.ts`, `gemini-consent.ts`, `ai/{citations,tools}.ts` | `src/main/features/agent/` (`gemini/` → `features/agent/gemini/`) | |
+| 2 | `src/main/ai/semantic-{models,runner,usage}.ts` | `src/main/features/semantic/` | |
+| 2 | `src/main/fs/project-operations.ts`, `search/text-search.ts` | `src/main/features/files/` | |
+| 2 | `src/main/watch/{error-notice,project-watcher}.ts`, `index-options.ts`, `index-sources.ts` | `src/main/features/indexing/` | |
+| 2 | `src/main/{mcp-http,git-hook,integrations}.ts` | `src/main/features/integrations/` | |
+| 2 | `src/main/{collab,debug,extensions,git,lsp,terminal,graph-pages}/` | `src/main/features/<cùng tên>/` | |
+| 2 | `src/main/tasks/` | `src/main/features/terminal/tasks/` | |

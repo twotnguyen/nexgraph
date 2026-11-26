@@ -5,9 +5,9 @@ Mỗi mục ghi nguồn, giấy phép, commit được dùng và phần nào c�
 ## Antigravity CLI
 
 - Nguồn: https://antigravity.google/download và manifest tải xuống chính thức của Google.
-- Phiên bản: `1.5.11`, binary chính thức không sửa đổi, tải theo yêu cầu khi thiết lập tài khoản Google. URL và SHA-512 từng nền tảng được ghim trong `apps/desktop/src/main/gemini/installation.ts`.
+- Phiên bản: `1.5.11`, binary chính thức không sửa đổi, tải theo yêu cầu khi thiết lập tài khoản Google. URL và SHA-512 từng nền tảng được ghim trong `apps/desktop/src/main/features/agent/gemini/installation.ts`.
 - Đây là phần mềm riêng của Google; giấy phép Apache-2.0 của NexGraph không áp dụng cho binary CLI. NexGraph không chép mã CLI vào nguồn ứng dụng.
-- Dùng ở: `apps/desktop/src/main/gemini/` khởi chạy `agy acp` theo [giao diện tích hợp được Google hỗ trợ](https://antigravity.google/docs/ide/extensions/acp/), kết nối công cụ NexGraph bằng MCP HTTP có xác thực. OAuth và vòng suy luận do CLI chính thức thực hiện.
+- Dùng ở: `apps/desktop/src/main/features/agent/gemini/` khởi chạy `agy acp` theo [giao diện tích hợp được Google hỗ trợ](https://antigravity.google/docs/ide/extensions/acp/), kết nối công cụ NexGraph bằng MCP HTTP có xác thực. OAuth và vòng suy luận do CLI chính thức thực hiện.
 
 ## Graphify
 
@@ -268,7 +268,7 @@ SOFTWARE.
 - Nguồn: https://github.com/sst/opencode
 - Phiên bản: `2.4.1` (binary chạy thành tiến trình con, không sửa mã).
 - Giấy phép: MIT, Copyright (c) 2025 opencode. Bản đầy đủ nguyên văn từ `LICENSE` của gói `opencode` 2.4.1.
-- Dùng ở: runtime agent Nex — `apps/desktop/src/main/agent/nex/` khởi chạy `opencode serve` cục bộ với `HOME`/`XDG_*`/`OPENCODE_CONFIG_DIR` riêng; binary đóng gói ở N3-P1.
+- Dùng ở: runtime agent Nex — `apps/desktop/src/main/features/agent/nex/` khởi chạy `opencode serve` cục bộ với `HOME`/`XDG_*`/`OPENCODE_CONFIG_DIR` riêng; binary đóng gói ở N3-P1.
 
 ```text
 MIT License
@@ -384,7 +384,7 @@ SOFTWARE.
 - Nguồn: https://github.com/earendil-works/pi
 - Phiên bản: `1.5.2` (gói npm `@earendil-works/pi-coding-agent`, dùng qua API công khai, không chép mã)
 - Giấy phép: MIT, Copyright (c) 2025 Mario Zechner. Áp dụng cả các gói pi 1.5.2 đi kèm: `pi-agent-core`, `pi-ai`, `pi-codemode`, `pi-mcp`, `pi-tui` (cùng scope `@earendil-works`).
-- Dùng ở: `apps/desktop/src/main/agent/` — harness agent lập trình chạy trong tiến trình main; NexGraph đăng ký tool đồ thị và cổng duyệt qua extension.
+- Dùng ở: `apps/desktop/src/main/features/agent/` — harness agent lập trình chạy trong tiến trình main; NexGraph đăng ký tool đồ thị và cổng duyệt qua extension.
 
 ```text
 MIT License
@@ -415,7 +415,7 @@ SOFTWARE.
 - Nguồn: https://github.com/sinclairzx81/typebox
 - Phiên bản: `1.3.27` (gói npm `typebox`, dùng qua API công khai, không chép mã)
 - Giấy phép: MIT, Copyright (c) 2017-2026 Haydn Paterson.
-- Dùng ở: `apps/desktop/src/main/agent/extension.ts` — bọc JSON Schema của tool đồ thị thành tham số tool của pi.
+- Dùng ở: `apps/desktop/src/main/features/agent/extension.ts` — bọc JSON Schema của tool đồ thị thành tham số tool của pi.
 
 ## monaco-vim
 
@@ -429,14 +429,14 @@ SOFTWARE.
 - Nguồn: https://github.com/typescript-language-server/typescript-language-server, https://github.com/microsoft/TypeScript
 - Phiên bản: `6.1.0` và `5.9.3` (chạy thành tiến trình con, không sửa mã)
 - Giấy phép: Apache-2.0 (typescript-language-server: Copyright (c) TypeFox và các tác giả; TypeScript: Copyright (c) Microsoft Corporation).
-- Dùng ở: `apps/desktop/src/main/lsp/manager.ts` — định nghĩa, gợi ý, hover cho tệp TS/JS trong editor.
+- Dùng ở: `apps/desktop/src/main/features/lsp/manager.ts` — định nghĩa, gợi ý, hover cho tệp TS/JS trong editor.
 
 ## Pyright
 
 - Nguồn: https://github.com/microsoft/pyright
 - Phiên bản: `1.1.414` (chạy `pyright-langserver` thành tiến trình con, không sửa mã)
 - Giấy phép: MIT, Copyright (c) Microsoft Corporation.
-- Dùng ở: `apps/desktop/src/main/lsp/manager.ts` — định nghĩa, gợi ý, hover cho tệp Python trong editor.
+- Dùng ở: `apps/desktop/src/main/features/lsp/manager.ts` — định nghĩa, gợi ý, hover cho tệp Python trong editor.
 
 ## xterm.js
 
@@ -450,20 +450,20 @@ SOFTWARE.
 - Nguồn: https://github.com/microsoft/node-pty
 - Phiên bản: `1.2.0-beta.18` (dùng qua API công khai, không chép mã; bản dựng N-API có sẵn trong gói)
 - Giấy phép: MIT, Copyright (c) 2012-2015 Christopher Jeffrey, Copyright (c) 2016 Daniel Imms, Copyright (c) Microsoft Corporation.
-- Dùng ở: `apps/desktop/src/main/terminal/manager.ts` — chạy shell cho terminal tích hợp.
+- Dùng ở: `apps/desktop/src/main/features/terminal/manager.ts` — chạy shell cho terminal tích hợp.
 
 ## js-debug và debugpy (tải khi người dùng bấm "Tải về" trong bảng Gỡ lỗi, không đóng gói sẵn)
 
 - js-debug: https://github.com/microsoft/vscode-js-debug, bản `js-debug-dap-v1.140.1` (MIT, Copyright (c) Microsoft Corporation). Chạy `dapDebugServer.js` bằng Node của Electron làm debug adapter cho Node.js.
 - debugpy: https://github.com/microsoft/debugpy, bản `1.8.22` (wheel `py2.py3-none-any`, MIT, Copyright (c) Microsoft Corporation). Chạy `python -m debugpy.adapter` bằng Python của người dùng.
-- Cả hai tải từ địa chỉ cố định, kiểm SHA-256 rồi giải nén vào thư mục dữ liệu của app (`debug-adapters/`); giấy phép đi kèm trong thư mục giải nén. Dùng ở `apps/desktop/src/main/debug/`.
+- Cả hai tải từ địa chỉ cố định, kiểm SHA-256 rồi giải nén vào thư mục dữ liệu của app (`debug-adapters/`); giấy phép đi kèm trong thư mục giải nén. Dùng ở `apps/desktop/src/main/features/debug/`.
 
 ## Yjs, y-monaco, y-protocols, ws
 
 - Nguồn: https://github.com/yjs/yjs, https://github.com/yjs/y-monaco, https://github.com/yjs/y-protocols, https://github.com/websockets/ws
 - Phiên bản: yjs `13.6.33`, y-monaco `0.1.6`, y-protocols `1.0.7`, ws `8.23.0` (dùng qua API công khai, không chép mã)
 - Giấy phép: MIT (Yjs, y-monaco, y-protocols: Copyright (c) Kevin Jahns; ws: Copyright (c) Einar Otto Stangvik và các tác giả).
-- Dùng ở: `apps/desktop/src/renderer/src/state/collab.ts` (CRDT và con trỏ), `apps/desktop/src/main/collab/hub.ts` (WebSocket trong LAN).
+- Dùng ở: `apps/desktop/src/renderer/src/state/collab.ts` (CRDT và con trỏ), `apps/desktop/src/main/features/collab/hub.ts` (WebSocket trong LAN).
 
 
 ## react-markdown

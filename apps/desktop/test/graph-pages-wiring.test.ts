@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   PAGES_PARTITION, attachGraphPageWebview, bindGraphPageGuest, guestBinding, installGraphPagesProtocol,
   navigationAllowed, pageUrl, projectFromPageUrl, wireGraphPageContents
-} from '../src/main/graph-pages/protocol'
+} from '../src/main/features/graph-pages/protocol'
 
 vi.mock('electron', () => ({ protocol: { registerSchemesAsPrivileged: vi.fn() } }))
 

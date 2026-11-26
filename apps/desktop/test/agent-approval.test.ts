@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, realpathSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { APPROVAL_TIMEOUT_MS, createApprovalGate, needsExplicitApproval, type ApprovalGate } from '../src/main/agent/approval'
+import { APPROVAL_TIMEOUT_MS, createApprovalGate, needsExplicitApproval, type ApprovalGate } from '../src/main/features/agent/approval'
 import type { AgentMode, ApprovalRequest } from '../src/shared/agent-types'
 
 const input: Record<string, unknown> = {

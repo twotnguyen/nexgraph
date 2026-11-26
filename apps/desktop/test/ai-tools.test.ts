@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EngineApiError, type EngineApi } from '../src/main/engine/api'
-import { MAX_TOOL_CHARS, TOOL_DEFS, TOOL_RESULT_CLOSE, TOOL_RESULT_OPEN, runTool } from '../src/main/ai/tools'
+import { EngineApiError, type EngineApi } from '../src/main/platform/engine/api'
+import { MAX_TOOL_CHARS, TOOL_DEFS, TOOL_RESULT_CLOSE, TOOL_RESULT_OPEN, runTool } from '../src/main/features/agent/tools'
 
 /** Bỏ delimiter framing để kiểm nội dung JSON bên trong. */
 const payload = (s: string): string => {

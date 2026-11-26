@@ -2,8 +2,8 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AccountService } from '../../../src/main/agent/accounts'
-import { SecretStore, type SecretBox } from '../../../src/main/ai/settings'
+import { AccountService } from '../../../src/main/features/agent/accounts'
+import { SecretStore, type SecretBox } from '../../../src/main/platform/settings'
 
 // DNS giả: hostname công khai phân giải tới IP công khai; IP literal giữ nguyên để test chặn link-local.
 vi.mock('node:dns/promises', () => ({

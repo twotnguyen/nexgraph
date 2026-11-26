@@ -30,8 +30,8 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() }
 }))
 
-vi.mock('../src/main/engine/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/engine/api')>()
+vi.mock('../src/main/platform/engine/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/platform/engine/api')>()
   class FakeEngineApi {
     listProjects() { return h.projects }
     removeProject(pid: string) { h.removed.push(pid); h.projects = h.projects.filter((p) => p.project_id !== pid); return Promise.resolve() }
@@ -39,8 +39,8 @@ vi.mock('../src/main/engine/api', async (importOriginal) => {
   return { ...actual, EngineApi: FakeEngineApi }
 })
 
-vi.mock('../src/main/mcp-http', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/mcp-http')>()
+vi.mock('../src/main/features/integrations/mcp-http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/features/integrations/mcp-http')>()
   class FakeMcpHttpManager {
     start() { return Promise.resolve({ url: 'http://127.0.0.1:1/mcp', key: 'k' }) }
     stop(pid: string) { h.mcpStops.push(pid); return Promise.resolve() }
@@ -50,7 +50,7 @@ vi.mock('../src/main/mcp-http', async (importOriginal) => {
   return { ...actual, McpHttpManager: FakeMcpHttpManager }
 })
 
-vi.mock('../src/main/watch/project-watcher', () => ({
+vi.mock('../src/main/features/indexing/project-watcher', () => ({
   ProjectWatcher: class {
     constructor(private readonly o: { root: string }) {}
     start() {}

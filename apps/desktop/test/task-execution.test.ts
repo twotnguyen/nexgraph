@@ -2,10 +2,10 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { createApprovalGate } from '../src/main/agent/approval'
-import { previewWrite } from '../src/main/agent/extension'
-import { CheckpointStore } from '../src/main/agent/checkpoints'
-import { detectProjectCommands, TaskExecution } from '../src/main/agent/process-tools'
+import { createApprovalGate } from '../src/main/features/agent/approval'
+import { previewWrite } from '../src/main/features/agent/extension'
+import { CheckpointStore } from '../src/main/features/agent/checkpoints'
+import { detectProjectCommands, TaskExecution } from '../src/main/features/agent/process-tools'
 import type { AgentMode, ApprovalRequest } from '../src/shared/agent-types'
 
 function fixture() {

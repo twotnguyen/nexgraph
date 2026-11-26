@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
-import { startEngine, type EngineCommand } from '../src/main/engine/launcher'
-import { runSmoke } from '../src/main/smoke'
+import { startEngine, type EngineCommand } from '../src/main/platform/engine/launcher'
+import { runSmoke } from '../src/main/app/smoke'
 
 const tmp = () => mkdtempSync(join(tmpdir(), 'ng-'))
 const fakeCmd: EngineCommand = {

@@ -4,8 +4,8 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { projectOperations } from '../src/main/fs/project-operations'
-import { toIpcResult } from '../src/main/ipc-result'
+import { projectOperations } from '../src/main/features/files/project-operations'
+import { toIpcResult } from '../src/main/platform/ipc-result'
 
 let root: string
 let outside: string

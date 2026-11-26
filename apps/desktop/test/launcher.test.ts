@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { getHealth } from '../src/main/engine/client'
-import { EngineStartError, engineEnv, startEngine, type EngineCommand } from '../src/main/engine/launcher'
+import { getHealth } from '../src/main/platform/engine/client'
+import { EngineStartError, engineEnv, startEngine, type EngineCommand } from '../src/main/platform/engine/launcher'
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>()

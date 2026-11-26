@@ -1,10 +1,10 @@
 import { ipcMain, webContents } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { PAGE_NODE_CHANNEL, deliverLateSelection, handlePageNodeMessage } from '../../graph-pages/bridge'
-import { discoverGraphPages, readGraphJsonIndex } from '../../graph-pages/pages'
-import { PAGES_PARTITION, guestBinding } from '../../graph-pages/protocol'
-import { pageRoots } from '../../graph-pages/roots'
+import { PAGE_NODE_CHANNEL, deliverLateSelection, handlePageNodeMessage } from './bridge'
+import { discoverGraphPages, readGraphJsonIndex } from './pages'
+import { PAGES_PARTITION, guestBinding } from './protocol'
+import { pageRoots } from './roots'
 import type { IpcContext } from '../../platform/ipc-context'
 
 /** Trang đồ thị HTML trong `<root>/.nexgraph/` (thẻ Sơ đồ, ADR 0024). */

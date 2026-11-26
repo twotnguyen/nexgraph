@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { shouldIgnore } from '../src/main/watch/ignore'
-import { ProjectWatcher } from '../src/main/watch/project-watcher'
+import { shouldIgnore } from '../src/main/platform/ignore'
+import { ProjectWatcher } from '../src/main/features/indexing/project-watcher'
 
 class FakeFsWatcher extends EventEmitter {
   closed = false

@@ -1,6 +1,6 @@
 import { app, dialog } from 'electron'
 import { join } from 'node:path'
-import { ExtensionRegistry } from '../../extensions/registry'
+import { ExtensionRegistry } from './registry'
 import type { IpcContext } from '../../platform/ipc-context'
 
 /** Extension: thư mục người dùng chọn được kiểm tra rồi chép vào <userData>/extensions; renderer chỉ nhận manifest đã kiểm. */

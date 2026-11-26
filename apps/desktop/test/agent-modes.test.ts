@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { acpRules, modeInstruction } from '../src/main/agent/skill'
+import { acpRules, modeInstruction } from '../src/main/features/agent/skill'
 
 describe('chỉ dẫn theo chế độ', () => {
   it('AI-03: chế độ Kế hoạch yêu cầu nêu tệp và kiểm thử dự kiến ở mọi runtime', () => {

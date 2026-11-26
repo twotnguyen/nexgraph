@@ -18,7 +18,7 @@ const BOUNDARY = [
   'ipc.ts', 'app/ipc.ts', 'platform/ipc-context.ts',
   // Handler IPC chia theo tính năng (ADR 0026 pha 2): mọi `features/<x>/ipc.ts` đều là tệp biên.
   ...readdirSync(join(MAIN, 'features')).map((feature) => `features/${feature}/ipc.ts`),
-  'ipc-result.ts', 'engine/api.ts', 'agent/session.ts', 'engine/launcher.ts', 'engine/supervisor.ts'
+  'platform/ipc-result.ts', 'platform/engine/api.ts', 'features/agent/session.ts', 'platform/engine/launcher.ts', 'platform/engine/supervisor.ts'
 ]
 const VIETNAMESE = /[ÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴàáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]/
 /** Lời gọi dựng lỗi/thông báo đi ra renderer. */
@@ -49,7 +49,7 @@ function callArgument(text: string, at: number): string {
 /** `engine_unavailable`, `bad_param`… (không phải câu) hoặc một trường `.code`. */
 const CODE = /['"`][a-z][a-z0-9_]{2,}['"`]|\.code\b|\bcode:/
 /** Ngoại lệ có lý do: lời gọi tự mang khoá dịch chứ không dùng mã lỗi. */
-const ALLOWED = [{ file: 'engine/launcher.ts', why: 'fail(message, messageKey, vars): renderer dịch bằng messageKey của trạng thái engine' }]
+const ALLOWED = [{ file: 'platform/engine/launcher.ts', why: 'fail(message, messageKey, vars): renderer dịch bằng messageKey của trạng thái engine' }]
 
 describe('câu lỗi main trả qua IPC dịch được ở renderer', () => {
   it('mọi câu tiếng Việt trong lời gọi lỗi ở tệp biên đều đi kèm mã lỗi', () => {

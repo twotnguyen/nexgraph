@@ -2,12 +2,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameS
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import { createNexgraphExtension, previewWrite, setDisabledTools, toolsFor } from '../src/main/agent/extension'
-import { NEXGRAPH_RULES, NEXGRAPH_SKILL_NAME, skillMarkdown } from '../src/main/agent/skill'
-import { TOOL_DEFS } from '../src/main/ai/tools'
-import type { EngineApi } from '../src/main/engine/api'
-import { createApprovalGate, type ApprovalGate } from '../src/main/agent/approval'
-import { readProjectFile, writeProjectFile } from '../src/main/fs/project-fs'
+import { createNexgraphExtension, previewWrite, setDisabledTools, toolsFor } from '../src/main/features/agent/extension'
+import { NEXGRAPH_RULES, NEXGRAPH_SKILL_NAME, skillMarkdown } from '../src/main/features/agent/skill'
+import { TOOL_DEFS } from '../src/main/features/agent/tools'
+import type { EngineApi } from '../src/main/platform/engine/api'
+import { createApprovalGate, type ApprovalGate } from '../src/main/features/agent/approval'
+import { readProjectFile, writeProjectFile } from '../src/main/platform/project-fs'
 
 type Handler = (e: { toolName: string; toolCallId?: string; input: unknown }) => Promise<{ block: true; reason: string } | undefined>
 const names = TOOL_DEFS.map((t) => t.function.name)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSse } from '../src/main/engine/events'
+import { parseSse } from '../src/main/platform/engine/events'
 
 const ev = (o: object) => `data: ${JSON.stringify(o)}\n\n`
 

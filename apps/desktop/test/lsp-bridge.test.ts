@@ -9,7 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const mocked = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: mocked.spawn }))
 
-import { LspManager } from '../src/main/lsp/manager'
+import { LspManager } from '../src/main/features/lsp/manager'
 type Message = { id?: number; method: string; params: { textDocument?: { version?: number } } }
 
 class Server extends EventEmitter {

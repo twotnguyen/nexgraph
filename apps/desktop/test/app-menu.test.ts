@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { buildAppMenu, setAppMenuLocale, type MenuBuildOptions } from '../src/main/appMenu'
+import { buildAppMenu, setAppMenuLocale, type MenuBuildOptions } from '../src/main/app/appMenu'
 
 type Item = MenuItemConstructorOptions & { submenu?: Item[] }
 const build = (patch: Partial<MenuBuildOptions> = {}): Item[] => buildAppMenu({

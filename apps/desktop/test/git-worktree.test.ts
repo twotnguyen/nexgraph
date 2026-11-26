@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { canonicalPath, gitWorktreeAdd, gitWorktreeRemove, gitWorktrees, parseWorktrees } from '../src/main/git/worktree'
+import { canonicalPath, gitWorktreeAdd, gitWorktreeRemove, gitWorktrees, parseWorktrees } from '../src/main/features/git/worktree'
 
 const sha = (letter: string) => letter.repeat(40)
 

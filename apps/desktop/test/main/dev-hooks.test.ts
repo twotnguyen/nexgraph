@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountDevHooks } from '../../src/main/dev-hooks'
+import { accountDevHooks } from '../../src/main/app/dev-hooks'
 
 describe('accountDevHooks', () => {
   it('bản đóng gói luôn không nối hook dev, kể cả khi env bật', () => {

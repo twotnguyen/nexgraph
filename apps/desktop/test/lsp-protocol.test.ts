@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { normalizeDiagnostics, normalizeSignatureHelp, normalizeWorkspaceEdit, projectFile } from '../src/main/lsp/protocol'
+import { normalizeDiagnostics, normalizeSignatureHelp, normalizeWorkspaceEdit, projectFile } from '../src/main/features/lsp/protocol'
 
 let base: string
 let root: string

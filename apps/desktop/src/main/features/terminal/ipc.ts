@@ -1,12 +1,12 @@
 import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
 import type { TaskDefinition } from '../../../shared/api'
-import { FsError } from '../../fs/project-fs'
+import { FsError } from '../../platform/project-fs'
 import { type IpcContext, sendOwned } from '../../platform/ipc-context'
-import { ensureTasksFile, listTasks, resolveTask } from '../../tasks'
-import { createTaskSigner, taskContentKey } from '../../tasks/signature'
-import { TerminalManager, resolveTerminalPath, validateTask } from '../../terminal/manager'
-import { UserError } from '../../user-error'
+import { ensureTasksFile, listTasks, resolveTask } from './tasks'
+import { createTaskSigner, taskContentKey } from './tasks/signature'
+import { TerminalManager, resolveTerminalPath, validateTask } from './manager'
+import { UserError } from '../../platform/user-error'
 
 let terminals: TerminalManager | null = null
 /** Khoá ký task sống theo phiên app: task renderer gửi lại phải do chính main cấp (REV-13). */

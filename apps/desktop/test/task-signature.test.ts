@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTaskSigner, taskContentKey } from '../src/main/tasks/signature'
+import { createTaskSigner, taskContentKey } from '../src/main/features/terminal/tasks/signature'
 
 const scope = { projectId: 'p1', root: '/tmp/dự-án-a' }
 const otherProject = { projectId: 'p2', root: '/tmp/dự-án-a' }

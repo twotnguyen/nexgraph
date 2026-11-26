@@ -19,7 +19,7 @@ from nexgraph_engine.store.publication import publish_stage, stage_graph
 ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting_llm: job semantic đường A chờ main (W9)
 # Job đã xong chỉ giữ để client hỏi kết quả một lúc: giới hạn số lượng và TTL để `_jobs` không phình mãi (REV-19).
 # Gỡ dự án chờ refresh nền nhả khoá tối đa chừng này (refresh qua pipeline mất cỡ giây);
-# DELETE của desktop hết hạn sau 15 s (apps/desktop/src/main/engine/api.ts `removeProject`).
+# DELETE của desktop hết hạn sau 15 s (apps/desktop/src/main/platform/engine/api.ts `removeProject`).
 REMOVE_WAIT_SECONDS = 10.0
 MAX_FINISHED_JOBS = 50
 FINISHED_JOB_TTL_SECONDS = 60 * 60

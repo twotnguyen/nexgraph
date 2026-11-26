@@ -12,8 +12,8 @@ import {
   GeminiInstallation,
   verifyWindowsSignature,
   windowsSignatureEnvironment
-} from '../src/main/gemini/installation'
-import { buildGeminiEnvironment, prepareGeminiProfile } from '../src/main/gemini/profile'
+} from '../src/main/features/agent/gemini/installation'
+import { buildGeminiEnvironment, prepareGeminiProfile } from '../src/main/features/agent/gemini/profile'
 const roots: string[] = []
 async function root() {
   const path = await mkdtemp(join(tmpdir(), 'nexgraph-google-install-'))

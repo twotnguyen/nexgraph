@@ -1,10 +1,10 @@
 import { shell } from 'electron'
 import type { TextSearchQuery, WriteOpts } from '../../../shared/api'
-import { AgentFileScope } from '../../agent/file-scope'
-import { FsError, fsHandlers, isProtectedRel, readProjectFileBytes } from '../../fs/project-fs'
-import { projectOperations } from '../../fs/project-operations'
+import { AgentFileScope } from '../agent/file-scope'
+import { FsError, fsHandlers, isProtectedRel, readProjectFileBytes } from '../../platform/project-fs'
+import { projectOperations } from './project-operations'
 import type { IpcContext } from '../../platform/ipc-context'
-import { GENERATED_DIRS, replaceText, searchText } from '../../search/text-search'
+import { GENERATED_DIRS, replaceText, searchText } from './text-search'
 
 /** Cây tệp, đọc/ghi, thao tác tệp, tìm tệp (⌘P) và tìm/thay văn bản trong dự án. */
 export function registerFilesIpc(ctx: IpcContext): void {

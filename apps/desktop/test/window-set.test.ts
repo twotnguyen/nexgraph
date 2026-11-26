@@ -1,7 +1,7 @@
 // PR #49 (N1): mở nhiều cửa sổ — cửa sổ mới không được chiếm chỗ cửa sổ chính, và chỉ khi
 // cửa sổ cuối đóng mới dọn agent/engine (trước đây đóng một cửa sổ là dọn của tất cả).
 import { describe, expect, it } from 'vitest'
-import { WindowSet } from '../src/main/windows'
+import { WindowSet } from '../src/main/app/windows'
 
 class FakeWindow {
   destroyed = false

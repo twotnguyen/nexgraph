@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { UNLOAD_DIALOG, closesAgents, confirmUnload } from '../src/main/unload-guard'
+import { UNLOAD_DIALOG, closesAgents, confirmUnload } from '../src/main/app/unload-guard'
 
 describe('confirmUnload', () => {
   it('chỉ cho đóng khi chọn "Đóng và bỏ thay đổi"; mặc định và Esc là "Ở lại"', () => {

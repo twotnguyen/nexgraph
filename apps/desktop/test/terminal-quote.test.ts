@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { shellQuote } from '../src/main/terminal/quote'
+import { shellQuote } from '../src/main/features/terminal/quote'
 
 /**
  * `args` của task vẫn được quote từng arg khi ghép lệnh (shellTask) — khác với biến trong `command` nay chèn

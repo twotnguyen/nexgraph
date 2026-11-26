@@ -254,7 +254,7 @@ export const uiEnAgent: Record<string, string> = {
   'Đang thử lại {attempt}/{max} sau {seconds} giây. {message}': 'Retrying {attempt}/{max} in {seconds} {seconds, plural, one {second} other {seconds}}. {message}',
   'Chi tiết kỹ thuật': 'Technical details',
   'Không kết nối được tới nhà cung cấp AI.': 'Could not connect to the AI provider.',
-  // Câu lỗi cứng trong main/agent/session.ts (đi qua errorText của renderer).
+  // Câu lỗi cứng trong main/features/agent/session.ts (đi qua errorText của renderer).
   'Chọn mô hình trước khi tạo hội thoại': 'Select a model before creating a conversation',
   'Chọn mô hình trước khi tách hội thoại': 'Select a model before branching the conversation',
   'Chọn mô hình trước khi mở hội thoại': 'Select a model before opening a conversation',

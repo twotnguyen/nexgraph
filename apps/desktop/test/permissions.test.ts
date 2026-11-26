@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { installPermissionHandlers } from '../src/main/security/permissions'
+import { installPermissionHandlers } from '../src/main/app/permissions'
 
 type RequestHandler = (contents: unknown, permission: string, callback: (granted: boolean) => void, details?: unknown) => void
 type CheckHandler = (contents: unknown, permission: string, origin?: string, details?: unknown) => boolean

@@ -1,6 +1,6 @@
 import type { LspCallHierarchyItem, LspRange } from '../../../shared/api'
-import { FsError } from '../../fs/project-fs'
-import { LspManager } from '../../lsp/manager'
+import { FsError } from '../../platform/project-fs'
+import { LspManager } from './manager'
 import type { IpcContext } from '../../platform/ipc-context'
 
 /** Language server cho editor; khởi động khi mở tệp TS/JS/Python đầu tiên. */

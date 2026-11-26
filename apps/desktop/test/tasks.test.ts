@@ -3,8 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ensureTasksFile, listTasks, parseJsonc, resolveTask } from '../src/main/tasks'
-import { UserError } from '../src/main/user-error'
+import { ensureTasksFile, listTasks, parseJsonc, resolveTask } from '../src/main/features/terminal/tasks'
+import { UserError } from '../src/main/platform/user-error'
 import type { TaskDefinition } from '../src/shared/api'
 
 let base: string

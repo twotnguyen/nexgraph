@@ -33,8 +33,8 @@ vi.mock('electron', () => ({
   safeStorage: { isEncryptionAvailable: () => false, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() }
 }))
 
-vi.mock('../src/main/engine/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/engine/api')>()
+vi.mock('../src/main/platform/engine/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/platform/engine/api')>()
   class FakeEngineApi {
     listProjects() { return h.projects }
     exportGraph(...args: unknown[]) { h.exports.push(args); return { files: [join(args.at(-1) as string, 'a.html')], truncated: false } }
@@ -42,8 +42,8 @@ vi.mock('../src/main/engine/api', async (importOriginal) => {
   return { ...actual, EngineApi: FakeEngineApi }
 })
 
-vi.mock('../src/main/mcp-http', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/mcp-http')>()
+vi.mock('../src/main/features/integrations/mcp-http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/features/integrations/mcp-http')>()
   class FakeMcpHttpManager {
     start(pid: string, projectPath: string) { h.mcpStarts.push([pid, projectPath]); return Promise.resolve({ url: 'http://127.0.0.1:1/mcp', key: 'k' }) }
     stop() { return Promise.resolve() }
@@ -53,7 +53,7 @@ vi.mock('../src/main/mcp-http', async (importOriginal) => {
   return { ...actual, McpHttpManager: FakeMcpHttpManager }
 })
 
-vi.mock('../src/main/watch/project-watcher', () => ({
+vi.mock('../src/main/features/indexing/project-watcher', () => ({
   ProjectWatcher: class {
     constructor(o: { root: string }) { h.watcherRoots.push(o.root) }
     start() {}
@@ -62,8 +62,8 @@ vi.mock('../src/main/watch/project-watcher', () => ({
 }))
 
 // REV-13: thay TerminalManager thật để kiểm đường cấp task mà không spawn pty trong test.
-vi.mock('../src/main/terminal/manager', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/main/terminal/manager')>()
+vi.mock('../src/main/features/terminal/manager', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/main/features/terminal/manager')>()
   class FakeTerminalManager {
     create(root: string, cols: number, rows: number, task?: { label: string; command: string }) {
       h.terminals.push({ root, cols, rows, ...(task ? { task } : {}) })

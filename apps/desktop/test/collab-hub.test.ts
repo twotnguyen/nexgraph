@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { CollabEvent } from '../src/shared/api'
-import { CollabHub } from '../src/main/collab/hub'
+import { CollabHub } from '../src/main/features/collab/hub'
 
 const hubs: CollabHub[] = []
 const make = () => {

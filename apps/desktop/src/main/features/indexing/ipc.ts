@@ -1,14 +1,14 @@
 import { app, dialog } from 'electron'
 import { join } from 'node:path'
 import type { IndexOptions } from '../../../shared/graph-types'
-import { SecretStore } from '../../ai/settings'
-import { EngineApiError } from '../../engine/api'
-import { IndexOptionsStore } from '../../index-options'
-import { IndexSourceStore } from '../../index-sources'
+import { SecretStore } from '../../platform/settings'
+import { EngineApiError } from '../../platform/engine/api'
+import { IndexOptionsStore } from './index-options'
+import { IndexSourceStore } from './index-sources'
 import type { IpcContext } from '../../platform/ipc-context'
 import { secretBox } from '../../platform/prefs'
-import { WatchErrorNotifier } from '../../watch/error-notice'
-import { ProjectWatcher } from '../../watch/project-watcher'
+import { WatchErrorNotifier } from './error-notice'
+import { ProjectWatcher } from './project-watcher'
 
 const watchers = new Map<string, ProjectWatcher>()
 const watchStarts = new Map<string, symbol>()

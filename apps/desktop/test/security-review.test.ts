@@ -2,9 +2,9 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { SecretStore, writeJson } from '../src/main/ai/settings'
-import { isProtectedRel, resolveInside } from '../src/main/fs/project-fs'
-import { GeminiConnectionManager } from '../src/main/gemini/connection'
+import { SecretStore, writeJson } from '../src/main/platform/settings'
+import { isProtectedRel, resolveInside } from '../src/main/platform/project-fs'
+import { GeminiConnectionManager } from '../src/main/features/agent/gemini/connection'
 
 // NTFS không có mode POSIX: chỉ kiểm quyền tệp trên macOS/Linux.
 const posix = process.platform !== 'win32'

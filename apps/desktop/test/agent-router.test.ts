@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { AgentRouter, type AgentRuntime, type AgentRuntimeId } from '../src/main/agent-router'
+import { AgentRouter, type AgentRuntime, type AgentRuntimeId } from '../src/main/features/agent/agent-router'
 
 const runtime = (name: string) => ({
   pending: vi.fn(() => 0),
