@@ -21,12 +21,31 @@ export interface GraphPageSelection {
   sourceLine: number | null
   sourceLocation: string | null
   via: string | null
+  /** Cộng đồng của nút (trang gộp và trang cộng đồng đều gửi). */
+  community: number | null
+  /** Số thành viên nếu nút là nút cộng đồng của đồ thị bị gộp; null với nút thường. */
+  memberCount: number | null
 }
 
 /** Scheme + URL của khung nhúng; main đăng ký `nxpage` là scheme chuẩn (protocol.ts). */
 export const GRAPH_PAGE_SCHEME = 'nxpage'
 export const graphPageUrl = (projectId: string, file: string): string =>
   `${GRAPH_PAGE_SCHEME}://${projectId}/${encodeURIComponent(file)}`
+
+/** NG-ACT-2: trang cộng đồng sinh từ graph.json, cùng scheme để dùng lại cầu nối chọn nút. */
+export const COMMUNITY_PAGE_FILE = 'community.html'
+export const communityPageUrl = (projectId: string, community: number): string =>
+  `${graphPageUrl(projectId, COMMUNITY_PAGE_FILE)}?c=${community}`
+
+/**
+ * NG-ACT-1: "Mở mã" chỉ dùng được với tệp thật trong dự án. Nguồn ảo (`nguon://cargo`),
+ * đường dẫn tuyệt đối và đường dẫn thoát ra ngoài (`..`) đều không mở được trong editor.
+ */
+export function canOpenPageSource(file: string | null | undefined): boolean {
+  if (!file || file.includes('://')) return false
+  if (file.startsWith('/') || file.startsWith('\\') || /^[A-Za-z]:[\\/]/.test(file)) return false
+  return !file.split(/[\\/]/).includes('..')
+}
 
 /** Kênh IPC giữa preload của trang, main và renderer của app (một chỗ để không lệch tên). */
 export const GRAPH_PAGE_NODE_CHANNEL = 'graph-pages:node'
