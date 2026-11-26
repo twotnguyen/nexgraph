@@ -78,3 +78,50 @@ def test_cancelled_pipeline_reports_cancel(fixture_root):
     result = run_pipeline(fixture_root, steps=(Step("extract", ("extract", ".", "--code-only")),), cancel=cancel)
     assert result.cancelled and not result.ok
     assert not (fixture_root / ".nexgraph" / "graph.json").exists()
+
+
+def test_child_env_stops_vendor_reexec(tmp_path, monkeypatch):
+    """Vendor tự chạy lại `[sys.executable, "-m", "graphify", ...]` khi thiếu PYTHONHASHSEED.
+
+    Ở bản đóng gói `sys.executable` là binary engine, không hiểu `-m graphify`. Môi trường runner
+    đưa cho tiến trình con phải làm vendor bỏ qua bước re-exec này ở mọi lệnh bị ghim seed.
+    """
+    import graphify.__main__ as vendor_cli
+
+    from nexgraph_engine.pipeline.runner import child_env
+
+    env = child_env(tmp_path / "out")
+    env.pop("PYTEST_CURRENT_TEST", None)  # tiến trình con thật không chạy dưới pytest
+    monkeypatch.setattr(os, "environ", env)
+    calls = []
+    monkeypatch.setattr(vendor_cli, "_reexec", lambda argv, env, windows=None: calls.append(argv))
+    for command in sorted(vendor_cli._HASHSEED_PINNED_COMMANDS):
+        monkeypatch.setattr(sys, "argv", ["graphify", command, "."])
+        vendor_cli._pin_hash_seed_if_needed()
+    assert calls == []
+
+
+@pytest.mark.skipif(os.name == "nt", reason="launcher giả là shell script; Windows do job package kiểm")
+def test_frozen_engine_runs_extract_step(fixture_root, tmp_path, monkeypatch):
+    """Giả lập bản cài: `sys.executable` là binary `nexgraph-engine` chỉ nhận subcommand của CLI.
+
+    Smoke bộ cài từng đỏ: `invalid choice: 'graphify'` vì vendor re-exec chính binary với `-m graphify`.
+    """
+    from nexgraph_engine.pipeline.runner import run_step
+
+    launcher = tmp_path / "bin" / "nexgraph-engine"
+    launcher.parent.mkdir()
+    code = (f"import sys; sys.executable = {str(launcher)!r}; "
+            "from nexgraph_engine.cli import main; sys.exit(main(sys.argv[1:]))")
+    launcher.write_text(f"#!/bin/sh\nexec {sys.executable!s} -c {code!r} \"$@\"\n", encoding="utf-8")
+    launcher.chmod(0o755)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(launcher))
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.delenv("PYTHONHASHSEED", raising=False)
+
+    out = fixture_root / ".nexgraph"
+    step = run_step(fixture_root, out, Step("extract", ("extract", ".", "--code-only")), timeout=120)
+
+    assert step.returncode == 0, "\n".join(step.tail)
+    assert (out / "graph.json").is_file()

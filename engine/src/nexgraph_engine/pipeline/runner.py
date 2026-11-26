@@ -116,6 +116,9 @@ def child_env(out_dir: Path) -> dict[str, str]:
     env.setdefault("GRAPHIFY_BACKEND", "none")
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+    # Thiếu biến này thì vendor tự chạy lại `[sys.executable, "-m", "graphify", ...]` (graphify/__main__.py
+    # `_pin_hash_seed_if_needed`); ở bản cài `sys.executable` là binary engine nên lệnh đó hỏng.
+    env.setdefault("PYTHONHASHSEED", "0")
     return env
 
 
