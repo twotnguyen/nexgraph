@@ -16,6 +16,14 @@ def _bare(label: str) -> str:
     return label[:-2] if label.endswith("()") else label
 
 
+def _flow_kinds(root: Path) -> dict[str, str]:
+    conn = open_graph_db(root / ".nexgraph" / "graph.db")
+    try:
+        return {_bare(name): kind for name, kind in conn.execute("SELECT ten, loai_vao FROM luong")}
+    finally:
+        conn.close()
+
+
 def _flow_steps(root: Path) -> dict[str, list[str]]:
     conn = open_graph_db(root / ".nexgraph" / "graph.db")
     try:
@@ -52,6 +60,8 @@ def test_pipeline_index_builds_flows(api, pipeline_flow):
     assert "login" in flows, flows
     assert flows["login"] == ["login", "login_user", "find_user", "check_password", "save_session",
                               "hash_password"]  # đúng thứ tự gọi như đường cũ (test_flows_build)
+    # Loại điểm vào khớp theo tên trần: `main()` vẫn là `main`, route nhận từ decorator.
+    assert _flow_kinds(root) == {"login": "route", "books": "route", "main": "main"}
     body = api.get(f"/v1/projects/{pid}/flows", params={"q": "login"}).json()
     assert [_bare(flow["name"]) for flow in body["flows"]] == ["login"], body
 
