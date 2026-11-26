@@ -64,6 +64,10 @@ def refresh_pipeline(store, root: Path, *, timeout: float | None = None):
 
     before = _paths(store)
     report = replace_files(store, changed, out / "graph.json", root=root)
+    from nexgraph_engine.pipeline.job import rebuild_flows_safely
+
+    if (flow_warning := rebuild_flows_safely(store, root)) is not None:  # tệp đổi làm đổi luồng đi qua nó
+        warnings.append(flow_warning)
     rebrand_exported(out)  # ADR 0025: trang HTML vừa vẽ lại cũng phải sạch tên nguồn
     after = _paths(store)
     added = [path for path in changed if path in after and path not in before]

@@ -12,9 +12,11 @@ from __future__ import annotations
 
 import os
 import re
+import sqlite3
 import time
 from pathlib import Path
 
+from nexgraph_engine.flows.build import rebuild_flows
 from nexgraph_engine.index.indexer import ProgressEvent
 from nexgraph_engine.pipeline.mode import GRAPHIFY, LEGACY, pipeline_mode
 from nexgraph_engine.pipeline.rebrand import rebrand_exported
@@ -88,6 +90,21 @@ def _record_vendor_errors(store, lines: list[str]) -> list[str]:
     return sorted(set(recorded))
 
 
+def rebuild_flows_safely(store, root: Path) -> str | None:
+    """Dựng lại `luong` sau khi nạp graph.json, cùng chính sách lỗi với bộ trích xuất cũ.
+
+    Lỗi SQLite là lỗi thật của chỉ mục nên ném lên; lỗi khác chỉ mất phần luồng (trả câu cảnh báo).
+    """
+    try:
+        rebuild_flows(store, root)
+    except sqlite3.Error:
+        raise
+    except Exception as exc:  # luồng là phần phụ: không làm hỏng cả lần lập chỉ mục
+        store.conn.rollback()
+        return f"Không dựng được luồng: {exc}"
+    return None
+
+
 def run_index_pipeline(store, root: Path, *, exclude: list[str] | None = None,
                        on_event, cancel) -> dict | None:
     """Chạy pipeline + nạp chỉ mục trong `store` (bản staging của job).
@@ -115,11 +132,13 @@ def run_index_pipeline(store, root: Path, *, exclude: list[str] | None = None,
 
     on_event(ProgressEvent("resolve", total, total, "Đang nạp đồ thị vào chỉ mục"))
     report = import_graph_json(store, root, graph_json)
+    # Đường cũ dựng luồng sau bước phân giải; bộ nạp #67 không làm, thiếu thì list_flows/trace_flow rỗng.
+    flow_warning = rebuild_flows_safely(store, root)
     rebrand_exported(out)  # ADR 0025: tên hiển thị trong báo cáo/trang HTML, không đổi id/đường dẫn
 
     vendor_lines = [line for step in result.steps for line in step.tail]
     errors = _record_vendor_errors(store, vendor_lines)
-    warnings = [*result.warnings, *vendor_lines[-10:]]
+    warnings = [*result.warnings, *([flow_warning] if flow_warning else []), *vendor_lines[-10:]]
     seconds = round(time.perf_counter() - started, 3)
     on_event(ProgressEvent("done", total, total, f"Đã lập chỉ mục {report.nodes} nút, {report.edges} cạnh"))
     return {
