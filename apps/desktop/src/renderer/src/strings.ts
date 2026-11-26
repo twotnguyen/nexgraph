@@ -305,6 +305,8 @@ const viStrings = {
       ai_bad_request: 'Nhà cung cấp AI từ chối yêu cầu.', ai_provider_error: 'Nhà cung cấp AI tạm thời gặp lỗi.',
       ai_context_window: 'Ngữ cảnh vượt giới hạn mô hình — tăng context window hoặc rút gọn câu hỏi.',
       ai_too_many_rounds: 'Trợ lý gọi công cụ quá nhiều lần mà chưa trả lời. Hãy hỏi cụ thể hơn.', ai_cancelled: 'Đã dừng.',
+      ai_runtime_restarted: 'Runtime Nex đã khởi động lại. Hãy gửi lại câu hỏi.',
+      ai_tool_rejected: 'Đã từ chối thao tác.',
       ai_provider_changed: 'Nhà cung cấp hoặc model AI đã thay đổi. Hãy kiểm tra lại rồi gửi câu hỏi.'
     } as Record<string, string>
   },
@@ -1021,6 +1023,8 @@ const enStrings: typeof viStrings = {
       ai_bad_request: 'The AI provider rejected the request.', ai_provider_error: 'The AI provider is temporarily unavailable.',
       ai_context_window: 'The context exceeds the model window — raise the context window or shorten the request.',
       ai_too_many_rounds: 'The assistant called tools too many times without answering. Please ask a more specific question.', ai_cancelled: 'Stopped.',
+      ai_runtime_restarted: 'The Nex runtime restarted. Please send your question again.',
+      ai_tool_rejected: 'Action rejected.',
       ai_provider_changed: 'The AI provider or model changed. Check it and send your question again.'
     } as Record<string, string>
   },

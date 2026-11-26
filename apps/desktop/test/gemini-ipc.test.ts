@@ -12,12 +12,13 @@ const h = vi.hoisted(() => ({
   googleModels: vi.fn(), piModels: vi.fn(), googleTest: vi.fn<() => Promise<GeminiConnectionTest>>(), piTest: vi.fn(),
   googleSelect: vi.fn(), googleDisconnect: vi.fn(), googleForget: vi.fn(), googleLogin: vi.fn(),
   googlePrompt: vi.fn(), piPrompt: vi.fn(), googleFork: vi.fn(), piFork: vi.fn(), googleChanged: vi.fn(), piChanged: vi.fn(),
-  piSelect: vi.fn(), setApiKey: vi.fn(), cancelLogin: vi.fn()
+  piSelect: vi.fn(), setApiKey: vi.fn(), cancelLogin: vi.fn(), piBusy: false
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => h.userData },
+  app: { getPath: () => h.userData, isPackaged: false },
   ipcMain: { handle: (channel: string, fn: (event: unknown, ...args: unknown[]) => Promise<unknown>) => h.handlers.set(channel, fn) },
+  BrowserWindow: { fromWebContents: () => ({}) },
   dialog: {}, shell: {}, safeStorage: { isEncryptionAvailable: () => false }
 }))
 vi.mock('../src/main/engine/api', async (original) => {
@@ -40,6 +41,7 @@ vi.mock('../src/main/agent/session', () => ({
     prompt(...args: unknown[]) { return h.piPrompt(...args) }
     forkSession(...args: unknown[]) { return h.piFork(...args) }
     snapshot() { return { runtime: 'pi' } }
+    hasActiveTurn() { return h.piBusy }
   }
 }))
 vi.mock('../src/main/gemini/connection', () => ({ GeminiConnectionManager: class {
@@ -64,7 +66,9 @@ vi.mock('../src/main/gemini/service', () => ({ GeminiAgentService: class {
 import { registerIpc } from '../src/main/ipc'
 
 type Result<T = unknown> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
-const invoke = <T = unknown,>(channel: string, ...args: unknown[]) => h.handlers.get(channel)!({}, ...args) as Promise<Result<T>>
+const trustedFrame = {}
+const trustedEvent = { sender: { mainFrame: trustedFrame }, senderFrame: trustedFrame }
+const invoke = <T = unknown,>(channel: string, ...args: unknown[]) => h.handlers.get(channel)!(trustedEvent, ...args) as Promise<Result<T>>
 const prefs = () => JSON.parse(readFileSync(join(h.userData, 'prefs.json'), 'utf8')) as Record<string, unknown>
 const pending = <T,>() => {
   let resolve!: (result: T) => void
@@ -87,7 +91,9 @@ beforeEach(() => {
   h.userData = join(base, 'user'); h.root = join(base, 'source')
   mkdirSync(h.userData); mkdirSync(h.root)
   writeFileSync(join(h.userData, 'prefs.json'), JSON.stringify({ aiRuntime: 'pi', aiGeminiEnabled: '0' }))
-  h.cid = 'account-a'; h.model = 'auto'; h.authenticated = true; h.piProvider = 'google'; h.piModel = 'api-model'
+  h.cid = 'account-a'; h.model = 'auto'; h.authenticated = true; h.piProvider = 'google'; h.piModel = 'api-model'; h.piBusy = false
+  writeFileSync(join(h.userData, 'opencode-bin'), '')
+  process.env.NEX_OPENCODE_BIN = join(h.userData, 'opencode-bin')
   h.status.mockImplementation(async () => currentStatus())
   h.googleModels.mockResolvedValue([{ runtime: 'antigravity-cli', provider: 'google-antigravity', id: 'auto', label: 'Auto' }])
   h.piModels.mockResolvedValue([{ provider: 'google', id: 'api-model', label: 'Google API key' }])
@@ -274,6 +280,33 @@ describe('Gemini/Pi model list isolation', () => {
   it('Pi lỗi không làm mất model tài khoản Google và không chọn runtime tự động', async () => {
     h.piModels.mockRejectedValueOnce(new Error('API provider unavailable'))
     expect(await invoke('auth:models')).toMatchObject({ ok: true, data: [{ runtime: 'antigravity-cli', provider: 'google-antigravity', id: 'auto' }] })
+    expect(prefs().aiRuntime).toBe('pi')
+  })
+})
+
+describe('Runtime agent IPC (review #66 Important 2, 4)', () => {
+  it('chặn đổi runtime khi có lượt đang chạy hoặc đang chờ duyệt, không đổi prefs', async () => {
+    h.piBusy = true
+    expect(await invoke('ai:set-runtime', 'nex')).toMatchObject({ ok: false, error: { code: 'runtime_switch_blocked' } })
+    expect(prefs().aiRuntime).toBe('pi')
+    h.piBusy = false
+  })
+
+  it('chỉ nhận nex|pi tại runtime, giá trị khác trả bad_param', async () => {
+    expect(await invoke('ai:set-runtime', 'gemini-cli')).toMatchObject({ ok: false, error: { code: 'bad_param' } })
+    expect(await invoke('ai:set-runtime', 'nex/../pi')).toMatchObject({ ok: false, error: { code: 'bad_param' } })
+    expect(prefs().aiRuntime).toBe('pi')
+  })
+
+  it('từ chối khung không phải cửa sổ NexGraph (onTrusted)', async () => {
+    const handler = h.handlers.get('ai:set-runtime')!
+    expect(await handler({}, 'pi')).toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
+    const getter = h.handlers.get('ai:get-runtime')!
+    expect(await getter({})).toMatchObject({ ok: false, error: { code: 'forbidden_sender' } })
+  })
+
+  it('đổi sang Pi khi rảnh vẫn chạy', async () => {
+    expect(await invoke('ai:set-runtime', 'pi')).toMatchObject({ ok: true })
     expect(prefs().aiRuntime).toBe('pi')
   })
 })

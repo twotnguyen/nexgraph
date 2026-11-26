@@ -131,6 +131,10 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
     return target
   }
 
+  // Kịch bản dưới đây kiểm chính sách IPC của runtime Pi (LLM giả gọi tool theo giao thức Pi). Bản cài
+  // đóng kèm binary Nex (#73) nên runtime mặc định là Nex: ghim Pi, nếu không smoke đi nhầm đường.
+  await api.ai.setRuntime('pi')
+  if ((await api.ai.getRuntime()).runtime !== 'pi') throw new Error('agent IPC smoke could not select the Pi runtime')
   const target = await selectProvider('smoke', baseUrl)
   const expectedEdit = source.replace('  return true', '  return false')
   const original = await api.fs.read(pid, filename)

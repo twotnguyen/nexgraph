@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, realpathSync, rmdirSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join } from 'node:path'
+import { assertPackagedNexRuntime } from './nex-runtime.mjs'
 
 function run(command, args, options) {
   const result = spawnSync(command, args, { encoding: 'utf8', timeout: 180_000, windowsHide: true, ...options })
@@ -68,6 +69,8 @@ async function smokeNsis(installer, temp, smoke) {
     requireFile(binary)
     requireFile(uninstaller)
     requireFile(join(dir, 'resources', 'engine', 'nexgraph-engine.exe'))
+    // PKG-NEX-3: bộ cài Windows phải có runtime Nex và chạy được opencode.exe --version.
+    await assertPackagedNexRuntime({ appDir: dir, platform: 'win32' })
     await smoke(binary)
   }, () => {
     if (existsSync(uninstaller)) {
@@ -97,6 +100,8 @@ async function smokeDmg(installer, temp, smoke) {
   const binary = join(app, 'Contents', 'MacOS', 'NexGraph')
   requireFile(binary)
   requireFile(join(app, 'Contents', 'Resources', 'engine', 'nexgraph-engine'))
+  // PKG-NEX-3: bản cài macOS phải có runtime Nex và chạy được opencode --version.
+  await assertPackagedNexRuntime({ appDir: app, platform: 'darwin' })
   await smoke(binary)
 }
 

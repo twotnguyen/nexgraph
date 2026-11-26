@@ -49,7 +49,7 @@ const SECTION_WORDS = {
   apikey: () => tr('API key nhà cung cấp OpenAI Anthropic Claude khoá'),
   custom: () => tr('Nhà cung cấp tuỳ chỉnh custom base URL OpenRouter'),
   oauth: () => tr('Đăng nhập gói đăng ký ChatGPT OAuth'),
-  model: () => tr('Mô hình model kiểm tra kết nối'),
+  model: () => tr('Mô hình model runtime Nex Pi kiểm tra kết nối'),
   privacy: () => tr('Quyền riêng tư dữ liệu bảo mật'),
   about: () => tr('Giới thiệu về phiên bản giấy phép mã nguồn mở open source license'),
   language: () => tr('Ngôn ngữ giao diện language locale Tiếng Việt English')
@@ -92,6 +92,7 @@ export function SettingsScreen({ onBack, initialPage, onOpenLicenses }: { onBack
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [models, setModels] = useState<ModelInfo[]>([])
   const [settings, setSettings] = useState<AiSettings | null>(null)
+  const [runtimeInfo, setRuntimeInfo] = useState<{ runtime: 'nex' | 'pi' | 'antigravity-cli'; nexAvailable: boolean; nexReady: boolean } | null>(null)
   const [keyProvider, setKeyProvider] = useState('')
   const [keyInput, setKeyInput] = useState('')
   const [custom, setCustom] = useState(EMPTY_CUSTOM)
@@ -139,6 +140,7 @@ export function SettingsScreen({ onBack, initialPage, onOpenLicenses }: { onBack
       setSettings(null)
       setError(errorMsg(e))
     })
+    const currentRuntime = Promise.resolve(window.nexgraph.ai.getRuntime?.()).then(setRuntimeInfo).catch(() => setRuntimeInfo(null))
     try {
       const a = window.nexgraph.auth
       const [providers, models] = await Promise.all([a.list(), a.models()])
@@ -148,7 +150,7 @@ export function SettingsScreen({ onBack, initialPage, onOpenLicenses }: { onBack
     } catch (e) {
       setError(errorMsg(e))
     }
-    await currentSettings
+    await Promise.all([currentSettings, currentRuntime])
   }, [])
 
   useEffect(() => { void load() }, [load])
@@ -621,6 +623,19 @@ export function SettingsScreen({ onBack, initialPage, onOpenLicenses }: { onBack
       </section>}
 
       {pages.some((p) => p.id === 'model') && <h1 id="settings-model" data-settings-page="model" className="settings-page-title">{tr('Mô hình')}</h1>}
+      {shows('model') && <section className="settings-section" aria-labelledby="settings-runtime-title">
+        <h2 id="settings-runtime-title">{tr('Runtime agent')}</h2>
+        <div className="settings-row">
+          <div><label htmlFor="settings-runtime">{tr('Runtime agent')}</label><p>{tr('Nex là runtime mặc định khi máy có sẵn; Pi là bản dự phòng. Đổi runtime áp dụng cho lượt chat tiếp theo.')}</p></div>
+          <select id="settings-runtime" value={runtimeInfo?.runtime === 'nex' ? 'nex' : 'pi'} disabled={busy || !runtimeInfo?.nexAvailable}
+            onChange={(e) => void run(() => window.nexgraph.ai.setRuntime(e.target.value === 'nex' ? 'nex' : 'pi'), tr('Đã đổi runtime agent.'))}>
+            <option value="nex">{tr('Nex (khuyến nghị)')}</option>
+            <option value="pi">{tr('Pi (dự phòng)')}</option>
+          </select>
+        </div>
+        {runtimeInfo && !runtimeInfo.nexAvailable && <p className="muted small">{tr('Chưa tìm thấy runtime Nex trên máy này; app dùng Pi.')}</p>}
+        {runtimeInfo?.nexAvailable && !runtimeInfo.nexReady && <p className="muted small">{tr('Nex cần nhà cung cấp OpenAI-compatible có API key; thêm ở mục Tài khoản AI.')}</p>}
+      </section>}
       {shows('model') && <section className="settings-section">
         <h2>{vi.accounts.modelTitle}</h2>
         <label className="field">{vi.accounts.modelTitle}
