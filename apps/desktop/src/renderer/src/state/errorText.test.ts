@@ -96,4 +96,11 @@ describe('errorText', () => {
     // Mã có trong codeErrors (I3): UI English dịch câu Việt cố định của main.
     expect(errorText({ code: 'bad_param', message: 'Endpoint không hợp lệ' })).toBe('Invalid parameter.')
   })
+
+  it('chặn đổi runtime giữa lượt có câu VI và bản Anh', () => {
+    const error = { code: 'runtime_switch_blocked', message: 'Không đổi runtime khi trợ lý đang chạy hoặc đang chờ duyệt. Hãy dừng lượt hiện tại trước.' }
+    expect(errorText(error)).toBe('Không đổi runtime khi trợ lý đang chạy hoặc đang chờ duyệt. Hãy dừng lượt hiện tại trước.')
+    setLocale('en')
+    expect(errorText(error)).toBe('Cannot switch runtime while the assistant is running or waiting for approval. Stop the current turn first.')
+  })
 })

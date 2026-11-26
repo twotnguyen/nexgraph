@@ -1,0 +1,23 @@
+{
+  "$comment": "Runtime agent Nex (OpenCode) đóng kèm bộ cài. sha256 là của tệp nén tải từ release chính thức; binarySha256 là của binary sau khi giải nén. Đổi version thì tải lại, tính cả hai sha rồi cập nhật.",
+  "version": "2.4.1",
+  "source": "https://github.com/anomalyco/opencode/releases/tag/v2.4.1",
+  "assets": {
+    "darwin-arm64": {
+      "url": "https://github.com/anomalyco/opencode/releases/download/v2.4.1/opencode-darwin-arm64.zip",
+      "filename": "opencode-darwin-arm64.zip",
+      "sha256": "95a101eda95108478f1db43cff8fcbd4811f6c0e79af1e167301843c6a48d731",
+      "binarySha256": "e465e8ad79c632149699878465225aecec183b8a1fb23727f60731f5c11c9cc9",
+      "bytes": 115188658,
+      "binary": "opencode"
+    },
+    "windows-x64": {
+      "url": "https://github.com/anomalyco/opencode/releases/download/v2.4.1/opencode-windows-x64.zip",
+      "filename": "opencode-windows-x64.zip",
+      "sha256": "831e00806531fabb184533ef85fead96eb92287cab2d0f21db7daaa494e75083",
+      "binarySha256": "f3da11bf51ace25b86f52e20368d415451d200d6b48101d9f4e5d721b1d2020e",
+      "bytes": 132524450,
+      "binary": "opencode.exe"
+    }
+  }
+}

@@ -308,6 +308,24 @@ describe('SettingsScreen', () => {
     expect(screen.getAllByRole('status').filter((el) => el.closest('.toast'))).toHaveLength(2)
   })
 
+  it('hiện runtime Nex khi máy có binary, đổi được sang Pi và có nhãn English', async () => {
+    const { api } = installNexgraph({
+      ai: {
+        getSettings: vi.fn(async () => ({ runtime: 'nex' as const, provider: 'custom-1', baseUrl: 'https://ai.test/v1', model: 'gpt-6-luna', hasKey: true })),
+        getRuntime: vi.fn(async () => ({ runtime: 'nex' as const, nexAvailable: true, nexReady: true }))
+      }
+    })
+    render(<SettingsScreen onBack={() => {}} />)
+    const select = await screen.findByLabelText('Runtime agent', { selector: 'select' })
+    expect(select).toHaveValue('nex')
+    expect(screen.getByRole('option', { name: 'Nex (khuyến nghị)' })).toBeInTheDocument()
+    await userEvent.selectOptions(select, 'pi')
+    expect(api.ai.setRuntime).toHaveBeenCalledWith('pi')
+    act(() => setLocale('en'))
+    expect(screen.getAllByText('Agent runtime').length).toBeGreaterThan(0)
+    expect(screen.getByRole('option', { name: 'Nex (recommended)' })).toBeInTheDocument()
+  })
+
   it('main báo catalog model đổi sau khi lưu key → danh sách tự tải lại, listener huỷ khi unmount', async () => {
     let catalog = [model('go-a')]
     const { api } = installNexgraph({ auth: {

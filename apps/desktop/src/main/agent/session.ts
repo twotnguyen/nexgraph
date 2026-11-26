@@ -20,6 +20,7 @@ import { TaskExecution } from './process-tools'
 import { CheckpointStore } from './checkpoints'
 import { prepareAgentContext } from './context'
 import { contextTooSmall, smallContextMessage } from './context-window'
+import type { NexProvider } from './nex/config'
 
 /** Module bọc duy nhất nạp pi. */
 export const loadPi = () => import('@earendil-works/pi-coding-agent')
@@ -81,6 +82,10 @@ export type SessionSpec = {
   modelRuntime: ModelRuntime
   model: Model
   sessionManager?: SessionManager
+  /** Runtime khác Pi (Nex) cần id dự án, hộp duyệt và chế độ hiện tại; Pi bỏ qua. */
+  projectId?: string
+  gate?: ApprovalGate
+  getMode?: () => AgentMode
   beforeModelTurn?(): void
   remainingTokens?(): number
   /** Lỗi do app phát hiện trước khi gửi (cửa sổ ngữ cảnh, HTTP 4xx): main biết mã chính xác. */
@@ -98,6 +103,8 @@ export type AgentAccounts = {
   selectedModelPricing?(): 'known' | 'unknown' | 'free' | 'subscription' | 'local' | undefined
   /** false khi cửa sổ ngữ cảnh của model chỉ là giá trị mặc định (model tuỳ chỉnh chưa khai báo): khi đó không hiện vòng context. */
   selectedModelWindowKnown?(): boolean
+  /** Nhà cung cấp OpenAI-compatible đang chọn cho runtime Nex; null khi là OAuth/built-in (N1-A1 chỉ hỗ trợ custom). */
+  nexProvider?(): NexProvider | null
 }
 
 export type AgentDeps = {
@@ -397,6 +404,15 @@ export class AgentService {
     if (entry && !this.discardIfStale(projectId, entry)) entry.gate.resolve(id, allow)
   }
   pending(projectId: string): number { return this.entries.get(projectId)?.gate.pending() ?? 0 }
+
+  /** Có lượt đang chạy hoặc đang chờ duyệt ở bất kỳ dự án nào (chặn đổi runtime giữa lượt). */
+  hasActiveTurn(): boolean {
+    if (this.starting.size > 0 || this.forking.size > 0) return true
+    for (const entry of this.entries.values()) {
+      if (entry.busy || entry.gate.pending() > 0) return true
+    }
+    return false
+  }
 
   private assertIdle(projectId: string): void {
     if (this.rollbacks.has(projectId) || this.forking.has(projectId) || this.starting.has(projectId) || this.entries.get(projectId)?.busy) {
@@ -858,6 +874,7 @@ export class AgentService {
     entry.session = create({
       cwd: root, agentDir: join(this.deps.dataDir, 'agent'), tools: toolsFor('edit'),
       sessionManager: stored.manager,
+      projectId, gate: entry.gate, getMode: () => this.getMode(projectId),
       extension: createNexgraphExtension({
         api: this.deps.api, projectId, root, gate: entry.gate,
         getMode: () => this.getMode(projectId), getTask: () => !entry.stopped && entry.busy ? entry.execution ?? null : null,

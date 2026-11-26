@@ -55,7 +55,7 @@ export function sameConsentTarget(left: AiConsentTarget | null | undefined, righ
   return left.baseUrl === right.baseUrl
 }
 
-export function consentTargetForSettings(settings: { runtime?: 'pi' | 'antigravity-cli'; provider?: string; baseUrl?: string; model?: string; accountId?: string; connectionId?: string }): AiConsentTarget | null {
+export function consentTargetForSettings(settings: { runtime?: 'nex' | 'pi' | 'antigravity-cli'; provider?: string; baseUrl?: string; model?: string; accountId?: string; connectionId?: string }): AiConsentTarget | null {
   if (!settings.model) return null
   if (settings.runtime === 'antigravity-cli') return settings.connectionId ? {
     runtime: 'antigravity-cli', provider: 'google-antigravity', connectionId: settings.connectionId,

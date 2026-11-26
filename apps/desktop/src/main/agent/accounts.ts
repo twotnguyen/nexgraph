@@ -9,6 +9,7 @@ import { readJson, writeJson, type SecretStore } from '../ai/settings'
 import { AgentError, classifyProviderError, loadPi, rememberSecret, scrub } from './session'
 import { createOpenAiOAuth, revokeOpenAiSession, type OpenAiRegistration } from './openai-auth'
 import { contextTooSmall } from './context-window'
+import type { NexProvider } from './nex/config'
 
 // pi-coding-agent không tái xuất các kiểu auth; suy ra từ chữ ký login() công khai.
 type AuthInteraction = Parameters<ModelRuntime['login']>[2]
@@ -446,6 +447,25 @@ export class AccountService {
     const selected = this.getSelectedModel()
     const custom = selected && this.customs().find((p) => p.id === selected.provider)
     return !custom || !!custom.contextWindow
+  }
+
+  /**
+   * Provider OpenAI-compatible đang chọn cho runtime Nex. Đợt N1-A1 chỉ hỗ trợ provider tuỳ chỉnh
+   * (base URL + key); OAuth/built-in trả null để renderer giữ runtime Pi.
+   * Key chỉ đi vào env của tiến trình con, không vào cấu hình trên đĩa và không trả về renderer.
+   */
+  nexProvider(): NexProvider | null {
+    const selected = this.getSelectedModel()
+    if (!selected) return null
+    const custom = this.customs().find((p) => p.id === selected.provider)
+    if (!custom || custom.id !== selected.provider) return null
+    const apiKey = this.deps.secrets.get(custom.id) ?? ''
+    return {
+      id: custom.id, label: custom.label, baseUrl: custom.baseUrl, apiKey: apiKey || 'unused', model: selected.id,
+      ...(custom.contextWindow ? { contextWindow: custom.contextWindow } : {}),
+      ...(custom.maxTokens ? { maxTokens: custom.maxTokens } : {}),
+      ...(typeof custom.supportsTools === 'boolean' ? { supportsTools: custom.supportsTools } : {})
+    }
   }
 
   /** shortcut: SDK OpenAI trong pi không gửi được request thiếu Authorization; khi chưa có key,

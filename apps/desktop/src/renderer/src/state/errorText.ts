@@ -148,6 +148,7 @@ export const codeErrors: Record<string, string> = {
   task_not_found: 'Không tìm thấy hội thoại của tác vụ',
   image_not_supported: 'Mô hình đang chọn không hỗ trợ ảnh hoặc chưa xác định được khả năng nhận ảnh.',
   agent_busy: 'Trợ lý đang trả lời',
+  runtime_switch_blocked: 'Không đổi runtime khi trợ lý đang chạy hoặc đang chờ duyệt. Hãy dừng lượt hiện tại trước.',
   ai_not_configured: 'Chưa cấu hình trợ lý AI',
   session_not_found: 'Hội thoại không thuộc tài khoản và dự án đang chọn',
   unapproved_task: 'Chỉ chạy được task khai trong .vscode/tasks.json hoặc .nexgraph/tasks.json của dự án.',

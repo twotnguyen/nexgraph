@@ -88,10 +88,11 @@ function targetOf(settings: AiSettings): AiConsentTarget | null {
 }
 
 function connectionLabel(settings: AiSettings | null): string {
-  return settings?.runtime === 'antigravity-cli' ? `${settings.model === 'auto' || settings.model.toLowerCase().startsWith('gemini') ? 'Gemini' : 'Antigravity'} · ${tr('Tài khoản Google')}` : settings?.provider === 'google' ? 'Gemini · API key'
+  const runtime = settings?.runtime === 'nex' ? 'Nex · ' : ''
+  return runtime + (settings?.runtime === 'antigravity-cli' ? `${settings.model === 'auto' || settings.model.toLowerCase().startsWith('gemini') ? 'Gemini' : 'Antigravity'} · ${tr('Tài khoản Google')}` : settings?.provider === 'google' ? 'Gemini · API key'
     : settings?.provider === 'ollama-local' ? tr('Ollama · Trên máy') : settings?.provider === 'openai' ? 'ChatGPT / OpenAI'
       : settings?.provider === 'openai-codex' ? 'Codex · ChatGPT' : settings?.provider === 'anthropic' ? 'Claude · API key'
-        : settings?.provider === 'openrouter' ? 'OpenRouter · API key' : settings?.provider ?? tr('Chưa có kết nối')
+        : settings?.provider === 'openrouter' ? 'OpenRouter · API key' : settings?.provider ?? tr('Chưa có kết nối'))
 }
 
 function errorCode(e: unknown): string {
@@ -817,6 +818,7 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       <header className="agent-head">
         {view !== 'chat' && <button type="button" className="agent-icon-button" aria-label={tr('Về cuộc trò chuyện')} title={tr('Về cuộc trò chuyện')} onClick={() => setView('chat')}><Icon name="back" size={16} /></button>}
         <h2 title={view === 'chat' ? sessionTitle : undefined}>{view === 'history' ? tr('Trò chuyện') : view === 'settings' ? tr('Quyền & giới hạn') : sessionTitle ?? vi.chat.title}</h2>
+        {cfg && view === 'chat' && <span className="agent-model agent-runtime" title={tr('Runtime agent')}>{cfg.runtime === 'nex' ? 'Nex' : cfg.runtime === 'antigravity-cli' ? 'Antigravity' : 'Pi'}</span>}
         <div className="agent-actions">
           <button type="button" className="agent-icon-button" aria-label={tr('Lịch sử')} title={tr('Lịch sử trò chuyện')} aria-pressed={view === 'history'} disabled={workLocked}
             onClick={() => { setView(view === 'history' ? 'chat' : 'history'); void work.refresh().catch(() => {}) }}><Icon name="history" size={16} /></button>
