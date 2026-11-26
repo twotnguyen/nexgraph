@@ -31,19 +31,29 @@ def owned_prefix() -> str:
     return f"{PREFIX}{os.getpid()}-"
 
 
+def _last_change(entry: os.DirEntry) -> float:
+    """mtime mới nhất của thư mục và các mục con cấp 1 (bộ trích xuất ghi vào thư mục con, gốc đứng yên)."""
+    newest = entry.stat(follow_symlinks=False).st_mtime
+    with os.scandir(entry.path) as children:
+        for child in children:
+            newest = max(newest, child.stat(follow_symlinks=False).st_mtime)
+    return newest
+
+
 def _orphan(entry: os.DirEntry, now: float) -> bool:
     match = _OWNED.match(entry.name)
     if match:
         pid = int(match.group(1))
-        # Cùng pid với tiến trình này mà chưa tạo cache thì là của tiến trình cũ trùng pid đã chết.
-        return pid == os.getpid() or not pid_alive(pid)
-    return now - entry.stat(follow_symlinks=False).st_mtime > LEGACY_MAX_AGE_SECONDS
+        # Không bao giờ xoá thư mục mang pid của chính tiến trình này: luồng dọn của `serve` có thể chạy cùng lúc
+        # với lần tạo cache đầu tiên. Thư mục của tiến trình cũ trùng pid chờ tiến trình này kết thúc.
+        return pid != os.getpid() and not pid_alive(pid)
+    return now - _last_change(entry) > LEGACY_MAX_AGE_SECONDS
 
 
 def sweep_orphan_caches(base: Path | None = None) -> int:
     """Xoá cache của tiến trình đã chết trong `base` (mặc định thư mục tạm). Trả số thư mục đã xoá.
 
-    Chỉ gọi khi tiến trình này chưa có cache (thư mục mang pid của chính nó là của tiến trình cũ trùng pid).
+    Gọi được bất cứ lúc nào: không đụng thư mục mang pid của tiến trình này.
     """
     base = Path(base) if base is not None else Path(tempfile.gettempdir())
     removed = 0

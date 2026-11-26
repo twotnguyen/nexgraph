@@ -66,7 +66,8 @@ def test_sweep_keeps_caches_of_live_processes_and_recent_legacy(watched_tmp, mon
     for d in (dead, live, legacy_old, legacy_new, other):
         (d / "ast").mkdir(parents=True)
     two_days_ago = time.time() - 2 * 24 * 3600
-    os.utime(legacy_old, (two_days_ago, two_days_ago))
+    for d in (legacy_old / "ast", legacy_old):  # bị bỏ: cả nội dung lẫn thư mục đều không đổi
+        os.utime(d, (two_days_ago, two_days_ago))
 
     monkeypatch.setattr(generic, "_cache_dir", None)
     root = generic._cache_root()
@@ -102,3 +103,37 @@ def test_serve_removes_orphan_caches_on_start(watched_tmp, tmp_path):
             os.kill(ready["pid"], getattr(signal, "SIGKILL", signal.SIGTERM))
         p.kill()
         p.wait(timeout=60)
+
+
+def test_sweep_never_removes_caches_of_this_process(watched_tmp, monkeypatch):
+    """review-81 T2: luồng dọn của `serve` chạy song song với lần tạo cache đầu tiên của job — không được xoá
+    cache đang dùng của chính tiến trình."""
+    from nexgraph_engine.index.extract_cache import sweep_orphan_caches
+    monkeypatch.setattr(generic, "_cache_dir", None)
+    root = generic._cache_root()
+    other_thread = watched_tmp / f"nexgraph-extract-{os.getpid()}-luongkhac"
+    other_thread.mkdir()
+    try:
+        sweep_orphan_caches()
+        assert root.is_dir() and other_thread.is_dir()
+    finally:
+        generic.reset_cache_root()
+
+
+def test_legacy_cache_still_written_inside_is_kept(watched_tmp, monkeypatch):
+    """review-81 T1: engine bản cũ chỉ ghi vào thư mục con, mtime của thư mục gốc đứng yên."""
+    from nexgraph_engine.index.extract_cache import sweep_orphan_caches
+    legacy = watched_tmp / "nexgraph-extract-dangchay"
+    (legacy / "ast").mkdir(parents=True)
+    old = time.time() - 3 * 24 * 3600
+    os.utime(legacy, (old, old))
+    assert sweep_orphan_caches() == 0
+    assert legacy.is_dir()
+
+
+def test_windows_open_failure_is_dead_only_for_missing_process():
+    """review-81 T3: OpenProcess lỗi vì lý do khác "không có tiến trình" (87) thì không chắc — coi là còn sống."""
+    from nexgraph_engine.subprocesses import _open_failure_means_alive
+    assert _open_failure_means_alive(87) is False   # ERROR_INVALID_PARAMETER: không có tiến trình này
+    assert _open_failure_means_alive(5) is True     # ERROR_ACCESS_DENIED
+    assert _open_failure_means_alive(1450) is True  # ERROR_NO_SYSTEM_RESOURCES

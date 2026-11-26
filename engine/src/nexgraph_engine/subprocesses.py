@@ -25,6 +25,14 @@ def run_captured(
         return subprocess.CompletedProcess(result.args, result.returncode, stdout.read(), stderr.read())
 
 
+def _open_failure_means_alive(error: int) -> bool:
+    """OpenProcess thất bại: chỉ ERROR_INVALID_PARAMETER (87) nghĩa là không có tiến trình này.
+
+    Lỗi khác (từ chối truy cập, thiếu tài nguyên…) là không chắc, nên coi là còn sống.
+    """
+    return error != 87
+
+
 def pid_alive(pid: int) -> bool:
     """Tiến trình `pid` còn sống không, mà không gửi tín hiệu nào tới nó.
 
@@ -55,7 +63,7 @@ def pid_alive(pid: int) -> bool:
     kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
     handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
     if not handle:
-        return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED: có tiến trình nhưng không được mở
+        return _open_failure_means_alive(ctypes.get_last_error())
     try:
         code = wintypes.DWORD()
         if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
