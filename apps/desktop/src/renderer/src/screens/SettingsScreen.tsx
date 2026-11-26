@@ -51,6 +51,7 @@ const SECTION_WORDS = {
   oauth: () => tr('Đăng nhập gói đăng ký ChatGPT OAuth'),
   model: () => tr('Mô hình model runtime Nex Pi kiểm tra kết nối'),
   privacy: () => tr('Quyền riêng tư dữ liệu bảo mật'),
+  about: () => tr('Giới thiệu về phiên bản giấy phép mã nguồn mở open source license'),
   language: () => tr('Ngôn ngữ giao diện language locale Tiếng Việt English')
 }
 const PAGES = (): { id: string; label: string; icon: IconName; sections: (keyof typeof SECTION_WORDS)[] }[] => [
@@ -62,7 +63,8 @@ const PAGES = (): { id: string; label: string; icon: IconName; sections: (keyof 
   { id: 'extensions', label: tr('Extension'), icon: 'plug', sections: ['extensions'] },
   { id: 'ai', label: tr('Tài khoản AI'), icon: 'plug', sections: ['quick', 'gemini', 'apikey', 'custom', 'oauth'] },
   { id: 'model', label: tr('Mô hình'), icon: 'spark', sections: ['model'] },
-  { id: 'privacy', label: tr('Quyền riêng tư'), icon: 'shield', sections: ['privacy'] }
+  { id: 'privacy', label: tr('Quyền riêng tư'), icon: 'shield', sections: ['privacy'] },
+  { id: 'about', label: tr('Giới thiệu'), icon: 'info', sections: ['about'] }
 ]
 
 function NumberSetting({ id, value, min, max, onChange }: { id: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
@@ -86,7 +88,7 @@ function NumberSetting({ id, value, min, max, onChange }: { id: string; value: n
 }
 
 /** Màn Tài khoản AI: key theo nhà cung cấp → nhà cung cấp tuỳ chỉnh → OAuth gói đăng ký → chọn model → kiểm tra kết nối. */
-export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; initialPage?: string }) {
+export function SettingsScreen({ onBack, initialPage, onOpenLicenses }: { onBack: () => void; initialPage?: string; onOpenLicenses?: () => void }) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [models, setModels] = useState<ModelInfo[]>([])
   const [settings, setSettings] = useState<AiSettings | null>(null)
@@ -126,6 +128,12 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
   const statusBar = useStatusBar()
   const hiddenStatusItems = useHiddenStatusItems()
   const locale = useLocale()
+  const [appVersion, setAppVersion] = useState('')
+  useEffect(() => {
+    let alive = true
+    void window.nexgraph.app?.version().then((version) => { if (alive) setAppVersion(version) }).catch(() => {})
+    return () => { alive = false }
+  }, [])
 
   const load = useCallback(async () => {
     const currentSettings = window.nexgraph.ai.getSettings().then(setSettings).catch((e) => {
@@ -657,6 +665,14 @@ export function SettingsScreen({ onBack, initialPage }: { onBack: () => void; in
         <h2>{tr('Dữ liệu')}</h2>
         <p>{vi.settings.privacy1}</p>
         <p>{vi.settings.privacy2}</p>
+      </section>}
+
+      {pages.some((p) => p.id === 'about') && <h1 id="settings-about" data-settings-page="about" className="settings-page-title">{tr('Giới thiệu')}</h1>}
+      {shows('about') && <section className="settings-section" aria-labelledby="settings-about-title">
+        <h2 id="settings-about-title">NexGraph</h2>
+        <p className="muted">{appVersion ? tr('Phiên bản {version}', { version: appVersion }) : tr('Đang đọc phiên bản…')}</p>
+        <p className="muted small">{tr('Phần mềm bên thứ ba và giấy phép đi kèm bản cài.')}</p>
+        <button type="button" disabled={!onOpenLicenses} onClick={onOpenLicenses}>{tr('Giấy phép mã nguồn mở')}</button>
       </section>}
       </div>
       {connecting && <ConnectionDialog initialMethod={connecting} onClose={() => setConnecting(null)}

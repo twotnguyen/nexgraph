@@ -48,6 +48,7 @@ import { ensureTasksFile, listTasks, resolveTask } from './tasks'
 import { createTaskSigner, taskContentKey } from './tasks/signature'
 import { UserError } from './user-error'
 import { setMenuLocale, getMenuLocale } from './app-menu-locale'
+import { readCurrentLicenses } from './licenses'
 import { isMenuLocale, pickFileTitle } from './app-menu-labels'
 import { git, gitBlame, gitBranches, gitCommit, gitDiffSides, gitRemote, gitRestore, gitStage, gitStashAction, gitStashes, gitStashSave, gitStatus, gitSwitchBranch, gitUnstage } from './git/repo'
 import { gitCommitDiff, gitCommitFiles, gitHistory } from './git/history'
@@ -308,6 +309,9 @@ export function registerIpc(
     setMenuLocale(value)
     rebuildMenu?.(value)
   })
+  // Màn Giấy phép mã nguồn mở + mục Giới thiệu: chỉ đọc tệp đi kèm, không nhận đường dẫn từ renderer.
+  onTrusted('licenses:read', () => readCurrentLicenses())
+  onTrusted('app:version', async () => app.getVersion())
   on('project:open', (path: string) => api().openProject(path))
   on('project:list', () => api().listProjects())
   const indexSources = new IndexSourceStore(join(app.getPath('userData'), 'index-sources.json'),

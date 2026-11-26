@@ -237,7 +237,7 @@ const viStrings = {
     card: 'Tích hợp trợ lý AI', cardDesc: 'Nối Claude Code, Codex, Cursor, Gemini và 17 trợ lý khác vào đồ thị của dự án: MCP, quy tắc hỏi graph trước, skill và hook nhắc.',
     title: 'Tích hợp trợ lý AI',
     agents: {
-      claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', opencode: 'OpenCode', kilo: 'Kilo Code', aider: 'Aider',
+      claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', opencode: 'Nex', kilo: 'Kilo Code', aider: 'Aider',
       amp: 'Amp', vscode: 'VS Code (Copilot)', claw: 'OpenClaw', droid: 'Factory Droid', trae: 'Trae', 'trae-cn': 'Trae CN',
       antigravity: 'Antigravity', hermes: 'Hermes', kiro: 'Kiro', pi: 'Pi', devin: 'Devin / Windsurf', codebuddy: 'CodeBuddy', kimi: 'Kimi',
       agents: 'Agent Skills (AGENTS.md)'
@@ -278,8 +278,8 @@ const viStrings = {
     starters: ['Giải thích kiến trúc dự án', 'Các điểm vào chính nằm ở đâu?'],
     setupTitle: 'Thiết lập trợ lý AI',
     setupDescription: 'Chọn nhà cung cấp và model để hỏi về mã nguồn hoặc đề xuất thay đổi.',
-    connectOpenCode: 'Kết nối OpenCode',
-    openCodeHint: 'Sau khi lưu cấu hình MCP, mở OpenCode trong thư mục dự án để dùng các công cụ đồ thị của NexGraph.',
+    connectOpenCode: 'Kết nối Nex',
+    openCodeHint: 'Sau khi lưu cấu hình MCP, trợ lý dùng các công cụ đồ thị của NexGraph trong thư mục dự án.',
     attachFile: 'Thêm tệp đang mở', removeFile: 'Bỏ tệp tham chiếu', noActiveFile: 'Mở một tệp để thêm vào câu hỏi',
     filePrompt: (ref: string) => `Tệp tham chiếu trong dự án: @${ref}`,
     placeholder: 'Hỏi về dự án, ví dụ: luồng đăng nhập chạy thế nào?',
@@ -955,7 +955,7 @@ const enStrings: typeof viStrings = {
     card: 'AI assistant integrations', cardDesc: 'Connect Claude Code, Codex, Cursor, Gemini and 17 more assistants to the project graph: MCP, rules to query the graph first, skills and reminder hooks.',
     title: 'AI assistant integrations',
     agents: {
-      claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', opencode: 'OpenCode', kilo: 'Kilo Code', aider: 'Aider',
+      claude: 'Claude Code', codex: 'Codex', gemini: 'Gemini CLI', cursor: 'Cursor', opencode: 'Nex', kilo: 'Kilo Code', aider: 'Aider',
       amp: 'Amp', vscode: 'VS Code (Copilot)', claw: 'OpenClaw', droid: 'Factory Droid', trae: 'Trae', 'trae-cn': 'Trae CN',
       antigravity: 'Antigravity', hermes: 'Hermes', kiro: 'Kiro', pi: 'Pi', devin: 'Devin / Windsurf', codebuddy: 'CodeBuddy', kimi: 'Kimi',
       agents: 'Agent Skills (AGENTS.md)'
@@ -996,8 +996,8 @@ const enStrings: typeof viStrings = {
     starters: ['Explain the project architecture', 'Where are the main entry points?'],
     setupTitle: 'Set up the AI assistant',
     setupDescription: 'Choose a provider and model to ask about the code or suggest changes.',
-    connectOpenCode: 'Connect OpenCode',
-    openCodeHint: 'After saving the MCP configuration, open OpenCode in the project folder to use NexGraph graph tools.',
+    connectOpenCode: 'Connect Nex',
+    openCodeHint: 'After saving the MCP configuration, the assistant uses NexGraph graph tools in the project folder.',
     attachFile: 'Attach open file', removeFile: 'Remove referenced file', noActiveFile: 'Open a file to attach it to the question',
     filePrompt: (ref: string) => `File referenced in the project: @${ref}`,
     placeholder: 'Ask about the project, for example: how does the login flow work?',
@@ -1522,6 +1522,22 @@ export const uiEn: Record<string, string> = {
   'Đã bỏ đăng ký ChatGPT đã lưu. Lần đăng nhập tiếp theo có thể chọn tài khoản hoặc workspace khác.': 'Removed the saved ChatGPT registration. The next sign-in can choose a different account or workspace.',
   'Đang kiểm tra…': 'Checking…',
   'Dữ liệu': 'Data',
+  // Màn Giấy phép mã nguồn mở + mục Giới thiệu (LIC-2)
+  'Giấy phép mã nguồn mở': 'Open Source Licenses',
+  'Giới thiệu': 'About',
+  'Giới thiệu về phiên bản giấy phép mã nguồn mở open source license': 'About version open source license',
+  'Phiên bản {version}': 'Version {version}',
+  'Đang đọc phiên bản…': 'Reading version…',
+  'Phần mềm bên thứ ba và giấy phép đi kèm bản cài.': 'Third-party software and licenses included with the installation.',
+  'Phần mềm bên thứ ba và giấy phép đi kèm bản cài NexGraph.': 'Third-party software and licenses included with NexGraph.',
+  'Tìm trong giấy phép': 'Search licenses',
+  'Tìm trong giấy phép…': 'Search licenses…',
+  'Đang tải giấy phép…': 'Loading licenses…',
+  '{shown}/{total} mục': '{shown}/{total} {total, plural, one {section} other {sections}}',
+  'Không có mục nào khớp “{query}”': 'No sections match “{query}”',
+  'Tệp: {name}': 'File: {name}',
+  // Câu dự phòng theo mã lỗi licenses_missing (state/errorText codeErrors): main trả câu Việt.
+  'Không đọc được tệp giấy phép mã nguồn mở đi kèm ứng dụng.': 'Could not read the open source license file included with the app.',
   // ArchitectureCanvas, FlowsView, GraphCanvas, MapView
   'Đang tải kiến trúc…': 'Loading architecture…',
   'Đang tải các bước…': 'Loading steps…',

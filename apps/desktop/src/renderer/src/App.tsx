@@ -19,6 +19,7 @@ import { LargeProjectScreen } from './screens/LargeProjectScreen'
 import { IndexingScreen } from './screens/IndexingScreen'
 import { ProjectOverviewScreen, type WorkspaceTab } from './screens/ProjectOverviewScreen'
 import { SettingsScreen } from './screens/SettingsScreen'
+import { LicensesScreen } from './screens/LicensesScreen'
 import { ProjectsScreen } from './screens/ProjectsScreen'
 import { WorkspaceScreen } from './screens/WorkspaceScreen'
 import { GlobalViewScreen } from './screens/GlobalViewScreen'
@@ -33,6 +34,7 @@ type Screen =
   | { name: 'overview'; project: ProjectSummary }
   | { name: 'workspace'; project: ProjectSummary; tab?: WorkspaceTab; initialCommand?: HostCommand }
   | { name: 'settings'; back: Screen; page?: string }
+  | { name: 'licenses'; back: Screen }
   | { name: 'global'; projectIds: string[] }
 
 /** Kiểm tra kích thước trước khi lập chỉ mục. Lỗi khi quét không chặn: coi như dự án không lớn. */
@@ -203,6 +205,8 @@ export default function App() {
   const openSettings = (page?: string) => setScreen((s) => s.name === 'settings' ? { ...s, page } : { name: 'settings', back: s, page })
   useCommand('settings.open', () => openSettings(), appCommands)
   useCommand('keymap.open', () => openSettings('keymap'), appCommands)
+  // Menu Help → Giấy phép mã nguồn mở; mở được từ mọi màn, kể cả khi Không gian làm việc đang hiện.
+  useCommand('licenses.open', () => setScreen((s) => (s.name === 'licenses' ? s : { name: 'licenses', back: s })))
   useCommand('projects.open', () => setScreen({ name: 'projects' }), appCommands && screen.name !== 'projects' && !workspace && !indexing?.exploring)
   const vimOn = useVimMode()
   useCommand('editor.toggle_vim', () => setVimMode(!vimOn))
@@ -269,7 +273,9 @@ export default function App() {
         </CommandsEnabled>
       )}
       {screen.name === 'global' && <GlobalViewScreen projectIds={screen.projectIds} onBack={() => setScreen({ name: 'projects' })} />}
-      {screen.name === 'settings' && <SettingsScreen key={screen.page ?? ''} initialPage={screen.page} onBack={() => setScreen(screen.back)} />}
+      {screen.name === 'licenses' && <LicensesScreen onBack={() => setScreen(screen.back)} />}
+      {screen.name === 'settings' && <SettingsScreen key={screen.page ?? ''} initialPage={screen.page} onBack={() => setScreen(screen.back)}
+        onOpenLicenses={() => setScreen({ name: 'licenses', back: screen })} />}
       <EngineStatusBar status={status} onRestart={() => void window.nexgraph.engine.restart()} />
       {!window.nexgraph?.host && <CommandPaletteHost />}
     </div>

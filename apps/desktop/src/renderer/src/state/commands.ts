@@ -31,6 +31,7 @@ export const COMMANDS: CommandDef[] = [
   { id: 'window.close', category: 'Ứng dụng', title: 'Đóng cửa sổ' },
   { id: 'theme_selector.toggle', category: 'Giao diện', title: 'Chọn chủ đề màu', key: 'mod+k mod+t' },
   { id: 'settings.open', category: 'Ứng dụng', title: 'Mở cài đặt', key: 'mod+,' },
+  { id: 'licenses.open', category: 'Ứng dụng', title: 'Giấy phép mã nguồn mở' },
   { id: 'keymap.open', category: 'Ứng dụng', title: 'Mở phím tắt', key: 'mod+k mod+s' },
   { id: 'notification.clear', category: 'Ứng dụng', title: 'Xoá tất cả thông báo' },
   { id: 'notifications.toggle', category: 'Ứng dụng', title: 'Mở trung tâm thông báo' },
