@@ -5,6 +5,7 @@ nên đầu ra vendor ở đây so được với `graphify_import_snapshots`.
 """
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -90,6 +91,7 @@ def test_child_env_stops_vendor_reexec(tmp_path, monkeypatch):
 
     from nexgraph_engine.pipeline.runner import child_env
 
+    monkeypatch.delenv("PYTHONHASHSEED", raising=False)  # biến có sẵn trên máy sẽ che lỗi của mã cũ
     env = child_env(tmp_path / "out")
     env.pop("PYTEST_CURRENT_TEST", None)  # tiến trình con thật không chạy dưới pytest
     monkeypatch.setattr(os, "environ", env)
@@ -113,7 +115,8 @@ def test_frozen_engine_runs_extract_step(fixture_root, tmp_path, monkeypatch):
     launcher.parent.mkdir()
     code = (f"import sys; sys.executable = {str(launcher)!r}; "
             "from nexgraph_engine.cli import main; sys.exit(main(sys.argv[1:]))")
-    launcher.write_text(f"#!/bin/sh\nexec {sys.executable!s} -c {code!r} \"$@\"\n", encoding="utf-8")
+    launcher.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} -c {shlex.quote(code)} \"$@\"\n",
+                        encoding="utf-8")
     launcher.chmod(0o755)
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(launcher))

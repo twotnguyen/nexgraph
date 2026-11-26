@@ -118,6 +118,8 @@ def child_env(out_dir: Path) -> dict[str, str]:
     env["PYTHONUTF8"] = "1"
     # Thiếu biến này thì vendor tự chạy lại `[sys.executable, "-m", "graphify", ...]` (graphify/__main__.py
     # `_pin_hash_seed_if_needed`); ở bản cài `sys.executable` là binary engine nên lệnh đó hỏng.
+    # Ở dev biến này ghim seed thật. Bản cài (bootloader PyInstaller dùng isolated config) bỏ qua nó,
+    # nên ở đó chỉ chặn re-exec, seed vẫn ngẫu nhiên — backlog N2-E2-hashseed-frozen.
     env.setdefault("PYTHONHASHSEED", "0")
     return env
 
