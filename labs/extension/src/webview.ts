@@ -26,4 +26,4 @@ window.nexgraph.host = {
   }
 }
 // Cùng một bundle phục vụ hai webview: tab chính và view Trợ lý AI ở thanh bên phụ.
-void (root.dataset.mode === 'agent' ? import('../../../apps/desktop/src/renderer/src/hosted/AgentView') : import('../../../apps/desktop/src/renderer/src/main'))
+void (root.dataset.mode === 'agent' ? import('../../../apps/desktop/src/renderer/src/app/hosted/AgentView') : import('../../../apps/desktop/src/renderer/src/main'))

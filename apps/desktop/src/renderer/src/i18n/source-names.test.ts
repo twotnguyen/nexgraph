@@ -23,7 +23,7 @@ const ALLOWED: { file?: RegExp; value?: RegExp; why: string }[] = [
     why: 'mô tả nhà cung cấp dịch vụ "OpenCode Zen/Go" trong danh sách đăng nhập (ADR 0025 §1): neo đầu chuỗi, đúng ranh giới từ, chỉ ở tệp chứa các mô tả đó'
   },
   { file: /^\.\.\/\.\.\/packages\/contracts\/src\/integration-types\.ts$/, value: /^opencode$/, why: 'ID nền tảng nội bộ cho khoá cấu hình MCP, không hiển thị' },
-  { file: /^src\/renderer\/src\/screens\/LicensesScreen\.tsx$/, why: 'màn Giấy phép mã nguồn mở — nơi duy nhất được nêu tên nguồn' }
+  { file: /^src\/renderer\/src\/app\/screens\/LicensesScreen\.tsx$/, why: 'màn Giấy phép mã nguồn mở — nơi duy nhất được nêu tên nguồn' }
 ]
 /**
  * Tên tệp THẬT mà engine đọc (`graphify/rcfile.RC_FILENAME`, `index/discovery.py`): người dùng phải tự tạo
@@ -74,11 +74,11 @@ function sources(dir: string): string[] {
 /** Mọi tệp có chuỗi người dùng thấy trong phạm vi quét. */
 function displaySources(): SourceFile[] {
   const targets = [
-    join(APP, 'src/renderer/src/strings.ts'),
+    join(APP, 'src/renderer/src/i18n/strings.ts'),
     ...readdirSync(join(APP, 'src/renderer/src/i18n')).filter((name) => /^uiEn-.*\.ts$/.test(name)).map((name) => join(APP, 'src/renderer/src/i18n', name)),
     join(APP, 'src/main/app/app-menu-labels.ts'),
     ...sources(join(APP, '../../packages/contracts/src')),
-    join(APP, 'src/renderer/src/screens/LicensesScreen.tsx')
+    join(APP, 'src/renderer/src/app/screens/LicensesScreen.tsx')
   ]
   return targets.map((path) => ({ file: relPosix(APP, path), text: readFileSync(path, 'utf8') }))
 }
@@ -91,11 +91,11 @@ describe('quét tên nguồn trong chuỗi hiển thị (LIC-3)', () => {
 
   it('bộ quét bắt được vi phạm và chuẩn hoá đường dẫn "\\" của Windows sang "/"', () => {
     const violations = scanSourceNames([
-      { file: 'src\\renderer\\src\\strings.ts', text: "const a = 'NexGraph'\nconst b = 'Mở OpenCode'\n" },
+      { file: 'src\\renderer\\src\\i18n\\strings.ts', text: "const a = 'NexGraph'\nconst b = 'Mở OpenCode'\n" },
       { file: '..\\..\\packages\\contracts\\src\\api.ts', text: '// Graphify trong comment không tính\nconst c = `dùng Graphify`\n' }
     ])
     expect(violations).toEqual([
-      { file: 'src/renderer/src/strings.ts', line: 2, value: 'Mở OpenCode' },
+      { file: 'src/renderer/src/i18n/strings.ts', line: 2, value: 'Mở OpenCode' },
       { file: '../../packages/contracts/src/api.ts', line: 2, value: 'dùng Graphify' }
     ])
     expect(violations.every((v) => !v.file.includes('\\'))).toBe(true)
@@ -105,11 +105,11 @@ describe('quét tên nguồn trong chuỗi hiển thị (LIC-3)', () => {
     expect(scanSourceNames([{ file: 'src/renderer/src/i18n/uiEn-screens.ts', text: "'OpenCode Zen: dùng API key'" }])).toEqual([])
     expect(scanSourceNames([{ file: '../../packages/contracts/src/integration-types.ts', text: "'opencode'" }])).toEqual([])
     // Cùng chữ "OpenCode" nhưng không phải tên nhà cung cấp thì vẫn báo.
-    expect(scanSourceNames([{ file: 'src/renderer/src/strings.ts', text: "'Kết nối OpenCode'" }])).toHaveLength(1)
+    expect(scanSourceNames([{ file: 'src/renderer/src/i18n/strings.ts', text: "'Kết nối OpenCode'" }])).toHaveLength(1)
   })
 
   it('ngoại lệ hẹp: chỉ token tên tệp thật ".graphifyrc"; "Graphify" đứng riêng vẫn bị báo (B2)', () => {
-    const scan = (text: string) => scanSourceNames([{ file: 'src/renderer/src/strings.ts', text }])
+    const scan = (text: string) => scanSourceNames([{ file: 'src/renderer/src/i18n/strings.ts', text }])
     // Đúng token tên tệp (chỉ dẫn thật của hộp Tuỳ chọn index, VI + EN): được phép.
     expect(scan("'Đổi ngôn ngữ của một đuôi tệp bằng .graphifyrc ở gốc dự án, ví dụ language.inc = php'")).toEqual([])
     expect(scan("'Override the language of a file extension with .graphifyrc at the project root, for example language.inc = php'")).toEqual([])
@@ -138,7 +138,7 @@ describe('quét tên nguồn trong chuỗi hiển thị (LIC-3)', () => {
       expect(scanSourceNames([{ file: providers, text }]), text).toEqual([])
     }
     // Cùng chuỗi ở tệp khác: báo (trước đây khớp chuỗi con ở mọi tệp).
-    for (const file of ['src/renderer/src/strings.ts', 'src/renderer/src/i18n/uiEn-agent.ts', '../../packages/contracts/src/api.ts', 'src/main/app/app-menu-labels.ts']) {
+    for (const file of ['src/renderer/src/i18n/strings.ts', 'src/renderer/src/i18n/uiEn-agent.ts', '../../packages/contracts/src/api.ts', 'src/main/app/app-menu-labels.ts']) {
       expect(scanSourceNames([{ file, text: "'OpenCode Zen: dùng API key'" }]), file).toHaveLength(1)
     }
     // Đúng tệp nhưng không neo đầu chuỗi hoặc sai ranh giới từ: báo.

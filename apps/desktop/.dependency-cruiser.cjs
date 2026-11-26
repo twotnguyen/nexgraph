@@ -1,6 +1,6 @@
 /**
  * Luật phụ thuộc giữa các khối của app desktop (ADR 0026, pha 0: chỉ báo cáo).
- * Chạy: `pnpm rules:report` ở gốc repo. Pha 2–3 sẽ thêm luật theo `features/<x>`.
+ * Chạy: `pnpm rules:report` ở gốc repo. Renderer: app → features → shared/i18n (pha 3b).
  */
 const TEST = '(\\.test\\.[cm]?tsx?$|^test/|^e2e/|test-utils\\.ts$)'
 
@@ -35,11 +35,18 @@ module.exports = {
       to: { path: '^src/(main|renderer|preload)/' },
     },
     {
-      name: 'state-khong-import-components',
-      comment: 'State/hook của renderer không phụ thuộc component; component dùng state, không ngược lại.',
+      name: 'renderer-shared-doc-lap',
+      comment: 'renderer/src/shared (ui, lib) và i18n dùng được ở mọi nơi nên không phụ thuộc tính năng hay phần lắp ráp (ADR 0026 pha 3b; trước là state-khong-import-components).',
       severity: 'error',
-      from: { path: '^src/renderer/src/state/', pathNot: TEST },
-      to: { path: '^src/renderer/src/components/' },
+      from: { path: '^src/renderer/src/(shared|i18n)/', pathNot: TEST },
+      to: { path: '^src/renderer/src/(app|features)/' },
+    },
+    {
+      name: 'features-khong-import-app',
+      comment: 'Tính năng không phụ thuộc phần lắp ráp workbench (app/); app/ ghép các tính năng lại.',
+      severity: 'error',
+      from: { path: '^src/renderer/src/features/', pathNot: TEST },
+      to: { path: '^src/renderer/src/app/' },
     },
     {
       name: 'ma-san-pham-khong-import-test',

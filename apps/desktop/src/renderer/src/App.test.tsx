@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ScanInfo } from '@nexgraph/contracts/graph-types'
 import { installNexgraph, progress, project } from './test-utils'
-import { formatDate } from './state/locale'
+import { formatDate } from './shared/lib/locale'
 import App from './App'
 
 // jsdom không chạy được Monaco (thiếu matchMedia khi nạp phần gợi ý/hover); test này không mở editor.
-vi.mock('./components/editor/monaco', () => ({ languageFor: () => 'plaintext', createEditor: vi.fn(), createDiffEditor: vi.fn(), createMirror: () => null }))
+vi.mock('./features/editor/monaco', () => ({ languageFor: () => 'plaintext', createEditor: vi.fn(), createDiffEditor: vi.fn(), createMirror: () => null }))
 
 const small: ScanInfo = { files: 120, by_language: { dart: 120 }, large: false, threshold: 5000, top_dirs: [] }
 const large: ScanInfo = {

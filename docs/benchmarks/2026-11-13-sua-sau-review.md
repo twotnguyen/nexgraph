@@ -7,7 +7,7 @@ Ngày 2026-11-13, macOS arm64. Không commit/push trong phiên sửa. Dữ liệ
 Đã chạy:
 
 ```sh
-pnpm --filter @nexgraph/desktop exec vitest run test/ai-settings.test.ts test/git-hook.test.ts src/renderer/src/screens/SettingsScreen.test.tsx
+pnpm --filter @nexgraph/desktop exec vitest run test/ai-settings.test.ts test/git-hook.test.ts src/renderer/src/app/screens/SettingsScreen.test.tsx
 ```
 
 Kết quả: **3 test files, 23 tests passed**. Kiểm cả thao tác thay key rỗng, đổi origin, lỗi mã hoá không làm mất cấu hình cũ, hook Python/Node không bị thay bytes/mode và hook shell vẫn cài/gỡ được.

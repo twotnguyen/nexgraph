@@ -2,7 +2,7 @@
 
 Mỗi dòng ứng với một dòng của bảng đối chiếu trong spec F10 §3 (`docs/superpowers/specs/2026-11-13-nexgraph-graphify-parity-design.md` của workspace). Chạy trên app thật, bản build từ mã nguồn hoặc bộ cài. Tích ô **macOS** và **Windows** khi đạt. Không đạt thì ghi hiện tượng, commit và ảnh vào cột Ghi chú.
 
-Phần so sánh tự động nằm ở [graphify-parity.md](graphify-parity.md): số tệp, node, cặp node có cạnh, community, seed `query`, `path`, và `graph.json` nạp bằng `graphify-mcp`. Checklist này chỉ kiểm chỗ bấm và kết quả hiện trên giao diện. Chữ in đậm là nhãn đúng như trên giao diện (`apps/desktop/src/renderer/src/strings.ts`).
+Phần so sánh tự động nằm ở [graphify-parity.md](graphify-parity.md): số tệp, node, cặp node có cạnh, community, seed `query`, `path`, và `graph.json` nạp bằng `graphify-mcp`. Checklist này chỉ kiểm chỗ bấm và kết quả hiện trên giao diện. Chữ in đậm là nhãn đúng như trên giao diện (`apps/desktop/src/renderer/src/i18n/strings.ts`).
 
 **Ghi lần chạy:** người thử · ngày · commit · bản build (mã nguồn / bộ cài + SHA-256) · máy.
 

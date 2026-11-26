@@ -2,8 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { plural, setLocale } from '../state/locale'
-import { tr, vi } from '../strings'
+import { plural, setLocale } from '../shared/lib/locale'
+import { tr, vi } from './strings'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 /** Từ đứng sau số nhưng không phải danh từ đếm được: động từ/giới từ/đơn vị đo. */
@@ -11,9 +11,9 @@ const NOT_A_NOUN = new Set(['has', 'was', 'is', 'does', 'this', 'cross', 'plus',
 
 /** Chuỗi bản Anh: phần `enStrings` của strings.ts (kèm record `uiEn` phía sau) và các tệp uiEn-*.ts. */
 function enSources(): { file: string; text: string; lineOffset: number }[] {
-  const strings = readFileSync(join(ROOT, 'strings.ts'), 'utf8')
+  const strings = readFileSync(join(ROOT, 'i18n', 'strings.ts'), 'utf8')
   const at = strings.indexOf('const enStrings')
-  const out = [{ file: 'strings.ts', text: strings.slice(at), lineOffset: strings.slice(0, at).split('\n').length - 1 }]
+  const out = [{ file: 'i18n/strings.ts', text: strings.slice(at), lineOffset: strings.slice(0, at).split('\n').length - 1 }]
   for (const entry of readdirSync(join(ROOT, 'i18n'))) {
     if (/^uiEn.*\.ts$/.test(entry)) out.push({ file: `i18n/${entry}`, text: readFileSync(join(ROOT, 'i18n', entry), 'utf8'), lineOffset: 0 })
   }

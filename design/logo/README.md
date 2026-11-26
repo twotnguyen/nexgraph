@@ -32,6 +32,6 @@ Mọi tệp `nexgraph-app-icon`, `nexgraph-mark`, `nexgraph-logo-dark`, `nexgrap
 | `nexgraph-logo-dark.svg` / `.png` | 840×220 (PNG 2×) | README, slide nền tối |
 | `nexgraph-logo-light.svg` / `.png` | 840×220 (PNG 2×) | Bìa báo cáo Word/PDF, tài liệu in |
 
-Logo nhỏ trong app (thanh trên cùng, tên dự án) là component `Logo` ở `apps/desktop/src/renderer/src/components/common/icons.tsx`: cùng hình, vẽ trên lưới 24 px.
+Logo nhỏ trong app (thanh trên cùng, tên dự án) là component `Logo` ở `apps/desktop/src/renderer/src/shared/ui/icons.tsx`: cùng hình, vẽ trên lưới 24 px.
 
 Ảnh `nexgraph-3d-icon`, `-prism-`, `-hypercube-`, `-minimal-`, `-dag-logo` (`.png`, `.webp`) là các bản khám phá cũ do mô hình sinh ảnh tạo theo ý tưởng trước. Chúng không còn là logo chính thức.

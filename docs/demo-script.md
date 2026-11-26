@@ -2,7 +2,7 @@
 
 Dùng **NexGraph 0.2.0 Electron/Monaco** (bản ứng viên; 0.1.2 là bản đang phát hành) từ [bộ cài đúng commit bàn giao](release/README.md). Chạy trên bản sao dự án. Ghi tên và hash bộ cài, commit NexGraph, commit hoặc tên fixture của dự án, hệ điều hành và provider trước mỗi lượt. [Biên bản nghiệm thu 18/11](release/acceptance/2026-11-18.md) · [biên bản RC 23/11](release/acceptance/2026-11-23-macos.md).
 
-Nhãn nút trong tài liệu chép đúng chuỗi giao diện tiếng Việt ở `apps/desktop/src/renderer/src/strings.ts`; bản English ghi trong ngoặc khi khác (ví dụ **Tìm trong đồ thị** / *Search Graph*, **Tô luồng trên graph** / *Highlight flow on graph*). Đổi ngôn ngữ trong **Cài đặt** có hiệu lực ngay, không cần khởi động lại.
+Nhãn nút trong tài liệu chép đúng chuỗi giao diện tiếng Việt ở `apps/desktop/src/renderer/src/i18n/strings.ts`; bản English ghi trong ngoặc khi khác (ví dụ **Tìm trong đồ thị** / *Search Graph*, **Tô luồng trên graph** / *Highlight flow on graph*). Đổi ngôn ngữ trong **Cài đặt** có hiệu lực ngay, không cần khởi động lại.
 
 ## Kiểm nhanh bằng fixture Python
 
