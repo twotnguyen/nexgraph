@@ -31,7 +31,7 @@ import { EditorStateRegistry } from './agent/editor-state'
 import { AgentRouter, type AgentRuntimeId } from './agent-router'
 import { createNexSession, nexAvailable } from './agent/nex/runtime'
 import { NexSidecar, resolveNexBinary } from './agent/nex/sidecar'
-import { NexAccountManager, checkNexAuthUrl, withCustomProviders } from './agent/nex/accounts'
+import { NexAccountManager, checkNexAuthUrl, withAppKeys, withCustomProviders } from './agent/nex/accounts'
 import { NexConsentStore, nexAgentAccounts, nexDestination, nexReady } from './agent/nex/destination'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
@@ -910,7 +910,8 @@ export function registerIpc(
       const a = await acc()
       const providers = (await a.listProviders()).filter((p) => p.custom)
       const models = await a.listModels()
-      return withCustomProviders(view, providers.map((p) => ({
+      const withKeys = withAppKeys(view, (id) => !!a.nexProviderFor({ provider: id, id: '' }))
+      return withCustomProviders(withKeys, providers.map((p) => ({
         id: p.id, label: p.label, hasKey: p.hasKey,
         models: models.filter((m) => m.provider === p.id).map((m) => ({ id: m.id, label: m.label }))
       })))

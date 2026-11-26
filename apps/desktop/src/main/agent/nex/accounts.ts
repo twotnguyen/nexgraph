@@ -97,6 +97,20 @@ export function withCustomProviders(view: NexAccountsView, customs: NexCustomPro
   return { ...view, providers: [...view.providers, ...providers] }
 }
 
+/**
+ * Nhà cung cấp built-in có API key trong kho của app (nhập ở khối Nex, `nex:save-key`): key không đi
+ * qua sidecar mà vào env tiến trình con, nên sidecar báo "chưa kết nối". `usable(id)` = app dựng được
+ * provider OpenAI-compatible cho nó (có baseUrl + key) — khi đó hiện đã kết nối để chọn được model.
+ */
+export function withAppKeys(view: NexAccountsView, usable: (providerId: string) => boolean): NexAccountsView {
+  return {
+    ...view,
+    providers: view.providers.map((provider) => provider.connected || !usable(provider.id) ? provider : {
+      ...provider, connected: true, connections: [...provider.connections, { id: provider.id, label: 'API key', method: 'key' }]
+    })
+  }
+}
+
 export type NexAccountManagerOptions = {
   /** Khởi động (hoặc nối lại) sidecar tài khoản; ném lỗi khi máy không có runtime. */
   connect: () => Promise<{ baseUrl: string; password: string }>

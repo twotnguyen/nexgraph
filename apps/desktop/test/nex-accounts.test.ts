@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { NexAccountManager, checkNexAuthUrl, deviceCodeFromInstructions, withCustomProviders } from '../src/main/agent/nex/accounts'
+import { NexAccountManager, checkNexAuthUrl, deviceCodeFromInstructions, withAppKeys, withCustomProviders } from '../src/main/agent/nex/accounts'
 import type { NexAccountsView } from '../src/shared/agent-types'
 
 const SECRET = 'sk-live-should-never-leave-main'
@@ -256,5 +256,25 @@ describe('withCustomProviders', () => {
     expect(merged.providers).toHaveLength(1)
     expect(merged.providers[0]).toMatchObject({ id: 'qa', name: 'NexGraph QA', connected: true, models: [{ id: 'gpt-6-luna', label: 'gpt-6-luna' }] })
     expect(merged.providers[0].methods.map((m) => m.id)).toEqual(['key'])
+  })
+})
+
+// Review #72 vòng 1, finding 3: API key nhập trong khối Nex cho nhà cung cấp built-in nằm trong kho
+// của app (không ở sidecar) — vẫn phải hiện "đã kết nối" để chọn được model.
+describe('nhà cung cấp built-in có API key trong kho app', () => {
+  const view = {
+    available: true,
+    providers: [
+      { id: 'openai', name: 'OpenAI', connected: false, connections: [], methods: [{ id: 'key', type: 'key' as const, label: 'API key' }], models: [{ id: 'gpt-5', label: 'GPT-5' }] },
+      { id: 'anthropic', name: 'Anthropic', connected: false, connections: [], methods: [], models: [] },
+      { id: 'github', name: 'GitHub', connected: true, connections: [{ id: 'c1', label: 'oauth', method: 'oauth' }], methods: [], models: [] }
+    ]
+  }
+
+  it('đánh dấu connected khi app dùng được key đó cho Nex; không đụng nhà cung cấp khác', () => {
+    const out = withAppKeys(view as never, (id) => id === 'openai')
+    expect(out.providers.find((p) => p.id === 'openai')).toMatchObject({ connected: true, connections: [{ id: 'openai', label: 'API key', method: 'key' }] })
+    expect(out.providers.find((p) => p.id === 'anthropic')?.connected).toBe(false)
+    expect(out.providers.find((p) => p.id === 'github')?.connections).toHaveLength(1)
   })
 })
