@@ -1,5 +1,5 @@
 from pathlib import Path
-from nexgraph_engine.flows.entry import detect_entry_points, decorators_above
+from nexgraph_engine.analysis.flows.entry import detect_entry_points, decorators_above
 
 
 def test_entry_points_of_flow_app(copy_fixture, index_project):

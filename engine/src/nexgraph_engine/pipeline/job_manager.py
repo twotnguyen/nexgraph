@@ -7,15 +7,15 @@ import time
 import uuid
 from collections.abc import Callable
 
-from nexgraph_engine.index.events import EventBus
-from nexgraph_engine.index.extra_sources import ExtraSources
+from nexgraph_engine.indexing.index.events import EventBus
+from nexgraph_engine.indexing.index.extra_sources import ExtraSources
 from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent, RunResult
-from nexgraph_engine.index.scan import resolve_subdir
-from nexgraph_engine.sources import sources_root
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.projects import ProjectInfo, ProjectRegistry
-from nexgraph_engine.store.publication import publish_stage, stage_graph
-from nexgraph_engine.tasks import TaskCancelled, TaskContext
+from nexgraph_engine.indexing.index.scan import resolve_subdir
+from nexgraph_engine.indexing.sources import sources_root
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.projects import ProjectInfo, ProjectRegistry
+from nexgraph_engine.storage.store.publication import publish_stage, stage_graph
+from nexgraph_engine.core.tasks import TaskCancelled, TaskContext
 
 ACTIVE = ("queued", "structure", "resolve", "running", "waiting_llm")  # waiting_llm: job semantic đường A chờ main (W9)
 # Job đã xong chỉ giữ để client hỏi kết quả một lúc: giới hạn số lượng và TTL để `_jobs` không phình mãi (REV-19).

@@ -16,13 +16,13 @@ import sqlite3
 import time
 from pathlib import Path
 
-from nexgraph_engine.flows.build import rebuild_flows
+from nexgraph_engine.analysis.flows.build import rebuild_flows
 from nexgraph_engine.pipeline.legacy_indexer import ProgressEvent
 from nexgraph_engine.pipeline.applied import forget_applied
 from nexgraph_engine.pipeline.mode import GRAPHIFY, LEGACY, pipeline_mode
 from nexgraph_engine.pipeline.rebrand import rebrand_exported
 from nexgraph_engine.pipeline.runner import FULL_STEPS, run_pipeline
-from nexgraph_engine.graphify_import import import_graph_json
+from nexgraph_engine.indexing.graphify_import import import_graph_json
 
 _ERROR_HINT = re.compile(r"AST extraction (?:incomplete|failed)|failed to extract|extract(?:ion)? error", re.I)
 _FILE_IN_LINE = re.compile(r"([\w][\w./\\-]*\.[A-Za-z0-9]{1,8})\b")

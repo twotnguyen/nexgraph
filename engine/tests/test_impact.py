@@ -2,15 +2,15 @@ import time
 
 import pytest
 
-from nexgraph_engine.changes.model import ChangeSet, FileChange
-from nexgraph_engine.impact import params
-from nexgraph_engine.impact import analyze as impact
-from nexgraph_engine.impact.analyze import analyze, map_to_nodes
-from nexgraph_engine.index.tested_by import derive_tested_by
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Edge, FileRec, Node
+from nexgraph_engine.analysis.changes.model import ChangeSet, FileChange
+from nexgraph_engine.analysis.impact import params
+from nexgraph_engine.analysis.impact import analyze as impact
+from nexgraph_engine.analysis.impact.analyze import analyze, map_to_nodes
+from nexgraph_engine.indexing.index.tested_by import derive_tested_by
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.core.schema.enums import Confidence, EdgeType, NodeKind, Origin
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.models import Edge, FileRec, Node
 
 
 class G:

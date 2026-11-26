@@ -1,7 +1,7 @@
 import pytest
 
 import gh_fake
-from nexgraph_engine.prs import gh
+from nexgraph_engine.analysis.prs import gh
 
 DIFF = "diff --git a/util.py b/util.py\n--- a/util.py\n+++ b/util.py\n@@ -1 +1 @@\n-def helper(x):\n+def helper(x, y=1):\n"
 VIEW = ('{"number": 8, "title": "Sẵn sàng", "state": "OPEN", "headRefName": "f8", "baseRefName": "main",'

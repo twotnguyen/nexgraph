@@ -1,5 +1,5 @@
 """Hai lỗi do chấm độ đúng (H6) tìm ra ở bước nối lời gọi/kế thừa của extractor chung."""
-from nexgraph_engine.schema.enums import EdgeType
+from nexgraph_engine.core.schema.enums import EdgeType
 
 
 def _edges(store, kind):

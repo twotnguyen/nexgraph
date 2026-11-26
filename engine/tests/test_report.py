@@ -1,6 +1,6 @@
 import pytest
 
-from nexgraph_engine.report.build import report_json, report_markdown
+from nexgraph_engine.analysis.report.build import report_json, report_markdown
 
 
 def test_report_excludes_tests_and_files(copy_fixture, index_project):
@@ -79,8 +79,8 @@ def test_report_route_ok(api, copy_fixture):
 
 
 def test_report_uses_published_graph_during_reindex(api, copy_fixture, monkeypatch):
-    from nexgraph_engine.schema.db import open_graph_db
-    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.core.schema.db import open_graph_db
+    from nexgraph_engine.storage.store.graph_store import GraphStore
     pid = api.open(copy_fixture("py_mini"))["project_id"]
     assert api.index(pid)["state"] == "done"
     url = f"/v1/projects/{pid}/report"
@@ -100,7 +100,7 @@ def test_report_uses_published_graph_during_reindex(api, copy_fixture, monkeypat
 
 
 def test_audit_ratios_sum_to_one(copy_fixture, index_project):
-    from nexgraph_engine.report.build import audit_json
+    from nexgraph_engine.analysis.report.build import audit_json
     store, _, _ = index_project(copy_fixture("bookstore_app"))
     audit = audit_json(store)
     want = dict(store.conn.execute("SELECT muc_tin_cay, count(*) FROM canh GROUP BY muc_tin_cay").fetchall())
@@ -110,7 +110,7 @@ def test_audit_ratios_sum_to_one(copy_fixture, index_project):
 
 
 def test_audit_lists_parse_errors(copy_fixture, index_project):
-    from nexgraph_engine.report.build import audit_json
+    from nexgraph_engine.analysis.report.build import audit_json
     store, _, _ = index_project(copy_fixture("bookstore_app"))  # lib/broken.dart cú pháp hỏng
     errors = audit_json(store)["parse_errors"]
     assert errors["total"] >= 1
@@ -204,7 +204,7 @@ def test_report_route_accepts_lang(api, copy_fixture):
 
 
 def test_translate_every_graphify_message():
-    from nexgraph_engine.report.i18n import translate_questions, translate_surprising
+    from nexgraph_engine.analysis.report.i18n import translate_questions, translate_surprising
     questions = [
         {"type": "ambiguous_edge", "question": "What is the exact relationship between `A` and `B`?",
          "why": "Edge tagged AMBIGUOUS (relation: calls) - confidence is low."},

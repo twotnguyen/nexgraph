@@ -8,10 +8,10 @@ import anyio
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
-from nexgraph_engine.mcp.server import build_server
-from nexgraph_engine.memory import MemoryBusy, lessons, rate, recall, remember, writer
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.publication import graph_writer
+from nexgraph_engine.interfaces.mcp.server import build_server
+from nexgraph_engine.analysis.memory import MemoryBusy, lessons, rate, recall, remember, writer
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.publication import graph_writer
 
 AUTH = "lib/services/auth_service.dart#file"
 LOGIN = "lib/screens/login_screen.dart#file"

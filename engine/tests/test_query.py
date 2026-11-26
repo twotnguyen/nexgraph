@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.query.ask import ask_graph
-from nexgraph_engine.query.paths import PATH_TYPES, find_paths, impact_of
+from nexgraph_engine.analysis.query.ask import ask_graph
+from nexgraph_engine.analysis.query.paths import PATH_TYPES, find_paths, impact_of
 
 
 def test_path_through_real_edges(copy_fixture, index_project):
@@ -182,16 +182,16 @@ class _Graph:
     """Đồ thị dựng tay để kiểm chọn đường: mỗi nút hàm nằm trong tệp riêng."""
 
     def __init__(self, tmp_path):
-        from nexgraph_engine.schema.db import open_graph_db
-        from nexgraph_engine.store.graph_store import GraphStore
+        from nexgraph_engine.core.schema.db import open_graph_db
+        from nexgraph_engine.storage.store.graph_store import GraphStore
         self.conn = open_graph_db(tmp_path / "paths.db")
         self.store = GraphStore(self.conn)
         self.store.init_project("g", False)
         self.run = self.store.begin_run()
 
     def node(self, name: str) -> str:
-        from nexgraph_engine.schema.enums import NodeKind
-        from nexgraph_engine.store.models import FileRec, Node
+        from nexgraph_engine.core.schema.enums import NodeKind
+        from nexgraph_engine.storage.store.models import FileRec, Node
         path = f"lib/{name}.py"
         self.store.add_file(self.run, FileRec(path, "python", 1, 1, name.encode().hex().ljust(64, "0")[:64], False))
         nid = f"{path}::{name}#function"
@@ -199,12 +199,12 @@ class _Graph:
         return nid
 
     def edge(self, a: str, b: str, conf: str = "EXTRACTED", score: float = 1.0) -> None:
-        from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
+        from nexgraph_engine.core.schema.enums import Confidence, EdgeType, Origin
         self.store.add_edges([Edge(a, b, EdgeType.CALLS, confidence=Confidence(conf), confidence_score=score,
                                    origin=Origin.AST if conf == "EXTRACTED" else Origin.RESOLVER, line=1)])
 
 
-from nexgraph_engine.store.models import Edge  # noqa: E402
+from nexgraph_engine.storage.store.models import Edge  # noqa: E402
 
 
 @pytest.fixture

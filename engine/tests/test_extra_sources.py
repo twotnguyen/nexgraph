@@ -5,13 +5,13 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from nexgraph_engine.index import extra_sources
-from nexgraph_engine.index.extra_sources import ExtraSources
+from nexgraph_engine.indexing.index import extra_sources
+from nexgraph_engine.indexing.index.extra_sources import ExtraSources
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.changes.freshness import freshness
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.analysis.changes.freshness import freshness
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 SECRET = "matkhau-bi-mat"
 DSN = f"postgresql://u:{SECRET}@db.local/shop"

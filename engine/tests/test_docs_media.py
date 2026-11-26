@@ -3,8 +3,8 @@ from types import SimpleNamespace
 import pytest
 
 import graphify.transcribe as gt
-from nexgraph_engine.docs import media
-from nexgraph_engine.schema.enums import EdgeType
+from nexgraph_engine.indexing.docs import media
+from nexgraph_engine.core.schema.enums import EdgeType
 
 from test_docs_extract import docs_root, edges, run_index  # noqa: F401  (fixture dùng chung)
 
@@ -130,8 +130,8 @@ def test_transcription_cancel_mid_file(tmp_path, monkeypatch):
 def test_cancel_during_transcription_stops_index(docs_root, tmp_path, monkeypatch):
     import threading
     from nexgraph_engine.pipeline.legacy_indexer import Indexer
-    from nexgraph_engine.schema.db import open_graph_db
-    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.core.schema.db import open_graph_db
+    from nexgraph_engine.storage.store.graph_store import GraphStore
     cancel = threading.Event()
 
     class Model:

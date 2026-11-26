@@ -1,4 +1,4 @@
-from nexgraph_engine.bridge.to_nx import Scope, build_nx, write_graph_json
+from nexgraph_engine.analysis.bridge.to_nx import Scope, build_nx, write_graph_json
 
 
 def test_build_nx_all_has_graphify_attrs(copy_fixture, index_project):

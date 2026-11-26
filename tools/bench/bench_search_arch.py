@@ -11,13 +11,13 @@ import threading
 import time
 from pathlib import Path
 
-from nexgraph_engine.arch.builder import MAX_BLOCKS, build_view, files_of_block
-from nexgraph_engine.arch.evidence import evidence_between
+from nexgraph_engine.analysis.arch.builder import MAX_BLOCKS, build_view, files_of_block
+from nexgraph_engine.analysis.arch.evidence import evidence_between
 from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent
-from nexgraph_engine.index.scan import scan_project
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.search import search
+from nexgraph_engine.indexing.index.scan import scan_project
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.search import search
 
 QUERIES = ["build", "state", "widget", "service", "init", "get", "controller", "login", "user", "dispose"]
 

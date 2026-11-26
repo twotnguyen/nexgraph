@@ -87,8 +87,8 @@ packages = ["src/nexgraph_engine", "src/graphify"]
 testpaths = ["tests"]
 markers = ["slow: test chậm (đo đồ thị/vendor) — vẫn chạy trong CI, không skip"]
 
-# Luật phụ thuộc giữa module (ADR 0026, pha 0: chỉ báo cáo). Chạy: `pnpm rules:report` ở gốc repo.
-# Tên tầng là package hiện tại; pha 4 gom chúng vào core/storage/indexing/analysis/interfaces.
+# Luật phụ thuộc giữa module (ADR 0026). Chạy: `pnpm rules:report` ở gốc repo.
+# Mỗi tầng là một package con (pha 4c). `nexgraph_engine.cli` ở gốc chỉ là điểm vào công khai, gọi interfaces.cli.
 [tool.importlinter]
 root_packages = ["nexgraph_engine", "graphify"]
 
@@ -98,12 +98,12 @@ name = "Engine chia tầng: giao diện → điều phối → phân tích → l
 type = "layers"
 containers = ["nexgraph_engine"]
 layers = [
-    "cli : api : mcp : hook_guard : selftest",
-    "pipeline",
-    "query : arch : flows : impact : changes : prs : semantic : tour : report : memory : global_graph : bridge : export",
-    "index : graphify_import : sources : dart : docs",
-    "store",
-    "schema : ids : errors : logging_setup : subprocesses : text : tasks",
+    "interfaces",  # api, mcp, cli, hook_guard, selftest
+    "pipeline",    # điều phối lập chỉ mục, job, bộ trích xuất cũ
+    "analysis",    # query, arch, flows, impact, changes, prs, semantic, tour, report, memory, global_graph, bridge, export
+    "indexing",    # index, graphify_import, sources, dart, docs
+    "storage",     # store
+    "core",        # schema, ids, errors, logging_setup, subprocesses, text, tasks
 ]
 
 [[tool.importlinter.contracts]]
@@ -121,13 +121,8 @@ name = "Cổng adapters.graphify chỉ phụ thuộc tầng lõi"
 type = "forbidden"
 source_modules = ["nexgraph_engine.adapters"]
 forbidden_modules = [
-    "nexgraph_engine.cli", "nexgraph_engine.api", "nexgraph_engine.mcp", "nexgraph_engine.hook_guard",
-    "nexgraph_engine.selftest", "nexgraph_engine.pipeline",
-    "nexgraph_engine.query", "nexgraph_engine.arch", "nexgraph_engine.flows", "nexgraph_engine.impact",
-    "nexgraph_engine.changes", "nexgraph_engine.prs", "nexgraph_engine.semantic", "nexgraph_engine.tour",
-    "nexgraph_engine.report", "nexgraph_engine.memory", "nexgraph_engine.global_graph", "nexgraph_engine.bridge",
-    "nexgraph_engine.export", "nexgraph_engine.index", "nexgraph_engine.graphify_import", "nexgraph_engine.sources",
-    "nexgraph_engine.dart", "nexgraph_engine.docs", "nexgraph_engine.store",
+    "nexgraph_engine.cli", "nexgraph_engine.interfaces", "nexgraph_engine.pipeline", "nexgraph_engine.analysis",
+    "nexgraph_engine.indexing", "nexgraph_engine.storage",
 ]
 
 [[tool.importlinter.contracts]]

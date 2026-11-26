@@ -1,6 +1,6 @@
 import pytest
 
-from nexgraph_engine.text.keywords import search_keywords, split_identifier
+from nexgraph_engine.core.text.keywords import search_keywords, split_identifier
 
 
 @pytest.mark.parametrize("name,expected", [

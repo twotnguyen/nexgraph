@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index import scan
-from nexgraph_engine.index.discovery import discover
-from nexgraph_engine.index.scan import ScanInfo, resolve_subdir, scan_project
-from nexgraph_engine.store.projects import ProjectPathError
+from nexgraph_engine.indexing.index import scan
+from nexgraph_engine.indexing.index.discovery import discover
+from nexgraph_engine.indexing.index.scan import ScanInfo, resolve_subdir, scan_project
+from nexgraph_engine.storage.store.projects import ProjectPathError
 
 
 def write(root: Path, rel: str, text: str = "x") -> None:

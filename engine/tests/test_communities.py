@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 import nexgraph_engine.pipeline.legacy_indexer as indexer_module
-from nexgraph_engine.arch.communities import detect_communities, file_graph
+from nexgraph_engine.analysis.arch.communities import detect_communities, file_graph
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
 
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from nexgraph_engine.prs import gh
+from nexgraph_engine.analysis.prs import gh
 
 FIX = Path(__file__).parent / "fixtures" / "gh"
 

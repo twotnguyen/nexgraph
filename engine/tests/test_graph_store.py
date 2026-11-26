@@ -2,10 +2,10 @@ import sqlite3
 
 import pytest
 
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Edge, FileRec, Node, UnresolvedRef
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.core.schema.enums import Confidence, EdgeType, NodeKind, Origin
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.models import Edge, FileRec, Node, UnresolvedRef
 
 
 @pytest.fixture

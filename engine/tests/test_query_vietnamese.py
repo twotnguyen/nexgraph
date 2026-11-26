@@ -1,10 +1,10 @@
 """A4-F4/MIN: câu hỏi tiếng Việt thuần không được khớp chuỗi con rác, và phải gợi ý thân thiện."""
 import pytest
 
-from nexgraph_engine.query.ask import ask_graph
-from nexgraph_engine.query.context import build_context
-from nexgraph_engine.text.terms import VI_STOPWORDS, has_vietnamese, name_matches
-from nexgraph_engine.store.search import build_match_query, search
+from nexgraph_engine.analysis.query.ask import ask_graph
+from nexgraph_engine.analysis.query.context import build_context
+from nexgraph_engine.core.text.terms import VI_STOPWORDS, has_vietnamese, name_matches
+from nexgraph_engine.storage.store.search import build_match_query, search
 
 
 def test_get_context_vietnamese_only_is_friendly(copy_fixture, index_project):

@@ -8,11 +8,11 @@ import threading
 import time
 import zlib
 
-from nexgraph_engine.index.discovery import discover
+from nexgraph_engine.indexing.index.discovery import discover
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 
 def _tree(root):

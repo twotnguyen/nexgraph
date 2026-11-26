@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
-from nexgraph_engine.ids import file_node_id, node_id
-from nexgraph_engine.schema.enums import EdgeType, NodeKind
+from nexgraph_engine.indexing.dart.extractor import FileExtraction, extract_dart
+from nexgraph_engine.core.ids import file_node_id, node_id
+from nexgraph_engine.core.schema.enums import EdgeType, NodeKind
 
 FIXTURE = Path(__file__).parent / "fixtures" / "bookstore_app"
 

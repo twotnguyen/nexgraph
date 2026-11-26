@@ -15,7 +15,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from nexgraph_engine.api.app import create_app
+from nexgraph_engine.interfaces.api.app import create_app
 
 GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
 EDIT_FILE = "src/common/utils/string-util/string-util.service.ts"

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.docs.secrets import redact_doc_secrets
+from nexgraph_engine.indexing.docs.secrets import redact_doc_secrets
 
 REPO = Path(__file__).resolve().parents[2]
 

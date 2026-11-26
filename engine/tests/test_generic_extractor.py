@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from nexgraph_engine.index.generic import extract_generic
-from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind
+from nexgraph_engine.indexing.index.generic import extract_generic
+from nexgraph_engine.core.schema.enums import Confidence, EdgeType, NodeKind
 
 ROOT = Path(__file__).parent / "fixtures" / "py_mini"
 

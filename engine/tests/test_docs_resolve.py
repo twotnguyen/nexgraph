@@ -3,8 +3,8 @@ import shutil
 import time
 
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.query.paths import impact_of
-from nexgraph_engine.schema.enums import EdgeType
+from nexgraph_engine.analysis.query.paths import impact_of
+from nexgraph_engine.core.schema.enums import EdgeType
 
 from test_docs_extract import FIX, _make_office, docs_root, edges, run_index  # noqa: F401  (fixture dùng chung)
 

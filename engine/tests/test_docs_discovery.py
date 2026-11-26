@@ -1,6 +1,6 @@
 import time
 
-from nexgraph_engine.index.discovery import discover
+from nexgraph_engine.indexing.index.discovery import discover
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
 
 

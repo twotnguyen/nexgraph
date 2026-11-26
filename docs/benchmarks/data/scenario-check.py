@@ -1,7 +1,7 @@
 import json, os, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 from fastapi.testclient import TestClient
-from nexgraph_engine.api.app import create_app
+from nexgraph_engine.interfaces.api.app import create_app
 TOKEN="s"*40
 def run_index(c,h,pid,**body):
     t=time.perf_counter()

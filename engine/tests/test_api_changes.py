@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.changes import gitdiff
+from nexgraph_engine.analysis.changes import gitdiff
 from nexgraph_engine.pipeline import refresh_service
 from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent
 

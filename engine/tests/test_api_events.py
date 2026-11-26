@@ -18,7 +18,7 @@ def test_events_stream_receives_progress(api, copy_fixture):
 
 
 def test_subscription_drops_oldest_even_for_graph_updated():
-    from nexgraph_engine.index.events import MAX_QUEUE, EventBus
+    from nexgraph_engine.indexing.index.events import MAX_QUEUE, EventBus
 
     bus = EventBus()
     sub = bus.subscribe()

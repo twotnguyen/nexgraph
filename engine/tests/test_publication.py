@@ -6,9 +6,9 @@ from contextlib import closing
 
 import pytest
 
-from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION, open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.publication import backup_graph, graph_writer, publish_stage, stage_graph
+from nexgraph_engine.core.schema.db import GRAPH_SCHEMA_VERSION, open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.publication import backup_graph, graph_writer, publish_stage, stage_graph
 
 PROJECT_ID = "00000000-0000-0000-0000-000000000001"
 
@@ -70,7 +70,7 @@ def test_writer_lease_protects_existing_stage_across_processes(graph):
     script = """
 import sys
 from pathlib import Path
-from nexgraph_engine.store.publication import GraphWriteBusy, stage_graph
+from nexgraph_engine.storage.store.publication import GraphWriteBusy, stage_graph
 
 try:
     with stage_graph(Path(sys.argv[1])):

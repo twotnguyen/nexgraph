@@ -1,6 +1,6 @@
 # NexGraph — Phụ thuộc hàm, chuẩn hóa, từ điển dữ liệu, ràng buộc toàn vẹn (bản nháp)
 
-> **Cập nhật 2026-11-24:** tài liệu này mô tả lược đồ lúc thiết kế (Sprint 2, 24/10/2026). Mã hiện ở lược đồ đồ thị **v8**, CSDL app **v3**, CSDL graph chung **v1** (`engine/src/nexgraph_engine/schema/db.py:8-10`); SQL thiết kế đã cập nhật theo ở `design/database/`.
+> **Cập nhật 2026-11-24:** tài liệu này mô tả lược đồ lúc thiết kế (Sprint 2, 24/10/2026). Mã hiện ở lược đồ đồ thị **v8**, CSDL app **v3**, CSDL graph chung **v1** (`engine/src/nexgraph_engine/core/schema/db.py:8-10`); SQL thiết kế đã cập nhật theo ở `design/database/`.
 
 > Bản nháp cho báo cáo tuần 2, chưa duyệt. Cập nhật 2026-10-24. Nền: `2026-10-24-nexgraph-csdl-design.md` (thực thể), `2026-10-24-nexgraph-csdl-tan-tu.md` (tân từ, bản số).
 > Thứ tự theo giáo trình: phụ thuộc hàm và chuẩn hóa (§1–§2) cho ra lược đồ cuối; từ điển dữ liệu (§3) và ràng buộc toàn vẹn (§4) viết trên lược đồ cuối.

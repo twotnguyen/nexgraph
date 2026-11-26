@@ -1,7 +1,7 @@
 """REV-12: base_url của nhà cung cấp LLM không được trỏ vào mạng nội bộ/link-local (SSRF), trừ loopback (R5)."""
 import pytest
 
-from nexgraph_engine.semantic.transport import check_base_url
+from nexgraph_engine.analysis.semantic.transport import check_base_url
 
 
 @pytest.mark.parametrize("url", ["http://127.0.0.1:11434/v1", "http://localhost:1234/v1",

@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent, RunResult
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -139,7 +139,7 @@ class Api:
 @pytest.fixture
 def api(tmp_path):
     from fastapi.testclient import TestClient
-    from nexgraph_engine.api.app import create_app
+    from nexgraph_engine.interfaces.api.app import create_app
     app = create_app(TOKEN, {"testserver"}, data_dir=tmp_path / "appdata", sse_ping_seconds=0.2)
     yield Api(TestClient(app), app)
     app.state.services.jobs.shutdown()

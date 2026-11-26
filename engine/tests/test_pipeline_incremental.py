@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.search import search
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.search import search
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

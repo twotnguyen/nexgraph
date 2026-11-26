@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.core.schema.db import open_graph_db
 
 
 def _bare(label: str) -> str:

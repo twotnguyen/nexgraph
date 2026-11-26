@@ -2,7 +2,7 @@ import hashlib
 import threading
 from pathlib import Path
 
-from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind
+from nexgraph_engine.core.schema.enums import Confidence, EdgeType, NodeKind
 
 
 def tree_hashes(root: Path) -> dict[str, str]:
@@ -98,9 +98,9 @@ def test_index_workers_override_does_not_bypass_media(monkeypatch):
 
 def test_rb22_edge_does_not_break_index_job(copy_fixture, index_project, monkeypatch):
     """Failure injection: cạnh vi phạm RB22 chỉ thành file_error, job vẫn 'done'."""
-    from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
-    from nexgraph_engine.store.graph_store import GraphStore
-    from nexgraph_engine.store.models import Edge
+    from nexgraph_engine.core.schema.enums import Confidence, EdgeType, Origin
+    from nexgraph_engine.storage.store.graph_store import GraphStore
+    from nexgraph_engine.storage.store.models import Edge
 
     root = copy_fixture("bookstore_app")
     injected: list[int] = []
@@ -1031,7 +1031,7 @@ def test_extracting_twice_through_a_symlinked_root_gives_the_same_references(tmp
     macOS) thì lần trích xuất thứ hai trong cùng tiến trình mất import nội bộ."""
     import os
     import pytest
-    from nexgraph_engine.index.generic import extract_generic
+    from nexgraph_engine.indexing.index.generic import extract_generic
     real = tmp_path / "real"
     (real / "pkg").mkdir(parents=True)
     (real / "pkg" / "util.py").write_text("def helper():\n    return 1\n")
@@ -1132,7 +1132,7 @@ def test_future_result_runtimeerror_reports_and_falls_back(tmp_path, index_proje
 def test_progress_callback_runtimeerror_is_not_swallowed(tmp_path, index_project, monkeypatch):
     """Minor #27 N2: lỗi trong on_progress không được nuốt (job 'loi') và không add_file hai lần."""
     from nexgraph_engine.pipeline import legacy_indexer as indexer
-    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.storage.store.graph_store import GraphStore
 
     root = _many_py(tmp_path / "p")
     monkeypatch.setattr(indexer, "index_workers", lambda *_: 2)

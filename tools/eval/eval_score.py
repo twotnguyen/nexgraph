@@ -18,7 +18,7 @@ import json
 import re
 from pathlib import Path
 
-from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.core.schema.db import open_graph_db
 
 KINDS = ("symbol", "call", "import", "inherit", "test")
 # Nút symbol để chấm: bỏ file/thư mục/route (route là khái niệm suy ra, người đọc mã không "thấy" nó).

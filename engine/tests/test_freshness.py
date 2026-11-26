@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.changes.freshness import freshness
+from nexgraph_engine.analysis.changes.freshness import freshness
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="cần git trong PATH")
 GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull}
@@ -40,7 +40,7 @@ def test_fresh_right_after_index(git_project):
 
 def test_source_change_is_detected_without_git_metadata(git_project, monkeypatch):
     store, root = git_project
-    monkeypatch.setattr("nexgraph_engine.changes.freshness._git_head", lambda _root: None)
+    monkeypatch.setattr("nexgraph_engine.analysis.changes.freshness._git_head", lambda _root: None)
     (root / "util.py").write_text("def helper(x):\n    return x + 3\n")
     result = freshness(store, root)
     assert result["head_commit"] is None
@@ -100,7 +100,7 @@ def test_recent_edit_with_unchanged_stat_is_still_hashed(copy_fixture, index_pro
     root = copy_fixture("py_mini")
     source = root / "util.py"
     # Máy CI chậm lập chỉ mục lâu hơn RACY_SECONDS thật, nên nới ngưỡng để mtime vẫn tính là "vừa mới đây".
-    monkeypatch.setattr("nexgraph_engine.changes.freshness.RACY_SECONDS", 3600)
+    monkeypatch.setattr("nexgraph_engine.analysis.changes.freshness.RACY_SECONDS", 3600)
     monkeypatch.setattr("nexgraph_engine.pipeline.legacy_refresh.RACY_SECONDS", 3600)
     source.touch()  # mtime = bây giờ, như tệp vừa lưu ngay trước khi lập chỉ mục
     store, _, _ = index_project(root)
@@ -148,7 +148,7 @@ def test_freshness_counts_indexed_documents_not_unindexed_media(tmp_path, index_
 
 
 def test_stats_name_languages_with_generic_support_only(copy_fixture, index_project):
-    from nexgraph_engine.api.routes_graph import stats_json
+    from nexgraph_engine.interfaces.api.routes_graph import stats_json
     root = copy_fixture("py_mini")
     (root / "main.go").write_text("package main\n\nfunc main() {}\n")
     store, _, _ = index_project(root)

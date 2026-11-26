@@ -4,11 +4,11 @@ import time
 
 import pytest
 
-from nexgraph_engine.index.events import EventBus
+from nexgraph_engine.indexing.index.events import EventBus
 from nexgraph_engine.pipeline.job_manager import IndexAlreadyRunning, JobManager, UnknownProject
-from nexgraph_engine.tasks import TaskCancelled
+from nexgraph_engine.core.tasks import TaskCancelled
 from nexgraph_engine.pipeline.refresh_service import ProjectLocks, RefreshService
-from nexgraph_engine.store.projects import ProjectRegistry
+from nexgraph_engine.storage.store.projects import ProjectRegistry
 
 TERMINAL = {"done", "error", "cancelled"}
 

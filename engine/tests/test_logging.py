@@ -9,11 +9,11 @@ import time
 
 import pytest
 
-from nexgraph_engine.api.routes_projects import _last_run
-from nexgraph_engine.index.events import EventBus
+from nexgraph_engine.interfaces.api.routes_projects import _last_run
+from nexgraph_engine.indexing.index.events import EventBus
 from nexgraph_engine.pipeline.job_manager import JobManager
-from nexgraph_engine.logging_setup import configure_logging, level_from_env, reset_logging
-from nexgraph_engine.store.projects import ProjectInfo
+from nexgraph_engine.core.logging_setup import configure_logging, level_from_env, reset_logging
+from nexgraph_engine.storage.store.projects import ProjectInfo
 
 
 @pytest.fixture(autouse=True)
@@ -74,7 +74,7 @@ def test_level_defaults_to_info_and_ignores_garbage(monkeypatch):
 
 
 def test_import_does_not_configure_logging():
-    code = ("import logging, nexgraph_engine.pipeline.job_manager, nexgraph_engine.api.app;"
+    code = ("import logging, nexgraph_engine.pipeline.job_manager, nexgraph_engine.interfaces.api.app;"
             "print(len(logging.getLogger('nexgraph_engine').handlers))")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=_env(), timeout=120)
     assert r.returncode == 0, r.stderr
@@ -92,7 +92,7 @@ def test_cli_mcp_logs_to_stderr_and_keeps_stdout_clean(tmp_path):
 
 def test_stderr_log_is_utf8_even_on_cp1252_console():
     """Windows mặc định cp1252: chữ có dấu trong log phải vẫn ra UTF-8 (CI windows-latest bắt lỗi này)."""
-    code = ("from nexgraph_engine.logging_setup import configure_logging;"
+    code = ("from nexgraph_engine.core.logging_setup import configure_logging;"
             "configure_logging().info('dự án có dấu')")
     env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONUTF8")}
     env["PYTHONIOENCODING"] = "cp1252"

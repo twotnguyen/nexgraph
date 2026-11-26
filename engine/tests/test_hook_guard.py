@@ -8,8 +8,8 @@ import anyio
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
-from nexgraph_engine.hook_guard import guard_output, stamp_path, touch_query_stamp
-from nexgraph_engine.mcp.server import build_server
+from nexgraph_engine.interfaces.hook_guard import guard_output, stamp_path, touch_query_stamp
+from nexgraph_engine.interfaces.mcp.server import build_server
 
 
 @pytest.fixture
@@ -133,9 +133,9 @@ def test_bad_arguments_still_exit_zero():
 
 def test_hook_guard_skips_heavy_imports(proj):
     root, data, _ = proj
-    code = ("import sys, io; from nexgraph_engine.cli import main; sys.stdin = io.TextIOWrapper(io.BytesIO(b'{}'));"
+    code = ("import sys, io; from nexgraph_engine.interfaces.cli import main; sys.stdin = io.TextIOWrapper(io.BytesIO(b'{}'));"
             f"main(['hook-guard', 'read', '--project', {str(root)!r}, '--data-dir', {str(data)!r}]);"
-            "print(sorted(m for m in ('uvicorn', 'fastapi', 'mcp.server.fastmcp', 'nexgraph_engine.api.app') if m in sys.modules), file=sys.stderr)")
+            "print(sorted(m for m in ('uvicorn', 'fastapi', 'mcp.server.fastmcp', 'nexgraph_engine.interfaces.api.app') if m in sys.modules), file=sys.stderr)")
     # Lời nhắc tiếng Việt: ép UTF-8 cả hai đầu, Windows mặc định cp1252.
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, encoding="utf-8",
                        env={**os.environ, "PYTHONIOENCODING": "utf-8"})

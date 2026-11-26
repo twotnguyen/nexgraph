@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION
+from nexgraph_engine.core.schema.db import GRAPH_SCHEMA_VERSION
 
 KEY = "sk-test-SECRET-key-9f3a1c77"
 TERMINAL = {"done", "error", "cancelled"}
@@ -301,8 +301,8 @@ def test_cancel_mid_way_writes_no_partial_chunk(api, copy_fixture):
 
 def test_app_transport_times_out_reports_errors_and_releases_write_lock(api, docs_pid, monkeypatch):
     """Đường A không ai trả lời: job kết thúc trong hạn, báo timeout từng khối, và nhả khoá ghi của dự án."""
-    from nexgraph_engine.semantic import run as semantic_run
-    from nexgraph_engine.store.publication import graph_writer
+    from nexgraph_engine.analysis.semantic import run as semantic_run
+    from nexgraph_engine.storage.store.publication import graph_writer
 
     monkeypatch.setattr(semantic_run, "LLM_QUEUE_TIMEOUT_SECONDS", 0.3, raising=False)
     enable(api, docs_pid, "app")
@@ -520,11 +520,11 @@ def test_rewrite_removes_llm_edges_touching_chunk_and_skips_outside_pairs(api, d
     # Cạnh từ symbol ngoài khối tới nút AST của tài liệu: bị xoá khi ghi lại khối.
     heading = conn.execute("SELECT id_nut FROM nut WHERE loai_nut = 'document' LIMIT 1").fetchone()[0]
     conn.close()
-    from nexgraph_engine.schema.db import open_graph_db
-    from nexgraph_engine.semantic.ingest import write_fragment
-    from nexgraph_engine.store.graph_store import GraphStore
-    from nexgraph_engine.store.models import Edge
-    from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
+    from nexgraph_engine.core.schema.db import open_graph_db
+    from nexgraph_engine.analysis.semantic.ingest import write_fragment
+    from nexgraph_engine.storage.store.graph_store import GraphStore
+    from nexgraph_engine.storage.store.models import Edge
+    from nexgraph_engine.core.schema.enums import Confidence, EdgeType, Origin
     info = api.app.state.services.registry.get(docs_pid)
     c = open_graph_db(info.graph_db)
     store = GraphStore(c)
@@ -602,7 +602,7 @@ def test_no_cache_calls_model_again(api, docs_pid, llm):
 def test_pr_triage_without_prs_lists_open_prs_from_gh(api, docs_pid, llm, monkeypatch):
     """Tab PR (W7) chỉ gửi target: engine tự lấy hàng PR qua `gh`, bỏ PR sai nhánh gốc/cũ như triage theo luật."""
     import gh_fake
-    from nexgraph_engine.prs import gh
+    from nexgraph_engine.analysis.prs import gh
     enable(api, docs_pid)
     gh_fake.install(monkeypatch, {})
     llm.reply = lambda body: json.dumps({"triage": [{"number": 8, "priority": 1, "action": "Review ngay."}]})
@@ -622,7 +622,7 @@ def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
     """`gh` chậm không được giữ request: desktop bỏ chờ sau 15 s và job sẽ kẹt giữ khoá dự án (kiểm thử tích hợp I1)."""
     import threading
     import gh_fake
-    from nexgraph_engine.prs import gh
+    from nexgraph_engine.analysis.prs import gh
     enable(api, docs_pid)
     gh_fake.install(monkeypatch, {})
     fake_run, release = gh.run_gh, threading.Event()
@@ -641,9 +641,9 @@ def test_pr_triage_start_does_not_wait_for_gh(api, docs_pid, llm, monkeypatch):
 
 def test_load_prs_failure_closes_llm_queue(tmp_path):
     """REV-19: `gh` lỗi trước khi mở CSDL vẫn phải đóng hàng đợi LLM (không rò job đường A)."""
-    from nexgraph_engine.tasks import TaskContext
-    from nexgraph_engine.semantic.run import Request, make_work
-    from nexgraph_engine.semantic.transport import LlmQueue
+    from nexgraph_engine.core.tasks import TaskContext
+    from nexgraph_engine.analysis.semantic.run import Request, make_work
+    from nexgraph_engine.analysis.semantic.transport import LlmQueue
 
     def boom() -> list[dict]:
         raise RuntimeError("gh lỗi")

@@ -10,18 +10,36 @@ import ast
 from pathlib import Path
 
 PKG = Path(__file__).resolve().parents[1] / "src" / "nexgraph_engine"
+# Từ pha 4c, package nằm trong thư mục tầng: so vòng giữa `analysis.query` và `analysis.flows`, không phải giữa tầng.
+LAYERS = {"core", "storage", "indexing", "analysis", "interfaces"}
+
+
+def _key(parts: list[str] | tuple[str, ...]) -> str | None:
+    if not parts:
+        return None
+    head = parts[0].removesuffix(".py")
+    if head in LAYERS and len(parts) > 1 and parts[1] != "__init__.py":
+        return f"{head}.{parts[1].removesuffix('.py')}"
+    return head
 
 
 def _package_of(module: str) -> str | None:
     parts = module.split(".")
-    return parts[1] if len(parts) > 1 and parts[0] == "nexgraph_engine" else None
+    return _key(parts[1:]) if len(parts) > 1 and parts[0] == "nexgraph_engine" else None
+
+
+def _exists(key: str) -> bool:
+    rel = Path(*key.split("."))
+    return (PKG / rel).is_dir() or (PKG / rel.with_suffix(".py")).is_file()
 
 
 def _graph() -> dict[str, set[str]]:
     deps: dict[str, set[str]] = {}
     for f in PKG.rglob("*.py"):
         rel = f.relative_to(PKG)
-        src = rel.parts[0].removesuffix(".py")
+        src = _key(rel.parts)
+        if src in LAYERS:  # __init__.py của chính thư mục tầng
+            continue
         deps.setdefault(src, set())
         for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Import):
@@ -32,7 +50,7 @@ def _graph() -> dict[str, set[str]]:
                 continue
             for t in targets:
                 pkg = _package_of(t)
-                if pkg and pkg != src and ((PKG / pkg).is_dir() or (PKG / f"{pkg}.py").is_file()):
+                if pkg and pkg != src and pkg not in LAYERS and _exists(pkg):
                     deps[src].add(pkg)
     return deps
 

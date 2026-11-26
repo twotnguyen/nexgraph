@@ -1,6 +1,6 @@
 # NexGraph — Thiết kế CSDL (bản nháp cho báo cáo tuần 2)
 
-> **Cập nhật 2026-11-24:** tài liệu này mô tả lược đồ lúc thiết kế (Sprint 2, 24/10/2026). Mã hiện ở lược đồ đồ thị **v8**, CSDL app **v3**, CSDL graph chung **v1** (`engine/src/nexgraph_engine/schema/db.py:8-10`); SQL thiết kế đã cập nhật theo ở `design/database/`.
+> **Cập nhật 2026-11-24:** tài liệu này mô tả lược đồ lúc thiết kế (Sprint 2, 24/10/2026). Mã hiện ở lược đồ đồ thị **v8**, CSDL app **v3**, CSDL graph chung **v1** (`engine/src/nexgraph_engine/core/schema/db.py:8-10`); SQL thiết kế đã cập nhật theo ở `design/database/`.
 
 > Trạng thái: **bản nháp chờ người dùng duyệt**, chưa phải quyết định. Cập nhật 2026-10-24.
 > Phục vụ báo cáo tuần 2 (phân tích chức năng UML + thiết kế CSDL theo môn PTTK CSDL). Nơi lưu dữ liệu: spec §5.10, ADR 0005.

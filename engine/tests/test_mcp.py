@@ -11,7 +11,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from mcp.shared.memory import create_connected_server_and_client_session
 
-from nexgraph_engine.mcp.server import ProjectNotIndexed, build_server
+from nexgraph_engine.interfaces.mcp.server import ProjectNotIndexed, build_server
 
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
          "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context",
@@ -149,7 +149,7 @@ def test_mcp_tools_require_a_published_graph(api, copy_fixture, tmp_path):
 
 
 def test_mcp_app_dir_fallback_reads_registry_read_only(api, copy_fixture, tmp_path, monkeypatch):
-    from nexgraph_engine.store import projects
+    from nexgraph_engine.storage.store import projects
 
     root = copy_fixture("bookstore_app")
 
@@ -392,15 +392,15 @@ def test_get_community_rejects_huge_numeric_id():
     """id hàng nghìn chữ số từng làm int() ném ValueError (tool crash) thay vì lỗi đọc được."""
     from mcp.server.fastmcp.exceptions import ToolError
 
-    from nexgraph_engine.mcp.server import community_json
+    from nexgraph_engine.interfaces.mcp.server import community_json
 
     with pytest.raises(ToolError):
         community_json(object(), "com:" + "9" * 5000, 10)
 
 
 def _first_community(indexed):
-    from nexgraph_engine.mcp.server import resolve_graph_db
-    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.interfaces.mcp.server import resolve_graph_db
+    from nexgraph_engine.core.schema.db import open_graph_db
     conn = open_graph_db(resolve_graph_db(*indexed), read_only=True)
     try:
         return conn.execute("SELECT ma_khoi FROM khoi_kien_truc ORDER BY ma_khoi LIMIT 1").fetchone()[0]
@@ -621,9 +621,9 @@ def test_get_callers_matches_neighbors_in_calls(indexed):
 
 
 def test_tests_for_tool_lists_test_nodes(indexed):
-    from nexgraph_engine.impact.analyze import tests_for
-    from nexgraph_engine.mcp.server import resolve_graph_db
-    from nexgraph_engine.schema.db import open_graph_db
+    from nexgraph_engine.analysis.impact.analyze import tests_for
+    from nexgraph_engine.interfaces.mcp.server import resolve_graph_db
+    from nexgraph_engine.core.schema.db import open_graph_db
     server = build_server(*indexed)
     got = payload(call(server, "tests_for", {"node_id": LOGIN}))
     conn = open_graph_db(resolve_graph_db(*indexed), read_only=True)
@@ -710,7 +710,7 @@ def test_pr_tools_use_fake_gh(indexed, monkeypatch):
 
 def test_pr_tools_report_missing_gh(indexed, monkeypatch):
     import gh_fake
-    from nexgraph_engine.prs.gh import GhError
+    from nexgraph_engine.analysis.prs.gh import GhError
     gh_fake.install(monkeypatch, {("repo", "view"): GhError("gh_missing")})
     r = call(build_server(*indexed), "list_prs", {})
     assert r.isError and "gh" in r.content[0].text

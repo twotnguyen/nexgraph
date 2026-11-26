@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from nexgraph_engine.subprocesses import run_captured
+from nexgraph_engine.core.subprocesses import run_captured
 
 
 def test_captures_output_and_does_not_inherit_stdin(tmp_path):

@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.arch.builder import UnknownBlock, build_view
-from nexgraph_engine.arch.evidence import evidence_between
+from nexgraph_engine.analysis.arch.builder import UnknownBlock, build_view
+from nexgraph_engine.analysis.arch.evidence import evidence_between
 
 
 def write(root: Path, rel: str, text: str) -> None:

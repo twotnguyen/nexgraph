@@ -23,13 +23,13 @@ try:  # Unix: đo RSS đỉnh của tiến trình cha và con
 except ImportError:  # Windows không có module này (ENG-04)
     resource = None
 
-from nexgraph_engine.arch.builder import build_view
-from nexgraph_engine.index.discovery import discover
+from nexgraph_engine.analysis.arch.builder import build_view
+from nexgraph_engine.indexing.index.discovery import discover
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.search import search
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.search import search
 
 IGNORE = shutil.ignore_patterns(".git", ".nexgraph", "node_modules", "build", ".dart_tool", "__pycache__", ".venv", "venv")
 
@@ -200,26 +200,26 @@ def main() -> None:
         m["refresh_one_file_ms"] = stat(refresh)
 
         try:
-            from nexgraph_engine.flows.build import rebuild_flows
-            from nexgraph_engine.flows.query import list_flows_json
+            from nexgraph_engine.analysis.flows.build import rebuild_flows
+            from nexgraph_engine.analysis.flows.query import list_flows_json
             measure("rebuild_flows_ms", r, lambda: rebuild_flows(store, root), m)
             measure("list_flows_auth_ms", r, lambda: list_flows_json(store, q="auth"), m)
         except ImportError:
             m["rebuild_flows_ms"] = m["list_flows_auth_ms"] = None
         try:
-            from nexgraph_engine.arch.cycles import import_cycles
-            from nexgraph_engine.arch.map import build_map
+            from nexgraph_engine.analysis.arch.cycles import import_cycles
+            from nexgraph_engine.analysis.arch.map import build_map
             measure("build_map_400_ms", r, lambda: build_map(conn, None, 400), m)
             measure("import_cycles_ms", r, lambda: import_cycles(conn), m)
         except ImportError:
             m["build_map_400_ms"] = m["import_cycles_ms"] = None
         try:
-            from nexgraph_engine.tour.build import build_tour
+            from nexgraph_engine.analysis.tour.build import build_tour
             measure("build_tour_ms", r, lambda: build_tour(store), m)
         except ImportError:
             m["build_tour_ms"] = None
         try:
-            from nexgraph_engine.query.context import build_context
+            from nexgraph_engine.analysis.query.context import build_context
             for question in ("login", "auth", "user"):  # dự án không có "login" thì thử từ khác; ghi lại từ đã dùng
                 try:
                     build_context(store, root, question)

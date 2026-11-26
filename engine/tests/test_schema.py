@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.schema.db import (
+from nexgraph_engine.core.schema.db import (
     GRAPH_SCHEMA_VERSION,
     SchemaOutdatedError,
     SchemaVersionError,
@@ -13,7 +13,7 @@ from nexgraph_engine.schema.db import (
     open_app_db,
     open_graph_db,
 )
-from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
+from nexgraph_engine.core.schema.enums import Confidence, EdgeType, NodeKind, Origin
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -198,8 +198,8 @@ def test_schema_sql_packaged():
     assert "kieu_bien" in load_sql("graph")
     from importlib import resources
 
-    assert resources.files("nexgraph_engine.schema").joinpath("migrate_1_to_2.sql").is_file()
-    assert resources.files("nexgraph_engine.schema").joinpath("migrate_4_to_5.sql").is_file()
+    assert resources.files("nexgraph_engine.core.schema").joinpath("migrate_1_to_2.sql").is_file()
+    assert resources.files("nexgraph_engine.core.schema").joinpath("migrate_4_to_5.sql").is_file()
 
 
 def test_v5_has_flow_tables_and_upgrades_v4(tmp_path):
@@ -237,7 +237,7 @@ def _schema_rows(conn):
 @pytest.mark.parametrize("name, opener", [("graph", "open_graph_db"), ("app", "open_app_db")])
 def test_new_db_schema_matches_plain_script(tmp_path, name, opener):
     import sqlite3
-    from nexgraph_engine.schema import db
+    from nexgraph_engine.core.schema import db
     ref = sqlite3.connect(tmp_path / "ref.db")
     ref.executescript(db.load_sql(name))
     conn = getattr(db, opener)(tmp_path / "new.db")
@@ -247,7 +247,7 @@ def test_new_db_schema_matches_plain_script(tmp_path, name, opener):
 
 def test_failed_schema_rolls_back_and_releases_lock(tmp_path, monkeypatch):
     import sqlite3
-    from nexgraph_engine.schema import db
+    from nexgraph_engine.core.schema import db
     good = db.load_sql
     monkeypatch.setattr(db, "load_sql", lambda name: good(name) + "\nCREATE TABLE nut (x);\n")
     with pytest.raises(sqlite3.OperationalError):
@@ -259,7 +259,7 @@ def test_failed_schema_rolls_back_and_releases_lock(tmp_path, monkeypatch):
 
 def test_concurrent_first_open_creates_schema_once(tmp_path):
     from concurrent.futures import ThreadPoolExecutor
-    from nexgraph_engine.schema.db import APP_SCHEMA_VERSION, open_app_db
+    from nexgraph_engine.core.schema.db import APP_SCHEMA_VERSION, open_app_db
     path = tmp_path / "app.db"
     with ThreadPoolExecutor(8) as pool:
         versions = list(pool.map(lambda _: open_app_db(path).execute("PRAGMA user_version").fetchone()[0], range(8)))
@@ -269,7 +269,7 @@ def test_concurrent_first_open_creates_schema_once(tmp_path):
 def test_first_open_retries_journal_mode_when_sqlite_reports_busy(tmp_path, monkeypatch):
     """FLAKY-SCHEMA (CI Windows, PR #53): `PRAGMA journal_mode = WAL` cần khoá độc quyền và SQLite trả
     SQLITE_BUSY ngay khi kết nối khác (app + MCP mở lần đầu cùng lúc) đang giữ khoá — phải thử lại."""
-    from nexgraph_engine.schema import db as schema_db
+    from nexgraph_engine.core.schema import db as schema_db
 
     real_connect = schema_db.sqlite3.connect
     busy = {"left": 2}
@@ -297,7 +297,7 @@ def test_first_open_retries_journal_mode_when_sqlite_reports_busy(tmp_path, monk
 
 def test_open_does_not_retry_other_database_errors(tmp_path, monkeypatch):
     """Chỉ thử lại khi bận; lỗi CSDL khác phải nổi lên ngay, không nuốt."""
-    from nexgraph_engine.schema import db as schema_db
+    from nexgraph_engine.core.schema import db as schema_db
 
     real_connect = schema_db.sqlite3.connect
     calls = {"n": 0}
@@ -452,7 +452,7 @@ def test_v7_upgrades_to_v8_with_image_flag_column(tmp_path):
 
 
 def test_app_v3_ai_per_project_and_upgrades_v2(tmp_path):
-    from nexgraph_engine.schema.db import APP_SCHEMA_VERSION
+    from nexgraph_engine.core.schema.db import APP_SCHEMA_VERSION
     c = open_app_db(tmp_path / "app.db")
     assert c.execute("PRAGMA user_version").fetchone()[0] == APP_SCHEMA_VERSION == 3
     pid = "1" * 36
@@ -478,7 +478,7 @@ def test_app_v3_ai_per_project_and_upgrades_v2(tmp_path):
 
 
 def test_global_db_created_at_v1_and_matches_script(tmp_path):
-    from nexgraph_engine.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
+    from nexgraph_engine.core.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
     conn = open_global_db(tmp_path / "global.db")
     assert conn.execute("PRAGMA user_version").fetchone()[0] == GLOBAL_SCHEMA_VERSION == 1
     assert conn.execute("PRAGMA foreign_keys").fetchone()[0] == 1
@@ -490,7 +490,7 @@ def test_global_db_created_at_v1_and_matches_script(tmp_path):
 
 
 def test_global_db_newer_version_rejected(tmp_path):
-    from nexgraph_engine.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
+    from nexgraph_engine.core.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
     conn = open_global_db(tmp_path / "global.db")
     conn.execute(f"PRAGMA user_version = {GLOBAL_SCHEMA_VERSION + 1}")
     conn.close()
