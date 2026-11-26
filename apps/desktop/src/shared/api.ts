@@ -382,6 +382,9 @@ export interface NexGraphApi {
   ai: {
     /** Cấu hình của đích nhận dữ liệu đang chọn. */
     getSettings(): Promise<AiSettings>
+    /** Runtime agent đang chọn: `nex` (OpenCode sidecar), `pi` dự phòng, `antigravity-cli`. */
+    getRuntime(): Promise<{ runtime: 'nex' | 'pi' | 'antigravity-cli'; nexAvailable: boolean; nexReady: boolean }>
+    setRuntime(runtime: 'nex' | 'pi'): Promise<void>
     hasConsent(projectId: string, target: AiConsentTarget): Promise<boolean>
     grantConsent(projectId: string, target: AiConsentTarget): Promise<void>
   }

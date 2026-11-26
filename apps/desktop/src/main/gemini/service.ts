@@ -115,6 +115,15 @@ export class GeminiAgentService {
     if (entry && this.current(pid, entry)) entry.gate.resolve(id, allow)
   }
   pending(pid: string): number { return this.entries.get(pid)?.gate.pending() ?? 0 }
+
+  /** Có lượt Gemini đang chạy/đang chờ duyệt (chặn đổi runtime giữa lượt). */
+  hasActiveTurn(): boolean {
+    if (this.probing || this.forking.size > 0 || this.starts.size > 0 || this.rollbacks.size > 0) return true
+    for (const entry of this.entries.values()) {
+      if (entry.busy || entry.gate.pending() > 0) return true
+    }
+    return false
+  }
   private current(pid: string, entry: Entry): boolean { return this.entries.get(pid) === entry && entry.target.connectionId === this.deps.connection.connectionIdentity() && entry.generation === (this.generations.get(pid) ?? 0) }
   private assertTask(pid: string, entry: Entry): void {
     if (!this.current(pid, entry)) throw failed('ai_provider_changed', 'Kết nối Gemini đã thay đổi. Hãy gửi lại câu hỏi.')

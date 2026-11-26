@@ -19,6 +19,8 @@ export type ApprovedWrite = WritePreview & { assertCurrent(): void }
 
 export interface ApprovalGate {
   check(toolName: string, input: unknown): Promise<ApprovalDecision & { approved?: ApprovedWrite }>
+  /** Yêu cầu duyệt đã dựng sẵn (runtime khác Pi, vd Nex): cùng hàng đợi, timeout và denyAll. */
+  request(req: ApprovalRequest): Promise<ApprovalDecision>
   resolve(id: string, allow: boolean): void
   denyAll(reason: string): void
   pending(): number
@@ -133,6 +135,7 @@ export function createApprovalGate(deps: ApprovalDeps): ApprovalGate {
 
   return {
     check,
+    request: (req) => wait(req),
     async checkCommand(command) {
       if (deps.getMode() !== 'edit' || !deps.canRunCommands?.()) return deny('Chưa cho phép chạy mã của dự án trong tác vụ này')
       const myEpoch = epoch
