@@ -234,5 +234,3 @@ export async function gitBlame(root: string, file: unknown): Promise<GitBlameLin
   }
   return lines
 }
-
-export { gitRestore, gitBranches, gitSwitchBranch, gitRemote, gitStashes, gitStashSave, gitStashAction } from './operations'

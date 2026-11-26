@@ -37,10 +37,10 @@ jobs:
           --skip=security/noDangerouslySetInnerHtml
           apps/desktop/src
 
-  # Luật phụ thuộc giữa module (ADR 0026). Pha 0: chỉ báo cáo vào summary của job, không thuộc 7 check bắt buộc.
-  # Pha 4 đổi sang `pnpm rules:strict` và đưa vào ruleset.
+  # Luật phụ thuộc giữa module (ADR 0026 pha 4e): check bắt buộc thứ 8 của ruleset `main-guard`.
+  # `rules:strict` thoát 1 khi còn bất kỳ vi phạm (kể cả cảnh báo vòng phụ thuộc); summary của job vẫn có bảng chi tiết.
   module-rules:
-    name: module-rules (báo cáo)
+    name: module-rules
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -52,10 +52,10 @@ jobs:
           cache: pnpm
       # dependency-cruiser cần TypeScript của dự án; không chạy script cài đặt (không cần Electron).
       - run: pnpm install --frozen-lockfile --ignore-scripts
-      - run: pnpm rules:report
+      - run: pnpm rules:strict
 
   # Nhánh thử nghiệm Code-OSS (labs/, ADR 0026 pha 1): ngoài pnpm workspace mặc định, lockfile riêng.
-  # Không thuộc 7 check bắt buộc, `release` không chờ; vẫn chạy để thấy ngay khi việc chuyển tệp desktop làm gãy labs.
+  # Không thuộc 8 check bắt buộc, `release` không chờ; vẫn chạy để thấy ngay khi việc chuyển tệp desktop làm gãy labs.
   labs:
     name: labs (báo cáo)
     runs-on: ubuntu-latest
@@ -196,7 +196,7 @@ jobs:
     name: release
     if: startsWith(github.ref, 'refs/tags/v')
     # REL-06: release chỉ chạy khi version-check xanh (tag khớp cả 4 nguồn version).
-    needs: [version-check, engine, desktop, package]
+    needs: [version-check, engine, desktop, package, module-rules]
     runs-on: ubuntu-latest
     permissions:
       contents: write

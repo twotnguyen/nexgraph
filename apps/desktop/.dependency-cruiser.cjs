@@ -1,5 +1,5 @@
 /**
- * Luật phụ thuộc giữa các khối của app desktop (ADR 0026, pha 0: chỉ báo cáo).
+ * Luật phụ thuộc giữa các khối của app desktop (ADR 0026). Từ pha 4e là check bắt buộc `module-rules` (`pnpm rules:strict`).
  * Chạy: `pnpm rules:report` ở gốc repo. Renderer: app → features → shared/i18n (pha 3b).
  */
 const TEST = '(\\.test\\.[cm]?tsx?$|^test/|^e2e/|test-utils\\.ts$)'

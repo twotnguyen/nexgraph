@@ -10,10 +10,12 @@ const read = (path: string) => readFileSync(join(repoRoot, path), 'utf8')
 const scripts = (): Record<string, string> => (JSON.parse(read('package.json')) as { scripts: Record<string, string> }).scripts
 
 describe('script luật phụ thuộc module', () => {
-  it('pnpm rules:report / rules:strict gọi cùng script, CI chạy rules:report', () => {
+  it('pnpm rules:report / rules:strict gọi cùng script, CI chạy rules:strict (ADR 0026 pha 4e)', () => {
     expect(scripts()['rules:report']).toBe('node tools/ci/module-rules.mjs')
     expect(scripts()['rules:strict']).toBe('node tools/ci/module-rules.mjs --strict')
-    expect(read('.github/workflows/ci.yml')).toMatch(/^\s+- run: pnpm rules:report\s*$/m)
+    const ci = read('.github/workflows/ci.yml')
+    expect(ci).toMatch(/^\s+- run: pnpm rules:strict\s*$/m)
+    expect(ci).not.toMatch(/^\s+- run: pnpm rules:report\s*$/m)
   })
 
   it('ghim phiên bản chính xác của công cụ', () => {
