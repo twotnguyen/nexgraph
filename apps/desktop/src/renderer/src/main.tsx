@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import { initializeTheme } from './state/useTheme'
+import { initializeTheme } from './shared/lib/useTheme'
 import '@xyflow/react/dist/style.css'
 import '@fontsource/be-vietnam-pro/400.css'
 import '@fontsource/be-vietnam-pro/500.css'

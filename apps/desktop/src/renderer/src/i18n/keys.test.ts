@@ -2,7 +2,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { uiEn } from '../strings'
+import { uiEn } from './strings'
 
 /**
  * Mọi câu tiếng Việt đưa vào `tr()`/`msg()` phải có bản Anh trong `uiEn`.

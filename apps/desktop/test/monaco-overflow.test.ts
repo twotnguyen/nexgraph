@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { mountOverflowWidgets, overflowWidgetsHost } from '../src/renderer/src/components/editor/overflowWidgets'
+import { mountOverflowWidgets, overflowWidgetsHost } from '../src/renderer/src/features/editor/overflowWidgets'
 
 // BUG-AB: monaco 0.57 không còn CSS định vị `.overflowingContentWidgets`, nên phải cấp
 // `overflowWidgetsDomNode` riêng ở 0,0 của container editor để gốc toạ độ widget tràn không phụ

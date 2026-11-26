@@ -315,7 +315,7 @@ SOFTWARE.
 - Nguồn: https://github.com/microsoft/monaco-editor
 - Phiên bản: `0.57.0` (gói npm `monaco-editor`, dùng qua API công khai, không chép mã)
 - Giấy phép: MIT, Copyright (c) Microsoft Corporation.
-- Dùng ở: `apps/desktop/src/renderer/src/components/editor/monaco.ts` — trình soạn thảo mã trong thẻ tệp của renderer, được Vite gói vào bản dựng.
+- Dùng ở: `apps/desktop/src/renderer/src/features/editor/monaco.ts` — trình soạn thảo mã trong thẻ tệp của renderer, được Vite gói vào bản dựng.
 
 ```text
 The MIT License (MIT)
@@ -345,7 +345,7 @@ SOFTWARE.
 
 - Nguồn: thư mục `assets/themes/` của Wu (https://github.com/dstrml/wu), commit `288f144420fc9f22016b6d65dacbd2a3d77842b3`. Mã chính của Wu là GPL-3.0, nhưng ba tệp theme có giấy phép MIT riêng; NexGraph chỉ chép giá trị màu, không chép mã.
 - Giấy phép: MIT. Copyright (c) 2026 Wing (Wu Dark, Wu Light); Copyright (c) 2014 GitHub Inc. (One Dark, One Light); Copyright (c) 2021 Catppuccin (Latte, Frappé, Macchiato, Mocha).
-- Dùng ở: `apps/desktop/src/renderer/src/styles.css` (khối `:root[data-theme='…']`), danh sách theme trong `apps/desktop/src/renderer/src/state/useTheme.ts`.
+- Dùng ở: `apps/desktop/src/renderer/src/styles.css` (khối `:root[data-theme='…']`), danh sách theme trong `apps/desktop/src/renderer/src/shared/lib/useTheme.ts`.
 
 ```text
 MIT License
@@ -377,7 +377,7 @@ SOFTWARE.
 
 - Nguồn: thư mục `assets/icon_themes/symbols/` của Wu (https://github.com/dstrml/wu), commit `288f144420fc9f22016b6d65dacbd2a3d77842b3`; gốc là bộ Symbols của Miguel Solorio.
 - Giấy phép: MIT, Copyright (c) 2020-22 Miguel Solorio. Bản đầy đủ ở `apps/desktop/src/renderer/src/assets/file-icons/LICENSE`.
-- Dùng ở: `apps/desktop/src/renderer/src/assets/file-icons/` (66 SVG chép nguyên, biến thể tối có hậu tố `.dark.svg`) và bảng tra đuôi tệp → icon trong `apps/desktop/src/renderer/src/components/common/FileTypeIcon.tsx` (phần con của `icon_theme.json`).
+- Dùng ở: `apps/desktop/src/renderer/src/assets/file-icons/` (66 SVG chép nguyên, biến thể tối có hậu tố `.dark.svg`) và bảng tra đuôi tệp → icon trong `apps/desktop/src/renderer/src/shared/ui/FileTypeIcon.tsx` (phần con của `icon_theme.json`).
 
 ## pi coding-agent
 
@@ -422,7 +422,7 @@ SOFTWARE.
 - Nguồn: https://github.com/brijeshb42/monaco-vim
 - Phiên bản: `0.4.4` (gói npm, dùng qua API công khai `initVimMode`, không chép mã)
 - Giấy phép: MIT, Copyright (c) 2018 Brijesh Bittu; phần keymap Vim lấy từ CodeMirror (MIT). Bản đầy đủ trong gói (`LICENSE`, `LICENSE.codemirror.txt`).
-- Dùng ở: `apps/desktop/src/renderer/src/components/editor/monaco.ts` — chế độ Vim của editor.
+- Dùng ở: `apps/desktop/src/renderer/src/features/editor/monaco.ts` — chế độ Vim của editor.
 
 ## typescript-language-server và TypeScript
 
@@ -443,7 +443,7 @@ SOFTWARE.
 - Nguồn: https://github.com/xtermjs/xterm.js
 - Phiên bản: `@xterm/xterm` 6.0.0, `@xterm/addon-fit` 0.11.0, `@xterm/addon-search` 0.16.0, `@xterm/addon-web-links` 0.12.0 (dùng qua API công khai, không chép mã)
 - Giấy phép: MIT, Copyright (c) 2017-2019 The xterm.js authors; Copyright (c) 2014-2016 SourceLair Private Company; Copyright (c) 2012-2013 Christopher Jeffrey.
-- Dùng ở: `apps/desktop/src/renderer/src/components/terminal/TerminalPanel.tsx` — terminal tích hợp.
+- Dùng ở: `apps/desktop/src/renderer/src/features/terminal/TerminalPanel.tsx` — terminal tích hợp.
 
 ## node-pty
 
@@ -463,7 +463,7 @@ SOFTWARE.
 - Nguồn: https://github.com/yjs/yjs, https://github.com/yjs/y-monaco, https://github.com/yjs/y-protocols, https://github.com/websockets/ws
 - Phiên bản: yjs `13.6.33`, y-monaco `0.1.6`, y-protocols `1.0.7`, ws `8.23.0` (dùng qua API công khai, không chép mã)
 - Giấy phép: MIT (Yjs, y-monaco, y-protocols: Copyright (c) Kevin Jahns; ws: Copyright (c) Einar Otto Stangvik và các tác giả).
-- Dùng ở: `apps/desktop/src/renderer/src/state/collab.ts` (CRDT và con trỏ), `apps/desktop/src/main/features/collab/hub.ts` (WebSocket trong LAN).
+- Dùng ở: `apps/desktop/src/renderer/src/features/collab/collab.ts` (CRDT và con trỏ), `apps/desktop/src/main/features/collab/hub.ts` (WebSocket trong LAN).
 
 
 ## react-markdown
@@ -617,7 +617,7 @@ THIS SOFTWARE.
 - Nguồn: https://github.com/mermaid-js/mermaid
 - Phiên bản: 12.3.0 (gói npm `mermaid`, dùng qua API công khai, không chép mã) cho xem trước Markdown trong editor; 11.17.2 (`mermaid-11.min.js`, tải từ `cdn.jsdelivr.net/npm/mermaid@11`) cho các sơ đồ trong trang Luồng gọi của đồ thị. Cả hai dùng MIT, Knut Sveidqvist.
 - Phụ thuộc kéo theo của bản 12.3.0: 122 gói, phần lớn MIT hoặc ISC; còn lại BSD-3-Clause, Apache-2.0 (Chevrotain), Unlicense (robust-predicates), DOMPurify (MPL-2.0 hoặc Apache-2.0, dùng theo Apache-2.0) và elkjs (EPL-2.0 hoặc GPL-3.0-or-later, dùng theo EPL-2.0). Mỗi gói giữ giấy phép riêng trong gói npm của nó.
-- Dùng ở: `apps/desktop/src/renderer/src/components/viewers/MermaidBlock.tsx` — vẽ khối ```mermaid trong xem trước Markdown thành SVG (`securityLevel: 'strict'`). Vite gói thành các chunk chỉ nạp khi gặp khối đầu tiên. Bản 11.17.2 nằm ở `apps/desktop/resources/graph-pages/mermaid-11.min.js` cho `pi-callflow.html` (N1-D1).
+- Dùng ở: `apps/desktop/src/renderer/src/features/viewers/MermaidBlock.tsx` — vẽ khối ```mermaid trong xem trước Markdown thành SVG (`securityLevel: 'strict'`). Vite gói thành các chunk chỉ nạp khi gặp khối đầu tiên. Bản 11.17.2 nằm ở `apps/desktop/resources/graph-pages/mermaid-11.min.js` cho `pi-callflow.html` (N1-D1).
 
 The MIT License (MIT)
 

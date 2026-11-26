@@ -59,7 +59,8 @@ Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tê
 | `renderer-khong-import-main`, `main-khong-import-renderer` | Hai tiến trình chỉ nói chuyện qua preload/IPC. Test tích hợp được miễn. |
 | `preload-chi-dung-shared` | Preload chỉ dùng `@nexgraph/contracts`. |
 | `contracts-doc-lap` | `packages/contracts` (trước là `src/shared`, pha 3a) không phụ thuộc main/renderer/preload. |
-| `state-khong-import-components` | State/hook không phụ thuộc component. |
+| `renderer-shared-doc-lap` | `renderer/src/shared/` (`ui`, `lib`) và `i18n/` không phụ thuộc `app/` hay `features/` (pha 3b, thay `state-khong-import-components`). |
+| `features-khong-import-app` | `features/<x>/` không phụ thuộc `app/` (phần lắp ráp workbench). |
 | `ma-san-pham-khong-import-test` | Mã sản phẩm không import tệp test. |
 | `khong-vong-phu-thuoc` (cảnh báo) | Không có vòng import giữa tệp mã sản phẩm. |
 
@@ -84,6 +85,27 @@ Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tê
 - `test/ipc-channels.test.ts` khoá: tập kênh main đăng ký bằng đúng tập kênh preload gọi, không kênh nào đăng ký hai lần, việc dọn khi gỡ dự án chạy đủ.
 
 Pha 2b đưa mọi module của `src/main` vào ba nhóm: `app/` (lắp ráp: menu, cửa sổ, khởi động, smoke), `platform/` (dùng chung: engine, an toàn đường dẫn, lỗi, cài đặt), `features/<x>/` (mã và IPC của một tính năng). Ở gốc chỉ còn `index.ts` (điểm vào electron-vite) và `ipc.ts`. Test của main vẫn ở `apps/desktop/test/`.
+
+### Renderer theo tính năng (pha 3b, 27/11/2026)
+
+`src/renderer/src` có 3 tầng, chiều phụ thuộc một hướng: `app/` → `features/<x>/` → `shared/` + `i18n/`.
+
+| Tầng | Chứa |
+|---|---|
+| `app/` | Lắp ráp: `workbenchPanels.ts` (đăng ký panel), `layout/` (khung workbench), `screens/` (các màn hình), `hosted/` (điểm vào khi nhúng), cầu menu, hành động menu Tệp. `App.tsx` và `main.tsx` ở gốc. |
+| `features/<x>/` | Component, hook, state và test của một tính năng (22 tính năng, cùng tên với `components/<x>` cũ, thêm `extensions`). |
+| `shared/ui/` | Component dùng chung: biểu tượng, thông báo, `Picker`, `PaneStack`, `FileFinder`, thanh trạng thái. |
+| `shared/lib/` | Tiện ích, state không thuộc tính năng nào: lệnh và phím tắt, giao diện, bố cục, tuỳ chọn editor, lỗi, ngôn ngữ, `waitJob`. |
+| `i18n/` | `strings.ts` (trước ở gốc) và bảng dịch. |
+
+- **Kết quả:** desktop từ 12 lỗi và 6 cảnh báo còn **0 lỗi và 1 cảnh báo**. Cảnh báo còn lại là vòng `main/features/git/operations.ts` ↔ `repo.ts`.
+- **Cách sửa 12 lỗi cũ:**
+  - `workbenchPanels` chuyển sang `app/`.
+  - `activeEditor` và `collab` chuyển vào tính năng của chúng; import `features/editor/monaco` từ trong tính năng thì không vi phạm.
+  - `appMenuBridge` chuyển sang `app/`.
+- **Gỡ vòng `icons` ↔ `ProjectOverviewScreen`:** chuyển kiểu `WorkspaceTab` sang `shared/lib/workspaceTab.ts`; màn Tổng quan xuất lại kiểu này.
+- **Đổi tên:** `state/savedPrompts.ts` thành `features/agent/savedPromptsStore.ts`. Trên macOS và Windows, hệ tệp không phân biệt hoa thường, nên nếu giữ tên cũ thì `./savedPrompts` và `./SavedPrompts` (component) sẽ trỏ nhầm sang nhau.
+- **Còn lại:** tính năng import lẫn nhau, 31 import ở 22 cặp, nhiều nhất là `collab`/`viewers` → `editor`. Chưa có luật cho trường hợp này. Muốn tách thì đưa phần dùng chung xuống `shared/`.
 
 ## Đường dẫn đã chuyển
 
@@ -111,3 +133,6 @@ Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài re
 | 2 | `src/main/{collab,debug,extensions,git,lsp,terminal,graph-pages}/` | `src/main/features/<cùng tên>/` | |
 | 2 | `src/main/tasks/` | `src/main/features/terminal/tasks/` | |
 | 3 | `apps/desktop/src/shared/` (8 tệp) | `packages/contracts/src/` (gói `@nexgraph/contracts`) | Import `@shared/x` và `../shared/x` → `@nexgraph/contracts/x` (267 chỗ). Alias trong `electron.vite.config.ts`, `vitest.config.mts`, hai `tsconfig`; không có bước build, mã được gom vào bundle. `labs/extension` import theo đường dẫn tương đối. |
+| 3 | `renderer/src/components/<x>/` (22 thư mục) | `renderer/src/features/<x>/` | `common/` → `shared/ui/`, `layout/` → `app/layout/` (trừ `Picker`, `PaneStack`, `FileFinder` → `shared/ui/`), `EngineStatusBar` → `shared/ui/`. |
+| 3 | `renderer/src/state/` (57 tệp) | `app/`, `shared/lib/`, `features/<x>/` | Theo nơi dùng; xem mục "Renderer theo tính năng". `savedPrompts.ts` → `features/agent/savedPromptsStore.ts`. |
+| 3 | `renderer/src/{screens,hosted}/`, `services/`, `strings.ts` | `app/{screens,hosted}/`, `features/architecture/layout/`, `i18n/strings.ts` | 311 tệp chuyển, 659 đường dẫn import sửa bằng script. |

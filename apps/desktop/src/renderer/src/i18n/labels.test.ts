@@ -20,9 +20,9 @@ const RAW_ERROR = /\??\.message\s*\?\?\s*String\(|String\((?:e|err|error|ex)\)|(
 const DOM_SETTERS = new Set(['setAttribute', 'setAttributeNS', 'setTimeout', 'setInterval', 'setImmediate', 'setProperty', 'setSelectionRange', 'setPointerCapture', 'setStart', 'setEnd'])
 /** Ngoại lệ có chủ đích: dữ liệu người dùng thấy nhưng không phải nhãn UI (đã ghi rõ lý do). */
 const ALLOWED: { file: string; contains: string; why: string }[] = [
-  { file: 'components/agent/AgentPanel.tsx', contains: 'content: msgText(message)', why: 'nội dung bubble lỗi trong lịch sử hội thoại: đã gửi cho model, lưu chuỗi như mọi tin nhắn' },
-  { file: 'components/collab/CollabUi.tsx', contains: "name || tr('Người dùng')", why: 'tên hiển thị gửi sang phiên cộng tác là dữ liệu, không phải nhãn UI' },
-  { file: 'state/debugState.ts', contains: 'output: [...state.output.slice(-500)', why: 'dòng console gỡ lỗi: ghi vào buffer văn bản, không phải nhãn UI' },
+  { file: 'features/agent/AgentPanel.tsx', contains: 'content: msgText(message)', why: 'nội dung bubble lỗi trong lịch sử hội thoại: đã gửi cho model, lưu chuỗi như mọi tin nhắn' },
+  { file: 'features/collab/CollabUi.tsx', contains: "name || tr('Người dùng')", why: 'tên hiển thị gửi sang phiên cộng tác là dữ liệu, không phải nhãn UI' },
+  { file: 'features/debug/debugState.ts', contains: 'output: [...state.output.slice(-500)', why: 'dòng console gỡ lỗi: ghi vào buffer văn bản, không phải nhãn UI' },
   { file: 'App.tsx', contains: "state: 'error', message: msgText(errorMsg(e))", why: 'EngineStatus.message là chuỗi theo hợp đồng IPC; các lần cập nhật sau dùng messageKey của supervisor' }
 ]
 

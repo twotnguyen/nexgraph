@@ -1,7 +1,7 @@
 /**
  * Nhãn menu hệ thống (File/Edit/View/Window/Help) cho main process.
  *
- * Main không import được `src/renderer/src/strings.ts` (chuỗi renderer đọc localStorage và
+ * Main không import được `src/renderer/src/i18n/strings.ts` (chuỗi renderer đọc localStorage và
  * chỉ dùng trong renderer), nên bảng nhãn menu sống ở đây. Ngôn ngữ lấy từ lựa chọn UI của
  * người dùng qua IPC `app-menu:set-locale`; đổi ngôn ngữ là dựng lại menu (xem appMenu.ts).
  */
