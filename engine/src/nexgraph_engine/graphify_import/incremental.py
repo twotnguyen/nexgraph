@@ -130,7 +130,8 @@ def replace_files(store: GraphStore, changed_paths: list[str], graph_json_path: 
         sync_communities(store, parsed, prior)
         enrich_missing_fields(store, root, sorted(reload))
         tested_by = derive_tested_by(store)
-        store.snapshot_baseline()
+        # Không chụp lại `moc_tep`: mốc của Changes (dự án không Git) là lần lập chỉ mục đầy đủ gần nhất
+        # (docs/srs/data-model.md), như refresh của đường legacy.
         store.set_run_state(run_id, "hoan_tat", files_done=len(reload), files_total=len(reload))
 
     return ReplaceReport(files_changed=len(reload), files_removed=len(removed),

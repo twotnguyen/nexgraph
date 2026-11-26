@@ -82,3 +82,37 @@ def test_refresh_removed_file_drops_its_nodes(api, indexed_pipeline):
         assert store.node_ids_of_file("util.ts") == {}
     finally:
         conn.close()
+
+
+def test_changes_keep_full_index_baseline_after_refresh(api, tmp_path, monkeypatch):
+    """Dự án không Git: Changes so với lần lập chỉ mục đầy đủ, refresh tăng dần không được dời mốc.
+
+    Smoke bộ cài: sửa `smoke.ts` rồi GET /changes phải báo tệp đổi và người gọi ở tệp khác.
+    """
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "graphify")
+    root = tmp_path / "Đồ án" / "changes app"
+    root.mkdir(parents=True)
+    lines = ["export function helper(): boolean {", "  return true", "}", "",
+             "export function entry(): boolean {", "  return helper()", "}", ""]
+    (root / "lib.ts").write_text("\n".join(lines), encoding="utf-8")
+    (root / "caller.ts").write_text("\n".join([
+        "import { helper } from './lib'", "", "export function external(): boolean {", "  return helper()", "}", ""]),
+        encoding="utf-8")
+    pid = api.open(root)["project_id"]
+    assert api.index(pid, timeout=180)["state"] == "done"
+    base = f"/v1/projects/{pid}"
+    assert api.get(f"{base}/changes", params={"refresh": "false"}).json()["changed_files"] == []
+
+    lines[1] = "  return false"
+    (root / "lib.ts").write_text("\n".join(lines), encoding="utf-8")
+    changes = api.get(f"{base}/changes").json()  # refresh tăng dần rồi đọc thay đổi
+
+    assert changes["base"] == "last_index"
+    assert [(f["path"], f["status"]) for f in changes["changed_files"]] == [("lib.ts", "M")]
+    changed = {node["id"] for node in changes["changed_nodes"]}
+    impacted = {(item["node"]["file"], item["hops"]) for item in changes["impacted"]}
+    assert any(node_id.startswith("lib_helper") for node_id in changed), changed
+    assert ("caller.ts", 1) in impacted, impacted
+    # Gọi lại vẫn so với mốc cũ: lần refresh thứ hai không đổi gì nhưng không được xoá thay đổi đã có.
+    again = api.get(f"{base}/changes").json()
+    assert [(f["path"], f["status"]) for f in again["changed_files"]] == [("lib.ts", "M")]
