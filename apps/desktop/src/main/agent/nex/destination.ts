@@ -68,22 +68,28 @@ const DEFAULT_WINDOW = 200_000
  * chọn đó; không có → trả nguyên nguồn (hành vi #66: Nex dùng nhà cung cấp tuỳ chỉnh Pi đang chọn).
  */
 export function nexAgentAccounts<T extends NexDestinationSource>(a: T, consent: NexConsentStore): T | AgentAccounts {
-  const dest = nexDestination(a)
-  if (!dest) return a
-  const { runtime: _runtime, model: _model, account: _account, ...rest } = dest
-  const target: NexConsentTarget = { runtime: 'nex', ...rest }
+  if (!nexDestination(a)) return a
+  // Đọc lựa chọn SỐNG ở mỗi lần gọi: recipient().isCurrent() so lại getSelectedModel/sessionIdentity để
+  // selectionChanged() huỷ phiên khi người dùng đổi/đăng xuất tài khoản Nex giữa chừng (review #72 vòng 2).
+  const current = (): NexDestination | null => nexDestination(a)
   const base = a.modelRuntime
-  const known = base.getModel(dest.provider, dest.model) as Record<string, unknown> | undefined
-  const model = {
-    api: 'openai-completions', reasoning: false, input: ['text'],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: DEFAULT_WINDOW, maxTokens: 16_384,
-    ...(known ?? {}),
-    id: dest.model, name: (known?.name as string | undefined) ?? dest.model, provider: dest.provider, baseUrl: dest.baseUrl
+  const known = (dest: NexDestination) => base.getModel(dest.provider, dest.model) as Record<string, unknown> | undefined
+  const modelOf = (dest: NexDestination) => {
+    const info = known(dest)
+    return {
+      api: 'openai-completions', reasoning: false, input: ['text'],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: DEFAULT_WINDOW, maxTokens: 16_384,
+      ...(info ?? {}),
+      id: dest.model, name: (info?.name as string | undefined) ?? dest.model, provider: dest.provider, baseUrl: dest.baseUrl
+    }
   }
   const modelRuntime = new Proxy(base, {
     get(targetRuntime, key) {
       if (key === 'getModel') {
-        return (provider: string, id: string) => provider === dest.provider && id === dest.model ? model : undefined
+        return (provider: string, id: string) => {
+          const dest = current()
+          return dest && provider === dest.provider && id === dest.model ? modelOf(dest) : undefined
+        }
       }
       const value = Reflect.get(targetRuntime, key, targetRuntime) as unknown
       return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(targetRuntime) : value
@@ -91,12 +97,29 @@ export function nexAgentAccounts<T extends NexDestinationSource>(a: T, consent: 
   })
   return {
     modelRuntime,
-    getSelectedModel: () => ({ provider: dest.provider, id: dest.model }),
-    getConsentTarget: async () => target,
+    getSelectedModel: () => {
+      const dest = current()
+      return dest ? { provider: dest.provider, id: dest.model } : null
+    },
+    getConsentTarget: async () => {
+      const dest = current()
+      if (!dest) return null
+      const { runtime: _runtime, model: _model, account: _account, ...rest } = dest
+      return { runtime: 'nex', ...rest } satisfies NexConsentTarget
+    },
     hasConsent: (projectId, t) => consent.hasConsent(projectId, t),
-    sessionIdentity: () => JSON.stringify(['nex', dest.provider, dest.baseUrl]),
-    selectedModelPricing: () => dest.account ? 'subscription' : 'unknown',
-    selectedModelWindowKnown: () => !!known,
-    nexProvider: () => a.nexProviderFor({ provider: dest.provider, id: dest.model })
+    sessionIdentity: () => {
+      const dest = current()
+      return dest ? JSON.stringify(['nex', dest.provider, dest.baseUrl]) : ''
+    },
+    selectedModelPricing: () => current()?.account ? 'subscription' : 'unknown',
+    selectedModelWindowKnown: () => {
+      const dest = current()
+      return !!dest && !!known(dest)
+    },
+    nexProvider: () => {
+      const dest = current()
+      return dest ? a.nexProviderFor({ provider: dest.provider, id: dest.model }) : null
+    }
   }
 }

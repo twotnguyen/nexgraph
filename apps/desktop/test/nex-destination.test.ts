@@ -84,3 +84,22 @@ describe('AgentAccounts của phiên Nex', () => {
     expect(nexAgentAccounts(base, new NexConsentStore(async () => tmpdir()))).toBe(base)
   })
 })
+
+// Review #72 vòng 2, finding 1: AgentService.recipient().isCurrent() đọc lại getSelectedModel/sessionIdentity
+// để selectionChanged() huỷ phiên khi đổi tài khoản Nex — adapter phải đọc lựa chọn SỐNG, không chốt lúc dựng.
+describe('lựa chọn Nex đổi sau khi dựng adapter', () => {
+  it('getSelectedModel/sessionIdentity/consent target/model theo lựa chọn hiện tại', async () => {
+    let selected: { provider: string; id: string } | null = { provider: 'openai', id: 'gpt-5' }
+    const accounts = nexAgentAccounts(source({ nexSelectedModel: () => selected }), new NexConsentStore(async () => tmpdir()))
+    const identity = accounts.sessionIdentity!()
+    selected = { provider: 'anthropic', id: 'claude' }
+    expect(accounts.getSelectedModel()).toEqual({ provider: 'anthropic', id: 'claude' })
+    expect(accounts.sessionIdentity!()).not.toBe(identity)
+    expect(await accounts.getConsentTarget!()).toEqual({ runtime: 'nex', provider: 'anthropic', baseUrl: 'nex-account:anthropic' })
+    expect(accounts.modelRuntime.getModel('openai', 'gpt-5')).toBeUndefined()
+    expect(accounts.modelRuntime.getModel('anthropic', 'claude')).toMatchObject({ baseUrl: 'nex-account:anthropic' })
+    selected = null
+    expect(accounts.getSelectedModel()).toBeNull()
+    expect(await accounts.getConsentTarget!()).toBeNull()
+  })
+})
