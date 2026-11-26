@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Query, Request
-from graphify.security import validate_url
+from nexgraph_engine.adapters.graphify.security import validate_url
 from pydantic import BaseModel, Field
 
 from nexgraph_engine.api.errors import ApiError, error_response

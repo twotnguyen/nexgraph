@@ -146,7 +146,7 @@ def write_graph_json(bg: BridgeGraph, path: Path, *, project_name: str | None = 
     """
     import json
 
-    from graphify.export import to_json
+    from nexgraph_engine.adapters.graphify.export import to_json
     to_json(bg.G, bg.communities, str(path), force=True, community_labels=bg.labels,
             built_at_commit=built_at_commit)
     if project_name:

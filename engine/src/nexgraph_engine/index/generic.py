@@ -15,7 +15,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from graphify.extract import _get_extractor, _safe_extract_with_xaml_root, extract
+from nexgraph_engine.adapters.graphify.extract import _get_extractor, _safe_extract_with_xaml_root, extract
 
 from nexgraph_engine.dart.extractor import FileExtraction
 from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, LANGUAGE_BY_EXT, is_batch_language

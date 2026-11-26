@@ -41,7 +41,7 @@ def _gaps(store: GraphStore) -> dict:
 
 
 def _god_nodes(store: GraphStore, bg: BridgeGraph) -> list[dict]:
-    from graphify.analyze import god_nodes
+    from nexgraph_engine.adapters.graphify.analysis import god_nodes
     out = []
     for g in god_nodes(bg.G, top_n=GOD_NODES * 5):
         attrs = bg.G.nodes[g["id"]]
@@ -56,7 +56,7 @@ def _god_nodes(store: GraphStore, bg: BridgeGraph) -> list[dict]:
 
 
 def _benchmark(bg: BridgeGraph, warnings: list[str], lang: str) -> dict | None:
-    from graphify.benchmark import run_benchmark
+    from nexgraph_engine.adapters.graphify.analysis import run_benchmark
     with tempfile.TemporaryDirectory(prefix="nexgraph-bench-") as d:
         path = Path(d) / "graph.json"
         try:
@@ -78,7 +78,7 @@ def report_json(store: GraphStore, root: Path, source: SourcePolicy | None = Non
                 sources_dir: Path | None = None, *, lang: str = "en") -> dict:
     """`lang="en"` giữ nguyên chuỗi Graphify (hành vi cũ); `lang="vi"` dịch ở lớp NexGraph."""
     lang = check_lang(lang, "en")  # lang sai phải ném ValueError như build_tour (M3, review 23/11)
-    from graphify.analyze import suggest_questions, surprising_connections
+    from nexgraph_engine.adapters.graphify.analysis import suggest_questions, surprising_connections
     bg = build_nx(store, keep_file=source.allows if source else None)
     labels = {cid: community_label(name, lang) for cid, name in bg.labels.items()}
     communities = [{"id": f"com:{cid}", "label": labels[cid], "size": len(members),
@@ -130,8 +130,8 @@ def render_report_markdown(bg: BridgeGraph, project_name: str, files: int, *, la
     Câu hỏi gợi ý/lý do dịch bằng `report/i18n.py` như route `/report`; tiêu đề mục và câu khung dịch
     bằng `report/markdown_i18n.py`. Nhãn cụm lưu tiếng Việt nên được dịch trước khi sinh câu hỏi.
     """
-    from graphify.analyze import god_nodes, suggest_questions, surprising_connections
-    from graphify.report import generate
+    from nexgraph_engine.adapters.graphify.analysis import god_nodes, suggest_questions, surprising_connections
+    from nexgraph_engine.adapters.graphify.analysis import generate
 
     from nexgraph_engine.report.markdown_i18n import localize_markdown
 

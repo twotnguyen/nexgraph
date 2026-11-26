@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 
-from graphify.security import redact_secrets
+from nexgraph_engine.adapters.graphify.security import redact_secrets
 
 REDACTED = "[redacted]"
 # Hậu tố tên khoá nhạy cảm, so sau khi bỏ mọi ký tự không phải chữ/số: `DB_PASSWORD` → `DBPASSWORD`.

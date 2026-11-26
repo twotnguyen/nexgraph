@@ -15,7 +15,7 @@ from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-from graphify.reflect import aggregate_lessons
+from nexgraph_engine.adapters.graphify.serve import aggregate_lessons
 
 from nexgraph_engine.query.source_policy import SourcePolicy, protected_source
 from nexgraph_engine.schema.db import open_graph_db

@@ -8,7 +8,7 @@ import re
 import tempfile
 from pathlib import Path
 
-from graphify.extractors.markdown import extract_markdown
+from nexgraph_engine.adapters.graphify.extract import extract_markdown
 
 from nexgraph_engine.dart.extractor import FileExtraction
 from nexgraph_engine.ids import node_id

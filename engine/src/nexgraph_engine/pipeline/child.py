@@ -26,7 +26,7 @@ def run_vendor(root: Path, out_dir: Path, vendor_args: list[str]) -> int:
     previous_argv = sys.argv
     sys.argv = ["graphify", *vendor_args]
     try:
-        from graphify.__main__ import main as vendor_main
+        from nexgraph_engine.adapters.graphify.runner import main as vendor_main
 
         vendor_main()
     except SystemExit as exc:  # CLI vendor thoát bằng SystemExit ở mọi nhánh

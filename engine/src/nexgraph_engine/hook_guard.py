@@ -133,7 +133,7 @@ def guard_output(kind: str, project: Path, data_dir: Path | None, strict: bool, 
         if kind == "search":
             command = str(t.get("command") or "")
             if command:
-                from graphify.cli import _bash_invokes_search
+                from nexgraph_engine.adapters.graphify.runner import _bash_invokes_search
                 if not _bash_invokes_search(command):
                     return ""
             elif not t.get("pattern"):

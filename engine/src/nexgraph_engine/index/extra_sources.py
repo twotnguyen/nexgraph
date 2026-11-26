@@ -14,10 +14,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from graphify.cargo_introspect import introspect_cargo
-from graphify.manifest_ingest import extract_package_manifest
-from graphify.mcp_ingest import extract_mcp_config
-from graphify.scip_ingest import ingest_scip_json
+from nexgraph_engine.adapters.graphify.ingest import introspect_cargo
+from nexgraph_engine.adapters.graphify.ingest import extract_package_manifest
+from nexgraph_engine.adapters.graphify.ingest import extract_mcp_config
+from nexgraph_engine.adapters.graphify.ingest import ingest_scip_json
 
 from nexgraph_engine.ids import REPOSITORY_ID, file_node_id, node_id
 from nexgraph_engine.index.discovery import discover
@@ -31,7 +31,7 @@ MAX_FILE_BYTES = 16 * 1024 * 1024  # SCIP JSON 28 MB đã đẩy RSS lên 824 MB
 
 def introspect_postgres(dsn: str) -> dict:
     # Import muộn: graphify.pg_introspect cần psycopg (không đóng gói), test thay hàm này bằng mock.
-    from graphify.pg_introspect import introspect_postgres as real
+    from nexgraph_engine.adapters.graphify.ingest import introspect_postgres as real
     return real(dsn)
 
 
