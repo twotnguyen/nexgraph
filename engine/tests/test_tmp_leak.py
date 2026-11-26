@@ -5,20 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from nexgraph_engine.api.services import Services
-
-
-@pytest.fixture
-def watched_tmp(tmp_path, monkeypatch):
-    """Thư mục tạm riêng cho cả tiến trình này lẫn worker con (spawn kế thừa biến môi trường)."""
-    tmp = tmp_path / "tmp"
-    tmp.mkdir()
-    for key in ("TMPDIR", "TEMP", "TMP"):
-        monkeypatch.setenv(key, str(tmp))
-    monkeypatch.setattr(tempfile, "tempdir", None)
-    return tmp
 
 
 def test_test_tmp_is_inside_pytest_basetemp(tmp_path_factory):

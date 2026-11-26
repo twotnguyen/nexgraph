@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import atexit
 import logging
+import multiprocessing
 import re
 import tempfile
 from pathlib import Path
@@ -18,6 +19,7 @@ from graphify.extract import _get_extractor, _safe_extract_with_xaml_root, extra
 
 from nexgraph_engine.dart.extractor import FileExtraction
 from nexgraph_engine.index.discovery import CONFIG_LANGUAGES, LANGUAGE_BY_EXT, is_batch_language
+from nexgraph_engine.index.extract_cache import owned_prefix, sweep_orphan_caches
 from nexgraph_engine.ids import file_node_id, node_id
 from nexgraph_engine.schema.enums import Confidence, EdgeType, NodeKind, Origin
 from nexgraph_engine.store.models import Edge, Node, UnresolvedRef
@@ -29,9 +31,12 @@ _cache_dir: tempfile.TemporaryDirectory | None = None
 
 def _cache_root() -> Path:
     # Một thư mục cache duy nhất cho cả tiến trình (bộ trích xuất cảnh báo khi đổi cache root giữa các lần gọi).
+    # Tên mang pid để tiến trình sau dọn được cache của tiến trình bị dừng cứng (ENG-extract-killed).
     global _cache_dir
     if _cache_dir is None:
-        _cache_dir = tempfile.TemporaryDirectory(prefix="nexgraph-extract-")
+        if multiprocessing.parent_process() is None:  # worker không dọn: tránh N worker cùng quét một lúc
+            sweep_orphan_caches()
+        _cache_dir = tempfile.TemporaryDirectory(prefix=owned_prefix())
         atexit.register(_cache_dir.cleanup)
     return Path(_cache_dir.name)
 
