@@ -1,0 +1,72 @@
+/* Màn Giấy phép mã nguồn mở: đầu trang có nút quay lại, ô tìm; nội dung là văn bản chỉ đọc. */
+.screen.licenses {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 980px;
+  height: 100%;
+  min-height: 0;
+}
+
+.licenses-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(180px, 260px);
+  align-items: end;
+  gap: 12px;
+}
+
+.licenses-back {
+  align-self: start;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+}
+.licenses-back:hover { background: color-mix(in srgb, var(--color-text) 7%, var(--color-surface)); }
+
+.licenses-title h1 { margin: 0; font-size: 20px; }
+.licenses-title p { margin: 4px 0 0; font-size: 12px; }
+
+.licenses-search input {
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 13px;
+}
+.licenses-search input:focus { border-color: color-mix(in srgb, var(--blue) 60%, var(--color-border)); outline: 0; }
+
+.licenses-doc {
+  flex: 1;
+  min-height: 0;
+  padding: 2px 4px 24px 2px;
+  overflow: auto;
+}
+
+.licenses-count { margin: 0 0 8px; }
+.licenses-intro { margin: 0 0 10px; }
+.licenses-empty { padding: 18px 0; color: var(--color-muted); }
+.licenses-loading { padding: 18px 0; }
+
+.license-section { padding: 10px 0 4px; border-top: 1px solid var(--color-border); }
+.license-section:first-of-type { border-top: 0; }
+.license-section h2 { margin: 0 0 6px; font-size: 14px; }
+
+.licenses-doc pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--color-text);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.licenses-doc mark { border-radius: 2px; background: color-mix(in srgb, var(--amber, #f5c542) 55%, transparent); color: inherit; }
+.licenses-source { margin: 14px 0 0; }

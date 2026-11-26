@@ -201,6 +201,7 @@ export const codeErrors: Record<string, string> = {
   invalid_response: 'Phản hồi ACP thiếu kết quả.',
   invalid_tasks: 'Tệp cấu hình tác vụ không hợp lệ.',
   invalid_timeout: 'Thời gian chờ Gemini không hợp lệ.',
+  licenses_missing: 'Không đọc được tệp giấy phép mã nguồn mở đi kèm ứng dụng.',
   missing_task_context: 'Không có ngữ cảnh cho biến trong tác vụ.',
   model_unavailable: 'Antigravity chưa cung cấp danh sách model. Kiểm tra tài khoản và thử lại.',
   no_commit: 'Kho chưa có commit nào.',

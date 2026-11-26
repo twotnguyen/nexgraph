@@ -175,6 +175,14 @@ export interface NexGraphApi {
     /** Đổi nhãn menu native theo ngôn ngữ UI (main dựng lại thanh menu). */
     setLocale(locale: 'vi' | 'en'): Promise<void>
   }
+  /** Màn Giấy phép mã nguồn mở: đọc `THIRD_PARTY_LICENSES.md` đã đóng gói (Resources) hoặc ở gốc repo khi dev. */
+  licenses?: {
+    read(): Promise<{ text: string; path: string }>
+  }
+  /** Thông tin phiên bản cho mục Giới thiệu trong Cài đặt. */
+  app?: {
+    version(): Promise<string>
+  }
   index: {
     scan(projectId: string): Promise<ScanInfo>
     start(projectId: string, opts?: IndexOptions): Promise<{ jobId: string }>
