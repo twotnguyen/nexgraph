@@ -1,4 +1,6 @@
+import os
 import shutil
+import tempfile
 import threading
 from pathlib import Path
 
@@ -9,6 +11,29 @@ from nexgraph_engine.schema.db import open_graph_db
 from nexgraph_engine.store.graph_store import GraphStore
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _tmp_trong_basetemp(tmp_path_factory):
+    """Thư mục tạm của cả phiên test nằm trong basetemp của pytest (MIN-tmp-leak).
+
+    Mã và test gọi `tempfile` trực tiếp, tiến trình engine con bị test dừng giữa chừng (không chạy `atexit`)
+    từng để lại `tmp*`, `nexgraph-extract-*`, `nexgraph-data-*` trong thư mục tạm của máy sau mỗi lượt.
+    Đổi biến môi trường để cả tiến trình con thừa hưởng; pytest chỉ giữ basetemp của 3 lượt gần nhất.
+    """
+    root = tmp_path_factory.mktemp("tmp", numbered=False)
+    saved = {key: os.environ.get(key) for key in ("TMPDIR", "TEMP", "TMP")}
+    saved_tempdir = tempfile.tempdir
+    for key in saved:
+        os.environ[key] = str(root)
+    tempfile.tempdir = None  # gettempdir() đọc lại biến môi trường
+    yield root
+    for key, value in saved.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+    tempfile.tempdir = saved_tempdir
 
 
 @pytest.fixture(autouse=True)

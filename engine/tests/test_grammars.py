@@ -1,5 +1,4 @@
 """W2 Task 2: mỗi đuôi code của graphify có tệp mẫu thì phải trích ra symbol (grammar đã được đóng gói)."""
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -24,8 +23,8 @@ def _samples() -> dict[str, Path]:
 
 
 @pytest.mark.parametrize("ext,path", sorted(_samples().items()))
-def test_every_code_extension_with_fixture_yields_nodes(ext, path):
+def test_every_code_extension_with_fixture_yields_nodes(ext, path, tmp_path):
     if ext in NO_SYMBOLS:
         pytest.skip(NO_SYMBOLS[ext])
-    r = extract([path], cache_root=Path(tempfile.mkdtemp()), root=path.parent, parallel=False)
+    r = extract([path], cache_root=tmp_path, root=path.parent, parallel=False)
     assert len([n for n in r["nodes"] if n.get("label") != path.name]) > 0, f"{ext}: thiếu grammar?"
