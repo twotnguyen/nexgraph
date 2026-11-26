@@ -10,7 +10,11 @@ from nexgraph_engine.store.projects import ProjectRegistry
 
 class Services:
     def __init__(self, data_dir: Path | None) -> None:
-        self.data_dir = Path(data_dir) if data_dir else Path(tempfile.mkdtemp(prefix="nexgraph-data-"))
+        # Không có data_dir (test, chạy thử): thư mục tạm thuộc về Services, xoá khi tắt hoặc khi bị thu gom
+        # nếu app bị bỏ mà lifespan không chạy (MIN-tmp-leak).
+        self._owned_dir = None if data_dir else tempfile.TemporaryDirectory(prefix="nexgraph-data-",
+                                                                            ignore_cleanup_errors=True)
+        self.data_dir = Path(data_dir) if data_dir else Path(self._owned_dir.name)
         self.registry = ProjectRegistry(self.data_dir)
         self.bus = EventBus()
         self.locks = ProjectLocks()
@@ -27,6 +31,8 @@ class Services:
         for llm_queue in list(self.llm_queues.values()):
             llm_queue.close()
         self.llm_queues.clear()
+        if self._owned_dir is not None:
+            self._owned_dir.cleanup()
 
     # --- graph chung (W8) ---------------------------------------------------------------------------
     def relink_global(self) -> str:
