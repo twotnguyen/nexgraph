@@ -122,7 +122,7 @@ export class NexAccountManager {
   private client(): Promise<NexClient> {
     if (!this.clientPromise) {
       this.clientPromise = this.o.connect()
-        .then((ready) => (this.o.clientFactory ?? ((input) => new NexClient(input)))(ready))
+        .then((ready) => (this.o.clientFactory ?? ((input) => new NexClient({ baseUrl: input.baseUrl, secret: input.password })))(ready))
         .catch((error: unknown) => {
           this.clientPromise = null
           const reason = (error as { code?: string }).code === 'nex_not_available' ? 'no_runtime' : 'sidecar_error'

@@ -102,14 +102,15 @@ describe('NexSidecar', () => {
   }, 30_000)
 
   it('dùng HOME dùng chung + thư mục cấu hình riêng khi được chỉ định (tài khoản dùng cho mọi dự án)', async () => {
-    const { bin, dir } = fixture()
+    const { bin, dir, spawnImpl } = fixture()
     const root = mkdtempSync(join(tmpdir(), 'n1a1-project-'))
     const dump = join(dir, 'env-shared.json')
     const homeDir = join(dir, 'nex', 'home')
     const configDir = join(dir, 'nex', 'projects', 'p1', 'config')
     const sidecar = new NexSidecar({
       bin, dataDir: join(dir, 'nex'), projectKey: 'p1', homeDir, configDir, cwd: root,
-      config: () => config(root), env: { FAKE_NEX_DUMP: dump }
+      // Windows: fixture là .cmd, phải chạy qua shell như các ca khác (không có thì spawn EINVAL).
+      spawnImpl, config: () => config(root), env: { FAKE_NEX_DUMP: dump }
     })
     await sidecar.start()
     const env = JSON.parse(readFileSync(dump, 'utf8')) as Record<string, unknown>
