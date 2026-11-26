@@ -86,3 +86,38 @@ packages = ["src/nexgraph_engine", "src/graphify"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: test chậm (đo đồ thị/vendor) — vẫn chạy trong CI, không skip"]
+
+# Luật phụ thuộc giữa module (ADR 0026, pha 0: chỉ báo cáo). Chạy: `pnpm rules:report` ở gốc repo.
+# Tên tầng là package hiện tại; pha 4 gom chúng vào core/storage/indexing/analysis/interfaces.
+[tool.importlinter]
+root_packages = ["nexgraph_engine", "graphify"]
+
+[[tool.importlinter.contracts]]
+id = "engine-layers"
+name = "Engine chia tầng: giao diện → điều phối → phân tích → lập chỉ mục → lưu trữ → lõi"
+type = "layers"
+containers = ["nexgraph_engine"]
+layers = [
+    "cli : api : mcp : hook_guard : selftest",
+    "pipeline",
+    "query : arch : flows : impact : changes : prs : semantic : tour : report : memory : global_graph : bridge : export",
+    "index : graphify_import : sources : dart : docs",
+    "store",
+    "schema : ids : errors : logging_setup : subprocesses",
+]
+
+[[tool.importlinter.contracts]]
+id = "graphify-gateway"
+name = "Chỉ nexgraph_engine.adapters.graphify được import graphify"
+type = "forbidden"
+source_modules = ["nexgraph_engine"]
+forbidden_modules = ["graphify"]
+ignore_imports = ["nexgraph_engine.adapters.graphify.** -> graphify.**"]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+id = "graphify-one-way"
+name = "Mã vendor graphify không import nexgraph_engine"
+type = "forbidden"
+source_modules = ["graphify"]
+forbidden_modules = ["nexgraph_engine"]
