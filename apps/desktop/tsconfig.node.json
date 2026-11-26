@@ -10,7 +10,7 @@
     "isolatedModules": true,
     "types": ["node"],
     "baseUrl": ".",
-    "paths": { "@shared/*": ["src/shared/*"] }
+    "paths": { "@nexgraph/contracts/*": ["../../packages/contracts/src/*"] }
   },
-  "include": ["electron.vite.config.ts", "vitest.config.mts", "playwright.config.ts", "src/main/**/*", "src/preload/**/*", "src/shared/**/*", "test/**/*", "e2e/**/*"]
+  "include": ["electron.vite.config.ts", "vitest.config.mts", "playwright.config.ts", "src/main/**/*", "src/preload/**/*", "../../packages/contracts/src/**/*", "test/**/*", "e2e/**/*"]
 }

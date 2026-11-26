@@ -1,4 +1,4 @@
-import type { FlowStep } from '@shared/graph-types'
+import type { FlowStep } from '@nexgraph/contracts/graph-types'
 import { tr, vi } from '../../strings'
 
 interface Props {

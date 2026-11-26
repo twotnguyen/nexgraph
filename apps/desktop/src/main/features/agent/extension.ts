@@ -2,7 +2,7 @@ import { relative, resolve, sep } from 'node:path'
 import { existsSync, realpathSync } from 'node:fs'
 import { Type } from 'typebox'
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent' // chỉ kiểu: pi là ESM, không import tĩnh giá trị
-import type { AgentMode } from '../../../shared/agent-types'
+import type { AgentMode } from '@nexgraph/contracts/agent-types'
 import type { EngineApi } from '../../platform/engine/api'
 import { FsError, isProtectedRel, readProjectFile, resolveInside, writeProjectFile } from '../../platform/project-fs'
 import { TOOL_DEFS, runTool } from './tools'

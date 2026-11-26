@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { GitCommit, GitFileChange } from '@shared/api'
+import type { GitCommit, GitFileChange } from '@nexgraph/contracts/api'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'
 import { errorMsg } from '../../state/errorText'

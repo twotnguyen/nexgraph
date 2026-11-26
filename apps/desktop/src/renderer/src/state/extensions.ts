@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { ExtensionCommand, ExtensionInfo } from '@shared/api'
+import type { ExtensionCommand, ExtensionInfo } from '@nexgraph/contracts/api'
 import { addCommands, registerHandler, removeCommands, runCommand } from './commands'
 import { addThemes } from './useTheme'
 import { getActiveEditor } from './activeEditor'

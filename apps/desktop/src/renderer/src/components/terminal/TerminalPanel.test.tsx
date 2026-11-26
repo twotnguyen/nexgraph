@@ -2,7 +2,7 @@
 import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { TerminalEvent } from '@shared/api'
+import type { TerminalEvent } from '@nexgraph/contracts/api'
 import { TerminalPanel } from './TerminalPanel'
 import { setTerminalHeight } from '../../state/layoutPrefs'
 

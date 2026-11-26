@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, realpathSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-import type { ApprovalDecision, ApprovalRequest, CommandApprovalRequest, FileApprovalRequest } from '../../../../shared/agent-types'
+import type { ApprovalDecision, ApprovalRequest, CommandApprovalRequest, FileApprovalRequest } from '@nexgraph/contracts/agent-types'
 import type { ApprovalGate } from '../approval'
 import type { ProviderFailure } from '../session'
 import { NEX_PROVIDER_ID } from './config'

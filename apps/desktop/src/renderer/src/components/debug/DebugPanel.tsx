@@ -1,6 +1,6 @@
 import { tr } from '../../strings'
 import { useEffect, useRef, useState } from 'react'
-import type { DebugConfigInfo, DebugVariable } from '@shared/api'
+import type { DebugConfigInfo, DebugVariable } from '@nexgraph/contracts/api'
 import { Icon } from '../common/icons'
 import { addWatch, attachDebugging, clearAllBreakpoints, debugStep, evaluateConsole, pauseDebugging, removeWatch, restartDebugging, selectDebugConfig, selectFrame, setBreakpoint, setDebugError, startDebugging, stopDebugging, toggleBreakpoint, useDebugLayout, useDebugState, type ConfigRef, type DebugKind, type DebugLayoutSection } from '../../state/debugState'
 import './debug-panel.css'

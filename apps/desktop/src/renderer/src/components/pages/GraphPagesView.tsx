@@ -1,8 +1,8 @@
 // NG-UI-2: chế độ xem các trang HTML do pipeline đồ thị sinh ra trong `<root>/.nexgraph/`.
 // Mỗi lúc chỉ giữ MỘT khung nhúng (spike A3: 3 trang cùng sống ~1 GB RAM).
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GraphPageSelection, GraphPagesStatus } from '@shared/graph-pages'
-import { GRAPH_PAGE_THEME_CHANNEL, canOpenPageSource, communityPageUrl, graphPageUrl } from '@shared/graph-pages'
+import type { GraphPageSelection, GraphPagesStatus } from '@nexgraph/contracts/graph-pages'
+import { GRAPH_PAGE_THEME_CHANNEL, canOpenPageSource, communityPageUrl, graphPageUrl } from '@nexgraph/contracts/graph-pages'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
 import { useTheme } from '../../state/useTheme'

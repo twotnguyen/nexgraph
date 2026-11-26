@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GraphNode, SearchHit } from '@shared/graph-types'
+import type { GraphNode, SearchHit } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 import { SearchPanel } from './SearchPanel'
 

@@ -1,5 +1,5 @@
 import { createElement as h, Fragment, type ComponentProps, type ReactNode } from 'react'
-import type { NodeImpact } from '@shared/graph-types'
+import type { NodeImpact } from '@nexgraph/contracts/graph-types'
 import { ChangesPanel } from '../components/changes/ChangesPanel'
 import { DebugPanel } from '../components/debug/DebugPanel'
 import { DiagnosticsPanel, OutlinePanel } from '../components/editor/EditorPanels'

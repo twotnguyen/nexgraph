@@ -1,7 +1,7 @@
 import { app, dialog, shell } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { ExportFormat, ExportScope, PushRequest } from '../../../shared/graph-types'
+import type { ExportFormat, ExportScope, PushRequest } from '@nexgraph/contracts/graph-types'
 import { AgentError } from '../agent/session'
 import { writeJson } from '../../platform/settings'
 import { FsError, isWithin } from '../../platform/project-fs'

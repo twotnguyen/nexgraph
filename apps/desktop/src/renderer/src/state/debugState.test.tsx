@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { DebugEvent } from '@shared/api'
+import type { DebugEvent } from '@nexgraph/contracts/api'
 import { addWatch, clearAllBreakpoints, setBreakpoint, setDebugProject, startDebugging, toggleBreakpoint, useDebugState } from './debugState'
 
 beforeEach(() => { localStorage.clear(); setDebugProject('test') })

@@ -1,4 +1,4 @@
-import type { Changes, GraphNode } from '@shared/graph-types'
+import type { Changes, GraphNode } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 import { msgText, type Message } from '../../state/messages'
 import { HIGHLIGHT_COLORS } from '../graph/kindStyle'

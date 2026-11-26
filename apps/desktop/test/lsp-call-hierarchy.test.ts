@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { LspCallHierarchyItem } from '../src/shared/api'
+import type { LspCallHierarchyItem } from '@nexgraph/contracts/api'
 
 const mocked = vi.hoisted(() => ({ spawn: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: mocked.spawn }))

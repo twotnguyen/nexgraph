@@ -2,7 +2,7 @@
 import { createElement } from 'react'
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import type { GitCommit, GitFileChange } from '@shared/api'
+import type { GitCommit, GitFileChange } from '@nexgraph/contracts/api'
 import { GitHistory } from './GitHistory'
 import { assignLanes } from './graph'
 import { afterEach, describe, expect, it, vi } from 'vitest'

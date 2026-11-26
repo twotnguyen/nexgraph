@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { ApprovalRequest, FileApprovalRequest } from '@shared/agent-types'
+import type { ApprovalRequest, FileApprovalRequest } from '@nexgraph/contracts/agent-types'
 import { createDiffEditor, languageFor } from '../editor/monaco'
 import { tr, vi } from '../../strings'
 import './approval-card.css'

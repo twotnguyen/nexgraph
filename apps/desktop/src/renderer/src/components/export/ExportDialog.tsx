@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ExportFormat, ExportScope } from '@shared/graph-types'
+import type { ExportFormat, ExportScope } from '@nexgraph/contracts/graph-types'
 import { getLocale } from '../../state/locale'
 import { vi } from '../../strings'
 import { Icon } from '../common/icons'

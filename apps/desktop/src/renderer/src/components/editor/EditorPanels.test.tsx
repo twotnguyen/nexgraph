@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LspDiagnosticsEvent, LspDocumentSymbol, LspRange } from '@shared/api'
+import type { LspDiagnosticsEvent, LspDocumentSymbol, LspRange } from '@nexgraph/contracts/api'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { startDiagnostics } from '../../state/diagnostics'
 import { setLocale } from '../../state/locale'

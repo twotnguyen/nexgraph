@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { realpathSync } from 'node:fs'
 import { isAbsolute, relative, sep } from 'node:path'
-import type { AgentMode, ApprovalDecision, ApprovalRequest } from '../../../shared/agent-types'
-import type { FileContent } from '../../../shared/api'
+import type { AgentMode, ApprovalDecision, ApprovalRequest } from '@nexgraph/contracts/agent-types'
+import type { FileContent } from '@nexgraph/contracts/api'
 import { FsError, resolveInside } from '../../platform/project-fs'
 
 export const APPROVAL_TIMEOUT_MS = 5 * 60_000

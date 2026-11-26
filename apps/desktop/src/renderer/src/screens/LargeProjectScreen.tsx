@@ -1,4 +1,4 @@
-import type { ProjectSummary, ScanInfo } from '@shared/graph-types'
+import type { ProjectSummary, ScanInfo } from '@nexgraph/contracts/graph-types'
 import { vi, tr } from '../strings'
 import { Icon } from '../components/common/icons'
 import './welcome.css'

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { GeminiConsentStore } from '../src/main/features/agent/gemini-consent'
-import { consentTargetForSettings, sameConsentTarget, type GeminiConsentTarget } from '../src/shared/agent-types'
+import { consentTargetForSettings, sameConsentTarget, type GeminiConsentTarget } from '@nexgraph/contracts/agent-types'
 
 const fixtures: string[] = []
 afterEach(() => { for (const root of fixtures.splice(0)) rmSync(root, { recursive: true, force: true }) })

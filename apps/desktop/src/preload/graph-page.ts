@@ -3,7 +3,7 @@
 // Chạy trong isolated world của trang; nói chuyện với main world qua postMessage vì
 // `network`/`nodesDS` của graph.html là khai báo top-level, không phải thuộc tính window.
 import { ipcRenderer, webFrame } from 'electron'
-import { COMMUNITY_PAGE_FILE, GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_THEME_CHANNEL } from '../shared/graph-pages'
+import { COMMUNITY_PAGE_FILE, GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_THEME_CHANNEL } from '@nexgraph/contracts/graph-pages'
 
 export const PAGE_NODE_CHANNEL = GRAPH_PAGE_NODE_CHANNEL
 export const PAGE_THEME_CHANNEL = GRAPH_PAGE_THEME_CHANNEL

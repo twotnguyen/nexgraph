@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { realpathSync } from 'node:fs'
-import type { AiConsentTarget, GeminiConsentTarget } from '../../../shared/agent-types'
-import { sameConsentTarget } from '../../../shared/agent-types'
+import type { AiConsentTarget, GeminiConsentTarget } from '@nexgraph/contracts/agent-types'
+import { sameConsentTarget } from '@nexgraph/contracts/agent-types'
 import { readJson, writeJson } from '../../platform/settings'
 
 const changed = () => Object.assign(new Error('Kết nối Google đã thay đổi. Hãy kiểm tra và xác nhận lại trước khi gửi mã nguồn.'), { code: 'ai_provider_changed' })

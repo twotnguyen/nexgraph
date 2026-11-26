@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GitCommit, GitHunk } from '@shared/api'
+import type { GitCommit, GitHunk } from '@nexgraph/contracts/api'
 import { createDiffEditor, languageFor } from '../editor/monaco'
 import { FileTypeIcon } from '../common/FileTypeIcon'
 import { Icon } from '../common/icons'

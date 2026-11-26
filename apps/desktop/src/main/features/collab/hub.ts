@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { networkInterfaces } from 'node:os'
 import { WebSocket, WebSocketServer, type RawData } from 'ws'
-import type { CollabEvent, CollabHello } from '../../../shared/api'
+import type { CollabEvent, CollabHello } from '@nexgraph/contracts/api'
 import { UserError } from '../../platform/user-error'
 
 const MAX_PEERS = 8

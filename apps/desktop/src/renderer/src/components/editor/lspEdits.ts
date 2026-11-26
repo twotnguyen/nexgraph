@@ -1,4 +1,4 @@
-import type { FileContent, FileRevision, LspDiagnostic, LspTextEdit, LspWorkspaceEdit, WriteOpts } from '@shared/api'
+import type { FileContent, FileRevision, LspDiagnostic, LspTextEdit, LspWorkspaceEdit, WriteOpts } from '@nexgraph/contracts/api'
 import { tr } from '../../strings'
 
 /** Phạm vi LSP tính từ 0; marker và editor Monaco tính từ 1. */

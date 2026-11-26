@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { ArchEvidence } from '@shared/graph-types'
+import type { ArchEvidence } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 import { msgText, type Message } from '../../state/messages'
 

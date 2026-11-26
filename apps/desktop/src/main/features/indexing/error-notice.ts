@@ -1,4 +1,4 @@
-import type { WatchFailure } from '../../../shared/api'
+import type { WatchFailure } from '@nexgraph/contracts/api'
 
 /** Cùng một lỗi refresh nền lặp lại trong cửa sổ này chỉ báo một lần để không spam trung tâm thông báo. */
 export const WATCH_ERROR_REPEAT_MS = 60_000

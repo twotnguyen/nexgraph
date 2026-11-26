@@ -1,4 +1,4 @@
-import type { LspCallHierarchyItem, LspRange } from '../../../shared/api'
+import type { LspCallHierarchyItem, LspRange } from '@nexgraph/contracts/api'
 import { FsError } from '../../platform/project-fs'
 import { LspManager } from './manager'
 import type { IpcContext } from '../../platform/ipc-context'

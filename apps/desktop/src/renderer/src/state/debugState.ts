@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react'
-import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugEvent, DebugFrame, DebugLoadedSource, DebugModule, DebugScope, DebugVariable, NexGraphApi } from '@shared/api'
+import type { DebugBreakpoint, DebugBreakpoints, DebugConfigInfo, DebugEvent, DebugFrame, DebugLoadedSource, DebugModule, DebugScope, DebugVariable, NexGraphApi } from '@nexgraph/contracts/api'
 import { errorMsg, errorText } from './errorText'
 import { msg, type Message } from './messages'
 

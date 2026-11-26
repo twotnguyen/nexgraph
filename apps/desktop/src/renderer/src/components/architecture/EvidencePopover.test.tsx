@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ArchEvidence } from '@shared/graph-types'
+import type { ArchEvidence } from '@nexgraph/contracts/graph-types'
 import { EvidencePopover } from './EvidencePopover'
 
 const item = (over: Partial<ArchEvidence['edge']> = {}, file = 'lib/a.dart', line = 12): ArchEvidence => ({

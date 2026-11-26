@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NexAccountManager, checkNexAuthUrl, deviceCodeFromInstructions, withAppKeys, withCustomProviders } from '../src/main/features/agent/nex/accounts'
-import type { NexAccountsView } from '../src/shared/agent-types'
+import type { NexAccountsView } from '@nexgraph/contracts/agent-types'
 
 const SECRET = 'sk-live-should-never-leave-main'
 

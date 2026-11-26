@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentContextItem, AgentSessionSnapshot } from '@shared/agent-types'
+import type { AgentContextItem, AgentSessionSnapshot } from '@nexgraph/contracts/agent-types'
 import { emptyAgentSnapshot, installNexgraph } from '../../test-utils'
 import { AgentPanel } from './AgentPanel'
 

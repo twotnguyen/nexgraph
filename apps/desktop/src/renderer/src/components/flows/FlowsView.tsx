@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FlowDetail, FlowKind, FlowList as FlowListType, GraphEdge } from '@shared/graph-types'
+import type { FlowDetail, FlowKind, FlowList as FlowListType, GraphEdge } from '@nexgraph/contracts/graph-types'
 import type { HighlightKind } from '../graph/kindStyle'
 import { tr, vi } from '../../strings'
 import { useDebounced } from '../../state/useDebounced'

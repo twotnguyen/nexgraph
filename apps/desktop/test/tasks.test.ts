@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { ensureTasksFile, listTasks, parseJsonc, resolveTask } from '../src/main/features/terminal/tasks'
 import { UserError } from '../src/main/platform/user-error'
-import type { TaskDefinition } from '../src/shared/api'
+import type { TaskDefinition } from '@nexgraph/contracts/api'
 
 let base: string
 let root: string

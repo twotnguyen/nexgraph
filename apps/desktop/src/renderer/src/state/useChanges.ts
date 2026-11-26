@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Changes } from '@shared/graph-types'
+import type { Changes } from '@nexgraph/contracts/graph-types'
 import { tr } from '../strings'
 import { errorMsg } from './errorText'
 import { msg, type Message } from './messages'

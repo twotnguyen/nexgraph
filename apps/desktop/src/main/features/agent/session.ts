@@ -8,7 +8,7 @@ import {
   type AgentExecutionSettings, type AgentExecutionPolicy, type AgentRunLimits, type AgentUsage, type AgentToolRun, type AgentContextUsage,
   type AgentTask, type AgentSessionInfo, type AgentSessionSnapshot, type AgentPromptOptions,
   type AgentCheckpointInfo, type AgentRollbackResult, type PiConsentTarget, type NexConsentTarget
-} from '../../../shared/agent-types'
+} from '@nexgraph/contracts/agent-types'
 import { verifyCitations } from './citations'
 import type { EngineApi } from '../../platform/engine/api'
 import { createApprovalGate, type ApprovalGate } from './approval'

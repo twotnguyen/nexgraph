@@ -1,4 +1,4 @@
-import type { Job } from '@shared/graph-types'
+import type { Job } from '@nexgraph/contracts/graph-types'
 import { vi } from '../strings'
 
 /** Đợi job tổng quát (clone, ingest…) kết thúc bằng cách hỏi `index.status`; lỗi hoặc huỷ thì ném `{ code, message }`. */

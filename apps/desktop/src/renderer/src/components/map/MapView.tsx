@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@shared/graph-types'
+import type { ArchEvidence, ImportCycles, MapNode, ProjectMap } from '@nexgraph/contracts/graph-types'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
 import { errorMsg } from '../../state/errorText'

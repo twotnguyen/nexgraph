@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ScanInfo } from '@shared/graph-types'
+import type { ScanInfo } from '@nexgraph/contracts/graph-types'
 import { installNexgraph, progress, project } from './test-utils'
 import { formatDate } from './state/locale'
 import App from './App'

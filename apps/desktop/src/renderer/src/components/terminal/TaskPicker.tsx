@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { tr } from '../../strings'
-import type { TaskDefinition } from '@shared/api'
+import type { TaskDefinition } from '@nexgraph/contracts/api'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { errorMsg } from '../../state/errorText'
 import { msg, msgText, type Message } from '../../state/messages'

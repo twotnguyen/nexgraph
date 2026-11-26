@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_IDS } from '../src/shared/integration-types'
+import { AGENT_IDS } from '@nexgraph/contracts/integration-types'
 import { agentsMdBlock, applyPlatform, applyUninstall, planPlatform, planUninstall } from '../src/main/features/integrations/integrations'
 
 const cmd = { command: '/Apps/NexGraph/engine', args: [] as string[] }

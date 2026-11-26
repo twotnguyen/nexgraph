@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { EngineHandle } from '../src/main/platform/engine/launcher'
 import { EngineStartError } from '../src/main/platform/engine/launcher'
 import { EngineSupervisor, type RetryPolicy } from '../src/main/platform/engine/supervisor'
-import type { EngineStatus } from '../src/shared/engine-status'
+import type { EngineStatus } from '@nexgraph/contracts/engine-status'
 
 const health = { status: 'ok', api_version: '1', engine_version: '9.9.9', vendor_commit: 'abc' }
 

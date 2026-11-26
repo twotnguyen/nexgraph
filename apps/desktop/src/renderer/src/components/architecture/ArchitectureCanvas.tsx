@@ -1,6 +1,6 @@
 import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { ArchBlock, ArchEvidence, ArchLink, ArchView } from '@shared/graph-types'
+import type { ArchBlock, ArchEvidence, ArchLink, ArchView } from '@nexgraph/contracts/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'

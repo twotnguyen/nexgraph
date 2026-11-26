@@ -1,4 +1,4 @@
-import type { Citation, GraphEdge, GraphNode, PathResult } from '@shared/graph-types'
+import type { Citation, GraphEdge, GraphNode, PathResult } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 
 export type FlowHighlight = {

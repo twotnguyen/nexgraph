@@ -1,4 +1,4 @@
-import type { IndexOptions } from '../../../shared/graph-types'
+import type { IndexOptions } from '@nexgraph/contracts/graph-types'
 import { readJson, writeJson } from '../../platform/settings'
 
 /** Lựa chọn của hộp thoại Index được nhớ theo dự án; `force` và `subdir` là của một lần chạy nên không dính. */

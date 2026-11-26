@@ -1,6 +1,6 @@
 import { tr } from '../../strings'
 import { useEffect, useRef, useState } from 'react'
-import type { DebugBreakpoint } from '@shared/api'
+import type { DebugBreakpoint } from '@nexgraph/contracts/api'
 import './breakpoint-form.css'
 
 export function BreakpointForm({ point, focus = 'condition', onSave, onCancel }: {

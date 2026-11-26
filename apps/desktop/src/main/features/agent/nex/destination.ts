@@ -1,5 +1,5 @@
 import { realpathSync } from 'node:fs'
-import type { AiConsentTarget, NexConsentTarget } from '../../../../shared/agent-types'
+import type { AiConsentTarget, NexConsentTarget } from '@nexgraph/contracts/agent-types'
 import type { AgentAccounts } from '../session'
 import type { NexProvider } from './config'
 

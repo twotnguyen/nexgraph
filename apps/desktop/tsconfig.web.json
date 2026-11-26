@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "types": ["vitest/globals", "@testing-library/jest-dom/vitest"],
     "baseUrl": ".",
-    "paths": { "@shared/*": ["src/shared/*"] }
+    "paths": { "@nexgraph/contracts/*": ["../../packages/contracts/src/*"] }
   },
-  "include": ["src/renderer/src/**/*", "src/shared/**/*", "src/preload/index.d.ts"]
+  "include": ["src/renderer/src/**/*", "../../packages/contracts/src/**/*", "src/preload/index.d.ts"]
 }

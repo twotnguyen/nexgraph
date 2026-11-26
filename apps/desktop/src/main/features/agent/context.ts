@@ -1,4 +1,4 @@
-import type { AgentContextItem } from '../../../shared/agent-types'
+import type { AgentContextItem } from '@nexgraph/contracts/agent-types'
 import type { EngineApi } from '../../platform/engine/api'
 import { FsError, readProjectFile } from '../../platform/project-fs'
 import { AgentFileScope } from './file-scope'

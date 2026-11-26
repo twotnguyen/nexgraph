@@ -9,7 +9,7 @@ import {
   PAGE_CSP, VIS_INTEGRITY, discoverGraphPages, handlePageRequest, handleWebRequest,
   injectCsp, isAllowedRequest, lineFromSourceLocation, localLibFor, readGraphJsonIndex, rebrandHtml, resolveGraphPage
 } from '../src/main/features/graph-pages/pages'
-import { canOpenPageSource } from '../src/shared/graph-pages'
+import { canOpenPageSource } from '@nexgraph/contracts/graph-pages'
 
 const fixture = () => {
   const root = mkdtempSync(join(tmpdir(), 'ng-pages-'))

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { GraphNode, NodeKind } from '@shared/graph-types'
+import type { GraphNode, NodeKind } from '@nexgraph/contracts/graph-types'
 import { tr, vi } from '../../strings'
 import { errorMsg } from '../../state/errorText'
 import { msg, msgText, type Message } from '../../state/messages'

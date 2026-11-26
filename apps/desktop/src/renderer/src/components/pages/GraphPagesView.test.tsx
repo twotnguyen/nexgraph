@@ -3,7 +3,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GraphPageSelection, GraphPagesStatus } from '@shared/graph-pages'
+import type { GraphPageSelection, GraphPagesStatus } from '@nexgraph/contracts/graph-pages'
 import { setLocale } from '../../state/locale'
 import { setTheme } from '../../state/useTheme'
 import { GraphPagesView } from './GraphPagesView'

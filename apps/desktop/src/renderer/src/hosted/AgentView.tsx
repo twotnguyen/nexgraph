@@ -1,7 +1,7 @@
 // View Trợ lý AI khi chạy trong extension (thanh bên phụ của nền): dùng lại nguyên AgentPanel, chỉ đổi nơi nó sống.
 import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import type { ProjectSummary } from '@shared/graph-types'
+import type { ProjectSummary } from '@nexgraph/contracts/graph-types'
 import { AgentPanel } from '../components/agent/AgentPanel'
 import { useLocale } from '../state/locale'
 import { tr } from '../strings'

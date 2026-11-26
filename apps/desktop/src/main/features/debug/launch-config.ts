@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import type { DebugConfigInfo } from '../../../shared/api'
+import type { DebugConfigInfo } from '@nexgraph/contracts/api'
 import { FsError, readProjectFile, resolveInside, writeProjectFile } from '../../platform/project-fs'
 import { parseJsonc } from '../terminal/tasks'
 import { UserError } from '../../platform/user-error'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { DocSection, GraphNode, NodeExplain } from '@shared/graph-types'
+import type { DocSection, GraphNode, NodeExplain } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 import { kindLabel, kindStyle } from './kindStyle'
 import { NodeMemory } from './NodeMemory'

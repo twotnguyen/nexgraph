@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LspDocumentSymbol, LspRange } from '@shared/api'
+import type { LspDocumentSymbol, LspRange } from '@nexgraph/contracts/api'
 import { largerSymbolAt, previousFromHistory, siblingSymbol, smallestSymbolAt } from './syntaxSelection'
 
 const range = (startLine: number, startCharacter: number, endLine: number, endCharacter: number): LspRange => ({

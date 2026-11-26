@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { IndexOptions, ProjectSummary } from '@shared/graph-types'
+import type { IndexOptions, ProjectSummary } from '@nexgraph/contracts/graph-types'
 import { useIndexJob } from '../state/useIndexJob'
 import { Icon } from '../components/common/icons'
 import { vi, tr } from '../strings'

@@ -4,7 +4,7 @@ import { msg, type Message } from '../../state/messages'
 import { retryNotice } from './retry'
 
 import { useEffect, useRef, useState } from 'react'
-import type { AgentContextUsage, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot, AgentTask, AgentToolRun, AgentUsage } from '@shared/agent-types'
+import type { AgentContextUsage, AgentExecutionSettings, AgentRunLimits, AgentSessionInfo, AgentSessionSnapshot, AgentTask, AgentToolRun, AgentUsage } from '@nexgraph/contracts/agent-types'
 
 export type AgentInspection = { id: string; title: string; text?: string; before?: string; after?: string; file?: string }
 const defaults: AgentRunLimits = { maxTurns: 30, maxDurationMs: 600_000, maxTokens: 120_000 }

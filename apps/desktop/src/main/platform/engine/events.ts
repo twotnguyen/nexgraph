@@ -1,4 +1,4 @@
-import type { EngineEvent } from '../../../shared/graph-types'
+import type { EngineEvent } from '@nexgraph/contracts/graph-types'
 import type { EngineHandle } from './launcher'
 
 /** Tách các sự kiện SSE hoàn chỉnh khỏi bộ đệm; phần chưa đủ (`rest`) giữ lại cho gói tiếp theo. */

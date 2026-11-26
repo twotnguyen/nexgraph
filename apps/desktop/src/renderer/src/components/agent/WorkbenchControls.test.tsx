@@ -2,7 +2,7 @@
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionSnapshot, ProjectCommands } from '@shared/agent-types'
+import type { AgentSessionSnapshot, ProjectCommands } from '@nexgraph/contracts/agent-types'
 import { emptyAgentSnapshot, installNexgraph } from '../../test-utils'
 import { useAgentWorkbench } from './useAgentWorkbench'
 import { WorkbenchHistory, WorkbenchSettings, WorkbenchStatus, ago } from './WorkbenchControls'

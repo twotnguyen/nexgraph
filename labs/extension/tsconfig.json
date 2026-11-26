@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "types": ["node", "vite/client"],
     "baseUrl": ".",
-    "paths": { "@shared/*": ["../../apps/desktop/src/shared/*"] }
+    "paths": { "@nexgraph/contracts/*": ["../../packages/contracts/src/*"] }
   },
   "include": ["src/**/*", "test/**/*", "../../apps/desktop/src/preload/index.d.ts"]
 }

@@ -1,5 +1,5 @@
-import type { NexGraphApi } from '../../shared/api'
-import type { AiConsentTarget } from '../../shared/agent-types'
+import type { NexGraphApi } from '@nexgraph/contracts/api'
+import type { AiConsentTarget } from '@nexgraph/contracts/agent-types'
 
 /** Chạy nguyên hàm trong renderer của bản cài để kiểm cả contextBridge và IPC. */
 export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: string): Promise<string> {

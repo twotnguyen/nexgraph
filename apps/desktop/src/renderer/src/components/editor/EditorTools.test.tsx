@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspRange, NexGraphApi } from '@shared/api'
+import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspRange, NexGraphApi } from '@nexgraph/contracts/api'
 import type { EditorHandle } from './monaco'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { setLocale } from '../../state/locale'

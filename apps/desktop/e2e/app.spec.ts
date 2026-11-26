@@ -2,7 +2,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { NexGraphApi } from '../src/shared/api'
+import type { NexGraphApi } from '@nexgraph/contracts/api'
 import { addDataDirOwner, prepareDataDir } from './data-dir'
 
 /**

@@ -1,4 +1,4 @@
-import type { EngineStatus } from '../../../shared/engine-status'
+import type { EngineStatus } from '@nexgraph/contracts/engine-status'
 import { getHealth } from './client'
 import { EngineStartError, startEngine, type EngineCommand, type EngineHandle } from './launcher'
 

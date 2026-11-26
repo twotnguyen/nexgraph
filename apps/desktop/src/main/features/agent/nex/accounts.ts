@@ -4,7 +4,7 @@ import {
 } from './client'
 import type {
   NexAccountConnection, NexAccountMethod, NexAccountProvider, NexAccountsView, NexAuthStartView, NexAuthStatusView
-} from '../../../../shared/agent-types'
+} from '@nexgraph/contracts/agent-types'
 
 /**
  * Nhà cung cấp hiện trong khối "Tài khoản AI cho Nex". Chỉ những integration có đăng nhập gói

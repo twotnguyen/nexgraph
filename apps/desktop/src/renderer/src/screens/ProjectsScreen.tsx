@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalMember, ProjectSummary } from '@shared/graph-types'
+import type { GlobalMember, ProjectSummary } from '@nexgraph/contracts/graph-types'
 import { Icon, Logo } from '../components/common/icons'
 import { Toast } from '../components/common/Toast'
 import { waitJob } from '../state/waitJob'

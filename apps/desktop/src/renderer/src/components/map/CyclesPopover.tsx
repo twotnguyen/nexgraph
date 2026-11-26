@@ -1,4 +1,4 @@
-import type { ImportCycles } from '@shared/graph-types'
+import type { ImportCycles } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 
 interface Props {

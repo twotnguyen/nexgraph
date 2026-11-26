@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Job, ProjectAiSettings, SemanticEstimate, SemanticResult, SemanticTarget } from '@shared/graph-types'
+import type { Job, ProjectAiSettings, SemanticEstimate, SemanticResult, SemanticTarget } from '@nexgraph/contracts/graph-types'
 import { waitJob } from '../../state/waitJob'
 import { formatNumber } from '../../state/locale'
 import { vi } from '../../strings'

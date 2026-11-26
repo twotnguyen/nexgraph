@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { LspDiagnostic } from '@shared/api'
+import type { LspDiagnostic } from '@nexgraph/contracts/api'
 
 type DiagnosticEvent = { projectId: string; file: string; diagnostics: LspDiagnostic[] }
 const empty: Record<string, LspDiagnostic[]> = {}

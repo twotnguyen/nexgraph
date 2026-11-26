@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { AgentMode } from '@shared/agent-types'
+import type { AgentMode } from '@nexgraph/contracts/agent-types'
 import { tr } from '../strings'
 
 /** Hồ sơ trợ lý kiểu Wu: chế độ nền (Hỏi/Kế hoạch/Sửa) cộng danh sách tool bị tắt. */

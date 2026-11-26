@@ -1,5 +1,5 @@
 // Chuỗi giao diện: mặc định tiếng Việt, bản Anh trong enStrings (spec §5.9).
-import type { PathConfidence } from '@shared/graph-types'
+import type { PathConfidence } from '@nexgraph/contracts/graph-types'
 import { formatNumber, getLocale, plural, pluralOf } from './state/locale'
 import { uiEnScreens } from './i18n/uiEn-screens'
 import { uiEnAgent } from './i18n/uiEn-agent'

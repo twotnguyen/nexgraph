@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { GraphReport } from '@shared/graph-types'
+import type { GraphReport } from '@nexgraph/contracts/graph-types'
 import { vi, tr } from '../../strings'
 import { formatNumber, useLocale } from '../../state/locale'
 import { kindLabel, kindStyle } from '../graph/kindStyle'

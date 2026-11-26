@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { NexAccountMethod, NexAccountProvider, NexAccountsView, NexAuthStartView } from '@shared/agent-types'
+import type { NexAccountMethod, NexAccountProvider, NexAccountsView, NexAuthStartView } from '@nexgraph/contracts/agent-types'
 import { tr } from '../../strings'
 import { errorMsg } from '../../state/errorText'
 import type { Message } from '../../state/messages'

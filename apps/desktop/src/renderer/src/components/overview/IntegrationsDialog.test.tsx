@@ -2,7 +2,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { IntegrationPlan } from '@shared/integration-types'
+import type { IntegrationPlan } from '@nexgraph/contracts/integration-types'
 import { installNexgraph, project } from '../../test-utils'
 import { IntegrationsDialog } from './IntegrationsDialog'
 

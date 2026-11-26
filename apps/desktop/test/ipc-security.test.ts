@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, truncateSync, unlink
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import type { NexGraphApi } from '../src/shared/api'
+import type { NexGraphApi } from '@nexgraph/contracts/api'
 
 const h = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => Promise<unknown>>(),

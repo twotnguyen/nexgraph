@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { StrictMode, type ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GraphNode, Neighborhood } from '@shared/graph-types'
+import type { GraphNode, Neighborhood } from '@nexgraph/contracts/graph-types'
 import { emptyChanges, installNexgraph, project } from '../test-utils'
 import { buildExcerpts, consumePendingMultiBuffer, requestMultiBuffer } from '../state/multiBuffer'
 import { toggleBookmark } from '../state/bookmarks'

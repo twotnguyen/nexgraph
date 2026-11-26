@@ -5,10 +5,10 @@ import type {
   DocSection, GraphNode, GraphReport, GraphStats, Job, NodeExplain,
   NeighborQuery, Neighborhood, NodeImpact, PathResult, ProjectSummary, PushRequest, PushResult, RefreshResult, ScanInfo, SearchHit,
   SourceItem, ProjectAiSettings, SemanticEstimate, SemanticTarget
-} from '../../../shared/graph-types'
-import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from '../../../shared/graph-types'
-import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from '../../../shared/graph-types'
-import type { PrAvailability, PrDetail, PrList } from '../../../shared/graph-types'
+} from '@nexgraph/contracts/graph-types'
+import type { AnswerRating, Lessons, MemoryKind, MemoryRecall } from '@nexgraph/contracts/graph-types'
+import type { GlobalExportResult, GlobalGraph, GlobalMember, GlobalSearchHit } from '@nexgraph/contracts/graph-types'
+import type { PrAvailability, PrDetail, PrList } from '@nexgraph/contracts/graph-types'
 import type { LlmChunk } from '../../features/semantic/semantic-runner'
 import type { EngineHandle } from './launcher'
 

@@ -1,4 +1,4 @@
-import type { NodeKind } from '@shared/graph-types'
+import type { NodeKind } from '@nexgraph/contracts/graph-types'
 import { getLocale } from '../../state/locale'
 
 // Màu theo loại nút (token ở design/mockups/shared.css); màu chỉ mang ý nghĩa.

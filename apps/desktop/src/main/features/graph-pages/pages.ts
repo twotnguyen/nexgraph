@@ -3,8 +3,8 @@
 import { createHash } from 'node:crypto'
 import { readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { extname, join, sep } from 'node:path'
-import type { GraphPagesStatus } from '@shared/graph-pages'
-import { COMMUNITY_PAGE_FILE } from '@shared/graph-pages'
+import type { GraphPagesStatus } from '@nexgraph/contracts/graph-pages'
+import { COMMUNITY_PAGE_FILE } from '@nexgraph/contracts/graph-pages'
 
 export { COMMUNITY_PAGE_FILE }
 

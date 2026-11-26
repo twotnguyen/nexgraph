@@ -1,0 +1,10 @@
+{
+  "name": "@nexgraph/contracts",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Hợp đồng kiểu main ↔ preload ↔ renderer ↔ engine của NexGraph (ADR 0026 pha 3). Chỉ là mã nguồn TypeScript, được bundle vào app.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  }
+}

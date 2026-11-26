@@ -1,4 +1,4 @@
-import type { ProjectAiSettings, SemanticTarget } from '../../../shared/graph-types'
+import type { ProjectAiSettings, SemanticTarget } from '@nexgraph/contracts/graph-types'
 import { AgentError } from '../agent/session'
 import { directTransport, piComplete, selectedModelLabel } from './semantic-models'
 import { runSemanticJob } from './semantic-runner'

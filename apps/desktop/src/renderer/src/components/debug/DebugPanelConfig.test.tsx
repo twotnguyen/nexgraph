@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { DebugEvent } from '@shared/api'
+import type { DebugEvent } from '@nexgraph/contracts/api'
 import { setDebugProject } from '../../state/debugState'
 import { DebugPanel } from './DebugPanel'
 

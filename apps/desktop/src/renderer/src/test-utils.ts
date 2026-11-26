@@ -1,9 +1,9 @@
 import { vi } from 'vitest'
-import type { NexGraphApi } from '@shared/api'
-import type { Changes, EngineEvent, Job, JobState, ProjectSummary } from '@shared/graph-types'
-import type { MemoryRecall } from '@shared/graph-types'
-import type { AgentEvent, AgentSessionSnapshot } from '@shared/agent-types'
-import type { GeminiCliEvent, GeminiCliStatus } from '@shared/gemini-types'
+import type { NexGraphApi } from '@nexgraph/contracts/api'
+import type { Changes, EngineEvent, Job, JobState, ProjectSummary } from '@nexgraph/contracts/graph-types'
+import type { MemoryRecall } from '@nexgraph/contracts/graph-types'
+import type { AgentEvent, AgentSessionSnapshot } from '@nexgraph/contracts/agent-types'
+import type { GeminiCliEvent, GeminiCliStatus } from '@nexgraph/contracts/gemini-types'
 
 export const emptyGeminiStatus = (over: Partial<GeminiCliStatus> = {}): GeminiCliStatus => ({
   state: 'not_installed', version: '1.5.11', installed: false, platformSupported: true, authenticated: false,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GitStash } from '@shared/api'
+import type { GitStash } from '@nexgraph/contracts/api'
 import { errorMsg } from '../../state/errorText'
 import { msgText, type Message } from '../../state/messages'
 import { Icon } from '../common/icons'

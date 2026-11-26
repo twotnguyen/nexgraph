@@ -2,8 +2,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { NexGraphApi } from '@shared/api'
-import type { ArchEvidence, ArchView } from '@shared/graph-types'
+import type { NexGraphApi } from '@nexgraph/contracts/api'
+import type { ArchEvidence, ArchView } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 import { setLocale } from '../../state/locale'
 

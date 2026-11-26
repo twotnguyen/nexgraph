@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { relative } from 'node:path'
-import type { GitBlameLine, GitFileChange, GitStatus } from '../../../shared/api'
+import type { GitBlameLine, GitFileChange, GitStatus } from '@nexgraph/contracts/api'
 import { resolveInside } from '../../platform/project-fs'
 import { safeProcessEnv } from '../../platform/process-env'
 import { UserError } from '../../platform/user-error'

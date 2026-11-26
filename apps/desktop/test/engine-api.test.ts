@@ -7,7 +7,7 @@ import { EngineApi, EngineApiError } from '../src/main/platform/engine/api'
 import { subscribeEvents } from '../src/main/platform/engine/events'
 import { startEngine, type EngineHandle } from '../src/main/platform/engine/launcher'
 import { toIpcResult } from '../src/main/platform/ipc-result'
-import type { EngineEvent } from '../src/shared/graph-types'
+import type { EngineEvent } from '@nexgraph/contracts/graph-types'
 
 const fake = {
   command: process.execPath,

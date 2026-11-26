@@ -57,8 +57,8 @@ Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tê
 | Luật | Ý nghĩa |
 |---|---|
 | `renderer-khong-import-main`, `main-khong-import-renderer` | Hai tiến trình chỉ nói chuyện qua preload/IPC. Test tích hợp được miễn. |
-| `preload-chi-dung-shared` | Preload chỉ dùng `src/shared`. |
-| `shared-doc-lap` | `src/shared` (sẽ thành `packages/contracts`) không phụ thuộc main/renderer/preload. |
+| `preload-chi-dung-shared` | Preload chỉ dùng `@nexgraph/contracts`. |
+| `contracts-doc-lap` | `packages/contracts` (trước là `src/shared`, pha 3a) không phụ thuộc main/renderer/preload. |
 | `state-khong-import-components` | State/hook không phụ thuộc component. |
 | `ma-san-pham-khong-import-test` | Mã sản phẩm không import tệp test. |
 | `khong-vong-phu-thuoc` (cảnh báo) | Không có vòng import giữa tệp mã sản phẩm. |
@@ -110,3 +110,4 @@ Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài re
 | 2 | `src/main/{mcp-http,git-hook,integrations}.ts` | `src/main/features/integrations/` | |
 | 2 | `src/main/{collab,debug,extensions,git,lsp,terminal,graph-pages}/` | `src/main/features/<cùng tên>/` | |
 | 2 | `src/main/tasks/` | `src/main/features/terminal/tasks/` | |
+| 3 | `apps/desktop/src/shared/` (8 tệp) | `packages/contracts/src/` (gói `@nexgraph/contracts`) | Import `@shared/x` và `../shared/x` → `@nexgraph/contracts/x` (267 chỗ). Alias trong `electron.vite.config.ts`, `vitest.config.mts`, hai `tsconfig`; không có bước build, mã được gom vào bundle. `labs/extension` import theo đường dẫn tương đối. |

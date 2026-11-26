@@ -1,4 +1,4 @@
-import type { FlowKind, FlowSummary } from '@shared/graph-types'
+import type { FlowKind, FlowSummary } from '@nexgraph/contracts/graph-types'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
 

@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { GraphNode, PrDetail, PrList, PrListItem } from '@shared/graph-types'
+import type { GraphNode, PrDetail, PrList, PrListItem } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 import { PrsView } from './PrsView'
 
