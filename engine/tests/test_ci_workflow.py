@@ -47,3 +47,15 @@ def test_module_rules_job_reports_without_gating():
     runs = [s.get("run", "") for s in job["steps"]]
     assert "pnpm rules:report" in runs
     assert "module-rules" not in _needs(jobs["release"])
+
+
+def test_labs_job_reports_without_gating():
+    """ADR 0026 pha 1: labs/ (Code-OSS thử nghiệm) có job riêng, không thuộc check bắt buộc, không chặn phát hành."""
+    jobs = _jobs()
+    job = jobs["labs"]
+    assert job["name"] not in {"lint", "engine", "desktop", "package"}
+    runs = [s.get("run", "") for s in job["steps"]]
+    assert "pnpm --dir labs/extension test" in runs
+    assert "labs" not in _needs(jobs["release"])
+    desktop_runs = " ".join(s.get("run", "") for s in jobs["desktop"]["steps"])
+    assert "extension" not in desktop_runs

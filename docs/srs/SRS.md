@@ -12,7 +12,7 @@
 
 | Hạng mục | Phạm vi |
 |---|---|
-| Nền tảng | Bản phát hành hiện hành 0.1.2 và bản ứng viên 0.2.0 là Electron độc lập với Monaco tích hợp, cho **macOS Apple silicon (arm64) và Windows x64**; Mac Intel và Windows ARM ngoài phạm vi. Repo và bộ cài công khai ở [GitHub Releases](https://github.com/twotnguyen/nexgraph/releases). Người dùng chọn đúng kiến trúc theo [bộ cài](../release/README.md). [Code-OSS](../../apps/shell/README.md) được giữ ở mức bản xem trước tích hợp, dùng editor của workbench và có phép nghiệm thu riêng. |
+| Nền tảng | Bản phát hành hiện hành 0.1.2 và bản ứng viên 0.2.0 là Electron độc lập với Monaco tích hợp, cho **macOS Apple silicon (arm64) và Windows x64**; Mac Intel và Windows ARM ngoài phạm vi. Repo và bộ cài công khai ở [GitHub Releases](https://github.com/twotnguyen/nexgraph/releases). Người dùng chọn đúng kiến trúc theo [bộ cài](../release/README.md). [Code-OSS](../../labs/shell/README.md) được giữ ở mức bản xem trước tích hợp, dùng editor của workbench và có phép nghiệm thu riêng. |
 | Ngôn ngữ MVP | TypeScript, JavaScript và Python. Đánh giá trên ca sử dụng thực tế và báo giới hạn phân tích tĩnh. |
 | Ngôn ngữ bổ sung | C# và Dart có bộ trích xuất trong engine. Go và Java ở mức đồ thị chung. Cây widget, route và phân tích Flutter chuyên sâu thuộc hướng phát triển. Bảng [phần mở rộng thực tế](../../engine/src/nexgraph_engine/index/discovery.py) là tham chiếu khi cập nhật mức hỗ trợ. |
 | Phạm vi đồ thị | Một thư mục dự án mỗi lần phân tích, có thể giới hạn ở thư mục con và loại trừ đường dẫn. Dùng Git khi có commit phù hợp, nếu thiếu thì dùng mốc lập chỉ mục. |

@@ -1,10 +1,10 @@
 // Điểm vào của bundle webview: vá Worker → dựng window.nexgraph bằng preload cũ → chạy app React cũ.
 import './worker-blob'
 import './hosted.css'
-import '../../desktop/src/preload/index'
+import '../../../apps/desktop/src/preload/index'
 import { ipcRenderer } from './electron-webview'
 import { parseInitialCommand } from './host-command'
-import type { HostCommand } from '../../desktop/src/shared/api'
+import type { HostCommand } from '../../../apps/desktop/src/shared/api'
 
 const root = document.getElementById('root')!
 let commandsReady = false
@@ -26,4 +26,4 @@ window.nexgraph.host = {
   }
 }
 // Cùng một bundle phục vụ hai webview: tab chính và view Trợ lý AI ở thanh bên phụ.
-void (root.dataset.mode === 'agent' ? import('../../desktop/src/renderer/src/hosted/AgentView') : import('../../desktop/src/renderer/src/main'))
+void (root.dataset.mode === 'agent' ? import('../../../apps/desktop/src/renderer/src/hosted/AgentView') : import('../../../apps/desktop/src/renderer/src/main'))

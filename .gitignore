@@ -34,3 +34,7 @@ Thumbs.db
 
 # Scratch của công cụ làm việc
 .superpowers/
+
+# Thử nghiệm Code-OSS: checkout nền và app dựng ra (labs/shell/build.mjs)
+labs/shell/.upstream/
+labs/shell/VSCode-*/

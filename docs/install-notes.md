@@ -1,6 +1,6 @@
 # Cài đặt và chạy NexGraph
 
-Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.2.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản phát hành](release/README.md). Cách chạy test và các nhóm test opt-in ở [hướng dẫn kiểm thử](testing.md). [Lớp phủ Code-OSS](../apps/shell/README.md) có quy trình dựng riêng.
+Tài liệu này hướng dẫn phát triển và đóng gói từ mã nguồn. Để cài NexGraph 0.2.0 Electron/Monaco bằng tệp tải từ CI, xem [hướng dẫn bản phát hành](release/README.md). Cách chạy test và các nhóm test opt-in ở [hướng dẫn kiểm thử](testing.md). [Lớp phủ Code-OSS](../labs/shell/README.md) có quy trình dựng riêng.
 
 ## Chạy Electron từ checkout sạch
 
@@ -50,7 +50,7 @@ Bộ cài nằm ở `apps/desktop/dist/`, với tên `NexGraph-<version>-macos-<
 
 ## Chạy Code-OSS
 
-`apps/shell/` ghim upstream Code-OSS. `apps/extension/` dùng lại engine và giao diện graph của NexGraph. Thao tác mở mã chuyển sang editor của Code-OSS, Agent nằm ở thanh bên phụ. Làm theo [hướng dẫn dựng shell](../apps/shell/README.md), gồm phiên bản Node/pnpm riêng trong `upstream.json`, Visual Studio Build Tools C++ trên Windows và cấu hình engine khi chạy dev. Script chỉ kèm engine trong bản đóng gói nếu có kết quả PyInstaller trước đó. Workflow [CI hiện hành](../.github/workflows/ci.yml) kiểm bản Electron độc lập. Trạng thái bộ cài và nghiệm thu Code-OSS cần bằng chứng riêng.
+`labs/shell/` ghim upstream Code-OSS. `labs/extension/` dùng lại engine và giao diện graph của NexGraph. Thao tác mở mã chuyển sang editor của Code-OSS, Agent nằm ở thanh bên phụ. Làm theo [hướng dẫn dựng shell](../labs/shell/README.md), gồm phiên bản Node/pnpm riêng trong `upstream.json`, Visual Studio Build Tools C++ trên Windows và cấu hình engine khi chạy dev. Script chỉ kèm engine trong bản đóng gói nếu có kết quả PyInstaller trước đó. Workflow [CI hiện hành](../.github/workflows/ci.yml) kiểm bản Electron độc lập. Trạng thái bộ cài và nghiệm thu Code-OSS cần bằng chứng riêng.
 
 ## Cài đặt tài khoản AI
 

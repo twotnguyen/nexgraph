@@ -16,13 +16,13 @@ Dùng đúng phiên bản Node trong `upstream.json` và pnpm theo từng worksp
 
 ```sh
 pnpm install --frozen-lockfile
-node apps/shell/build.mjs --dev
+node labs/shell/build.mjs --dev
 ```
 
-Sau khi build dev, đặt `NEXGRAPH_REPO_ROOT` trỏ tới gốc repo rồi chạy `apps/shell/.upstream/scripts/code.bat` (Windows) hoặc `apps/shell/.upstream/scripts/code.sh` (macOS) với thư mục dự án cần mở. Extension gọi engine qua `uv` khi không có engine đóng gói. Xem [chuẩn bị uv và Python 3.12](../../docs/install-notes.md#chạy-electron-từ-checkout-sạch).
+Sau khi build dev, đặt `NEXGRAPH_REPO_ROOT` trỏ tới gốc repo rồi chạy `labs/shell/.upstream/scripts/code.bat` (Windows) hoặc `labs/shell/.upstream/scripts/code.sh` (macOS) với thư mục dự án cần mở. Extension gọi engine qua `uv` khi không có engine đóng gói. Xem [chuẩn bị uv và Python 3.12](../../docs/install-notes.md#chạy-electron-từ-checkout-sạch).
 
-Chạy `node apps/shell/build.mjs` để tạo thư mục ứng dụng thử trong `apps/shell/VSCode-<hệ điều hành>-<kiến trúc>/`. Để kèm engine, chạy bước PyInstaller trong [hướng dẫn dựng engine](../../docs/install-notes.md#đóng-gói-electron) để tạo `engine/dist/nexgraph-engine` trước. Dùng `--src <đường dẫn>` nếu muốn lấy commit ghim từ bản clone upstream đã có. Ghi bằng chứng build và smoke riêng theo từng hệ điều hành.
+Chạy `node labs/shell/build.mjs` để tạo thư mục ứng dụng thử trong `labs/shell/VSCode-<hệ điều hành>-<kiến trúc>/`. Để kèm engine, chạy bước PyInstaller trong [hướng dẫn dựng engine](../../docs/install-notes.md#đóng-gói-electron) để tạo `engine/dist/nexgraph-engine` trước. Dùng `--src <đường dẫn>` nếu muốn lấy commit ghim từ bản clone upstream đã có. Ghi bằng chứng build và smoke riêng theo từng hệ điều hành.
 
 ## Nâng phiên bản Code-OSS
 
-Đổi `commit` trong `upstream.json`, xóa checkout dựng `apps/shell/.upstream/` và chạy lại `build.mjs`. Rà soát bản vá nào không còn áp được trên commit mới.
+Đổi `commit` trong `upstream.json`, xóa checkout dựng `labs/shell/.upstream/` và chạy lại `build.mjs`. Rà soát bản vá nào không còn áp được trên commit mới.

@@ -1,4 +1,4 @@
-import type { HostCommand } from '../../desktop/src/shared/api'
+import type { HostCommand } from '../../../apps/desktop/src/shared/api'
 
 export function parseInitialCommand(raw: string | undefined): HostCommand | undefined {
   if (!raw) return

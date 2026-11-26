@@ -12,7 +12,7 @@
     "isolatedModules": true,
     "types": ["node", "vite/client"],
     "baseUrl": ".",
-    "paths": { "@shared/*": ["../desktop/src/shared/*"] }
+    "paths": { "@shared/*": ["../../apps/desktop/src/shared/*"] }
   },
-  "include": ["src/**/*", "test/**/*", "../desktop/src/preload/index.d.ts"]
+  "include": ["src/**/*", "test/**/*", "../../apps/desktop/src/preload/index.d.ts"]
 }
