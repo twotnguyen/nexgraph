@@ -51,6 +51,7 @@ from nexgraph_engine.query.contracts import (
     stats_json,
 )
 from nexgraph_engine.query.context import build_context
+from nexgraph_engine.mcp import graphify_view
 from nexgraph_engine.prs.gh import GhError
 from nexgraph_engine.prs.listing import list_prs_json, triage_json
 from nexgraph_engine.prs.review import pr_detail_json, review_status_json
@@ -122,26 +123,131 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
     def src(s: GraphStore) -> Path | None:  # gốc phụ `sources/` (nguồn tải từ URL, W6)
         return sources_root(data_dir, s.project_id())
 
+    def run_sync(tool_name: str, body: Callable[[GraphStore], Any], guard: tuple[str, ...] = ()) -> Any:
+        try:
+            conn = open_graph_db(graph_db, read_only=True)
+        except (sqlite3.Error, OSError) as exc:
+            raise ToolError(f"Không mở được dữ liệu đồ thị: {exc}") from exc
+        try:
+            store = GraphStore(conn)
+            if not store.has_published_graph():
+                raise ToolError("Dự án chưa được lập chỉ mục xong")
+            model = ModelGraph(store, root, source=SourcePolicy(root, store.last_exclude()))
+            # Như HTTP: hỏi thẳng về nút bị loại khỏi ngữ cảnh AI thì từ chối, kể cả khi láng giềng của nó hiển thị được.
+            if not all(model.allows_node(node_id) for node_id in guard):
+                raise protected_source()
+            return model.filter(body(store))
+        except ApiError as exc:  # lỗi nghiệp vụ dùng chung với HTTP -> lỗi tool đọc được
+            raise ToolError(exc.message) from exc
+        finally:
+            conn.close()
+
     async def run(tool_name: str, body: Callable[[GraphStore], Any], guard: tuple[str, ...] = ()) -> Any:
-        def work() -> Any:
+        return await _offload(tool_name, lambda: run_sync(tool_name, body, guard))
+
+    # ── Lớp xem đồ thị vendor (ADR 0025 mục 2) ────────────────────────────
+    pid_cache: list[str] = []
+    root_resolved = root.resolve()
+
+    def project_id() -> str | None:
+        """Id dự án trong graph.db, đọc một lần; None khi chưa có CSDL."""
+        if pid_cache:
+            return pid_cache[0]
+        try:
+            conn = open_graph_db(graph_db, read_only=True)
+        except (sqlite3.Error, OSError):
+            return None
+        try:
+            pid = GraphStore(conn).project_id()
+        finally:
+            conn.close()
+        if pid:
+            pid_cache.append(pid)
+        return pid
+
+    def source_policy(project_root: Path) -> tuple[SourcePolicy, tuple]:
+        """Chính sách nguồn của dự án + khoá cache cho lớp xem vendor.
+
+        Cùng quy tắc với nhánh SQLite (`ModelGraph`): mẫu `exclude` của lần lập chỉ mục gần nhất,
+        `.gitignore`, tên tệp nhạy cảm, và biên dự án.
+        """
+        exclude: list[str] = []
+        try:
+            db = resolve_graph_db(project_root, data_dir if project_root == root_resolved else None)
+            conn = open_graph_db(db, read_only=True)
+        except (ProjectNotIndexed, sqlite3.Error, OSError):
+            pass
+        else:
             try:
-                conn = open_graph_db(graph_db, read_only=True)
-            except (sqlite3.Error, OSError) as exc:
-                raise ToolError(f"Không mở được dữ liệu đồ thị: {exc}") from exc
-            try:
-                store = GraphStore(conn)
-                if not store.has_published_graph():
-                    raise ToolError("Dự án chưa được lập chỉ mục xong")
-                model = ModelGraph(store, root, source=SourcePolicy(root, store.last_exclude()))
-                # Như HTTP: hỏi thẳng về nút bị loại khỏi ngữ cảnh AI thì từ chối, kể cả khi láng giềng của nó hiển thị được.
-                if not all(model.allows_node(node_id) for node_id in guard):
-                    raise protected_source()
-                return model.filter(body(store))
-            except ApiError as exc:  # lỗi nghiệp vụ dùng chung với HTTP -> lỗi tool đọc được
-                raise ToolError(exc.message) from exc
+                exclude = GraphStore(conn).last_exclude()
             finally:
                 conn.close()
-        return await _offload(tool_name, work)
+        try:
+            gitignore = (project_root / ".gitignore").stat().st_mtime_ns
+        except OSError:
+            gitignore = 0
+        return SourcePolicy(project_root, exclude), (str(project_root), tuple(exclude), gitignore)
+
+    def blocked_nodes(G: Any, policy: SourcePolicy) -> set[str]:
+        """Id các nút có `source_file` bị chính sách loại; nút không có tệp thì giữ lại."""
+        allowed: dict[str, bool] = {}
+        dropped: set[str] = set()
+        for node_id, data in G.nodes(data=True):
+            source_file = data.get("source_file")
+            if not source_file:
+                continue
+            name = str(source_file).replace("\\", "/")  # chuẩn hoá như đường dẫn trong graph.db
+            ok = allowed.get(name)
+            if ok is None:
+                ok = policy.allows(name)
+                allowed[name] = ok
+            if not ok:
+                dropped.add(node_id)
+        return dropped
+
+    def vendor_view(project_path: str | None) -> graphify_view.LoadedGraph | None:
+        """Đồ thị `.nexgraph/graph.json` của dự án hiện tại; None khi chưa có.
+
+        `project_path` (tham số của bản gốc) chỉ được trỏ vào chính dự án đang mở: người dùng đồng ý
+        gửi ngữ cảnh cho AI theo từng dự án, nên không đọc đồ thị/tệp của dự án khác. graph.json là
+        symlink có đích ngoài dự án thì coi như chưa có đồ thị (review #69 vòng 2, F4).
+        """
+        project_root = root_resolved
+        if project_path:
+            try:
+                requested = Path(project_path).expanduser().resolve()
+            except (OSError, RuntimeError, ValueError):
+                requested = None
+            if requested != root_resolved:
+                raise ToolError("project_path chỉ nhận thư mục của dự án đang mở")
+        try:
+            graph_real = graphify_view.graph_json_path(project_root).resolve()
+            graph_real.relative_to(project_root)
+        except (OSError, RuntimeError, ValueError):
+            return None
+        view = graphify_view.view_for(project_root)
+        if view.get() is None:
+            return None
+        policy, key = source_policy(project_root)
+        return view.policy_view(key, lambda graph: blocked_nodes(graph, policy))
+
+    def vendor_text(tool_name: str, arguments: dict, project_path: str | None) -> str | None:
+        """Văn bản của tool vendor đã đổi tên hiển thị; None để rơi về hành vi NexGraph (R-N3)."""
+        loaded = vendor_view(project_path)
+        if loaded is None:
+            if project_path:
+                raise ToolError(
+                    f"Không tìm thấy {graphify_view.OUT_DIR_NAME}/{graphify_view.GRAPH_JSON_NAME} "
+                    f"trong {project_path}")
+            return None
+        try:
+            text = graphify_view.HANDLERS[tool_name](loaded, arguments)
+        except graphify_view.VendorToolError as exc:
+            raise ToolError(str(exc)) from exc
+        except Exception as exc:
+            # Như wrapper `call_tool` của vendor (serve.py:3505–3506): lỗi bất ngờ thành văn bản.
+            return f"Error executing {tool_name}: {exc}"
+        return graphify_view.rebrand_text(text)
 
     @mcp.tool(annotations=READ_ONLY)
     async def search(query: str, kinds: list[str] | None = None, limit: int = 20) -> list[dict]:
@@ -149,19 +255,54 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         return await run("search", lambda s: search_json(s, query, kinds, max(1, min(limit, 100))))
 
     @mcp.tool(annotations=READ_ONLY)
-    async def get_node(node_id: str) -> dict:
-        """Lấy một nút theo id (ví dụ `lib/main.dart#file`, `lib/a.dart::A.run#method`)."""
-        return await run("get_node", lambda s: get_node_json(s, node_id), (node_id,))
+    async def get_node(label: str | None = None, node_id: str | None = None, id: str | None = None,
+                       project_path: str | None = None) -> str | dict:
+        """Get full details for a specific node by label or ID.
+
+        `label`: nhãn hoặc id nút; `node_id`/`id` là tên thay thế cùng nghĩa. Có `.nexgraph/graph.json`
+        thì trả văn bản như bản gốc (nguồn, loại, cộng đồng, bậc); chưa có thì trả JSON của NexGraph theo id.
+        """
+        raw = label or node_id or id
+
+        def work() -> str | dict:
+            text = vendor_text("get_node", {"label": raw}, project_path)
+            if text is not None:
+                return text
+            if not raw:
+                raise ToolError("Cần label hoặc node_id")
+            node: str = raw
+            return run_sync("get_node", lambda s: get_node_json(s, node), (node,))
+
+        return await _offload("get_node", work)
 
     @mcp.tool(annotations=READ_ONLY)
-    async def get_neighbors(node_id: str, types: list[str] | None = None,
+    async def get_neighbors(label: str | None = None, node_id: str | None = None, id: str | None = None,
+                            relation_filter: str = "", token_budget: int = 2000,
+                            types: list[str] | None = None,
                             direction: Literal["in", "out", "both"] = "both", depth: int = 1,
-                            limit: int = 200) -> dict:
-        """Nút lân cận qua cạnh thật. types lọc EdgeType (CALLS, IMPORTS, INHERITS, TESTED_BY...).
-        direction=in: ai trỏ tới nút này; out: nút này trỏ tới đâu. depth 1–3."""
-        wanted = parse_edge_types(types) if types else None
-        return await run("get_neighbors", lambda s: neighbors_json(
-            s, node_id, wanted, direction, max(1, min(depth, 3)), max(1, min(limit, 2000))), (node_id,))
+                            limit: int = 200, project_path: str | None = None) -> str | dict:
+        """Get all direct neighbors of a node with edge details.
+
+        `label`/`node_id`/`id`: nhãn hoặc id nút. `relation_filter`: lọc theo loại quan hệ;
+        `token_budget`: ngân sách token đầu ra. `types`/`direction`/`depth`/`limit` là tham số
+        của NexGraph, chỉ dùng khi chưa có `.nexgraph/graph.json` (khi đó trả JSON như trước).
+        """
+        raw = label or node_id or id
+
+        def work() -> str | dict:
+            text = vendor_text("get_neighbors", {
+                "label": raw, "relation_filter": relation_filter, "token_budget": token_budget,
+            }, project_path)
+            if text is not None:
+                return text
+            if not raw:
+                raise ToolError("Cần label hoặc node_id")
+            node: str = raw
+            wanted = parse_edge_types(types) if types else None
+            return run_sync("get_neighbors", lambda s: neighbors_json(
+                s, node, wanted, direction, max(1, min(depth, 3)), max(1, min(limit, 2000))), (node,))
+
+        return await _offload("get_neighbors", work)
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_architecture(parent: str | None = None) -> dict:
@@ -199,43 +340,135 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             redact_documents=True))
 
     @mcp.tool(annotations=READ_ONLY)
-    async def query_graph(question: str, depth: int = 2, budget: int = 2000,
-                          mode: Literal["bfs", "dfs"] = "bfs") -> dict:
-        """Hỏi đồ thị bằng câu tự do: tìm nút khớp rồi mở rộng BFS/DFS trong giới hạn token (budget)."""
-        def body(s: GraphStore) -> dict:
+    async def query_graph(question: str, mode: Literal["bfs", "dfs"] = "bfs", depth: int | None = None,
+                          token_budget: int | None = None, context_filter: list[str] | None = None,
+                          demote_docs: bool = True, budget: int | None = None,
+                          project_path: str | None = None) -> str | dict:
+        """Search the knowledge graph using BFS or DFS. Returns relevant nodes and edges as text context.
+
+        `question`: câu hỏi hoặc từ khoá. `mode`: bfs = ngữ cảnh rộng, dfs = lần theo một nhánh.
+        `depth` 1–6 — bỏ trống thì 3 khi có `.nexgraph/graph.json` (như bản gốc), 2 khi chưa có
+        (như NexGraph trước đây). `token_budget`: ngân sách token đầu ra, bỏ trống thì 2000.
+        `context_filter`: lọc ngữ cảnh cạnh, ví dụ ["call", "field"]. `demote_docs`: xếp hạng mã
+        nguồn trên tài liệu. `budget`: tên cũ của `token_budget`, vẫn nhận.
+        """
+        def work() -> str | dict:
+            effective_budget = budget if budget is not None else (2000 if token_budget is None else token_budget)
+            text = vendor_text("query_graph", {
+                "question": question, "mode": mode,
+                "depth": 3 if depth is None else depth,
+                "token_budget": effective_budget,
+                "context_filter": context_filter, "demote_docs": demote_docs,
+            }, project_path)
+            if text is not None:
+                touch_query_stamp(data_dir, project_id())  # hook-guard thôi nhắc trong 30 phút
+                return text
+
+            def body(s: GraphStore) -> dict:
+                try:
+                    out = ask_graph(s, question, max(1, min(2 if depth is None else depth, 6)),
+                                    max(1, min(effective_budget, 100_000)), mode)
+                except ValueError as exc:
+                    raise ToolError(str(exc)) from exc
+                touch_query_stamp(data_dir, s.project_id())  # hook-guard thôi nhắc trong 30 phút
+                return out
+            return run_sync("query_graph", body)
+
+        return await _offload("query_graph", work)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def shortest_path(source: str, target: str, max_hops: int | None = None, undirected: bool = False,
+                            directed: bool | None = None,
+                            project_path: str | None = None) -> str | dict:
+        """Find the shortest path between two concepts in the knowledge graph. Follows stored edge
+        direction by default; set `undirected=true` to ignore it. Ends with the path's confidence.
+
+        `source`/`target`: nhãn hoặc id nút. `max_hops`: số bước tối đa — bỏ trống thì 8 khi có
+        `.nexgraph/graph.json`, 4 khi chưa có (như NexGraph trước đây). `directed` là tên cũ
+        (nghịch đảo của `undirected`), vẫn nhận. Chưa có graph.json → JSON của NexGraph.
+        """
+        def work() -> str | dict:
+            text = vendor_text("shortest_path", {
+                "source": source, "target": target,
+                "max_hops": 8 if max_hops is None else max_hops,
+                "undirected": (not directed) if directed is not None else undirected,
+            }, project_path)
+            if text is not None:
+                return text
+            go_directed = directed if directed is not None else not undirected
+            hops = max(1, min(4 if max_hops is None else max_hops, 6))
+
+            def body(s: GraphStore) -> dict:
+                try:
+                    return find_paths(s, [source, target], hops, go_directed)
+                except KeyError as exc:
+                    raise ToolError(f"Không có nút {exc.args[0]}") from exc
+            return run_sync("shortest_path", body, (source, target))
+
+        return await _offload("shortest_path", work)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def god_nodes(top_n: int = 10, exclude_hubs_percentile: float | None = None,
+                        top: int | None = None, project_path: str | None = None) -> str | list[dict]:
+        """Return the most connected nodes - the core abstractions of the knowledge graph.
+
+        `top_n`: số nút (mặc định 10). `exclude_hubs_percentile` (0–100): bỏ nút có bậc vượt
+        phân vị này. `top` là tên cũ của `top_n`, vẫn nhận. Chưa có `.nexgraph/graph.json` →
+        JSON của NexGraph (bỏ tệp và test, tối đa 10).
+        """
+        def work() -> str | list[dict]:
+            text = vendor_text("god_nodes", {
+                "top_n": top if top is not None else top_n,
+                "exclude_hubs_percentile": exclude_hubs_percentile,
+            }, project_path)
+            if text is not None:
+                return text
+            n = top if top is not None else top_n
+            return run_sync("god_nodes", lambda s: report_json(
+                s, root, SourcePolicy(root, s.last_exclude()), src(s))["god_nodes"][:max(1, min(n, 10))])
+
+        return await _offload("god_nodes", work)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def graph_stats(project_path: str | None = None) -> str | dict:
+        """Return summary statistics: node count, edge count, communities, confidence breakdown.
+
+        Có `.nexgraph/graph.json` → văn bản như bản gốc (kèm commit dựng đồ thị); chưa có →
+        JSON của NexGraph (số tệp, nút/cạnh theo loại, ngôn ngữ, độ mới).
+        """
+        def work() -> str | dict:
+            text = vendor_text("graph_stats", {}, project_path)
+            if text is not None:
+                return text
+            return run_sync("graph_stats", lambda s: stats_json(s, root, src(s)))
+
+        return await _offload("graph_stats", work)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def get_community(community_id: int | str, limit: int = 200, token_budget: int = 2000,
+                            project_path: str | None = None) -> str | dict:
+        """Get all nodes in a community by community ID.
+
+        `community_id`: số nguyên (0-indexed theo kích thước); dạng cũ `com:<số>` vẫn nhận.
+        `token_budget`: ngân sách token đầu ra. Chưa có `.nexgraph/graph.json` → JSON của
+        NexGraph (khối kiến trúc mức tệp; `limit` là số nút tối đa).
+        """
+        def work() -> str | dict:
+            raw = str(community_id)
+            candidate = raw[4:] if raw.startswith("com:") else raw
             try:
-                out = ask_graph(s, question, max(1, min(depth, 6)), max(1, min(budget, 100_000)), mode)
-            except ValueError as exc:
-                raise ToolError(str(exc)) from exc
-            touch_query_stamp(data_dir, s.project_id())  # hook-guard thôi nhắc trong 30 phút
-            return out
-        return await run("query_graph", body)
+                cid: int | str = int(candidate)
+            except ValueError:
+                cid = community_id  # không phải số: để vendor báo lỗi như bản gốc
+            text = vendor_text("get_community", {
+                "community_id": cid, "token_budget": token_budget,
+            }, project_path)
+            if text is not None:
+                return text
+            return run_sync("get_community", lambda s: community_json(
+                s, f"com:{cid}" if isinstance(cid, int) else raw, max(1, min(limit, 2000))))
 
-    @mcp.tool(annotations=READ_ONLY)
-    async def shortest_path(source: str, target: str, max_hops: int = 4, directed: bool = True) -> dict:
-        """Đường đi ngắn nhất giữa hai nút (id), tối đa max_hops cạnh (1–6)."""
-        def body(s: GraphStore) -> dict:
-            try:
-                return find_paths(s, [source, target], max(1, min(max_hops, 6)), directed)
-            except KeyError as exc:
-                raise ToolError(f"Không có nút {exc.args[0]}") from exc
-        return await run("shortest_path", body, (source, target))
-
-    @mcp.tool(annotations=READ_ONLY)
-    async def god_nodes(top: int = 10) -> list[dict]:
-        """Các nút có nhiều liên kết nhất (không tính tệp và test)."""
-        return await run("god_nodes", lambda s: report_json(s, root, SourcePolicy(root, s.last_exclude()), src(s))["god_nodes"][:max(1, min(top, 10))])
-
-    @mcp.tool(annotations=READ_ONLY)
-    async def graph_stats() -> dict:
-        """Số tệp, số nút theo loại, số cạnh theo loại, ngôn ngữ, số tham chiếu chưa phân giải, và độ mới của graph
-        (indexed_at, index_commit, head_commit, changed_files, stale)."""
-        return await run("graph_stats", lambda s: stats_json(s, root, src(s)))
-
-    @mcp.tool(annotations=READ_ONLY)
-    async def get_community(community_id: str, limit: int = 200) -> dict:
-        """Một cộng đồng (khối kiến trúc) theo id dạng `com:<số>`: nhãn, kích thước, độ gắn kết và các nút."""
-        return await run("get_community", lambda s: community_json(s, community_id, max(1, min(limit, 2000))))
+        return await _offload("get_community", work)
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_context(question: str, budget: int = 4000) -> dict:
@@ -265,11 +498,29 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         return await run("trace_flow", lambda s: trace_from_json(s, entry))  # type: ignore[arg-type]
 
     @mcp.tool(annotations=READ_ONLY)
-    async def get_section(node_id: str) -> dict:
-        """Đọc thân một mục tài liệu (nút document, mỗi heading một nút) từ tệp hiện tại, đã che secret,
-        tối đa 8.000 ký tự. stale=true nghĩa là tệp đã đổi sau lần lập chỉ mục."""
-        return await run("get_section", lambda s: section_json(
-            s, root, node_id, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s)))
+    async def get_section(label: str | None = None, node_id: str | None = None, id: str | None = None,
+                          max_chars: int = 8000, project_path: str | None = None) -> str | dict:
+        """Return the text of a Markdown section (a heading node, with its subsections) or a whole
+        Markdown page, read from the source file. Use it instead of opening the .md file after
+        query_graph or get_node lands on a heading.
+
+        `label`: nhãn heading, id nút, hoặc 'path/file.md::Heading' khi nhiều tệp trùng heading;
+        `node_id`/`id` là tên thay thế. `max_chars`: trần ký tự trả về (mặc định 8000).
+        Chưa có `.nexgraph/graph.json` → JSON của NexGraph (đã che secret, có cờ stale).
+        """
+        raw = label or node_id or id
+
+        def work() -> str | dict:
+            text = vendor_text("get_section", {"label": raw, "max_chars": max_chars}, project_path)
+            if text is not None:
+                return text
+            if not raw:
+                raise ToolError("Cần label hoặc node_id")
+            node: str = raw
+            return run_sync("get_section", lambda s: section_json(
+                s, root, node, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s)))
+
+        return await _offload("get_section", work)
 
     @mcp.tool(annotations=READ_ONLY)
     async def get_callers(node_id: str, depth: int = 1, limit: int = 200) -> dict:
@@ -326,22 +577,60 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             raise ToolError(str(exc)) from exc
 
     @mcp.tool(annotations=READ_ONLY)
-    async def list_prs(limit: int = 50) -> dict:
-        """PR đang mở trên GitHub: nhãn (WRONG-BASE, CI-FAIL, CHANGES-REQ, DRAFT, STALE, PENDING, APPROVED, READY),
-        tệp đổi, số nút bị ảnh hưởng, và các cặp PR xung đột (cùng tệp hoặc cùng vùng ảnh hưởng). Cần `gh` đã đăng nhập."""
-        return await run("list_prs", lambda s: pr_call(lambda: list_prs_json(s, root, max(1, min(limit, 100)),
-                                                                                   model=ModelGraph(s, root))))
+    async def list_prs(base: str | None = None, repo: str | None = None, limit: int = 50,
+                       project_path: str | None = None) -> str | dict:
+        """List open GitHub PRs with CI status, review state, and graph impact (which communities
+        each PR touches, blast radius). Use this before starting work to check if a PR already
+        covers the area you're about to change.
+
+        `base`: nhánh gốc để lọc (tự dò nếu bỏ trống). `repo`: chủ/tên repo trên GitHub (mặc định
+        repo hiện tại). Cần `gh` đã đăng nhập. Chưa có `.nexgraph/graph.json` → JSON của NexGraph
+        (kèm cặp PR xung đột; `limit` là số PR tối đa).
+        """
+        def work() -> str | dict:
+            text = vendor_text("list_prs", {"base": base, "repo": repo}, project_path)
+            if text is not None:
+                return text
+            return run_sync("list_prs", lambda s: pr_call(lambda: list_prs_json(
+                s, root, max(1, min(limit, 100)), model=ModelGraph(s, root))))
+
+        return await _offload("list_prs", work)
 
     @mcp.tool(annotations=READ_ONLY)
-    async def get_pr_impact(pr_number: int) -> dict:
-        """Ảnh hưởng và review cục bộ của một PR (không checkout): nút đổi, vùng ảnh hưởng có điểm, test liên quan,
-        symbol đổi thiếu test, tài liệu có thể cũ, code có thể không còn ai gọi, test nên chạy và lệnh gợi ý."""
-        return await run("get_pr_impact", lambda s: pr_call(lambda: pr_detail_json(s, root, pr_number, model=ModelGraph(s, root), data_dir=data_dir)))
+    async def get_pr_impact(pr_number: int, repo: str | None = None,
+                            project_path: str | None = None) -> str | dict:
+        """Get detailed graph impact for a specific PR: which files it changes, which knowledge-graph
+        communities are affected, and how many nodes are touched.
+
+        `pr_number`: số PR. `repo`: chủ/tên repo trên GitHub (mặc định repo hiện tại). Chưa có
+        `.nexgraph/graph.json` → JSON của NexGraph (vùng ảnh hưởng có điểm, test liên quan…).
+        """
+        def work() -> str | dict:
+            text = vendor_text("get_pr_impact", {"pr_number": pr_number, "repo": repo}, project_path)
+            if text is not None:
+                return text
+            return run_sync("get_pr_impact", lambda s: pr_call(lambda: pr_detail_json(
+                s, root, pr_number, model=ModelGraph(s, root), data_dir=data_dir)))
+
+        return await _offload("get_pr_impact", work)
 
     @mcp.tool(annotations=READ_ONLY)
-    async def triage_prs() -> dict:
-        """Hàng đợi review xếp theo luật (bỏ PR sai nhánh gốc và PR cũ), kèm việc nên làm cho từng PR."""
-        return await run("triage_prs", lambda s: pr_call(lambda: triage_json(list_prs_json(s, root, model=ModelGraph(s, root)))))
+    async def triage_prs(base: str | None = None, repo: str | None = None,
+                         project_path: str | None = None) -> str | dict:
+        """Return all actionable open PRs (correct base, not stale) with full graph impact data so
+        you can reason about review priority, merge order, and conflict risk.
+
+        `base`: nhánh gốc (tự dò nếu bỏ trống). `repo`: chủ/tên repo trên GitHub (mặc định repo
+        hiện tại). Chưa có `.nexgraph/graph.json` → JSON của NexGraph (hàng đợi review theo luật).
+        """
+        def work() -> str | dict:
+            text = vendor_text("triage_prs", {"base": base, "repo": repo}, project_path)
+            if text is not None:
+                return text
+            return run_sync("triage_prs", lambda s: pr_call(lambda: triage_json(
+                list_prs_json(s, root, model=ModelGraph(s, root)))))
+
+        return await _offload("triage_prs", work)
 
     @mcp.tool(annotations=READ_ONLY)
     async def review_status(pr_number: int) -> dict:

@@ -85,3 +85,4 @@ packages = ["src/nexgraph_engine", "src/graphify"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = ["slow: test chậm (đo đồ thị/vendor) — vẫn chạy trong CI, không skip"]
