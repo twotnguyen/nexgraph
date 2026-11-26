@@ -131,6 +131,15 @@ jobs:
           uv run --locked pyinstaller packaging/nexgraph-engine.spec --noconfirm
         working-directory: engine
       - run: pnpm install --frozen-lockfile
+      # PKG-NEX-3: runtime Nex tải theo tệp ghim (sha256 trong nex-runtime.json). Cache theo hash tệp ghim
+      # để PR sau không tải lại 110–126 MB; fetch vẫn kiểm sha nên cache hỏng sẽ tự tải lại.
+      - name: Cache runtime Nex (theo sha256 trong tệp ghim)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: apps/desktop/build-resources/opencode
+          key: nex-runtime-${{ runner.os }}-${{ hashFiles('apps/desktop/nex-runtime.json') }}
+      - name: Tải runtime Nex (kiểm sha256)
+        run: node apps/desktop/scripts/fetch-nex-runtime.mjs
       - name: Đóng gói ứng dụng (electron-builder)
         run: pnpm --filter @nexgraph/desktop run package
       - name: Kiểm tra tệp cài đặt
