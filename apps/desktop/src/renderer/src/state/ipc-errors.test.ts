@@ -14,7 +14,12 @@ import { setLocale } from './locale'
  */
 const MAIN = fileURLToPath(new URL('../../../main/', import.meta.url))
 /** Tệp trả lỗi trực tiếp cho renderer (IPC/handler) hoặc dựng thông báo trạng thái. */
-const BOUNDARY = ['ipc.ts', 'ipc-result.ts', 'engine/api.ts', 'agent/session.ts', 'engine/launcher.ts', 'engine/supervisor.ts']
+const BOUNDARY = [
+  'ipc.ts', 'app/ipc.ts', 'platform/ipc-context.ts',
+  // Handler IPC chia theo tính năng (ADR 0026 pha 2): mọi `features/<x>/ipc.ts` đều là tệp biên.
+  ...readdirSync(join(MAIN, 'features')).map((feature) => `features/${feature}/ipc.ts`),
+  'ipc-result.ts', 'engine/api.ts', 'agent/session.ts', 'engine/launcher.ts', 'engine/supervisor.ts'
+]
 const VIETNAMESE = /[ÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐÈÉẺẼẸÊỀẾỂỄỆÌÍỈĨỊÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢÙÚỦŨỤƯỪỨỬỮỰỲÝỶỸỴàáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]/
 /** Lời gọi dựng lỗi/thông báo đi ra renderer. */
 const ERROR_CALL = /(?:new\s+\w*Error|fail|Object\.assign\(new Error)\s*\(/g

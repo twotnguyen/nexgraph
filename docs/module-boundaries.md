@@ -66,6 +66,17 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
   - `main/git/operations.ts` ↔ `main/git/repo.ts`.
 - Các luật ranh giới tiến trình và `shared` đang giữ.
 
+### IPC của main theo tính năng (pha 2a)
+
+`src/main/ipc.ts` chỉ còn lắp ráp: dựng `IpcContext` (`platform/ipc-context.ts`) rồi gọi `register<Tính năng>Ipc(ctx)` của `app/ipc.ts` và `features/<tính năng>/ipc.ts` (projects, files, lsp, terminal, git, debug, collab, extensions, indexing, graph, graph-pages, agent, integrations, export, semantic). Quy ước:
+
+- Kênh mới đặt trong `features/<tính năng>/ipc.ts`, đăng ký bằng `ctx.on` / `ctx.onFrom` / `ctx.onTrusted` (kiểm khung gửi). Path luôn suy từ `ctx.rootOf(projectId)`.
+- Tính năng giữ trạng thái theo dự án đăng ký việc dọn bằng `ctx.onProjectRemove(hook)`; `project:remove` gọi các hook theo thứ tự đăng ký sau khi engine gỡ xong.
+- Hàm vòng đời (`closeAllAgents`, `stopAllWatchers`, `stopEditorProcesses`…) vẫn xuất từ `ipc.ts` cho `index.ts` và `labs/extension`.
+- `test/ipc-channels.test.ts` khoá: tập kênh main đăng ký bằng đúng tập kênh preload gọi, không kênh nào đăng ký hai lần, việc dọn khi gỡ dự án chạy đủ.
+
+Pha 2b chuyển các thư mục còn lại của `src/main` (agent, ai, engine, fs, git, …) vào `features/<x>/` và `platform/`.
+
 ## Đường dẫn đã chuyển
 
 Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài repo dùng bảng này để sửa đường dẫn cũ.
