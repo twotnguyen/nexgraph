@@ -9,6 +9,8 @@ engine/build/
 
 # Cache AST do test graphify vendored sinh ra, không commit
 engine/third_party/graphify/graphify-out/
+# Chỉ mục stat do test upstream sinh lại mỗi lần chạy (không có trong repo upstream)
+engine/third_party/graphify/tests/fixtures/graphify-out/cache/stat-index.json
 
 # Node / Electron
 node_modules/
