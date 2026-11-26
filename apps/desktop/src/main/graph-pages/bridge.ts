@@ -14,6 +14,8 @@ export interface PageNodePayload {
   source_file: string | null
   source_location: string | null
   via: string | null
+  community: number | null
+  memberCount: number | null
 }
 
 /** Nút người dùng vừa chọn, đã làm giàu bằng dữ liệu engine. */
@@ -25,9 +27,13 @@ export interface GraphPageSelection {
   sourceLine: number | null
   sourceLocation: string | null
   via: string | null
+  community: number | null
+  memberCount: number | null
 }
 
 const clean = (value: unknown, max: number): string | null => typeof value === 'string' && value.length > 0 && value.length <= max ? value : null
+const count = (value: unknown, max: number): number | null =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= max ? value : null
 
 /** Payload từ trang là dữ liệu không tin cậy: chỉ nhận đúng hình dạng, cắt độ dài. */
 export function validatePageNode(payload: unknown): PageNodePayload | null {
@@ -36,7 +42,10 @@ export function validatePageNode(payload: unknown): PageNodePayload | null {
   const id = clean(raw.id, 512)
   // Preload gửi tin nhắn khởi động/theme với id `__bridge__`, `__boot__` — không phải nút người dùng chọn.
   if (!id || id.startsWith('__')) return null
-  return { id, label: clean(raw.label, 2000), source_file: clean(raw.source_file, 1024), source_location: clean(raw.source_location, 1024), via: clean(raw.via, 64) }
+  return {
+    id, label: clean(raw.label, 2000), source_file: clean(raw.source_file, 1024), source_location: clean(raw.source_location, 1024),
+    via: clean(raw.via, 64), community: count(raw.community, 1_000_000), memberCount: count(raw.member_count, 1_000_000)
+  }
 }
 
 export interface SenderLike {
@@ -101,7 +110,9 @@ export async function handlePageNodeMessage(args: {
       sourceFile: sourceFile ?? null,
       sourceLine: sourceLine ?? null,
       sourceLocation: sourceFile ? `${sourceFile}${sourceLine ? `:${sourceLine}` : ''}` : payload.source_location,
-      via: payload.via
+      via: payload.via,
+      community: payload.community,
+      memberCount: payload.memberCount
     }
   }
 }

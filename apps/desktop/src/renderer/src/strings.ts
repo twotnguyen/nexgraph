@@ -135,6 +135,13 @@ const viStrings = {
     pagesSource: 'Nguồn',
     pagesId: 'Mã nút',
     pagesNoSource: 'Không có tệp nguồn (nút cộng đồng của đồ thị đã gộp)',
+    pagesActions: 'Hành động cho nút đã chọn',
+    pagesOpenCode: 'Mở mã',
+    pagesOpenCodeDisabled: 'Nút không có tệp thật để mở',
+    pagesImpact: 'Vùng ảnh hưởng',
+    pagesAskNex: 'Hỏi Nex',
+    pagesOpenCommunity: 'Mở cộng đồng',
+    pagesBackOverview: '← Quay lại trang tổng',
     pagesMissing: 'Dự án chưa có trang đồ thị trong .nexgraph.',
     export: 'Xuất…',
     back: '← Tổng quan'
@@ -851,6 +858,13 @@ const enStrings: typeof viStrings = {
     pagesSource: 'Source',
     pagesId: 'Node ID',
     pagesNoSource: 'No source file (community node of the aggregated graph)',
+    pagesActions: 'Actions for the selected node',
+    pagesOpenCode: 'Open code',
+    pagesOpenCodeDisabled: 'This node has no real file to open',
+    pagesImpact: 'Impact',
+    pagesAskNex: 'Ask Nex',
+    pagesOpenCommunity: 'Open community',
+    pagesBackOverview: '← Back to overview',
     pagesMissing: 'This project has no graph pages in .nexgraph yet.',
     export: 'Export…',
     back: '← Overview'
@@ -1612,7 +1626,13 @@ export const uiEn: Record<string, string> = {
   'URL nguồn không hợp lệ hoặc bị chặn.': 'The source URL is invalid or blocked.',
   'Không phân giải được tên máy chủ của URL nguồn.': 'Could not resolve the source URL host name.',
   'URL nguồn không hợp lệ.': 'The source URL is invalid.',
-  '{n} mục không đọc được khi quét — kiểm tra quyền đọc của các mục đó.': '{n} {n, plural, one {item} other {items}} could not be read during the scan — check read permissions.'
+  '{n} mục không đọc được khi quét — kiểm tra quyền đọc của các mục đó.': '{n} {n, plural, one {item} other {items}} could not be read during the scan — check read permissions.',
+  // N2-D2: câu hỏi "Hỏi Nex" và nhãn chọn nút của trang đồ thị.
+  'Chọn qua {via}': 'Selected via {via}',
+  'Giải thích nút "{label}" ({source}) trong đồ thị này.': 'Explain the node "{label}" ({source}) in this graph.',
+  'Giải thích nút "{label}" trong đồ thị này.': 'Explain the node "{label}" in this graph.',
+  'Cộng đồng: {name}': 'Community: {name}',
+  'Tóm tắt cộng đồng "{label}" ({count} thành phần) trong đồ thị này.': 'Summarize the community "{label}" ({count, plural, one {1 member} other {{count} members}}) in this graph.'
 }
 
 /** Dịch chuỗi khi có bản Anh, giữ nguyên tiếng Việt khi thiếu, rồi thay các biến {name}.

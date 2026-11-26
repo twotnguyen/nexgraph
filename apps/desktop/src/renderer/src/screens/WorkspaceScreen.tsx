@@ -250,6 +250,13 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   // Trang Đồ thị/Cây/Luồng gọi trong <root>/.nexgraph/: có tệp mới hiện thẻ, không có thì giữ
   // nguyên giao diện cũ (R-N3). Dò lại khi đồ thị cập nhật vì pipeline có thể vừa ghi thêm trang.
   const [pagesStatus, setPagesStatus] = useState<GraphPagesStatus | null>(null)
+  // NG-ACT-1: "Hỏi Nex" điền câu hỏi vào ô chat của agent (không tự gửi), nonce đổi mỗi lần bấm.
+  const askSeq = useRef(0)
+  const [ask, setAsk] = useState<{ text: string; nonce: number } | null>(null)
+  const askNex = (text: string) => {
+    setAsk({ text, nonce: ++askSeq.current })
+    setChatOpen(true)
+  }
   const pagesAutoOpened = useRef<string | null>(null)
   useEffect(() => {
     let alive = true
@@ -498,12 +505,14 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
     const node = selected?.id ?? (overlay ? null : focus)
     openExport(tab === 'graph' && node ? { kind: 'node', value: node } : { kind: 'all' })
   }
-  const showImpact = async (node: GraphNode) => {
+  const showImpact = async (node: GraphNode) => showImpactById(node.id)
+  /** NG-ACT-1: mở màn ảnh hưởng từ id của nút chọn trong trang đồ thị (không cần GraphNode). */
+  const showImpactById = async (id: string) => {
     const request = ++impactRequest.current
     setPanel('changes')
     setImpactPending(true)
     try {
-      const impact = await window.nexgraph.graph.impactOf(project.project_id, node.id)
+      const impact = await window.nexgraph.graph.impactOf(project.project_id, id)
       if (request === impactRequest.current) setNodeImpact(impact)
     } catch (e) {
       if (request === impactRequest.current) setFeedback(errorMsg(e))
@@ -730,7 +739,7 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
   const agentPanel = !hosted && <AgentPanel id={chatId} hidden={!chatOpen} projectId={project.project_id} projectName={project.name}
     activeFile={chatFile} onClose={() => setChatOpen(false)} onConnectOpenCode={() => setConnectOpenCode(true)}
     getEditorContext={() => activeFile ? editorContexts.current.get(activeFile)?.() ?? null : null} graphContext={graphContext} beforePrompt={flushEditorState} onInspect={inspect}
-    onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={openWorkspaceSettings ?? (() => {})} dock={chatDock} onToggleDock={toggleDock} />
+    ask={ask} onOpenCode={openCode} onHighlight={highlightFromChat} onOpenSettings={openWorkspaceSettings ?? (() => {})} dock={chatDock} onToggleDock={toggleDock} />
 
   // Lệnh cho bảng lệnh và phím tắt (state/commands.ts); rời màn hình thì hỏi trước nếu còn tệp chưa lưu.
   useCommand('agent.toggle', () => setChatOpen((v) => !v), !hosted)
@@ -1219,7 +1228,12 @@ export function WorkspaceScreen({ project, initialTab, initialFlowId, onBack, on
           </div>
         </>}
         <div data-split={sideShown ? splitSide : undefined} className={`canvas-wrap${sideShown ? ' split' : ''}`} id={viewId} role="tabpanel" aria-labelledby={tabId(tab)} tabIndex={0}>
-          {tab === 'pages' && pagesStatus && hasPages && <GraphPagesView projectId={project.project_id} status={pagesStatus} revision={revision} />}
+          {tab === 'pages' && pagesStatus && hasPages && (
+            <GraphPagesView projectId={project.project_id} status={pagesStatus} revision={revision}
+              onOpenCode={(file, line) => openCode(file, line)}
+              onImpact={(nodeId) => void showImpactById(nodeId)}
+              onAsk={askNex} />
+          )}
           {tab === 'arch' && <ArchitectureCanvas key={`${archParent ?? 'root'}:${openSeq}`} projectId={project.project_id} revision={revision} initialParent={archParent} onParentChange={setArchContext} onOpenNode={openNodeId} onOpenCode={openCode} onOpenProjects={onOpenProjects ? guardLeave(onOpenProjects) : undefined} />}
           {tab === 'map' && <MapView projectId={project.project_id} revision={revision} onOpenNode={openNodeId} onOpenCode={openCode} onOpenArch={openArch} />}
           {tab === 'flows' && <FlowsView projectId={project.project_id} revision={revision} initialFlowId={flowId} openRequest={openSeq} onSelectedFlowChange={setFlowContext} onOpenCode={openCode} onOpenNode={openNodeId} />}
