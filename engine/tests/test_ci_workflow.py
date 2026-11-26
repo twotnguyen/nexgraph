@@ -37,3 +37,13 @@ def test_required_check_names_unchanged():
     for job in ("engine", "desktop", "package"):
         assert jobs[job]["name"] == f"{job} (${{{{ matrix.os }}}})"
         assert jobs[job]["strategy"]["matrix"]["os"] == ["macos-latest", "windows-latest"]
+
+
+def test_module_rules_job_reports_without_gating():
+    """ADR 0026 pha 0: luật phụ thuộc chỉ báo cáo, không chặn phát hành, chạy đúng script ở gốc repo."""
+    jobs = _jobs()
+    job = jobs["module-rules"]
+    assert job["name"] not in {"lint", "engine", "desktop", "package"}
+    runs = [s.get("run", "") for s in job["steps"]]
+    assert "pnpm rules:report" in runs
+    assert "module-rules" not in _needs(jobs["release"])

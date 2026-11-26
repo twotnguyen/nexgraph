@@ -37,6 +37,23 @@ jobs:
           --skip=security/noDangerouslySetInnerHtml
           apps/desktop/src
 
+  # Luật phụ thuộc giữa module (ADR 0026). Pha 0: chỉ báo cáo vào summary của job, không thuộc 7 check bắt buộc.
+  # Pha 4 đổi sang `pnpm rules:strict` và đưa vào ruleset.
+  module-rules:
+    name: module-rules (báo cáo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # dependency-cruiser cần TypeScript của dự án; không chạy script cài đặt (không cần Electron).
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm rules:report
+
   engine:
     name: engine (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
