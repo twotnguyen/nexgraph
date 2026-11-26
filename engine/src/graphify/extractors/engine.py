@@ -5,6 +5,8 @@ import hashlib
 import importlib
 import json
 import re
+import threading
+from unicodedata import normalize
 from graphify.extractors.base import (
     _LANGUAGE_BUILTIN_GLOBALS,
     _file_stem,
@@ -14,6 +16,7 @@ from graphify.extractors.base import (
 )
 from graphify.ids import DeclIdRegistry, normalize_id
 from graphify.extractors.models import LanguageConfig
+from graphify.extractors.python_scope import _python_param_names, _python_param_shadow_checker
 from graphify.extractors.resolution import _resolve_js_import_target
 from graphify.security import sanitize_metadata
 from pathlib import Path
@@ -1577,7 +1580,8 @@ def _python_pre_scan_underscore_collisions(root_node, source: bytes, stem: str) 
 
 def _underscore_salted_nid(plain_nid: str, name: str, groups: dict[str, set[str]],
                            private_prefixes: tuple[str, ...] = ("_",),
-                           private_suffixes: tuple[str, ...] = ()) -> str:
+                           private_suffixes: tuple[str, ...] = (),
+                           leaf=None) -> str:
     """Resolve a declaration's real node id against the collision map.
 
     Shared by the Python and C# pre-scans (#3302, #4415). A name with no
@@ -1594,12 +1598,15 @@ def _underscore_salted_nid(plain_nid: str, name: str, groups: dict[str, set[str]
     members private with ``$`` and ``#`` (#4475).
     ``private_suffixes`` does the same for a trailing mark: C++ spells a
     private member ``find_`` as often as ``_find``.
+    ``leaf`` maps a name to the part whose spelling decides that (Lua judges
+    ``M._load`` by ``_load``).
     """
     names = groups.get(plain_nid)
     if not names or len(names) < 2:
         return plain_nid
     public = [n for n in names
-              if not n.startswith(private_prefixes) and not n.endswith(private_suffixes)]
+              for part in [leaf(n) if leaf is not None else n]
+              if not part.startswith(private_prefixes) and not part.endswith(private_suffixes)]
     if len(public) == 1 and name == public[0]:
         return plain_nid
     salt = hashlib.sha1(name.encode("utf-8"), usedforsecurity=False).hexdigest()[:6]
@@ -1685,6 +1692,79 @@ def _php_member_nid(class_nid: str, member_node, name: str, source: bytes,
 
 
 _JAVA_MEMBER_CALLABLE_TYPES = ("method_declaration", "constructor_declaration")
+
+
+_JAVA_LOMBOK_IMPORT_RE = re.compile(
+    rb"^\s*import\s+lombok\s*\.\s*(?:Getter|\*)\s*;", re.MULTILINE
+)
+
+
+def _java_lombok_getter_annotation(declaration_node, source: bytes):
+    """The ``@Getter`` annotation on a declaration when it is Lombok's.
+
+    ``@lombok.Getter`` always is; a bare ``@Getter`` only when the file
+    imports ``lombok.Getter`` or ``lombok.*``. ``@Getter(AccessLevel.NONE)``
+    asks for no getter, so it returns None.
+    """
+    for anno in _java_annotation_nodes(declaration_node):
+        name_node = anno.child_by_field_name("name")
+        raw = _read_text(name_node, source) if name_node is not None else ""
+        if raw == "Getter" and not _JAVA_LOMBOK_IMPORT_RE.search(source):
+            continue
+        if raw not in ("Getter", "lombok.Getter"):
+            continue
+        args = anno.child_by_field_name("arguments")
+        if args is not None and re.search(r"\bNONE\b", _read_text(args, source)):
+            return None
+        return anno
+    return None
+
+
+def _java_lombok_getters(field_node, source: bytes) -> list[str]:
+    """Names of the getters Lombok ``@Getter`` writes for a field (#5148).
+
+    A field annotation covers static and instance fields; a class annotation
+    covers instance fields only. The name is ``get`` + the capitalised field
+    name, or ``is`` for a primitive ``boolean`` (a ``boolean isX`` keeps its
+    own name). Lombok skips a getter when the class already declares a
+    zero-argument method of that name, ignoring case.
+    """
+    body = field_node.parent
+    owner = body.parent if body is not None else None
+    if owner is None:
+        return []
+    own = _java_lombok_getter_annotation(field_node, source)
+    if own is None:
+        if any(
+            a.child_by_field_name("name") is not None
+            and _read_text(a.child_by_field_name("name"), source) in ("Getter", "lombok.Getter")
+            for a in _java_annotation_nodes(field_node)
+        ):
+            return []  # @Getter(AccessLevel.NONE) on the field wins over the class
+        if (_java_has_modifier(field_node, "static")
+                or _java_lombok_getter_annotation(owner, source) is None):
+            return []
+    type_node = field_node.child_by_field_name("type")
+    is_boolean = type_node is not None and _read_text(type_node, source) == "boolean"
+    declared = set()
+    for c in body.children:
+        if c.type != "method_declaration":
+            continue
+        params = c.child_by_field_name("parameters")
+        name_node = c.child_by_field_name("name")
+        if name_node is not None and params is not None and not any(
+            p.type in ("formal_parameter", "spread_parameter") for p in params.children
+        ):
+            declared.add(_read_text(name_node, source).lower())
+    names = []
+    for field in _java_declarator_names(field_node, source):
+        if is_boolean and field.startswith("is") and field[2:3].isupper():
+            getter = field
+        else:
+            getter = ("is" if is_boolean else "get") + field[:1].upper() + field[1:]
+        if getter.lower() not in declared:
+            names.append(getter)
+    return names
 
 
 def _java_member_nid(class_nid: str, member_node, name: str, source: bytes,
@@ -1963,6 +2043,145 @@ def _swift_member_nid(class_nid: str, member_node, name: str, source: bytes,
         groups = {nid: ns for nid, ns in names.items() if len(ns) >= 2}
         groups_cache[key] = groups
     return _underscore_salted_nid(_make_id(class_nid, name), name, groups)
+
+
+_RUBY_MEMBER_CALLABLE_TYPES = ("method", "singleton_method")
+
+
+def _ruby_member_nid(class_nid: str, member_node, name: str, source: bytes,
+                     groups_cache: dict, sanitize) -> str:
+    """Node id for a Ruby method, salted when a sibling collides.
+
+    ``make_id`` drops a leading ``_`` and folds case, so ``_read_attribute`` /
+    ``read_attribute`` or ``_where!`` / ``where!`` of one class or module
+    minted one id: the second declaration vanished and its calls were credited
+    to the survivor. Group the methods of the enclosing class/module body (its
+    own ``def``s and those of a ``class << self`` in it) by the id they would
+    get, then apply ``_underscore_salted_nid``, the Python/C#/Solidity/Java
+    rule (#3302, #4415, #5058, #5151): a unique public name keeps the plain
+    id, every other colliding name is salted. ``name`` is the sanitized name
+    (``foo!`` -> ``foo_bang``, #3077), so ``foo`` / ``foo!`` / ``foo?`` never
+    collide. Members that collide with nothing keep their old id; an
+    instance and a singleton method of one name share one name, so they are
+    not a collision.
+    """
+    body = member_node.parent
+    if body is not None and body.parent is not None and body.parent.type == "singleton_class":
+        body = body.parent.parent
+    if body is None:
+        return _make_id(class_nid, name)
+    key = (class_nid, body.start_byte, body.end_byte)
+    groups = groups_cache.get(key)
+    if groups is None:
+        names: dict[str, set[str]] = {}
+        stack = list(body.children)
+        while stack:
+            c = stack.pop()
+            if c.type == "singleton_class":
+                inner = c.child_by_field_name("body")
+                if inner is not None:
+                    stack.extend(inner.children)
+                continue
+            if c.type not in _RUBY_MEMBER_CALLABLE_TYPES:
+                continue
+            name_node = c.child_by_field_name("name")
+            text = sanitize(_read_text(name_node, source)) if name_node is not None else ""
+            if text and normalize_id(text):
+                names.setdefault(_make_id(class_nid, text), set()).add(text)
+        groups = {nid: ns for nid, ns in names.items() if len(ns) >= 2}
+        groups_cache[key] = groups
+    return _underscore_salted_nid(_make_id(class_nid, name), name, groups)
+
+
+def _lua_field_name(name: str) -> str:
+    """``M:load`` and ``M.load`` name one table field; spell both with ``.``."""
+    return name.replace(":", ".")
+
+
+def _lua_field_leaf(name: str) -> str:
+    return name.rsplit(".", 1)[-1]
+
+
+def _lua_pre_scan_field_collisions(root, source: bytes, stem: str) -> dict[str, set[str]]:
+    """Group a Lua file's table-field functions by the id they would get.
+
+    ``make_id`` drops ``_`` and folds case, so ``function M._load()`` /
+    ``function M.load()`` (or ``Runner:_start()`` / ``Runner:start()``) in one
+    file minted one id: the second declaration vanished and its calls were
+    credited to its twin. Only dotted/colon names are grouped; a bare
+    ``_x`` / ``x`` pair is the module-level rule's (#2810).
+    """
+    names: dict[str, set[str]] = {}
+    stack = [root]
+    while stack:
+        n = stack.pop()
+        if n.type == "function_declaration":
+            name_node = n.child_by_field_name("name")
+            if name_node is not None and name_node.type in (
+                    "dot_index_expression", "method_index_expression"):
+                text = _lua_field_name(_read_text(name_node, source))
+                if normalize_id(_lua_field_leaf(text)):
+                    names.setdefault(_make_id(stem, text), set()).add(text)
+        stack.extend(n.children)
+    return {nid: ns for nid, ns in names.items() if len(ns) >= 2}
+
+
+_SCALA_OWNER_TYPES = ("class_definition", "object_definition", "trait_definition",
+                      "enum_definition", "given_definition")
+_SCALA_MEMBER_CALLABLE_TYPES = ("function_definition", "function_declaration")
+# A setter `def size_=(v)` is the companion of the getter `def size`: the
+# getter is the name callers read, so it keeps the plain id.
+_SCALA_PRIVATE_MEMBER_SUFFIXES = ("_=",)
+
+
+def _scala_member_nid(class_nid: str, member_node, name: str, source: bytes,
+                      groups_cache: dict) -> str:
+    """Node id for a Scala method, salted when a sibling collides.
+
+    ``make_id`` drops a leading ``_``, a trailing ``_=`` and folds case, so
+    ``_enter`` / ``enter``, a getter ``size`` / setter ``size_=`` or
+    ``forEach`` / ``foreach`` of one type minted one id: the second
+    declaration vanished and its calls were credited to the survivor. A class
+    and its companion object share one id, so group the methods of the
+    type's body and of its same-named companions in the same scope by the id
+    they would get, then apply ``_underscore_salted_nid``, the
+    Python/C#/Solidity/Java rule (#3302, #4415, #5058, #5151): a unique public
+    name keeps the plain id, every other colliding name is salted. Members
+    that collide with nothing keep their old id; overloads share one name, so
+    they are not a collision.
+    """
+    body = member_node.parent
+    owner = body.parent if body is not None else None
+    if owner is None or owner.type not in _SCALA_OWNER_TYPES or owner.parent is None:
+        return _make_id(class_nid, name)
+    name_node = owner.child_by_field_name("name")
+    owner_name = _read_text(name_node, source) if name_node is not None else ""
+    scope = owner.parent
+    key = (class_nid, scope.start_byte, scope.end_byte, owner_name)
+    groups = groups_cache.get(key)
+    if groups is None:
+        names: dict[str, set[str]] = {}
+        for decl in scope.children:
+            if decl.type not in _SCALA_OWNER_TYPES:
+                continue
+            decl_name = decl.child_by_field_name("name")
+            if decl is not owner and (
+                    decl_name is None or _read_text(decl_name, source) != owner_name):
+                continue
+            for b in decl.children:
+                if b.type not in ("template_body", "enum_body", "with_template_body"):
+                    continue
+                for c in b.children:
+                    if c.type not in _SCALA_MEMBER_CALLABLE_TYPES:
+                        continue
+                    member_name = c.child_by_field_name("name")
+                    text = _read_text(member_name, source) if member_name is not None else ""
+                    if text and normalize_id(text):
+                        names.setdefault(_make_id(class_nid, text), set()).add(text)
+        groups = {nid: ns for nid, ns in names.items() if len(ns) >= 2}
+        groups_cache[key] = groups
+    return _underscore_salted_nid(_make_id(class_nid, name), name, groups,
+                                  private_suffixes=_SCALA_PRIVATE_MEMBER_SUFFIXES)
 
 
 _CPP_PRIVATE_MEMBER_PREFIXES = ("_", "~")
@@ -2310,6 +2529,25 @@ def _swift_receiver_name(recv_node, source: bytes) -> str | None:
                             return _read_text(sc, source)
     return None
 
+
+def _swift_operand_tail(node):
+    """Return the operand a misplaced Swift call suffix really applies to.
+
+    tree-sitter-swift parses ``a + f()`` as ``(a + f)()`` and ``!f()`` as
+    ``(!f)()``: the call's callee slot (or a member call's receiver) holds the
+    whole operator expression. The call belongs to its last operand. An
+    implicit member ``.make()`` is also a ``prefix_expression``; it names no
+    receiver, so it is left as is.
+    """
+    while node is not None:
+        if node.type in ("additive_expression", "multiplicative_expression"):
+            node = node.child_by_field_name("rhs")
+        elif node.type == "prefix_expression" and node.children and node.children[0].type != ".":
+            node = node.child_by_field_name("target")
+        else:
+            break
+    return node
+
 _C_PRIMITIVE_TYPE_NODES = frozenset({
     "primitive_type", "sized_type_specifier", "auto", "placeholder_type_specifier",
 })
@@ -2391,6 +2629,14 @@ def _cpp_type_parameters_in_scope(node, source: bytes) -> frozenset[str]:
     return frozenset(names)
 
 
+class _CppStdName(str):
+    """A type name that was written `std::`-qualified (`std::chrono::seconds` ->
+    ``seconds``). The reference keeps its tail as its label, but it names the
+    standard library, so ``ensure_named_node`` gives it a stub of its own that
+    the corpus-wide rewire never maps onto a project symbol (#5219)."""
+    __slots__ = ()
+
+
 def _cpp_collect_type_refs(node, source: bytes, generic: bool, out: list[tuple[str, str]],
                            skip: frozenset[str] | None = None,
                            dialect_quals: frozenset[str] = frozenset()) -> None:
@@ -2417,6 +2663,31 @@ def _cpp_collect_type_refs(node, source: bytes, generic: bool, out: list[tuple[s
         return
     if t == "qualified_identifier":
         name_node = node.child_by_field_name("name")
+        scope_node = node.child_by_field_name("scope")
+        if scope_node is not None and _read_text(scope_node, source) == "std":
+            # `std::chrono::seconds`, `std::vector<HttpClient>`: the name is the
+            # standard library's, never a project symbol; its template
+            # arguments are still the project's own types.
+            while name_node is not None and name_node.type == "qualified_identifier":
+                name_node = name_node.child_by_field_name("name")
+            if name_node is None:
+                return
+            role = "generic_arg" if generic else "type"
+            if name_node.type == "type_identifier":
+                text = _read_text(name_node, source)
+                if text and text not in dialect_quals:
+                    out.append((_CppStdName(text), role))
+            elif name_node.type == "template_type":
+                base = name_node.child_by_field_name("name")
+                text = _read_text(base, source) if base is not None else ""
+                if text and text not in dialect_quals:
+                    out.append((_CppStdName(text), role))
+                args_node = name_node.child_by_field_name("arguments")
+                if args_node is not None:
+                    for c in args_node.children:
+                        if c.is_named:
+                            _cpp_collect_type_refs(c, source, True, out, skip, dialect_quals)
+            return
         if name_node is not None:
             _cpp_collect_type_refs(name_node, source, generic, out, skip, dialect_quals)
         return
@@ -2593,36 +2864,6 @@ def _python_collect_param_refs(params_node, source: bytes) -> list[tuple[str, st
             _python_collect_type_refs(type_node, source, False, out)
     return out
 
-def _python_param_names(params_node, source: bytes) -> set[str]:
-    """Plain parameter identifiers declared on a Python `parameters` node.
-
-    Covers positional/keyword params plus `*args` / `**kwargs` and typed or
-    default forms — anything that binds a local name the function body can shadow
-    a module-level definition with.
-    """
-    out: set[str] = set()
-    if params_node is None:
-        return out
-    for child in params_node.children:
-        if child.type == "identifier":
-            out.add(_read_text(child, source))
-        elif child.type in (
-            "typed_parameter",
-            "default_parameter",
-            "typed_default_parameter",
-            "list_splat_pattern",
-            "dictionary_splat_pattern",
-        ):
-            # The bound name is the first identifier child (the rest is type/default).
-            name_n = child.child_by_field_name("name")
-            if name_n is None:
-                name_n = next(
-                    (c for c in child.children if c.type == "identifier"), None
-                )
-            if name_n is not None:
-                out.add(_read_text(name_n, source))
-    return out
-
 # pytest fixtures (#ISSUE). A test or fixture names a fixture as a parameter:
 # `def test_x(runner): runner.invoke(cli)`, with `runner` defined in the same
 # file or a conftest.py above it. The parameter has no annotation, so it is
@@ -2648,6 +2889,24 @@ def _python_is_pytest_fixture(func_node, source: bytes) -> bool:
         if expr is not None and _read_text(expr, source) in _PYTEST_FIXTURE_DECORATORS:
             return True
     return False
+
+
+def _python_base_name_node(arg):
+    """The `identifier` a Python class base names, or None.
+
+    A parameterized base (`Base[T]`, `Repo[User]`) parses as a `subscript`
+    whose `value` field is the base itself; the `[...]` holds only type
+    arguments. `mod.Base`, `mod.Base[T]` and calls stay None.
+
+    Known limitation: a subscript whose value is a plain identifier that is not
+    a type (`class Dyn(registry['k'])`) is indistinguishable from `Base[int]`
+    at the AST level, so it yields the identifier (`registry`) here and may emit
+    a spurious `inherits` edge. Harmless unless a corpus class is literally named
+    `registry`; the common generic case dominates.
+    """
+    if arg.type == "subscript":
+        arg = arg.child_by_field_name("value")
+    return arg if arg is not None and arg.type == "identifier" else None
 
 
 def _python_annotation_class(type_node, source: bytes) -> str | None:
@@ -2762,6 +3021,87 @@ def _python_collect_assignment_targets(node, source: bytes, out: set[str]) -> No
     if node.type in ("pattern_list", "tuple_pattern", "list_pattern"):
         for c in node.children:
             _python_collect_assignment_targets(c, source, out)
+
+
+def _python_import_bound_names(node, source: bytes) -> list[str]:
+    """Local names an `import_statement`/`import_from_statement` node binds.
+
+    A plain `import x` binds `x`; `import x as y` binds `y`; `from m import
+    x` binds `x`; `from m import x as y` binds `y`. `from m import *` binds
+    no name graphify can see without resolving the imported module, so the
+    wildcard contributes nothing here, same convention as the receiver
+    shadow checker's own `import_names` this mirrors.
+    """
+    names: list[str] = []
+    past_import = False
+    for item in node.children:
+        if item.type == "import":
+            past_import = True
+            continue
+        if not past_import:
+            continue
+        if item.type == "aliased_import":
+            alias = item.child_by_field_name("alias")
+            if alias is not None:
+                names.append(_read_text(alias, source))
+        elif item.type == "dotted_name":
+            names.append(_read_text(item, source).split(".")[0])
+    return names
+
+
+def _python_local_import_names(func_def_node, source: bytes) -> set[str]:
+    """Names a Python function body's OWN `import`/`from ... import` statements
+    bind, not descending into nested `function_definition`/`class_definition`/
+    `lambda` subtrees (their imports belong to a different scope).
+
+    A narrower, import-only analogue of `_python_local_bound_names`: kept
+    separate so the bare-call lexical resolution guard built on it (#5421)
+    does not also start suppressing the parameter-shadowing case, which is a
+    distinct, already-tracked issue (#5418).
+    """
+    bound: set[str] = set()
+
+    def walk(n) -> None:
+        for child in n.children:
+            t = child.type
+            if t in ("function_definition", "class_definition", "lambda"):
+                continue
+            if t in ("import_statement", "import_from_statement"):
+                bound.update(_python_import_bound_names(child, source))
+            walk(child)
+
+    body = func_def_node.child_by_field_name("body")
+    if body is not None:
+        walk(body)
+    return bound
+
+
+def _python_call_shadowed_by_local_import(node, callee_name: str, source: bytes) -> bool:
+    """Does the nearest enclosing Python function/class body bind `callee_name`
+    via its OWN `import`/`from ... import` statement?
+
+    A function-local import is only valid in its own lexical scope: `from m
+    import x` inside `caller()` binds `x` there, so a bare `x()` call in that
+    body names the imported symbol, not a same-named module-level function or
+    class elsewhere in the file (#5421). Checked against the nearest enclosing
+    function or class body only, matching Python's own scoping: a sibling
+    nested `def`'s own import is a different scope and must not shadow this
+    call. Stops at the first function/class ancestor and requires the walk to
+    have arrived through that scope's own body, not its parameters/decorators
+    or a default/annotation value (which evaluate in the scope around it): a
+    call reached that way is left unshadowed rather than walked further out,
+    a narrow gap this conservative check accepts rather than risk suppressing
+    a real edge.
+    """
+    n = node
+    while (parent := n.parent) is not None:
+        if parent.type in ("function_definition", "class_definition"):
+            body = parent.child_by_field_name("body")
+            if body is not None and n == body:
+                return callee_name in _python_local_import_names(parent, source)
+            return False
+        n = parent
+    return False
 
 # Languages whose `self`/`this` member calls bind through _self_call_target.
 _SELF_CALL_LANGUAGES = frozenset({
@@ -4580,6 +4920,23 @@ def _csharp_return_info(method_node, source: bytes) -> list:
     return [ret, len(tparams)]
 
 
+def _csharp_deferred_member(access, source: bytes) -> list | None:
+    """``["member", receiver, name, []]`` for ``var x = T.P`` (#5376).
+
+    The variable's type is the declared type of the property or field ``P`` on
+    ``T``, which may be declared in another file, so the cross-file pass
+    resolves it. Only a plain ``identifier.identifier`` access qualifies.
+    """
+    inner = access.child_by_field_name("expression")
+    name = access.child_by_field_name("name")
+    if (
+        inner is None or name is None
+        or inner.type != "identifier" or name.type != "identifier"
+    ):
+        return None
+    return ["member", _read_text(inner, source), _read_text(name, source), []]
+
+
 def _csharp_deferred_call(invocation, source: bytes) -> list | None:
     """``[receiver, method, type args]`` for ``var x = R.M<A>(...)`` (#4266).
 
@@ -4756,6 +5113,11 @@ def _csharp_method_receiver_types(
                                 # `var v = R.M<A>()` — typed cross-file from
                                 # M's declared return type (#4266).
                                 type_name = _csharp_deferred_call(g, source)
+                                break
+                            if g.type == "member_access_expression":
+                                # `var a = T.P` — typed cross-file from P's
+                                # declared type (#5376).
+                                type_name = _csharp_deferred_member(g, source)
                                 break
                     bind(_read_text(name_node, source), type_name, scope, declared_elem)
         elif node.type == "foreach_statement":
@@ -6627,6 +6989,125 @@ def _kotlin_nav_identifier_segments(nav, source: bytes) -> list[str] | None:
     return segments
 
 
+_KOTLIN_IDENTIFIERS = ("identifier", "simple_identifier", "type_identifier")
+
+
+def _kotlin_type_name(type_node, source: bytes) -> str | None:
+    """`Greeter`, `a.b.Greeter`, `Greeter?` and `Box<T>` name `Greeter`/`Box`; other types name nothing."""
+    if type_node is not None and type_node.type == "nullable_type":
+        type_node = next((c for c in type_node.children if c.type == "user_type"), None)
+    if type_node is None or type_node.type != "user_type":
+        return None
+    # Older grammars nest each dotted segment in a simple_user_type.
+    parts = [c for c in type_node.children if c.type == "simple_user_type"] or [type_node]
+    names = [c for c in parts[-1].children if c.type in _KOTLIN_IDENTIFIERS]
+    return _read_text(names[-1 if len(parts) == 1 else 0], source) if names else None
+
+
+def _kotlin_declared_type(decl, initializer, source: bytes) -> str:
+    """The type a Kotlin binding declares, or `Name` for `= Name(...)`; "" when neither says."""
+    for child in decl.children:
+        name = _kotlin_type_name(child, source)
+        if name:
+            return name
+    if initializer is not None and initializer.type == "call_expression" and initializer.children:
+        callee = initializer.children[0]
+        if callee.type in _KOTLIN_IDENTIFIERS:
+            text = _read_text(callee, source)
+            if text[:1].isupper():
+                return text
+    return ""
+
+
+def _kotlin_binding_name(decl, source: bytes) -> str | None:
+    return next((_read_text(c, source) for c in decl.children if c.type in _KOTLIN_IDENTIFIERS), None)
+
+
+def _kotlin_variable_binding(decl, name: str, initializer, source: bytes) -> str | None:
+    """Type of `name` if this (multi-)variable declaration binds it ("" if untyped), else None."""
+    if decl.type == "variable_declaration" and _kotlin_binding_name(decl, source) == name:
+        return _kotlin_declared_type(decl, initializer, source)
+    if decl.type == "multi_variable_declaration" and any(
+        _kotlin_binding_name(v, source) == name for v in decl.children if v.type == "variable_declaration"
+    ):
+        return ""
+    return None
+
+
+def _kotlin_property_binding(prop, name: str, source: bytes) -> str | None:
+    named = [c for c in prop.children if c.is_named]
+    for i, child in enumerate(named):
+        initializer = named[i + 1] if i + 1 < len(named) else None
+        bound = _kotlin_variable_binding(child, name, initializer, source)
+        if bound is not None:
+            return bound
+    return None
+
+
+def _kotlin_receiver_type(call, name: str, source: bytes, *, this_field: bool = False) -> str | None:
+    """Declared type of receiver `name` at `call`, by Kotlin's lexical scoping.
+
+    "" means a binding in scope hides the name but gives no type, None that
+    nothing in this file binds it (an inherited or top-level property elsewhere).
+    """
+    node = call.parent
+    while node is not None:
+        t = node.type
+        if not this_field:
+            bound = None
+            if t in ("function_declaration", "anonymous_function", "secondary_constructor"):
+                for params in node.children:
+                    for param in params.children if params.type == "function_value_parameters" else ():
+                        if param.type == "parameter" and _kotlin_binding_name(param, source) == name:
+                            bound = _kotlin_declared_type(param, None, source)
+            elif t == "lambda_literal":
+                params = next((c for c in node.children if c.type == "lambda_parameters"), None)
+                if params is None:
+                    bound = "" if name == "it" else None
+                else:
+                    for decl in params.children:
+                        bound = _kotlin_variable_binding(decl, name, None, source) if bound is None else bound
+            elif t == "for_statement":
+                decl = next((c for c in node.children if c.is_named), None)
+                if decl is not None:
+                    bound = _kotlin_variable_binding(decl, name, None, source)
+            elif t == "catch_block":
+                if _kotlin_binding_name(node, source) == name:
+                    bound = ""
+            if bound is not None:
+                return bound
+            if t in ("block", "statements", "source_file", "lambda_literal"):
+                # The nearest earlier declaration in this block wins.
+                for stmt in node.children:
+                    if stmt.start_byte >= call.start_byte:
+                        break
+                    if stmt.type == "property_declaration":
+                        found = _kotlin_property_binding(stmt, name, source)
+                        bound = found if found is not None else bound
+                if bound is not None:
+                    return bound
+        if t == "class_body":
+            # Members are visible from every method, whatever their order.
+            for stmt in node.children:
+                if stmt.type == "property_declaration":
+                    bound = _kotlin_property_binding(stmt, name, source)
+                    if bound is not None:
+                        return bound
+        elif t == "class_declaration":
+            for ctor in node.children:
+                for params in ctor.children if ctor.type == "primary_constructor" else ():
+                    for param in params.children if params.type == "class_parameters" else ():
+                        # Only a `val`/`var` parameter is a property a method can read.
+                        if (param.type == "class_parameter"
+                                and any(c.type in ("val", "var") for c in param.children)
+                                and _kotlin_binding_name(param, source) == name):
+                            return _kotlin_declared_type(param, None, source)
+            if this_field:
+                return None
+        node = node.parent
+    return None
+
+
 def _first_parse_error_line(root) -> int:
     """1-based line of the first ERROR/MISSING node under ``root`` (#2551).
 
@@ -7494,6 +7975,58 @@ def _php_get_route_name(closure_node, src: bytes) -> str | None:
         
     return None
 
+# Thread-local cache of a built tree-sitter Parser per language module. Building
+# Language(lang_fn()) and Parser(language) is non-trivial and was repeated for
+# every file; a Parser is reusable across parse() calls, so one per language per
+# worker suffices. Thread-local, NOT a plain global/lru_cache: Parser.parse is not
+# thread-safe, and extraction can run multithreaded in one process (tests
+# monkeypatch ProcessPoolExecutor to ThreadPoolExecutor; production uses separate
+# worker processes, each single-threaded). Giving every thread its own Parser
+# keeps reuse safe in both. Keyed by (ts_module, ts_language_fn); the value is
+# (parser, None) on success or (None, error_message) so a failing grammar is not
+# retried per file.
+_parser_tls = threading.local()
+
+
+def _get_parser(ts_module: str, ts_language_fn: str):
+    cache = getattr(_parser_tls, "parsers", None)
+    if cache is None:
+        cache = {}
+        _parser_tls.parsers = cache
+    key = (ts_module, ts_language_fn)
+    entry = cache.get(key)
+    if entry is None:
+        entry = _build_parser(ts_module, ts_language_fn)
+        cache[key] = entry
+    return entry
+
+
+def _build_parser(ts_module: str, ts_language_fn: str):
+    try:
+        mod = importlib.import_module(ts_module)
+        from tree_sitter import Language, Parser
+        lang_fn = getattr(mod, ts_language_fn, None)
+        if lang_fn is None:
+            # Fallback for PHP: try "language_php" then "language"
+            lang_fn = getattr(mod, "language", None)
+        if lang_fn is None:
+            return None, f"No language function in {ts_module}"
+        language = Language(lang_fn())
+        return Parser(language), None
+    except ImportError:
+        return None, f"{ts_module} not installed"
+    except TypeError as e:
+        # tree-sitter version mismatch: old Language() expects (lib_path),
+        # new Language() expects (language_capsule, name). Surface a hint
+        # so users see the upgrade path instead of a bare TypeError.
+        return None, (
+            f"tree-sitter version mismatch for {ts_module}: {e}. "
+            "Try: pip install --upgrade tree-sitter tree-sitter-languages"
+        )
+    except Exception as e:
+        return None, str(e)
+
+
 def _extract_generic(
     path: Path, config: LanguageConfig, *, source_override: bytes | None = None,
     scan_root: Path | None = None,
@@ -7505,32 +8038,11 @@ def _extract_generic(
     still keying nodes/edges off ``path``. Lets container formats (e.g. Vue SFCs)
     mask the wrapper and parse just the embedded ``<script>``.
     """
-    try:
-        mod = importlib.import_module(config.ts_module)
-        from tree_sitter import Language, Parser
-        lang_fn = getattr(mod, config.ts_language_fn, None)
-        if lang_fn is None:
-            # Fallback for PHP: try "language_php" then "language"
-            lang_fn = getattr(mod, "language", None)
-        if lang_fn is None:
-            return {"nodes": [], "edges": [], "error": f"No language function in {config.ts_module}"}
-        language = Language(lang_fn())
-    except ImportError:
-        return {"nodes": [], "edges": [], "error": f"{config.ts_module} not installed"}
-    except TypeError as e:
-        # tree-sitter version mismatch: old Language() expects (lib_path),
-        # new Language() expects (language_capsule, name). Surface a hint
-        # so users see the upgrade path instead of a bare TypeError.
-        hint = (
-            f"tree-sitter version mismatch for {config.ts_module}: {e}. "
-            "Try: pip install --upgrade tree-sitter tree-sitter-languages"
-        )
-        return {"nodes": [], "edges": [], "error": hint}
-    except Exception as e:
-        return {"nodes": [], "edges": [], "error": str(e)}
+    parser, parser_error = _get_parser(config.ts_module, config.ts_language_fn)
+    if parser_error is not None:
+        return {"nodes": [], "edges": [], "error": parser_error}
 
     try:
-        parser = Parser(language)
         source = _read_source_bytes(path) if source_override is None else source_override
         if config.ts_module == "tree_sitter_cpp":
             # Persisted lookup offsets and call sites must share line-ending-independent bytes.
@@ -7565,6 +8077,10 @@ def _extract_generic(
     )
     python_receiver_shadowed = (
         _python_receiver_shadow_checker(root, source)
+        if config.ts_module == "tree_sitter_python" else None
+    )
+    python_param_shadowed = (
+        _python_param_shadow_checker(source)
         if config.ts_module == "tree_sitter_python" else None
     )
     python_module_instances = (
@@ -7718,10 +8234,17 @@ def _extract_generic(
     swift_member_groups: dict = {}
     # C++ class body -> member-function collision groups, filled lazily.
     cpp_member_groups: dict = {}
+    # Ruby class/module body -> method collision groups, filled lazily.
+    ruby_member_groups: dict = {}
+    # Scala type (with its companions) -> method collision groups, filled lazily.
+    scala_member_groups: dict = {}
 
     python_underscore_groups: dict[str, set[str]] = {}
     if config.ts_module == "tree_sitter_python":
         python_underscore_groups = _python_pre_scan_underscore_collisions(root, source, stem)
+    lua_field_groups: dict[str, set[str]] = {}
+    if config.ts_module == "tree_sitter_lua":
+        lua_field_groups = _lua_pre_scan_field_collisions(root, source, stem)
 
     def add_node(nid: str, label: str, line: int, *, node_type: str | None = None,
                  metadata: dict | None = None) -> None:
@@ -7766,6 +8289,24 @@ def _extract_generic(
         edges.append(edge)
 
     def ensure_named_node(name: str, line: int) -> str:
+        if isinstance(name, _CppStdName):
+            # A `std::`-qualified C++ type is the standard library's, not a name
+            # this file or the corpus declares: its own stub, which the rewire
+            # skips, so a project `seconds` never captures `std::chrono::seconds`
+            # (#5219). The label stays the tail.
+            std_nid = _make_id("std", str(name))
+            if std_nid not in seen_ids:
+                seen_ids.add(std_nid)
+                nodes.append({
+                    "id": std_nid,
+                    "label": str(name),
+                    "file_type": "code",
+                    "source_file": "",
+                    "source_location": "",
+                    "origin_file": str_path,
+                    "_cpp_std": True,
+                })
+            return std_nid
         declared = decl_registry.lookup(name)
         if declared is not None:
             return declared
@@ -8053,13 +8594,15 @@ def _extract_generic(
                     ):
                         metadata["ruby_lookup_unsafe"] = True
             if config.ts_module == "tree_sitter_python":
-                # Only a bare-name base becomes an `inherits` edge (below). A base
-                # the edge list cannot show (`mod.Base`, `Generic[T]`, a call) still
-                # sits in the MRO, so the cross-file inherited-method walk must not
-                # read this class's edges as its complete base list.
+                # Only a bare or parameterized name base (`Base`, `Base[T]`) becomes
+                # an `inherits` edge (below). A base the edge list cannot show
+                # (`mod.Base`, a call) still sits in the MRO, so the cross-file
+                # inherited-method walk must not read this class's edges as its
+                # complete base list.
                 _py_bases = node.child_by_field_name("superclasses")
                 if _py_bases is not None and any(
-                    c.is_named and c.type not in ("identifier", "keyword_argument", "comment")
+                    c.is_named and c.type not in ("keyword_argument", "comment")
+                    and _python_base_name_node(c) is None
                     for c in _py_bases.children
                 ):
                     metadata = dict(metadata or {})
@@ -8156,8 +8699,9 @@ def _extract_generic(
                 args = node.child_by_field_name("superclasses")
                 if args:
                     for arg in args.children:
-                        if arg.type == "identifier":
-                            base = _read_text(arg, source)
+                        base_node = _python_base_name_node(arg)
+                        if base_node is not None:
+                            base = _read_text(base_node, source)
                             base_nid = ensure_named_node(base, line)
                             add_edge(class_nid, base_nid, "inherits", line)
 
@@ -8408,10 +8952,26 @@ def _extract_generic(
                 # in another file, so defer resolution to the cross-file Ruby
                 # resolver (reusing the #1634 candidate logic and the #1640 module
                 # nodes as targets). Only bare/namespaced constant arguments count;
-                # `extend self`, `include some_var`, etc. are skipped.
+                # `extend self`, `include some_var`, etc. are skipped. A `class <<
+                # self` block is scanned too: an `include`/`prepend` there injects
+                # the module's methods as the class's own singleton (class) methods
+                # — the same relationship `extend <Mod>` expresses in the body — so
+                # it must mix in likewise. `class << other` opens a different
+                # object's singleton, not the enclosing class's, so only `self`
+                # counts.
                 _rb_body = _find_body(node, config)
                 if _rb_body is not None:
-                    for _stmt in _rb_body.children:
+                    _rb_mixin_stmts = list(_rb_body.children)
+                    for _sc in _rb_body.children:
+                        if _sc.type != "singleton_class":
+                            continue
+                        _sc_value = _sc.child_by_field_name("value")
+                        if _sc_value is None or _sc_value.type != "self":
+                            continue
+                        _sc_body = _sc.child_by_field_name("body")
+                        if _sc_body is not None:
+                            _rb_mixin_stmts.extend(_sc_body.children)
+                    for _stmt in _rb_mixin_stmts:
                         if _stmt.type != "call" or _stmt.child_by_field_name("receiver") is not None:
                             continue
                         _m = _stmt.child_by_field_name("method")
@@ -9179,6 +9739,18 @@ def _extract_generic(
                         static_fields = java_static_field_types.setdefault(parent_class_nid, {})
                         for field_name in field_names:
                             static_fields[field_name] = receiver_type
+                # Lombok @Getter (#5148): the getter is real at compile time,
+                # so it gets the node a hand-written one would, and its return
+                # type types a chain such as `Model.getInstance().work()`.
+                for getter in _java_lombok_getters(node, source):
+                    getter_nid = _make_id(parent_class_nid, getter)
+                    if any(n["id"] == getter_nid for n in nodes):
+                        continue
+                    getter_line = node.start_point[0] + 1
+                    add_node(getter_nid, f".{getter}()", getter_line,
+                             metadata={"arity": 0, "signature": "", "lombok": "Getter"})
+                    add_edge(parent_class_nid, getter_nid, "method", getter_line)
+                    java_return_types[getter_nid] = receiver_type
                 line = node.start_point[0] + 1
                 refs: list[tuple[str, str]] = []
                 _java_collect_type_refs(type_node, source, False, refs)
@@ -9699,6 +10271,17 @@ def _extract_generic(
                     func_nid = _cpp_member_nid(
                         parent_class_nid, node, sanitized_name, source, cpp_member_groups
                     )
+                elif (config.ts_module == "tree_sitter_ruby"
+                      and t in _RUBY_MEMBER_CALLABLE_TYPES):
+                    func_nid = _ruby_member_nid(
+                        parent_class_nid, node, sanitized_name, source, ruby_member_groups,
+                        config.sanitize_symbol_name_fn or (lambda n: n),
+                    )
+                elif (config.ts_module == "tree_sitter_scala"
+                      and t in _SCALA_MEMBER_CALLABLE_TYPES):
+                    func_nid = _scala_member_nid(
+                        parent_class_nid, node, sanitized_name, source, scala_member_groups
+                    )
                 ruby_method_metadata = None
                 if ruby_method_kind is not None:
                     kinds = ruby_method_kinds.setdefault(func_nid, set())
@@ -9750,6 +10333,13 @@ def _extract_generic(
                 if config.ts_module == "tree_sitter_python":
                     func_nid = _underscore_salted_nid(
                         func_nid, sanitized_name, python_underscore_groups
+                    )
+                elif lua_field_groups and func_nid in lua_field_groups:
+                    # `M._load` / `M.load`: the one public field keeps the plain
+                    # id, every other spelling is salted (#3302's rule).
+                    func_nid = _underscore_salted_nid(
+                        func_nid, _lua_field_name(sanitized_name), lua_field_groups,
+                        leaf=_lua_field_leaf,
                     )
                 if (config.ts_module == "tree_sitter_cpp" and "::" in func_name
                         and cpp_qualified_names.get(func_nid)
@@ -10556,6 +11146,25 @@ def _extract_generic(
                 walk(child, parent_class_nid=parent_class_nid)
             return
 
+        # Ruby `private def x` / `private_class_method def self.x` pass the
+        # definition as a call argument. It is still a member of the class
+        # body it sits in, so keep the class link for those arguments only.
+        if (config.ts_module == "tree_sitter_ruby" and t == "call"
+                and parent_class_nid
+                and node.child_by_field_name("receiver") is None):
+            args = node.child_by_field_name("arguments")
+            if args is not None and any(
+                    c.type in config.function_types for c in args.children):
+                for child in node.children:
+                    if child == args:
+                        for arg in args.children:
+                            walk(arg, parent_class_nid=(
+                                parent_class_nid
+                                if arg.type in config.function_types else None))
+                    else:
+                        walk(child, parent_class_nid=None)
+                return
+
         # Default: recurse
         for child in node.children:
             walk(child, parent_class_nid=None)
@@ -10750,6 +11359,24 @@ def _extract_generic(
                 method_owner, methods_by_owner, class_parent, csharp_interface_names,
             )
 
+    # Kotlin: this file's types by name and their methods, for `x.m()` on a typed receiver,
+    # and how many declarations share each callable name.
+    kotlin_types_by_label: dict[str, list[str]] = {}
+    kotlin_methods_by_owner: dict[tuple[str, str], str] = {}
+    kotlin_callable_counts: dict[str, int] = {}
+    if config.ts_module == "tree_sitter_kotlin":
+        kotlin_labels = {n["id"]: n["label"] for n in nodes}
+        for e in edges:
+            if e["relation"] == "method":
+                name = kotlin_labels.get(e["target"], "").strip("()").lstrip(".")
+                kotlin_methods_by_owner.setdefault((e["source"], name), e["target"])
+        for owner in {owner for owner, _ in kotlin_methods_by_owner}:
+            kotlin_types_by_label.setdefault(kotlin_labels.get(owner, ""), []).append(owner)
+        for n in nodes:
+            if n["label"].endswith("()"):
+                name = n["label"].strip("()").lstrip(".")
+                kotlin_callable_counts[name] = kotlin_callable_counts.get(name, 0) + 1
+
     def _fields_up_chain(tables: dict, class_nid) -> dict:
         if not class_nid:
             return {}
@@ -10867,6 +11494,45 @@ def _extract_generic(
             "weight": 1.0,
         })
 
+    python_lambda_bindings: dict[int, tuple[str, set[str]]] = {}
+
+    def _python_private_prefix(node) -> str:
+        # A nested class's bases and decorators still use the outer class's
+        # private names. A class supplies its own prefix inside its body.
+        while (parent := node.parent) is not None:
+            if parent.type == "class_definition" and node == parent.child_by_field_name("body"):
+                class_name = parent.child_by_field_name("name")
+                if class_name is None:
+                    return ""
+                name = normalize("NFKC", _read_text(class_name, source)).lstrip("_")
+                return f"_{name}" if name else ""
+            node = parent
+        return ""
+
+    def _python_binding_name(name: str, private_prefix: str) -> str:
+        name = normalize("NFKC", name)
+        if name.startswith("__") and not name.endswith("__"):
+            return private_prefix + name
+        return name
+
+    def _python_lambda_param_shadows(node, name: str) -> bool:
+        """Check lambda body bindings. Defaults cannot see that lambda's own parameters."""
+        while (parent := node.parent) is not None:
+            if parent.type in ("function_definition", "class_definition", "module"):
+                break
+            if parent.type == "lambda" and node == parent.child_by_field_name("body"):
+                if parent.id not in python_lambda_bindings:
+                    prefix = _python_private_prefix(parent)
+                    parameters = _python_param_names(parent.child_by_field_name("parameters"), source)
+                    python_lambda_bindings[parent.id] = (
+                        prefix, {_python_binding_name(param, prefix) for param in parameters},
+                    )
+                prefix, parameters = python_lambda_bindings[parent.id]
+                if _python_binding_name(name, prefix) in parameters:
+                    return True
+            node = parent
+        return False
+
     def _emit_indirect_ref(ident, scope_nid: str, enclosing_locals, context: str) -> None:
         """A function referenced BY NAME — passed as a call argument, or listed as a
         value in a dispatch table — is an indirect dependency of ``scope_nid``. Emit
@@ -10887,6 +11553,8 @@ def _extract_generic(
         # it shadows in every scope — no unique same-named definition elsewhere in
         # the corpus is what this identifier refers to.
         if ident_name in js_external_imports:
+            return
+        if config.ts_module == "tree_sitter_python" and _python_lambda_param_shadows(ident, ident_name):
             return
         _emit_indirect_by_name(ident_name, ident, scope_nid, context)
 
@@ -11101,6 +11769,9 @@ def _extract_generic(
             member_receiver: str | None = None
             kotlin_qualified_prefix: str | None = None
             kotlin_object_receiver: str | None = None
+            # Kotlin `x.m()` / `this.x.m()`: the receiver variable and its declared type.
+            kotlin_receiver: str | None = None
+            kotlin_receiver_type: str | None = None
             csharp_qualified_prefix: str | None = None
             csharp_receiver_chain: list[str] | None = None
             java_receiver_chain: list | None = None
@@ -11123,7 +11794,7 @@ def _extract_generic(
                             callee_name = _read_text(child, source)
                             break
                 # Swift: first child may be simple_identifier or navigation_expression
-                first = node.children[0] if node.children else None
+                first = _swift_operand_tail(node.children[0]) if node.children else None
                 if node.type != "macro_invocation" and first:
                     if first.type == "simple_identifier":
                         callee_name = _read_text(first, source)
@@ -11138,7 +11809,7 @@ def _extract_generic(
                                         callee_name = _read_text(sc, source)
                         # #1356: capture the receiver so the cross-file pass can
                         # resolve it through the file's type table.
-                        recv_node = first.children[0] if first.children else None
+                        recv_node = _swift_operand_tail(first.children[0]) if first.children else None
                         swift_receiver = _swift_receiver_name(recv_node, source)
                         if recv_node is not None and recv_node.type == "self_expression":
                             self_receiver = "self"
@@ -11151,6 +11822,11 @@ def _extract_generic(
                 # versions (including the JVM `io.github.bonede:tree-sitter-kotlin`
                 # binding) produce `simple_identifier`. Accept both.
                 first = node.children[0] if node.children else None
+                # The grammar parses `!isEmpty()` / `-bonus()` as
+                # `(!isEmpty)()`, putting the prefix operator in the callee
+                # slot. The call belongs to the operand.
+                while first is not None and first.type == "unary_expression":
+                    first = first.child_by_field_name("argument")
                 if first:
                     if first.type in ("simple_identifier", "identifier"):
                         callee_name = _read_text(first, source)
@@ -11190,6 +11866,19 @@ def _extract_generic(
                             and segments[0][:1].isupper()
                         ):
                             kotlin_object_receiver = segments[0]
+                        this_field = False
+                        if segments is not None and len(segments) == 2:
+                            kotlin_receiver = segments[0] if not segments[0][:1].isupper() else None
+                        else:
+                            head = next((c for c in first.children if c.is_named), None)
+                            parts = [c for c in head.children if c.is_named] if head is not None else []
+                            if (head is not None and head.type == "navigation_expression" and len(parts) == 2
+                                    and parts[0].type == "this_expression" and parts[1].type in _KOTLIN_IDENTIFIERS):
+                                kotlin_receiver, this_field = _read_text(parts[1], source), True
+                        if kotlin_receiver:
+                            kotlin_receiver_type = _kotlin_receiver_type(
+                                node, kotlin_receiver, source, this_field=this_field
+                            )
             elif config.ts_module == "tree_sitter_scala":
                 # Scala: first child
                 first = node.children[0] if node.children else None
@@ -11302,6 +11991,23 @@ def _extract_generic(
                                 if isinstance(root_type, str):
                                     csharp_receiver_chain = [
                                         root_type, _read_text(fname, source)
+                                    ]
+                                elif (
+                                    root_type is None
+                                    and csharp_table is not None
+                                    and not _csharp_receiver_is_declared(
+                                        csharp_table, _read_text(inner, source),
+                                        node.start_byte,
+                                    )
+                                ):
+                                    # `T.P.M()` / `T.P?.M()` (#5376): no local,
+                                    # parameter, field or property named `T` is in
+                                    # scope, so `T` names a type and `P` is a
+                                    # static member of it -- the singleton idiom
+                                    # `Audio.Instance.Click()`. The resolver types
+                                    # `P` from its declaration, like `x.F.M()`.
+                                    csharp_receiver_chain = [
+                                        _read_text(inner, source), _read_text(fname, source)
                                     ]
                         elif recv is not None and recv.type == "element_access_expression":
                             # xs[i].M() on a `T[]` / `List<T>`: an element is a T
@@ -11588,6 +12294,10 @@ def _extract_generic(
                 if func_node:
                     if func_node.type == "identifier":
                         callee_name = _read_text(func_node, source)
+                    elif config.ts_module == "tree_sitter_c" and func_node.type == "field_expression":
+                        # A C field callee is an indirect function-pointer call.
+                        # Its field name gives no evidence for a free function.
+                        callee_name = None
                     elif func_node.type in config.call_accessor_node_types:
                         is_member_call = True
                         if config.call_accessor_field:
@@ -11682,8 +12392,24 @@ def _extract_generic(
             # A known PHP $this receiver resolves against its owning class's methods.
             _builtin_member_call = is_member_call and callee_name in _LANGUAGE_BUILTIN_GLOBALS
             php_builtin_self_call = config.ts_module == "tree_sitter_php" and self_receiver == "this"
-            if callee_name and (
-                callee_name not in _LANGUAGE_BUILTIN_GLOBALS or _builtin_member_call
+            # A bare Python call through a parameter, own or captured, has an
+            # unknown target: neither the same-file nor the cross-file lookup
+            # may name one (#5418).
+            _python_param_call = (
+                python_param_shadowed is not None
+                and not is_member_call
+                and bool(callee_name)
+                and python_param_shadowed(node, callee_name)
+            )
+            if (
+                callee_name
+                and not _python_param_call
+                and (callee_name not in _LANGUAGE_BUILTIN_GLOBALS or _builtin_member_call)
+                and not (
+                    config.ts_module == "tree_sitter_python"
+                    and not is_member_call
+                    and _python_lambda_param_shadows(node, callee_name)
+                )
             ):
                 # Python member calls defer to receiver-based resolution unless the
                 # receiver is known to stay in the current class. Falling back to a
@@ -11716,6 +12442,12 @@ def _extract_generic(
                 )
                 _java_defer = (
                     config.ts_module == "tree_sitter_java" and is_member_call
+                )
+                # Kotlin `x.m()` names a method of x's type. Picking whichever `m`
+                # this file declares last bound `g.greet()` on a `Greeter` to one
+                # implementer's `greet`; resolve through the type instead.
+                _kotlin_member_defer = (
+                    config.ts_module == "tree_sitter_kotlin" and is_member_call and kotlin_receiver is not None
                 )
                 _swift_defer = (
                     config.ts_module == "tree_sitter_swift"
@@ -11784,7 +12516,7 @@ def _extract_generic(
                          or (cpp_binding is None and member_receiver in cpp_unknown_fields.get(
                              method_owner.get(caller_nid, ""), ())))
                 )
-                if _python_defer or _java_defer or _csharp_defer or _swift_defer or _js_member_defer or _cpp_member_defer or (_builtin_member_call and not php_builtin_self_call) or _lua_member_defer or is_scoped_call or (
+                if _python_defer or _java_defer or _csharp_defer or _kotlin_member_defer or _swift_defer or _js_member_defer or _cpp_member_defer or (_builtin_member_call and not php_builtin_self_call) or _lua_member_defer or is_scoped_call or (
                     is_member_call
                     and member_receiver
                     and (
@@ -11793,19 +12525,36 @@ def _extract_generic(
                     )
                 ):
                     tgt_nid = None
+                    if _kotlin_member_defer and not _builtin_member_call:
+                        if kotlin_receiver_type:
+                            owners = kotlin_types_by_label.get(kotlin_receiver_type, [])
+                            if len(owners) == 1:
+                                tgt_nid = kotlin_methods_by_owner.get((owners[0], callee_name))
+                        elif kotlin_callable_counts.get(callee_name) == 1:
+                            # Untyped receiver: the bare name, only when nothing else here shares it.
+                            tgt_nid = label_to_nid.get(callee_name)
                 else:
                     if config.ts_module in (
                         "tree_sitter_python", "tree_sitter_javascript", "tree_sitter_typescript",
                     ) and not is_member_call:
-                        curr_scope = caller_nid
                         tgt_nid = None
-                        while curr_scope:
-                            if curr_scope in lexical_nids_by_scope and callee_name in lexical_nids_by_scope[curr_scope]:
-                                tgt_nid = lexical_nids_by_scope[curr_scope][callee_name]
-                                break
-                            curr_scope = scope_parents.get(curr_scope)
-                        if not tgt_nid:
-                            tgt_nid = label_to_nid.get(callee_name)
+                        # A function-local import shadows a same-named
+                        # module-level function/class for the rest of this
+                        # call's own lexical scope; neither the lexical-scope
+                        # walk below nor the file-wide label fallback may
+                        # name a target for it (#5421).
+                        if not (
+                            config.ts_module == "tree_sitter_python"
+                            and _python_call_shadowed_by_local_import(node, callee_name, source)
+                        ):
+                            curr_scope = caller_nid
+                            while curr_scope:
+                                if curr_scope in lexical_nids_by_scope and callee_name in lexical_nids_by_scope[curr_scope]:
+                                    tgt_nid = lexical_nids_by_scope[curr_scope][callee_name]
+                                    break
+                                curr_scope = scope_parents.get(curr_scope)
+                            if not tgt_nid:
+                                tgt_nid = label_to_nid.get(callee_name)
                         # A class-body call (`x = f()` beside `def f`) may still
                         # name the class's own method; a method body may not.
                         if (
@@ -11920,7 +12669,22 @@ def _extract_generic(
                         and not is_member_call
                         and callee_name in (local_bound_names.get(caller_nid, frozenset()) | extra_locals)
                     )
-                    if not is_py_local_data:
+                    # Shadowed by a function-local import, with a same-named
+                    # definition elsewhere in this very file: that same-file
+                    # twin cannot be the target, but nothing here knows the
+                    # import's own, so the call is dropped rather than risk
+                    # the global cross-file pass falling back to the twin's
+                    # label by coincidence (#5421). A callee with no same-file
+                    # twin has nothing to wrongly fall back to, so it is left
+                    # to resolve normally (including through a nearer import
+                    # that does name a real cross-file target, #5418).
+                    is_py_import_shadowed = (
+                        config.ts_module == "tree_sitter_python"
+                        and not is_member_call
+                        and callee_name in label_to_nid
+                        and _python_call_shadowed_by_local_import(node, callee_name, source)
+                    )
+                    if not is_py_local_data and not is_py_import_shadowed:
                         # Callee not in this file — save for cross-file resolution in extract()
                         rc_entry = {
                             "caller_nid": caller_nid,
@@ -12038,7 +12802,29 @@ def _extract_generic(
                             receiver_type = _csharp_scoped_receiver_type(
                                 receiver_types, member_receiver, node.start_byte
                             )
-                            if isinstance(receiver_type, list):
+                            if isinstance(receiver_type, list) and receiver_type[0] == "member":
+                                # `var a = T.P; a.M()` (#5376): `a` has P's declared
+                                # type, resolved cross-file like `T.P.M()`. T is a
+                                # typed value here, else a type name when nothing
+                                # named T is in scope.
+                                _, recv, member, _unused = receiver_type
+                                csharp_scope = (
+                                    receiver_types if isinstance(receiver_types, tuple) else None
+                                )
+                                recv_t = _csharp_scoped_receiver_type(
+                                    csharp_scope, recv, node.start_byte
+                                )
+                                if isinstance(recv_t, str):
+                                    rc_entry["receiver_var_chain"] = [recv_t, member]
+                                elif (
+                                    recv_t is None
+                                    and csharp_scope is not None
+                                    and not _csharp_receiver_is_declared(
+                                        csharp_scope, recv, node.start_byte
+                                    )
+                                ):
+                                    rc_entry["receiver_var_chain"] = [recv, member]
+                            elif isinstance(receiver_type, list):
                                 # `var v = R.M<A>(); v.X()` (#4266): R is typed
                                 # here, M's return type in the cross-file pass.
                                 _, recv, method, targs = receiver_type
@@ -12104,6 +12890,9 @@ def _extract_generic(
                         if kotlin_object_receiver:
                             rc_entry["lang"] = "kotlin"
                             rc_entry["kotlin_object_receiver"] = kotlin_object_receiver
+                        if kotlin_receiver_type:
+                            rc_entry["lang"] = "kotlin"
+                            rc_entry["kotlin_receiver_type"] = kotlin_receiver_type
                         raw_calls.append(rc_entry)
 
             # Indirect dispatch: a function passed BY NAME as a call argument

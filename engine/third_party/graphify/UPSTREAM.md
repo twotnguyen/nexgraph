@@ -3,16 +3,16 @@
 | | |
 |---|---|
 | Nguồn | https://github.com/Graphify-Labs/graphify |
-| Commit | `c60eea01cf87dcfb33787808cd534cc7afc5ffff` (1 commit sau tag `v0.9.112`, chỉ nâng phụ thuộc) |
-| Phiên bản | 0.9.112 |
-| Ngày commit | 2026-11-18 |
+| Commit | `16127eb30892f997d758efdd894e5e04264edbbb` (tag `v0.9.120`) |
+| Phiên bản | 0.9.120 — **đóng băng đến hết bảo vệ đồ án (ADR 0026)** |
+| Ngày commit | 2026-11-25 |
 | Giấy phép | Apache-2.0 (`LICENSE`); phần đóng góp trước 2026-07-22 còn theo MIT (`LICENSE-MIT`); xem `NOTICE` |
-| Trạng thái khi nhập | Chép từ bản clone nghiên cứu `~/Documents/CODE/nexgraph/graphify` ngày 2026-11-20 (W1, ADR 0018). Trước đó: `86c57be`, 0.9.92, nhập 2026-10-27 |
+| Trạng thái khi nhập | Chép thư mục `graphify/` và `tests/` từ tag `v0.9.120` ngày 2026-11-26 (ADR 0026). Trước đó: `c60eea0` (0.9.112, nhập 2026-11-20, W1, ADR 0018); `86c57be` (0.9.92, nhập 2026-10-27) |
 | File đã sửa | `graphify/extract.py`: dòng `AST cache:` in ra stderr thay vì stdout (stdout của engine là kênh giao thức) |
 
 Mã nằm ở `engine/src/graphify/` (chép nguyên thư mục `graphify/` của upstream, bỏ `__pycache__`). Test gốc nằm ở `tests/` bên cạnh file này, chép nguyên thư mục `tests/` của upstream.
 
-**Không đồng bộ upstream.** Upstream đổi rất nhanh; theo upstream sẽ phá kế hoạch (ADR 0001).
+**Không đồng bộ upstream.** Upstream đổi rất nhanh; theo upstream sẽ phá kế hoạch (ADR 0001). Từ ADR 0026 bản này **đóng băng** ở 0.9.120: chỉ backport bản vá bảo mật (GitHub Security Advisories của repo upstream), mỗi tệp backport đánh dấu như mục dưới và ghi vào bảng trên.
 
 ## Quy ước khi sửa
 
