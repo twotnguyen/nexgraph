@@ -49,6 +49,8 @@ const api: NexGraphApi = {
   file: { pickOpen: (projectId) => call('file:pick-open', projectId) },
   window: { openNew: () => call('window:open-new') },
   menu: { onAction: (cb) => subscribe<AppMenuAction>('app-menu:action', cb), setLocale: (locale) => call('app-menu:set-locale', locale) },
+  licenses: { read: () => call('licenses:read') },
+  app: { version: () => call('app:version') },
   index: {
     scan: (projectId) => call('index:scan', projectId),
     start: (projectId, opts) => call('index:start', projectId, opts),

@@ -181,7 +181,7 @@ describe('WorkspaceScreen', () => {
     installNexgraph({ mcp: { plan } })
     render(<WorkspaceScreen project={project()} />)
     await userEvent.click(screen.getByRole('button', { name: 'Thêm thao tác' }))
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Kết nối OpenCode' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Kết nối Nex' }))
     expect(plan).toHaveBeenCalledWith('opencode', 'p1', undefined)
     expect(within(screen.getByRole('dialog')).getByRole('combobox', { name: 'Trợ lý' })).toHaveValue('opencode')
   })

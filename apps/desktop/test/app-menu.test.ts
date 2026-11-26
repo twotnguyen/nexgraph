@@ -90,6 +90,17 @@ describe('template menu hệ thống', () => {
     expect(send).toHaveBeenCalledWith('window.new')
   })
 
+  it('Help có mục Giấy phép mã nguồn mở gửi licenses.open (LIC-2)', () => {
+    const send = vi.fn()
+    const help = menu(build({ send }), 'Trợ giúp')
+    const item = (help.submenu ?? []).find((entry) => entry.label === 'Giấy phép mã nguồn mở')
+    expect(item).toBeTruthy()
+    item!.click!({} as never, undefined as never, undefined as never)
+    expect(send).toHaveBeenCalledWith('licenses.open')
+    const english = menu(build({ locale: 'en' }), 'Help')
+    expect((english.submenu ?? []).some((entry) => entry.label === 'Open Source Licenses')).toBe(true)
+  })
+
   it('setAppMenuLocale chỉ nhận vi/en và dựng lại menu, đúng cả macOS và Windows', () => {
     const getWindow = () => null
     const current = (): Item[] => (h.appMenu as { template: Item[] }).template

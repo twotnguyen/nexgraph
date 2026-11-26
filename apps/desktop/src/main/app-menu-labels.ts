@@ -34,7 +34,7 @@ type Labels = {
     reload: string; toggleDevTools: string; actualSize: string; zoomIn: string; zoomOut: string; fullScreen: string
   }
   window: { minimize: string; zoom: string; close: string; front: string }
-  help: { about: string }
+  help: { about: string; licenses: string }
 }
 
 const VI: Labels = {
@@ -114,7 +114,7 @@ const VI: Labels = {
     fullScreen: 'Bật/tắt toàn màn hình'
   },
   window: { minimize: 'Thu nhỏ', zoom: 'Phóng to cửa sổ', close: 'Đóng cửa sổ', front: 'Đưa tất cả lên trước' },
-  help: { about: 'Giới thiệu NexGraph' }
+  help: { about: 'Giới thiệu NexGraph', licenses: 'Giấy phép mã nguồn mở' }
 }
 
 const EN: Labels = {
@@ -194,7 +194,7 @@ const EN: Labels = {
     fullScreen: 'Toggle Full Screen'
   },
   window: { minimize: 'Minimize', zoom: 'Zoom', close: 'Close Window', front: 'Bring All to Front' },
-  help: { about: 'About NexGraph' }
+  help: { about: 'About NexGraph', licenses: 'Open Source Licenses' }
 }
 
 export const menuLabels: Record<MenuLocale, Labels> = { vi: VI, en: EN }
