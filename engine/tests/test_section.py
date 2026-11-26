@@ -3,13 +3,13 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.errors import ApiError
+from nexgraph_engine.core.errors import ApiError
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
-from nexgraph_engine.query.contracts import read_code
-from nexgraph_engine.query.section import section_json
-from nexgraph_engine.query.source_policy import SourcePolicy
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.analysis.query.contracts import read_code
+from nexgraph_engine.analysis.query.section import section_json
+from nexgraph_engine.analysis.query.source_policy import SourcePolicy
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 SECRET = "sk-abcdefghijklmnopqrstuvwx1234"
 GUIDE = f"""# Intro

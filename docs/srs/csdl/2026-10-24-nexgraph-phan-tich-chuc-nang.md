@@ -1,6 +1,6 @@
 # NexGraph — Phân tích chức năng và hồ sơ UML (bản nháp cho báo cáo tuần 2)
 
-> **Cập nhật 2026-11-24:** tài liệu này mô tả lược đồ lúc thiết kế (Sprint 2, 24/10/2026). Mã hiện ở lược đồ đồ thị **v8**, CSDL app **v3**, CSDL graph chung **v1** (`engine/src/nexgraph_engine/schema/db.py:8-10`); SQL thiết kế đã cập nhật theo ở `design/database/`.
+> **Cập nhật 2026-11-24:** tài liệu này mô tả lược đồ lúc thiết kế (Sprint 2, 24/10/2026). Mã hiện ở lược đồ đồ thị **v8**, CSDL app **v3**, CSDL graph chung **v1** (`engine/src/nexgraph_engine/core/schema/db.py:8-10`); SQL thiết kế đã cập nhật theo ở `design/database/`.
 
 > Bản nháp chờ người dùng duyệt. Cập nhật 2026-10-24. Nền: spec (§3.1 use case, §4 tính năng, §5 kiến trúc), báo cáo tuần 1 (Bảng 2.2, 2.3), hợp đồng API engine v1 trong `plans/2026-10-18-nexgraph-roadmap.md`, CSDL trong `2026-10-24-nexgraph-csdl-*.md`.
 > Tên lớp, thành phần ở §3 (sơ đồ lớp thiết kế) là **đề xuất mức thiết kế**; spec giao việc chốt tên chính xác cho người cài đặt.

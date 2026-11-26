@@ -2,7 +2,7 @@ import sqlite3
 
 from fastapi.testclient import TestClient
 
-from nexgraph_engine.schema.db import GRAPH_SCHEMA_VERSION
+from nexgraph_engine.core.schema.db import GRAPH_SCHEMA_VERSION
 
 TOKEN = "t" * 40
 INTERNAL_ERROR_MESSAGE = "Lỗi nội bộ engine. Xem log để biết chi tiết."
@@ -86,9 +86,9 @@ def test_graph_error_maps_oserror_only_for_graph_db():
     """MIN-48: OSError ở bất kỳ route nào từng bị dán nhãn `graph_readonly`; chỉ lỗi trên graph.db mới đúng."""
     import errno
 
-    from nexgraph_engine.api.errors import graph_error
-    from nexgraph_engine.schema.db import SchemaOutdatedError
-    from nexgraph_engine.store.publication import GraphWriteBusy
+    from nexgraph_engine.interfaces.api.errors import graph_error
+    from nexgraph_engine.core.schema.db import SchemaOutdatedError
+    from nexgraph_engine.storage.store.publication import GraphWriteBusy
 
     def code_of(exc: BaseException) -> str | None:
         mapped = graph_error(exc)
@@ -108,7 +108,7 @@ def test_graph_error_maps_oserror_only_for_graph_db():
 
 def test_graph_unavailable_code_for_unopenable_database():
     """MIN-48: 'unable to open database file' là thiếu tệp/đường dẫn, không phải 'tệp chỉ đọc'."""
-    from nexgraph_engine.api.errors import graph_error
+    from nexgraph_engine.interfaces.api.errors import graph_error
 
     mapped = graph_error(sqlite3.OperationalError("unable to open database file"))
     assert mapped is not None

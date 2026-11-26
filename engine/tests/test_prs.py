@@ -5,9 +5,9 @@ import sys
 import pytest
 
 import gh_fake
-from nexgraph_engine.prs import gh
-from nexgraph_engine.prs.diff import parse_unified_diff, to_changeset
-from nexgraph_engine.prs.listing import gh_status, list_prs_json, triage_json, triage_prompt
+from nexgraph_engine.analysis.prs import gh
+from nexgraph_engine.analysis.prs.diff import parse_unified_diff, to_changeset
+from nexgraph_engine.analysis.prs.listing import gh_status, list_prs_json, triage_json, triage_prompt
 
 
 @pytest.fixture
@@ -182,7 +182,7 @@ def test_gh_error_redacts_tokens(tmp_path, monkeypatch):
 def test_hub_project_conflicts_are_same_file_only_and_capped(tmp_path, index_project, monkeypatch):
     """60 PR trên 40 module cùng gọi một hàm hub: chỉ cặp cùng tệp là xung đột, danh sách bị giới hạn."""
     import json
-    from nexgraph_engine.prs import listing
+    from nexgraph_engine.analysis.prs import listing
     root = tmp_path / "hub"
     root.mkdir()
     (root / "core.py").write_text("def log(x):\n    return x\n")

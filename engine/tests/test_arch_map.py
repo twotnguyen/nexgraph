@@ -1,9 +1,9 @@
 import pytest
 
-from nexgraph_engine.arch import map as map_mod
-from nexgraph_engine.arch.builder import UnknownBlock
-from nexgraph_engine.arch.evidence import evidence_between
-from nexgraph_engine.arch.map import build_map
+from nexgraph_engine.analysis.arch import map as map_mod
+from nexgraph_engine.analysis.arch.builder import UnknownBlock
+from nexgraph_engine.analysis.arch.evidence import evidence_between
+from nexgraph_engine.analysis.arch.map import build_map
 
 SPEC = {
     "app/main.py": ["core.db", "core.auth.login", "web.views"],

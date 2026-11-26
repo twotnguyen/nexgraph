@@ -13,19 +13,19 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from nexgraph_engine.arch.communities import detect_communities
-from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
-from nexgraph_engine.index.tested_by import derive_tested_by
-from nexgraph_engine.flows.build import flows_before, rebuild_flows, update_flows
-from nexgraph_engine.index.discovery import DiscoveredFile, discover, sha256_file
-from nexgraph_engine.index.discovery import SOURCES_PREFIX, is_batch_language
-from nexgraph_engine.index.source_state import RACY_SECONDS, _git_head
+from nexgraph_engine.analysis.arch.communities import detect_communities
+from nexgraph_engine.core.ids import REPOSITORY_ID, directory_node_id, file_node_id
+from nexgraph_engine.indexing.index.tested_by import derive_tested_by
+from nexgraph_engine.analysis.flows.build import flows_before, rebuild_flows, update_flows
+from nexgraph_engine.indexing.index.discovery import DiscoveredFile, discover, sha256_file
+from nexgraph_engine.indexing.index.discovery import SOURCES_PREFIX, is_batch_language
+from nexgraph_engine.indexing.index.source_state import RACY_SECONDS, _git_head
 from nexgraph_engine.pipeline.legacy_indexer import ExtractedFile, add_batch_calls, extract_file
-from nexgraph_engine.index.resolver import TYPE_KINDS, _package_name, resolve_references
-from nexgraph_engine.index.source_state import real_file_records
-from nexgraph_engine.schema.enums import EdgeType, NodeKind
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Edge, Node
+from nexgraph_engine.indexing.index.resolver import TYPE_KINDS, _package_name, resolve_references
+from nexgraph_engine.indexing.index.source_state import real_file_records
+from nexgraph_engine.core.schema.enums import EdgeType, NodeKind
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.models import Edge, Node
 
 _RESOLVABLE_KINDS = [k.value for k in (*TYPE_KINDS, NodeKind.FUNCTION)]
 logger = logging.getLogger(__name__)

@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 FILES = {
     "app/__init__.py": "",

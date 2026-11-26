@@ -8,12 +8,12 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import pytest
 
-from nexgraph_engine.changes.model import ChangeSet, FileChange
-from nexgraph_engine.graphify_import import changed_files_from_manifest, import_graph_json, replace_files
-from nexgraph_engine.impact import analyze as impact
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.search import search
+from nexgraph_engine.analysis.changes.model import ChangeSet, FileChange
+from nexgraph_engine.indexing.graphify_import import changed_files_from_manifest, import_graph_json, replace_files
+from nexgraph_engine.analysis.impact import analyze as impact
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.search import search
 
 FIXTURES = Path(__file__).parent / "fixtures"
 APP = FIXTURES / "graphify_import_app"
@@ -225,8 +225,8 @@ def test_replace_files_syncs_communities_on_new_symbol(tmp_path):
 
 def test_sync_communities_keeps_label_on_noop_incremental(tmp_path):
     """QA vòng 2.2 (repro của QA): tên đã đặt không mất khi nạp tăng dần không đổi đồ thị."""
-    from nexgraph_engine.mcp.server import community_json
-    from nexgraph_engine.semantic.ingest import write_labels
+    from nexgraph_engine.interfaces.mcp.server import community_json
+    from nexgraph_engine.analysis.semantic.ingest import write_labels
 
     root = make_project(tmp_path)
     store, conn = open_store(tmp_path)
@@ -243,8 +243,8 @@ def test_sync_communities_keeps_label_on_noop_incremental(tmp_path):
 
 def test_sync_communities_carries_label_when_regrouped(tmp_path):
     """Tập thành viên đổi (thêm farewell) nhưng Jaccard ≥ 0.8 với đúng một cộng đồng cũ → giữ tên."""
-    from nexgraph_engine.mcp.server import community_json
-    from nexgraph_engine.semantic.ingest import write_labels
+    from nexgraph_engine.interfaces.mcp.server import community_json
+    from nexgraph_engine.analysis.semantic.ingest import write_labels
 
     root = make_project(tmp_path)
     store, conn = open_store(tmp_path)
@@ -282,8 +282,8 @@ def _members(conn) -> set[str]:
 
 def _label_community_1(store, conn, name: str) -> None:
     """Đặt nhãn AI/người dùng đúng như pipeline: `write_labels` ghi `nhan_cum` + `khoi_kien_truc.ten`."""
-    from nexgraph_engine.semantic.chunks import membership_signature
-    from nexgraph_engine.semantic.ingest import write_labels
+    from nexgraph_engine.analysis.semantic.chunks import membership_signature
+    from nexgraph_engine.analysis.semantic.ingest import write_labels
 
     group = next(c for c in store.communities() if c["id"] == 1)
     assert write_labels(store, {"1": [1, membership_signature(group["files"])]}, {"1": name}) == {1: name}
@@ -304,7 +304,7 @@ def _reload(store, root: Path, graph: Path, mode: str, changed: list[str]) -> No
 ])
 def test_label_decision_uses_membership_from_before_the_import(tmp_path, mode, kept, jaccard, expected):
     """QA vòng 3.2 (repro rv67c-members): xoá thành viên rồi nạp lại — so với tập TRƯỚC lần nạp."""
-    from nexgraph_engine.mcp.server import community_json
+    from nexgraph_engine.interfaces.mcp.server import community_json
 
     root = tmp_path / "Đồ án" / "du-an"
     graph = _vendor_community(root, {"app.py": 5}, "Vendor A")
@@ -329,7 +329,7 @@ def test_label_decision_uses_membership_from_before_the_import(tmp_path, mode, k
 @pytest.mark.parametrize("mode", ["incremental", "full"])
 def test_label_survives_noop_reload_when_enrich_changed_node_kind(tmp_path, mode):
     """Enrich đổi `a_run#function` → `a_run#method`: thành viên so theo nút vendor, không theo `#kind`."""
-    from nexgraph_engine.mcp.server import community_json
+    from nexgraph_engine.interfaces.mcp.server import community_json
 
     root = tmp_path / "du-an"
     (root / ".nexgraph").mkdir(parents=True)
@@ -353,7 +353,7 @@ def test_label_survives_noop_reload_when_enrich_changed_node_kind(tmp_path, mode
 
 def test_label_decision_counts_members_of_removed_files(tmp_path):
     """Gỡ hẳn một tệp (nhánh `remove_file`) cũng bị tính vào thành viên đã mất: 5 → 1 = Jaccard 0,2."""
-    from nexgraph_engine.mcp.server import community_json
+    from nexgraph_engine.interfaces.mcp.server import community_json
 
     root = tmp_path / "du-an"
     graph = _vendor_community(root, {"app.py": 1, "old.py": 4}, "Vendor A")
@@ -371,7 +371,7 @@ def test_label_decision_counts_members_of_removed_files(tmp_path):
 
 
 def _community_1_shown(store) -> dict:
-    from nexgraph_engine.mcp.server import community_json
+    from nexgraph_engine.interfaces.mcp.server import community_json
 
     return community_json(store, "com:1", 20)["community"]
 
@@ -503,8 +503,8 @@ def test_rejects_paths_outside_root_before_io(tmp_path):
 
 def test_file_records_and_enrich_skip_outside_root(tmp_path, monkeypatch):
     """Cùng một bước xác thực cho hash (file_records) và span (enrich): không I/O trước khi chặn."""
-    from nexgraph_engine.graphify_import import enrich as enrich_module
-    from nexgraph_engine.graphify_import.importer import file_records
+    from nexgraph_engine.indexing.graphify_import import enrich as enrich_module
+    from nexgraph_engine.indexing.graphify_import.importer import file_records
 
     root = make_project(tmp_path)
     outside = tmp_path / "ngoai.py"
@@ -527,8 +527,10 @@ def test_file_records_and_enrich_skip_outside_root(tmp_path, monkeypatch):
 
 def test_windows_absolute_and_unc_paths_pure():
     """QA vòng 2.1: nhận dạng/đổi đường Windows bằng hàm thuần (chạy được trên macOS)."""
-    from nexgraph_engine.graphify_import.paths import (
-        is_absolute_source, relative_posix_in_root, windows_relative_source,
+    from nexgraph_engine.indexing.graphify_import.paths import (
+        is_absolute_source,
+        relative_posix_in_root,
+        windows_relative_source,
     )
 
     assert is_absolute_source(r"C:\proj\app.py")
@@ -562,7 +564,7 @@ def test_absolute_recognition_ignores_host_path_flavour(monkeypatch, host_path):
     `Path` của Windows (WindowsPath) không coi `/etc/passwd` là tuyệt đối còn Path của POSIX thì
     có; mô phỏng từng kiểu host bằng lớp Pure tương ứng để cùng một kết quả được kiểm trên mọi OS.
     """
-    from nexgraph_engine.graphify_import import paths
+    from nexgraph_engine.indexing.graphify_import import paths
 
     monkeypatch.setattr(paths, "Path", host_path)
     for text in ABSOLUTE_SOURCES:
@@ -573,7 +575,7 @@ def test_absolute_recognition_ignores_host_path_flavour(monkeypatch, host_path):
 
 def test_host_absolute_accepts_only_the_native_syntax():
     """Dạng đường của nền tảng kia không xác thực được realpath → không phải đường tuyệt đối "của host"."""
-    from nexgraph_engine.graphify_import.paths import is_host_absolute
+    from nexgraph_engine.indexing.graphify_import.paths import is_host_absolute
 
     for text in ("/etc/passwd", "/Users/dev/proj/app.py"):
         assert is_host_absolute(text, windows=False) and not is_host_absolute(text, windows=True), text
@@ -663,7 +665,7 @@ def test_overlong_source_file_is_rejected_not_fatal(tmp_path):
 
 def test_cli_import_graph(tmp_path, capsys):
     """NG-IMP-4: lệnh nội bộ `nexgraph-engine import-graph --project <root>`."""
-    from nexgraph_engine.cli import main
+    from nexgraph_engine.interfaces.cli import main
 
     root = make_project(tmp_path)
     assert main(["import-graph", "--project", str(root)]) == 0
@@ -679,7 +681,7 @@ def test_cli_import_graph(tmp_path, capsys):
 
 
 def test_cli_import_graph_custom_json_and_missing(tmp_path, capsys):
-    from nexgraph_engine.cli import main
+    from nexgraph_engine.interfaces.cli import main
 
     root = tmp_path / "trong"
     root.mkdir()

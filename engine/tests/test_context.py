@@ -1,6 +1,6 @@
 import pytest
 
-from nexgraph_engine.query.context import build_context, rrf
+from nexgraph_engine.analysis.query.context import build_context, rrf
 
 
 def test_rrf_scores_and_reasons():

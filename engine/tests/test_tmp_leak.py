@@ -5,7 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from nexgraph_engine.api.services import Services
+from nexgraph_engine.interfaces.api.services import Services
 
 
 def test_test_tmp_is_inside_pytest_basetemp(tmp_path_factory):

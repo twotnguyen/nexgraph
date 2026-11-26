@@ -7,7 +7,7 @@ import pytest
 
 from nexgraph_engine.pipeline import legacy_refresh as refresh_mod
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.schema.enums import EdgeType
+from nexgraph_engine.core.schema.enums import EdgeType
 
 
 def graph_state(store) -> dict:
@@ -168,8 +168,8 @@ def test_racy_edit_same_second_same_size(tmp_path, index_project):
 
 def test_respects_subdir_scope(copy_fixture, tmp_path):
     from nexgraph_engine.pipeline.legacy_indexer import Indexer
-    from nexgraph_engine.schema.db import open_graph_db
-    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.core.schema.db import open_graph_db
+    from nexgraph_engine.storage.store.graph_store import GraphStore
 
     root = copy_fixture("bookstore_app")
     conn = open_graph_db(tmp_path / "scoped.db")
@@ -227,7 +227,7 @@ def test_unicode_names_and_directory_cleanup(project):
 
 
 def test_fts_follows_edits(project):
-    from nexgraph_engine.store.search import search
+    from nexgraph_engine.storage.store.search import search
 
     store, root = project
     assert search(store.conn, "login")
@@ -266,7 +266,7 @@ FLOW_EDITS = [
 
 @pytest.mark.parametrize("max_flows", [2000, 2, 1])  # 2 và 1: bảng luồng đầy, ứng viên bị cắt không được lưu
 def test_flows_after_each_refresh_equal_a_full_rebuild(copy_fixture, index_project, monkeypatch, max_flows):
-    from nexgraph_engine.flows import build
+    from nexgraph_engine.analysis.flows import build
     monkeypatch.setattr(build, "MAX_FLOWS", max_flows)
     errors: list[Exception] = []
     real = refresh_mod.update_flows
@@ -318,7 +318,7 @@ def test_refresh_rebuilds_flows_when_update_fails(project, index_project, monkey
 
 
 def test_small_edit_updates_flows_without_a_full_rebuild(copy_fixture, index_project, monkeypatch):
-    from nexgraph_engine.flows import build
+    from nexgraph_engine.analysis.flows import build
     root = copy_fixture("flow_app")
     store, _, _ = index_project(root)
     kept = dict(store.conn.execute("SELECT ten, ma_luong FROM luong"))
@@ -333,7 +333,7 @@ def test_small_edit_updates_flows_without_a_full_rebuild(copy_fixture, index_pro
 
 def _capped_project(tmp_path, index_project, monkeypatch):
     """Ba điểm vào ở ba tệp; MAX_FLOWS = 2 nên z_entry (điểm thấp nhất) là ứng viên bị cắt, không được lưu."""
-    from nexgraph_engine.flows import build
+    from nexgraph_engine.analysis.flows import build
     monkeypatch.setattr(build, "MAX_FLOWS", 2)
     write(tmp_path, "lib.py", "def leaf():\n    return 1\n\n\ndef mid():\n    return leaf()\n")
     write(tmp_path, "lib2.py", "def leaf2():\n    return 1\n")
@@ -354,7 +354,7 @@ def test_capped_flows_stored_flow_falling_below_an_unstored_candidate(tmp_path, 
 
 
 def test_capped_flows_unstored_candidate_rising_through_a_changed_callee(tmp_path, index_project, monkeypatch):
-    from nexgraph_engine.flows import build
+    from nexgraph_engine.analysis.flows import build
     store = _capped_project(tmp_path, index_project, monkeypatch)
     monkeypatch.setattr(build, "rebuild_flows", lambda *a, **k: pytest.fail("phải cập nhật cục bộ được"))
     write(tmp_path, "lib2.py", "def leaf2():\n    return l2()\n\n\ndef l2():\n    return l3()\n\n\ndef l3():\n    return 1\n")

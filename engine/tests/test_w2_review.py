@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 
 from nexgraph_engine.pipeline.legacy_indexer import Indexer, index_workers
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 POLYGLOT = Path(__file__).parent / "fixtures" / "polyglot"
 
@@ -42,7 +42,7 @@ def test_heritage_outside_type_body_is_kept(tmp_path):
 
 
 def test_enum_members_are_qualified_by_parent(tmp_path):
-    from nexgraph_engine.index.generic import extract_generic
+    from nexgraph_engine.indexing.index.generic import extract_generic
     (tmp_path / "e.rs").write_text("enum Status { Ok, Fail }\nenum Outcome { Ok }\n")
     ids = {n.id for n in extract_generic(tmp_path, "e.rs", "rust", is_test=False).nodes}
     assert not any("@" in i for i in ids), ids
@@ -55,7 +55,7 @@ def test_requested_workers_respect_media_and_small_projects():
 
 
 def test_refresh_skips_batch_when_no_generic_file_changed(tmp_path, monkeypatch):
-    from nexgraph_engine.index import batch_calls
+    from nexgraph_engine.indexing.index import batch_calls
     from nexgraph_engine.pipeline.legacy_refresh import refresh_project
     root = tmp_path / "p"
     shutil.copytree(POLYGLOT / "rust", root)
@@ -75,6 +75,6 @@ def test_refresh_skips_batch_when_no_generic_file_changed(tmp_path, monkeypatch)
 
 
 def test_config_files_are_not_relevant_changes():
-    from nexgraph_engine.changes.gitdiff import _relevant
+    from nexgraph_engine.analysis.changes.gitdiff import _relevant
     assert not _relevant("pubspec.yaml") and not _relevant("package.json") and not _relevant(".github/workflows/ci.yml")
     assert _relevant("lib/a.dart") and _relevant("src/a.rs")

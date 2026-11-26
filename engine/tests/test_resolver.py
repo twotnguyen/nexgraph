@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from nexgraph_engine.schema.enums import Confidence, EdgeType, Origin
-from nexgraph_engine.store.models import Edge
+from nexgraph_engine.core.schema.enums import Confidence, EdgeType, Origin
+from nexgraph_engine.storage.store.models import Edge
 
 
 def write(root: Path, rel: str, text: str) -> None:
@@ -111,11 +111,11 @@ def test_inherits_implements_resolved(tmp_path, index_project):
 
 def test_created_out_only_contains_edges_actually_inserted(tmp_path):
     """created_out dùng để tính luồng: không được gồm cạnh bị dedup (RB16)."""
-    from nexgraph_engine.index.resolver import resolve_references
-    from nexgraph_engine.schema.db import open_graph_db
-    from nexgraph_engine.schema.enums import NodeKind
-    from nexgraph_engine.store.graph_store import GraphStore
-    from nexgraph_engine.store.models import FileRec, Node, UnresolvedRef
+    from nexgraph_engine.indexing.index.resolver import resolve_references
+    from nexgraph_engine.core.schema.db import open_graph_db
+    from nexgraph_engine.core.schema.enums import NodeKind
+    from nexgraph_engine.storage.store.graph_store import GraphStore
+    from nexgraph_engine.storage.store.models import FileRec, Node, UnresolvedRef
 
     conn = open_graph_db(tmp_path / "g.db")
     store = GraphStore(conn)

@@ -19,16 +19,20 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
 
 ## Engine (`engine/pyproject.toml`, `[tool.importlinter]`)
 
-**`engine-layers`**: tầng trên được import tầng dưới, không ngược lại; package cùng tầng import lẫn nhau được.
+**`engine-layers`**: tầng trên được import tầng dưới, không ngược lại; package cùng tầng import lẫn nhau được. Từ pha 4c mỗi tầng là một thư mục trong `engine/src/nexgraph_engine/`.
 
-| Tầng | Package hiện tại | Tầng đích (pha 4) |
+| Tầng | Thư mục | Package |
 |---|---|---|
-| Giao diện | `cli`, `api`, `mcp`, `hook_guard`, `selftest` | `interfaces` |
-| Điều phối | `pipeline` | `interfaces` hoặc tầng điều phối riêng |
-| Phân tích | `query`, `arch`, `flows`, `impact`, `changes`, `prs`, `semantic`, `tour`, `report`, `memory`, `global_graph`, `bridge`, `export` | `analysis` |
-| Lập chỉ mục | `index`, `graphify_import`, `sources`, `dart`, `docs` | `indexing` |
-| Lưu trữ | `store` | `storage` |
-| Lõi | `schema`, `ids`, `errors`, `logging_setup`, `subprocesses`, `text`, `tasks` | `core` |
+| Giao diện | `interfaces/` | `api`, `mcp`, `cli`, `hook_guard`, `selftest`, `resources` |
+| Điều phối | `pipeline/` | đường pipeline Graphify, `job_manager`, `refresh_service`, `legacy_indexer`, `legacy_refresh` |
+| Phân tích | `analysis/` | `query`, `arch`, `flows`, `impact`, `changes`, `prs`, `semantic`, `tour`, `report`, `memory`, `global_graph`, `bridge`, `export` |
+| Lập chỉ mục | `indexing/` | `index`, `graphify_import`, `sources`, `dart`, `docs` |
+| Lưu trữ | `storage/` | `store` |
+| Lõi | `core/` | `schema`, `ids`, `errors`, `logging_setup`, `subprocesses`, `text`, `tasks` |
+
+Ngoài tầng còn hai phần:
+- `adapters/graphify/`: cổng tới Graphify, chỉ được dùng lõi.
+- `cli.py` ở gốc package: **điểm vào công khai** (`python -m nexgraph_engine.cli`, script `nexgraph-engine`, tệp vào của PyInstaller). Module này chỉ gọi `interfaces/cli.py`. Tên được giữ vì desktop ở chế độ chạy từ mã nguồn, hook git và cấu hình MCP đã ghi vào máy người dùng đều gọi nó.
 
 **`graphify-gateway`**: chỉ `nexgraph_engine.adapters.graphify` được import `graphify`. **`graphify-gateway-core-only`**: cổng không phụ thuộc tầng nào của engine trừ lõi.
 
@@ -69,6 +73,11 @@ Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tê
 | `store/freshness.py` | `changes/freshness.py` | Phân tích độ mới, cần `discover` của tầng lập chỉ mục |
 | `query/contracts.py` (`node_json`, `edge_json`) | `store/json_v1.py` (`contracts` import lại) | `flows` cần mà không phụ thuộc `query` |
 | `semantic/chunks.py` (`membership_signature`) | `ids.py` (`chunks` import lại) | `arch` cần mà không phụ thuộc `semantic` |
+
+### Sau pha 4c (chia thư mục theo tầng, 27/11/2026)
+
+- 32 package/module chuyển vào 5 thư mục tầng bằng script chuyển module theo AST. Script sửa import, đích `monkeypatch` dạng chuỗi, tên `resources.files("nexgraph_engine.core.schema")`, `tools/`, tài liệu. Không đổi mã chạy.
+- `engine-layers` viết lại theo 6 thư mục tầng. Mọi hợp đồng: 4 giữ. `test_package_cycles` so vòng giữa package bên trong tầng (`analysis.query` với `analysis.flows`), không phải giữa tầng. Đã thử bằng đột biến: thêm import `flows → query` thì test đỏ.
 
 ## Desktop (`apps/desktop/.dependency-cruiser.cjs`)
 
@@ -154,3 +163,9 @@ Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài re
 | 3 | `renderer/src/components/<x>/` (22 thư mục) | `renderer/src/features/<x>/` | `common/` → `shared/ui/`, `layout/` → `app/layout/` (trừ `Picker`, `PaneStack`, `FileFinder` → `shared/ui/`), `EngineStatusBar` → `shared/ui/`. |
 | 3 | `renderer/src/state/` (57 tệp) | `app/`, `shared/lib/`, `features/<x>/` | Theo nơi dùng; xem mục "Renderer theo tính năng". `savedPrompts.ts` → `features/agent/savedPromptsStore.ts`. |
 | 3 | `renderer/src/{screens,hosted}/`, `services/`, `strings.ts` | `app/{screens,hosted}/`, `features/architecture/layout/`, `i18n/strings.ts` | 311 tệp chuyển, 659 đường dẫn import sửa bằng script. |
+| 4 | `engine/src/nexgraph_engine/{schema,ids,errors,logging_setup,subprocesses,text,tasks}` | `nexgraph_engine/core/…` | Pha 4c. Import `nexgraph_engine.schema` → `nexgraph_engine.core.schema`. |
+| 4 | `nexgraph_engine/store/` | `nexgraph_engine/storage/store/` | |
+| 4 | `nexgraph_engine/{index,graphify_import,sources,dart,docs}/` | `nexgraph_engine/indexing/…` | |
+| 4 | `nexgraph_engine/{query,arch,flows,impact,changes,prs,semantic,tour,report,memory,global_graph,bridge,export}/` | `nexgraph_engine/analysis/…` | |
+| 4 | `nexgraph_engine/{api,mcp,resources}/`, `hook_guard.py`, `selftest.py`, `cli.py` | `nexgraph_engine/interfaces/…` | `nexgraph_engine/cli.py` vẫn có, là điểm vào công khai gọi `interfaces/cli.py`. |
+| 4 | Các module chuyển ở pha 4b | xem mục "Sau pha 4b" | Đường dẫn ở đó là trước pha 4c; thêm tiền tố tầng (ví dụ `index/source_state.py` → `indexing/index/source_state.py`). |

@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.bridge.to_nx import Scope
-from nexgraph_engine.export.callflow_i18n import localize_callflow_html
-from nexgraph_engine.export.run import export_graph
+from nexgraph_engine.analysis.bridge.to_nx import Scope
+from nexgraph_engine.analysis.export.callflow_i18n import localize_callflow_html
+from nexgraph_engine.analysis.export.run import export_graph
 
 import re
 import subprocess
@@ -118,7 +118,7 @@ def test_push_rejects_unsupported_scheme(api, copy_fixture, uri):
 
 @pytest.mark.parametrize("uri", ["bolt://h:7687", "bolt+s://h", "neo4j://h", "neo4j+s://h", "redis://h", "rediss://h"])
 def test_validate_push_uri_allows_driver_schemes(uri):
-    from nexgraph_engine.export.run import validate_push_uri
+    from nexgraph_engine.analysis.export.run import validate_push_uri
     assert validate_push_uri(uri) == uri.split("://")[0]
 
 
@@ -155,7 +155,7 @@ def test_svg_export_of_graph_over_500_nodes(index_project, tmp_path):
 
 def test_export_route_unexpected_error_is_json(api, copy_fixture, tmp_path, monkeypatch):
     pid = _indexed(api, copy_fixture)
-    import nexgraph_engine.api.routes_export as routes
+    import nexgraph_engine.interfaces.api.routes_export as routes
     monkeypatch.setattr(routes, "export_graph", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     r = api.post(f"/v1/projects/{pid}/export", json={"format": "svg", "scope": {"kind": "all"}, "out_dir": str(tmp_path)})
     assert r.status_code == 500 and r.json()["error"]["code"] == "export_failed" and "boom" in r.json()["error"]["message"]
@@ -179,7 +179,7 @@ def test_directory_export_twice_keeps_both_dirs(index_project, copy_fixture, tmp
 
 
 def test_failed_export_leaves_no_placeholder_file(index_project, copy_fixture, tmp_path, monkeypatch):
-    from nexgraph_engine.export import run as run_mod
+    from nexgraph_engine.analysis.export import run as run_mod
 
     store, _, _ = index_project(copy_fixture("py_mini"))
     monkeypatch.setattr(run_mod, "_write", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("hỏng")))
@@ -247,9 +247,9 @@ def test_hard_kill_during_write_leaves_no_destination_file(copy_fixture, index_p
     script = (
         "import os, signal, sqlite3\n"
         "from pathlib import Path\n"
-        "from nexgraph_engine.bridge.to_nx import Scope\n"
-        "from nexgraph_engine.store.graph_store import GraphStore\n"
-        "import nexgraph_engine.export.run as run\n"
+        "from nexgraph_engine.analysis.bridge.to_nx import Scope\n"
+        "from nexgraph_engine.storage.store.graph_store import GraphStore\n"
+        "import nexgraph_engine.analysis.export.run as run\n"
         "\n"
         "def half_then_kill(store, fmt, scope, target, project_name, gx, **kwargs):\n"
         "    with open(target, 'wb') as fh:\n"
@@ -457,7 +457,7 @@ def _synthetic_bg():
     """Đồ thị 3 cộng đồng: hai cạnh thật 1→2, một cạnh AMBIGUOUS 2→3 (không được tính)."""
     import networkx as nx
 
-    from nexgraph_engine.bridge.to_nx import BridgeGraph
+    from nexgraph_engine.analysis.bridge.to_nx import BridgeGraph
 
     def edge(a: str, b: str, *, relation: str = "calls", confidence: str = "EXTRACTED", score: float = 0.9) -> dict:
         return {"source": a, "target": b, "relation": relation, "confidence": confidence,
@@ -475,7 +475,7 @@ def _synthetic_bg():
 
 def test_apply_callflow_flow_follows_real_edges_only():
     """E9b-1: chuỗi theo hướng/trọng số cạnh thật; mục không có cạnh đi ra không bị nối tiếp."""
-    from nexgraph_engine.export.callflow_flow import apply_callflow_flow, flow_chain, section_edge_weights
+    from nexgraph_engine.analysis.export.callflow_flow import apply_callflow_flow, flow_chain, section_edge_weights
 
     bg = _synthetic_bg()
     sections = [{"id": "community-1", "name": "Alpha", "communities": ["1"]},
@@ -514,7 +514,7 @@ def test_markdown_export_follows_lang(copy_fixture, index_project, tmp_path):
 
 def test_markdown_vi_translates_negative_community_id_and_more_suffix():
     """E9b-3 (review-62 Minor): `### Community -1` và `(+4 more)` từng còn tiếng Anh trên docs_app."""
-    from nexgraph_engine.report.markdown_i18n import localize_markdown
+    from nexgraph_engine.analysis.report.markdown_i18n import localize_markdown
 
     md = ('## Communities (1 total, 0 thin omitted)\n'
           '\n### Community -1 - "Khác"\n'
@@ -599,7 +599,7 @@ _CALLFLOW_RULE_SAMPLES = [
 
 def test_every_callflow_translation_rule_applies():
     """MIN-48: test cũ chỉ phủ ~15/42 quy tắc; đây phủ từng quy tắc, để graphify đổi chuỗi là đỏ ngay."""
-    from nexgraph_engine.export.callflow_i18n import _NOTE, _RULES
+    from nexgraph_engine.analysis.export.callflow_i18n import _NOTE, _RULES
 
     assert len(_RULES) + 1 == len(_CALLFLOW_RULE_SAMPLES)  # thêm quy tắc phải thêm mẫu
     for english, vietnamese in _CALLFLOW_RULE_SAMPLES:

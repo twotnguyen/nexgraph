@@ -9,16 +9,16 @@ import threading
 
 import pytest
 
-from nexgraph_engine.ids import file_node_id
+from nexgraph_engine.core.ids import file_node_id
 from nexgraph_engine.pipeline import legacy_indexer as indexer_module
-from nexgraph_engine.index.events import EventBus
+from nexgraph_engine.indexing.index.events import EventBus
 from nexgraph_engine.pipeline.legacy_indexer import ExtractedFile, Indexer, ProgressEvent, RunResult
 from nexgraph_engine.pipeline.job_manager import JobManager
-from nexgraph_engine.index.scan import scan_project
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.schema.enums import NodeKind
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import FileRec, Node
+from nexgraph_engine.indexing.index.scan import scan_project
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.core.schema.enums import NodeKind
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.models import FileRec, Node
 
 unreadable_only = pytest.mark.skipif(os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
                                      reason="chmod 000 không chặn được trên Windows/root")
@@ -101,7 +101,7 @@ class WarningIndexer(Indexer):
 
 
 def test_job_payload_carries_the_warning_message(tmp_path, copy_fixture):
-    from nexgraph_engine.store.projects import ProjectRegistry
+    from nexgraph_engine.storage.store.projects import ProjectRegistry
 
     registry = ProjectRegistry(tmp_path / "appdata")
     info = registry.open_project(copy_fixture("py_mini"))
@@ -154,7 +154,7 @@ def test_unreadable_directory_is_reported_not_silently_skipped(tmp_path):
 @unreadable_only
 def test_index_job_result_carries_unreadable_paths(tmp_path):
     """A1 F6: kết quả job index có trường ổn định để desktop hiện cảnh báo."""
-    from nexgraph_engine.store.projects import ProjectRegistry
+    from nexgraph_engine.storage.store.projects import ProjectRegistry
 
     root = tmp_path / "proj"
     root.mkdir()

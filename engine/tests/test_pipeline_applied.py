@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-import nexgraph_engine.graphify_import as graphify_import
+import nexgraph_engine.indexing.graphify_import as graphify_import
 import nexgraph_engine.pipeline.job as pipeline_job
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.changes.freshness import freshness
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.analysis.changes.freshness import freshness
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

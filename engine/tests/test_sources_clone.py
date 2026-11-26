@@ -4,8 +4,8 @@ import time
 
 import pytest
 
-from nexgraph_engine.sources import clone as clone_module
-from nexgraph_engine.sources.clone import parse_repo_url
+from nexgraph_engine.indexing.sources import clone as clone_module
+from nexgraph_engine.indexing.sources.clone import parse_repo_url
 
 
 def wait_job(api, job_id, timeout=60):

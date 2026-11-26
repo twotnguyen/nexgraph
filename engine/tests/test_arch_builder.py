@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.arch.builder import MAX_BLOCKS, UnknownBlock, build_view, files_of_block
+from nexgraph_engine.analysis.arch.builder import MAX_BLOCKS, UnknownBlock, build_view, files_of_block
 
 
 def write(root: Path, rel: str, text: str) -> None:

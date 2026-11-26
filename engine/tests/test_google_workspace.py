@@ -7,9 +7,9 @@ from urllib.parse import quote
 import pytest
 
 import graphify.google_workspace as gw
-from nexgraph_engine.docs import media
-from nexgraph_engine.ids import file_node_id
-from nexgraph_engine.index.discovery import discover
+from nexgraph_engine.indexing.docs import media
+from nexgraph_engine.core.ids import file_node_id
+from nexgraph_engine.indexing.index.discovery import discover
 
 
 @pytest.fixture

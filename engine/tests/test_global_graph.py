@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from nexgraph_engine.global_graph.store import GlobalStore
+from nexgraph_engine.analysis.global_graph.store import GlobalStore
 
 
 def _edge(src_pid, dst_pid, src="a#function", dst="b#function"):
@@ -28,7 +28,7 @@ def test_global_store_add_remove_cascades_edges(tmp_path):
 
 # --- Task 2: cạnh liên repo -----------------------------------------------------------------------
 
-from nexgraph_engine.global_graph.link import cross_repo_impact, relink  # noqa: E402
+from nexgraph_engine.analysis.global_graph.link import cross_repo_impact, relink  # noqa: E402
 
 
 @pytest.fixture
@@ -174,7 +174,7 @@ def test_python_import_symbol_exact_module(api, tmp_path):
 
 
 def test_visible_cross_repo_respects_both_policies_and_drops_stale(two_repos):
-    from nexgraph_engine.global_graph.link import visible_cross_repo
+    from nexgraph_engine.analysis.global_graph.link import visible_cross_repo
     services, lib, app = two_repos
     g = GlobalStore(services.data_dir)
     g.add(lib), g.add(app)

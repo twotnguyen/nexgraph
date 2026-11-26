@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.mcp import graphify_view
+from nexgraph_engine.interfaces.mcp import graphify_view
 
 
 def _write_graph(path: Path, nodes: list[tuple[str, str]]) -> None:

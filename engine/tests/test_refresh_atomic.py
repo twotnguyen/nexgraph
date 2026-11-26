@@ -14,8 +14,8 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.pipeline import legacy_refresh as refresh_mod
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 from test_refresh import graph_state
 
 
@@ -116,9 +116,9 @@ import os, sys, time
 from pathlib import Path
 from nexgraph_engine.pipeline import legacy_refresh as refresh_mod
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.publication import graph_writer
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.publication import graph_writer
 
 db, root, marker, mode = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
 

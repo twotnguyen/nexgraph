@@ -8,7 +8,7 @@ import json
 import random
 from pathlib import Path
 
-from nexgraph_engine.schema.db import open_graph_db
+from nexgraph_engine.core.schema.db import open_graph_db
 
 SYMBOL_KINDS = ("class", "mixin", "enum", "extension", "function", "method", "test", "widget", "screen")
 MIN_SYMBOLS = 3

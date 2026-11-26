@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 from nexgraph_engine import VENDOR_COMMIT, __version__
-from nexgraph_engine.api.app import create_app
+from nexgraph_engine.interfaces.api.app import create_app
 
 TOKEN = "t" * 40
 

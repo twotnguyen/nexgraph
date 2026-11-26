@@ -2,8 +2,8 @@ import anyio
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
-from nexgraph_engine.cli import _build_parser
-from nexgraph_engine.mcp.server import build_server
+from nexgraph_engine.interfaces.cli import _build_parser
+from nexgraph_engine.interfaces.mcp.server import build_server
 from test_api_global import _join, _pair
 from test_mcp import call, payload
 
@@ -67,7 +67,7 @@ def test_cross_repo_hides_nodes_excluded_from_ai(grouped):
     server = build_server(root, data_dir, global_graph=True)
     before = payload(call(server, "query_graph", {"question": "checkout"}))["cross_repo"]
     assert any(e["node_id"] == "src/calculator.ts::Calculator.add#method" for e in before)
-    from nexgraph_engine.store.projects import ProjectRegistry
+    from nexgraph_engine.storage.store.projects import ProjectRegistry
     lib_root = ProjectRegistry(data_dir, read_only=True).get(lib).path
     (lib_root / ".gitignore").write_text("src/calculator.ts\n", encoding="utf-8")
     after = payload(call(server, "query_graph", {"question": "checkout"}))

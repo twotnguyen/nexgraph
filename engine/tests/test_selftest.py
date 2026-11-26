@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
-from nexgraph_engine.api.app import create_app
-from nexgraph_engine.selftest import run_selftest
+from nexgraph_engine.interfaces.api.app import create_app
+from nexgraph_engine.interfaces.selftest import run_selftest
 
 
 def test_run_selftest_extracts_nodes():

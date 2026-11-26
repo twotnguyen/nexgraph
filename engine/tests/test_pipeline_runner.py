@@ -114,7 +114,7 @@ def test_frozen_engine_runs_extract_step(fixture_root, tmp_path, monkeypatch):
     launcher = tmp_path / "bin" / "nexgraph-engine"
     launcher.parent.mkdir()
     code = (f"import sys; sys.executable = {str(launcher)!r}; "
-            "from nexgraph_engine.cli import main; sys.exit(main(sys.argv[1:]))")
+            "from nexgraph_engine.interfaces.cli import main; sys.exit(main(sys.argv[1:]))")
     launcher.write_text(f"#!/bin/sh\nexec {shlex.quote(sys.executable)} -c {shlex.quote(code)} \"$@\"\n",
                         encoding="utf-8")
     launcher.chmod(0o755)

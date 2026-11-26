@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from nexgraph_engine.pipeline.legacy_refresh import refresh_project
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 
 class _CommitBoom:

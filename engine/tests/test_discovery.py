@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.index.discovery import discover, is_test_path, language_of, sha256_file
+from nexgraph_engine.indexing.index.discovery import discover, is_test_path, language_of, sha256_file
 
 
 def write(root: Path, rel: str, text: str = "void main() {}\n") -> None:
@@ -176,7 +176,7 @@ def test_graphifyrc_language_overrides_are_honoured(tmp_path):
     (tmp_path / ".graphifyrc").write_text("language.inc = php\n")
     (tmp_path / "a.inc").write_text("<?php\nfunction run() { return 1; }\n")
     assert [f.language for f in discover(tmp_path)] == ["php"]
-    from nexgraph_engine.index.generic import extract_generic
+    from nexgraph_engine.indexing.index.generic import extract_generic
     assert [n.label for n in extract_generic(tmp_path, "a.inc", "php", is_test=False).nodes] == ["run"]
 
 

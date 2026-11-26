@@ -100,7 +100,7 @@ def test_refresh_linked_worktree_reads_its_own_git_dir(api, copy_fixture, tmp_pa
 def test_refresh_timeout_exits_124_and_logs(api, copy_fixture, tmp_path):
     root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
     code = ("import time, nexgraph_engine.pipeline.legacy_refresh as r; r.refresh_project = lambda *a, **k: time.sleep(30); "
-            "from nexgraph_engine.cli import main; raise SystemExit(main(['refresh', '--project', %r, '--data-dir', %r]))"
+            "from nexgraph_engine.interfaces.cli import main; raise SystemExit(main(['refresh', '--project', %r, '--data-dir', %r]))"
             % (str(root), str(appdata)))
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=20,
                        env={**os.environ, "NEXGRAPH_REFRESH_TIMEOUT": "1"})
@@ -174,8 +174,8 @@ def test_hook_refresh_waits_for_busy_writer_instead_of_skipping(api, copy_fixtur
     import threading
     import time
 
-    from nexgraph_engine.mcp.server import resolve_graph_db
-    from nexgraph_engine.store.publication import graph_writer
+    from nexgraph_engine.interfaces.mcp.server import resolve_graph_db
+    from nexgraph_engine.storage.store.publication import graph_writer
 
     root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
     db = resolve_graph_db(root, appdata)
@@ -208,9 +208,9 @@ def test_invalid_refresh_timeout_falls_back_to_default(api, copy_fixture, tmp_pa
 def test_killed_refresh_does_not_block_later_refreshes(api, copy_fixture, tmp_path):
     from contextlib import closing
 
-    from nexgraph_engine.mcp.server import resolve_graph_db
-    from nexgraph_engine.schema.db import open_graph_db
-    from nexgraph_engine.store.graph_store import GraphStore
+    from nexgraph_engine.interfaces.mcp.server import resolve_graph_db
+    from nexgraph_engine.core.schema.db import open_graph_db
+    from nexgraph_engine.storage.store.graph_store import GraphStore
 
     root, appdata = _indexed_repo(api, copy_fixture), tmp_path / "appdata"
     with closing(open_graph_db(resolve_graph_db(root, appdata))) as conn:

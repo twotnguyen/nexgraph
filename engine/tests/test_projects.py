@@ -1,4 +1,4 @@
-from nexgraph_engine.schema.db import APP_SCHEMA_VERSION, GRAPH_SCHEMA_VERSION
+from nexgraph_engine.core.schema.db import APP_SCHEMA_VERSION, GRAPH_SCHEMA_VERSION
 import os
 import sqlite3
 import sys
@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.store.projects import ProjectPathError, ProjectRegistry
-from nexgraph_engine.schema.db import open_app_db
+from nexgraph_engine.storage.store.projects import ProjectPathError, ProjectRegistry
+from nexgraph_engine.core.schema.db import open_app_db
 
 
 @pytest.fixture

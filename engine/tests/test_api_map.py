@@ -1,4 +1,4 @@
-from nexgraph_engine.arch.cycles import import_cycles
+from nexgraph_engine.analysis.arch.cycles import import_cycles
 from test_arch_map import make
 
 

@@ -5,9 +5,9 @@ from pathlib import Path
 import pytest
 
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.schema.enums import EdgeType, NodeKind
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.core.schema.enums import EdgeType, NodeKind
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 FIX = Path(__file__).parent / "fixtures" / "docs_app"
 
@@ -56,7 +56,7 @@ def test_heading_line_range(docs_root, tmp_path):
 
 
 def test_mentions_become_unresolved_documents_refs():
-    from nexgraph_engine.docs.extract import extract_document
+    from nexgraph_engine.indexing.docs.extract import extract_document
     x = extract_document("README.md", (FIX / "README.md").read_text(encoding="utf-8"), file_id="README.md#file")
     refs = {(r.name, r.type, r.source) for r in x.refs}
     assert ("AuthService.login", EdgeType.DOCUMENTS, "README.md::Docs app#document") in refs
@@ -78,7 +78,7 @@ def _make_office(root: Path) -> None:
 
 
 def test_docx_and_xlsx_text(docs_root, tmp_path):
-    from nexgraph_engine.docs.text import doc_text
+    from nexgraph_engine.indexing.docs.text import doc_text
     _make_office(docs_root)
     assert "Hướng dẫn" in doc_text(docs_root / "guide.docx", "docx")
     assert "Users" in doc_text(docs_root / "data.xlsx", "xlsx")
@@ -89,7 +89,7 @@ def test_docx_and_xlsx_text(docs_root, tmp_path):
 
 
 def test_pdf_text():
-    from nexgraph_engine.docs.text import doc_text
+    from nexgraph_engine.indexing.docs.text import doc_text
     assert "AuthService" in doc_text(FIX / "docs" / "spec.pdf", "pdf")
 
 
@@ -110,7 +110,7 @@ def test_docs_off_graph_unchanged(docs_root, tmp_path):
 
 
 def test_bridge_marks_documents(docs_root, tmp_path):
-    from nexgraph_engine.bridge.to_nx import build_nx
+    from nexgraph_engine.analysis.bridge.to_nx import build_nx
     store = run_index(docs_root, tmp_path / "g.db", include_docs=True)
     G = build_nx(store).G
     assert G.nodes["README.md::Cài đặt#document"]["file_type"] == "document"

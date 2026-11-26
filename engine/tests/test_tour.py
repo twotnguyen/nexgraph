@@ -1,4 +1,4 @@
-from nexgraph_engine.tour.build import build_tour
+from nexgraph_engine.analysis.tour.build import build_tour
 
 
 def test_tour_of_flow_app(copy_fixture, index_project):
@@ -99,7 +99,7 @@ def test_tour_route_in_english_has_no_vietnamese(api, pid_flow):
 
 def test_community_label_covers_all_stored_forms():
     """Nhãn cụm engine lưu luôn là tiếng Việt (`Cụm quanh …`, `Cộng đồng N`, `Khác`) — EN phải dịch hết."""
-    from nexgraph_engine.tour.build import _community_label
+    from nexgraph_engine.analysis.tour.build import _community_label
 
     assert _community_label("Cộng đồng 3", True) == "Community 3"
     assert _community_label("Khác", True) == "Other"
@@ -109,7 +109,7 @@ def test_community_label_covers_all_stored_forms():
 
 
 def test_community_label_does_not_double_prefix():
-    from nexgraph_engine.tour.build import _community_label
+    from nexgraph_engine.analysis.tour.build import _community_label
     assert _community_label("Cụm quanh auth_service.dart", False) == "Cụm quanh auth_service.dart"
     assert _community_label("Cụm quanh auth_service.dart", True) == "Cluster around auth_service.dart"
     assert _community_label("service", False) == "Cụm service"

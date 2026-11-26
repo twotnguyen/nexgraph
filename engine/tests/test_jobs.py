@@ -3,11 +3,11 @@ import time
 
 import pytest
 
-from nexgraph_engine.index.events import EventBus
+from nexgraph_engine.indexing.index.events import EventBus
 from nexgraph_engine.pipeline.legacy_indexer import Indexer, ProgressEvent
 from nexgraph_engine.pipeline.job_manager import IndexAlreadyRunning, JobManager, UnknownProject
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.projects import ProjectRegistry
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.projects import ProjectRegistry
 
 TERMINAL = {"done", "error", "cancelled"}
 
@@ -229,7 +229,7 @@ def test_app_shutdown_stops_job_manager(tmp_path, monkeypatch):
     """REV-19: engine tắt phải gọi shutdown() (huỷ + join job nền), không chỉ trong test."""
     from fastapi.testclient import TestClient
 
-    from nexgraph_engine.api.app import create_app
+    from nexgraph_engine.interfaces.api.app import create_app
 
     app = create_app("t" * 40, {"testserver"}, data_dir=tmp_path / "appdata")
     called: list[bool] = []

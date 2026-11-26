@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from nexgraph_engine.schema.enums import NodeKind
-from nexgraph_engine.store.search import build_match_query, search
+from nexgraph_engine.core.schema.enums import NodeKind
+from nexgraph_engine.storage.store.search import build_match_query, search
 
 
 def write(root: Path, rel: str, text: str) -> None:

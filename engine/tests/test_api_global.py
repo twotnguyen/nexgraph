@@ -3,7 +3,7 @@ import shutil
 import time
 from pathlib import Path
 
-from nexgraph_engine.global_graph.store import GlobalStore
+from nexgraph_engine.analysis.global_graph.store import GlobalStore
 
 APP_CALL = ("src/cart.ts::checkout#function", "src/calculator.ts::Calculator.add#method")
 
@@ -129,7 +129,7 @@ def test_export_writes_merged_graph_json(api, copy_fixture, tmp_path):
 
 
 def test_newer_global_db_is_409(api):
-    from nexgraph_engine.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
+    from nexgraph_engine.core.schema.db import GLOBAL_SCHEMA_VERSION, open_global_db
     conn = open_global_db(api.app.state.services.data_dir / "global.db")
     conn.execute(f"PRAGMA user_version = {GLOBAL_SCHEMA_VERSION + 1}")
     conn.close()
@@ -236,7 +236,7 @@ def test_relink_started_while_another_runs_finishes_both(api, monkeypatch):
     """Bản thật: job đang chạy không nuốt lời gọi thứ hai — cả hai job đều chạy xong."""
     import threading
 
-    from nexgraph_engine.global_graph import link
+    from nexgraph_engine.analysis.global_graph import link
 
     started, release = threading.Event(), threading.Event()
 

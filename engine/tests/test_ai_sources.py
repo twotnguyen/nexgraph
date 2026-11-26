@@ -4,9 +4,9 @@ import re
 
 import pytest
 
-from nexgraph_engine.errors import ApiError
-from nexgraph_engine.mcp.server import build_server
-from nexgraph_engine.query.source_policy import SourcePolicy
+from nexgraph_engine.core.errors import ApiError
+from nexgraph_engine.interfaces.mcp.server import build_server
+from nexgraph_engine.analysis.query.source_policy import SourcePolicy
 from test_mcp import call, payload
 
 MODEL = {"X-NexGraph-Audience": "model"}
@@ -180,7 +180,7 @@ def test_sensitive_folder_above_the_project_does_not_block_everything(tmp_path, 
 
 
 def test_memory_filter_reads_file_paths_containing_hash(tmp_path):
-    from nexgraph_engine.memory import source_filter
+    from nexgraph_engine.analysis.memory import source_filter
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "C#.md").write_text("# Intro\n", encoding="utf-8")
     allows = source_filter(SourcePolicy(tmp_path, ["*.md"]))

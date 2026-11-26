@@ -1,7 +1,7 @@
 import pytest
 
-from nexgraph_engine.errors import ApiError
-from nexgraph_engine.query.explain import explain_json
+from nexgraph_engine.core.errors import ApiError
+from nexgraph_engine.analysis.query.explain import explain_json
 
 TARGET = "t.py::target#function"
 

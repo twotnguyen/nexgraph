@@ -14,26 +14,32 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from nexgraph_engine.docs.secrets import redact_doc_secrets
+from nexgraph_engine.indexing.docs.secrets import redact_doc_secrets
 
-from nexgraph_engine.arch.communities import detect_communities
-from nexgraph_engine.dart.extractor import FileExtraction, extract_dart
-from nexgraph_engine.ids import REPOSITORY_ID, directory_node_id, file_node_id
-from nexgraph_engine.docs import media
-from nexgraph_engine.docs.extract import extract_document
-from nexgraph_engine.docs.text import doc_text
-from nexgraph_engine.index.extra_sources import ExtraSources, ingest_sources
-from nexgraph_engine.index.discovery import DOC_LANGUAGES, DiscoveredFile, discover, is_batch_language, sha256_file
-from nexgraph_engine.index.tested_by import derive_tested_by
-from nexgraph_engine.flows.build import rebuild_flows
-from nexgraph_engine.index.generic import extract_generic
-from nexgraph_engine.index.batch_calls import batch_cross_file_calls
-from nexgraph_engine.index.generic import reset_cache_root
-from nexgraph_engine.index.resolver import _package_name, resolve_references
-from nexgraph_engine.index.source_state import RACY_SECONDS, _git_head
-from nexgraph_engine.schema.enums import EdgeType, NodeKind
-from nexgraph_engine.store.graph_store import GraphStore
-from nexgraph_engine.store.models import Edge, FileRec, Node, RunState, UnresolvedRef
+from nexgraph_engine.analysis.arch.communities import detect_communities
+from nexgraph_engine.indexing.dart.extractor import FileExtraction, extract_dart
+from nexgraph_engine.core.ids import REPOSITORY_ID, directory_node_id, file_node_id
+from nexgraph_engine.indexing.docs import media
+from nexgraph_engine.indexing.docs.extract import extract_document
+from nexgraph_engine.indexing.docs.text import doc_text
+from nexgraph_engine.indexing.index.extra_sources import ExtraSources, ingest_sources
+from nexgraph_engine.indexing.index.discovery import (
+    DOC_LANGUAGES,
+    DiscoveredFile,
+    discover,
+    is_batch_language,
+    sha256_file,
+)
+from nexgraph_engine.indexing.index.tested_by import derive_tested_by
+from nexgraph_engine.analysis.flows.build import rebuild_flows
+from nexgraph_engine.indexing.index.generic import extract_generic
+from nexgraph_engine.indexing.index.batch_calls import batch_cross_file_calls
+from nexgraph_engine.indexing.index.generic import reset_cache_root
+from nexgraph_engine.indexing.index.resolver import _package_name, resolve_references
+from nexgraph_engine.indexing.index.source_state import RACY_SECONDS, _git_head
+from nexgraph_engine.core.schema.enums import EdgeType, NodeKind
+from nexgraph_engine.storage.store.graph_store import GraphStore
+from nexgraph_engine.storage.store.models import Edge, FileRec, Node, RunState, UnresolvedRef
 
 logger = logging.getLogger(__name__)
 

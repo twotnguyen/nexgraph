@@ -11,9 +11,9 @@ from contextlib import closing
 import pytest
 
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
-from nexgraph_engine.mcp.server import build_server
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.interfaces.mcp.server import build_server
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 from test_mcp import call, payload
 from test_refresh import graph_state
 
@@ -117,10 +117,10 @@ def test_engine_crash_during_rebuild_keeps_old_graph_and_allows_retry(api, copy_
     script = """
 import os, sqlite3, sys, time
 from pathlib import Path
-from nexgraph_engine.index.events import EventBus
+from nexgraph_engine.indexing.index.events import EventBus
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
 from nexgraph_engine.pipeline import job_manager as jobs
-from nexgraph_engine.store.projects import ProjectRegistry
+from nexgraph_engine.storage.store.projects import ProjectRegistry
 
 def pause():
     marker = Path(sys.argv[3])
@@ -143,7 +143,7 @@ def interrupted_backup(source, destination):
 
 indexer = InterruptedIndexer
 if sys.argv[4] == 'publication':
-    import nexgraph_engine.store.publication as publication
+    import nexgraph_engine.storage.store.publication as publication
     publication.backup_graph = interrupted_backup
     indexer = Indexer
 manager = jobs.JobManager(ProjectRegistry(Path(sys.argv[1])), EventBus(), indexer_cls=indexer)

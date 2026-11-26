@@ -33,10 +33,10 @@ import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
-from nexgraph_engine.mcp import graphify_view
-from nexgraph_engine.mcp.server import build_server
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.interfaces.mcp import graphify_view
+from nexgraph_engine.interfaces.mcp.server import build_server
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 pytestmark = pytest.mark.slow
 
@@ -540,7 +540,7 @@ def sqlite_project(tmp_path_factory):
 
 def test_sqlite_query_graph_defaults(sqlite_project, monkeypatch):
     """Không có graph.json: mặc định phải như trước PR — depth 2, budget 2000."""
-    import nexgraph_engine.mcp.server as server_module
+    import nexgraph_engine.interfaces.mcp.server as server_module
 
     seen: list[tuple[int, int, str]] = []
     real = server_module.ask_graph
@@ -557,7 +557,7 @@ def test_sqlite_query_graph_defaults(sqlite_project, monkeypatch):
 
 def test_sqlite_shortest_path_default_max_hops(sqlite_project, monkeypatch):
     """Không có graph.json: mặc định max_hops 4 (bản cũ), không phải 8 của vendor."""
-    import nexgraph_engine.mcp.server as server_module
+    import nexgraph_engine.interfaces.mcp.server as server_module
 
     seen: list[tuple[int, bool]] = []
     real = server_module.find_paths

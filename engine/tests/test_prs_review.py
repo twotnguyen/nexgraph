@@ -4,9 +4,9 @@ import pytest
 
 import gh_fake
 from nexgraph_engine.pipeline.legacy_indexer import Indexer
-from nexgraph_engine.prs.review import pr_detail_json, review_status_json
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.analysis.prs.review import pr_detail_json, review_status_json
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 LIB = "def helper(x):\n    return x + 1\n\n\ndef orphan():\n    return 0\n\n\ndef kept():\n    return 1\n"
 APP = ("from lib import helper, orphan, kept\n\n\ndef run():\n    a = orphan()\n    b = kept()\n"
@@ -114,7 +114,7 @@ def test_bad_number_never_calls_gh(store, monkeypatch):
 
 
 def test_cross_repo_impact_uses_shared_graph_when_present(store, monkeypatch, tmp_path):
-    from nexgraph_engine.global_graph import link
+    from nexgraph_engine.analysis.global_graph import link
     seen = {}
 
     def fake(data_dir, project_id, node_ids):
@@ -174,8 +174,8 @@ def test_monorepo_test_command_uses_the_nearest_package_manifest(tmp_path):
 
     import json as _json
 
-    from nexgraph_engine.prs.diff import DiffFile
-    from nexgraph_engine.prs.review import select_tests
+    from nexgraph_engine.analysis.prs.diff import DiffFile
+    from nexgraph_engine.analysis.prs.review import select_tests
 
     web = tmp_path / "packages" / "web"
     (web / "src").mkdir(parents=True)
@@ -198,8 +198,8 @@ def test_monorepo_hoisted_workspace_uses_the_root_runner(tmp_path):
     import json as _json
     from types import SimpleNamespace
 
-    from nexgraph_engine.prs.diff import DiffFile
-    from nexgraph_engine.prs.review import select_tests
+    from nexgraph_engine.analysis.prs.diff import DiffFile
+    from nexgraph_engine.analysis.prs.review import select_tests
 
     web = tmp_path / "packages" / "web"
     (web / "src").mkdir(parents=True)
@@ -213,8 +213,8 @@ def test_monorepo_hoisted_workspace_uses_the_root_runner(tmp_path):
 def test_go_monorepo_command_is_relative_to_the_module(tmp_path):
     from types import SimpleNamespace
 
-    from nexgraph_engine.prs.diff import DiffFile
-    from nexgraph_engine.prs.review import select_tests
+    from nexgraph_engine.analysis.prs.diff import DiffFile
+    from nexgraph_engine.analysis.prs.review import select_tests
 
     api_pkg = tmp_path / "services" / "api"
     (api_pkg / "pkg").mkdir(parents=True)

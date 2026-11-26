@@ -8,8 +8,8 @@ from urllib.parse import quote
 import pytest
 
 import graphify.security as security
-from nexgraph_engine.ids import file_node_id
-from nexgraph_engine.index.discovery import discover
+from nexgraph_engine.core.ids import file_node_id
+from nexgraph_engine.indexing.index.discovery import discover
 
 PAGE = b"""<html><head><title>Ghi chu kien truc</title></head>
 <body><h1>Kien truc</h1><p>Dich vu BookService goi kho du lieu.</p></body></html>"""
@@ -136,7 +136,7 @@ def test_ingest_adds_source_to_graph_and_survives_refresh(api, project, web):
 
 
 def test_cli_refresh_keeps_sources(api, project, web, capsys):
-    from nexgraph_engine.cli import _refresh
+    from nexgraph_engine.interfaces.cli import _refresh
     root, pid = project
     job = wait_job(api, api.post(f"/v1/projects/{pid}/sources", json={"url": f"{web}/page.html"}).json()["job_id"])
     rel = job["result"]["file"]
@@ -192,7 +192,7 @@ def test_context_reads_sources(api, project, web):
 
 
 def test_cli_refresh_without_data_dir_keeps_sources(api, project, web, capsys):
-    from nexgraph_engine.cli import _refresh
+    from nexgraph_engine.interfaces.cli import _refresh
     root, pid = project
     job = wait_job(api, api.post(f"/v1/projects/{pid}/sources", json={"url": f"{web}/page.html"}).json()["job_id"])
     rel = job["result"]["file"]
@@ -202,7 +202,7 @@ def test_cli_refresh_without_data_dir_keeps_sources(api, project, web, capsys):
 
 @pytest.mark.parametrize("name", ["C:evil.md", "c:..", "a:b.md"])
 def test_drive_and_colon_names_rejected(tmp_path, name):
-    from nexgraph_engine.index.discovery import source_path
-    from nexgraph_engine.sources import remove_source
+    from nexgraph_engine.indexing.index.discovery import source_path
+    from nexgraph_engine.indexing.sources import remove_source
     assert source_path(tmp_path / "proj", f"sources/{name}", tmp_path / "src") is None
     assert remove_source(tmp_path, name) is False

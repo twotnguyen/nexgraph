@@ -4,8 +4,8 @@ import urllib.parse
 
 import pytest
 
-from nexgraph_engine.schema.db import open_graph_db
-from nexgraph_engine.store.graph_store import GraphStore
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def test_neighbors_truncated(indexed):
 
 def test_code_reports_truncation(indexed):
     """F5/REV-21: đọc cả tệp dài hơn MAX_CODE_LINES phải báo `truncated`, không cắt ngầm."""
-    from nexgraph_engine.query.contracts import MAX_CODE_LINES
+    from nexgraph_engine.analysis.query.contracts import MAX_CODE_LINES
 
     api, pid, root = indexed
     total = MAX_CODE_LINES + 20

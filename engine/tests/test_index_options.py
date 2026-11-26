@@ -47,7 +47,7 @@ def test_index_route_rejects_bad_workers(api, copy_fixture):
 
 
 def test_force_starts_a_fresh_ast_cache(tmp_path, index_project, monkeypatch):
-    from nexgraph_engine.index import generic
+    from nexgraph_engine.indexing.index import generic
     (tmp_path / "a.go").write_text("package main\nfunc main() {}\n")
     before = generic._cache_root()
     import nexgraph_engine.pipeline.legacy_indexer as ix

@@ -7,8 +7,8 @@ import sys
 import time
 from pathlib import Path
 
-from nexgraph_engine.index import generic
-from nexgraph_engine.subprocesses import pid_alive
+from nexgraph_engine.indexing.index import generic
+from nexgraph_engine.core.subprocesses import pid_alive
 
 
 def _dead_pid() -> int:
@@ -35,7 +35,7 @@ def _wait_dead(pid: int) -> None:
 def test_cache_of_hard_killed_engine_is_removed_by_next_process(watched_tmp, monkeypatch):
     """Engine bị dừng cứng (taskkill /F khi thoát app trên Windows, SIGKILL khi quá hạn, crash) không chạy
     `atexit`, nên cache trích xuất bị bỏ lại; tiến trình engine kế tiếp phải dọn nó."""
-    code = ("import os, time; from nexgraph_engine.index.generic import _cache_root; "
+    code = ("import os, time; from nexgraph_engine.indexing.index.generic import _cache_root; "
             "print(os.getpid(), _cache_root(), flush=True); time.sleep(120)")
     p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True, encoding="utf-8")
     try:
@@ -108,7 +108,7 @@ def test_serve_removes_orphan_caches_on_start(watched_tmp, tmp_path):
 def test_sweep_never_removes_caches_of_this_process(watched_tmp, monkeypatch):
     """review-81 T2: luồng dọn của `serve` chạy song song với lần tạo cache đầu tiên của job — không được xoá
     cache đang dùng của chính tiến trình."""
-    from nexgraph_engine.index.extract_cache import sweep_orphan_caches
+    from nexgraph_engine.indexing.index.extract_cache import sweep_orphan_caches
     monkeypatch.setattr(generic, "_cache_dir", None)
     root = generic._cache_root()
     other_thread = watched_tmp / f"nexgraph-extract-{os.getpid()}-luongkhac"
@@ -122,7 +122,7 @@ def test_sweep_never_removes_caches_of_this_process(watched_tmp, monkeypatch):
 
 def test_legacy_cache_still_written_inside_is_kept(watched_tmp, monkeypatch):
     """review-81 T1: engine bản cũ chỉ ghi vào thư mục con, mtime của thư mục gốc đứng yên."""
-    from nexgraph_engine.index.extract_cache import sweep_orphan_caches
+    from nexgraph_engine.indexing.index.extract_cache import sweep_orphan_caches
     legacy = watched_tmp / "nexgraph-extract-dangchay"
     (legacy / "ast").mkdir(parents=True)
     old = time.time() - 3 * 24 * 3600
@@ -133,7 +133,7 @@ def test_legacy_cache_still_written_inside_is_kept(watched_tmp, monkeypatch):
 
 def test_windows_open_failure_is_dead_only_for_missing_process():
     """review-81 T3: OpenProcess lỗi vì lý do khác "không có tiến trình" (87) thì không chắc — coi là còn sống."""
-    from nexgraph_engine.subprocesses import _open_failure_means_alive
+    from nexgraph_engine.core.subprocesses import _open_failure_means_alive
     assert _open_failure_means_alive(87) is False   # ERROR_INVALID_PARAMETER: không có tiến trình này
     assert _open_failure_means_alive(5) is True     # ERROR_ACCESS_DENIED
     assert _open_failure_means_alive(1450) is True  # ERROR_NO_SYSTEM_RESOURCES
