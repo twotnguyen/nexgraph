@@ -12,6 +12,7 @@ from graphify.extractors.base import (  # noqa: F401
     _read_source_text,
     _read_text,
 )
+from graphify.extractors.python_scope import _python_param_shadow_checker
 from graphify.ids import normalize_id
 from graphify.rcfile import effective_suffix, get_language_overrides
 import functools
@@ -1029,6 +1030,48 @@ def _vue_mask_non_script(src: str) -> tuple[str, str | None]:
     out.append(_blank(src[pos:]))
     return "".join(out), lang
 
+
+_HTML_SCRIPT_TAG_RE = re.compile(
+    r"<script\b((?:\"[^\"]*\"|'[^']*'|[^>\"'])*)>([\s\S]*?)</script\s*>",
+    re.IGNORECASE,
+)
+_NON_JS_SCRIPT_TYPE_RE = re.compile(
+    r"""\btype\s*=\s*["']?(?!module\b|text/javascript\b|application/javascript\b)""",
+    re.IGNORECASE,
+)
+
+
+def _svelte_mask_non_script(src: str) -> tuple[str, str | None]:
+    """Blank everything in a ``.svelte`` file except JS ``<script>`` bodies.
+
+    Every character outside those bodies becomes a space (``\\r``/``\\n`` are
+    kept), so AST locations match the original file. Scripts with a non-JS
+    ``type`` (``application/ld+json`` and the like) are blanked too: their
+    bodies are not statements and would only add parse errors. Returns
+    ``(masked_source, lang)``; ``lang`` is the first JS block's declared
+    ``lang``. Mirrors :func:`_astro_mask_non_script`.
+    """
+    chars = [c if c in "\r\n" else " " for c in src]
+    lang: str | None = None
+    for m in _HTML_SCRIPT_TAG_RE.finditer(src):
+        if _NON_JS_SCRIPT_TYPE_RE.search(m.group(1)):
+            continue
+        start, end = m.start(2), m.end(2)
+        chars[start:end] = src[start:end]
+        # Terminate the region in place of the closing `</script`, so two scripts
+        # on one line don't run together. U+2028 is a JS line terminator, so it
+        # ends a trailing `//` comment that would otherwise swallow the next
+        # block; the `;` after it then ends the statement (inside the comment it
+        # would be inert). U+2028 is not a newline, so line numbers hold, and its
+        # 3 UTF-8 bytes replace 3 ASCII ones, so byte offsets do too.
+        chars[end:end + 4] = ["\u2028", ";", "", ""]
+        if lang is None:
+            lang_m = _VUE_SCRIPT_LANG_RE.search(m.group(1))
+            if lang_m:
+                lang = lang_m.group(1).lower()
+    return "".join(chars), lang
+
+
 def _memo_cwd(path_str: str) -> str:
     """The cwd part of a path-memo key: empty for an absolute path (#perf).
 
@@ -1088,7 +1131,14 @@ def _disambiguate_colliding_node_ids(
     scatter a single module across N file-qualified duplicates.
     """
     by_id: dict[str, list[dict]] = {}
+    # Files whose copy of a node an earlier merge folded into it (Go, #5304). Their
+    # edges still name the shared pre-salt id keyed by their OWN path, so they must
+    # follow the node they were folded into. Transient: always consumed here.
+    folded_files: dict[int, list[str]] = {}
     for node in nodes:
+        folded = node.pop("_go_folded_files", None)
+        if folded:
+            folded_files[id(node)] = folded
         if node.get("type") in ("module", "namespace"):
             continue
         nid = node.get("id")
@@ -1133,6 +1183,11 @@ def _disambiguate_colliding_node_ids(
             remap[(old_id, source_key)] = new_id
             if new_id != old_id:
                 node["id"] = new_id
+        for node in group:
+            for folded_file in folded_files.get(id(node), ()):
+                folded_key = _source_key(folded_file, root)
+                if folded_key and folded_key not in source_keys:
+                    remap.setdefault((old_id, folded_key), node["id"])
 
     if not remap:
         # No colliding ids to salt apart, but the transient `target_file` hint an
@@ -1154,23 +1209,24 @@ def _disambiguate_colliding_node_ids(
         if len(candidates) == 1:
             unambiguous_remaps[old_id] = next(iter(candidates))
 
-    # A C/ObjC/C++ `#include "foo.h"` / `#import "foo.h"` resolves to the header's
-    # file node, but `foo.h` and its sibling `foo.c`/`foo.m`/`foo.cpp` collapse to
-    # the same `foo` file id, so disambiguation salts them apart by path. A
-    # cross-file import edge from a THIRD file carries neither salt's source_key, so
-    # the (target, edge_source_key) lookup misses and the edge dangles on the now
-    # dead `foo` id. Repoint those import edges to the HEADER variant (the include
-    # always targeted the header), keyed by the original colliding id (#1475).
-    _HEADER_SUFFIXES = (".h", ".hpp", ".hh", ".hxx")
+    # #1475: an unhinted native include targets the header variant, even
+    # when its own implementation file has the same original ID.
+    from graphify.extract import _lang_family
+
+    header_suffixes = {".h", ".hpp", ".hh", ".hxx"}
     header_remaps: dict[str, str] = {}
+    file_remaps: dict[tuple[str, str], set[str]] = {}
     for old_id in ambiguous_ids:
-        for node in by_id.get(old_id, []):
-            sk = _node_disambiguation_source_key(node, root)
-            if sk and Path(sk).suffix.lower() in _HEADER_SUFFIXES:
-                new_id = remap.get((old_id, sk))
-                if new_id:
-                    header_remaps[old_id] = new_id
-                    break
+        for node in by_id[old_id]:
+            source = _node_disambiguation_source_key(node, root)
+            new_id = remap.get((old_id, source))
+            if not source or not new_id:
+                continue
+            if Path(source).suffix.lower() in header_suffixes:
+                header_remaps.setdefault(old_id, new_id)
+            family = _lang_family(source)
+            if family and node.get("label") == Path(source).name:
+                file_remaps.setdefault((old_id, family), set()).add(new_id)
 
     for edge in edges:
         edge_source_key = _source_key(str(edge.get("source_file", "")), root)
@@ -1193,14 +1249,16 @@ def _disambiguate_colliding_node_ids(
             edge["source"] = remap[source_key]
         elif edge.get("source") in unambiguous_remaps:
             edge["source"] = unambiguous_remaps[str(edge["source"])]
-        # imports/imports_from always target a header file, so they must resolve to
-        # the header variant BEFORE the same-source-file salt is considered. Keying
-        # the import target by the importer's own source file mis-points a `.m`
-        # importing its own `.h` back at itself (self-loop), and is wrong for any
-        # cross-file import whose importer shares the colliding id (#1475).
-        if (edge.get("relation") in ("imports", "imports_from")
-                and edge.get("target") in header_remaps):
-            edge["target"] = header_remaps[str(edge["target"])]
+        target = str(edge.get("target", ""))
+        if (not target_file and target in header_remaps
+                and edge.get("relation") in ("imports", "imports_from")):
+            family = _lang_family(edge_source_key)
+            if family == "native" or effective_suffix(edge_source_key) in header_suffixes:
+                edge["target"] = header_remaps[target]
+            elif family:
+                candidates = file_remaps.get((target, family), set())
+                if len(candidates) == 1:
+                    edge["target"] = next(iter(candidates))
         elif target_key in remap:
             edge["target"] = remap[target_key]
         elif edge.get("target") in unambiguous_remaps:
@@ -1481,13 +1539,29 @@ def _apply_symbol_resolution_facts(
     for declaration in facts.declarations:
         ensure_symbol_node(declaration.file_path, declaration.name, declaration.line)
 
-    local_aliases_by_file: dict[Path, dict[str, tuple[Path, str]]] = {}
+    # Keyed by scope_id (None = module level, else the plain id of the function
+    # an import is local to), so a function-local Python import's alias binds
+    # only a use whose own scope_id matches, instead of every same-named call
+    # anywhere in the file (#5421's second, deferred scenario). JS/TS imports
+    # never set scope_id, so every alias they contribute lives under the same
+    # None key as before -- this is purely additive for them.
+    local_aliases_by_file: dict[Path, dict[str, dict[str | None, tuple[Path, str]]]] = {}
     for import_fact in facts.imports:
         file_path = _resolve_cached(import_fact.file_path)
-        local_aliases_by_file.setdefault(file_path, {})[import_fact.local_name] = (
+        local_aliases_by_file.setdefault(file_path, {}).setdefault(
+            import_fact.local_name, {}
+        )[import_fact.scope_id] = (
             _resolve_cached(import_fact.target_path),
             import_fact.imported_name,
         )
+
+    def _local_alias(file_path: Path, name: str, scope_id: str | None) -> tuple[Path, str] | None:
+        by_scope = local_aliases_by_file.get(file_path, {}).get(name)
+        if not by_scope:
+            return None
+        if scope_id is not None and scope_id in by_scope:
+            return by_scope[scope_id]
+        return by_scope.get(None)
 
     pending_aliases_by_file: dict[Path, list[_SymbolAliasFact]] = {}
     for alias_fact in facts.aliases:
@@ -1499,11 +1573,11 @@ def _apply_symbol_resolution_facts(
         while changed:
             changed = False
             for alias_fact in aliases:
-                if alias_fact.alias in local_aliases:
+                if None in local_aliases.get(alias_fact.alias, {}):
                     continue
-                origin = local_aliases.get(alias_fact.target_name)
+                origin = local_aliases.get(alias_fact.target_name, {}).get(None)
                 if origin is not None:
-                    local_aliases[alias_fact.alias] = origin
+                    local_aliases.setdefault(alias_fact.alias, {})[None] = origin
                     changed = True
 
     named_exports_by_file: dict[Path, dict[str, tuple[Path, str]]] = {}
@@ -1567,7 +1641,7 @@ def _apply_symbol_resolution_facts(
         if export_fact.target_path is not None and export_fact.target_name is not None:
             origin = (_resolve_cached(export_fact.target_path), export_fact.target_name)
         elif export_fact.local_name is not None:
-            origin = local_aliases_by_file.get(file_path, {}).get(export_fact.local_name)
+            origin = _local_alias(file_path, export_fact.local_name, None)
             if origin is None and (file_path, export_fact.local_name) in symbol_nodes:
                 origin = (file_path, export_fact.local_name)
         if origin is None:
@@ -1987,7 +2061,7 @@ def _apply_symbol_resolution_facts(
     for use_fact in facts.uses:
         file_path = _resolve_cached(use_fact.file_path)
         target_id = None
-        unresolved_origin = local_aliases_by_file.get(file_path, {}).get(use_fact.local_name)
+        unresolved_origin = _local_alias(file_path, use_fact.local_name, use_fact.source_id)
         if unresolved_origin is not None:
             origin_path, origin_symbol = resolve_exported_origin(*unresolved_origin)
             target_id = symbol_nodes.get((origin_path, origin_symbol))
@@ -2023,20 +2097,17 @@ def _apply_symbol_resolution_facts(
 def _parse_js_tree(path: Path):
     try:
         from tree_sitter import Language, Parser
-        # .vue embeds the script in non-JS markup; mask it out and parse the
-        # <script> with TS.
-        vue_lang: str | None = None
-        if effective_suffix(path) == ".vue":
-            masked, vue_lang = _vue_mask_non_script(
-                _read_source_text(path, warn=False)
-            )
+        suffix = effective_suffix(path)
+        if suffix in (".vue", ".svelte"):
+            # Blank component markup before parsing the script bodies.
+            mask = _vue_mask_non_script if suffix == ".vue" else _svelte_mask_non_script
+            masked, lang = mask(_read_source_text(path, warn=False))
             source = masked.encode("utf-8")
+            use_ts = lang not in ("js", "jsx")
         else:
             source = _read_source_bytes(path, warn=False)
-        use_ts = effective_suffix(path) in (".ts", ".mts", ".cts") or (
-            effective_suffix(path) == ".vue" and vue_lang not in ("js", "jsx")
-        )
-        if effective_suffix(path) == ".tsx":
+            use_ts = suffix in (".ts", ".mts", ".cts")
+        if suffix == ".tsx":
             # .tsx must use the JSX-aware TSX grammar, mirroring the engine's
             # _TSX_CONFIG (ts_language_fn="language_tsx"). Parsing .tsx with
             # language_typescript misparses JSX, and tree-sitter's error
@@ -3013,7 +3084,7 @@ def _python_imported_names(node, source: bytes) -> list[tuple[str, str]]:
             continue
         if child.type == "dotted_name":
             name = _read_text(child, source)
-            names.append((name, name.split(".")[-1]))
+            names.append((name, name.split(".")[0 if node.type == "import_statement" else -1]))
         elif child.type == "aliased_import":
             name_node = child.child_by_field_name("name")
             alias_node = child.child_by_field_name("alias")
@@ -3377,11 +3448,18 @@ def _collect_python_symbol_resolution_facts(
     root: Path,
     facts: _SymbolResolutionFacts,
     ambiguous_python_modules: set[str] | None = None,
+    raw_calls: list[dict] | None = None,
 ) -> None:
     ambiguous_python_modules = ambiguous_python_modules or set()
     py_paths = [path for path in paths if effective_suffix(path) == ".py"]
     if not py_paths:
         return
+
+    calls_by_file: dict[Path, list[dict]] = {}
+    for call in raw_calls or []:
+        source_file = call.get("source_file")
+        if source_file and not call.get("is_member_call") and not call.get("indirect"):
+            calls_by_file.setdefault(_resolve_cached(source_file), []).append(call)
 
     # One parse per file, dropped before the next (the same reason as the JS facts above).
     for path in py_paths:
@@ -3389,8 +3467,35 @@ def _collect_python_symbol_resolution_facts(
         if parsed is None:
             continue
         source, root_node = parsed
+        imported_names: dict[str, tuple[str, str, str | None]] = {}
+        local_import_scopes: dict[str, list[tuple[int, int]]] = {}
+        top_level_bodies = _python_top_level_function_bodies(path, root_node, source)
+
+        # A function-local import binds its name only inside that function's own
+        # body, not the whole file: tag every import_from_statement found while
+        # walking each top-level def/method body with that body's own (plain,
+        # unsalted) id, the same id a bare call inside it gets as its
+        # facts.uses source_id below. _apply_symbol_resolution_facts then binds
+        # the alias only for a use whose source_id matches, so it cannot leak
+        # into an unrelated sibling function's own same-named call (#5421's
+        # second, deferred scenario -- distinct from local_import_scopes above,
+        # which guards the separate raw_calls direct-call fallback for #5229).
+        import_scope_by_node_id: dict[int, str] = {}
+        for scope_source_id, body in top_level_bodies:
+            for node in _walk_python_tree(body):
+                if node.type == "import_from_statement":
+                    import_scope_by_node_id[node.id] = scope_source_id
 
         for node in _walk_python_tree(root_node):
+            if node.type in ("import_statement", "import_from_statement"):
+                scope = node.parent
+                while scope is not None and scope.type not in (
+                    "module", "function_definition", "class_definition", "lambda",
+                ):
+                    scope = scope.parent
+                if scope is not None and scope.type == "function_definition":
+                    for _, local in _python_imported_names(node, source):
+                        local_import_scopes.setdefault(local, []).append((scope.start_byte, scope.end_byte))
             if node.type != "import_from_statement":
                 continue
             module = _python_import_from_module(node, source)
@@ -3400,6 +3505,12 @@ def _collect_python_symbol_resolution_facts(
             if level == 0 and _make_id(module_name) in ambiguous_python_modules:
                 continue
             target_path = _resolve_python_module_path(module_name, path, root, level)
+            if node.parent is not None and node.parent.type == "module":
+                for imported, local in _python_imported_names(node, source):
+                    imported_names[local] = (
+                        imported, module_name if level == 0 else "",
+                        str(target_path) if target_path is not None else None,
+                    )
             if target_path is not None:
                 # #1146: `from pkg import submod` — if the target is a package
                 # (__init__.py) and an imported name matches a submodule file on
@@ -3442,7 +3553,10 @@ def _collect_python_symbol_resolution_facts(
                 if target_path is None:
                     continue  # a namespace package owns no symbols of its own to bind
                 facts.imports.append(
-                    _SymbolImportFact(path, local_name, target_path, imported_name, line)
+                    _SymbolImportFact(
+                        path, local_name, target_path, imported_name, line,
+                        import_scope_by_node_id.get(node.id),
+                    )
                 )
                 if path.stem == "__init__":
                     facts.exports.append(
@@ -3455,10 +3569,28 @@ def _collect_python_symbol_resolution_facts(
                         )
                     )
 
-        for source_id, body in _python_top_level_function_bodies(path, root_node, source):
+        # Constrain direct-call fallback to the explicitly imported name and
+        # module, including imports the fact resolver could not resolve (#5229).
+        # Only unconditional top-level imports apply file-wide. For explicitly
+        # supplied files outside the scan root, failure to resolve a module does
+        # not establish that it is external; retain their existing fallback.
+        if _resolve_cached(path).is_relative_to(_resolve_cached(root)):
+            for call in calls_by_file.get(_resolve_cached(path), []):
+                if call.get("callee") in imported_names:
+                    scopes = local_import_scopes.get(call["callee"], ())
+                    site = call.get("_python_call_site")
+                    if scopes and (not site or any(start <= site[0] < end for start, end in scopes)):
+                        continue  # A nearer import shadows the module binding.
+                    call["_python_import_binding"] = imported_names[call["callee"]]
+
+        param_shadowed = _python_param_shadow_checker(source)
+        for source_id, body in top_level_bodies:
             for node in _walk_python_tree(body):
                 imported_name = _python_call_identifier(node, source)
                 if imported_name is None:
+                    continue
+                # A parameter named like an import hides it (#5418).
+                if param_shadowed(node, imported_name):
                     continue
                 facts.uses.append(
                     _SymbolUseFact(
@@ -3485,6 +3617,7 @@ def _augment_symbol_resolution_edges(
     _collect_python_symbol_resolution_facts(
         paths, root, facts,
         ambiguous_python_modules=ambiguous_python_modules,
+        raw_calls=raw_calls,
     )
     if resolution_context_nodes:
         _apply_symbol_resolution_facts(
@@ -3786,7 +3919,13 @@ def _cpp_source_key(source_file: str | Path, root: Path) -> str:
     if not source_file:
         return ""
     try:
-        return os.path.relpath((root / source_file).resolve(), root.resolve()).replace("\\", "/")
+        path = (root / source_file).resolve()
+        try:
+            return os.path.relpath(path, root.resolve()).replace("\\", "/")
+        except ValueError:
+            # No relative path to a root on another Windows drive; the absolute
+            # path is still a distinct identity for the file.
+            return path.as_posix()
     except (OSError, RuntimeError, ValueError):
         return ""
 
@@ -3935,9 +4074,16 @@ def _merge_cpp_member_declarations(
             continue
         scope, name = qualified.rsplit("::", 1)
         classes = owners.get(scope, [])
-        if len(classes) != 1 or classes[0].get("_cpp_class_kind") != "definition":
+        # A plain forward declares no members, so one that
+        # _merge_cpp_forward_classes left unfolded (no include path to the
+        # definition) is not a rival owner. Any other kind beside the single
+        # definition (a second definition, a template or conditional class)
+        # keeps the scope uncertain.
+        definitions = [c for c in classes if c.get("_cpp_class_kind") == "definition"]
+        if len(definitions) != 1 or any(
+                c.get("_cpp_class_kind") not in {"forward", "definition"} for c in classes):
             continue
-        owner = classes[0]
+        owner = definitions[0]
         if any(len(n["_cpp_member_records"]) != 1
                or not n["_cpp_member_records"][0].get("signature")
                or (n.get("metadata") or {}).get("cpp_conditions") for n in group):
@@ -4175,6 +4321,9 @@ def _merge_decl_def_classes(
         if src == tgt:
             continue
         k = (src, tgt, e.get("relation"), e.get("context"))
+        if e.get("relation") == "calls":
+            # A repeat call site is not a merge twin; keep it for the build's `also_seen`.
+            k += (e.get("source_file"), e.get("source_location"))
         if k in seen_keys:
             continue
         seen_keys.add(k)
@@ -4214,9 +4363,10 @@ def _merge_go_package_types(
 
     GOD-NODE GUARDS:
 
-      * Every node in the id-collision must be a ``.go`` file in ONE directory — Go's
-        package unit. The id folds in only the directory's NAME, so ``a/svc`` and
-        ``b/svc`` collide on id while being different packages; those stay split.
+      * Only ``.go`` nodes in ONE directory — Go's package unit — fold together. The
+        id folds in only the directory's NAME, so ``a/svc`` and ``b/svc`` collide on
+        id while being different packages; those stay split from each other, and
+        each directory's own copies fold separately (#5304).
       * A ``_test.go`` member folds only when its package clause names the same
         package as the group's other files (#5209). An internal test file
         (``package svc``) commonly adds test-only methods to a package type, while an
@@ -4224,10 +4374,17 @@ def _merge_go_package_types(
         types of its own; same-directory is not evidence of same package there, so a
         clause that differs or cannot be read keeps the group split.
 
-    No edge re-pointing is needed: the group already shares one id, so every edge
+    No edge re-pointing is needed here: the group already shares one id, so every edge
     already points at the survivor. The declaration site wins — the file holding
     ``type X``, the only one with a ``contains`` edge to it — and the dropped nodes'
     methods keep their own ``source_file``, so no location is lost with them.
+
+    When the id still collides afterwards (another directory's package declares the
+    same name), ``_disambiguate_colliding_node_ids`` salts each survivor by its own
+    path and re-points edges by the path that EMITTED them, which for a dropped
+    sibling's ``method`` edges is in no salt. The survivor therefore lists the files
+    it absorbed in a transient ``_go_folded_files``, which that pass consumes so those
+    edges follow it instead of staying on the dead bare id (#5304).
     """
     by_id: dict[str, list[dict]] = {}
     for n in all_nodes:
@@ -4253,25 +4410,62 @@ def _merge_go_package_types(
     for nid, group in by_id.items():
         if len(group) < 2:
             continue
-        files = [Path(str(n.get("source_file", ""))) for n in group]
-        if len({f.parent for f in files}) != 1:
-            continue
-        if any(f.name.endswith("_test.go") for f in files):
-            clauses = {_go_package_clause(f) for f in files}
-            if len(clauses) != 1 or None in clauses:
+        # Fold each directory on its own: `alpha/` and `other/alpha/` share the id but
+        # are two packages, and each may spread its own type over sibling files.
+        by_dir: dict[Path, list[dict]] = {}
+        for n in group:
+            by_dir.setdefault(Path(str(n.get("source_file", ""))).parent, []).append(n)
+        for members in by_dir.values():
+            if len(members) < 2:
                 continue
-        # A type whose declaring file is outside the corpus leaves the whole group
-        # method-only; one node is still the answer, so fold on the lowest path.
-        declared = declaring_files.get(nid, set())
-        candidates = [n for n in group if str(n.get("source_file", "")) in declared] or group
-        keeper = min(candidates, key=lambda n: (str(n.get("source_file", "")),
-                                                str(n.get("source_location", ""))))
-        for node in group:
-            if node is not keeper:
-                drop_objs.add(id(node))
+            files = [Path(str(n.get("source_file", ""))) for n in members]
+            if any(f.name.endswith("_test.go") for f in files):
+                clauses = {_go_package_clause(f) for f in files}
+                if len(clauses) != 1 or None in clauses:
+                    continue
+            # A type whose declaring file is outside the corpus leaves the whole group
+            # method-only; one node is still the answer, so fold on the lowest path.
+            declared = declaring_files.get(nid, set())
+            candidates = [n for n in members
+                          if str(n.get("source_file", "")) in declared] or members
+            keeper = min(candidates, key=lambda n: (str(n.get("source_file", "")),
+                                                    str(n.get("source_location", ""))))
+            folded = keeper.setdefault("_go_folded_files", [])
+            for node in members:
+                if node is not keeper:
+                    drop_objs.add(id(node))
+                    folded.append(str(node.get("source_file", "")))
 
     if drop_objs:
         all_nodes[:] = [n for n in all_nodes if id(n) not in drop_objs]
+
+    # A file in ANOTHER package that names the type (`svc *alpha.Service` in a field,
+    # parameter or return type) mints a sourceless `alpha.Service` stub, and
+    # `_make_id` folds that label onto the very id the declaration carries
+    # (`alpha_service`). The stub's origin_file then makes
+    # `_disambiguate_colliding_node_ids` see two source paths and salt BOTH apart,
+    # so the declaration's id changes while the `method` edges a sibling file emitted
+    # (keyed by that sibling's own path, which is in neither salt) stay on the dead
+    # bare id, and every member call through the type is dropped (#5304). Move such a
+    # stub to an id of its own before that pass: it is still a qualified stub, so
+    # `_resolve_go_type_references` re-points its edges through the referencing
+    # file's import exactly as before; it just no longer collides with the
+    # declaration it may well resolve to.
+    stub_renames: dict[tuple[str, str], str] = {}
+    for n in all_nodes:
+        nid = n.get("id")
+        label = str(n.get("label", ""))
+        origin = str(n.get("origin_file", ""))
+        if (nid in by_id and not n.get("source_file") and "." in label
+                and Path(origin).suffix.lower() == ".go"):
+            new_id = _make_id("go", "ref", label)
+            stub_renames[(nid, origin)] = new_id
+            n["id"] = new_id
+    if stub_renames:
+        for e in all_edges:
+            renamed = stub_renames.get((str(e.get("target", "")), str(e.get("source_file", ""))))
+            if renamed:
+                e["target"] = renamed
 
 
 def _resolve_cross_file_java_imports(
