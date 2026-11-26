@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 from nexgraph_engine.graphify_import.paths import (
-    has_nul, is_absolute_source, is_host_absolute, relative_posix_in_root, resolve_inside_root,
+    MAX_REL_PATH, has_nul, is_absolute_source, is_host_absolute, relative_posix_in_root, resolve_inside_root,
 )
 from nexgraph_engine.schema.enums import EdgeType, Origin
 
@@ -109,6 +109,8 @@ def normalise_rel_path(raw: object, root, *, cache: dict[str, str] | None = None
     if cache is not None and text in cache:
         return cache[text]
     result = _normalise(text, root)
+    if len(result) > MAX_REL_PATH:
+        result = ""  # vượt giới hạn cột `tep`: từ chối thay vì để IntegrityError làm hỏng cả lần nạp
     if cache is not None:
         cache[text] = result
     return result

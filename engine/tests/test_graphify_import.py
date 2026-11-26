@@ -642,6 +642,25 @@ def test_nul_changed_path_is_rejected_by_replace_files(tmp_path):
     assert conn.execute("SELECT count(*) FROM tep WHERE duong_dan_tuong_doi = 'app.py'").fetchone()[0] == 1
 
 
+def test_overlong_source_file_is_rejected_not_fatal(tmp_path):
+    """Đường dài hơn giới hạn cột `tep.duong_dan_tuong_doi` (1024 ký tự) bị từ chối, không làm hỏng cả lần nạp.
+
+    Trước bản sửa: `sqlite3.IntegrityError` (CHECK length BETWEEN 1 AND 1024) thoát khỏi `import_graph_json`.
+    """
+    root = make_project(tmp_path)
+    long_path = "a/" * 600 + "x.py"  # 1204 ký tự, mỗi phần ngắn nên vẫn qua bước resolve
+    graph_json = root / ".nexgraph" / "graph.json"
+    data = json.loads(graph_json.read_text(encoding="utf-8"))
+    data["nodes"].append({"id": "long_node", "label": "long_node()", "_callable": True, "_origin": "ast",
+                          "source_file": long_path, "source_location": "L1"})
+    graph_json.write_text(json.dumps(data), encoding="utf-8")
+    store, conn = open_store(tmp_path)
+    report = import_graph_json(store, root, graph_json)
+    assert report.rejected_paths == (long_path,)
+    assert store.get_node("app_greet#function").file == "app.py"
+    assert store.get_node("long_node#function").file == "__(graphify-external)"
+
+
 def test_cli_import_graph(tmp_path, capsys):
     """NG-IMP-4: lệnh nội bộ `nexgraph-engine import-graph --project <root>`."""
     from nexgraph_engine.cli import main

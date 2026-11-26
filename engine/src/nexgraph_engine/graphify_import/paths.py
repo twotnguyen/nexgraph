@@ -47,6 +47,10 @@ def is_host_absolute(text: str, *, windows: bool | None = None) -> bool:
     return is_windows_absolute(text) if on_windows else is_posix_absolute(text)
 
 
+#: Giới hạn cột `tep.duong_dan_tuong_doi` (schema/graph.sql, CHECK length BETWEEN 1 AND 1024).
+MAX_REL_PATH = 1024
+
+
 def has_nul(text: str) -> bool:
     """Chuỗi có NUL: không phải đường dẫn hợp lệ trên nền tảng nào; `os.lstat` ném `ValueError` (QA #67 vòng 4)."""
     return "\x00" in text
