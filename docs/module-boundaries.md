@@ -65,3 +65,12 @@ Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/d
   - `components/common/icons.tsx` ↔ `screens/ProjectOverviewScreen.tsx`, kéo theo 4 dialog/card của màn Tổng quan.
   - `main/git/operations.ts` ↔ `main/git/repo.ts`.
 - Các luật ranh giới tiến trình và `shared` đang giữ.
+
+## Đường dẫn đã chuyển
+
+Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài repo dùng bảng này để sửa đường dẫn cũ.
+
+| Pha | Cũ | Mới | Ghi chú |
+|---|---|---|---|
+| 1 | `apps/extension/` | `labs/extension/` | Ngoài pnpm workspace mặc định, lockfile riêng `labs/extension/pnpm-lock.yaml` (cùng phiên bản đã khoá trước đó). Cài: `pnpm --dir labs/extension install --ignore-workspace`. CI: job `labs (báo cáo)`, không bắt buộc. |
+| 1 | `apps/shell/` | `labs/shell/` | Không phải gói pnpm. `node labs/shell/build.mjs` |

@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 
 // Bundle extension host: mã main cũ + lớp giả lập `electron`, một file CJS, chỉ để ngoài `vscode`.
 export default defineConfig({
-  resolve: { alias: { '@shared': resolve('../desktop/src/shared'), electron: resolve('src/electron-host.ts') } },
+  resolve: { alias: { '@shared': resolve('../../apps/desktop/src/shared'), electron: resolve('src/electron-host.ts') } },
   ssr: { noExternal: true },
   build: {
     ssr: 'src/extension.ts',

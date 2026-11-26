@@ -54,6 +54,24 @@ jobs:
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: pnpm rules:report
 
+  # Nhánh thử nghiệm Code-OSS (labs/, ADR 0026 pha 1): ngoài pnpm workspace mặc định, lockfile riêng.
+  # Không thuộc 7 check bắt buộc, `release` không chờ; vẫn chạy để thấy ngay khi việc chuyển tệp desktop làm gãy labs.
+  labs:
+    name: labs (báo cáo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+      # extension import thẳng mã desktop nên cần node_modules của desktop; không cần Electron.
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm --dir labs/extension install --ignore-workspace --frozen-lockfile
+      - run: pnpm --dir labs/extension typecheck
+      - run: pnpm --dir labs/extension test
+
   engine:
     name: engine (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -103,8 +121,6 @@ jobs:
       - run: pnpm --filter @nexgraph/desktop test
         env:
           NEXGRAPH_E2E: '1'
-      - run: pnpm --filter ./apps/extension typecheck
-      - run: pnpm --filter ./apps/extension test
 
   version-check:
     name: version-check

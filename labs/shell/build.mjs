@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Dựng app NexGraph từ nền Code-OSS đã ghim: lấy nền → áp bản vá → chép đè → gắn extension + engine → build.
-// Dùng: node apps/shell/build.mjs [--dev] [--src <đường dẫn hoặc URL repo nền>]
+// Dùng: node labs/shell/build.mjs [--dev] [--src <đường dẫn hoặc URL repo nền>]
 //   --dev  chỉ biên dịch để chạy thử bằng .upstream/scripts/code.sh, không đóng gói.
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -33,7 +33,7 @@ if (!existsSync(join(up, '.git'))) {
 }
 const head = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: up, encoding: 'utf8' }).trim()
 if (head !== pin.commit) {
-  console.error(`.upstream đang ở ${head}, khác commit ghim ${pin.commit}. Xoá apps/shell/.upstream rồi chạy lại.`)
+  console.error(`.upstream đang ở ${head}, khác commit ghim ${pin.commit}. Xoá labs/shell/.upstream rồi chạy lại.`)
   process.exit(1)
 }
 // Về trạng thái gốc trước khi áp lại, để chạy nhiều lần vẫn ra cùng kết quả (giữ node_modules, out, .build).
@@ -55,10 +55,10 @@ const product = { ...JSON.parse(readFileSync(productFile, 'utf8')), ...JSON.pars
 writeFileSync(productFile, JSON.stringify(product, null, '\t') + '\n')
 
 step('Build extension NexGraph')
-run('pnpm', ['--filter', 'nexgraph', 'build'], repo)
+run('pnpm', ['build'], join(repo, 'labs', 'extension'))
 const ext = join(up, 'extensions', 'nexgraph')
 mkdirSync(ext, { recursive: true })
-for (const f of ['package.json', 'dist', 'media', 'themes']) cpSync(join(repo, 'apps', 'extension', f), join(ext, f), { recursive: true })
+for (const f of ['package.json', 'dist', 'media', 'themes']) cpSync(join(repo, 'labs', 'extension', f), join(ext, f), { recursive: true })
 for (const f of ['LICENSE', 'NOTICE', 'THIRD_PARTY_LICENSES.md']) cpSync(join(repo, f), join(ext, f))
 
 step('Cài dependency của nền')
@@ -75,7 +75,7 @@ const target = `${win ? 'win32' : process.platform}-${process.arch}`
 step(`Đóng gói vscode-${target}-min`)
 run('pnpm', ['run', 'gulp', `vscode-${target}-min`], up)
 
-// Nền đặt kết quả cạnh thư mục nguồn: apps/shell/VSCode-<target>.
+// Nền đặt kết quả cạnh thư mục nguồn: labs/shell/VSCode-<target>.
 const out = join(here, `VSCode-${target}`)
 const appDir = process.platform === 'darwin' ? join(out, `${product.nameLong}.app`, 'Contents', 'Resources', 'app') : join(out, 'resources', 'app')
 step('Lược bỏ phần của nền không dùng tới')

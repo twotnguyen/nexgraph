@@ -25,7 +25,7 @@ Mở thư mục mã nguồn trong cửa sổ NexGraph. Dự án nhỏ được q
 - [Danh sách kiểm trên Windows](docs/windows-checklist.md)
 - [Trợ lý AI: tài khoản, ngữ cảnh, quyền thực thi, lịch sử và hoàn tác](docs/ai-workbench.md)
 
-**NexGraph 0.1.0 Electron/Monaco** là bản dùng để bàn giao và bảo vệ. Bộ cài có engine đi kèm. Lệnh `pnpm dev` khởi động cùng giao diện và chạy engine từ mã nguồn. Tích hợp **Code-OSS** là bản thử nghiệm, dùng chung engine và có quy trình build riêng. [Quy trình build Code-OSS](apps/shell/README.md)
+**NexGraph 0.1.0 Electron/Monaco** là bản dùng để bàn giao và bảo vệ. Bộ cài có engine đi kèm. Lệnh `pnpm dev` khởi động cùng giao diện và chạy engine từ mã nguồn. Tích hợp **Code-OSS** là bản thử nghiệm, dùng chung engine và có quy trình build riêng. [Quy trình build Code-OSS](labs/shell/README.md)
 
 ## Đặc tả và trạng thái
 
@@ -42,8 +42,8 @@ CI chạy setup từ checkout sạch rồi kiểm trên Windows và macOS. Job �
 |---|---|
 | [`engine/`](engine/) | Python 3.12, FastAPI, SQLite, lập chỉ mục, truy vấn đồ thị và MCP |
 | [`apps/desktop/`](apps/desktop/) | Electron, React, Monaco, editor và trợ lý AI |
-| [`apps/extension/`](apps/extension/) | Adapter Code-OSS, webview đồ thị và tích hợp editor của workbench |
-| [`apps/shell/`](apps/shell/) | Cấu hình, patch và quy trình build Code-OSS theo commit ghim |
+| [`labs/extension/`](labs/extension/) | Adapter Code-OSS, webview đồ thị và tích hợp editor của workbench |
+| [`labs/shell/`](labs/shell/) | Cấu hình, patch và quy trình build Code-OSS theo commit ghim |
 | [`docs/`](docs/) | Đặc tả, use case, sơ đồ, tài liệu chạy và biên bản kiểm thử |
 
 ## Giấy phép

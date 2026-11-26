@@ -6,7 +6,7 @@ import { resolve } from 'node:path'
 export default defineConfig({
   base: './',
   plugins: [react()],
-  resolve: { alias: { '@shared': resolve('../desktop/src/shared'), electron: resolve('src/electron-webview.ts') } },
+  resolve: { alias: { '@shared': resolve('../../apps/desktop/src/shared'), electron: resolve('src/electron-webview.ts') } },
   worker: { format: 'es' },
   build: {
     outDir: 'dist/webview',
