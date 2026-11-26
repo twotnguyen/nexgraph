@@ -92,11 +92,12 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
     offIndex()
   }
 
+  // Đồ thị theo Graphify (ADR 0023): nút hàm mang nhãn của pipeline, có `()`.
   const hits = await api.graph.search(pid, 'smokeEntry', { kinds: ['function'] })
-  const entry = hits.find(({ node }) => node.label === 'smokeEntry' && node.file === filename)?.node
+  const entry = hits.find(({ node }) => node.label === 'smokeEntry()' && node.file === filename)?.node
   if (!entry || entry.line_start !== 5) throw new Error('graph IPC did not find smokeEntry at smoke.ts:5')
   const neighbors = await api.graph.neighbors(pid, { node: entry.id, types: ['CALLS'], direction: 'out', depth: 1 })
-  const helper = neighbors.nodes.find((node) => node.label === 'smokeHelper' && node.file === filename)
+  const helper = neighbors.nodes.find((node) => node.label === 'smokeHelper()' && node.file === filename)
   if (!helper || !neighbors.edges.some((edge) => edge.type === 'CALLS' && edge.source === entry.id &&
     edge.target === helper.id && edge.evidence?.file === filename && edge.evidence.line === 6)) {
     throw new Error('graph IPC did not find the smokeEntry call at smoke.ts:6')
@@ -107,7 +108,7 @@ export async function runRendererSmoke(api: NexGraphApi, root: string, baseUrl: 
   }
 
   const callerHits = await api.graph.search(pid, 'smokeExternal', { kinds: ['function'] })
-  const external = callerHits.find(({ node }) => node.label === 'smokeExternal' && node.file === caller)?.node
+  const external = callerHits.find(({ node }) => node.label === 'smokeExternal()' && node.file === caller)?.node
   if (!external) throw new Error('graph IPC did not find the caller in the second source file')
   const externalCalls = await api.graph.neighbors(pid, { node: external.id, types: ['CALLS'], direction: 'out', depth: 1 })
   if (!externalCalls.edges.some((edge) => edge.type === 'CALLS' && edge.source === external.id &&
