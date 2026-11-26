@@ -19,6 +19,8 @@ export const uiEnAgent: Record<string, string> = {
   'Bỏ ghim': 'Unpin',
   'Chi phí chưa xác định': 'Cost unavailable',
   'Chi phí: chưa xác định': 'Cost: unavailable',
+  'Câu hỏi, ngữ cảnh đồ thị và nội dung tệp mà trợ lý đọc trong dự án {project} có thể được gửi tới tài khoản {provider} đã đăng nhập trong Nex (model {model}). Nex gửi bằng tài khoản đó, không qua khoá API của NexGraph.':
+    'The question, graph context and file contents read by the assistant in {project} may be sent to the {provider} account signed in to Nex (model {model}). Nex sends them with that account, not with a NexGraph API key.',
   'Cho phép Antigravity CLI chính thức gửi ngữ cảnh và lịch sử hội thoại của dự án “{project}” tới Google bằng tài khoản Google hiện đang được Antigravity quản lý trên máy này? Trợ lý sử dụng {model}.': 'Allow the official Antigravity CLI to send the project “{project}” context and conversation history to Google using the Google account currently managed by Antigravity on this machine? The assistant uses {model}.',
   'Cho phép Antigravity CLI gửi ngữ cảnh và lịch sử hội thoại của dự án này tới Google bằng tài khoản Google hiện đang được Antigravity quản lý.': 'Allow Antigravity CLI to send this project’s context and conversation history to Google using the Google account currently managed by Antigravity.',
   'Cho phép chạy': 'Allow run',

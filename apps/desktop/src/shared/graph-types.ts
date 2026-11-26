@@ -398,6 +398,8 @@ export interface AiSettings {
   provider?: string
   accountId?: string
   connectionId?: string
+  /** Runtime Nex đang gửi tới điểm đến chọn trong khối tài khoản Nex (consent riêng, không theo model Pi). */
+  nexDestination?: boolean
 }
 export interface Citation { raw: string; file: string; start: number; end: number; valid: boolean; reason: null | 'file_not_found' | 'out_of_range' }
 export interface ContextItem { node: GraphNode; score: number; reasons: string[]; code: { file: string; start: number; end: number; text: string } | null }

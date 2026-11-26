@@ -80,7 +80,9 @@ export type NexAuthStatusView = { status: 'pending' | 'complete' | 'failed' | 'e
 
 export type PiConsentTarget = { runtime?: 'pi'; provider: string; baseUrl: string; accountId?: string }
 export type GeminiConsentTarget = { runtime: 'antigravity-cli'; provider: 'google-antigravity'; connectionId: string; accountId?: string; baseUrl?: never }
-export type AiConsentTarget = PiConsentTarget | GeminiConsentTarget
+/** Điểm đến của phiên Nex theo khối tài khoản Nex (#72): `baseUrl` là URL nhà cung cấp, hoặc `nex-account:<id>` cho tài khoản đăng nhập trong sidecar. */
+export type NexConsentTarget = { runtime: 'nex'; provider: string; baseUrl: string; accountId?: string }
+export type AiConsentTarget = PiConsentTarget | GeminiConsentTarget | NexConsentTarget
 
 export function normalizeConsentTarget(provider: string, baseUrl: string, accountId?: string): PiConsentTarget | null {
   try {
@@ -97,11 +99,16 @@ export function sameConsentTarget(left: AiConsentTarget | null | undefined, righ
   if (!left || !right || left.provider !== right.provider || left.accountId !== right.accountId) return false
   if (left.runtime === 'antigravity-cli' || right.runtime === 'antigravity-cli')
     return left.runtime === 'antigravity-cli' && right.runtime === 'antigravity-cli' && !!left.connectionId && left.connectionId === right.connectionId
+  // Điểm đến Nex và điểm đến Pi cùng nhà cung cấp/URL vẫn là hai consent khác nhau.
+  if ((left.runtime === 'nex') !== (right.runtime === 'nex')) return false
   return left.baseUrl === right.baseUrl
 }
 
-export function consentTargetForSettings(settings: { runtime?: 'nex' | 'pi' | 'antigravity-cli'; provider?: string; baseUrl?: string; model?: string; accountId?: string; connectionId?: string }): AiConsentTarget | null {
+export function consentTargetForSettings(settings: { runtime?: 'nex' | 'pi' | 'antigravity-cli'; provider?: string; baseUrl?: string; model?: string; accountId?: string; connectionId?: string; nexDestination?: boolean }): AiConsentTarget | null {
   if (!settings.model) return null
+  if (settings.runtime === 'nex' && settings.nexDestination) return settings.provider && settings.baseUrl ? {
+    runtime: 'nex', provider: settings.provider, baseUrl: settings.baseUrl, ...(settings.accountId ? { accountId: settings.accountId } : {})
+  } : null
   if (settings.runtime === 'antigravity-cli') return settings.connectionId ? {
     runtime: 'antigravity-cli', provider: 'google-antigravity', connectionId: settings.connectionId,
     ...(settings.accountId ? { accountId: settings.accountId } : {})

@@ -32,6 +32,7 @@ import { AgentRouter, type AgentRuntimeId } from './agent-router'
 import { createNexSession, nexAvailable } from './agent/nex/runtime'
 import { NexSidecar, resolveNexBinary } from './agent/nex/sidecar'
 import { NexAccountManager, checkNexAuthUrl, withCustomProviders } from './agent/nex/accounts'
+import { NexConsentStore, nexAgentAccounts, nexDestination, nexReady } from './agent/nex/destination'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
@@ -42,6 +43,7 @@ import { SemanticUsageStore } from './ai/semantic-usage'
 import { directTransport, piComplete, selectedModelLabel } from './ai/semantic-models'
 import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
+import { sameConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
@@ -213,8 +215,7 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHoo
   }))
 
 /** Nex dùng được khi có model đã chọn (tài khoản sidecar, API key built-in, hoặc provider tuỳ chỉnh). */
-const nexReadyFor = (a: AccountService | null): boolean =>
-  !!a && !!(a.nexProviderFor(a.nexSelectedModel()) ?? a.nexProvider())
+const nexReadyFor = (a: AccountService | null): boolean => nexReady(a)
 
 export function stopAllWatchers(): void {
   watchStarts.clear()
@@ -836,12 +837,19 @@ export function registerIpc(
     return status.authenticated && status.connectionId ? { runtime: 'antigravity-cli', provider: 'google-antigravity', connectionId: status.connectionId } : null
   }
   const googleConsent = new GeminiConsentStore(join(dataDir, 'google-consent.json'), rootOf, googleTarget)
+  const nexConsent = new NexConsentStore(rootOf)
   const derivedSettings = async (): Promise<AiSettings> => {
     if (selectedRuntime() === 'antigravity-cli') {
       const status = await google.status()
       return { runtime: 'antigravity-cli', provider: 'google-antigravity', baseUrl: '', model: status.authenticated && geminiEnabled() ? google.selectedModel() : '', hasKey: false, connectionId: status.connectionId }
     }
     const a = await acc()
+    // Runtime Nex có lựa chọn riêng trong khối tài khoản Nex: renderer phải hỏi consent theo điểm đến đó.
+    const dest = selectedRuntime() === 'nex' ? nexDestination(a) : null
+    if (dest) {
+      return { runtime: 'nex', provider: dest.provider, baseUrl: dest.baseUrl, model: dest.model,
+        hasKey: dest.account || a.hasKey(dest.provider), nexDestination: true }
+    }
     const target = await a.getConsentTarget()
     const model = a.getSelectedModel()
     return {
@@ -854,11 +862,18 @@ export function registerIpc(
     }
   }
   on('ai:get-settings', () => derivedSettings())
-  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => target?.runtime === 'antigravity-cli' ? googleConsent.hasConsent(pid, target) : (await acc()).hasConsent(pid, target))
+  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => target?.runtime === 'antigravity-cli' ? googleConsent.hasConsent(pid, target)
+    : target?.runtime === 'nex' ? nexConsent.hasConsent(pid, target) : (await acc()).hasConsent(pid, target))
   on('ai:grant-consent', async (pid: string, target: AiConsentTarget) => {
     await rootOf(pid)
     if (target?.runtime === 'antigravity-cli') await googleConsent.grantConsent(pid, target)
-    else await (await acc()).grantConsent(pid, target)
+    else if (target?.runtime === 'nex') {
+      // Chỉ nhận đúng điểm đến Nex hiện tại: renderer không được tự chọn điểm đến khác để xin consent.
+      const current = selectedRuntime() === 'nex' ? nexDestination(await acc()) : null
+      if (!current || !sameConsentTarget(target, { runtime: 'nex', provider: current.provider, baseUrl: current.baseUrl }))
+        throw new AgentError('ai_provider_changed', 'Tài khoản AI của Nex đã thay đổi. Hãy kiểm tra và xác nhận lại trước khi gửi mã nguồn.')
+      await nexConsent.grantConsent(pid, target)
+    } else await (await acc()).grantConsent(pid, target)
   })
   on('git:suggest-message', async (pid: string) => {
     const root = await rootOf(pid)
@@ -1032,7 +1047,8 @@ export function registerIpc(
   // Cùng AgentService (phiên, transcript, checklist, giới hạn) nhưng phiên do Nex/OpenCode phụ trách.
   const nexAgent = new AgentService({
     api: liveApi, dataDir,
-    accounts: acc,
+    // Model/recipient/consent theo lựa chọn trong khối tài khoản Nex (không theo model Pi đang chọn).
+    accounts: async () => nexAgentAccounts(await acc(), nexConsent),
     rootOf,
     editorState: (projectId) => editorStates.get(projectId),
     emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event }),
