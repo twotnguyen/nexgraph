@@ -48,6 +48,17 @@ def _legacy_pipeline_for_existing_fixtures(monkeypatch):
 
 
 @pytest.fixture
+def watched_tmp(tmp_path, monkeypatch):
+    """Thư mục tạm riêng cho cả tiến trình này lẫn worker con (spawn kế thừa biến môi trường)."""
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    for key in ("TMPDIR", "TEMP", "TMP"):
+        monkeypatch.setenv(key, str(tmp))
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    return tmp
+
+
+@pytest.fixture
 def fixtures_dir() -> Path:
     return FIXTURES
 
