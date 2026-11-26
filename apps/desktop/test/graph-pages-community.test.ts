@@ -1,6 +1,6 @@
 // NG-ACT-2: trang cộng đồng sinh từ `<root>/.nexgraph/graph.json` — đọc/lọc an toàn, giới hạn,
 // phục vụ qua `nxpage://` để dùng lại cầu nối chọn nút của #68.
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -114,6 +114,24 @@ describe('phục vụ trang cộng đồng qua nxpage://', () => {
     const corrupt = project('{')
     expect((await handlePageRequest(`nxpage://pid-1/${COMMUNITY_PAGE_FILE}?c=1`, opts(corrupt.root))).status).toBe(404)
     expect((await handlePageRequest(`nxpage://pid-2/${COMMUNITY_PAGE_FILE}?c=1`, opts(root))).status).toBe(403)
+  })
+
+  it('graph.json hoặc .nexgraph là symlink ra ngoài dự án → không đọc, không dựng trang (cùng containment #68)', async () => {
+    const leaked = graphFile([member('a', 1, { label: 'LEAKED' })], [])
+    const fileLink = project(null)
+    const outside = mkdtempSync(join(tmpdir(), 'ng-outside-'))
+    writeFileSync(join(outside, 'secret.json'), leaked)
+    symlinkSync(join(outside, 'secret.json'), join(fileLink.dir, 'graph.json'))
+    await expect(readGraphJsonCommunity(fileLink.root, 1)).resolves.toBeNull()
+    const res = await handlePageRequest(`nxpage://pid-1/${COMMUNITY_PAGE_FILE}?c=1`, opts(fileLink.root))
+    expect(res.status).toBe(404)
+    expect(await res.text()).not.toContain('LEAKED')
+
+    const dirLink = mkdtempSync(join(tmpdir(), 'ng-community-'))
+    const outsideDir = mkdtempSync(join(tmpdir(), 'ng-outside-'))
+    writeFileSync(join(outsideDir, 'graph.json'), leaked)
+    symlinkSync(outsideDir, join(dirLink, '.nexgraph'))
+    await expect(readGraphJsonCommunity(dirLink, 1)).resolves.toBeNull()
   })
 
   it('render có tiêu đề NexGraph, bảng màu cộng đồng và thống kê', () => {

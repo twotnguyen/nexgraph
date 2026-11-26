@@ -306,7 +306,10 @@ export const communityNumber = (value: unknown): number | null => {
 
 /** Đọc graph.json một lần, giữ dạng gọn (không giữ metadata của Graphify); cache theo mtime. */
 async function loadGraphJson(root: string): Promise<GraphJsonGraph | null> {
-  const file = join(graphPagesDir(root), 'graph.json')
+  // Cùng containment với phục vụ trang và readGraphJsonIndex: graph.json (hoặc .nexgraph) là symlink
+  // ra ngoài gốc dự án → không đọc, nếu không nội dung tệp ngoài sẽ được dựng thành trang cộng đồng.
+  const file = await resolveGraphPage(root, 'graph.json')
+  if (!file) return null
   try {
     const info = await stat(file)
     const cached = graphJsonCache.get(file)
