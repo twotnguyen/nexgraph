@@ -15,7 +15,7 @@ pnpm rules:report   # in vi phạm, luôn thoát 0 nếu công cụ chạy đư�
 pnpm rules:strict   # thoát 1 khi còn vi phạm
 ```
 
-Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/desktop`. Cần `uv` cho import-linter. Phiên bản công cụ ghim trong `scripts/ci/module-rules.mjs`.
+Cần đã `pnpm install`, vì dependency-cruiser dùng TypeScript của `apps/desktop`. Cần `uv` cho import-linter. Phiên bản công cụ ghim trong `tools/ci/module-rules.mjs`.
 
 ## Engine (`engine/pyproject.toml`, `[tool.importlinter]`)
 
@@ -77,3 +77,6 @@ Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài re
 | 1 | `docs/superpowers/specs/2026-10-24-nexgraph-{csdl-chuan-hoa,csdl-design,csdl-tan-tu,phan-tich-chuc-nang}.md` | `docs/srs/csdl/` (cùng tên tệp) | Bản công khai; bản có ghi chú nội bộ ở tài liệu dự án |
 | 1 | `docs/superpowers/specs/2026-10-18-nexgraph-desktop-design.md`, `docs/superpowers/plans/` | bỏ khỏi repo | Bản cũ đã lệch; spec và kế hoạch hiện hành ở tài liệu dự án |
 | 1 | `design/` (hai bản: workspace và repo) | `design/` của repo | Thêm `diagrams/uml-hd-lap-chi-muc.html` |
+| 1 | `scripts/ci/` | `tools/ci/` | `pnpm rules:report`, `node tools/ci/check-version.mjs <tag>` |
+| 1 | `engine/scripts/{bench_all,bench_index,bench_refresh,bench_search_arch,demo_check}.py` | `tools/bench/` | Chạy từ gốc repo: `env -u PYTHONPATH uv run --project engine python tools/bench/<script>.py` |
+| 1 | `engine/scripts/{eval_sample,eval_score}.py` | `tools/eval/` | Như trên |

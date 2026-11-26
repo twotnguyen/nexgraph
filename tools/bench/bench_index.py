@@ -1,6 +1,6 @@
 """Đo lập chỉ mục một thư mục project (đồ thị ghi vào thư mục tạm, không đụng thư mục project).
 
-Chạy: uv run python scripts/bench_index.py <thư-mục-project> [--repeat N]
+Chạy: uv run --project engine python tools/bench/bench_index.py <thư-mục-project> [--repeat N]
 In: thời gian hai giai đoạn, số tệp/nút/cạnh theo loại, tham chiếu chưa phân giải, RAM đỉnh, thời gian mở lại.
 """
 import argparse

@@ -1,6 +1,6 @@
 # Đo tìm kiếm và bản đồ kiến trúc (kế hoạch con 3)
 
-Ngày đo: 2026-10-27. Công cụ: `engine/scripts/bench_search_arch.py` (thêm `--synthetic N` để sinh dự án giả). Số liệu là **một lần chạy trên một máy**, chưa lặp nhiều lần, **chưa có Windows**.
+Ngày đo: 2026-10-27. Công cụ: `tools/bench/bench_search_arch.py` (thêm `--synthetic N` để sinh dự án giả). Số liệu là **một lần chạy trên một máy**, chưa lặp nhiều lần, **chưa có Windows**.
 
 ## Máy và cấu hình
 

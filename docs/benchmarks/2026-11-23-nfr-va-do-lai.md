@@ -79,13 +79,13 @@ git -C <repo dự án> archive <sha> | tar -x -C <thư mục>
 
 # hiệu năng (cùng script đã sinh data/perf-*.json)
 cd engine
-env -u PYTHONPATH uv run --locked python scripts/bench_all.py <bản sao> \
+env -u PYTHONPATH uv run --locked python ../tools/bench/bench_all.py <bản sao> \
     --repeat 3 --index-repeat 3 --out <out>.json      # S
 ... --repeat 3 --index-repeat 1 ...                    # L / XL
 
 # độ đúng
-env -u PYTHONPATH uv run --locked python scripts/eval_score.py <db> \
-    docs/benchmarks/data/labels-<dự án>.csv --details <details>.json
+env -u PYTHONPATH uv run --locked python ../tools/eval/eval_score.py <db> \
+    ../docs/benchmarks/data/labels-<dự án>.csv --details <details>.json
 
 # RAM cả cây (mẫu ps 0,5 s)
 env -u PYTHONPATH uv run --locked python <workspace>/scripts/engine/ram_index.py <bản sao> <db>

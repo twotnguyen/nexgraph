@@ -7,11 +7,13 @@ from pathlib import Path
 
 import pytest
 
-SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
+# Script đo/đánh giá ở tools/ của repo (ADR 0026 pha 1), chạy trong môi trường uv của engine.
+TOOLS = Path(__file__).resolve().parents[2] / "tools"
+SCRIPTS = {"eval_score": TOOLS / "eval", "eval_sample": TOOLS / "eval", "bench_all": TOOLS / "bench"}
 
 
 def load(name: str):
-    spec = importlib.util.spec_from_file_location(name, SCRIPTS / f"{name}.py")
+    spec = importlib.util.spec_from_file_location(name, SCRIPTS[name] / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
     spec.loader.exec_module(mod)
@@ -68,7 +70,7 @@ def test_sample_is_deterministic_and_skips_tests(index_project, fixtures_dir, tm
 def test_bench_all_smoke(fixtures_dir, tmp_path):
     out = tmp_path / "perf.json"
     # PYTHONUTF8: script in tiếng Việt ra stdout; Windows mặc định cp1252 sẽ lỗi.
-    r = subprocess.run([sys.executable, str(SCRIPTS / "bench_all.py"), str(fixtures_dir / "flow_app"), "--repeat", "1", "--out", str(out)],
+    r = subprocess.run([sys.executable, str(SCRIPTS["bench_all"] / "bench_all.py"), str(fixtures_dir / "flow_app"), "--repeat", "1", "--out", str(out)],
                        capture_output=True, text=True, encoding="utf-8", env={**os.environ, "PYTHONUTF8": "1"})
     assert r.returncode == 0, r.stderr
     data = json.loads(out.read_text(encoding="utf-8"))

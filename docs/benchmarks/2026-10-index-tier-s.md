@@ -1,6 +1,6 @@
 # Đo lập chỉ mục, tầng S (kế hoạch con 2)
 
-Ngày đo: 2026-10-27. Công cụ: `engine/scripts/bench_index.py <thư-mục> --repeat 2`. Số liệu chỉ là **một lần chạy trên một máy**, chưa lặp nhiều lần, chưa có Windows.
+Ngày đo: 2026-10-27. Công cụ: `tools/bench/bench_index.py <thư-mục> --repeat 2`. Số liệu chỉ là **một lần chạy trên một máy**, chưa lặp nhiều lần, chưa có Windows.
 
 ## Máy và cấu hình
 

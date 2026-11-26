@@ -1,6 +1,6 @@
 """Chấm độ đúng của đồ thị so với nhãn tay (H6 Task 2).
 
-Chạy: uv run python scripts/eval_score.py <graph.db> <labels.csv> [--baseline graph.json] [--details d.json]
+Chạy: uv run --project engine python tools/eval/eval_score.py <graph.db> <labels.csv> [--baseline graph.json] [--details d.json]
 In JSON {kind: {tp, fp, fn, precision, recall}} chỉ trong phạm vi các tệp có trong CSV.
 
 CSV, cột cố định: file,kind,source,target,line   (kind: symbol|call|import|inherit|test)

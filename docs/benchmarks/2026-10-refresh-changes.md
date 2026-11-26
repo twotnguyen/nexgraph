@@ -1,6 +1,6 @@
 # Đo lập chỉ mục tăng dần và đọc thay đổi (kế hoạch con 4)
 
-Ngày đo: 2026-10-27. Công cụ: `engine/scripts/bench_refresh.py` (chép project sang thư mục tạm, `git init` + commit, rồi sửa; thư mục gốc không bị đụng). Số liệu là **một lần chạy trên một máy**, chưa lặp nhiều lần, **chưa có Windows**.
+Ngày đo: 2026-10-27. Công cụ: `tools/bench/bench_refresh.py` (chép project sang thư mục tạm, `git init` + commit, rồi sửa; thư mục gốc không bị đụng). Số liệu là **một lần chạy trên một máy**, chưa lặp nhiều lần, **chưa có Windows**.
 
 ## Máy và cấu hình
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Đọc `[project].version` từ pyproject.toml bằng TOML parser chuẩn (tomllib).
 
-Script CI `scripts/ci/check-version.mjs` gửi nguyên nội dung tệp qua stdin và
+Script CI `tools/ci/check-version.mjs` gửi nguyên nội dung tệp qua stdin và
 nhận version trên stdout — nhờ vậy parser theo dòng không còn cơ hội đọc nhầm
 `version = "..."` nằm trong chuỗi nhiều dòng của trường khác (vd. description).
 

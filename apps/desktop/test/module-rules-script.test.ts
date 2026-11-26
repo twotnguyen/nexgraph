@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { DEPENDENCY_CRUISER, IMPORT_LINTER, parseDepcruise, parseImportLinter } from '../../../scripts/ci/module-rules.mjs'
+import { DEPENDENCY_CRUISER, IMPORT_LINTER, parseDepcruise, parseImportLinter } from '../../../tools/ci/module-rules.mjs'
 
 // ADR 0026 pha 0: luật phụ thuộc module chạy cùng một lệnh ở máy và CI, công cụ ghim đúng phiên bản.
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url))
@@ -11,8 +11,8 @@ const scripts = (): Record<string, string> => (JSON.parse(read('package.json')) 
 
 describe('script luật phụ thuộc module', () => {
   it('pnpm rules:report / rules:strict gọi cùng script, CI chạy rules:report', () => {
-    expect(scripts()['rules:report']).toBe('node scripts/ci/module-rules.mjs')
-    expect(scripts()['rules:strict']).toBe('node scripts/ci/module-rules.mjs --strict')
+    expect(scripts()['rules:report']).toBe('node tools/ci/module-rules.mjs')
+    expect(scripts()['rules:strict']).toBe('node tools/ci/module-rules.mjs --strict')
     expect(read('.github/workflows/ci.yml')).toMatch(/^\s+- run: pnpm rules:report\s*$/m)
   })
 
