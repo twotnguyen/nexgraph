@@ -206,8 +206,25 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         return dropped
 
     def vendor_view(project_path: str | None) -> graphify_view.LoadedGraph | None:
-        """Đồ thị `.nexgraph/graph.json` của dự án hiện tại (hoặc `project_path`); None khi chưa có."""
-        project_root = Path(project_path).resolve() if project_path else root_resolved
+        """Đồ thị `.nexgraph/graph.json` của dự án hiện tại; None khi chưa có.
+
+        `project_path` (tham số của bản gốc) chỉ được trỏ vào chính dự án đang mở: người dùng đồng ý
+        gửi ngữ cảnh cho AI theo từng dự án, nên không đọc đồ thị/tệp của dự án khác. graph.json là
+        symlink có đích ngoài dự án thì coi như chưa có đồ thị (review #69 vòng 2, F4).
+        """
+        project_root = root_resolved
+        if project_path:
+            try:
+                requested = Path(project_path).expanduser().resolve()
+            except (OSError, RuntimeError, ValueError):
+                requested = None
+            if requested != root_resolved:
+                raise ToolError("project_path chỉ nhận thư mục của dự án đang mở")
+        try:
+            graph_real = graphify_view.graph_json_path(project_root).resolve()
+            graph_real.relative_to(project_root)
+        except (OSError, RuntimeError, ValueError):
+            return None
         view = graphify_view.view_for(project_root)
         if view.get() is None:
             return None

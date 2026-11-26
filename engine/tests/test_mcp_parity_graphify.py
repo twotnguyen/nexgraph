@@ -456,6 +456,69 @@ def test_vendor_branch_filters_before_lookup(policy_project):
     assert error is False and text.startswith("Node: safe_node")
 
 
+# ── Finding 4 (review vòng 2): `project_path` và graph.json không được ra ngoài dự án ──
+
+OTHER_README = "# B\n\n## Riêng B\n\nNOI-DUNG-RIENG-B\n"
+OTHER_GRAPH = {
+    "directed": False, "multigraph": False, "graph": {},
+    "nodes": [
+        {"id": "b_private", "label": "b_private", "file_type": "code",
+         "source_file": "b.py", "source_location": "L1", "community": 0},
+        {"id": "b_readme_rieng_b", "label": "Riêng B", "file_type": "document",
+         "source_file": "README.md", "source_location": "L3", "community": 0},
+    ],
+    "links": [],
+}
+#: Chỉ dữ liệu của dự án B mới sinh ra các chuỗi này (thông báo lỗi có thể nhắc lại nhãn truy vấn).
+OTHER_LEAKS = ("NOI-DUNG-RIENG-B", "Source: b.py", "ID: b_private")
+
+
+def _other_project(base: Path) -> Path:
+    other = base / "B-du-an-khac"
+    (other / ".nexgraph").mkdir(parents=True)
+    (other / "b.py").write_text("def b_private():\n    return 1\n", encoding="utf-8")
+    (other / "README.md").write_text(OTHER_README, encoding="utf-8")
+    (other / ".nexgraph" / "graph.json").write_text(json.dumps(OTHER_GRAPH, ensure_ascii=False), encoding="utf-8")
+    return other
+
+
+def test_project_path_outside_project_is_refused(policy_project):
+    """AI chỉ được đồng ý cho dự án đang mở: `project_path` trỏ sang dự án khác bị từ chối, không đọc dữ liệu."""
+    other = _other_project(policy_project.parent)
+    paths = [str(other), "../B-du-an-khac"]
+    try:
+        paths.append(os.path.relpath(other, Path.cwd()))
+    except ValueError:  # Windows: thư mục tạm và cwd khác ổ đĩa
+        pass
+    for project_path in paths:
+        for tool, arguments in [("get_node", {"label": "b_private"}),
+                                ("get_section", {"label": "Riêng B"}),
+                                ("graph_stats", {})]:
+            error, text = _server_call(policy_project, tool, {**arguments, "project_path": project_path})
+            assert error is True, (tool, project_path, text)
+            for leaked in OTHER_LEAKS:
+                assert leaked not in text, (tool, project_path, text)
+
+
+def test_project_path_of_current_project_still_works(policy_project):
+    error, text = _server_call(policy_project, "get_node", {"label": "safe_node", "project_path": str(policy_project)})
+    assert error is False and text.startswith("Node: safe_node"), text
+
+
+@pytest.mark.skipif(os.name == "nt", reason="tạo symlink trên Windows cần quyền Developer Mode")
+def test_symlinked_graph_json_outside_project_is_ignored(policy_project):
+    """`.nexgraph/graph.json` là symlink ra dự án khác (repo mang sẵn): không nạp đồ thị đó."""
+    other = _other_project(policy_project.parent)
+    link = policy_project / ".nexgraph" / "graph.json"
+    link.unlink()
+    link.symlink_to(other / ".nexgraph" / "graph.json")
+    graphify_view.clear_views()
+    for tool, arguments in [("get_node", {"label": "b_private"}), ("get_section", {"label": "Riêng B"})]:
+        _error, text = _server_call(policy_project, tool, arguments)
+        for leaked in OTHER_LEAKS:
+            assert leaked not in text, (tool, text)
+
+
 # ── Finding 2 (QA #69): mặc định tham số theo từng nhánh ────────────────────
 
 @pytest.fixture(scope="module")
