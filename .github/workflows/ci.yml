@@ -136,7 +136,7 @@ jobs:
     name: package (${{ matrix.os }})
     # Chạy SONG SONG với engine/desktop (CI-1): đường găng = max(test, package) thay vì test + package.
     # Phát hành vẫn an toàn: job `release` chờ đủ version-check, engine, desktop và package
-    # (khoá bằng engine/tests/test_ci_workflow.py). Bản cài của PR đỏ test chỉ là artifact, không phát hành.
+    # (khoá bằng engine/tests/repo/test_ci_workflow.py). Bản cài của PR đỏ test chỉ là artifact, không phát hành.
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

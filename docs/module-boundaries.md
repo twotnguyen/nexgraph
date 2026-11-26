@@ -40,7 +40,7 @@ Cổng (pha 4a) chia theo nhóm năng lực của ADR 0026 mục A.4: `extract`,
 - import trễ trong hàm vẫn chỉ tải module vendor khi gọi;
 - `monkeypatch` trên module vendor vẫn có tác dụng.
 
-Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tên mới của Graphify thì thêm vào `NAMES` và `TYPE_CHECKING` của nhóm, rồi chụp lại chữ ký: `UPDATE_GRAPHIFY_GATEWAY=1 pytest tests/test_graphify_gateway.py`. Test đó (chạy trong job bắt buộc `engine`) kiểm:
+Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tên mới của Graphify thì thêm vào `NAMES` và `TYPE_CHECKING` của nhóm, rồi chụp lại chữ ký: `UPDATE_GRAPHIFY_GATEWAY=1 pytest tests/adapters/test_graphify_gateway.py`. Test đó (chạy trong job bắt buộc `engine`) kiểm:
 - mọi tên còn tồn tại với đúng chữ ký đã chụp (`tests/fixtures/graphify_gateway_signatures.json`);
 - không tệp nào ngoài cổng import `graphify`.
 
@@ -59,7 +59,7 @@ Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tê
 ### Sau pha 4b (gỡ vòng, 27/11/2026)
 
 - `engine-layers`: **giữ**. Mọi hợp đồng: 4 giữ, 0 vi phạm.
-- Vòng giữa package: 5 → **0**. `tests/test_package_cycles.py` khoá điều này (tìm thành phần liên thông mạnh, tính cả import trễ). Test bắt thêm vòng ba package `arch → semantic → query → arch` mà phép dò vòng hai chiều bỏ sót.
+- Vòng giữa package: 5 → **0**. `tests/repo/test_package_cycles.py` khoá điều này (tìm thành phần liên thông mạnh, tính cả import trễ). Test bắt thêm vòng ba package `arch → semantic → query → arch` mà phép dò vòng hai chiều bỏ sót.
 - Cách gỡ: chỉ chuyển chỗ, không đổi logic. Đồ thị (nút, cạnh theo loại, tệp, luồng, bước luồng, cụm) giống hệt `main` sau lập chỉ mục và refresh trên 5 fixture, ở cả chế độ `graphify` lẫn `legacy`.
 
 | Cũ | Mới | Lý do |
@@ -78,6 +78,26 @@ Khối `TYPE_CHECKING` khai báo cùng các tên để IDE có kiểu. Dùng tê
 
 - 32 package/module chuyển vào 5 thư mục tầng bằng script chuyển module theo AST. Script sửa import, đích `monkeypatch` dạng chuỗi, tên `resources.files("nexgraph_engine.core.schema")`, `tools/`, tài liệu. Không đổi mã chạy.
 - `engine-layers` viết lại theo 6 thư mục tầng. Mọi hợp đồng: 4 giữ. `test_package_cycles` so vòng giữa package bên trong tầng (`analysis.query` với `analysis.flows`), không phải giữa tầng. Đã thử bằng đột biến: thêm import `flows → query` thì test đỏ.
+
+### Test engine theo tầng (pha 4d, 27/11/2026)
+
+`engine/tests/` chia theo **đối tượng được test**, không theo phần dựng dữ liệu. Nhiều test đi qua API hoặc `Indexer` để dựng đồ thị, nhưng nhắm vào một module phân tích, nên xếp theo module đó.
+
+| Thư mục | Số tệp | Ví dụ |
+|---|---|---|
+| `core/` | 3 | schema, tiến trình con, từ khoá |
+| `storage/` | 4 | `graph_store`, dự án, FTS, phát hành chỉ mục |
+| `indexing/` | 28 | phát hiện tệp, bộ trích xuất, tài liệu, nhập Graphify, nguồn ngoài mã |
+| `analysis/` | 25 | kiến trúc, luồng, ảnh hưởng, thay đổi, truy vấn, PR, tour |
+| `pipeline/` | 13 | `Indexer`/refresh cũ, job, đường pipeline Graphify |
+| `interfaces/` | 24 | HTTP API (`test_api_*`), MCP, CLI, hook-guard, logging |
+| `e2e/` | 3 | kịch bản đầu-cuối trên fixture |
+| `adapters/` | 3 | cổng Graphify, vendor, grammar |
+| `repo/` | 6 | CI, phát hành, phiên bản, script `tools/`, vòng phụ thuộc |
+
+- `conftest.py`, `fixtures/`, `gh_fake.py` vẫn ở `tests/`. `conftest.py` đưa `tests/` vào `sys.path`.
+- Hàm dùng chung giữa hai thư mục để ở `tests/support.py`: `call`, `payload` (gọi tool MCP), `make` (dựng dự án nhỏ cho bản đồ kiến trúc). Import theo tên trần từ tệp test ở thư mục khác chỉ chạy được khi thư mục kia đã được thu thập trước, nên không dùng cách đó.
+- Test mới đặt vào thư mục của module nó nhắm tới. Không thêm `__init__.py`: tên tệp test phải khác nhau trên toàn `tests/`.
 
 ## Desktop (`apps/desktop/.dependency-cruiser.cjs`)
 
@@ -169,3 +189,4 @@ Mỗi PR chuyển thư mục thêm dòng vào bảng này. Tài liệu ngoài re
 | 4 | `nexgraph_engine/{query,arch,flows,impact,changes,prs,semantic,tour,report,memory,global_graph,bridge,export}/` | `nexgraph_engine/analysis/…` | |
 | 4 | `nexgraph_engine/{api,mcp,resources}/`, `hook_guard.py`, `selftest.py`, `cli.py` | `nexgraph_engine/interfaces/…` | `nexgraph_engine/cli.py` vẫn có, là điểm vào công khai gọi `interfaces/cli.py`. |
 | 4 | Các module chuyển ở pha 4b | xem mục "Sau pha 4b" | Đường dẫn ở đó là trước pha 4c; thêm tiền tố tầng (ví dụ `index/source_state.py` → `indexing/index/source_state.py`). |
+| 4 | `engine/tests/test_<x>.py` (109 tệp) | `engine/tests/<tầng>/test_<x>.py` | Pha 4d; xem mục "Test engine theo tầng". `Path(__file__)` trong test tăng một cấp. |

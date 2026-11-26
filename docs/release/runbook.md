@@ -38,7 +38,7 @@ Phải khớp nhau; sau #60, job `version-check` (và `package`) gọi `tools/ci
 | `engine/src/nexgraph_engine/__init__.py` | `__version__` | Giá trị engine trả ở `/v1/health` và hiện trên thanh trạng thái app; cùng dạng PEP 440 |
 | `engine/uv.lock` | `[[package]] name = "nexgraph-engine"` → `version` | Cập nhật bằng `cd engine && uv lock` sau khi sửa pyproject; chỉ đổi dòng version của gói, không nâng phụ thuộc |
 
-Bản alpha dùng semver ở hai `package.json` và PEP 440 ở phía Python: `0.2.0-alpha.1` ↔ `0.2.0a1`. `engine/tests/test_version_consistency.py` so bốn tệp (và `uv.lock`) khớp nhau, nên bump sót sẽ đỏ ngay ở `pytest`.
+Bản alpha dùng semver ở hai `package.json` và PEP 440 ở phía Python: `0.2.0-alpha.1` ↔ `0.2.0a1`. `engine/tests/repo/test_version_consistency.py` so bốn tệp (và `uv.lock`) khớp nhau, nên bump sót sẽ đỏ ngay ở `pytest`.
 
 Kiểm nhanh trước khi commit:
 

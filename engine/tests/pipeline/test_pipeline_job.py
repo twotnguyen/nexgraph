@@ -1,0 +1,126 @@
+"""NG-PIPE-2: job lập chỉ mục dùng pipeline vendor; cờ `NEXGRAPH_PIPELINE=legacy` giữ đường cũ."""
+import shutil
+import time
+from pathlib import Path
+
+import pytest
+
+from nexgraph_engine.core.schema.db import open_graph_db
+from nexgraph_engine.storage.store.graph_store import GraphStore
+
+FIXTURES = Path(__file__).parents[1] / "fixtures"
+
+
+@pytest.fixture
+def pipeline_root(tmp_path):
+    """Fixture Python/TS nhỏ — vendor hỗ trợ cả hai ngôn ngữ nên đồ thị không rỗng."""
+    root = tmp_path / "Đồ án" / "pipeline app"
+    shutil.copytree(FIXTURES / "graphify_import_app", root)
+    return root
+
+
+def test_index_job_uses_pipeline(api, pipeline_root, monkeypatch):
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "graphify")
+    p = api.open(pipeline_root)
+
+    job = api.index(p["project_id"], timeout=180)
+
+    assert job["state"] == "done", job
+    assert job["result"]["pipeline"] == "graphify" and job["result"]["fallback_reason"] is None
+    assert job["result"]["nodes"] >= 4 and job["result"]["edges"] >= 3
+    out = pipeline_root / ".nexgraph"
+    assert (out / "graph.html").is_file()
+    assert (out / "GRAPH_TREE.html").is_file()
+    assert len(list(out.glob("*-callflow.html"))) == 1
+
+    stats = api.get(f"/v1/projects/{p['project_id']}/stats").json()
+    assert stats["nodes_by_kind"]["function"] >= 2
+
+    # graph.db có đúng nút do bộ nạp #67 sinh (`<id vendor>#<kind>`, nút tệp theo `ids.file_node_id`).
+    conn = open_graph_db(pipeline_root / ".nexgraph" / "graph.db")
+    try:
+        store = GraphStore(conn)
+        assert store.get_node("app_greet#function") is not None
+        assert store.get_node("app.py#file") is not None
+    finally:
+        conn.close()
+
+
+def test_job_publishes_vendor_progress(api, pipeline_root, monkeypatch):
+    """Stdout của vendor thành sự kiện tiến độ của job (không nuốt log của pipeline)."""
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "graphify")
+    p = api.open(pipeline_root)
+    sub = api.app.state.services.bus.subscribe()
+    try:
+        job = api.index(p["project_id"], timeout=180)
+        events = []
+        while (event := sub.get(timeout=0.05)) is not None:
+            events.append(event)
+    finally:
+        sub.close()
+    assert job["state"] == "done"
+    messages = [event.get("message") or "" for event in events if event["type"] == "job_progress"]
+    assert any("AST extraction" in message for message in messages)
+    states = {event["state"] for event in events if event["type"] == "job_progress"}
+    assert {"structure", "resolve", "done"} <= states
+
+
+def test_legacy_flag_keeps_old_extractor(api, copy_fixture, monkeypatch):
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "legacy")
+    root = copy_fixture("bookstore_app")
+
+    job = api.index(api.open(root)["project_id"])
+
+    assert job["state"] == "done", job
+    assert job["result"]["pipeline"] == "legacy" and job["result"]["fallback_reason"] == "env_legacy"
+    stats = api.get(f"/v1/projects/{job['project_id']}/stats").json()
+    assert stats["nodes_by_kind"]["widget"] == 3  # Dart: chỉ bộ trích xuất cũ hiểu
+    assert not (root / ".nexgraph" / "graph.html").exists()
+
+
+def test_pipeline_maps_ignore_dirs_to_vendor_excludes(api, pipeline_root, monkeypatch):
+    """Thư mục NexGraph luôn bỏ (`third_party`, `vendor`…) và mẫu người dùng chọn phải được vendor tôn trọng."""
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "graphify")
+    vendored = pipeline_root / "engine" / "third_party" / "lib"
+    vendored.mkdir(parents=True)
+    (vendored / "vendored.py").write_text("def vendored_helper():\n    return 1\n", encoding="utf-8")
+    private = pipeline_root / "private"
+    private.mkdir()
+    (private / "secret.py").write_text("def secret_helper():\n    return 2\n", encoding="utf-8")
+    p = api.open(pipeline_root)
+
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"exclude": ["private"]})
+    assert r.status_code == 202, r.text
+    job_id = r.json()["job_id"]
+    job: dict = {}
+    for _ in range(3000):
+        job = api.get(f"/v1/jobs/{job_id}").json()
+        if job["state"] in ("done", "error", "cancelled"):
+            break
+        time.sleep(0.02)
+
+    assert job["state"] == "done", job
+    conn = open_graph_db(pipeline_root / ".nexgraph" / "graph.db")
+    try:
+        files = {row[0] for row in conn.execute("SELECT duong_dan_tuong_doi FROM tep")}
+    finally:
+        conn.close()
+    assert "app.py" in files
+    assert not any(path.startswith("engine/third_party/") for path in files)
+    assert not any(path.startswith("private/") for path in files)
+
+
+def test_subdir_index_falls_back_to_legacy(api, copy_fixture, monkeypatch):
+    """Pipeline vendor chỉ quét cả gốc: lập chỉ mục thư mục con giữ đường cũ và báo lý do."""
+    monkeypatch.setenv("NEXGRAPH_PIPELINE", "graphify")
+    root = copy_fixture("bookstore_app")
+    p = api.open(root)
+    r = api.post(f"/v1/projects/{p['project_id']}/index", json={"subdir": "lib"})
+    assert r.status_code == 202, r.text
+    job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+    for _ in range(600):
+        job = api.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        if job["state"] in ("done", "error", "cancelled"):
+            break
+    assert job["state"] == "done", job
+    assert job["result"]["pipeline"] == "legacy" and job["result"]["fallback_reason"] == "subdir"
