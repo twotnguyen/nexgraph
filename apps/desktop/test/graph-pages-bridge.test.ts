@@ -78,7 +78,7 @@ describe('cầu nối chọn nút', () => {
 })
 
 describe('chỉ gửi tới đúng owner, mất host thì bỏ', () => {
-  const selection = { projectId: 'pid-1', id: 'n1', label: 'run', sourceFile: null, sourceLine: null, sourceLocation: null, via: null }
+  const selection = { projectId: 'pid-1', id: 'n1', label: 'run', sourceFile: null, sourceLine: null, sourceLocation: null, via: null, community: null, memberCount: null }
 
   it('host còn sống → gửi đúng kênh; không có host/host đã đóng → không gửi, không fallback', () => {
     const owner = { isDestroyed: () => false, send: vi.fn() }
@@ -93,7 +93,7 @@ describe('chỉ gửi tới đúng owner, mất host thì bỏ', () => {
 })
 
 describe('phản hồi tra nút đến muộn sau khi guest/binding đổi', () => {
-  const selection = { projectId: 'pid-1', id: 'n1', label: 'run', sourceFile: null, sourceLine: null, sourceLocation: null, via: null }
+  const selection = { projectId: 'pid-1', id: 'n1', label: 'run', sourceFile: null, sourceLine: null, sourceLocation: null, via: null, community: null, memberCount: null }
   const snapshot = binding()
   const liveOwner = () => ({ isDestroyed: () => false, send: vi.fn() })
   const liveGuest = () => ({ isDestroyed: () => false })
