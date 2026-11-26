@@ -1,4 +1,4 @@
-"""Test cho scripts/ci/check-version.mjs (REL-07).
+"""Test cho tools/ci/check-version.mjs (REL-07).
 
 Script là một phần của job CI `version-check`: so version của tag với 4 nguồn
 (root package.json, apps/desktop/package.json, engine/pyproject.toml,
@@ -14,11 +14,11 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = REPO_ROOT / "scripts" / "ci" / "check-version.mjs"
+SCRIPT = REPO_ROOT / "tools" / "ci" / "check-version.mjs"
 NODE = shutil.which("node") or "node"
 
 pytestmark = pytest.mark.skipif(
-    shutil.which("node") is None, reason="cần Node.js để chạy scripts/ci/check-version.mjs"
+    shutil.which("node") is None, reason="cần Node.js để chạy tools/ci/check-version.mjs"
 )
 
 SOURCES = (

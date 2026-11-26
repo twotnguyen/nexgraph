@@ -1,6 +1,6 @@
 """Chọn mẫu tệp để gán nhãn tay (H6 Task 2). Có hạt giống: cùng --seed cho cùng danh sách.
 
-Chạy: uv run python scripts/eval_sample.py <graph.db> --files 12 --seed 7 --out sample.json
+Chạy: uv run --project engine python tools/eval/eval_sample.py <graph.db> --files 12 --seed 7 --out sample.json
 Chọn ngẫu nhiên tệp mã không phải test, không nằm trong thư mục ẩn, có >= 3 symbol; chỉ ghi đường dẫn, không ghi cạnh (người gán nhãn không được nhìn kết quả).
 """
 import argparse

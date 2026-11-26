@@ -28,7 +28,7 @@ git merge-base --is-ancestor "$ACCEPTED_SHA" origin/main && echo "ACCEPTED_SHA c
 
 ## 1. Tăng version ở bốn tệp (cộng `uv.lock`)
 
-Phải khớp nhau; sau #60, job `version-check` (và `package`) gọi `scripts/ci/check-version.mjs` để so tag với **cả bốn nguồn version**; trên workflow cũ chỉ `package` so `tag == version` của `apps/desktop/package.json`:
+Phải khớp nhau; sau #60, job `version-check` (và `package`) gọi `tools/ci/check-version.mjs` để so tag với **cả bốn nguồn version**; trên workflow cũ chỉ `package` so `tag == version` của `apps/desktop/package.json`:
 
 | Tệp | Trường | Ghi chú |
 |---|---|---|

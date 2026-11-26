@@ -12,8 +12,8 @@
     "test": "pnpm --filter @nexgraph/desktop test",
     "typecheck": "pnpm --filter @nexgraph/desktop typecheck",
     "lint": "pnpm lint:engine && pnpm lint:desktop",
-    "rules:report": "node scripts/ci/module-rules.mjs",
-    "rules:strict": "node scripts/ci/module-rules.mjs --strict",
+    "rules:report": "node tools/ci/module-rules.mjs",
+    "rules:strict": "node tools/ci/module-rules.mjs --strict",
     "lint:engine": "uvx ruff@0.14.0 check --select E9,F63,F7,F82 engine/src/nexgraph_engine engine/tests",
     "lint:desktop": "npx --yes @biomejs/biome@2.3.0 lint --diagnostic-level=error --skip=a11y --skip=correctness/useExhaustiveDependencies --skip=correctness/noVoidTypeReturn --skip=suspicious/noAssignInExpressions --skip=suspicious/useIterableCallbackReturn --skip=suspicious/noShadowRestrictedNames --skip=suspicious/noImplicitAnyLet --skip=suspicious/noControlCharactersInRegex --skip=suspicious/noArrayIndexKey --skip=security/noDangerouslySetInnerHtml apps/desktop/src apps/desktop/e2e"
   },

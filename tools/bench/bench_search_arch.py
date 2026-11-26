@@ -1,6 +1,6 @@
 """Đo tìm kiếm và kiến trúc (kế hoạch con 3). Chạy:
-    uv run python scripts/bench_search_arch.py <thư-mục-project>
-    uv run python scripts/bench_search_arch.py --synthetic 6000      # sinh dự án giả để thử ngưỡng project lớn
+    uv run --project engine python tools/bench/bench_search_arch.py <thư-mục-project>
+    uv run --project engine python tools/bench/bench_search_arch.py --synthetic 6000      # sinh dự án giả để thử ngưỡng project lớn
 Đồ thị ghi vào thư mục tạm, không đụng thư mục project.
 """
 import argparse

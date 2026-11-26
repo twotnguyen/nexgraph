@@ -3,9 +3,9 @@
  * REL-07 / REL-06 — so version của tag phát hành với cả 4 nguồn version trong repo.
  *
  * Dùng trong CI:
- *   node scripts/ci/check-version.mjs "$GITHUB_REF_NAME"
+ *   node tools/ci/check-version.mjs "$GITHUB_REF_NAME"
  * Chạy cục bộ (kiểm trước khi push tag):
- *   node scripts/ci/check-version.mjs v0.2.0-alpha.1
+ *   node tools/ci/check-version.mjs v0.2.0-alpha.1
  *
  * Quy ước pre-release: tag/npm dùng semver `0.2.0-alpha.1`, `-beta.2`, `-rc.3`;
  * Python dùng PEP 440 `0.2.0a1`, `0.2.0b2`, `0.2.0rc3`. Tag phát hành chỉ nhận
@@ -16,7 +16,7 @@
  *
  * Không phụ thuộc gói ngoài để job `version-check` chạy được trên runner sạch.
  * Riêng `[project].version` đọc bằng TOML parser chuẩn của Python (`tomllib`,
- * script `scripts/ci/read-toml-version.py`, cần Python >= 3.11).
+ * script `tools/ci/read-toml-version.py`, cần Python >= 3.11).
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -144,8 +144,8 @@ function parsePythonVersion(text) {
 
 function usage(message) {
   if (message) console.error(`LỖI: ${message}`);
-  console.error('Dùng: node scripts/ci/check-version.mjs <tag> [--root <thư mục repo>]');
-  console.error('Ví dụ: node scripts/ci/check-version.mjs v0.2.0-alpha.1');
+  console.error('Dùng: node tools/ci/check-version.mjs <tag> [--root <thư mục repo>]');
+  console.error('Ví dụ: node tools/ci/check-version.mjs v0.2.0-alpha.1');
   process.exit(2);
 }
 
@@ -184,7 +184,7 @@ function main() {
     console.error(
       suggestion
         ? `GỢI Ý: dùng "${suggestion}" — PEP 440 (0.2.0a1) chỉ dùng trong engine/pyproject.toml và engine/src/nexgraph_engine/__init__.py, không dùng cho tag phát hành.`
-        : 'Ví dụ: node scripts/ci/check-version.mjs v0.2.0-alpha.1',
+        : 'Ví dụ: node tools/ci/check-version.mjs v0.2.0-alpha.1',
     );
     process.exit(1);
   }

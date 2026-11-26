@@ -1,6 +1,6 @@
 """Đo lập chỉ mục tăng dần và đọc thay đổi (kế hoạch con 4). Chạy:
-    uv run python scripts/bench_refresh.py <thư-mục-project>
-    uv run python scripts/bench_refresh.py --synthetic 6000
+    uv run --project engine python tools/bench/bench_refresh.py <thư-mục-project>
+    uv run --project engine python tools/bench/bench_refresh.py --synthetic 6000
 Project được CHÉP sang thư mục tạm (kèm `git init` + commit) rồi mới bị sửa; thư mục gốc không bị đụng.
 """
 import argparse

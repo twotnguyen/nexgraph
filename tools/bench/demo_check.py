@@ -1,6 +1,6 @@
 """Chạy kịch bản demo (docs/demo-script.md) bằng engine thật qua HTTP, không có giao diện, và bấm giờ từng bước.
 
-Chạy: uv run python scripts/demo_check.py <thư-mục-NestJS> [--runs 3] [--out kết-quả.json]
+Chạy: uv run --project engine python tools/bench/demo_check.py <thư-mục-NestJS> [--runs 3] [--out kết-quả.json]
 Dự án được CHÉP sang thư mục tạm (kèm git init + commit). Đây là bằng chứng cho engine, KHÔNG thay cho việc bấm thử trên app Electron.
 """
 import argparse

@@ -33,7 +33,7 @@ Ghi chú: `bookstore_app` nằm trong kho NexGraph nên commit ghim là commit N
 
 ### 2.1 Quy trình và độ tin cậy của nhãn
 
-- Mẫu: 12 tệp mã không phải test, không ở thư mục ẩn, có ≥ 3 symbol, chọn bằng `scripts/eval_sample.py --files 12 --seed 7` từ đồ thị đã lập chỉ mục (chỉ lấy đường dẫn tệp). Danh sách: `data/labels-*.csv` cột `file`.
+- Mẫu: 12 tệp mã không phải test, không ở thư mục ẩn, có ≥ 3 symbol, chọn bằng `tools/eval/eval_sample.py --files 12 --seed 7` từ đồ thị đã lập chỉ mục (chỉ lấy đường dẫn tệp). Danh sách: `data/labels-*.csv` cột `file`.
 - Nhãn nháp do **một agent AI đọc mã nguồn, không mở CSDL đồ thị, không chạy NexGraph** (nestjs: 195 dòng, albion: 245 dòng). **Người dùng chưa duyệt lại**: kế hoạch yêu cầu duyệt ≥ 3 tệp mỗi dự án và ghi tỉ lệ sửa; mục này còn **chờ người dùng**.
 - **Nhãn đã bị sửa sau khi xem kết quả của NexGraph**, trái với quy trình "gán nhãn trước, so sau" của kế hoạch. Các sửa (ghi trong `data/labels-*-notes.md`): thêm `constructor`, getter, `type` alias, hàm lồng nhau mà bản nháp bỏ theo quy ước sai; đổi nguồn của 7 lời gọi nằm trong hàm lồng sang đúng hàm lồng; thêm một nhãn `implements` bị bỏ sót. Mọi sửa đều kiểm lại với mã nguồn, nhưng thiên lệch xác nhận là có thể. Vì thế bảng 2.2 cho cả số **trước sửa nhãn** (lần chấm đầu) và **sau sửa nhãn**.
 - Cạnh khớp theo `(nguồn, đích, dòng)`. Lời gọi tới thư viện ngoài không gán nhãn và không tính. `test` tính ở hai mức: symbol → tệp test (`test`) và tệp nguồn → tệp test (`test_file`).
@@ -92,7 +92,7 @@ Công cụ gốc: bản vendor v0.9.92, `python -m graphify update <bản sao> -
 
 ## 4. Hiệu năng (spec §6.1, §7.2)
 
-Script: `engine/scripts/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --out data/perf-<dự án>.json`. Dự án được chép sang thư mục tạm (bỏ `.git`, `node_modules`, `build`, `.venv`); lập chỉ mục và đo trong cùng một tiến trình Python, trên máy macOS nêu ở §1. Lập chỉ mục tầng L chạy 1 lần (`--index-repeat 1`), các chỉ số còn lại 3 lần.
+Script: `tools/bench/bench_all.py <dự án> --repeat 3 [--index-repeat 1] --out data/perf-<dự án>.json`. Dự án được chép sang thư mục tạm (bỏ `.git`, `node_modules`, `build`, `.venv`); lập chỉ mục và đo trong cùng một tiến trình Python, trên máy macOS nêu ở §1. Lập chỉ mục tầng L chạy 1 lần (`--index-repeat 1`), các chỉ số còn lại 3 lần.
 
 **Điều kiện đo cần biết khi đọc số:**
 - "Mở lại" là mở CSDL chỉ đọc và gọi `stats()` **trong tiến trình đã nóng** (bộ nhớ đệm của hệ điều hành đã có trang), không phải khởi động lạnh của ứng dụng.
@@ -191,7 +191,7 @@ Giới hạn dự kiến khi có số: 10 câu, một dự án, một model, n n
 
 ## 7. Kịch bản demo và năm kịch bản lỗi (spec §1.2, §6.3)
 
-**Phạm vi:** bằng chứng dưới đây là **engine thật qua HTTP** (`scripts/demo_check.py`, `data/scenario-check.py`) và **test tự động**. **Chưa có lần nào bấm trên cửa sổ Electron**, chưa có ảnh `docs/screenshots/h6/`, chưa có đồng hồ bấm tay. Kết luận "kịch bản chạy trọn 3 lần liên tiếp trên macOS" **chưa đạt được ở mức giao diện**; ở mức engine thì có.
+**Phạm vi:** bằng chứng dưới đây là **engine thật qua HTTP** (`tools/bench/demo_check.py`, `data/scenario-check.py`) và **test tự động**. **Chưa có lần nào bấm trên cửa sổ Electron**, chưa có ảnh `docs/screenshots/h6/`, chưa có đồng hồ bấm tay. Kết luận "kịch bản chạy trọn 3 lần liên tiếp trên macOS" **chưa đạt được ở mức giao diện**; ở mức engine thì có.
 
 ### 7.1 Kịch bản demo ≤ 5 phút (`docs/demo-script.md`), mô phỏng bằng engine, 3 lần liên tiếp
 

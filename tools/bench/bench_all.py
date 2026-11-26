@@ -1,6 +1,6 @@
 """Đo hiệu năng toàn bộ trên một dự án (H6 Task 3). Dự án được CHÉP sang thư mục tạm; thư mục gốc không bị đụng.
 
-Chạy: uv run python scripts/bench_all.py <thư-mục-project> [--repeat 3] [--index-repeat N] --out perf.json
+Chạy: uv run --project engine python tools/bench/bench_all.py <thư-mục-project> [--repeat 3] [--index-repeat N] --out perf.json
 Mỗi chỉ số: {median, min, max, n} (ms, trừ khi tên có hậu tố khác). Hàm chưa có thì ghi null.
 Chạy từ thư mục engine/ (script dùng `git` để ghi commit). Cần `if __name__ == "__main__"` vì lập chỉ mục dùng ProcessPoolExecutor.
 """

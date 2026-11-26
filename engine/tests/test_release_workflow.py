@@ -1,7 +1,7 @@
 """Test khối shell của job `release` trong .github/workflows/ci.yml (REL-06).
 
 Job `release` chỉ chạy sau `version-check`, nên mọi tag tới được bước tạo Release
-đều đã qua `scripts/ci/check-version.mjs`: bản cuối `vX.Y.Z` hoặc pre-release
+đều đã qua `tools/ci/check-version.mjs`: bản cuối `vX.Y.Z` hoặc pre-release
 `vX.Y.Z-alpha.N` / `-beta.N` / `-rc.N`. Pre-release luôn có dấu `-`, và bước
 release phải thêm `--prerelease` đúng cho các tag đó.
 
