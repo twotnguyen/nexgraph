@@ -1,4 +1,4 @@
-import type { LspDocumentSymbol, LspPosition, LspRange } from '@shared/api'
+import type { LspDocumentSymbol, LspPosition, LspRange } from '@nexgraph/contracts/api'
 
 /** Mọi toạ độ trong module này là LSP: dòng và cột đều tính từ 0. */
 const compare = (a: LspPosition, b: LspPosition) => a.line - b.line || a.character - b.character

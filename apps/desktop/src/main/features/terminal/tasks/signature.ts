@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import type { TaskDefinition } from '../../../../shared/api'
+import type { TaskDefinition } from '@nexgraph/contracts/api'
 
 export type SignedTask = TaskDefinition & { signature: string }
 

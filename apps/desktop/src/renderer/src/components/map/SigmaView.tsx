@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import Graph from 'graphology'
 import forceAtlas2 from 'graphology-layout-forceatlas2'
 import type Sigma from 'sigma'
-import type { MapEdge, MapNode } from '@shared/graph-types'
+import type { MapEdge, MapNode } from '@nexgraph/contracts/graph-types'
 import { useThemeId } from '../../state/useTheme'
 import { communityColor, edgeSize, nodeSize, PALETTE } from './mapStyle'
 

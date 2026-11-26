@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { GitFileChange, GitStatus } from '@shared/api'
-import { consentTargetForSettings, sameConsentTarget } from '@shared/agent-types'
+import type { GitFileChange, GitStatus } from '@nexgraph/contracts/api'
+import { consentTargetForSettings, sameConsentTarget } from '@nexgraph/contracts/agent-types'
 import { errorMsg } from '../../state/errorText'
 import { msg, msgText, type Message } from '../../state/messages'
 import { FileTypeIcon } from '../common/FileTypeIcon'

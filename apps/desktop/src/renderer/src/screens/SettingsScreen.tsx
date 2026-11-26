@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react'
-import type { AiSettings } from '@shared/graph-types'
-import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@shared/agent-types'
+import type { AiSettings } from '@nexgraph/contracts/graph-types'
+import type { AuthEventView, AuthPromptView, ModelInfo, ProviderInfo } from '@nexgraph/contracts/agent-types'
 import { tr, vi } from '../strings'
 import { formatNumber, setLocale, useLocale } from '../state/locale'
 import { Icon, type IconName } from '../components/common/icons'

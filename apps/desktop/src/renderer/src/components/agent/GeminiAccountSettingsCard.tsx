@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GeminiCliStatus } from '@shared/gemini-types'
+import type { GeminiCliStatus } from '@nexgraph/contracts/gemini-types'
 import { Icon } from '../common/icons'
 import { tr } from '../../strings'
 import { errorMsg } from '../../state/errorText'

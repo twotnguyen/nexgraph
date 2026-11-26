@@ -4,7 +4,7 @@ import './hosted.css'
 import '../../../apps/desktop/src/preload/index'
 import { ipcRenderer } from './electron-webview'
 import { parseInitialCommand } from './host-command'
-import type { HostCommand } from '../../../apps/desktop/src/shared/api'
+import type { HostCommand } from '../../../packages/contracts/src/api'
 
 const root = document.getElementById('root')!
 let commandsReady = false

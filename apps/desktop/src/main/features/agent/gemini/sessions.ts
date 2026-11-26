@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, realpathSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import type { AgentContextUsage, AgentSessionInfo, AgentTask, AgentTranscriptMessage, AgentUsage } from '../../../../shared/agent-types'
+import type { AgentContextUsage, AgentSessionInfo, AgentTask, AgentTranscriptMessage, AgentUsage } from '@nexgraph/contracts/agent-types'
 import { writeJson } from '../../../platform/settings'
 
 const UUID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AGENT_IDS, type AgentId, type IntegrationPlan } from '@shared/integration-types'
-import type { ProjectSummary } from '@shared/graph-types'
+import { AGENT_IDS, type AgentId, type IntegrationPlan } from '@nexgraph/contracts/integration-types'
+import type { ProjectSummary } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 import { errorMsg } from '../../state/errorText'
 import { msg, msgText, type Message } from '../../state/messages'

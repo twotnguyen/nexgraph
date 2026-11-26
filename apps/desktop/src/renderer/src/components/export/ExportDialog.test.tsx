@@ -2,7 +2,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import type { ExportScope } from '@shared/graph-types'
+import type { ExportScope } from '@nexgraph/contracts/graph-types'
 import { describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../../test-utils'
 import { ExportDialog } from './ExportDialog'

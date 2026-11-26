@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { GlobalGraph, GlobalSearchHit } from '@shared/graph-types'
+import type { GlobalGraph, GlobalSearchHit } from '@nexgraph/contracts/graph-types'
 import { GraphCanvas } from '../components/graph/GraphCanvas'
 import { Icon } from '../components/common/icons'
 import { vi } from '../strings'

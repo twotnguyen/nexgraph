@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { GraphNode } from '@shared/graph-types'
+import type { GraphNode } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 
 interface Props {

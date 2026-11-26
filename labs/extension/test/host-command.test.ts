@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createHostCommandRelay, parseInitialCommand } from '../src/host-command'
-import type { HostCommand } from '../../../apps/desktop/src/shared/api'
+import type { HostCommand } from '../../../packages/contracts/src/api'
 
 describe('lệnh Code-OSS khi mở tab NexGraph', () => {
   it('giữ lệnh mở công cụ và dữ liệu đi kèm khi khởi động', () => {

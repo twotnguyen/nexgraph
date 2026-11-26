@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import type { AuthEventView, ModelInfo } from '../../../../shared/agent-types'
-import type { GeminiCliStatus } from '../../../../shared/gemini-types'
+import type { AuthEventView, ModelInfo } from '@nexgraph/contracts/agent-types'
+import type { GeminiCliStatus } from '@nexgraph/contracts/gemini-types'
 import {
   AcpClient,
   AcpError,

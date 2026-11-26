@@ -1,7 +1,7 @@
 import { existsSync, realpathSync, statSync } from 'node:fs'
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { IPty } from 'node-pty'
-import type { TaskDefinition } from '../../../shared/api'
+import type { TaskDefinition } from '@nexgraph/contracts/api'
 import { resolveInside } from '../../platform/project-fs'
 import { userShellEnv } from '../../platform/process-env'
 import { shellQuote } from './quote'

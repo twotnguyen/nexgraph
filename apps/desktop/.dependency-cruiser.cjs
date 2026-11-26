@@ -9,7 +9,7 @@ module.exports = {
   forbidden: [
     {
       name: 'renderer-khong-import-main',
-      comment: 'Renderer chỉ nói chuyện với main qua preload/IPC; kiểu dùng chung để ở src/shared. Test tích hợp được miễn.',
+      comment: 'Renderer chỉ nói chuyện với main qua preload/IPC; kiểu dùng chung để ở @nexgraph/contracts. Test tích hợp được miễn.',
       severity: 'error',
       from: { path: '^src/renderer/', pathNot: TEST },
       to: { path: '^src/main/' },
@@ -22,16 +22,16 @@ module.exports = {
     },
     {
       name: 'preload-chi-dung-shared',
-      comment: 'Preload là cầu nối mỏng: chỉ dùng src/shared.',
+      comment: 'Preload là cầu nối mỏng: chỉ dùng @nexgraph/contracts.',
       severity: 'error',
       from: { path: '^src/preload/' },
       to: { path: '^src/(main|renderer)/' },
     },
     {
-      name: 'shared-doc-lap',
-      comment: 'src/shared là hợp đồng (sẽ thành packages/contracts): không phụ thuộc main/renderer/preload.',
+      name: 'contracts-doc-lap',
+      comment: 'packages/contracts là hợp đồng (ADR 0026 pha 3, trước là src/shared): không phụ thuộc main/renderer/preload.',
       severity: 'error',
-      from: { path: '^src/shared/' },
+      from: { path: '(^|/)packages/contracts/' },
       to: { path: '^src/(main|renderer|preload)/' },
     },
     {

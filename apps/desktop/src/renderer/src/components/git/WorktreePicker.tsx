@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { GitWorktree } from '@shared/api'
+import type { GitWorktree } from '@nexgraph/contracts/api'
 import { errorMsg } from '../../state/errorText'
 import { fuzzyFilter } from '../../state/fuzzy'
 import { Icon } from '../common/icons'

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Citation, RatingOutcome } from '@shared/graph-types'
+import type { Citation, RatingOutcome } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
 import { errorMsg } from '../../state/errorText'

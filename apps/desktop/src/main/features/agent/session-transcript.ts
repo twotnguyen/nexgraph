@@ -1,4 +1,4 @@
-import type { AgentToolRun, AgentTranscriptMessage, AgentUsage } from '../../../shared/agent-types'
+import type { AgentToolRun, AgentTranscriptMessage, AgentUsage } from '@nexgraph/contracts/agent-types'
 import type { StoredSession } from './session-store'
 
 type RawMessage = { role?: string; content?: unknown; timestamp?: number; toolCallId?: string; isError?: boolean; usage?: unknown }

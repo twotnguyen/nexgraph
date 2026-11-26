@@ -1,6 +1,6 @@
 import { Background, Controls, ReactFlow, type Edge, type Node } from '@xyflow/react'
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
-import type { GraphEdge, GraphNode, Neighborhood } from '@shared/graph-types'
+import type { GraphEdge, GraphNode, Neighborhood } from '@nexgraph/contracts/graph-types'
 import { layoutDiagram } from '../../services/elkLayoutService'
 import { tr, vi } from '../../strings'
 import { useTheme } from '../../state/useTheme'

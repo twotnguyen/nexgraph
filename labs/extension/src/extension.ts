@@ -10,7 +10,7 @@ import { resolveEngineCommand } from '../../../apps/desktop/src/main/platform/en
 import { EngineSupervisor } from '../../../apps/desktop/src/main/platform/engine/supervisor'
 import { isWithin } from '../../../apps/desktop/src/main/platform/project-fs'
 import { closeAllAgents, registerIpc, stopAllMcpHttp, stopAllWatchers } from '../../../apps/desktop/src/main/ipc'
-import type { HostCommand } from '../../../apps/desktop/src/shared/api'
+import type { HostCommand } from '../../../packages/contracts/src/api'
 import { createHostCommandRelay } from './host-command'
 
 const folder = (): string | null => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? null

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GeminiCliStatus, GeminiConnectionTest } from '../src/shared/gemini-types'
+import type { GeminiCliStatus, GeminiConnectionTest } from '@nexgraph/contracts/gemini-types'
 
 const h = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => Promise<unknown>>(),

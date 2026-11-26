@@ -1,8 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppMenuAction, NexGraphApi } from '../shared/api'
-import type { EngineStatus } from '../shared/engine-status'
-import type { EngineEvent } from '../shared/graph-types'
-import type { AgentEvent, AuthEventView, AuthPromptView } from '../shared/agent-types'
+import type { AppMenuAction, NexGraphApi } from '@nexgraph/contracts/api'
+import type { EngineStatus } from '@nexgraph/contracts/engine-status'
+import type { EngineEvent } from '@nexgraph/contracts/graph-types'
+import type { AgentEvent, AuthEventView, AuthPromptView } from '@nexgraph/contracts/agent-types'
 
 type IpcResult<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } }
 

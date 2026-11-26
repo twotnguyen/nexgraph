@@ -1,4 +1,4 @@
-import type { AgentPromptOptions } from '../../../shared/agent-types'
+import type { AgentPromptOptions } from '@nexgraph/contracts/agent-types'
 import { UserError } from '../../platform/user-error'
 
 const MAX_IMAGE_BYTES = 24 * 1024 * 1024

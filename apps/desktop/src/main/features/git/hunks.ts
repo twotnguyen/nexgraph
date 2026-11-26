@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { GitHunk } from '../../../shared/api'
+import type { GitHunk } from '@nexgraph/contracts/api'
 import { UserError } from '../../platform/user-error'
 import { git, safePaths } from './repo'
 

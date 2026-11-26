@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { GraphNode } from '@shared/graph-types'
+import type { GraphNode } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../test-utils'
 import { GlobalViewScreen } from './GlobalViewScreen'
 

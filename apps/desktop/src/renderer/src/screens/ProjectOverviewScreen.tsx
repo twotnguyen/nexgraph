@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { GraphStats, IndexOptions, ProjectAiSettings, ProjectSummary } from '@shared/graph-types'
+import type { GraphStats, IndexOptions, ProjectAiSettings, ProjectSummary } from '@nexgraph/contracts/graph-types'
 import { ExportDialog } from '../components/export/ExportDialog'
 import { IndexOptionsDialog } from '../components/overview/IndexOptionsDialog'
 import { Icon, VIEW_TONE, type IconName, type Tone } from '../components/common/icons'

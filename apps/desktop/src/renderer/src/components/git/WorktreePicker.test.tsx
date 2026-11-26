@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GitWorktree } from '@shared/api'
+import type { GitWorktree } from '@nexgraph/contracts/api'
 import { WorktreePicker } from './WorktreePicker'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks() })

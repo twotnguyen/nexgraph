@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type { CollabEvent } from '../src/shared/api'
+import type { CollabEvent } from '@nexgraph/contracts/api'
 import { CollabHub } from '../src/main/features/collab/hub'
 
 const hubs: CollabHub[] = []

@@ -1,7 +1,7 @@
 import { realpath } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { resolveInside } from '../../platform/project-fs'
-import type { GitStash } from '../../../shared/api'
+import type { GitStash } from '@nexgraph/contracts/api'
 import { fail, git, safePaths } from './repo'
 
 export async function gitRestore(root: string, file: unknown, trashItem: (path: string) => Promise<void>): Promise<void> {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { SemanticDialog } from '../overview/SemanticDialog'
-import type { GraphNode, PrDetail, PrList } from '@shared/graph-types'
+import type { GraphNode, PrDetail, PrList } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'
 import { errorMsg } from '../../state/errorText'

@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import type { AgentMode, ProjectCommands } from '@shared/agent-types'
+import type { AgentMode, ProjectCommands } from '@nexgraph/contracts/agent-types'
 import { Icon } from '../common/icons'
 import { tr } from '../../strings'
 import type { AgentInspection, AgentWorkbench } from './useAgentWorkbench'

@@ -1,6 +1,6 @@
 import { Children, cloneElement, isValidElement, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import type { EngineStatus } from '@shared/engine-status'
+import type { EngineStatus } from '@nexgraph/contracts/engine-status'
 import { isStatusItemHidden, setStatusItemHidden, useHiddenStatusItems, useStatusBar } from '../state/layoutPrefs'
 import { runCommand, useCommandAvailable } from '../state/commands'
 import { getStatusBarItem } from '../state/statusBarRegistry'

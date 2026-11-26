@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - packages/*
 # pnpm 11 chặn script postinstall mặc định và báo lỗi nếu có gói chưa được quyết định.
 allowBuilds:
   electron: true

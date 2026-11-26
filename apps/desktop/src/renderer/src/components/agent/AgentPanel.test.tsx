@@ -2,8 +2,8 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentEvent, ApprovalRequest } from '@shared/agent-types'
-import type { GraphEdge, GraphNode } from '@shared/graph-types'
+import type { AgentEvent, ApprovalRequest } from '@nexgraph/contracts/agent-types'
+import type { GraphEdge, GraphNode } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 import { setLocale } from '../../state/locale'
 

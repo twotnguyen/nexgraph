@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyProjectEdits, applyTextEdits, diagnosticMarker, type ProjectEditAdapter } from './lspEdits'
-import type { FileContent } from '@shared/api'
+import type { FileContent } from '@nexgraph/contracts/api'
 
 const range = (sl: number, sc: number, el: number, ec: number) => ({ start: { line: sl, character: sc }, end: { line: el, character: ec } })
 

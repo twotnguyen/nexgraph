@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { AgentMode } from '@shared/agent-types'
+import type { AgentMode } from '@nexgraph/contracts/agent-types'
 import { TOOL_LABELS, deleteProfile, saveProfile, useAgentProfiles, type AgentProfile } from '../../state/agentProfiles'
 import { tr } from '../../strings'
 

@@ -1,4 +1,4 @@
-import type { BlockKind } from '@shared/graph-types'
+import type { BlockKind } from '@nexgraph/contracts/graph-types'
 
 const COLORS: Record<BlockKind, string> = {
   directory: 'var(--blue)',

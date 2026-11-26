@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { GraphNode } from '@shared/graph-types'
+import type { GraphNode } from '@nexgraph/contracts/graph-types'
 import { NodeContextMenu } from './NodeContextMenu'
 
 const node: GraphNode = { id: 'lib/a.dart::A.run#method', kind: 'method', label: 'run', qualified_name: 'A.run', language: 'dart',

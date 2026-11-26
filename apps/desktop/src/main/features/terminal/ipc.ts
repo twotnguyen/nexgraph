@@ -1,6 +1,6 @@
 import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
-import type { TaskDefinition } from '../../../shared/api'
+import type { TaskDefinition } from '@nexgraph/contracts/api'
 import { FsError } from '../../platform/project-fs'
 import { type IpcContext, sendOwned } from '../../platform/ipc-context'
 import { ensureTasksFile, listTasks, resolveTask } from './tasks'

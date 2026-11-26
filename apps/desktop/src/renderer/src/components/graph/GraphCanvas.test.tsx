@@ -3,8 +3,8 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import type { ReactNode } from 'react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { NexGraphApi } from '@shared/api'
-import type { GraphNode, Neighborhood } from '@shared/graph-types'
+import type { NexGraphApi } from '@nexgraph/contracts/api'
+import type { GraphNode, Neighborhood } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 import { setLocale, useLocale } from '../../state/locale'
 

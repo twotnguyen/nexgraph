@@ -19,6 +19,7 @@
     "smoke:packaged": "node scripts/smoke-packaged.mjs"
   },
   "devDependencies": {
+    "@nexgraph/contracts": "workspace:*",
     "@playwright/test": "^1.65.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",

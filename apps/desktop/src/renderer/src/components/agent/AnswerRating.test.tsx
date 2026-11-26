@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Citation } from '@shared/graph-types'
+import type { Citation } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 import { AnswerRating } from './AnswerRating'
 

@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmdirSync, rmSync, w
 import { dirname, join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
-import type { AgentId, IntegrationOptions, IntegrationPart, IntegrationPlan } from '../../../shared/integration-types'
+import type { AgentId, IntegrationOptions, IntegrationPart, IntegrationPlan } from '@nexgraph/contracts/integration-types'
 import { skillMarkdown } from '../agent/skill'
 import { PYTHON_ENV_GUARD } from '../../platform/engine/python-env'
 import type { EngineCommand } from '../../platform/engine/launcher'

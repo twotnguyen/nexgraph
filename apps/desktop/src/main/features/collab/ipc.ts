@@ -1,4 +1,4 @@
-import type { CollabHello } from '../../../shared/api'
+import type { CollabHello } from '@nexgraph/contracts/api'
 import { CollabHub } from './hub'
 import { FsError } from '../../platform/project-fs'
 import type { IpcContext } from '../../platform/ipc-context'

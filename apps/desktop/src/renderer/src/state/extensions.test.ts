@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from 'vitest'
-import type { ExtensionInfo } from '@shared/api'
+import type { ExtensionInfo } from '@nexgraph/contracts/api'
 import { availableCommands, registerHandler, runCommand } from './commands'
 import { setActiveEditor } from './activeEditor'
 import { THEMES, currentThemeId } from './useTheme'

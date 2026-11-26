@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AskResult, GraphEdge, GraphNode, SearchHit } from '@shared/graph-types'
+import type { AskResult, GraphEdge, GraphNode, SearchHit } from '@nexgraph/contracts/graph-types'
 import { useDebounced } from '../../state/useDebounced'
 import { vi, tr } from '../../strings'
 import { msgText, type Message } from '../../state/messages'

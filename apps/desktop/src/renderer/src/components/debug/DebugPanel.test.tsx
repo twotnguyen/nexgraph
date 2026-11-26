@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { DebugEvent } from '@shared/api'
+import type { DebugEvent } from '@nexgraph/contracts/api'
 import { setDebugProject, toggleBreakpoint, useDebugLayout } from '../../state/debugState'
 import { DebugPanel } from './DebugPanel'
 

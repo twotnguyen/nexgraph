@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspLocation, LspWorkspaceSymbol } from '@shared/api'
+import type { LspCallHierarchyCall, LspCallHierarchyItem, LspDocumentSymbol, LspLocation, LspWorkspaceSymbol } from '@nexgraph/contracts/api'
 import { tr } from '../../strings'
 import { useCommand } from '../../state/commands'
 import type { ActiveEditor } from '../../state/activeEditor'

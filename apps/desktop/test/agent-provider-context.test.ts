@@ -7,7 +7,7 @@ import { AccountService, CUSTOM_MODEL_SPEC } from '../src/main/features/agent/ac
 import { AgentService, contextWindowFailure, createPiSession, CONTEXT_WINDOW_MESSAGE } from '../src/main/features/agent/session'
 import { SecretStore } from '../src/main/platform/settings'
 import type { EngineApi } from '../src/main/platform/engine/api'
-import type { AgentEvent, AiConsentTarget } from '../src/shared/agent-types'
+import type { AgentEvent, AiConsentTarget } from '@nexgraph/contracts/agent-types'
 import { fakeProvider, type Seen } from './fake-provider'
 
 const KEY = 'sk-f4-provider-that'

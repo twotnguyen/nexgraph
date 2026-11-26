@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { TextSearchQuery, TextSearchResult } from '@shared/api'
+import type { TextSearchQuery, TextSearchResult } from '@nexgraph/contracts/api'
 import { useCommand } from '../../state/commands'
 import { useDebounced } from '../../state/useDebounced'
 import { tr } from '../../strings'

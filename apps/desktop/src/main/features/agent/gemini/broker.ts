@@ -2,7 +2,7 @@ import { createServer, type Server } from 'node:http'
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { Check } from 'typebox/value'
 import type { ToolDefinition } from '@earendil-works/pi-coding-agent'
-import type { AgentToolRun } from '../../../../shared/agent-types'
+import type { AgentToolRun } from '@nexgraph/contracts/agent-types'
 import { registerNexgraphTools, toolsFor, type NexgraphToolCall, type NexgraphToolDeps, type NexgraphToolGateResult, type NexgraphToolPort } from '../extension'
 
 const MAX_BODY = 256 * 1024

@@ -1,4 +1,4 @@
-import type { AgentEvent } from '@shared/agent-types'
+import type { AgentEvent } from '@nexgraph/contracts/agent-types'
 import { tr } from '../../strings'
 
 type RetryEvent = Extract<AgentEvent, { type: 'retry' }>

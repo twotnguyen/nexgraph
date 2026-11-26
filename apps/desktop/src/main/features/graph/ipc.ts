@@ -1,5 +1,5 @@
 import { app, dialog } from 'electron'
-import type { AnswerRating, FlowQuery, MemoryKind, NeighborQuery } from '../../../shared/graph-types'
+import type { AnswerRating, FlowQuery, MemoryKind, NeighborQuery } from '@nexgraph/contracts/graph-types'
 import type { IpcContext } from '../../platform/ipc-context'
 
 /** Truy vấn đồ thị qua engine, cùng nguồn ngoài (W6), bộ nhớ làm việc (W10), graph chung (W8) và pull request (W7). */

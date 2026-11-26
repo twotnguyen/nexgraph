@@ -1,6 +1,6 @@
 import { app, safeStorage } from 'electron'
 import { join } from 'node:path'
-import type { AgentId, IntegrationOptions } from '../../../shared/integration-types'
+import type { AgentId, IntegrationOptions } from '@nexgraph/contracts/integration-types'
 import { writeJson } from '../../platform/settings'
 import { EngineApiError } from '../../platform/engine/api'
 import { gitBranch, hookPreview, hookStatus, installHook, uninstallHook } from './git-hook'

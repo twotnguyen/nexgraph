@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { IndexOptions, Job, JobState } from '@shared/graph-types'
+import type { IndexOptions, Job, JobState } from '@nexgraph/contracts/graph-types'
 import { tr } from '../strings'
 import { errorMsg, errorText } from './errorText'
 import { msg, type Message } from './messages'

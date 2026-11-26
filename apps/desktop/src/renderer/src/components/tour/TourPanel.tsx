@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { TourStep } from '@shared/graph-types'
+import type { TourStep } from '@nexgraph/contracts/graph-types'
 import { tr, vi } from '../../strings'
 import { useLocale } from '../../state/locale'
 import { errorMsg } from '../../state/errorText'

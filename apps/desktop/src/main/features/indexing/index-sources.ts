@@ -1,4 +1,4 @@
-import type { IndexOptions, IndexSources } from '../../../shared/graph-types'
+import type { IndexOptions, IndexSources } from '@nexgraph/contracts/graph-types'
 import { readJson, writeJson, type SecretStore } from '../../platform/settings'
 
 /**

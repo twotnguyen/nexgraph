@@ -1,4 +1,4 @@
-import type { AiConsentTarget } from '@shared/agent-types'
+import type { AiConsentTarget } from '@nexgraph/contracts/agent-types'
 import { tr, vi } from '../../strings'
 
 export function ConsentDialog({ project, target, model, onOk, onCancel }: {

@@ -1,4 +1,4 @@
-import type { PathConfidence } from '@shared/graph-types'
+import type { PathConfidence } from '@nexgraph/contracts/graph-types'
 import { formatNumber } from './locale'
 import { msg, type Message } from './messages'
 

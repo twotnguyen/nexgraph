@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitBlameLine, NexGraphApi } from '@shared/api'
+import type { GitBlameLine, NexGraphApi } from '@nexgraph/contracts/api'
 import { installNexgraph } from '../../test-utils'
 import { setBlame, setEditorPrefs } from '../../state/editorPrefs'
 

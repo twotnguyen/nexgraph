@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MapEdge, MapNode, ProjectMap } from '@shared/graph-types'
+import type { MapEdge, MapNode, ProjectMap } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 import { setLocale } from '../../state/locale'
 import { MapView } from './MapView'

@@ -1,8 +1,8 @@
 // NG-UI-3: cầu nối chọn nút của trang → panel nhỏ trong app.
 // Preload của trang gửi {id, label, source_file}; main xác thực người gửi + payload rồi tra
 // `source_location` từ engine (route node hiện có) trước khi chuyển cho renderer.
-import type { GraphNode } from '@shared/graph-types'
-import { GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_NODE_SELECTED } from '@shared/graph-pages'
+import type { GraphNode } from '@nexgraph/contracts/graph-types'
+import { GRAPH_PAGE_NODE_CHANNEL, GRAPH_PAGE_NODE_SELECTED } from '@nexgraph/contracts/graph-pages'
 import { projectFromPageUrl, type GuestBinding } from './protocol'
 
 export const PAGE_NODE_CHANNEL = GRAPH_PAGE_NODE_CHANNEL

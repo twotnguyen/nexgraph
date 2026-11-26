@@ -1,5 +1,5 @@
 import { tr } from '../../strings'
-import type { AuthEventView } from '@shared/agent-types'
+import type { AuthEventView } from '@nexgraph/contracts/agent-types'
 
 function safeUrl(raw: string): string | null {
   try {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { SourceItem } from '@shared/graph-types'
+import type { SourceItem } from '@nexgraph/contracts/graph-types'
 import { waitJob } from '../../state/waitJob'
 import { vi } from '../../strings'
 import { msg, msgText, type Message } from '../../state/messages'

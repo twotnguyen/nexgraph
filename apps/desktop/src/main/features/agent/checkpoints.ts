@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { FileContent, FileRevision } from '../../../shared/api'
+import type { FileContent, FileRevision } from '@nexgraph/contracts/api'
 import { deleteProjectFile, FsError, readProjectFile, writeProjectFile } from '../../platform/project-fs'
 import type { WritePreview } from './approval'
 

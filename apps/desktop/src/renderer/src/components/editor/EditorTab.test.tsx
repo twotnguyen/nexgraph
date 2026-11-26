@@ -2,9 +2,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FileContent, FileRevision, LspDiagnosticsEvent, NexGraphApi } from '@shared/api'
+import type { FileContent, FileRevision, LspDiagnosticsEvent, NexGraphApi } from '@nexgraph/contracts/api'
 import { startDiagnostics } from '../../state/diagnostics'
-import type { EngineEvent } from '@shared/graph-types'
+import type { EngineEvent } from '@nexgraph/contracts/graph-types'
 import { installNexgraph } from '../../test-utils'
 
 const revealLines = vi.hoisted(() => vi.fn())

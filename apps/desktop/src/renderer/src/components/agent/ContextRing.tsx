@@ -1,4 +1,4 @@
-import type { AgentContextUsage } from '@shared/agent-types'
+import type { AgentContextUsage } from '@nexgraph/contracts/agent-types'
 import { formatNumber } from '../../state/locale'
 import { tr } from '../../strings'
 

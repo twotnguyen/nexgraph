@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APPROVAL_TIMEOUT_MS, createApprovalGate, needsExplicitApproval, type ApprovalGate } from '../src/main/features/agent/approval'
-import type { AgentMode, ApprovalRequest } from '../src/shared/agent-types'
+import type { AgentMode, ApprovalRequest } from '@nexgraph/contracts/agent-types'
 
 const input: Record<string, unknown> = {
   edit: { path: 'a.ts', edits: [] },

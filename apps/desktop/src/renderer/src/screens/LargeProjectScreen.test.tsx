@@ -2,7 +2,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { ScanInfo } from '@shared/graph-types'
+import type { ScanInfo } from '@nexgraph/contracts/graph-types'
 import { project } from '../test-utils'
 import { LargeProjectScreen } from './LargeProjectScreen'
 

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { cp, lstat, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
-import type { ExtensionCommand, ExtensionInfo, ExtensionTheme } from '../../../shared/api'
+import type { ExtensionCommand, ExtensionInfo, ExtensionTheme } from '@nexgraph/contracts/api'
 import { UserError } from '../../platform/user-error'
 
 /** Biến màu một theme extension được đặt: đúng bộ biến mà theme dựng sẵn khai báo trong styles.css. */

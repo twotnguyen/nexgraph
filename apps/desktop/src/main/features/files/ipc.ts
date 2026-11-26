@@ -1,5 +1,5 @@
 import { shell } from 'electron'
-import type { TextSearchQuery, WriteOpts } from '../../../shared/api'
+import type { TextSearchQuery, WriteOpts } from '@nexgraph/contracts/api'
 import { AgentFileScope } from '../agent/file-scope'
 import { FsError, fsHandlers, isProtectedRel, readProjectFileBytes } from '../../platform/project-fs'
 import { projectOperations } from './project-operations'

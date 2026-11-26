@@ -7,7 +7,7 @@ import { ASK_TOOLS, EDIT_TOOLS } from '../src/main/features/agent/extension'
 import { TOOL_DEFS } from '../src/main/features/agent/tools'
 import { modeInstruction } from '../src/main/features/agent/skill'
 import type { EngineApi } from '../src/main/platform/engine/api'
-import type { AgentEvent } from '../src/shared/agent-types'
+import type { AgentEvent } from '@nexgraph/contracts/agent-types'
 
 const GRAPH = TOOL_DEFS.map((t) => t.function.name)
 const TARGET = { provider: 'nexgraph-custom', baseUrl: 'https://test.example/v1' }

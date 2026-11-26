@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
-import type { GitWorktree } from '../../../shared/api'
+import type { GitWorktree } from '@nexgraph/contracts/api'
 import { fail, git } from './repo'
 
 /** Porcelain trả `C:/...` hoặc tên ngắn; `resolve` cũng đổi separator về dạng native khi thư mục đã mất. */

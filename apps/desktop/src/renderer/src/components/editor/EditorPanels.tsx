@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { LspDiagnostic, LspDocumentSymbol } from '@shared/api'
+import type { LspDiagnostic, LspDocumentSymbol } from '@nexgraph/contracts/api'
 import type { ActiveEditor } from '../../state/activeEditor'
 import { refreshDiagnostics, useDiagnostics } from '../../state/diagnostics'
 import { errorMsg } from '../../state/errorText'

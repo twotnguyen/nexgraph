@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@shared/agent-types'
-import type { AiSettings, Citation, GraphEdge, GraphNode } from '@shared/graph-types'
+import { consentTargetForSettings, sameConsentTarget, type AiConsentTarget, type AgentMode, type ApprovalRequest, type AgentContextItem, type FileApprovalRequest, type ModelInfo } from '@nexgraph/contracts/agent-types'
+import type { AiSettings, Citation, GraphEdge, GraphNode } from '@nexgraph/contracts/graph-types'
 import { tr, vi, viSource } from '../../strings'
 import { errorMsg } from '../../state/errorText'
 import { Icon } from '../common/icons'

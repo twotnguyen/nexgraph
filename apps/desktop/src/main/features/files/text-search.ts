@@ -1,6 +1,6 @@
 import { posix } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import type { TextSearchQuery, TextSearchResult, TextReplaceResult } from '../../../shared/api'
+import type { TextSearchQuery, TextSearchResult, TextReplaceResult } from '@nexgraph/contracts/api'
 import { AgentFileScope } from '../agent/file-scope'
 import { isProtectedRel, readProjectFile, writeProjectFile } from '../../platform/project-fs'
 import { UserError } from '../../platform/user-error'

@@ -1,6 +1,6 @@
 import { realpathSync } from 'node:fs'
 import { relative, sep } from 'node:path'
-import type { AgentEditorState } from '../../../shared/agent-types'
+import type { AgentEditorState } from '@nexgraph/contracts/agent-types'
 import { FsError, resolveInside } from '../../platform/project-fs'
 
 /** Đồng bộ dirty state trước khi gửi câu hỏi, duyệt ghi hoặc hoàn tác. */

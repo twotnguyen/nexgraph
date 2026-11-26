@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { ProjectSummary } from '@shared/graph-types'
+import type { ProjectSummary } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 import { errorMsg } from '../../state/errorText'
 import { msgText, type Message } from '../../state/messages'

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { TextSearchResult } from '@shared/api'
+import type { TextSearchResult } from '@nexgraph/contracts/api'
 import { afterEach, expect, it, vi } from 'vitest'
 import { runCommand } from '../../state/commands'
 import { setLocale } from '../../state/locale'

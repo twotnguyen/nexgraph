@@ -1,6 +1,6 @@
 import { app, dialog } from 'electron'
 import { join } from 'node:path'
-import type { IndexOptions } from '../../../shared/graph-types'
+import type { IndexOptions } from '@nexgraph/contracts/graph-types'
 import { SecretStore } from '../../platform/settings'
 import { EngineApiError } from '../../platform/engine/api'
 import { IndexOptionsStore } from './index-options'

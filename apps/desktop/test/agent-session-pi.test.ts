@@ -9,7 +9,7 @@ import { AgentService, createPiSession } from '../src/main/features/agent/sessio
 import { AccountService } from '../src/main/features/agent/accounts'
 import { SecretStore } from '../src/main/platform/settings'
 import type { EngineApi } from '../src/main/platform/engine/api'
-import type { AgentEvent, AiConsentTarget } from '../src/shared/agent-types'
+import type { AgentEvent, AiConsentTarget } from '@nexgraph/contracts/agent-types'
 
 const KEY = 'sk-test-khong-duoc-ghi-ra-dia'
 const OUTSIDE = `/tmp/x-outside-${process.pid}-${Date.now()}`

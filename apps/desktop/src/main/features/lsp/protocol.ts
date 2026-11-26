@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { isAbsolute, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { LspDiagnostic, LspMarkup, LspRange, LspSignatureHelp, LspTextEdit, LspWorkspaceEdit } from '../../../shared/api'
+import type { LspDiagnostic, LspMarkup, LspRange, LspSignatureHelp, LspTextEdit, LspWorkspaceEdit } from '@nexgraph/contracts/api'
 import { FsError, resolveInside } from '../../platform/project-fs'
 
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)

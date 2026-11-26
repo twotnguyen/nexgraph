@@ -1,6 +1,6 @@
 // NG-UI-3: xác thực người gửi + payload của cầu nối chọn nút, ràng buộc guest/owner/dự án.
 import { describe, expect, it, vi } from 'vitest'
-import type { GraphNode } from '../src/shared/graph-types'
+import type { GraphNode } from '@nexgraph/contracts/graph-types'
 import {
   deliverLateSelection, deliverSelection, handlePageNodeMessage, lineFromLocation, validatePageNode
 } from '../src/main/features/graph-pages/bridge'

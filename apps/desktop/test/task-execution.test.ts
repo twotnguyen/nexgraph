@@ -6,7 +6,7 @@ import { createApprovalGate } from '../src/main/features/agent/approval'
 import { previewWrite } from '../src/main/features/agent/extension'
 import { CheckpointStore } from '../src/main/features/agent/checkpoints'
 import { detectProjectCommands, TaskExecution } from '../src/main/features/agent/process-tools'
-import type { AgentMode, ApprovalRequest } from '../src/shared/agent-types'
+import type { AgentMode, ApprovalRequest } from '@nexgraph/contracts/agent-types'
 
 function fixture() {
   const base = mkdtempSync(join(tmpdir(), 'ng-task-'))

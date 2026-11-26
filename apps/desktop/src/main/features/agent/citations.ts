@@ -1,8 +1,8 @@
-import type { Citation } from '../../../shared/graph-types'
-import { parseCitations } from '../../../shared/citations'
+import type { Citation } from '@nexgraph/contracts/graph-types'
+import { parseCitations } from '@nexgraph/contracts/citations'
 import type { EngineApi } from '../../platform/engine/api'
 
-export { CITATION_SOURCE, type ParsedCitation, parseCitations } from '../../../shared/citations'
+export { CITATION_SOURCE, type ParsedCitation, parseCitations } from '@nexgraph/contracts/citations'
 
 /**
  * Trần số đường dẫn thử cho mỗi trích dẫn không ngoặc. Mỗi ứng viên là một lời gọi `code()` cục bộ;

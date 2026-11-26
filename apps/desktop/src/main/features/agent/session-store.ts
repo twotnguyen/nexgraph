@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, unlinkSync } from 'node:fs'
 import { basename, join, relative, sep } from 'node:path'
 import type { SessionManager } from '@earendil-works/pi-coding-agent'
-import type { AgentSessionInfo, AgentTask } from '../../../shared/agent-types'
+import type { AgentSessionInfo, AgentTask } from '@nexgraph/contracts/agent-types'
 import { writeJson } from '../../platform/settings'
 
 export type SessionScope = {

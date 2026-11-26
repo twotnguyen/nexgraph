@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { installNexgraph } from '../../test-utils'
 import { setLocale } from '../../state/locale'
 import { NexAccountsPane } from './NexAccountsPane'
-import type { NexAccountsView } from '@shared/agent-types'
+import type { NexAccountsView } from '@nexgraph/contracts/agent-types'
 
 const view = (over: Partial<NexAccountsView> = {}): NexAccountsView => ({
   available: true,

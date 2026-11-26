@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import type { DebugBreakpoints } from '../../../shared/api'
+import type { DebugBreakpoints } from '@nexgraph/contracts/api'
 import { adapterInstalled, installAdapter, type DebugKind } from './adapters'
 import { attachSpec, ensureConfigFile, listConfigs, resolveConfig, type DebugSpec } from './launch-config'
 import { DebugManager } from './manager'

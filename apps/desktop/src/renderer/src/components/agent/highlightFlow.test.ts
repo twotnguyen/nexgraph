@@ -1,6 +1,6 @@
 // F4 mục 4 (A2-F5): "Tô luồng trên graph" phải tô các nút được trích dẫn kể cả khi không có cạnh trực tiếp.
 import { describe, expect, it } from 'vitest'
-import type { Citation, GraphEdge, GraphNode, PathResult } from '@shared/graph-types'
+import type { Citation, GraphEdge, GraphNode, PathResult } from '@nexgraph/contracts/graph-types'
 import { highlightFlow } from './highlightFlow'
 
 const node = (id: string): GraphNode => ({

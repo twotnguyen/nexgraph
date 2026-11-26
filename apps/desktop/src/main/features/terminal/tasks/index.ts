@@ -1,7 +1,7 @@
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync, realpathSync } from 'node:fs'
 import type { BigIntStats } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
-import type { TaskDefinition } from '../../../../shared/api'
+import type { TaskDefinition } from '@nexgraph/contracts/api'
 import { toProjectRelative } from '../../agent/approval'
 import { isProtectedRel, isWithin, MAX_EDIT_BYTES, resolveInside, writeProjectFile } from '../../../platform/project-fs'
 import { UserError } from '../../../platform/user-error'

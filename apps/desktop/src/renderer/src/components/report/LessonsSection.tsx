@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { LessonEntry, Lessons } from '@shared/graph-types'
+import type { LessonEntry, Lessons } from '@nexgraph/contracts/graph-types'
 import { vi } from '../../strings'
 
 /** Mục "Bài học" của tab Báo cáo: tổng hợp tất định các lần đánh giá câu trả lời. */

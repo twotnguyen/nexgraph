@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { PathConfidence } from '@shared/graph-types'
+import type { PathConfidence } from '@nexgraph/contracts/graph-types'
 import { setLocale } from './locale'
 import { msgText } from './messages'
 import { askNotice, pathFound, pathNoLink } from './pathNotice'

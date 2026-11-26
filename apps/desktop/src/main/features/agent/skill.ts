@@ -1,4 +1,4 @@
-import type { AgentMode } from '../../../shared/agent-types'
+import type { AgentMode } from '@nexgraph/contracts/agent-types'
 import { TOOL_DEFS } from './tools'
 
 export const NEXGRAPH_SKILL_NAME = 'nexgraph'

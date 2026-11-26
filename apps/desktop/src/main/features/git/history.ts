@@ -1,5 +1,5 @@
 import { relative, resolve, sep } from 'node:path'
-import type { GitCommit, GitFileChange } from '../../../shared/api'
+import type { GitCommit, GitFileChange } from '@nexgraph/contracts/api'
 import { fail, git, safePaths } from './repo'
 
 export function parseGitLog(raw: string): GitCommit[] {

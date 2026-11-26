@@ -2,7 +2,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { setLocale } from '../../state/locale'
-import type { GitStatus, NexGraphApi } from '@shared/api'
+import type { GitStatus, NexGraphApi } from '@nexgraph/contracts/api'
 import { installNexgraph } from '../../test-utils'
 import { GitPanel } from './GitPanel'
 
