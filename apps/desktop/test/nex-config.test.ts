@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { nexConfig, nexProviderEnv, nexProjectKey, NEX_PROVIDER_ENV } from '../src/main/agent/nex/config'
+import { nexAccountConfig, nexConfig, nexProviderEnv, nexProjectKey, NEX_PROVIDER_ENV } from '../src/main/agent/nex/config'
 
 const engine = { command: '/opt/nexgraph/engine/nexgraph-engine', args: [] as string[] }
 const provider = { id: 'custom-1', label: 'NexGraph QA', baseUrl: 'https://ai.example.test/v1', apiKey: 'sk-sentinel-key', model: 'gpt-6-luna' }
@@ -54,6 +54,19 @@ describe('cấu hình Nex (OpenCode v2)', () => {
     const command = (config.mcp as { servers: { nexgraph: { command: string[] } } }).servers.nexgraph.command
     expect(command.slice(0, 8)).toEqual(['uv', 'run', '--project', '/repo/engine', '--locked', 'python', '-m', 'nexgraph_engine.cli'])
     expect(command.slice(8)).toEqual(['mcp', '--project', root, '--data-dir', '/tmp/data'])
+  })
+
+  it('cấu hình tài khoản đã đăng nhập trỏ thẳng provider/model, không khai báo providers', () => {
+    const root = '/tmp/proj-account'
+    const config = nexAccountConfig({ root, engine, dataDir: '/tmp/data', providerID: 'github-copilot', model: 'gpt-4.1' })
+    expect(config.model).toBe('github-copilot/gpt-4.1')
+    expect(config).not.toHaveProperty('providers')
+    expect(config).not.toHaveProperty('provider')
+    const servers = (config.mcp as { servers: Record<string, { command: string[]; cwd: string }> }).servers
+    expect(servers.nexgraph.cwd).toBe(root)
+    expect(servers.nexgraph.command.slice(-1)).toEqual(['/tmp/data'])
+    const rules = config.permissions as { action: string; effect: string }[]
+    expect(rules.find((rule) => rule.action === 'edit')?.effect).toBe('ask')
   })
 
   it('khoá dự án chỉ chứa ký tự an toàn và không rỗng', () => {

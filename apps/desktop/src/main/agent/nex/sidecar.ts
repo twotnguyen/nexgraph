@@ -19,6 +19,10 @@ export type NexSidecarOptions = {
   /** `<userData>/nex`; mỗi dự án có HOME riêng bên dưới. */
   dataDir: string
   projectKey: string
+  /** Thư mục HOME dùng chung cho mọi phiên (đăng nhập một lần dùng cho cả dự án); mặc định `<dataDir>/<projectKey>/home`. */
+  homeDir?: string
+  /** Thư mục cấu hình OpenCode (opencode.json, skill, plugin); mặc định `<home>/.config/opencode`. */
+  configDir?: string
   cwd: string
   config: () => Record<string, unknown>
   /** Env riêng của provider (có key). Không bao giờ được ghi ra đĩa/log. */
@@ -90,7 +94,8 @@ export class NexSidecar {
   /** Mật khẩu chỉ dùng cho client HTTP trong bộ nhớ, không ghi ra đĩa. */
   get secret(): string { return this.password }
 
-  private get home(): string { return join(this.o.dataDir, this.o.projectKey, 'home') }
+  private get home(): string { return this.o.homeDir ?? join(this.o.dataDir, this.o.projectKey, 'home') }
+  private get configDir(): string { return this.o.configDir ?? join(this.home, '.config', 'opencode') }
 
   async start(): Promise<{ baseUrl: string; password: string }> {
     if (this._status === 'running') return { baseUrl: this.baseUrl, password: this.password }
@@ -110,7 +115,7 @@ export class NexSidecar {
   private async spawnOnce(): Promise<{ baseUrl: string; password: string }> {
     if (this.stopped) throw new NexStartError('Đã dừng tiến trình Nex', this.stderrTail)
     const home = this.home
-    const configDir = join(home, '.config', 'opencode')
+    const configDir = this.configDir
     mkdirSync(configDir, { recursive: true })
     writeFileSync(join(configDir, 'opencode.json'), `${JSON.stringify(this.o.config(), null, 2)}\n`, { mode: 0o600 })
     const password = randomBytes(24).toString('base64url')

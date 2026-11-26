@@ -33,9 +33,56 @@ export type ProviderInfo = {
   description?: string
 }
 
+/** Một nhà cung cấp trong khối "Tài khoản AI cho Nex" (integration của sidecar). */
+export type NexAccountMethod = {
+  id: string
+  type: 'oauth' | 'command' | 'key' | 'external'
+  label: string
+  form?: { key: string; title: string; required: boolean; hidden?: boolean; options?: { value: string; label: string }[]; when?: { key: string; op: string; value: string }[] }[]
+}
+export type NexAccountConnection = {
+  id: string
+  label: string
+  method: 'key' | 'oauth' | 'external'
+  problem?: { message: string; url?: string }
+}
+export type NexAccountProvider = {
+  id: string
+  name: string
+  connected: boolean
+  connections: NexAccountConnection[]
+  methods: NexAccountMethod[]
+  models: { id: string; label: string }[]
+}
+export type NexAccountsView = {
+  /** Có runtime Nex trên máy và sidecar trả lời được. */
+  available: boolean
+  /** Lý do khi chưa dùng được (thiếu binary, sidecar lỗi) — câu đã dịch ở renderer bằng mã. */
+  reason?: 'no_runtime' | 'sidecar_error'
+  providers: NexAccountProvider[]
+  selected: { provider: string; id: string } | null
+}
+/** Kết quả bắt đầu một luồng đăng nhập qua sidecar. */
+export type NexAuthStartView = {
+  kind: 'oauth' | 'command' | 'external' | 'key'
+  integrationId: string
+  attemptId?: string
+  url?: string
+  instructions?: string
+  userCode?: string
+  /** URL đã được kiểm và mở bằng trình duyệt hệ thống. */
+  opened?: boolean
+  /** URL không mở vì không qua kiểm https + host cho phép. */
+  blockedReason?: 'invalid_url' | 'host_not_allowed'
+}
+export type NexAuthStatusView = { status: 'pending' | 'complete' | 'failed' | 'expired'; message?: string }
+
+
 export type PiConsentTarget = { runtime?: 'pi'; provider: string; baseUrl: string; accountId?: string }
 export type GeminiConsentTarget = { runtime: 'antigravity-cli'; provider: 'google-antigravity'; connectionId: string; accountId?: string; baseUrl?: never }
-export type AiConsentTarget = PiConsentTarget | GeminiConsentTarget
+/** Điểm đến của phiên Nex theo khối tài khoản Nex (#72): `baseUrl` là URL nhà cung cấp, hoặc `nex-account:<id>` cho tài khoản đăng nhập trong sidecar. */
+export type NexConsentTarget = { runtime: 'nex'; provider: string; baseUrl: string; accountId?: string }
+export type AiConsentTarget = PiConsentTarget | GeminiConsentTarget | NexConsentTarget
 
 export function normalizeConsentTarget(provider: string, baseUrl: string, accountId?: string): PiConsentTarget | null {
   try {
@@ -52,11 +99,16 @@ export function sameConsentTarget(left: AiConsentTarget | null | undefined, righ
   if (!left || !right || left.provider !== right.provider || left.accountId !== right.accountId) return false
   if (left.runtime === 'antigravity-cli' || right.runtime === 'antigravity-cli')
     return left.runtime === 'antigravity-cli' && right.runtime === 'antigravity-cli' && !!left.connectionId && left.connectionId === right.connectionId
+  // Điểm đến Nex và điểm đến Pi cùng nhà cung cấp/URL vẫn là hai consent khác nhau.
+  if ((left.runtime === 'nex') !== (right.runtime === 'nex')) return false
   return left.baseUrl === right.baseUrl
 }
 
-export function consentTargetForSettings(settings: { runtime?: 'nex' | 'pi' | 'antigravity-cli'; provider?: string; baseUrl?: string; model?: string; accountId?: string; connectionId?: string }): AiConsentTarget | null {
+export function consentTargetForSettings(settings: { runtime?: 'nex' | 'pi' | 'antigravity-cli'; provider?: string; baseUrl?: string; model?: string; accountId?: string; connectionId?: string; nexDestination?: boolean }): AiConsentTarget | null {
   if (!settings.model) return null
+  if (settings.runtime === 'nex' && settings.nexDestination) return settings.provider && settings.baseUrl ? {
+    runtime: 'nex', provider: settings.provider, baseUrl: settings.baseUrl, ...(settings.accountId ? { accountId: settings.accountId } : {})
+  } : null
   if (settings.runtime === 'antigravity-cli') return settings.connectionId ? {
     runtime: 'antigravity-cli', provider: 'google-antigravity', connectionId: settings.connectionId,
     ...(settings.accountId ? { accountId: settings.accountId } : {})

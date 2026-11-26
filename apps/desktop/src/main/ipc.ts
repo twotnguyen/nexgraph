@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell, webContents } from 'electron'
 import type { WebContents } from 'electron'
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import type { CollabHello, DebugBreakpoints, LspCallHierarchyItem, LspRange, TaskDefinition, TextSearchQuery, WriteOpts } from '../shared/api'
@@ -30,6 +30,9 @@ import { WatchErrorNotifier } from './watch/error-notice'
 import { EditorStateRegistry } from './agent/editor-state'
 import { AgentRouter, type AgentRuntimeId } from './agent-router'
 import { createNexSession, nexAvailable } from './agent/nex/runtime'
+import { NexSidecar, resolveNexBinary } from './agent/nex/sidecar'
+import { NexAccountManager, checkNexAuthUrl, withAppKeys, withCustomProviders } from './agent/nex/accounts'
+import { NexConsentStore, nexAgentAccounts, nexDestination, nexReady } from './agent/nex/destination'
 import { GeminiConnectionManager } from './gemini/connection'
 import { GeminiAgentService } from './gemini/service'
 import { GeminiConsentStore } from './gemini-consent'
@@ -40,6 +43,7 @@ import { SemanticUsageStore } from './ai/semantic-usage'
 import { directTransport, piComplete, selectedModelLabel } from './ai/semantic-models'
 import type { ProjectAiSettings, SemanticTarget } from '../shared/graph-types'
 import type { GeminiConsentTarget } from '../shared/agent-types'
+import { sameConsentTarget } from '../shared/agent-types'
 import type { AnswerRating, MemoryKind } from '../shared/graph-types'
 import { externalWebUrl } from './external-links'
 import { TerminalManager, resolveTerminalPath, validateTask } from './terminal/manager'
@@ -210,11 +214,46 @@ const accounts = (getWindow: () => BrowserWindow | null, dataDir: string, devHoo
     throw e
   }))
 
+/** Nex dùng được khi có model đã chọn (tài khoản sidecar, API key built-in, hoặc provider tuỳ chỉnh). */
+const nexReadyFor = (a: AccountService | null): boolean => nexReady(a)
+
 export function stopAllWatchers(): void {
   watchStarts.clear()
   for (const w of watchers.values()) w.stop()
   watchers.clear()
 }
+
+// ----- Tài khoản AI cho Nex (integration của sidecar) -----
+
+let nexAccounts: NexAccountManager | null = null
+let nexAccountsSidecar: NexSidecar | null = null
+
+/** Dừng sidecar tài khoản Nex khi thoát app. */
+export const stopNexAccounts = (): Promise<void> => (nexAccounts as NexAccountManager | null)?.stop() ?? Promise.resolve()
+
+/** Sidecar riêng cho màn tài khoản: HOME dùng chung với phiên chat, config riêng. */
+const startNexAccountsSidecar = (dataDir: string): Promise<{ baseUrl: string; password: string }> => {
+  if (!nexAccountsSidecar) {
+    const bin = resolveNexBinary({ env: process.env, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath })
+    if (!bin) return Promise.reject(Object.assign(new Error('Nex runtime is not available'), { code: 'nex_not_available' }))
+    // Token/tài khoản do sidecar lưu dưới `<userData>/nex/` (brief N2-A2), không chép ra nơi khác.
+    const nexRoot = join(app.getPath('userData'), 'nex')
+    nexAccountsSidecar = new NexSidecar({
+      bin,
+      dataDir: nexRoot,
+      projectKey: 'accounts',
+      homeDir: join(nexRoot, 'home'),
+      configDir: join(nexRoot, 'accounts', 'config'),
+      cwd: dataDir,
+      // Không cần MCP/model cho màn tài khoản; cấu hình tối thiểu để sidecar chạy.
+      config: () => ({ $schema: 'https://opencode.ai/config.json' }),
+      envSource: process.env
+    })
+    nexAccountsSidecar.onUnexpectedExit(() => (nexAccounts as NexAccountManager | null)?.resetClient())
+  }
+  return nexAccountsSidecar.start()
+}
+
 
 /** Đăng ký các kênh IPC của dự án và đồ thị. `handle()` trả engine hiện tại hoặc null khi chưa sẵn sàng. */
 export function registerIpc(
@@ -240,6 +279,25 @@ export function registerIpc(
     return h
   }
   const api = (): EngineApi => new EngineApi(handle())
+  nexAccounts = new NexAccountManager({
+    connect: () => startNexAccountsSidecar(dataDir),
+    openExternal: (raw) => {
+      const check = checkNexAuthUrl(raw)
+      if (!check.ok) return
+      // Cờ QA: ghi URL đã kiểm vào `<userData>/nex/last-auth-url.txt` thay vì mở trình duyệt thật.
+      if (/^(1|true)$/i.test(process.env.NEXGRAPH_NEX_AUTH_NO_OPEN ?? '')) {
+        try {
+          const nexRoot = join(app.getPath('userData'), 'nex')
+          mkdirSync(nexRoot, { recursive: true })
+          writeFileSync(join(nexRoot, 'last-auth-url.txt'), `${check.url}\n`, { mode: 0o600 })
+        } catch { /* cờ QA: không làm hỏng luồng đăng nhập */ }
+        return
+      }
+      void shell.openExternal(check.url).catch(() => {})
+    },
+    prefsFile: prefsFile(),
+    close: async () => { await nexAccountsSidecar?.stop(); nexAccountsSidecar = null }
+  })
   const on = <A extends unknown[], R>(channel: string, fn: (...args: A) => Promise<R>): void =>
     ipcMain.handle(channel, (_e, ...args) => toIpcResult(() => fn(...(args as A))))
   /** Như on() nhưng truyền webContents đã gọi vào handler (tài nguyên gắn cửa sổ đã mở nó). */
@@ -779,12 +837,19 @@ export function registerIpc(
     return status.authenticated && status.connectionId ? { runtime: 'antigravity-cli', provider: 'google-antigravity', connectionId: status.connectionId } : null
   }
   const googleConsent = new GeminiConsentStore(join(dataDir, 'google-consent.json'), rootOf, googleTarget)
+  const nexConsent = new NexConsentStore(rootOf)
   const derivedSettings = async (): Promise<AiSettings> => {
     if (selectedRuntime() === 'antigravity-cli') {
       const status = await google.status()
       return { runtime: 'antigravity-cli', provider: 'google-antigravity', baseUrl: '', model: status.authenticated && geminiEnabled() ? google.selectedModel() : '', hasKey: false, connectionId: status.connectionId }
     }
     const a = await acc()
+    // Runtime Nex có lựa chọn riêng trong khối tài khoản Nex: renderer phải hỏi consent theo điểm đến đó.
+    const dest = selectedRuntime() === 'nex' ? nexDestination(a) : null
+    if (dest) {
+      return { runtime: 'nex', provider: dest.provider, baseUrl: dest.baseUrl, model: dest.model,
+        hasKey: dest.account || a.hasKey(dest.provider), nexDestination: true }
+    }
     const target = await a.getConsentTarget()
     const model = a.getSelectedModel()
     return {
@@ -797,11 +862,18 @@ export function registerIpc(
     }
   }
   on('ai:get-settings', () => derivedSettings())
-  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => target?.runtime === 'antigravity-cli' ? googleConsent.hasConsent(pid, target) : (await acc()).hasConsent(pid, target))
+  on('ai:has-consent', async (pid: string, target: AiConsentTarget) => target?.runtime === 'antigravity-cli' ? googleConsent.hasConsent(pid, target)
+    : target?.runtime === 'nex' ? nexConsent.hasConsent(pid, target) : (await acc()).hasConsent(pid, target))
   on('ai:grant-consent', async (pid: string, target: AiConsentTarget) => {
     await rootOf(pid)
     if (target?.runtime === 'antigravity-cli') await googleConsent.grantConsent(pid, target)
-    else await (await acc()).grantConsent(pid, target)
+    else if (target?.runtime === 'nex') {
+      // Chỉ nhận đúng điểm đến Nex hiện tại: renderer không được tự chọn điểm đến khác để xin consent.
+      const current = selectedRuntime() === 'nex' ? nexDestination(await acc()) : null
+      if (!current || !sameConsentTarget(target, { runtime: 'nex', provider: current.provider, baseUrl: current.baseUrl }))
+        throw new AgentError('ai_provider_changed', 'Tài khoản AI của Nex đã thay đổi. Hãy kiểm tra và xác nhận lại trước khi gửi mã nguồn.')
+      await nexConsent.grantConsent(pid, target)
+    } else await (await acc()).grantConsent(pid, target)
   })
   on('git:suggest-message', async (pid: string) => {
     const root = await rootOf(pid)
@@ -830,6 +902,59 @@ export function registerIpc(
     }
   })
   on('auth:list', async () => (await acc()).listProviders())
+  on('nex:accounts', async () => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    const view = await manager.list()
+    try {
+      const a = await acc()
+      const providers = (await a.listProviders()).filter((p) => p.custom)
+      const models = await a.listModels()
+      const withKeys = withAppKeys(view, (id) => !!a.nexProviderFor({ provider: id, id: '' }))
+      return withCustomProviders(withKeys, providers.map((p) => ({
+        id: p.id, label: p.label, hasKey: p.hasKey,
+        models: models.filter((m) => m.provider === p.id).map((m) => ({ id: m.id, label: m.label }))
+      })))
+    } catch { return view }
+  })
+  on('nex:select-model', async (provider: string, id: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    const a = await acc()
+    const custom = (await a.listProviders()).some((p) => p.custom && p.id === provider)
+    if (custom) {
+      if (!(await a.listModels()).some((m) => m.provider === provider && m.id === id)) throw new AgentError('bad_param', 'Không có model này')
+      a.selectModel(provider, id)
+      manager.saveSelection({ provider, id })
+    } else await manager.selectModel(provider, id)
+    agent.selectionChanged()
+  })
+  onTrusted('nex:auth-start', async (integrationId: string, methodId: string, answers?: Record<string, unknown>) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    return manager.startAuth(integrationId, methodId, answers)
+  })
+  on('nex:auth-status', async (kind: 'oauth' | 'command', integrationId: string, attemptId: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    return manager.authStatus(kind, integrationId, attemptId)
+  })
+  onTrusted('nex:auth-cancel', async (kind: 'oauth' | 'command', integrationId: string, attemptId: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    await manager.cancelAuth(kind, integrationId, attemptId)
+  })
+  onTrusted('nex:auth-logout', async (integrationId: string) => {
+    const manager = nexAccounts
+    if (!manager) throw new AgentError('ai_not_configured', 'Tài khoản Nex chưa sẵn sàng')
+    try { await manager.logout(integrationId) } finally { agent.selectionChanged() }
+  })
+  onTrusted('nex:save-key', async (integrationId: string, key: string) => {
+    const a = await acc()
+    if (!(await a.listProviders()).some((p) => p.id === integrationId))
+      throw new AgentError('bad_param', 'Nhà cung cấp này chưa hỗ trợ nhập API key trong NexGraph')
+    try { await a.setApiKey(integrationId, key) } finally { agent.selectionChanged() }
+  })
   on('auth:set-key', async (providerId: string, key: string) => {
     try { await (await acc()).setApiKey(providerId, key) } finally { agent.selectionChanged() }
   })
@@ -885,7 +1010,7 @@ export function registerIpc(
   })
   onTrusted('ai:get-runtime', async () => {
     const a = await acc().catch(() => null)
-    return { runtime: selectedRuntime(), nexAvailable: nexRuntime(), nexReady: !!a?.nexProvider() }
+    return { runtime: selectedRuntime(), nexAvailable: nexRuntime(), nexReady: nexReadyFor(a) }
   })
   onTrusted('ai:set-runtime', async (runtime: unknown) => {
     if (runtime !== 'nex' && runtime !== 'pi') throw new AgentError('bad_param', 'Runtime không hợp lệ')
@@ -894,7 +1019,7 @@ export function registerIpc(
     }
     if (runtime === 'nex') {
       if (!nexRuntime()) throw new AgentError('ai_not_configured', 'Chưa tìm thấy runtime Nex trên máy này. Hãy dùng runtime Pi.')
-      if (!(await acc()).nexProvider()) throw new AgentError('ai_not_configured', 'Nex đợt này cần nhà cung cấp OpenAI-compatible có API key. Hãy thêm trong Cài đặt.')
+      if (!nexReadyFor(await acc())) throw new AgentError('ai_not_configured', 'Nex chưa có tài khoản AI. Hãy đăng nhập hoặc thêm nhà cung cấp OpenAI-compatible trong Cài đặt.')
     }
     selectRuntime(runtime)
   })
@@ -923,13 +1048,25 @@ export function registerIpc(
   // Cùng AgentService (phiên, transcript, checklist, giới hạn) nhưng phiên do Nex/OpenCode phụ trách.
   const nexAgent = new AgentService({
     api: liveApi, dataDir,
-    accounts: acc,
+    // Model/recipient/consent theo lựa chọn trong khối tài khoản Nex (không theo model Pi đang chọn).
+    accounts: async () => nexAgentAccounts(await acc(), nexConsent),
     rootOf,
     editorState: (projectId) => editorStates.get(projectId),
     emit: (projectId, event) => sendOwned(agentOwners.ownerOf(projectId), 'agent:event', { projectId, event }),
     createSession: (spec) => createNexSession(spec, {
       dataDir, isPackaged: app.isPackaged, resourcesPath: process.resourcesPath,
-      engineCommand: getCommand, getProvider: async () => (await acc()).nexProvider()
+      engineCommand: getCommand,
+      nexDataDir: join(app.getPath('userData'), 'nex'),
+      getProvider: async () => {
+        const a = await acc()
+        return a.nexProviderFor(a.nexSelectedModel()) ?? a.nexProvider()
+      },
+      getAccountModel: async () => {
+        const a = await acc()
+        const selected = a.nexSelectedModel()
+        // Nhà cung cấp tuỳ chỉnh / API key của app đi qua provider env, không phải tài khoản sidecar.
+        return selected && !a.nexProviderFor(selected) ? selected : null
+      }
     })
   })
   const agent = (agents = new AgentRouter(piAgent, googleAgent, selectedRuntime, nexAgent))

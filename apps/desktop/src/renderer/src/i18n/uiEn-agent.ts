@@ -19,6 +19,8 @@ export const uiEnAgent: Record<string, string> = {
   'Bỏ ghim': 'Unpin',
   'Chi phí chưa xác định': 'Cost unavailable',
   'Chi phí: chưa xác định': 'Cost: unavailable',
+  'Câu hỏi, ngữ cảnh đồ thị và nội dung tệp mà trợ lý đọc trong dự án {project} có thể được gửi tới tài khoản {provider} đã đăng nhập trong Nex (model {model}). Nex gửi bằng tài khoản đó, không qua khoá API của NexGraph.':
+    'The question, graph context and file contents read by the assistant in {project} may be sent to the {provider} account signed in to Nex (model {model}). Nex sends them with that account, not with a NexGraph API key.',
   'Cho phép Antigravity CLI chính thức gửi ngữ cảnh và lịch sử hội thoại của dự án “{project}” tới Google bằng tài khoản Google hiện đang được Antigravity quản lý trên máy này? Trợ lý sử dụng {model}.': 'Allow the official Antigravity CLI to send the project “{project}” context and conversation history to Google using the Google account currently managed by Antigravity on this machine? The assistant uses {model}.',
   'Cho phép Antigravity CLI gửi ngữ cảnh và lịch sử hội thoại của dự án này tới Google bằng tài khoản Google hiện đang được Antigravity quản lý.': 'Allow Antigravity CLI to send this project’s context and conversation history to Google using the Google account currently managed by Antigravity.',
   'Cho phép chạy': 'Allow run',
@@ -319,4 +321,29 @@ export const uiEnAgent: Record<string, string> = {
   '{count} tuần': '{count} {count, plural, one {week} other {weeks}}',
   '{count} ngày': '{count} {count, plural, one {day} other {days}}',
   '{count} giờ': '{count} {count, plural, one {hour} other {hours}}',
+
+  // Khối "Tài khoản AI cho Nex" (N2-A2)
+  'Tài khoản AI cho trợ lý Nex': 'AI accounts for the Nex assistant',
+  'API key': 'API key',
+  'Tài khoản AI cho Nex': 'AI accounts for Nex',
+  'Đăng nhập bằng tài khoản gói hoặc API key. Nex lưu thông tin đăng nhập trong thư mục dữ liệu của NexGraph.': 'Sign in with a subscription account or an API key. Nex keeps sign-in data inside the NexGraph data folder.',
+  'Đang tải danh sách nhà cung cấp…': 'Loading providers…',
+  'Chưa tìm thấy runtime Nex trên máy này.': 'The Nex runtime was not found on this machine.',
+  'Không khởi động được dịch vụ tài khoản Nex.': 'Could not start the Nex accounts service.',
+  'Đã kết nối': 'Connected',
+  'Chưa kết nối': 'Not connected',
+  'Đăng xuất': 'Sign out',
+  'Nhập API key': 'Enter API key',
+  'Mã xác nhận': 'Verification code',
+  'Mở trang xác nhận': 'Open the verification page',
+  'Không mở được trình duyệt tự động. Hãy mở liên kết bên dưới.': 'Could not open the browser automatically. Open the link below.',
+  'Đang chờ xác nhận trong trình duyệt…': 'Waiting for confirmation in the browser…',
+  'Model mặc định': 'Default model',
+  'Đã kết nối {name}': 'Connected {name}',
+  'Đã đăng xuất {name}': 'Signed out of {name}',
+  'Đã lưu API key cho {name}': 'Saved the API key for {name}',
+  'Đã chọn model mặc định cho {name}': 'Selected the default model for {name}',
+  'Đã bỏ model mặc định của {name}': 'Cleared the default model for {name}',
+  'Đăng nhập không thành công. Hãy thử lại.': 'Sign-in did not complete. Try again.',
+  'Đăng nhập bằng công cụ chính thức của nhà cung cấp.': 'Sign in with the provider’s official tool.'
 }

@@ -76,6 +76,13 @@ export function installNexgraph(over: { [K in keyof NexGraphApi]?: Partial<NexGr
       onEvent: vi.fn(() => () => {}), onPrompt: vi.fn(() => () => {}), onNotice: vi.fn(() => () => {}),
       onModelsChanged: vi.fn(() => () => {}), ...over.auth
     },
+    nex: {
+      accounts: vi.fn(async () => ({ available: true, providers: [], selected: null })),
+      authStart: vi.fn(async () => ({ kind: 'oauth' as const, integrationId: 'openai', attemptId: 'a', opened: true })),
+      authStatus: vi.fn(async () => ({ status: 'pending' as const })),
+      authCancel: vi.fn(async () => {}), saveKey: vi.fn(async () => {}), logout: vi.fn(async () => {}),
+      selectModel: vi.fn(async () => {}), ...over.nex
+    },
     gemini: {
       status: vi.fn(async () => emptyGeminiStatus()), setup: vi.fn(async () => emptyGeminiStatus({ state: 'signed_out', installed: true })),
       login: vi.fn(async () => emptyGeminiStatus({ state: 'connected', installed: true, authenticated: true })),

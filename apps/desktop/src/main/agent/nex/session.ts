@@ -23,6 +23,8 @@ export type NexSessionOptions = {
   root: string
   client: NexSessionClient
   model: { provider: string; id: string }
+  /** Provider bên trong sidecar (mặc định `nexgraph`; tài khoản đã đăng nhập dùng id integration). */
+  providerId?: string
   /** Hộp duyệt hiện có của app (ApprovalGate); vắng thì mọi yêu cầu sửa/lệnh bị từ chối. */
   gate?: Pick<ApprovalGate, 'request'>
   /** Chế độ Hỏi/Lập kế hoạch: chỉ đọc, không hỏi duyệt ghi/lệnh. */
@@ -145,7 +147,7 @@ export class NexSession {
     try {
       if (!this.ocId) {
         const created = await this.o.client.createSession({
-          title: text.slice(0, 80) || 'Nex', model: { providerID: NEX_PROVIDER_ID, id: this.currentModel.id }
+          title: text.slice(0, 80) || 'Nex', model: { providerID: this.o.providerId ?? NEX_PROVIDER_ID, id: this.currentModel.id }
         })
         this.ocId = created.id
       }
@@ -179,7 +181,7 @@ export class NexSession {
   async setModel(model: { provider: string; id: string }): Promise<void> {
     const changed = model.id !== this.currentModel.id
     this.currentModel = { ...model }
-    if (changed && this.ocId) await this.o.client.setModel(this.ocId, { providerID: NEX_PROVIDER_ID, id: model.id })
+    if (changed && this.ocId) await this.o.client.setModel(this.ocId, { providerID: this.o.providerId ?? NEX_PROVIDER_ID, id: model.id })
   }
 
   async dispose(): Promise<void> {

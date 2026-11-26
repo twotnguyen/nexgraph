@@ -9,6 +9,7 @@ import { Icon } from '../common/icons'
 import { AuthLinks } from './AuthLinks'
 import { ConnectionProviderPicker, type ConnectionProvider } from './ConnectionProviderPicker'
 import { GeminiConnectionPane } from './GeminiConnectionPane'
+import { NexAccountsPane } from './NexAccountsPane'
 import './connection-dialog.css'
 
 type Method = 'oauth' | 'api_key' | 'local'
@@ -50,10 +51,12 @@ export function ConnectionDialog({ projectId, onConnected, onClose, initialMetho
         <button type="button" aria-label={tr('Gemini bằng tài khoản Google')} aria-pressed={geminiMethod === 'account'} disabled={busy} onClick={() => setGeminiMethod('account')}><strong>{tr('Tài khoản Google')}</strong><small>{tr('Antigravity CLI chính thức')}<br />{tr('Hạn mức theo tài khoản')}</small></button>
         <button type="button" aria-label={tr('Gemini bằng API key')} aria-pressed={geminiMethod === 'api_key'} disabled={busy} onClick={() => setGeminiMethod('api_key')}><strong>API key</strong><small>Google AI Studio<br />{tr('Hạn mức API riêng')}</small></button>
       </div>}
-      {provider === 'gemini' && geminiMethod === 'account'
-        ? <GeminiConnectionPane projectId={projectId} onConnected={onConnected} onClose={onClose} onBusyChange={setBusy} />
-        : <PiConnectionForm key={provider} projectId={projectId} onConnected={onConnected} onClose={onClose} providerGroup={provider}
-          initialMethod={provider === 'local' ? 'local' : provider === 'gemini' || provider === 'other' ? 'api_key' : initialMethod === 'api_key' ? 'api_key' : 'oauth'} onBusyChange={setBusy} />}
+      {provider === 'nex'
+        ? <NexAccountsPane onConnected={onConnected} onClose={onClose} onBusyChange={setBusy} />
+        : provider === 'gemini' && geminiMethod === 'account'
+          ? <GeminiConnectionPane projectId={projectId} onConnected={onConnected} onClose={onClose} onBusyChange={setBusy} />
+          : <PiConnectionForm key={provider} projectId={projectId} onConnected={onConnected} onClose={onClose} providerGroup={provider}
+            initialMethod={provider === 'local' ? 'local' : provider === 'gemini' || provider === 'other' ? 'api_key' : initialMethod === 'api_key' ? 'api_key' : 'oauth'} onBusyChange={setBusy} />}
     </div>
   </section></div>
 }
