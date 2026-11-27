@@ -10,7 +10,7 @@ export type MenuLocale = 'vi' | 'en'
 export const isMenuLocale = (value: unknown): value is MenuLocale => value === 'vi' || value === 'en'
 
 type Labels = {
-  app: { about: string; hide: string; hideOthers: string; showAll: string; quit: string }
+  app: { about: string; checkUpdates: string; hide: string; hideOthers: string; showAll: string; quit: string }
   file: {
     newWindow: string; openFile: string; openFolder: string; openRecent: string
     saveAs: string; saveAll: string; share: string; autoSave: string
@@ -34,11 +34,11 @@ type Labels = {
     reload: string; toggleDevTools: string; actualSize: string; zoomIn: string; zoomOut: string; fullScreen: string
   }
   window: { minimize: string; zoom: string; close: string; front: string }
-  help: { about: string; licenses: string }
+  help: { about: string; checkUpdates: string; licenses: string }
 }
 
 const VI: Labels = {
-  app: { about: 'Giới thiệu NexGraph', hide: 'Ẩn NexGraph', hideOthers: 'Ẩn các ứng dụng khác', showAll: 'Hiện tất cả', quit: 'Thoát NexGraph' },
+  app: { about: 'Giới thiệu NexGraph', checkUpdates: 'Kiểm tra cập nhật…', hide: 'Ẩn NexGraph', hideOthers: 'Ẩn các ứng dụng khác', showAll: 'Hiện tất cả', quit: 'Thoát NexGraph' },
   file: {
     newWindow: 'Cửa sổ mới',
     openFile: 'Mở tệp…',
@@ -114,11 +114,11 @@ const VI: Labels = {
     fullScreen: 'Bật/tắt toàn màn hình'
   },
   window: { minimize: 'Thu nhỏ', zoom: 'Phóng to cửa sổ', close: 'Đóng cửa sổ', front: 'Đưa tất cả lên trước' },
-  help: { about: 'Giới thiệu NexGraph', licenses: 'Giấy phép mã nguồn mở' }
+  help: { about: 'Giới thiệu NexGraph', checkUpdates: 'Kiểm tra cập nhật…', licenses: 'Giấy phép mã nguồn mở' }
 }
 
 const EN: Labels = {
-  app: { about: 'About NexGraph', hide: 'Hide NexGraph', hideOthers: 'Hide Others', showAll: 'Show All', quit: 'Quit NexGraph' },
+  app: { about: 'About NexGraph', checkUpdates: 'Check for Updates…', hide: 'Hide NexGraph', hideOthers: 'Hide Others', showAll: 'Show All', quit: 'Quit NexGraph' },
   file: {
     newWindow: 'New Window',
     openFile: 'Open File…',
@@ -194,7 +194,7 @@ const EN: Labels = {
     fullScreen: 'Toggle Full Screen'
   },
   window: { minimize: 'Minimize', zoom: 'Zoom', close: 'Close Window', front: 'Bring All to Front' },
-  help: { about: 'About NexGraph', licenses: 'Open Source Licenses' }
+  help: { about: 'About NexGraph', checkUpdates: 'Check for Updates…', licenses: 'Open Source Licenses' }
 }
 
 export const menuLabels: Record<MenuLocale, Labels> = { vi: VI, en: EN }

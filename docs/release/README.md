@@ -35,6 +35,15 @@ Bộ cài không có chứng chỉ nhà phát triển nên hệ điều hành c�
 
 Nếu hệ điều hành vẫn chặn trình cài hoặc engine đã cài, ghi rõ thành phần và thông báo trong checklist. Với máy được quản lý, báo người phụ trách máy. [Workflow và artifact](../../.github/workflows/ci.yml) · [Kiểm tên bộ cài](../../apps/desktop/scripts/check-installer.mjs) · [Biên bản 0.1.0 bị chặn](acceptance/2026-11-18.md)
 
+### Cập nhật lên bản mới
+
+Từ bản có tính năng cập nhật trong app (bản phát hành kế tiếp sau 0.2.0-alpha.1), NexGraph đã cài tự kiểm tra GitHub Releases khoảng 10 giây sau khi mở, và khi chọn **Kiểm tra cập nhật…** (macOS: menu NexGraph; Windows: menu Trợ giúp). Bản thử (alpha/beta/rc) nhận cả bản thử mới hơn; bản chính thức chỉ nhận bản chính thức. Lỗi mạng lúc khởi động thì im lặng, chọn từ menu thì báo.
+
+- **Windows:** hộp thoại báo có bản mới → **Cập nhật** tải bộ cài trong nền (tiến độ trên thanh tác vụ) → **Khởi động lại**: app hỏi tệp chưa lưu, dừng engine và agent, cài đè lặng rồi tự mở lại. Chọn **Để sau** thì bản mới tự cài khi thoát app. Cần các tệp `latest.yml`/`alpha.yml`/`beta.yml` và `*.exe.blockmap` trên Release; job `package` báo lỗi nếu thiếu, job `release` tải lên cùng bộ cài. Máy bật Smart App Control/Application Control chặn bộ cài chưa ký thì cũng chặn bản cập nhật (xem mục trên).
+- **macOS:** tự cài đè cần chữ ký Apple Developer, bản cài hiện chỉ ký ad-hoc. Hộp thoại báo có bản mới → **Tải bản mới** mở liên kết DMG đúng kiến trúc trong trình duyệt → mở DMG, kéo NexGraph vào **Applications**, chọn **Thay thế** (không cần gỡ bản cũ). Vì DMG tải qua trình duyệt, lần mở đầu có thể phải **Open Anyway** như khi cài mới.
+- Bản đã cài **trước** khi có tính năng này (đến 0.2.0-alpha.1) phải cài tay một lần bản mới; từ đó trở đi mới tự cập nhật.
+- Tắt kiểm tra (máy demo, máy kiểm tự động): đặt biến môi trường `NEXGRAPH_UPDATE_CHECK=0`. Smoke và E2E tự tắt (`NEXGRAPH_SMOKE`, `NEXGRAPH_USER_DATA_DIR`).
+
 ## Chạy lần đầu
 
 1. Mở NexGraph và chờ trạng thái engine sẵn sàng. Bộ cài dùng engine kèm theo. Git giúp đọc thay đổi theo HEAD. Khi dự án thiếu Git phù hợp, Changes dùng mốc lập chỉ mục.

@@ -101,6 +101,27 @@ describe('template menu hệ thống', () => {
     expect((english.submenu ?? []).some((entry) => entry.label === 'Open Source Licenses')).toBe(true)
   })
 
+  it('Kiểm tra cập nhật: macOS ở menu ứng dụng, Windows ở Trợ giúp, chạy thẳng trong main', () => {
+    const checkUpdates = vi.fn()
+    const send = vi.fn()
+    const find = (item: Item, label: string) => (item.submenu ?? []).find((entry) => entry.label === label)
+
+    const mac = build({ platform: 'darwin', checkUpdates, send })
+    const macItem = find(menu(mac, 'NexGraph'), 'Kiểm tra cập nhật…')
+    expect(macItem).toBeTruthy()
+    expect(find(menu(mac, 'Trợ giúp'), 'Kiểm tra cập nhật…')).toBeUndefined()
+    macItem!.click!({} as never, undefined as never, undefined as never)
+    expect(checkUpdates).toHaveBeenCalledTimes(1)
+    expect(send).not.toHaveBeenCalled()
+
+    const win = build({ platform: 'win32', locale: 'en', checkUpdates })
+    find(menu(win, 'Help'), 'Check for Updates…')!.click!({} as never, undefined as never, undefined as never)
+    expect(checkUpdates).toHaveBeenCalledTimes(2)
+
+    // Không đăng ký trình kiểm (test, labs) thì không có mục chết.
+    expect(find(menu(build({ platform: 'win32' }), 'Trợ giúp'), 'Kiểm tra cập nhật…')).toBeUndefined()
+  })
+
   it('setAppMenuLocale chỉ nhận vi/en và dựng lại menu, đúng cả macOS và Windows', () => {
     const getWindow = () => null
     const current = (): Item[] => (h.appMenu as { template: Item[] }).template

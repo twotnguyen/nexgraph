@@ -290,9 +290,14 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ steps.installer.outputs.name }}
+          # Tệp kênh + blockmap cho cập nhật trong app (Windows); macOS có thể không sinh, không sao.
           path: |
             ${{ steps.installer.outputs.path }}
             ${{ steps.installer.outputs.manifest }}
+            apps/desktop/dist/latest*.yml
+            apps/desktop/dist/alpha*.yml
+            apps/desktop/dist/beta*.yml
+            apps/desktop/dist/*.blockmap
           if-no-files-found: error
 
   release:

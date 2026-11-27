@@ -87,6 +87,18 @@ writeFileSync(new URL(`../dist/${name}.build.json`, import.meta.url), JSON.strin
   run
 }, null, 2) + '\n', 'utf8')
 
+// Cập nhật trong app (Windows): electron-updater cần tệp kênh (`latest.yml`/`alpha.yml`/`beta.yml`)
+// trỏ đúng bộ cài này và tệp `.blockmap`. Thiếu thì bản đã cài sẽ không thấy bản mới, nên job đỏ ngay.
+if (process.platform === 'win32') {
+  const dist = fileURLToPath(new URL('../dist/', import.meta.url))
+  const channels = readdirSync(dist)
+    .filter((entry) => /^(latest|alpha|beta)\.yml$/.test(entry))
+    .filter((entry) => readFileSync(join(dist, entry), 'utf8').includes(`path: ${filename}`))
+  if (channels.length === 0) throw new Error(`Thiếu tệp kênh cập nhật (latest/alpha/beta.yml) trỏ tới ${filename}`)
+  if (!existsSync(join(dist, `${filename}.blockmap`))) throw new Error(`Thiếu ${filename}.blockmap cho cập nhật trong app`)
+  console.log(`Tệp cập nhật: ${channels.join(', ')}, ${filename}.blockmap`)
+}
+
 if (process.env.GITHUB_OUTPUT) {
   appendFileSync(process.env.GITHUB_OUTPUT, `name=${name}\npath=${path}\nmanifest=${manifest}\n`, 'utf8')
 }
