@@ -1,6 +1,6 @@
 [project]
 name = "nexgraph-engine"
-version = "0.2.0a1"
+version = "0.2.0a2"
 description = "Engine phân tích mã nguồn của NexGraph"
 requires-python = ">=3.12,<3.13"
 license = "Apache-2.0"
