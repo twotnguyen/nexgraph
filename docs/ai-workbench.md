@@ -58,6 +58,8 @@ Adapter ChatGPT dùng callback HTTP loopback trên `127.0.0.1` với cổng tr�
 
 Mặc định **Duyệt từng thay đổi**: mỗi thao tác ghi hiển thị đường dẫn cùng diff trước/sau. Lệnh được duyệt bằng executable, args, cwd và timeout. **Tự động trong phiên này** bỏ bước duyệt từng thao tác trong phạm vi đã cấp; **lệnh thì luôn phải duyệt từng lệnh** và vẫn cần bật **Cho phép chạy lệnh build/test** riêng (ADR 0016). Hỏi và Kế hoạch luôn chỉ đọc, kể cả khi trước đó đã bật quyền tự động.
 
+**Web (Nex):** Nex có thể tìm trên web và mở một trang để tra tài liệu thư viện hay thông báo lỗi. Mỗi lần đều hiện hộp duyệt kèm nguyên văn câu tìm hoặc URL, ở cả ba chế độ (web không ghi tệp dự án), kể cả khi đã bật **Tự động trong phiên này**. Đọc kỹ trước khi cho phép: câu tìm và URL đi ra ngoài máy, nên một tệp chứa chỉ dẫn độc có thể lợi dụng chúng để gửi dữ liệu dự án đi. Câu tìm được gửi tới dịch vụ tìm kiếm Exa; trang được mở trực tiếp từ máy bạn.
+
 Quyền tự động và chạy lệnh không được bật lại khi đóng rồi mở dự án. Công cụ chạy tiến trình bằng executable và mảng args, không diễn giải chuỗi shell chung. Tiến trình dùng quyền tài khoản Windows/macOS hiện tại; đây không phải máy ảo hay sandbox của hệ điều hành. Script của dự án có thể có tác động ngoài mã nguồn mà checkpoint không hoàn tác được.
 
 ## 3. Gửi ngữ cảnh đúng vị trí

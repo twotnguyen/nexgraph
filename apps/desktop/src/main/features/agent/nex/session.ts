@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, realpathSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
-import type { ApprovalDecision, ApprovalRequest, CommandApprovalRequest, FileApprovalRequest } from '@nexgraph/contracts/agent-types'
+import type { ApprovalDecision, ApprovalRequest, CommandApprovalRequest, FileApprovalRequest, WebApprovalRequest } from '@nexgraph/contracts/agent-types'
 import type { ApprovalGate } from '../approval'
 import type { ProviderFailure } from '../session'
 import { NEX_PROVIDER_ID } from './config'
@@ -313,6 +313,11 @@ export class NexSession {
     } else if (action === 'shell' && this.o.isEdit?.() !== false) {
       const command = asString(metadata.command) || resources[0] || ''
       if (command) request = { id: requestId, tool: 'command', executable: '/bin/sh', args: ['-c', command], cwd: this.o.root, timeoutMs: 120_000 } satisfies CommandApprovalRequest
+    } else if (action === 'webfetch' || action === 'websearch') {
+      // Không đổi tệp dự án nên hỏi ở mọi chế độ. Vẫn hỏi từng lần: URL hay câu tìm có thể mang dữ liệu
+      // dự án ra ngoài (chỉ dẫn độc trong tệp bảo Nex mở `https://…?q=<secret>`).
+      const target = asString(action === 'webfetch' ? metadata.url : metadata.query) || resources[0] || ''
+      if (target) request = { id: requestId, tool: action, target } satisfies WebApprovalRequest
     }
     let decision: ApprovalDecision = { allow: false, reason: 'Không hiển thị được yêu cầu duyệt' }
     if (request && this.o.gate) {

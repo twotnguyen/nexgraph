@@ -117,6 +117,10 @@ function isFileApproval(value: unknown): value is FileApprovalRequest {
 
 function isApproval(value: unknown): value is ApprovalRequest {
   if (isFileApproval(value)) return true
+  const web = value as Partial<Extract<ApprovalRequest, { tool: 'webfetch' | 'websearch' }>> | null
+  if (web && (web.tool === 'webfetch' || web.tool === 'websearch')) {
+    return typeof web.id === 'string' && !!web.id && typeof web.target === 'string' && web.target.trim() !== ''
+  }
   const request = value as Partial<Extract<ApprovalRequest, { tool: 'command' }>> | null
   return !!request && request.tool === 'command' && typeof request.id === 'string' && !!request.id
     && typeof request.executable === 'string' && Array.isArray(request.args) && request.args.every((arg) => typeof arg === 'string')
@@ -332,7 +336,10 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
       if (!mounted.current || pid !== projectId) return
       if (e.type === 'approval') {
         const { request } = e
-        if (t?.mode !== 'edit' || modeRef.current !== 'edit' || modePending.current || !isApproval(request)) return
+        if (!t || !isApproval(request)) return
+        // Duyệt web (Nex) không đổi tệp dự án nên hiện ở mọi chế độ; sửa tệp và lệnh chỉ ở chế độ Sửa.
+        const web = request.tool === 'webfetch' || request.tool === 'websearch'
+        if (!web && (t.mode !== 'edit' || modeRef.current !== 'edit' || modePending.current)) return
         setApprovals((cur) => (cur.some((a) => a.id === request.id) ? cur : [...cur, request]))
         announceAgent('approval', alertTitle.current)
         return
@@ -626,11 +633,15 @@ function ProjectAgentPanel({ id, projectId, projectName = projectId, hidden, act
   }
 
   const decide = (id: string, allow: boolean) => {
-    if (!visible.current || modePending.current || modeRef.current !== 'edit' || turn.current?.mode !== 'edit') return
+    const request = approvals.find((a) => a.id === id)
+    // Duyệt web không ghi tệp: không cần chế độ Sửa, không cần đồng bộ editor xuống đĩa trước.
+    const web = request?.tool === 'webfetch' || request?.tool === 'websearch'
+    const modeOk = () => web || (modeRef.current === 'edit' && turn.current?.mode === 'edit')
+    if (!visible.current || modePending.current || !modeOk()) return
     const current = turn.current
     void (async () => {
-      if (allow) await beforePrompt?.()
-      if (!mounted.current || !visible.current || modePending.current || modeRef.current !== 'edit' || turn.current !== current || current?.cancelled) return
+      if (allow && !web) await beforePrompt?.()
+      if (!mounted.current || !visible.current || modePending.current || !modeOk() || turn.current !== current || current?.cancelled) return
       await window.nexgraph.agent.approve(projectId, id, allow)
     })().catch((e) => {
       if (mounted.current) setError(errorMessage(e))
