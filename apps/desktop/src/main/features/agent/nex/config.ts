@@ -125,6 +125,9 @@ export const NEX_REMOVED_PLUGINS = [
   'opencode.tool.read', 'opencode.tool.grep', 'opencode.tool.glob'
 ] as const
 
+/** Chế độ chốt "tra đồ thị trước" của tool tệp MCP cho Nex (`nexgraph-engine mcp --file-guard`). */
+export const NEX_FILE_GUARD = 'strict'
+
 /** Các tệp sidecar ghi vào thư mục cấu hình cạnh `opencode.json`. */
 export function nexConfigFiles(): Record<string, string> {
   return { [NEX_INSTRUCTIONS_FILE]: nexInstructions() }
@@ -141,7 +144,10 @@ function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'
       servers: {
         nexgraph: {
           type: 'local',
-          command: [input.engine.command, ...input.engine.args, 'mcp', '--project', input.root, '--data-dir', input.dataDir],
+          // `--file-guard strict`: lần đầu Nex đọc/tìm tệp thô khi chưa tra đồ thị (và đồ thị còn mới) bị từ chối
+          // một lần kèm lời nhắc, như `graphify hook-guard --strict` với agent ngoài.
+          command: [input.engine.command, ...input.engine.args, 'mcp', '--project', input.root, '--data-dir', input.dataDir,
+            '--file-guard', NEX_FILE_GUARD],
           cwd: input.root,
           codemode: false,
           environment: { ...PYTHON_ENV_GUARD },

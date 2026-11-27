@@ -64,6 +64,8 @@ Mặc định **Duyệt từng thay đổi**: mỗi thao tác ghi hiển thị �
 - che secret trong tài liệu và tệp cấu hình (YAML, JSON cấu hình, Terraform, tệp không rõ loại); `grep` tìm trên bản đã che nên không dò được giá trị;
 - đọc được cả tệp chưa lập chỉ mục (tệp Nex vừa tạo).
 
+**Tra đồ thị trước (Nex):** app chạy MCP với `--file-guard strict`, tương đương `graphify hook-guard --strict` với agent ngoài. Lần đầu Nex đọc hay tìm tệp thô khi phiên chưa gọi tool đồ thị nào, và đồ thị còn mới (cùng commit, tệp đích chưa sửa sau lần index), tool từ chối **một lần** kèm lời nhắc gọi `query_graph`/`get_context`/`search`/`find`; lần gọi lại được phép. Liệt kê thư mục không bị chặn. Lỗi khi kiểm thì cho qua. Agent ngoài chạy `nexgraph-engine mcp` mặc định `--file-guard off`; `nudge` chỉ thêm trường `hint`.
+
 Lệnh shell (`cat .env`…) không qua chính sách này nhưng luôn hiện hộp duyệt kèm nguyên văn lệnh. Dự án chưa lập chỉ mục thì Nex không đọc được tệp nào.
 
 **Web (Nex):** Nex có thể tìm trên web và mở một trang để tra tài liệu thư viện hay thông báo lỗi. Mỗi lần đều hiện hộp duyệt kèm nguyên văn câu tìm hoặc URL, ở cả ba chế độ (web không ghi tệp dự án), kể cả khi đã bật **Tự động trong phiên này**. Đọc kỹ trước khi cho phép: câu tìm và URL đi ra ngoài máy, nên một tệp chứa chỉ dẫn độc có thể lợi dụng chúng để gửi dữ liệu dự án đi. Câu tìm được gửi tới dịch vụ tìm kiếm Exa; trang được mở trực tiếp từ máy bạn.
