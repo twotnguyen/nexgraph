@@ -81,21 +81,30 @@ export function nexConfig(input: NexConfigInput): Record<string, unknown> {
 /**
  * Tool có sẵn của OpenCode mà Nex được dùng (tệp chỉ dẫn giới thiệu đúng các tool này). Hai tool
  * `opencode_*_mcp_resource(s)` đọc resource của MCP `nexgraph` (báo cáo, god nodes, kết nối bất ngờ,
- * câu hỏi gợi ý, audit), thứ Graphify cấp cho agent kết nối vào qua `graphify://…`.
+ * câu hỏi gợi ý, audit), thứ Graphify cấp cho agent kết nối vào qua `graphify://…`. `webfetch` và
+ * `websearch` luôn hỏi duyệt (hộp duyệt hiện URL hoặc câu tìm), ở mọi chế độ.
  */
 export const NEX_ENABLED_TOOLS = [
-  'read', 'glob', 'grep', 'edit', 'write', 'shell', 'opencode_list_mcp_resources', 'opencode_read_mcp_resource'
+  'read', 'glob', 'grep', 'edit', 'write', 'shell', 'webfetch', 'websearch',
+  'opencode_list_mcp_resources', 'opencode_read_mcp_resource'
 ] as const
 
 /**
+ * Nhà cung cấp tìm web chọn sẵn. Không chọn thì lần tìm đầu OpenCode mở form chọn nhà cung cấp mà app
+ * không vẽ được, tool treo 1 phút rồi báo huỷ. Exa (`mcp.exa.ai`) chạy không cần key; người dùng có
+ * `EXA_API_KEY` thì OpenCode dùng key đó.
+ */
+export const NEX_WEBSEARCH_PROVIDER = 'exa'
+
+/**
  * Tool có sẵn của OpenCode 2.4.1 mà app không phục vụ được: `onPermission` (nex/session.ts) chỉ dựng
- * hộp duyệt cho `edit`/`shell` và từ chối mọi quyền khác, giao diện không hiện câu hỏi, phiên con
+ * hộp duyệt cho sửa tệp, lệnh và web, từ chối mọi quyền khác; giao diện không hiện câu hỏi, phiên con
  * hay lịch chạy. Luật `deny` trên `*` làm OpenCode bỏ tool khỏi danh sách gửi model
  * (`tool.ts` whollyDisabled). Đây là lớp dự phòng cho `NEX_REMOVED_PLUGINS` (bản OpenCode sau đổi
  * id plugin thì tool vẫn bị ẩn). `execute` là Code Mode.
  */
 export const NEX_DISABLED_TOOLS = [
-  'webfetch', 'websearch', 'generate_image', 'generate_video', 'question', 'subagent', 'execute', 'skill'
+  'generate_image', 'generate_video', 'question', 'subagent', 'execute', 'skill'
 ] as const
 
 /**
@@ -107,7 +116,7 @@ export const NEX_DISABLED_TOOLS = [
  */
 export const NEX_REMOVED_PLUGINS = [
   'opencode.tool.automation', 'opencode.tools', 'opencode.tools.mcp-events',
-  'opencode.tool.skill', 'opencode.tool.webfetch', 'opencode.tool.websearch', 'opencode.tool.question',
+  'opencode.tool.skill', 'opencode.tool.question',
   'opencode.tool.subagent', 'opencode.tool.image-generate', 'opencode.tool.video-generate'
 ] as const
 
@@ -122,6 +131,7 @@ function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'
     // Đường dẫn tuyệt đối: OpenCode nạp mục `instructions` đã khai kể cả khi tắt khám phá cấu hình dự án.
     instructions: [join(input.configDir, NEX_INSTRUCTIONS_FILE)],
     plugins: NEX_REMOVED_PLUGINS.map((id) => `-${id}`),
+    websearch: { provider: NEX_WEBSEARCH_PROVIDER },
     mcp: {
       servers: {
         nexgraph: {
@@ -147,6 +157,9 @@ function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'
       { action: 'opencode_read_mcp_resource', resource: 'nexgraph:*', effect: 'allow' },
       { action: 'edit', resource: '*', effect: 'ask' },
       { action: 'shell', resource: '*', effect: 'ask' },
+      // Hỏi từng lần: URL hay câu tìm có thể mang dữ liệu dự án ra ngoài.
+      { action: 'webfetch', resource: '*', effect: 'ask' },
+      { action: 'websearch', resource: '*', effect: 'ask' },
       ...NEX_DISABLED_TOOLS.map((action) => ({ action, resource: '*', effect: 'deny' }))
     ]
   }

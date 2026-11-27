@@ -20,7 +20,13 @@ export type CommandApprovalRequest = {
   cwd: string
   timeoutMs: number
 }
-export type ApprovalRequest = FileApprovalRequest | CommandApprovalRequest
+/** Nex mở một trang (`webfetch`, `target` là URL) hoặc tìm trên web (`websearch`, `target` là câu tìm). */
+export type WebApprovalRequest = {
+  id: string
+  tool: 'webfetch' | 'websearch'
+  target: string
+}
+export type ApprovalRequest = FileApprovalRequest | CommandApprovalRequest | WebApprovalRequest
 
 export type ApprovalDecision = { allow: true } | { allow: false; reason: string }
 

@@ -138,6 +138,21 @@ describe('AgentPanel workbench', () => {
     expect(api.agent.approve).toHaveBeenCalledWith('p1', 'command', true)
   })
 
+  it('duyệt web của Nex hiện ở chế độ Hỏi; yêu cầu web thiếu URL bị bỏ qua', async () => {
+    const { api, emitAgent } = installNexgraph({ ai: configured(), agent: {
+      prompt: vi.fn(() => new Promise<void>(() => {}))
+    } })
+    render(<AgentPanel {...props()} />)
+    await ask('Thư viện này đổi API ở bản mới không?')
+    act(() => emitAgent('p1', { type: 'approval', request: { id: 'web-empty', tool: 'webfetch', target: '  ' } }))
+    act(() => emitAgent('p1', { type: 'approval', request: { id: 'web', tool: 'websearch', target: 'vitest 4 breaking changes' } }))
+    const card = await screen.findByRole('group', { name: 'Tìm trên web' })
+    expect(within(card).getByText('vitest 4 breaking changes')).toBeInTheDocument()
+    expect(screen.queryAllByRole('group', { name: /trang web|trên web/ })).toHaveLength(1)
+    await userEvent.click(within(card).getByRole('button', { name: 'Cho phép' }))
+    expect(api.agent.approve).toHaveBeenCalledWith('p1', 'web', true)
+  })
+
   it('Dừng trong lúc đồng bộ editor không khởi động prompt sau đó', async () => {
     const flush = pending<void>()
     const { api } = installNexgraph({ ai: configured() })

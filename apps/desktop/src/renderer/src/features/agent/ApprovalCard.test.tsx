@@ -20,6 +20,23 @@ describe('ApprovalCard', () => {
     expect(decide.mock.calls).toEqual([[true], [false]])
   })
 
+  it('web hiện nguyên URL hoặc câu tìm dạng văn bản (không thành link bấm được), không dựng diff', async () => {
+    mocks.create.mockClear()
+    const decide = vi.fn()
+    const { container, unmount } = render(<ApprovalCard request={{ id: 'w1', tool: 'webfetch', target: 'https://docs.example.test/a?q=<b>' }} onDecide={decide} />)
+    expect(screen.getByRole('group', { name: 'Mở trang web' })).toBeInTheDocument()
+    expect(container.querySelector('pre')).toHaveTextContent('https://docs.example.test/a?q=<b>')
+    expect(container.querySelector('a')).toBeNull()
+    expect(mocks.create).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Cho phép' }))
+    expect(decide.mock.calls).toEqual([[true]])
+    unmount()
+    render(<ApprovalCard request={{ id: 'w2', tool: 'websearch', target: 'vitest mock timers' }} onDecide={vi.fn()} />)
+    expect(screen.getByRole('group', { name: 'Tìm trên web' })).toBeInTheDocument()
+    expect(screen.getByText('vitest mock timers')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xem diff ở giữa' })).toBeNull()
+  })
+
   it('tệp vẫn dùng Monaco diff và cho mở inspector ở giữa', async () => {
     const inspect = vi.fn()
     const request = { id: 'file', tool: 'edit' as const, path: 'src/app.ts', before: 'old', after: 'new' }

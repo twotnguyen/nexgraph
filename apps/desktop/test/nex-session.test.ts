@@ -133,6 +133,41 @@ describe('NexSession (adapter sự kiện OpenCode → Pi)', () => {
     await running
   })
 
+  it('webfetch/websearch hỏi duyệt ở mọi chế độ (không đụng tệp dự án), hiện đúng URL/câu tìm', async () => {
+    const { client, calls, emit } = fakeClient()
+    const decisions: ApprovalDecision[] = [{ allow: true }, { allow: false, reason: 'Người dùng từ chối thao tác này' }]
+    const request = vi.fn(async (_req: ApprovalRequest): Promise<ApprovalDecision> => decisions.shift() ?? { allow: false, reason: 'x' })
+    const session = sessionOf(client, { gate: { request }, isEdit: () => false })
+    session.subscribe(() => {})
+    const running = session.prompt('tra tài liệu')
+    await flush()
+    emit({ type: 'permission.asked', data: { sessionID: 'ses_1', id: 'per_web', action: 'webfetch', resources: ['https://docs.example.test/api'], metadata: { url: 'https://docs.example.test/api', format: 'markdown' } } })
+    await flush()
+    expect(request).toHaveBeenLastCalledWith({ id: 'per_web', tool: 'webfetch', target: 'https://docs.example.test/api' })
+    expect(calls.replies.at(-1)).toEqual({ id: 'per_web', decision: 'once' })
+    emit({ type: 'permission.asked', data: { sessionID: 'ses_1', id: 'per_search', action: 'websearch', resources: ['vitest mock timers'], metadata: { query: 'vitest mock timers' } } })
+    await flush()
+    expect(request).toHaveBeenLastCalledWith({ id: 'per_search', tool: 'websearch', target: 'vitest mock timers' })
+    expect(calls.replies.at(-1)).toEqual({ id: 'per_search', decision: 'reject' })
+    emit({ type: 'session.execution.succeeded', data: { sessionID: 'ses_1' } })
+    await running
+  })
+
+  it('webfetch thiếu URL: không hỏi duyệt, trả reject', async () => {
+    const { client, calls, emit } = fakeClient()
+    const request = vi.fn(async (): Promise<ApprovalDecision> => ({ allow: true }))
+    const session = sessionOf(client, { gate: { request } })
+    session.subscribe(() => {})
+    const running = session.prompt('tra')
+    await flush()
+    emit({ type: 'permission.asked', data: { sessionID: 'ses_1', id: 'per_empty', action: 'webfetch', resources: [], metadata: {} } })
+    await flush()
+    expect(request).not.toHaveBeenCalled()
+    expect(calls.replies.at(-1)).toEqual({ id: 'per_empty', decision: 'reject' })
+    emit({ type: 'session.execution.succeeded', data: { sessionID: 'ses_1' } })
+    await running
+  })
+
   it('symlink ra ngoài dự án: không đọc ngoài, không hỏi duyệt, trả reject', async () => {
     const root = mkdtempSync(join(tmpdir(), 'n1a1-session-'))
     const outside = mkdtempSync(join(tmpdir(), 'n1a1-outside-'))
