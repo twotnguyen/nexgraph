@@ -62,9 +62,9 @@ _RULES: list[tuple[re.Pattern[str], str | Callable[[re.Match[str]], str]]] = [
     (re.compile(r"^  These have ≤1 connection - (?P<reason>possible missing edges or undocumented components"
                 r"|possible missing edges)\. \(Counts symbols only; (?P<raw>\d+) node\(s\) total have ≤1"
                 r" connection when file, concept and rationale nodes are included\.\)$"), _isolated_note),
-    (re.compile(r"^- \*\*(?P<n>\d+) thin communities \(<(?P<k>\d+) nodes\) omitted from report\*\* — run"
-                r" `graphify query` to explore isolated nodes\.$"),
-     r"- **Bỏ qua \g<n> cộng đồng mỏng (<\g<k> nút) khỏi báo cáo** — chạy `graphify query` để xem các nút cô lập."),
+    (re.compile(r"^- \*\*(?P<n>\d+) thin communities \(<(?P<k>\d+) nodes\) omitted from report\*\* — open"
+                r" the graph view to explore isolated nodes\.$"),
+     r"- **Bỏ qua \g<n> cộng đồng mỏng (<\g<k> nút) khỏi báo cáo** — mở màn đồ thị để xem các nút cô lập."),
     (re.compile(r"^- \*\*High ambiguity: (?P<pct>\d+)% of edges are AMBIGUOUS\.\*\* Review the Ambiguous Edges"
                 r" section above\.$"),
      r"- **Độ mơ hồ cao: \g<pct>% cạnh là AMBIGUOUS.** Xem lại mục Cạnh AMBIGUOUS ở trên."),
@@ -85,8 +85,8 @@ _FRAGMENTS: tuple[tuple[str, str], ...] = (
     ("- Built from commit: ", "- Xây từ commit: "),
     ("- Run `git rev-parse HEAD` and compare to check if the graph is stale.",
      "- Chạy `git rev-parse HEAD` và so sánh để biết đồ thị có cũ không."),
-    ("- Run `graphify update .` after code changes (no API cost).",
-     "- Chạy `graphify update .` sau khi sửa mã (không tốn phí API)."),
+    ("- NexGraph updates the graph automatically after code changes (no API cost).",
+     "- NexGraph tự cập nhật đồ thị sau khi sửa mã (không tốn phí API)."),
 )
 
 

@@ -293,3 +293,27 @@ def test_report_json_rejects_unknown_lang(copy_fixture, index_project):
     with pytest.raises(ValueError, match="lang"):
         report_json(store, root, lang="fr")
     assert report_json(store, root, lang="vi")["questions"]
+
+
+def test_report_markdown_never_points_to_vendor_commands(copy_fixture, index_project, monkeypatch):
+    """ADR 0025: báo cáo (route, resource MCP `nexgraph://report`, tệp xuất) không nhắc lệnh `graphify …`.
+    Câu "thin communities … run `graphify query`" trước đây lọt vì báo cáo không qua lớp đổi tên."""
+    from nexgraph_engine.adapters.graphify import analysis as vendor
+
+    real = vendor.generate
+
+    def with_vendor_hints(*args, **kwargs):  # ép vendor in đủ hai câu nhắc lệnh, như dự án có cộng đồng mỏng
+        return real(*args, **kwargs) + (
+            "\n- **2 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes."
+            "\n- Run `graphify update .` after code changes (no API cost).\n")
+
+    monkeypatch.setattr(vendor, "generate", with_vendor_hints)
+    store, _, _ = index_project(copy_fixture("py_mini"))
+    english = report_markdown(store, "py_mini")
+    vietnamese = report_markdown(store, "py_mini", lang="vi")
+    for md in (english, vietnamese):
+        assert "graphify query" not in md and "graphify update" not in md
+    assert "open the graph view to explore isolated nodes" in english
+    assert "NexGraph updates the graph automatically after code changes" in english
+    assert "mở màn đồ thị để xem các nút cô lập" in vietnamese
+    assert "NexGraph tự cập nhật đồ thị sau khi sửa mã" in vietnamese
