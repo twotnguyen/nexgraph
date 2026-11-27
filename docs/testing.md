@@ -5,8 +5,8 @@ Tài liệu này gom các lệnh chạy test và các nhóm **opt-in** (chỉ ch
 ## 1. Lệnh cơ bản
 
 ```sh
-# engine (Python)
-cd engine && env -u PYTHONPATH uv run --locked pytest -q
+# engine (Python), song song mỗi lõi một worker (pytest-xdist; bỏ `-n auto` khi cần đọc log tuần tự)
+cd engine && env -u PYTHONPATH uv run --locked pytest -q -n auto
 
 # desktop (Electron/Vitest) + typecheck
 env -u PYTHONPATH pnpm test
@@ -14,6 +14,19 @@ pnpm typecheck
 ```
 
 `env -u PYTHONPATH` không phải mẹo trang trí: xem mục 4.
+
+### CI chỉ chạy phần bị ảnh hưởng (PR)
+
+Job `changes` của `.github/workflows/ci.yml` đọc danh sách tệp đổi của PR và [tools/ci/changes.mjs](../tools/ci/changes.mjs) quyết định phần việc nặng nào cần chạy:
+
+- **Tài liệu `.md`:** chỉ test che secret của engine (test này quét mọi `.md`).
+- **Chỉ renderer hoặc chỉ test desktop:** không chạy test engine, không đóng gói.
+- **Test engine:** không đóng gói, không test desktop. Riêng `engine/tests/fixtures/**` thì vẫn test desktop, vì E2E desktop dùng fixture này.
+- **Tệp `.github/`, `tools/ci/`, `package.json`, lockfile, hoặc đường dẫn chưa có luật:** chạy đủ.
+
+8 check bắt buộc luôn có kết quả: job vẫn chạy, chỉ các bước nặng được bỏ qua. **Push lên `main` và tag luôn chạy đủ**, nên lỗi lọt qua bộ lọc của PR vẫn bị bắt trên commit merge.
+
+Thêm một test đọc tệp ngoài thư mục của nó (tài liệu, ảnh, workflow) thì phải sửa luật trong `changes.mjs` và `apps/desktop/test/ci-changes.test.ts`.
 
 ## 2. Nhóm opt-in
 

@@ -51,6 +51,57 @@ def test_module_rules_job_blocks():
     assert "module-rules" in _needs(jobs["release"])
 
 
+REQUIRED_MATRIX_JOBS = ("engine", "desktop", "package")
+FLAG = {"engine": "engine", "desktop": "desktop", "package": "package"}
+
+
+def test_required_jobs_never_skipped_at_job_level():
+    """CI-02: `if` ở cấp job làm job matrix bị bỏ, check `engine (macos-latest)`… không bao giờ có kết quả và PR kẹt.
+    Bộ lọc theo tệp đổi chỉ được đặt ở từng bước."""
+    jobs = _jobs()
+    for name in (*REQUIRED_MATRIX_JOBS, "lint", "module-rules"):
+        assert "if" not in jobs[name], name
+    for name in REQUIRED_MATRIX_JOBS:
+        assert "changes" in _needs(jobs[name]), name
+
+
+def test_changes_job_runs_everything_outside_pull_requests():
+    """Push lên main/tag luôn chạy đủ: thứ lọt bộ lọc của PR bị bắt trên commit merge, release luôn có đủ bộ cài."""
+    jobs = _jobs()
+    pick = next(s for s in jobs["changes"]["steps"] if s.get("id") == "pick")
+    assert "node tools/ci/changes.mjs --all" in pick["run"]
+    assert '[ "$EVENT" = pull_request ]' in pick["run"]
+    assert set(jobs["changes"]["outputs"]) == {"engine", "desktop", "package", "labs"}
+    assert (WORKFLOW.parents[2] / "tools" / "ci" / "changes.mjs").is_file()
+
+
+def test_every_heavy_step_is_gated_by_changes():
+    """Bước nào không có điều kiện thì vẫn chạy khi PR không cần nó; bước nào thiếu thì bị bỏ cả trên main."""
+    exempt = ("Tắt quét thời gian thực của Defender", "Tag phải khớp version ở 4 nguồn")
+    jobs = _jobs()
+    for job in REQUIRED_MATRIX_JOBS:
+        flag = f"needs.changes.outputs.{FLAG[job]}"
+        for step in jobs[job]["steps"]:
+            label = step.get("name") or step.get("uses") or step.get("run")
+            if label in exempt:
+                continue
+            assert flag in step.get("if", ""), f"{job}: {label}"
+
+
+def test_engine_tests_run_in_parallel():
+    runs = [s.get("run", "") for s in _jobs()["engine"]["steps"]]
+    assert "uv run --locked pytest tests -q -n auto" in runs
+    pyproject = (WORKFLOW.parents[2] / "engine" / "pyproject.toml").read_text(encoding="utf-8")
+    assert "pytest-xdist" in pyproject
+
+
+def test_defender_step_only_on_windows_and_never_fails_the_job():
+    for job in REQUIRED_MATRIX_JOBS:
+        step = next(s for s in _jobs()[job]["steps"] if s.get("name") == "Tắt quét thời gian thực của Defender")
+        assert step["if"].startswith("runner.os == 'Windows'"), job
+        assert step["continue-on-error"] is True, job
+
+
 def test_labs_job_reports_without_gating():
     """ADR 0026 pha 1: labs/ (Code-OSS thử nghiệm) có job riêng, không thuộc check bắt buộc, không chặn phát hành."""
     jobs = _jobs()
