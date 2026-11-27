@@ -40,6 +40,24 @@ def test_lists_only_read_only_tools(indexed):
     assert {t.name for t in tools if not (t.annotations and t.annotations.readOnlyHint)} == {"remember"}
 
 
+def test_server_instructions_name_every_tool(indexed):
+    """Client MCP (OpenCode của Nex, Claude Code…) đưa `instructions` vào system prompt: tool nào
+    không được nhắc thì model ít khi biết để dùng. Thêm tool mới phải thêm dòng định tuyến."""
+    import re
+
+    from nexgraph_engine.interfaces.mcp.server import SERVER_INSTRUCTIONS
+
+    server = build_server(*indexed)
+
+    async def run():
+        async with create_connected_server_and_client_session(server._mcp_server) as client:
+            return (await client.initialize()).instructions, (await client.list_tools()).tools
+    instructions, tools = anyio.run(run)
+    assert instructions == SERVER_INSTRUCTIONS
+    missing = sorted(t.name for t in tools if not re.search(rf"(?<![\w]){re.escape(t.name)}(?![\w])", instructions))
+    assert missing == []
+
+
 def test_eleven_tools_keep_original_params(indexed):
     """ADR 0025 §2: 11 tool nhận tham số của bản gốc, vẫn giữ tên cũ của NexGraph."""
     server = build_server(*indexed)

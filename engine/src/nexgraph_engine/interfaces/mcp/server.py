@@ -73,7 +73,8 @@ WRITES_MEMORY = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idemp
 SERVER_INSTRUCTIONS = (
     "Đồ thị tri thức của dự án đang mở trong NexGraph (Tree-sitter AST + cạnh gọi hàm / import / kế thừa / "
     "kiểm thử, mỗi cạnh có bằng chứng tệp:dòng). Dùng khi câu hỏi là về QUAN HỆ giữa các phần của mã:\n"
-    "- tìm ký hiệu, tệp theo tên -> search\n"
+    "- tìm ký hiệu, tệp theo tên -> search; chỉ một loại nút (class, function, document...) -> find\n"
+    "- chi tiết một nút (tệp, dòng, loại, cụm) -> get_node\n"
     "- ai gọi X -> get_callers; ai import / kế thừa X -> get_neighbors direction=in\n"
     "- test nào kiểm X -> tests_for\n"
     "- X gọi / dùng gì -> get_neighbors direction=out\n"

@@ -44,7 +44,7 @@ function fixture(): { bin: string; dir: string; spawnImpl?: typeof spawn } {
 }
 
 const config = (root: string) => nexConfig({
-  root, engine: { command: 'engine', args: [] }, dataDir: join(root, '.nexgraph'),
+  root, engine: { command: 'engine', args: [] }, dataDir: join(root, '.nexgraph'), configDir: join(root, 'config'),
   provider: { label: 'QA', model: 'gpt-6-luna' }
 })
 
@@ -118,6 +118,33 @@ describe('NexSidecar', () => {
     expect(env.configDir).toBe(configDir)
     expect(JSON.parse(readFileSync(join(configDir, 'opencode.json'), 'utf8'))).toHaveProperty('mcp.servers.nexgraph')
     await sidecar.stop()
+  }, 30_000)
+
+  it('ghi các tệp phụ (chỉ dẫn hệ thống) vào thư mục cấu hình trước khi khởi động', async () => {
+    const { bin, dir, spawnImpl } = fixture()
+    const root = mkdtempSync(join(tmpdir(), 'n1a1-project-'))
+    const configDir = join(dir, 'nex', 'projects', 'p1', 'config')
+    const sidecar = new NexSidecar({
+      bin, dataDir: join(dir, 'nex'), projectKey: 'p1', configDir, cwd: root, spawnImpl,
+      config: () => config(root), files: () => ({ 'nexgraph-instructions.md': '# Nex\n' })
+    })
+    await sidecar.start()
+    expect(readFileSync(join(configDir, 'nexgraph-instructions.md'), 'utf8')).toBe('# Nex\n')
+    await sidecar.stop()
+  }, 30_000)
+
+  it('từ chối tên tệp phụ có dấu phân cách thư mục (không ghi ra ngoài thư mục cấu hình)', async () => {
+    const { bin, dir, spawnImpl } = fixture()
+    const root = mkdtempSync(join(tmpdir(), 'n1a1-project-'))
+    for (const name of ['../escape.md', 'a/b.md', 'a\\b.md', '..', '']) {
+      const sidecar = new NexSidecar({
+        bin, dataDir: join(dir, 'nex'), projectKey: 'p3', cwd: root, spawnImpl,
+        config: () => config(root), files: () => ({ [name]: 'x' })
+      })
+      await expect(sidecar.start(), name).rejects.toThrow()
+      await sidecar.stop()
+    }
+    expect(existsSync(join(dir, 'nex', 'p3', 'home', '.config', 'escape.md'))).toBe(false)
   }, 30_000)
 
   it('tìm binary theo thứ tự env → bản đóng gói → ~/.opencode', () => {
