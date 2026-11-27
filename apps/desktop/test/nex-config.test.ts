@@ -27,7 +27,7 @@ describe('cấu hình Nex (OpenCode v2)', () => {
     expect(mcp.nexgraph.type).toBe('local')
     expect(mcp.nexgraph.codemode).toBe(false)
     expect(mcp.nexgraph.cwd).toBe(root)
-    expect(mcp.nexgraph.command.slice(-5)).toEqual(['mcp', '--project', root, '--data-dir', join(root, '.nexgraph')])
+    expect(mcp.nexgraph.command.slice(-7)).toEqual(['mcp', '--project', root, '--data-dir', join(root, '.nexgraph'), '--file-guard', 'strict'])
     expect(text).not.toContain(provider.apiKey)
     const rules = config.permissions as { action: string; effect: string }[]
     expect(rules.find((rule) => rule.action === 'edit')?.effect).toBe('ask')
@@ -58,7 +58,7 @@ describe('cấu hình Nex (OpenCode v2)', () => {
     })
     const command = (config.mcp as { servers: { nexgraph: { command: string[] } } }).servers.nexgraph.command
     expect(command.slice(0, 8)).toEqual(['uv', 'run', '--project', '/repo/engine', '--locked', 'python', '-m', 'nexgraph_engine.cli'])
-    expect(command.slice(8)).toEqual(['mcp', '--project', root, '--data-dir', '/tmp/data'])
+    expect(command.slice(8)).toEqual(['mcp', '--project', root, '--data-dir', '/tmp/data', '--file-guard', 'strict'])
   })
 
   it('cấu hình tài khoản đã đăng nhập trỏ thẳng provider/model, không khai báo providers', () => {
@@ -69,7 +69,7 @@ describe('cấu hình Nex (OpenCode v2)', () => {
     expect(config).not.toHaveProperty('provider')
     const servers = (config.mcp as { servers: Record<string, { command: string[]; cwd: string }> }).servers
     expect(servers.nexgraph.cwd).toBe(root)
-    expect(servers.nexgraph.command.slice(-1)).toEqual(['/tmp/data'])
+    expect(servers.nexgraph.command.slice(-3)).toEqual(['/tmp/data', '--file-guard', 'strict'])
     const rules = config.permissions as { action: string; effect: string }[]
     expect(rules.find((rule) => rule.action === 'edit')?.effect).toBe('ask')
   })

@@ -34,7 +34,7 @@ from nexgraph_engine import __version__
 from nexgraph_engine.analysis import memory
 from nexgraph_engine.core.errors import ApiError
 from nexgraph_engine.analysis.flows.query import flow_json, list_flows_json, trace_from_json
-from nexgraph_engine.interfaces.hook_guard import touch_query_stamp
+from nexgraph_engine.interfaces.hook_guard import fresh_project, touch_query_stamp
 from nexgraph_engine.analysis.impact.analyze import tests_for as tests_for_node
 from nexgraph_engine.analysis.query.ask import ask_graph
 from nexgraph_engine.analysis.query.common import nodes_by_pk
@@ -118,8 +118,25 @@ async def _offload(tool_name: str, work: Callable[[], Any]) -> Any:
         raise ToolError(f"{tool_name} quá {timeout:g}s") from exc
 
 
-def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = False) -> FastMCP:
+#: Chốt "tra đồ thị trước" cho tool tệp (tương đương `graphify hook-guard [--strict]` cho agent ngoài).
+FILE_GUARD_MODES = ("off", "nudge", "strict")
+FILE_GUARD_NUDGE = (
+    "NexGraph: phiên này chưa tra đồ thị. `query_graph` (câu hỏi tự do), `get_context` (đoạn mã liên quan "
+    "nhất), `search` hoặc `find` chỉ ra tệp và dòng cần xem, ít token hơn đọc hay grep tệp thô."
+)
+FILE_GUARD_DENY = (
+    "NexGraph: tra đồ thị trước khi đọc hoặc tìm tệp thô. Gọi `query_graph`, `get_context`, `search` hoặc "
+    "`find` để định hướng, rồi gọi lại tool này: lần sau được phép. Mỗi phiên chỉ chặn một lần."
+)
+
+
+def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = False,
+                 file_guard: str = "off") -> FastMCP:
+    if file_guard not in FILE_GUARD_MODES:
+        raise ValueError(f"file_guard phải là một trong {FILE_GUARD_MODES}")
     root = project.resolve()
+    # Trạng thái của một tiến trình MCP (một agent): đã tra đồ thị chưa, đã chặn tool tệp lần nào chưa.
+    guard_state = {"consulted": False, "denied": False}
     graph_db = resolve_graph_db(root, data_dir)
     mcp = FastMCP("nexgraph", instructions=SERVER_INSTRUCTIONS)
     mcp._mcp_server.version = __version__
@@ -140,7 +157,9 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
             # Như HTTP: hỏi thẳng về nút bị loại khỏi ngữ cảnh AI thì từ chối, kể cả khi láng giềng của nó hiển thị được.
             if not all(model.allows_node(node_id) for node_id in guard):
                 raise protected_source()
-            return model.filter(body(store))
+            result = model.filter(body(store))
+            guard_state["consulted"] = True
+            return result
         except ApiError as exc:  # lỗi nghiệp vụ dùng chung với HTTP -> lỗi tool đọc được
             raise ToolError(exc.message) from exc
         finally:
@@ -251,6 +270,7 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         except Exception as exc:
             # Như wrapper `call_tool` của vendor (serve.py:3505–3506): lỗi bất ngờ thành văn bản.
             return f"Error executing {tool_name}: {exc}"
+        guard_state["consulted"] = True
         return graphify_view.rebrand_text(text)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -362,14 +382,41 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         finally:
             conn.close()
 
-    async def run_files(tool_name: str, body: Callable[[SourcePolicy], Any]) -> Any:
+    def file_guard_hint(read_target: str | None) -> str | None:
+        """Chốt "tra đồ thị trước": None khi cho qua im lặng; chuỗi nhắc khi cho qua kèm lời nhắc.
+
+        Như hook-guard của Graphify: chỉ can thiệp khi đồ thị còn mới (cùng commit, tệp đích không sửa sau
+        lần index) và phiên chưa tra đồ thị; chế độ strict từ chối đúng MỘT lần mỗi tiến trình. Lỗi khi
+        kiểm thì cho qua (fail-open), không bao giờ khoá agent khỏi tệp.
+        """
+        if file_guard == "off" or guard_state["consulted"]:
+            return None
+        try:
+            path = None
+            if read_target is not None:  # read_file; grep/glob truyền None (tìm trên cả cây)
+                name = read_target.strip().replace("\\", "/").strip("/")
+                path = root / name if name and name != "." else root
+                if path.is_dir():
+                    return None  # liệt kê thư mục là định hướng, không phải đọc tệp thô
+            if fresh_project(root, data_dir, path) is None:
+                return None
+        except Exception:
+            return None
+        if file_guard == "strict" and not guard_state["denied"]:
+            guard_state["denied"] = True
+            raise ToolError(FILE_GUARD_DENY)
+        return FILE_GUARD_NUDGE
+
+    async def run_files(tool_name: str, body: Callable[[SourcePolicy], Any], read_target: str | None = None) -> Any:
         """Tool tệp không cần đồ thị đã xuất bản: đọc thẳng đĩa, mọi đường dẫn qua `SourcePolicy`."""
         def work() -> Any:
             policy = files_policy()
             try:
-                return body(policy)
+                result = body(policy)
             except ApiError as exc:
                 raise ToolError(exc.message) from exc
+            hint = file_guard_hint(read_target)
+            return {**result, "hint": hint} if hint else result
         return await _offload(tool_name, work)
 
     @mcp.tool(annotations=READ_ONLY)
@@ -377,7 +424,8 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         """Đọc một tệp chữ trong dự án (đường dẫn tương đối, kể cả tệp chưa lập chỉ mục), tối đa 2.000 dòng
         mỗi lần; đường dẫn là thư mục (hoặc ".") thì liệt kê thư mục. Bỏ tệp bị loại khỏi AI (.env, khoá,
         .gitignore, mẫu loại trừ); tài liệu và cấu hình đã che secret (`redacted`)."""
-        return await run_files("read_file", lambda policy: project_files.read_file(root, policy, path, start, end))
+        return await run_files("read_file", lambda policy: project_files.read_file(root, policy, path, start, end),
+                               read_target=path)
 
     @mcp.tool(annotations=READ_ONLY)
     async def grep(pattern: str, path: str | None = None, include: str | None = None, literal: bool = False,
@@ -915,7 +963,7 @@ async def _serve_stdio(mcp: Any, stdin: Any) -> None:
         await mcp._mcp_server.run(read_stream, write_stream, mcp._mcp_server.create_initialization_options())
 
 
-def run_stdio(project: Path, data_dir: Path | None, global_graph: bool = False) -> int:
-    _run_stdio_quiet(build_server(project, data_dir, global_graph=global_graph))
+def run_stdio(project: Path, data_dir: Path | None, global_graph: bool = False, file_guard: str = "off") -> int:
+    _run_stdio_quiet(build_server(project, data_dir, global_graph=global_graph, file_guard=file_guard))
     return 0
 

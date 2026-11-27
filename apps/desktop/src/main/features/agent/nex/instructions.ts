@@ -48,6 +48,7 @@ Không có tool \`nexgraph_*\` nào trong danh sách, hoặc tool báo dự án 
 ## Công cụ tệp và lệnh
 
 - \`nexgraph_read_file\` (đọc tệp hoặc liệt kê thư mục), \`nexgraph_grep\` (tìm chuỗi/biểu thức trong nội dung), \`nexgraph_glob\` (tìm tệp theo mẫu tên): không cần duyệt. Dùng sau khi đồ thị đã chỉ ra tệp và dòng, hoặc khi cần một chuỗi văn bản mà đồ thị không có (thông báo lỗi, khoá cấu hình).
+- Lần đầu đọc hoặc tìm tệp khi phiên chưa tra đồ thị, tool có thể từ chối một lần và nhắc tra đồ thị: gọi \`nexgraph_query_graph\`, \`nexgraph_get_context\`, \`nexgraph_search\` hoặc \`nexgraph_find\` trước, rồi gọi lại. Kết quả có \`hint\` là lời nhắc cùng ý.
 - Các tool này bỏ qua tệp bị loại khỏi AI (\`.env\`, khoá, tệp trong \`.gitignore\`, mẫu người dùng loại trừ) và che secret trong tài liệu, cấu hình (\`[redacted]\`). Tệp bị từ chối là chủ ý của người dùng: không tìm cách đọc nó bằng đường khác. Dòng chứa \`[redacted]\` không sửa được bằng \`edit\`; nói với người dùng tự sửa dòng đó. Kết quả có \`redacted\` hoặc \`clipped\` là true thì văn bản không phải nguyên bản: không dùng \`write\` ghi đè cả tệp từ nó, chỉ sửa từng chỗ bằng \`edit\`.
 - \`nexgraph_read_file\` đọc được cả docx, xlsx, PDF (dạng chữ); \`nexgraph_grep\` và \`nexgraph_glob\` bỏ qua thư mục build và phụ thuộc (\`node_modules\`, \`dist\`, \`.venv\`, \`vendor\`…), muốn tìm trong đó thì truyền \`path\` trỏ vào.
 - \`edit\`, \`write\`: sửa hoặc tạo tệp trong dự án; chỉ ở chế độ **Sửa**, mỗi lần một hộp duyệt kèm diff.

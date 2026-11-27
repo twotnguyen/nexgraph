@@ -59,8 +59,11 @@ def _git_head(root: Path) -> str | None:
     return sha if out.returncode == 0 and 40 <= len(sha) <= 64 else None
 
 
-def _fresh_project(root: Path, data_dir: Path, target: Path | None) -> str | None:
-    """Id dự án khi graph còn mới với tệp đích; None khi chưa index, graph cũ hoặc vừa hỏi graph."""
+def fresh_project(root: Path, data_dir: Path | None, target: Path | None) -> str | None:
+    """Id dự án khi graph còn mới với tệp đích; None khi chưa index, graph cũ hoặc vừa hỏi graph.
+
+    Dùng chung cho hook-guard (agent ngoài) và chốt tool tệp của MCP (Nex). Không có `data_dir` thì bỏ
+    phần dấu "vừa hỏi graph" (tệp dấu nằm trong data_dir)."""
     from nexgraph_engine.core.schema.db import open_graph_db
     from nexgraph_engine.storage.store.graph_store import GraphStore
     from nexgraph_engine.storage.store.projects import resolve_graph_db
@@ -77,12 +80,16 @@ def _fresh_project(root: Path, data_dir: Path, target: Path | None) -> str | Non
         return None
     if target is not None and target.is_file() and target.stat().st_mtime > run[0]:
         return None
-    try:
-        if time.time() - stamp_path(data_dir, pid).stat().st_mtime < STAMP_TTL:
-            return None
-    except OSError:
-        pass
+    if data_dir is not None:
+        try:
+            if time.time() - stamp_path(data_dir, pid).stat().st_mtime < STAMP_TTL:
+                return None
+        except OSError:
+            pass
     return pid
+
+
+_fresh_project = fresh_project
 
 
 def _claim_deny(data_dir: Path, pid: str, session_id: str) -> bool:
