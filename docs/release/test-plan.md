@@ -29,7 +29,7 @@ Phần cứng và hệ điều hành của từng máy ghi vào biên bản theo
 
 ```sh
 # engine
-cd engine && env -u PYTHONPATH uv run --locked pytest -q
+cd engine && env -u PYTHONPATH uv run --locked pytest -q -n auto
 # desktop
 pnpm typecheck && env -u PYTHONPATH pnpm test
 # lint đúng như CI

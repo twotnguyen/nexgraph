@@ -13,6 +13,48 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  # CI-02: chọn phần việc nặng cần chạy theo tệp đổi của PR (tools/ci/changes.mjs, luật và lý do ở đầu tệp).
+  # Push lên main/tag luôn chạy đủ (`--all`), nên thứ lọt bộ lọc của PR vẫn bị bắt trên commit merge.
+  # Job bắt buộc (engine, desktop) KHÔNG bị bỏ ở cấp job (6 check của `main-guard` phải luôn có kết quả);
+  # chỉ các bước nặng có `if`. `package` không bắt buộc nên bỏ cả job khi PR không đổi tệp đóng gói.
+  # Lỗi lấy danh sách tệp hoặc PR > 3000 tệp (giới hạn API) đều rơi về chạy đủ.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      engine: ${{ steps.pick.outputs.engine }}
+      desktop: ${{ steps.pick.outputs.desktop }}
+      package: ${{ steps.pick.outputs.package }}
+      labs: ${{ steps.pick.outputs.labs }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          sparse-checkout: tools/ci
+      - name: Danh sách tệp đổi của PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: >-
+          gh api "repos/$REPO/pulls/$PR/files" --paginate
+          --jq '.[] | .filename, (.previous_filename // empty)' > "$RUNNER_TEMP/changed.txt"
+          || rm -f "$RUNNER_TEMP/changed.txt"
+      - name: Chọn phần CI cần chạy
+        id: pick
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          list="$RUNNER_TEMP/changed.txt"
+          if [ "$EVENT" = pull_request ] && [ -s "$list" ] && [ "$(wc -l < "$list")" -lt 3000 ]; then
+            node tools/ci/changes.mjs --files "$list"
+          else
+            node tools/ci/changes.mjs --all
+          fi
+
   lint:
     name: lint
     runs-on: ubuntu-latest
@@ -58,6 +100,8 @@ jobs:
   # Không thuộc 8 check bắt buộc, `release` không chờ; vẫn chạy để thấy ngay khi việc chuyển tệp desktop làm gãy labs.
   labs:
     name: labs (báo cáo)
+    needs: changes
+    if: needs.changes.outputs.labs == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -74,40 +118,79 @@ jobs:
 
   engine:
     name: engine (${{ matrix.os }})
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     steps:
+      # CI-02: runner Windows là máy tạm; quét thời gian thực của Defender làm chậm thao tác nhiều tệp
+      # (pytest, git trong test, electron-builder) và là nguồn test hết giờ chập chờn. Không tắt được thì chạy tiếp.
+      - name: Tắt quét thời gian thực của Defender
+        if: runner.os == 'Windows' && needs.changes.outputs.engine != 'skip'
+        shell: pwsh
+        continue-on-error: true
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: needs.changes.outputs.engine != 'skip'
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        if: needs.changes.outputs.engine != 'skip'
         with:
           enable-cache: true
       - run: uv sync --locked
+        if: needs.changes.outputs.engine != 'skip'
         working-directory: engine
-      - run: uv run --locked pytest tests -q
+      # CI-02: pytest-xdist, mỗi lõi một worker (122 s → 20 s trên máy 12 lõi; macOS CI 4m37 → 2m35).
+      # TEMP/TMP về runner.temp: trên Windows là ổ D: của runner, thư mục tạm mặc định nằm ở ổ C: chậm.
+      # --durations in 20 test chậm nhất để biết chỗ cần tối ưu tiếp.
+      - run: uv run --locked pytest tests -q -n auto --durations=20
+        if: needs.changes.outputs.engine == 'full'
         working-directory: engine
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+      # PR chỉ đổi tài liệu: chỉ nhóm test đọc *.md của repo (che secret không được dương tính giả).
+      - run: uv run --locked pytest tests/indexing/test_docs_secrets.py -q
+        if: needs.changes.outputs.engine == 'docs'
+        working-directory: engine
+      - name: Không có tệp ảnh hưởng engine
+        if: needs.changes.outputs.engine == 'skip'
+        run: echo "PR không đổi tệp nào mà test engine đọc; push lên main vẫn chạy đủ."
 
   desktop:
     name: desktop (${{ matrix.os }})
+    needs: changes
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
     steps:
+      # CI-02: runner Windows là máy tạm; quét thời gian thực của Defender làm chậm thao tác nhiều tệp
+      # (pytest, git trong test, electron-builder) và là nguồn test hết giờ chập chờn. Không tắt được thì chạy tiếp.
+      - name: Tắt quét thời gian thực của Defender
+        if: runner.os == 'Windows' && needs.changes.outputs.desktop == 'true'
+        shell: pwsh
+        continue-on-error: true
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: needs.changes.outputs.desktop == 'true'
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        if: needs.changes.outputs.desktop == 'true'
         with:
           enable-cache: true
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+        if: needs.changes.outputs.desktop == 'true'
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        if: needs.changes.outputs.desktop == 'true'
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm run setup:dev
+        if: needs.changes.outputs.desktop == 'true'
       - name: Smoke test checkout sạch
+        if: needs.changes.outputs.desktop == 'true'
         shell: bash
         timeout-minutes: 5
         env:
@@ -118,9 +201,17 @@ jobs:
           pnpm dev 2>&1 | tee nexgraph-dev-smoke.log
           grep -F 'SMOKE OK nodes=' nexgraph-dev-smoke.log
       - run: pnpm --filter @nexgraph/desktop typecheck
+        if: needs.changes.outputs.desktop == 'true'
       - run: pnpm --filter @nexgraph/desktop test
+        if: needs.changes.outputs.desktop == 'true'
         env:
           NEXGRAPH_E2E: '1'
+          # Test git/E2E tạo nhiều repo tạm: để trên ổ D: của runner Windows như engine (CI-02).
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
+      - name: Không có tệp ảnh hưởng desktop
+        if: needs.changes.outputs.desktop != 'true'
+        run: echo "PR không đổi tệp nào mà test desktop đọc; push lên main vẫn chạy đủ."
 
   version-check:
     name: version-check
@@ -137,6 +228,11 @@ jobs:
     # Chạy SONG SONG với engine/desktop (CI-1): đường găng = max(test, package) thay vì test + package.
     # Phát hành vẫn an toàn: job `release` chờ đủ version-check, engine, desktop và package
     # (khoá bằng engine/tests/repo/test_ci_workflow.py). Bản cài của PR đỏ test chỉ là artifact, không phát hành.
+    # CI-02: KHÔNG còn là check bắt buộc của PR (ruleset `main-guard` còn 6 check, Tình đồng ý 27/11/2026).
+    # PR chỉ đóng gói khi đổi tệp đóng gói/dependency (tools/ci/changes.mjs); push lên main và tag luôn đóng gói,
+    # nên lỗi đóng gói lộ trên chính commit merge gây ra nó. Vì không bắt buộc nên được bỏ ở cấp job.
+    needs: changes
+    if: needs.changes.outputs.package == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -145,6 +241,13 @@ jobs:
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
+      # CI-02: runner Windows là máy tạm; quét thời gian thực của Defender làm chậm thao tác nhiều tệp
+      # (pytest, git trong test, electron-builder) và là nguồn test hết giờ chập chờn. Không tắt được thì chạy tiếp.
+      - name: Tắt quét thời gian thực của Defender
+        if: runner.os == 'Windows'
+        shell: pwsh
+        continue-on-error: true
+        run: Set-MpPreference -DisableRealtimeMonitoring $true
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Tag phải khớp version ở 4 nguồn
         if: startsWith(github.ref, 'refs/tags/v')

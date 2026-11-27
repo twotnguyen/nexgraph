@@ -2,7 +2,9 @@
 
 `package` chạy song song với test để rút đường găng CI của mọi PR (13 → ~7,5 phút), nhưng
 phát hành vẫn chỉ xảy ra khi test xanh: `release` phải chờ `engine`, `desktop` và `package`.
-Tên 8 check bắt buộc của ruleset `main-guard` không được đổi (7 job + `module-rules`, ADR 0026 pha 4e).
+Tên 6 check bắt buộc của ruleset `main-guard` không được đổi: `lint`, `module-rules` (ADR 0026 pha 4e),
+`engine`/`desktop` trên macOS và Windows. `package` không còn bắt buộc ở PR từ CI-02 (27/11/2026) nhưng giữ
+tên để lịch sử check và job `release` không đổi.
 """
 
 from pathlib import Path
@@ -49,6 +51,68 @@ def test_module_rules_job_blocks():
     assert "pnpm rules:strict" in runs
     assert "pnpm rules:report" not in runs
     assert "module-rules" in _needs(jobs["release"])
+
+
+REQUIRED_MATRIX_JOBS = ("engine", "desktop")
+FLAG = {"engine": "engine", "desktop": "desktop"}
+WINDOWS_JOBS = ("engine", "desktop", "package")
+
+
+def test_required_jobs_never_skipped_at_job_level():
+    """CI-02: `if` ở cấp job làm job matrix bị bỏ, check `engine (macos-latest)`… không bao giờ có kết quả và PR kẹt.
+    Bộ lọc theo tệp đổi chỉ được đặt ở từng bước."""
+    jobs = _jobs()
+    for name in (*REQUIRED_MATRIX_JOBS, "lint", "module-rules"):
+        assert "if" not in jobs[name], name
+    for name in REQUIRED_MATRIX_JOBS:
+        assert "changes" in _needs(jobs[name]), name
+
+
+def test_package_is_skipped_as_a_whole_job_on_pull_requests():
+    """CI-02: package không bắt buộc ở PR nên bỏ cả job (không tốn runner) khi PR không đổi tệp đóng gói.
+    Ngoài PR, `changes` trả `--all` nên main và tag luôn đóng gói; release vẫn chờ package."""
+    package = _jobs()["package"]
+    assert "changes" in _needs(package)
+    assert package["if"] == "needs.changes.outputs.package == 'true'"
+    for step in package["steps"]:
+        assert "needs.changes" not in step.get("if", ""), step.get("name") or step.get("uses")
+
+
+def test_changes_job_runs_everything_outside_pull_requests():
+    """Push lên main/tag luôn chạy đủ: thứ lọt bộ lọc của PR bị bắt trên commit merge, release luôn có đủ bộ cài."""
+    jobs = _jobs()
+    pick = next(s for s in jobs["changes"]["steps"] if s.get("id") == "pick")
+    assert "node tools/ci/changes.mjs --all" in pick["run"]
+    assert '[ "$EVENT" = pull_request ]' in pick["run"]
+    assert set(jobs["changes"]["outputs"]) == {"engine", "desktop", "package", "labs"}
+    assert (WORKFLOW.parents[2] / "tools" / "ci" / "changes.mjs").is_file()
+
+
+def test_every_heavy_step_is_gated_by_changes():
+    """Bước nào không có điều kiện thì vẫn chạy khi PR không cần nó; bước nào thiếu thì bị bỏ cả trên main."""
+    exempt = ("Tắt quét thời gian thực của Defender", "Tag phải khớp version ở 4 nguồn")
+    jobs = _jobs()
+    for job in REQUIRED_MATRIX_JOBS:
+        flag = f"needs.changes.outputs.{FLAG[job]}"
+        for step in jobs[job]["steps"]:
+            label = step.get("name") or step.get("uses") or step.get("run")
+            if label in exempt:
+                continue
+            assert flag in step.get("if", ""), f"{job}: {label}"
+
+
+def test_engine_tests_run_in_parallel():
+    runs = [s.get("run", "") for s in _jobs()["engine"]["steps"]]
+    assert any(r.startswith("uv run --locked pytest tests -q -n auto") for r in runs)
+    pyproject = (WORKFLOW.parents[2] / "engine" / "pyproject.toml").read_text(encoding="utf-8")
+    assert "pytest-xdist" in pyproject
+
+
+def test_defender_step_only_on_windows_and_never_fails_the_job():
+    for job in WINDOWS_JOBS:
+        step = next(s for s in _jobs()[job]["steps"] if s.get("name") == "Tắt quét thời gian thực của Defender")
+        assert step["if"].startswith("runner.os == 'Windows'"), job
+        assert step["continue-on-error"] is True, job
 
 
 def test_labs_job_reports_without_gating():
