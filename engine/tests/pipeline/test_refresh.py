@@ -390,7 +390,13 @@ def test_same_second_rewrite_after_indexing_is_detected_later(tmp_path, index_pr
     import types
     src = tmp_path / "a.py"
     src.write_text("def old():\n    return 1\n", encoding="utf-8")
+    # Indexer chỉ ghi mtime khi tệp đã cũ hơn RACY_SECONDS. Đồng hồ của indexer cố định ở đúng mtime để
+    # "băm ngay sau khi ghi" luôn đúng, kể cả khi máy tải nặng (xdist trên runner Windows) làm index chậm > 2 s.
+    from nexgraph_engine.pipeline import legacy_indexer
+    written = src.stat().st_mtime
+    monkeypatch.setattr(legacy_indexer, "time", types.SimpleNamespace(time=lambda: written, monotonic=time.monotonic))
     store, result, _ = index_project(tmp_path)  # băm ngay sau khi ghi
+    monkeypatch.undo()
     assert result.state == "hoan_tat"
     st = src.stat()
     src.write_text("def new():\n    return 1\n", encoding="utf-8")  # cùng cỡ, cùng giây (formatter, checkout + hook)

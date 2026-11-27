@@ -90,7 +90,7 @@ def test_every_heavy_step_is_gated_by_changes():
 
 def test_engine_tests_run_in_parallel():
     runs = [s.get("run", "") for s in _jobs()["engine"]["steps"]]
-    assert "uv run --locked pytest tests -q -n auto" in runs
+    assert any(r.startswith("uv run --locked pytest tests -q -n auto") for r in runs)
     pyproject = (WORKFLOW.parents[2] / "engine" / "pyproject.toml").read_text(encoding="utf-8")
     assert "pytest-xdist" in pyproject
 

@@ -140,10 +140,15 @@ jobs:
       - run: uv sync --locked
         if: needs.changes.outputs.engine != 'skip'
         working-directory: engine
-      # CI-02: pytest-xdist, mỗi lõi một worker (122 s → 20 s trên máy 12 lõi; 1431 test qua 3 lần chạy song song).
-      - run: uv run --locked pytest tests -q -n auto
+      # CI-02: pytest-xdist, mỗi lõi một worker (122 s → 20 s trên máy 12 lõi; macOS CI 4m37 → 2m35).
+      # TEMP/TMP về runner.temp: trên Windows là ổ D: của runner, thư mục tạm mặc định nằm ở ổ C: chậm.
+      # --durations in 20 test chậm nhất để biết chỗ cần tối ưu tiếp.
+      - run: uv run --locked pytest tests -q -n auto --durations=20
         if: needs.changes.outputs.engine == 'full'
         working-directory: engine
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
       # PR chỉ đổi tài liệu: chỉ nhóm test đọc *.md của repo (che secret không được dương tính giả).
       - run: uv run --locked pytest tests/indexing/test_docs_secrets.py -q
         if: needs.changes.outputs.engine == 'docs'
@@ -200,6 +205,9 @@ jobs:
         if: needs.changes.outputs.desktop == 'true'
         env:
           NEXGRAPH_E2E: '1'
+          # Test git/E2E tạo nhiều repo tạm: để trên ổ D: của runner Windows như engine (CI-02).
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
       - name: Không có tệp ảnh hưởng desktop
         if: needs.changes.outputs.desktop != 'true'
         run: echo "PR không đổi tệp nào mà test desktop đọc; push lên main vẫn chạy đủ."
