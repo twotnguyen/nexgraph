@@ -18,8 +18,10 @@ GIT_ENV = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": o
 
 
 def git(root: Path, *args: str) -> str:
+    # `maintenance.auto`/`gc.auto`: commit có thể chạy `git maintenance --auto` ở nền và để lại
+    # `objects/maintenance.lock` trong lúc test chụp `.git` (main đỏ chập chờn ở a359f46, aab16d8).
     out = subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t.t", "-c", "commit.gpgsign=false",
-                          "-c", "core.quotepath=off", *args], cwd=root, env=GIT_ENV, capture_output=True,
+                          "-c", "core.quotepath=off", "-c", "maintenance.auto=false", "-c", "gc.auto=0", *args], cwd=root, env=GIT_ENV, capture_output=True,
                          text=True, encoding="utf-8")
     assert out.returncode == 0, out.stderr
     return out.stdout
