@@ -77,3 +77,4 @@ Dùng thư mục riêng cho mỗi lượt để không lẫn phiên chat, chỉ 
 ## 6. Kiểm thử giao diện bằng CDP
 
 Xem skill `nexgraph-desktop-ui-testing` trong workspace (chạy Electron qua CDP, phím/chuột thật, assertion + ảnh). Không dùng app NexGraph làm công cụ để tự kiểm chính nó trong lúc phát triển.
+
