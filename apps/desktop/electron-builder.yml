@@ -1,15 +1,14 @@
 appId: io.github.nexgraph.desktop
 productName: NexGraph
 # Cập nhật trong app (src/main/app/update): electron-builder sinh `app-update.yml` trong bộ cài
-# và `latest.yml`/`alpha.yml`/`beta.yml` + `.blockmap` cạnh bộ cài Windows. Script `package` vẫn
-# `--publish never`; job `release` của CI tải các tệp này lên GitHub Release.
+# và `latest.yml` + `.blockmap` cạnh bộ cài Windows. Với provider github chỉ có `latest.yml` cho mọi
+# phiên bản (kể cả alpha); bản alpha đã cài thử `alpha.yml` rồi tự lùi về `latest.yml` của Release
+# pre-release. Script `package` vẫn `--publish never`; job `release` của CI tải các tệp này lên Release.
 # Không khai `publisherName`: bộ cài chưa ký số, khai thì electron-updater sẽ từ chối bản tải về.
 publish:
   provider: github
   owner: twotnguyen
   repo: nexgraph
-# Bản alpha đã cài vẫn nhận được bản chính thức (và ngược lại tệp kênh luôn đủ cho mọi kênh).
-generateUpdatesFilesForAllChannels: true
 directories:
   output: dist
 files:

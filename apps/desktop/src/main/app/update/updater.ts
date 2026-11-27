@@ -8,7 +8,7 @@ import { acceptsPrerelease, pickMacUpdate, type GithubRelease } from './releases
 /**
  * Kiểm tra và cài bản mới từ GitHub Releases.
  *
- * - Windows (bộ cài NSIS): `electron-updater` đọc `latest.yml`/`alpha.yml` của Release, tải bộ cài
+ * - Windows (bộ cài NSIS): `electron-updater` đọc `latest.yml` của Release, tải bộ cài
  *   trong nền rồi cài đè và mở lại app. Không cần ký số vì cấu hình không khai `publisherName`.
  * - macOS: tự cài đè cần chữ ký Apple Developer, bản cài hiện chỉ ký ad-hoc. Vì vậy chỉ báo có bản
  *   mới và mở liên kết tải DMG; người dùng kéo app vào Applications để thay bản cũ.
