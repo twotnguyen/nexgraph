@@ -12,12 +12,37 @@ from typing import Literal
 
 import networkx as nx
 
-from nexgraph_engine.indexing.index.discovery import DOC_LANGUAGES
+from nexgraph_engine.indexing.graphify_import.mapping import EXTERNAL_FILE
+from nexgraph_engine.indexing.index.discovery import (DOC_LANGUAGE_BY_EXT, DOC_LANGUAGES, GOOGLE_WORKSPACE_EXTS,
+                                                      IMAGE_EXTS, MEDIA_EXTS)
 from nexgraph_engine.storage.store.graph_store import GraphStore
 
 EXPORT_NODE_LIMIT = 5000
 OTHER_COMMUNITY = -1
-DOC_KINDS = ("document", "concept")
+
+
+_DOC_EXTS = frozenset({*DOC_LANGUAGE_BY_EXT, *IMAGE_EXTS, *MEDIA_EXTS, *GOOGLE_WORKSPACE_EXTS})
+
+
+def _file_type(kind: str, language: str | None, path: str | None) -> str:
+    """`file_type` như Graphify ghi: vendor phân biệt các giá trị này (`suggest_questions` bỏ node `rationale`
+    khỏi danh sách cô lập và coi `document` là có lớp tài liệu; `query` hạ điểm `document` ×0,3).
+
+    Bộ nạp gộp `rationale` (docstring, chú thích trong tệp code) vào loại nút `document`; tách lại theo tệp chứa nút.
+    Bộ nạp ghi ngôn ngữ tài liệu theo đuôi (`md`), bộ trích xuất cũ theo tên (`markdown`), nên xét cả hai.
+    """
+    if kind == "concept":
+        return "concept"
+    if language in DOC_LANGUAGES or Path(path or "").suffix.lower() in _DOC_EXTS:
+        return "document"
+    return "rationale" if kind == "document" else "code"
+
+
+def _location(kind: str, line: int | None) -> str:
+    """Graphify ghi node tệp ở `L1`; `query`/`resolve` dựa vào đó để nhận node tệp khi tên trùng."""
+    if line:
+        return f"L{line}"
+    return "L1" if kind == "file" else ""
 
 RELATION = {
     "CALLS": "calls", "IMPORTS": "imports_from", "INHERITS": "inherits", "IMPLEMENTS": "implements",
@@ -103,9 +128,11 @@ def build_nx(store: GraphStore, scope: Scope = Scope(), keep_file: Callable[[str
         if keep_file is not None and r["tep"] and not keep_file(r["tep"]):
             hidden_communities.add(cid)
             continue
-        G.add_node(r["id_nut"], id=r["id_nut"], label=r["nhan"], source_file=r["tep"] or "",
-                   source_location=f"L{r['dong_bat_dau']}" if r["dong_bat_dau"] else "",
-                   file_type="document" if r["loai_nut"] in DOC_KINDS or r["ngon_ngu"] in DOC_LANGUAGES else "code",
+        # Node ngoài dự án của Graphify nằm dưới tệp giả trong `graph.db`; Graphify ghi chúng không có tệp.
+        G.add_node(r["id_nut"], id=r["id_nut"], label=r["nhan"],
+                   source_file="" if r["tep"] == EXTERNAL_FILE else r["tep"] or "",
+                   source_location=_location(r["loai_nut"], r["dong_bat_dau"]),
+                   file_type=_file_type(r["loai_nut"], r["ngon_ngu"], r["tep"]),
                    community=cid, kind=r["loai_nut"], is_test=bool(r["la_kiem_thu"]))
         pk_to_id[r["ma_nut"]] = r["id_nut"]
         communities.setdefault(cid, []).append(r["id_nut"])
