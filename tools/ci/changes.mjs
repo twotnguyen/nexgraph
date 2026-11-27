@@ -3,8 +3,12 @@
 //
 // Nguyên tắc: chỉ BỎ phần việc khi chắc tệp đổi không ảnh hưởng tới nó; đường dẫn chưa biết thì chạy đủ.
 // Push lên main và tag luôn chạy đủ (job truyền `--all`), nên thứ lọt qua bộ lọc của PR vẫn bị bắt
-// ngay trên commit merge. Job bắt buộc không bị bỏ, chỉ bỏ các bước nặng, để 8 check của
-// ruleset `main-guard` luôn có kết quả.
+// ngay trên commit merge. Job bắt buộc (engine, desktop) không bị bỏ, chỉ bỏ các bước nặng, để 6 check
+// của ruleset `main-guard` luôn có kết quả.
+//
+// `package` (đóng gói + smoke bộ cài, 7–11 phút) KHÔNG còn là check bắt buộc của PR (CI-02, Tình đồng ý
+// 27/11/2026): PR chỉ đóng gói khi đổi tệp chuyên về đóng gói (PACKAGING) hoặc dependency; mọi commit
+// trên main vẫn đóng gói, release vẫn chờ package xanh.
 //
 // Đầu vào của test nằm ngoài thư mục của chính nó (đã kiểm khi viết luật):
 //   - engine/tests/indexing/test_docs_secrets.py quét MỌI tệp *.md của repo  → .md bật engine 'docs'
@@ -21,6 +25,17 @@ import { pathToFileURL } from 'node:url'
 export const ALL = Object.freeze({ engine: 'full', desktop: true, package: true, labs: true })
 
 const ENGINE_LEVEL = { skip: 0, docs: 1, full: 2 }
+
+/** Tệp chỉ có tác dụng khi đóng gói: cấu hình electron-builder, spec PyInstaller, runtime Nex ghim,
+ *  script kiểm/smoke bộ cài, đường smoke trong main process. Đổi những tệp này thì PR đóng gói. */
+const PACKAGING = [
+  /^engine\/packaging\//,
+  /^engine\/(pyproject\.toml|uv\.lock)$/,
+  /^apps\/desktop\/(electron-builder\.yml|nex-runtime\.json)$/,
+  /^apps\/desktop\/build\//,
+  /^apps\/desktop\/scripts\//,
+  /^apps\/desktop\/src\/main\/app\/smoke[^/]*\.ts$/,
+]
 const need = (engine, desktop, pkg, labs) => ({ engine, desktop, package: pkg, labs })
 
 /** Phần CI một tệp cần. Thứ tự luật quan trọng: luật cụ thể trước, tệp lạ rơi về ALL. */
@@ -40,10 +55,16 @@ function needOf(file) {
     }
     if (f.startsWith('apps/desktop/src/renderer/')) return need('skip', true, false, true)
     if (f === 'apps/desktop/package.json') return ALL
-    if (f.startsWith('apps/desktop/') || f.startsWith('packages/')) return need('skip', true, true, true)
     if (['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml'].includes(f)) return ALL
+    if (PACKAGING.some((re) => re.test(f))) {
+      if (f.startsWith('engine/packaging/')) return need('skip', false, true, false)
+      // Dependency của engine: đổi cả test lẫn bộ cài (PyInstaller thiếu hidden import).
+      if (f.startsWith('engine/')) return need('full', true, true, false)
+      return need('skip', true, true, false)
+    }
+    if (f.startsWith('apps/desktop/') || f.startsWith('packages/')) return need('skip', true, false, true)
     if (md) return need('docs', false, false, false)
-    if (f.startsWith('engine/')) return need('full', true, true, false)
+    if (f.startsWith('engine/')) return need('full', true, false, false)
     // Ảnh trong docs/ và design/ là đầu vào test desktop (agent-images.test.ts đọc ảnh nghiệm thu và logo).
     if (f.startsWith('docs/') || f.startsWith('design/')) return need('skip', true, false, false)
     return ALL

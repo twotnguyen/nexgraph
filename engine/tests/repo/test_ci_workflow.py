@@ -2,7 +2,9 @@
 
 `package` chạy song song với test để rút đường găng CI của mọi PR (13 → ~7,5 phút), nhưng
 phát hành vẫn chỉ xảy ra khi test xanh: `release` phải chờ `engine`, `desktop` và `package`.
-Tên 8 check bắt buộc của ruleset `main-guard` không được đổi (7 job + `module-rules`, ADR 0026 pha 4e).
+Tên 6 check bắt buộc của ruleset `main-guard` không được đổi: `lint`, `module-rules` (ADR 0026 pha 4e),
+`engine`/`desktop` trên macOS và Windows. `package` không còn bắt buộc ở PR từ CI-02 (27/11/2026) nhưng giữ
+tên để lịch sử check và job `release` không đổi.
 """
 
 from pathlib import Path
@@ -51,8 +53,9 @@ def test_module_rules_job_blocks():
     assert "module-rules" in _needs(jobs["release"])
 
 
-REQUIRED_MATRIX_JOBS = ("engine", "desktop", "package")
-FLAG = {"engine": "engine", "desktop": "desktop", "package": "package"}
+REQUIRED_MATRIX_JOBS = ("engine", "desktop")
+FLAG = {"engine": "engine", "desktop": "desktop"}
+WINDOWS_JOBS = ("engine", "desktop", "package")
 
 
 def test_required_jobs_never_skipped_at_job_level():
@@ -63,6 +66,16 @@ def test_required_jobs_never_skipped_at_job_level():
         assert "if" not in jobs[name], name
     for name in REQUIRED_MATRIX_JOBS:
         assert "changes" in _needs(jobs[name]), name
+
+
+def test_package_is_skipped_as_a_whole_job_on_pull_requests():
+    """CI-02: package không bắt buộc ở PR nên bỏ cả job (không tốn runner) khi PR không đổi tệp đóng gói.
+    Ngoài PR, `changes` trả `--all` nên main và tag luôn đóng gói; release vẫn chờ package."""
+    package = _jobs()["package"]
+    assert "changes" in _needs(package)
+    assert package["if"] == "needs.changes.outputs.package == 'true'"
+    for step in package["steps"]:
+        assert "needs.changes" not in step.get("if", ""), step.get("name") or step.get("uses")
 
 
 def test_changes_job_runs_everything_outside_pull_requests():
@@ -96,7 +109,7 @@ def test_engine_tests_run_in_parallel():
 
 
 def test_defender_step_only_on_windows_and_never_fails_the_job():
-    for job in REQUIRED_MATRIX_JOBS:
+    for job in WINDOWS_JOBS:
         step = next(s for s in _jobs()[job]["steps"] if s.get("name") == "Tắt quét thời gian thực của Defender")
         assert step["if"].startswith("runner.os == 'Windows'"), job
         assert step["continue-on-error"] is True, job

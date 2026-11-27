@@ -20,11 +20,13 @@ pnpm typecheck
 Job `changes` của `.github/workflows/ci.yml` đọc danh sách tệp đổi của PR và [tools/ci/changes.mjs](../tools/ci/changes.mjs) quyết định phần việc nặng nào cần chạy:
 
 - **Tài liệu `.md`:** chỉ test che secret của engine (test này quét mọi `.md`).
-- **Chỉ renderer hoặc chỉ test desktop:** không chạy test engine, không đóng gói.
+- **Mã desktop (renderer, main, preload, contracts) hoặc test desktop:** chỉ test desktop.
+- **Mã engine:** test engine và test desktop (E2E dùng engine thật), không đóng gói.
 - **Test engine:** không đóng gói, không test desktop. Riêng `engine/tests/fixtures/**` thì vẫn test desktop, vì E2E desktop dùng fixture này.
+- **Tệp đóng gói** (`electron-builder.yml`, `engine/packaging/`, `nex-runtime.json`, `apps/desktop/scripts/`, `src/main/app/smoke*.ts`) **hoặc dependency** (`pyproject.toml`, `uv.lock`): có đóng gói.
 - **Tệp `.github/`, `tools/ci/`, `package.json`, lockfile, hoặc đường dẫn chưa có luật:** chạy đủ.
 
-8 check bắt buộc luôn có kết quả: job vẫn chạy, chỉ các bước nặng được bỏ qua. **Push lên `main` và tag luôn chạy đủ**, nên lỗi lọt qua bộ lọc của PR vẫn bị bắt trên commit merge.
+6 check bắt buộc (`lint`, `module-rules`, `engine`/`desktop` × 2) luôn có kết quả: job vẫn chạy, chỉ các bước nặng được bỏ qua. `package` không bắt buộc ở PR (ADR 0027 của workspace) nên bị bỏ cả job khi không cần. **Push lên `main` và tag luôn chạy đủ, kể cả đóng gói**, nên lỗi lọt qua bộ lọc của PR vẫn bị bắt trên commit merge. `main` đỏ ở `package` thì sửa ngay.
 
 Thêm một test đọc tệp ngoài thư mục của nó (tài liệu, ảnh, workflow) thì phải sửa luật trong `changes.mjs` và `apps/desktop/test/ci-changes.test.ts`.
 

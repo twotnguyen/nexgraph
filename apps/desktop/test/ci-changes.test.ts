@@ -31,9 +31,24 @@ describe('tools/ci/changes.mjs: chọn phần CI cần chạy theo tệp đổi 
       .toEqual({ engine: 'skip', desktop: true, package: false, labs: true })
   })
 
-  it('main process hoặc preload: đóng gói chạy (đường dẫn tài nguyên, binary đi kèm)', () => {
-    expect(classify(['apps/desktop/src/main/features/agent/nex/sidecar.ts'])).toMatchObject({ engine: 'skip', desktop: true, package: true })
-    expect(classify(['apps/desktop/src/preload/index.ts']).package).toBe(true)
+  it('main process, preload, contracts: test desktop, không đóng gói ở PR (main vẫn đóng gói sau merge)', () => {
+    expect(classify(['apps/desktop/src/main/features/agent/nex/sidecar.ts'])).toEqual({ engine: 'skip', desktop: true, package: false, labs: true })
+    expect(classify(['apps/desktop/src/preload/index.ts']).package).toBe(false)
+    expect(classify(['packages/contracts/src/agent-types.ts']).package).toBe(false)
+  })
+
+  it('tệp chuyên về đóng gói: PR đóng gói và smoke bộ cài', () => {
+    for (const file of ['apps/desktop/electron-builder.yml', 'apps/desktop/nex-runtime.json', 'apps/desktop/build/icon.png',
+      'apps/desktop/scripts/smoke-packaged.mjs', 'apps/desktop/src/main/app/smoke-desktop.ts']) {
+      expect(classify([file]), file).toEqual({ engine: 'skip', desktop: true, package: true, labs: false })
+    }
+    expect(classify(['engine/packaging/nexgraph-engine.spec'])).toEqual({ engine: 'skip', desktop: false, package: true, labs: false })
+  })
+
+  it('dependency (lockfile, pyproject): chạy đủ test và đóng gói', () => {
+    expect(classify(['engine/uv.lock'])).toEqual({ engine: 'full', desktop: true, package: true, labs: false })
+    expect(classify(['engine/pyproject.toml']).package).toBe(true)
+    expect(classify(['pnpm-lock.yaml'])).toEqual(ALL)
   })
 
   it('chỉ test desktop: không đóng gói, không test engine', () => {
@@ -45,8 +60,8 @@ describe('tools/ci/changes.mjs: chọn phần CI cần chạy theo tệp đổi 
     expect(classify(['apps/desktop/package.json'])).toMatchObject({ engine: 'full', desktop: true, package: true })
   })
 
-  it('mã engine: chạy đủ engine, desktop (E2E dùng engine thật) và đóng gói (PyInstaller)', () => {
-    expect(classify(['engine/src/nexgraph_engine/interfaces/mcp/server.py'])).toEqual({ engine: 'full', desktop: true, package: true, labs: false })
+  it('mã engine: chạy đủ engine và desktop (E2E dùng engine thật); không đóng gói ở PR', () => {
+    expect(classify(['engine/src/nexgraph_engine/interfaces/mcp/server.py'])).toEqual({ engine: 'full', desktop: true, package: false, labs: false })
   })
 
   it('test engine: không đóng gói, không test desktop; trừ fixture mà E2E desktop dùng', () => {
