@@ -26,9 +26,17 @@ describe('chỉ dẫn hệ thống của Nex', () => {
 
   it('giải thích tiền tố nexgraph_ của tool đồ thị và nêu các tool chính theo tên thật', () => {
     expect(text).toContain('`nexgraph_`')
-    for (const tool of ['nexgraph_get_context', 'nexgraph_search', 'nexgraph_get_impact', 'nexgraph_tests_for', 'nexgraph_read_code', 'nexgraph_remember']) {
+    for (const tool of ['nexgraph_get_context', 'nexgraph_search', 'nexgraph_get_impact', 'nexgraph_tests_for', 'nexgraph_read_code',
+      'nexgraph_remember', 'nexgraph_read_file', 'nexgraph_grep', 'nexgraph_glob']) {
       expect(mentions(tool), tool).toBe(true)
     }
+  })
+
+  it('nói rõ tool tệp đi qua chính sách nguồn và không đọc tệp bằng shell', () => {
+    expect(text).toMatch(/\.env/)
+    expect(text).toMatch(/\[redacted\]/)
+    expect(text).toMatch(/không tìm cách đọc nó bằng đường khác/)
+    expect(text).toMatch(/không qua chính sách nguồn/)
   })
 
   it('có lối lùi khi đồ thị chưa sẵn sàng (chưa lập chỉ mục, engine lỗi)', () => {
