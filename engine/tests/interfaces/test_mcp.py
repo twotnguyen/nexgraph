@@ -17,7 +17,7 @@ from support import call, payload
 TOOLS = {"search", "get_node", "get_neighbors", "get_architecture", "get_evidence", "get_impact", "read_code",
          "query_graph", "shortest_path", "god_nodes", "graph_stats", "get_community", "list_flows", "trace_flow", "get_context",
          "get_section", "get_callers", "tests_for", "find", "remember", "recall",
-         "list_prs", "get_pr_impact", "triage_prs", "review_status"}
+         "list_prs", "get_pr_impact", "triage_prs", "review_status", "read_file", "grep", "glob"}
 
 
 @pytest.fixture

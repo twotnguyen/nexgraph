@@ -55,6 +55,7 @@ from nexgraph_engine.interfaces.mcp import graphify_view
 from nexgraph_engine.analysis.prs.gh import GhError
 from nexgraph_engine.analysis.prs.listing import list_prs_json, triage_json
 from nexgraph_engine.analysis.prs.review import pr_detail_json, review_status_json
+from nexgraph_engine.analysis.query import project_files
 from nexgraph_engine.analysis.query.model_view import ModelGraph
 from nexgraph_engine.analysis.query.paths import find_paths, impact_of
 from nexgraph_engine.analysis.query.section import section_json
@@ -81,6 +82,8 @@ SERVER_INSTRUCTIONS = (
     "- các khối kiến trúc và mũi tên giữa chúng -> get_architecture, rồi get_evidence để lấy tệp:dòng\n"
     "- sửa X thì ảnh hưởng đâu, test nào liên quan -> get_impact\n"
     "- đọc đoạn mã để trích dẫn -> read_code\n"
+    "- đọc tệp bất kỳ trong dự án (cả tệp chưa lập chỉ mục), liệt kê thư mục -> read_file\n"
+    "- tìm chuỗi hoặc biểu thức trong nội dung tệp -> grep; tìm tệp theo mẫu tên -> glob\n"
     "- đọc một mục tài liệu (heading Markdown/docx/PDF) -> get_section\n"
     "- câu hỏi tự do, lấy đồ thị con liên quan -> query_graph\n"
     "- cần các đoạn mã liên quan nhất tới một câu hỏi, gọn trong ngân sách token -> get_context\n"
@@ -339,6 +342,56 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         return await run("read_code", lambda s: read_code_json(
             s, root, file, start, end, source=SourcePolicy(root, s.last_exclude()), sources_dir=src(s),
             redact_documents=True))
+
+    def files_policy() -> SourcePolicy:
+        """Chính sách nguồn cho tool tệp: mẫu loại trừ AI của lần lập chỉ mục gần nhất. Không đọc được
+        thì từ chối (đóng khi lỗi), không rơi về chính sách rỗng."""
+        try:
+            conn = open_graph_db(graph_db, read_only=True)
+        except (sqlite3.Error, OSError) as exc:
+            raise ToolError(f"Không mở được dữ liệu đồ thị: {exc}") from exc
+        try:
+            store = GraphStore(conn)
+            # Chưa có lần lập chỉ mục đầy đủ nào xong (lần đầu bị huỷ/lỗi) thì `last_exclude()` rỗng dù người
+            # dùng đã chọn mẫu loại trừ: từ chối như các tool đồ thị, không đọc với chính sách thiếu.
+            if not store.has_published_graph():
+                raise ToolError("Dự án chưa được lập chỉ mục xong")
+            return SourcePolicy(root, store.last_exclude())
+        except ApiError as exc:
+            raise ToolError(exc.message) from exc
+        finally:
+            conn.close()
+
+    async def run_files(tool_name: str, body: Callable[[SourcePolicy], Any]) -> Any:
+        """Tool tệp không cần đồ thị đã xuất bản: đọc thẳng đĩa, mọi đường dẫn qua `SourcePolicy`."""
+        def work() -> Any:
+            policy = files_policy()
+            try:
+                return body(policy)
+            except ApiError as exc:
+                raise ToolError(exc.message) from exc
+        return await _offload(tool_name, work)
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def read_file(path: str, start: int | None = None, end: int | None = None) -> dict:
+        """Đọc một tệp chữ trong dự án (đường dẫn tương đối, kể cả tệp chưa lập chỉ mục), tối đa 2.000 dòng
+        mỗi lần; đường dẫn là thư mục (hoặc ".") thì liệt kê thư mục. Bỏ tệp bị loại khỏi AI (.env, khoá,
+        .gitignore, mẫu loại trừ); tài liệu và cấu hình đã che secret (`redacted`)."""
+        return await run_files("read_file", lambda policy: project_files.read_file(root, policy, path, start, end))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def grep(pattern: str, path: str | None = None, include: str | None = None, literal: bool = False,
+                   case_sensitive: bool = True, limit: int = 100) -> dict:
+        """Tìm biểu thức chính quy (hoặc chuỗi khi literal=true) trong nội dung tệp của dự án; trả tệp, dòng,
+        đoạn dòng khớp. `path` giới hạn thư mục/tệp, `include` lọc tên tệp theo glob (vd `*.py`). Chỉ tìm
+        trong tệp được phép đưa vào AI, trên bản đã che secret."""
+        return await run_files("grep", lambda policy: project_files.grep(
+            root, policy, pattern, path, include, literal, case_sensitive, limit))
+
+    @mcp.tool(annotations=READ_ONLY)
+    async def glob(pattern: str, path: str | None = None, limit: int = 200) -> dict:
+        """Liệt kê tệp khớp mẫu glob (vd `**/*.ts`, `src/*.py`), tính từ `path`. Chỉ trả tệp được phép đưa vào AI."""
+        return await run_files("glob", lambda policy: project_files.glob(root, policy, pattern, path, limit))
 
     @mcp.tool(annotations=READ_ONLY)
     async def query_graph(question: str, mode: Literal["bfs", "dfs"] = "bfs", depth: int | None = None,

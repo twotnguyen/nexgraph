@@ -92,7 +92,9 @@ describe('cấu hình Nex (OpenCode v2)', () => {
     // Cách OpenCode 2.4.1 ẩn tool (`tool.ts` whollyDisabled): luật khớp cuối cùng, resource "*", effect "deny".
     const lastMatch = (action: string) => rules.findLast((rule) => rule.action === action || (rule.action.endsWith('*') && action.startsWith(rule.action.slice(0, -1))))
     for (const tool of NEX_DISABLED_TOOLS) expect(lastMatch(tool), tool).toMatchObject({ resource: '*', effect: 'deny' })
-    for (const tool of ['read', 'glob', 'grep']) expect(lastMatch(tool)?.effect, tool).toBe('allow')
+    // read/glob/grep của OpenCode đọc thẳng đĩa, bỏ qua chính sách nguồn: tắt, Nex dùng nexgraph_read_file/grep/glob.
+    for (const tool of ['read', 'glob', 'grep']) expect(lastMatch(tool), tool).toMatchObject({ resource: '*', effect: 'deny' })
+    expect(rules.some((rule) => ['read', 'glob', 'grep', 'list'].includes(rule.action) && rule.effect === 'allow')).toBe(false)
     for (const tool of ['edit', 'shell']) expect(lastMatch(tool)?.effect, tool).toBe('ask')
     expect(lastMatch('nexgraph_search')?.effect).toBe('allow')
     expect(NEX_DISABLED_TOOLS).toEqual(expect.arrayContaining(['question', 'subagent', 'execute', 'skill']))
@@ -105,8 +107,9 @@ describe('cấu hình Nex (OpenCode v2)', () => {
       const plugins = config.plugins as string[]
       expect(plugins).toEqual(NEX_REMOVED_PLUGINS.map((id) => `-${id}`))
       expect(plugins).toEqual(expect.arrayContaining(['-opencode.tool.automation', '-opencode.tools', '-opencode.tool.skill']))
-      // Plugin của tool Nex được dùng (read/glob/grep/edit/write/shell) không được gỡ.
-      for (const kept of ['read', 'glob', 'grep', 'edit', 'write', 'shell']) expect(plugins).not.toContain(`-opencode.tool.${kept}`)
+      // Plugin của tool Nex được dùng (edit/write/shell) không được gỡ; read/glob/grep bị gỡ (đọc thẳng đĩa).
+      for (const kept of ['edit', 'write', 'shell']) expect(plugins).not.toContain(`-opencode.tool.${kept}`)
+      for (const removed of ['read', 'glob', 'grep']) expect(plugins).toContain(`-opencode.tool.${removed}`)
     }
   })
 

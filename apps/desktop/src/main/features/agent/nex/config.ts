@@ -83,9 +83,13 @@ export function nexConfig(input: NexConfigInput): Record<string, unknown> {
  * `opencode_*_mcp_resource(s)` đọc resource của MCP `nexgraph` (báo cáo, god nodes, kết nối bất ngờ,
  * câu hỏi gợi ý, audit), thứ Graphify cấp cho agent kết nối vào qua `graphify://…`. `webfetch` và
  * `websearch` luôn hỏi duyệt (hộp duyệt hiện URL hoặc câu tìm), ở mọi chế độ.
+ *
+ * Không có `read`/`glob`/`grep` của OpenCode: chúng đọc thẳng đĩa, bỏ qua chính sách nguồn của NexGraph
+ * (`.env`, khoá, `.gitignore`, mẫu loại trừ AI, che secret). Nex đọc và tìm tệp bằng `nexgraph_read_file`,
+ * `nexgraph_grep`, `nexgraph_glob` của engine (`analysis/query/project_files.py`).
  */
 export const NEX_ENABLED_TOOLS = [
-  'read', 'glob', 'grep', 'edit', 'write', 'shell', 'webfetch', 'websearch',
+  'edit', 'write', 'shell', 'webfetch', 'websearch',
   'opencode_list_mcp_resources', 'opencode_read_mcp_resource'
 ] as const
 
@@ -104,7 +108,7 @@ export const NEX_WEBSEARCH_PROVIDER = 'exa'
  * id plugin thì tool vẫn bị ẩn). `execute` là Code Mode.
  */
 export const NEX_DISABLED_TOOLS = [
-  'generate_image', 'generate_video', 'question', 'subagent', 'execute', 'skill'
+  'generate_image', 'generate_video', 'question', 'subagent', 'execute', 'skill', 'read', 'glob', 'grep'
 ] as const
 
 /**
@@ -117,7 +121,8 @@ export const NEX_DISABLED_TOOLS = [
 export const NEX_REMOVED_PLUGINS = [
   'opencode.tool.automation', 'opencode.tools', 'opencode.tools.mcp-events',
   'opencode.tool.skill', 'opencode.tool.question',
-  'opencode.tool.subagent', 'opencode.tool.image-generate', 'opencode.tool.video-generate'
+  'opencode.tool.subagent', 'opencode.tool.image-generate', 'opencode.tool.video-generate',
+  'opencode.tool.read', 'opencode.tool.grep', 'opencode.tool.glob'
 ] as const
 
 /** Các tệp sidecar ghi vào thư mục cấu hình cạnh `opencode.json`. */
@@ -147,10 +152,6 @@ function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'
     // Mặc định của OpenCode khi không khớp rule là `ask` (spike A2 §3.3): vẫn khai báo rõ để không
     // phụ thuộc mặc định của bản cài. Chế độ Hỏi/Lập kế hoạch do lớp duyệt của app chặn thêm.
     permissions: [
-      { action: 'read', resource: '*', effect: 'allow' },
-      { action: 'glob', resource: '*', effect: 'allow' },
-      { action: 'grep', resource: '*', effect: 'allow' },
-      { action: 'list', resource: '*', effect: 'allow' },
       { action: 'nexgraph_*', resource: '*', effect: 'allow' },
       // Chỉ server `nexgraph`; resource của server khác rơi vào hỏi quyền, onPermission từ chối.
       { action: 'opencode_list_mcp_resources', resource: 'nexgraph', effect: 'allow' },
