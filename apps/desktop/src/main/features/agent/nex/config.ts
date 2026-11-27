@@ -78,8 +78,14 @@ export function nexConfig(input: NexConfigInput): Record<string, unknown> {
   }
 }
 
-/** Tool có sẵn của OpenCode mà Nex được dùng (tệp chỉ dẫn giới thiệu đúng các tool này). */
-export const NEX_ENABLED_TOOLS = ['read', 'glob', 'grep', 'edit', 'write', 'shell'] as const
+/**
+ * Tool có sẵn của OpenCode mà Nex được dùng (tệp chỉ dẫn giới thiệu đúng các tool này). Hai tool
+ * `opencode_*_mcp_resource(s)` đọc resource của MCP `nexgraph` (báo cáo, god nodes, kết nối bất ngờ,
+ * câu hỏi gợi ý, audit), thứ Graphify cấp cho agent kết nối vào qua `graphify://…`.
+ */
+export const NEX_ENABLED_TOOLS = [
+  'read', 'glob', 'grep', 'edit', 'write', 'shell', 'opencode_list_mcp_resources', 'opencode_read_mcp_resource'
+] as const
 
 /**
  * Tool có sẵn của OpenCode 2.4.1 mà app không phục vụ được: `onPermission` (nex/session.ts) chỉ dựng
@@ -97,9 +103,10 @@ export const NEX_DISABLED_TOOLS = [
  * tắt `execute` làm các tool Code Mode (`automation_*`, `opencode_*`) thành tool gọi thẳng, và
  * `opencode_worktree_remove` xin quyền `edit` nên luật quyền không ẩn được. Đo trên binary thật:
  * còn đúng `NEX_ENABLED_TOOLS` + tool `nexgraph_*` (script `scripts/nex/probe_system_prompt.ts`).
+ * Giữ `opencode.tools.mcp-resources` (đọc resource `nexgraph://…`).
  */
 export const NEX_REMOVED_PLUGINS = [
-  'opencode.tool.automation', 'opencode.tools', 'opencode.tools.mcp-resources', 'opencode.tools.mcp-events',
+  'opencode.tool.automation', 'opencode.tools', 'opencode.tools.mcp-events',
   'opencode.tool.skill', 'opencode.tool.webfetch', 'opencode.tool.websearch', 'opencode.tool.question',
   'opencode.tool.subagent', 'opencode.tool.image-generate', 'opencode.tool.video-generate'
 ] as const
@@ -135,6 +142,9 @@ function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'
       { action: 'grep', resource: '*', effect: 'allow' },
       { action: 'list', resource: '*', effect: 'allow' },
       { action: 'nexgraph_*', resource: '*', effect: 'allow' },
+      // Chỉ server `nexgraph`; resource của server khác rơi vào hỏi quyền, onPermission từ chối.
+      { action: 'opencode_list_mcp_resources', resource: 'nexgraph', effect: 'allow' },
+      { action: 'opencode_read_mcp_resource', resource: 'nexgraph:*', effect: 'allow' },
       { action: 'edit', resource: '*', effect: 'ask' },
       { action: 'shell', resource: '*', effect: 'ask' },
       ...NEX_DISABLED_TOOLS.map((action) => ({ action, resource: '*', effect: 'deny' }))

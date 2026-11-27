@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   nexAccountConfig, nexConfig, nexConfigFiles, nexProviderEnv, nexProjectKey, NEX_DISABLED_TOOLS, NEX_PROVIDER_ENV,
-  NEX_REMOVED_PLUGINS
+  NEX_ENABLED_TOOLS, NEX_REMOVED_PLUGINS
 } from '../src/main/features/agent/nex/config'
 import { NEX_INSTRUCTIONS_FILE, nexInstructions } from '../src/main/features/agent/nex/instructions'
 
@@ -108,6 +108,20 @@ describe('cấu hình Nex (OpenCode v2)', () => {
       // Plugin của tool Nex được dùng (read/glob/grep/edit/write/shell) không được gỡ.
       for (const kept of ['read', 'glob', 'grep', 'edit', 'write', 'shell']) expect(plugins).not.toContain(`-opencode.tool.${kept}`)
     }
+  })
+
+  it('giữ đường đọc resource MCP (nexgraph://report, god-nodes…) như Graphify cấp cho agent kết nối vào', () => {
+    const config = nexConfig({ root: '/tmp/proj', engine, dataDir: '/tmp/data', configDir: '/tmp/cfg', provider })
+    expect(config.plugins as string[]).not.toContain('-opencode.tools.mcp-resources')
+    const rules = config.permissions as { action: string; resource: string; effect: string }[]
+    for (const tool of ['opencode_list_mcp_resources', 'opencode_read_mcp_resource']) {
+      // Không có luật allow thì OpenCode hỏi quyền, và onPermission của app từ chối mọi quyền ngoài edit/shell.
+      expect(rules.findLast((rule) => rule.action === tool)?.effect, tool).toBe('allow')
+      expect(NEX_ENABLED_TOOLS as readonly string[]).toContain(tool)
+    }
+    // Chỉ mở cho server nexgraph (OpenCode kiểm resource "<server>" khi liệt kê, "<server>:<uri>" khi đọc).
+    expect(rules.find((rule) => rule.action === 'opencode_list_mcp_resources')?.resource).toBe('nexgraph')
+    expect(rules.find((rule) => rule.action === 'opencode_read_mcp_resource')?.resource).toBe('nexgraph:*')
   })
 
   it('khoá dự án chỉ chứa ký tự an toàn và không rỗng', () => {

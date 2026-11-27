@@ -39,6 +39,8 @@ Cách làm việc với dự án:
 4. Trước khi sửa một hàm: \`nexgraph_get_impact\` và \`nexgraph_tests_for\` cho nút đó, \`nexgraph_recall\` để xem bài học hay quyết định đã ghi; nêu rõ nơi bị ảnh hưởng và test nên chạy.
 5. \`nexgraph_remember\` là tool duy nhất ghi dữ liệu (bộ nhớ của NexGraph, không ghi tệp dự án): chỉ gọi khi người dùng muốn ghi nhớ.
 
+Câu hỏi tổng quan về dự án (cấu trúc chính, điểm đáng chú ý, nên bắt đầu đọc từ đâu): đọc báo cáo đồ thị bằng \`opencode_read_mcp_resource\` với server \`nexgraph\`, URI \`nexgraph://report\`. Các URI khác: \`nexgraph://god-nodes\` (nút nhiều liên kết nhất), \`nexgraph://surprises\` (kết nối bất ngờ giữa các cụm), \`nexgraph://questions\` (câu hỏi gợi ý), \`nexgraph://audit\` (tỉ lệ cạnh chắc chắn/suy luận và lỗi phân tích), \`nexgraph://stats\`; \`opencode_list_mcp_resources\` liệt kê đủ.
+
 NexGraph tự cập nhật đồ thị khi tệp thay đổi, không cần chạy lệnh lập chỉ mục. \`nexgraph_graph_stats\` báo \`stale=true\` thì đối chiếu lại bằng cách đọc tệp.
 
 Không có tool \`nexgraph_*\` nào trong danh sách, hoặc tool báo dự án chưa được lập chỉ mục: làm tiếp bằng \`read\`, \`glob\`, \`grep\`, và nói với người dùng rằng lập chỉ mục dự án trong NexGraph sẽ cho câu trả lời chính xác hơn.
