@@ -118,3 +118,89 @@ def test_glob_lists_only_allowed_files(project):
     (root / "b.py").write_text("B = 1\n", encoding="utf-8")
     capped = payload(call(server, "glob", {"pattern": "*.py", "limit": 1}))
     assert capped["files"] == ["app.py"] and capped["truncated"] is True
+
+
+# ── Sửa sau review độc lập của #101 ───────────────────────────────────────────
+
+def test_mcp_config_and_manifests_are_redacted(project):
+    """`.mcp.json` mang token server MCP; engine gọi nó là `mcp_config`, không phải mã nguồn."""
+    server, root = project
+    (root / ".mcp.json").write_text(f'{{"mcpServers": {{"gh": {{"env": {{"GITHUB_TOKEN": "{TOKEN}"}}}}}}}}\n',
+                                    encoding="utf-8")
+    (root / "pyproject.toml").write_text(f'[tool.x]\npassword = "{PASSWORD}"\n', encoding="utf-8")
+    for name in (".mcp.json", "pyproject.toml"):
+        body = payload(call(server, "read_file", {"path": name}))
+        assert TOKEN not in body["text"] and PASSWORD not in body["text"] and body["redacted"] is True, name
+    assert payload(call(server, "grep", {"pattern": "ghp_", "literal": True}))["matches"] == []
+
+
+def test_file_tools_refuse_without_a_completed_index(project, monkeypatch):
+    """Lần index đầu bị huỷ/lỗi: `last_exclude()` rỗng, nên không được đọc với chính sách thiếu mẫu loại trừ."""
+    from nexgraph_engine.storage.store.graph_store import GraphStore
+
+    server, _ = project
+    monkeypatch.setattr(GraphStore, "has_published_graph", lambda self: False)
+    for tool, args in (("read_file", {"path": "private/notes.py"}), ("grep", {"pattern": "X"}), ("glob", {"pattern": "*"})):
+        result = call(server, tool, args)
+        assert result.isError and "lập chỉ mục" in result.content[0].text, tool
+
+
+def test_glob_and_include_expand_braces(project):
+    server, _ = project
+    assert set(payload(call(server, "glob", {"pattern": "*.{py,yaml}"}))["files"]) == {"app.py", "config.yaml"}
+    hits = payload(call(server, "grep", {"pattern": "name|def", "include": "*.{py,yaml}"}))["matches"]
+    assert {hit["file"] for hit in hits} == {"app.py", "config.yaml"}
+
+
+@pytest.mark.parametrize("pattern", ["(a+)+$", "(a*)*b", "(x|xx)+y", "((ab)*)+c"])
+def test_grep_refuses_catastrophic_backtracking(project, pattern):
+    server, _ = project
+    result = call(server, "grep", {"pattern": pattern})
+    assert result.isError and "lồng nhau" in result.content[0].text
+
+
+def test_grep_accepts_ordinary_patterns(project):
+    server, _ = project
+    for pattern in (r"def \w+\(", "login|check", r"(?:user)\)", r"^\s+return"):
+        assert payload(call(server, "grep", {"pattern": pattern, "include": "*.py"}))["matches"], pattern
+
+
+def test_missing_search_path_is_an_error(project):
+    server, _ = project
+    for tool, args in (("grep", {"pattern": "login", "path": "scr"}), ("glob", {"pattern": "*", "path": "scr"})):
+        result = call(server, tool, args)
+        assert result.isError and "scr" in result.content[0].text, tool
+
+
+def test_grep_follows_a_symlinked_search_path_inside_the_project(project):
+    server, root = project
+    try:
+        os.symlink(root / "docs", root / "tai-lieu", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("không tạo được symlink")
+    hits = payload(call(server, "grep", {"pattern": "Demo", "path": "tai-lieu"}))["matches"]
+    assert [hit["line"] for hit in hits] == [1]
+
+
+def test_scan_skips_dependency_dirs_unless_asked(project):
+    server, root = project
+    (root / ".venv" / "lib").mkdir(parents=True)
+    (root / ".venv" / "lib" / "dep.py").write_text("def handler():\n    pass\n", encoding="utf-8")
+    assert payload(call(server, "grep", {"pattern": "def handler"}))["matches"] == []
+    inside = payload(call(server, "grep", {"pattern": "def handler", "path": ".venv"}))["matches"]
+    assert [hit["file"] for hit in inside] == [".venv/lib/dep.py"]
+
+
+def test_read_file_flags_clipped_lines_and_converts_documents(project):
+    import docx
+
+    server, root = project
+    (root / "min.js").write_text("x" * 3000 + "\n", encoding="utf-8")
+    assert payload(call(server, "read_file", {"path": "min.js"}))["clipped"] is True
+    assert payload(call(server, "read_file", {"path": "app.py"}))["clipped"] is False
+    document = docx.Document()
+    document.add_paragraph("Đặc tả đăng nhập")
+    document.add_paragraph(f"token: {TOKEN}")
+    document.save(root / "spec.docx")
+    body = payload(call(server, "read_file", {"path": "spec.docx"}))
+    assert "Đặc tả đăng nhập" in body["text"] and TOKEN not in body["text"]

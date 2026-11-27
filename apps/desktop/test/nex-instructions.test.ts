@@ -37,6 +37,8 @@ describe('chỉ dẫn hệ thống của Nex', () => {
     expect(text).toMatch(/\[redacted\]/)
     expect(text).toMatch(/không tìm cách đọc nó bằng đường khác/)
     expect(text).toMatch(/không qua chính sách nguồn/)
+    // Văn bản đã che/cắt không được dùng để ghi đè cả tệp (secret thật sẽ thành chữ [redacted]).
+    expect(text).toMatch(/không dùng `write` ghi đè cả tệp/)
   })
 
   it('có lối lùi khi đồ thị chưa sẵn sàng (chưa lập chỉ mục, engine lỗi)', () => {

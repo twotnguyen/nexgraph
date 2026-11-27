@@ -351,7 +351,12 @@ def build_server(project: Path, data_dir: Path | None, *, global_graph: bool = F
         except (sqlite3.Error, OSError) as exc:
             raise ToolError(f"Không mở được dữ liệu đồ thị: {exc}") from exc
         try:
-            return SourcePolicy(root, GraphStore(conn).last_exclude())
+            store = GraphStore(conn)
+            # Chưa có lần lập chỉ mục đầy đủ nào xong (lần đầu bị huỷ/lỗi) thì `last_exclude()` rỗng dù người
+            # dùng đã chọn mẫu loại trừ: từ chối như các tool đồ thị, không đọc với chính sách thiếu.
+            if not store.has_published_graph():
+                raise ToolError("Dự án chưa được lập chỉ mục xong")
+            return SourcePolicy(root, store.last_exclude())
         except ApiError as exc:
             raise ToolError(exc.message) from exc
         finally:
