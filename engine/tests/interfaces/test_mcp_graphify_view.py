@@ -117,10 +117,10 @@ def test_rebrand_text_only_changes_template_phrases():
     """Chỉ câu mẫu của vendor đổi; id, nhãn, đường dẫn, nội dung người dùng giữ nguyên byte."""
     assert graphify_view.rebrand_text(
         "Run `graphify update .` to refresh the graph."
-    ) == "Run `nexgraph update .` to refresh the graph."
+    ) == "Wait for NexGraph to refresh the graph, then try again."
     assert graphify_view.rebrand_text(
         "The heading moved since indexing; run `graphify update .` to refresh the graph."
-    ) == "The heading moved since indexing; run `nexgraph update .` to refresh the graph."
+    ) == "The heading moved since indexing; wait for NexGraph to refresh the graph, then try again."
     # Dữ liệu người dùng: không đổi, kể cả khi mang đúng chữ của nguồn.
     for data in ("graphify_qa", "engine/src/graphify/serve.py", "Graphify Report", "GRAPHIFY_OUT",
                  "graphify-out/graph.json", "def graphify(): pass"):

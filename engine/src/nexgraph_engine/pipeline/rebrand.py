@@ -5,26 +5,19 @@ Không đụng dữ liệu của dự án đang được phân tích: đường 
 `_graphify_version()`, `graphify-out`, `.graphify_analysis.json` và id `graphify-theme` của trang
 đều phải giữ nguyên — đổi chúng là sửa nội dung/khoá nội bộ, không phải nhãn hiển thị.
 
-#69 (MCP) chưa merge nên chưa có `rebrand_text` dùng chung; hàm ở đây là bản nhỏ, gộp lại khi #69 vào.
+Danh sách câu mẫu dùng chung ở `core/text/rebrand.py`; tệp này thêm phần riêng của trang HTML (`<title>`).
 """
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
+from nexgraph_engine.core.text import rebrand as core_rebrand
+
 EXPORTED = ("GRAPH_REPORT.md", "graph.html", "GRAPH_TREE.html")
 CALLFLOW_GLOB = "*-callflow.html"
 
-#: Câu/chữ mẫu của vendor → câu của NexGraph. Khớp nguyên văn nên không sửa nhầm dữ liệu dự án.
-PHRASES = (
-    ("Generated from graphify knowledge graph", "Generated from NexGraph knowledge graph"),
-    ("This section comes from graphify community clustering.",
-     "This section comes from NexGraph community clustering."),
-    ("graphify callflow-html", "NexGraph callflow"),
-    ("run `graphify query` to explore isolated nodes", "open the graph view to explore isolated nodes"),
-    ("Run `graphify update .` after code changes (no API cost).",
-     "Run `nexgraph refresh` after code changes (no API cost)."),
-)
+PHRASES = core_rebrand.PHRASES
 
 #: Tiêu đề trang là chữ của mẫu; chỉ đổi trong `<title>` và không đổi khi dính `/`, `\\`, `-`, `_`.
 TITLE = re.compile(r"<title>(.*?)</title>", re.S)
@@ -33,12 +26,7 @@ DISPLAY_WORD = re.compile(r"(?<![\w/\\-])[Gg]raphify(?![\w/\\-])")
 
 def rebrand_text(text: str) -> tuple[str, int]:
     """Trả `(văn bản đã đổi, số chỗ đã đổi)`; đường dẫn/id/dữ liệu dự án không khớp nên giữ nguyên."""
-    count = 0
-    for old, new in PHRASES:
-        hits = text.count(old)
-        if hits:
-            text = text.replace(old, new)
-            count += hits
+    text, count = core_rebrand.replace_phrases(text)
 
     def _title(match: re.Match[str]) -> str:
         nonlocal count

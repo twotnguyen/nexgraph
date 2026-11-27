@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from nexgraph_engine.core.text.rebrand import replace_phrases
+
 if TYPE_CHECKING:  # pragma: no cover - chỉ để gợi ý kiểu, không nạp networkx khi khởi động
     import networkx as nx
 
@@ -31,27 +33,13 @@ IDLE_TTL_SECONDS = 600.0
 #: khoá này, kẻo tái dùng chỉ mục tính trên đồ thị chưa lọc.
 _VENDOR_CACHE_KEYS = frozenset({"_trigram_index", "_idf_cache", "_traversal_view"})
 
-#: Cụm mẫu **do vendor sinh ra** cần đổi tên, khớp chính xác từng chuỗi — không regex, không đổi
-#: id/nhãn/đường dẫn/nội dung người dùng (QA #69 finding 1). Mỗi cặp ghi rõ nguồn sinh câu.
-_REBRAND_PHRASES = (
-    # graphify/sections.py:148 (lý do khi heading không còn ở dòng đã ghi)
-    ("Run `graphify update .` to refresh the graph.",
-     "Run `nexgraph update .` to refresh the graph."),
-    # graphify/sections.py:168 (ghi chú khi heading bị dời dòng)
-    ("run `graphify update .` to refresh the graph.",
-     "run `nexgraph update .` to refresh the graph."),
-)
-
-
 def rebrand_text(text: str) -> str:
     """Đổi **chỉ các cụm mẫu cố định** của vendor sang tên NexGraph (ADR 0025 mục 3).
 
     Không thay id, nhãn, đường dẫn tệp hay nội dung mã/tài liệu của người dùng, kể cả khi
     chúng chứa chữ "graphify" — dữ liệu phải trùng byte với bản gốc (QA #69 finding 1).
     """
-    for old, new in _REBRAND_PHRASES:
-        text = text.replace(old, new)
-    return text
+    return replace_phrases(text)[0]
 
 
 class VendorToolError(Exception):

@@ -55,12 +55,12 @@ Văn bản hướng dẫn.
 """
 
 # Kỳ vọng viết TAY cho các cụm mẫu do vendor sinh ra (không gọi hàm sản phẩm để tính).
-# Chỉ câu hướng dẫn của vendor đổi tên lệnh; mọi dữ liệu khác phải giữ nguyên byte.
+# Chỉ câu hướng dẫn của vendor (lệnh CLI không có trong NexGraph) được thay; mọi dữ liệu khác giữ nguyên byte.
 _TEMPLATE_EXPECTED = (
     ("Run `graphify update .` to refresh the graph.",
-     "Run `nexgraph update .` to refresh the graph."),
+     "Wait for NexGraph to refresh the graph, then try again."),
     ("run `graphify update .` to refresh the graph.",
-     "run `nexgraph update .` to refresh the graph."),
+     "wait for NexGraph to refresh the graph, then try again."),
 )
 
 
@@ -361,7 +361,7 @@ def test_template_phrase_rebranded(user_data_project):
     assert error is False
     expected = (
         "Section: Cài đặt  [README.md:L5-L7]\n"
-        "Note: The heading moved since indexing; run `nexgraph update .` to refresh the graph.\n"
+        "Note: The heading moved since indexing; wait for NexGraph to refresh the graph, then try again.\n"
         "\n"
         "## Cài đặt\n"
         "\n"

@@ -140,6 +140,7 @@ def render_report_markdown(bg: BridgeGraph, project_name: str, files: int, *, la
     from nexgraph_engine.adapters.graphify.analysis import generate
 
     from nexgraph_engine.analysis.report.markdown_i18n import localize_markdown
+    from nexgraph_engine.core.text.rebrand import replace_phrases
 
     lang = check_lang(lang, "en")
     labels = {cid: community_label(name, lang) for cid, name in bg.labels.items()}
@@ -158,4 +159,6 @@ def render_report_markdown(bg: BridgeGraph, project_name: str, files: int, *, la
         if line.startswith(f"- {files} files · ~"):
             line = f"- {files} files"
         lines.append(line)
-    return localize_markdown("\n".join(lines) + ("\n" if md.endswith("\n") else ""), lang)
+    # ADR 0025: đổi câu mẫu nhắc lệnh của vendor TRƯỚC khi dịch (bản dịch khớp câu tiếng Anh đã đổi).
+    text, _ = replace_phrases("\n".join(lines) + ("\n" if md.endswith("\n") else ""))
+    return localize_markdown(text, lang)
