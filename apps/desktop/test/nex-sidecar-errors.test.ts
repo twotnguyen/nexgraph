@@ -66,7 +66,7 @@ async function expectTreeGone([parent, worker]: [number, number]): Promise<void>
   await waitGone(worker)
 }
 
-const configFor = (root: string) => nexConfig({ root, engine: { command: 'engine', args: [] }, dataDir: join(root, '.nexgraph'), provider: { label: 'QA', model: 'gpt' } })
+const configFor = (root: string) => nexConfig({ root, engine: { command: 'engine', args: [] }, dataDir: join(root, '.nexgraph'), configDir: join(root, 'config'), provider: { label: 'QA', model: 'gpt' } })
 
 describe('NexSidecar dọn cây tiến trình', () => {
   it('binary sống mà không ready: start reject và child bị kill, không còn tiến trình', async () => {

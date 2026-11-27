@@ -1,5 +1,7 @@
+import { join } from 'node:path'
 import type { EngineCommand } from '../../../platform/engine/launcher'
 import { PYTHON_ENV_GUARD } from '../../../platform/engine/python-env'
+import { NEX_INSTRUCTIONS_FILE, nexInstructions } from './instructions'
 
 /** Mã provider bên trong tiến trình Nex; không dùng id nhà cung cấp của app để không lộ cấu hình nội bộ. */
 export const NEX_PROVIDER_ID = 'nexgraph'
@@ -26,6 +28,8 @@ export type NexConfigInput = {
   root: string
   engine: EngineCommand
   dataDir: string
+  /** Thư mục cấu hình OpenCode của dự án (`OPENCODE_CONFIG_DIR`), nơi sidecar ghi `nexConfigFiles()`. */
+  configDir: string
   provider: Pick<NexProvider, 'label' | 'model' | 'contextWindow' | 'maxTokens' | 'supportsTools'>
 }
 
@@ -74,9 +78,50 @@ export function nexConfig(input: NexConfigInput): Record<string, unknown> {
   }
 }
 
-/** Phần chung của cấu hình Nex: MCP engine + quyền. */
-function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'>): Record<string, unknown> {
+/**
+ * Tool có sẵn của OpenCode mà Nex được dùng (tệp chỉ dẫn giới thiệu đúng các tool này). Hai tool
+ * `opencode_*_mcp_resource(s)` đọc resource của MCP `nexgraph` (báo cáo, god nodes, kết nối bất ngờ,
+ * câu hỏi gợi ý, audit), thứ Graphify cấp cho agent kết nối vào qua `graphify://…`.
+ */
+export const NEX_ENABLED_TOOLS = [
+  'read', 'glob', 'grep', 'edit', 'write', 'shell', 'opencode_list_mcp_resources', 'opencode_read_mcp_resource'
+] as const
+
+/**
+ * Tool có sẵn của OpenCode 2.4.1 mà app không phục vụ được: `onPermission` (nex/session.ts) chỉ dựng
+ * hộp duyệt cho `edit`/`shell` và từ chối mọi quyền khác, giao diện không hiện câu hỏi, phiên con
+ * hay lịch chạy. Luật `deny` trên `*` làm OpenCode bỏ tool khỏi danh sách gửi model
+ * (`tool.ts` whollyDisabled). Đây là lớp dự phòng cho `NEX_REMOVED_PLUGINS` (bản OpenCode sau đổi
+ * id plugin thì tool vẫn bị ẩn). `execute` là Code Mode.
+ */
+export const NEX_DISABLED_TOOLS = [
+  'webfetch', 'websearch', 'generate_image', 'generate_video', 'question', 'subagent', 'execute', 'skill'
+] as const
+
+/**
+ * Plugin tool có sẵn của OpenCode 2.4.1 bị gỡ hẳn (`plugins: ["-<id>"]`). Chỉ `deny` thì chưa đủ:
+ * tắt `execute` làm các tool Code Mode (`automation_*`, `opencode_*`) thành tool gọi thẳng, và
+ * `opencode_worktree_remove` xin quyền `edit` nên luật quyền không ẩn được. Đo trên binary thật:
+ * còn đúng `NEX_ENABLED_TOOLS` + tool `nexgraph_*` (script `scripts/nex/probe_system_prompt.ts`).
+ * Giữ `opencode.tools.mcp-resources` (đọc resource `nexgraph://…`).
+ */
+export const NEX_REMOVED_PLUGINS = [
+  'opencode.tool.automation', 'opencode.tools', 'opencode.tools.mcp-events',
+  'opencode.tool.skill', 'opencode.tool.webfetch', 'opencode.tool.websearch', 'opencode.tool.question',
+  'opencode.tool.subagent', 'opencode.tool.image-generate', 'opencode.tool.video-generate'
+] as const
+
+/** Các tệp sidecar ghi vào thư mục cấu hình cạnh `opencode.json`. */
+export function nexConfigFiles(): Record<string, string> {
+  return { [NEX_INSTRUCTIONS_FILE]: nexInstructions() }
+}
+
+/** Phần chung của cấu hình Nex: MCP engine, chỉ dẫn hệ thống, quyền. */
+function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir' | 'configDir'>): Record<string, unknown> {
   return {
+    // Đường dẫn tuyệt đối: OpenCode nạp mục `instructions` đã khai kể cả khi tắt khám phá cấu hình dự án.
+    instructions: [join(input.configDir, NEX_INSTRUCTIONS_FILE)],
+    plugins: NEX_REMOVED_PLUGINS.map((id) => `-${id}`),
     mcp: {
       servers: {
         nexgraph: {
@@ -96,10 +141,13 @@ function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'
       { action: 'glob', resource: '*', effect: 'allow' },
       { action: 'grep', resource: '*', effect: 'allow' },
       { action: 'list', resource: '*', effect: 'allow' },
-      { action: 'skill', resource: '*', effect: 'allow' },
       { action: 'nexgraph_*', resource: '*', effect: 'allow' },
+      // Chỉ server `nexgraph`; resource của server khác rơi vào hỏi quyền, onPermission từ chối.
+      { action: 'opencode_list_mcp_resources', resource: 'nexgraph', effect: 'allow' },
+      { action: 'opencode_read_mcp_resource', resource: 'nexgraph:*', effect: 'allow' },
       { action: 'edit', resource: '*', effect: 'ask' },
-      { action: 'shell', resource: '*', effect: 'ask' }
+      { action: 'shell', resource: '*', effect: 'ask' },
+      ...NEX_DISABLED_TOOLS.map((action) => ({ action, resource: '*', effect: 'deny' }))
     ]
   }
 }
@@ -108,7 +156,7 @@ function nexBaseConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'
  * Cấu hình cho nhà cung cấp đã đăng nhập trong sidecar (ChatGPT, Copilot, OpenCode…):
  * model trỏ thẳng `<integration>/<model>`, không khai báo `providers` và không cần key trên đĩa.
  */
-export function nexAccountConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir'> & {
+export function nexAccountConfig(input: Pick<NexConfigInput, 'root' | 'engine' | 'dataDir' | 'configDir'> & {
   providerID: string
   model: string
 }): Record<string, unknown> {

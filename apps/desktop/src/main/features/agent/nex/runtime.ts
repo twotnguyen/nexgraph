@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { EngineCommand } from '../../../platform/engine/launcher'
 import type { PiSession, SessionSpec } from '../session'
 import { NexClient } from './client'
-import { nexAccountConfig, nexConfig, nexProjectKey, nexProviderEnv, type NexProvider } from './config'
+import { nexAccountConfig, nexConfig, nexConfigFiles, nexProjectKey, nexProviderEnv, type NexProvider } from './config'
 import { NexSession } from './session'
 import { NexSidecar, resolveNexBinary } from './sidecar'
 
@@ -50,17 +50,19 @@ export async function createNexSession(spec: SessionSpec, o: NexRuntimeOptions):
   const root = spec.cwd
   const dataRoot = o.nexDataDir ?? join(o.dataDir, 'nex')
   const projectKey = nexProjectKey(spec.projectId ?? root)
+  const configDir = join(dataRoot, 'projects', projectKey, 'config')
   const sidecar = new NexSidecar({
     bin,
     dataDir: dataRoot,
     projectKey,
-    // HOME dùng chung để đăng nhập một lần dùng được cho mọi dự án; cấu hình (MCP, quyền) theo dự án.
+    // HOME dùng chung để đăng nhập một lần dùng được cho mọi dự án; cấu hình (MCP, quyền, chỉ dẫn) theo dự án.
     homeDir: join(dataRoot, 'home'),
-    configDir: join(dataRoot, 'projects', projectKey, 'config'),
+    configDir,
     cwd: root,
     config: () => account
-      ? nexAccountConfig({ root, engine: o.engineCommand(), dataDir: o.dataDir, providerID: account.provider, model: account.id })
-      : nexConfig({ root, engine: o.engineCommand(), dataDir: o.dataDir, provider: provider! }),
+      ? nexAccountConfig({ root, engine: o.engineCommand(), dataDir: o.dataDir, configDir, providerID: account.provider, model: account.id })
+      : nexConfig({ root, engine: o.engineCommand(), dataDir: o.dataDir, configDir, provider: provider! }),
+    files: nexConfigFiles,
     env: { ...(provider ? nexProviderEnv(provider) : {}), ...extraEnv(o.env) },
     envSource: process.env,
     startupTimeoutMs: o.startupTimeoutMs,

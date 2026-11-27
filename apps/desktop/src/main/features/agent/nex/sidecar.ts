@@ -13,6 +13,8 @@ const STARTUP_TIMEOUT_MS = 30_000
 const READY_POLL_MS = 100
 const STDERR_TAIL = 4000
 const KILL_GRACE_MS = 3000
+/** Tên tệp phụ trong thư mục cấu hình: không dấu phân cách, không bắt đầu bằng dấu chấm (chặn `..`). */
+const SAFE_FILE_NAME = /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/
 
 export type NexSidecarOptions = {
   bin: string
@@ -25,6 +27,8 @@ export type NexSidecarOptions = {
   configDir?: string
   cwd: string
   config: () => Record<string, unknown>
+  /** Tệp ghi cạnh `opencode.json` trước mỗi lần khởi động (tên tệp trần, không có thư mục). */
+  files?: () => Record<string, string>
   /** Env riêng của provider (có key). Không bao giờ được ghi ra đĩa/log. */
   env?: Record<string, string>
   envSource?: NodeJS.ProcessEnv
@@ -117,6 +121,10 @@ export class NexSidecar {
     const home = this.home
     const configDir = this.configDir
     mkdirSync(configDir, { recursive: true })
+    for (const [name, content] of Object.entries(this.o.files?.() ?? {})) {
+      if (!SAFE_FILE_NAME.test(name)) throw new NexStartError(`Tên tệp cấu hình Nex không hợp lệ: ${name}`, '')
+      writeFileSync(join(configDir, name), content, { mode: 0o600 })
+    }
     writeFileSync(join(configDir, 'opencode.json'), `${JSON.stringify(this.o.config(), null, 2)}\n`, { mode: 0o600 })
     const password = randomBytes(24).toString('base64url')
     const env = safeProcessEnv(this.o.envSource ?? process.env, {

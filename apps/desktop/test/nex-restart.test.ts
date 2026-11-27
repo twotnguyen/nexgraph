@@ -71,7 +71,7 @@ describe('NexSession sống qua sidecar restart', () => {
     const pidFile = join(dir, 'pid.txt')
     const sidecar = new NexSidecar({
       bin, dataDir: join(dir, 'nex'), projectKey: 'p1', cwd: root,
-      config: () => nexConfig({ root, engine: { command: 'engine', args: [] }, dataDir: join(root, '.nexgraph'), provider: { label: 'QA', model: 'gpt' } }),
+      config: () => nexConfig({ root, engine: { command: 'engine', args: [] }, dataDir: join(root, '.nexgraph'), configDir: join(root, 'config'), provider: { label: 'QA', model: 'gpt' } }),
       spawnImpl, startupTimeoutMs: 8_000, maxRestarts: 2,
       env: { FAKE_NEX_PID: pidFile, FAKE_NEX_REPLY_MS: '600' }
     })
