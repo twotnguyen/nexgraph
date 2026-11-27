@@ -50,8 +50,9 @@ def test_vendor_graph_round_trips_graphify_file_type_and_location(tmp_path):
 
     root = tmp_path / "du an"
     (root / ".nexgraph").mkdir(parents=True)
-    (root / "app.py").write_text('import networkx\n\ndef greet(name):\n    """Chào người dùng."""\n    return name\n')
-    (root / "README.md").write_text("# Demo\n")
+    (root / "app.py").write_text('import networkx\n\ndef greet(name):\n    """Chào người dùng."""\n    return name\n',
+                                 encoding="utf-8")
+    (root / "README.md").write_text("# Demo\n", encoding="utf-8")
     nodes = [
         {"id": "app", "label": "app.py", "file_type": "code", "source_file": "app.py", "source_location": "L1"},
         {"id": "app_greet", "label": "greet()", "file_type": "code", "source_file": "app.py", "source_location": "L3",
@@ -68,7 +69,8 @@ def test_vendor_graph_round_trips_graphify_file_type_and_location(tmp_path):
         {"source": "app", "target": "networkx", "relation": "imports", "source_file": "app.py"},
     ]
     graph = root / ".nexgraph" / "graph.json"
-    graph.write_text(json.dumps({"directed": False, "multigraph": False, "graph": {}, "nodes": nodes, "links": links}))
+    graph.write_text(json.dumps({"directed": False, "multigraph": False, "graph": {}, "nodes": nodes, "links": links}),
+                     encoding="utf-8")
     store = GraphStore(open_graph_db(tmp_path / "graph.db"))
     import_graph_json(store, root, graph)
 
