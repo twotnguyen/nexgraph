@@ -35,7 +35,7 @@ describe('THIRD_PARTY_LICENSES.md (LIC-1)', () => {
   it('giữ các mục cũ (không xoá nghĩa vụ đã ghi)', () => {
     for (const heading of ['Antigravity CLI', 'code-review-graph', 'CodeRAG', 'Monaco Editor', 'pi coding-agent',
       'TypeBox', 'monaco-vim', 'typescript-language-server và TypeScript', 'Pyright', 'xterm.js', 'node-pty',
-      'Yjs, y-monaco, y-protocols, ws', 'react-markdown', 'remark-gfm']) {
+      'Yjs, y-monaco, y-protocols, ws', 'react-markdown', 'remark-gfm', 'electron-updater', 'semver']) {
       expect(text).toContain(`## ${heading}`)
     }
   })

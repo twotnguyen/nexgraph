@@ -17,12 +17,14 @@ export type MenuBuildOptions = {
   platform: NodeJS.Platform
   send: (id: string) => void
   appName?: string
+  /** Mục "Kiểm tra cập nhật…": chạy ngay trong main (hộp thoại hệ thống), không qua renderer. */
+  checkUpdates?: () => void
 }
 
 /** Nhãn menu đang dùng; renderer gửi qua IPC `app-menu:set-locale` khi người dùng đổi ngôn ngữ. */
 export { getMenuLocale }
 
-export function buildAppMenu({ locale: lang, isPackaged, platform, send, appName }: MenuBuildOptions): MenuItemConstructorOptions[] {
+export function buildAppMenu({ locale: lang, isPackaged, platform, send, appName, checkUpdates }: MenuBuildOptions): MenuItemConstructorOptions[] {
   const t = menuLabels[lang]
   const name = appName ?? 'NexGraph'
   const command = (label: string, id: string, extra: MenuItemConstructorOptions = {}): MenuItemConstructorOptions => ({
@@ -38,6 +40,7 @@ export function buildAppMenu({ locale: lang, isPackaged, platform, send, appName
       label: name,
       submenu: [
         { role: 'about', label: t.app.about },
+        ...(checkUpdates ? [{ label: t.app.checkUpdates, click: checkUpdates }] : []),
         separator(),
         { role: 'hide', label: t.app.hide },
         { role: 'hideOthers', label: t.app.hideOthers },
@@ -169,6 +172,8 @@ export function buildAppMenu({ locale: lang, isPackaged, platform, send, appName
     label: lang === 'en' ? 'Help' : 'Trợ giúp',
     submenu: [
       { role: 'about', label: t.help.about },
+      // macOS đặt mục này ở menu ứng dụng (quy ước của hệ điều hành); Windows ở Trợ giúp.
+      ...(checkUpdates && platform !== 'darwin' ? [{ label: t.help.checkUpdates, click: checkUpdates }] : []),
       separator(),
       command(t.help.licenses, 'licenses.open')
     ]
@@ -182,6 +187,12 @@ function send(id: string, getWindow: () => BrowserWindow | null): void {
   win?.webContents.send('app-menu:action', { id })
 }
 
+let checkUpdatesHandler: (() => void) | undefined
+/** index.ts đăng ký trình kiểm cập nhật trước khi dựng menu lần đầu. */
+export function setCheckUpdatesHandler(handler: () => void): void {
+  checkUpdatesHandler = handler
+}
+
 /** Dựng lại thanh menu (gọi lúc khởi động và mỗi lần đổi ngôn ngữ UI). */
 export function installAppMenu(getWindow: () => BrowserWindow | null, nextLocale: MenuLocale = getMenuLocale()): void {
   setMenuLocale(nextLocale)
@@ -190,7 +201,8 @@ export function installAppMenu(getWindow: () => BrowserWindow | null, nextLocale
     isPackaged: app.isPackaged,
     platform: process.platform,
     appName: app.getName(),
-    send: (id) => send(id, getWindow)
+    send: (id) => send(id, getWindow),
+    checkUpdates: checkUpdatesHandler
   })))
 }
 

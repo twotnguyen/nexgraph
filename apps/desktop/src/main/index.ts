@@ -16,7 +16,8 @@ import { runSmoke } from './app/smoke'
 import { externalWebUrl, isSameDocument } from './platform/external-links'
 import { accountDevHooks } from './app/dev-hooks'
 import { installPermissionHandlers } from './app/permissions'
-import { installAppMenu } from './app/appMenu'
+import { getMenuLocale, installAppMenu, setCheckUpdatesHandler } from './app/appMenu'
+import { Updater, electronUpdateEnv } from './app/update/updater'
 import { WindowSet } from './app/windows'
 import { PAGES_PARTITION, attachGraphPageWebview, bindGraphPageGuest, installGraphPagesProtocol, registerGraphPageScheme, wireGraphPageContents } from './features/graph-pages/protocol'
 import { pageRoots } from './features/graph-pages/roots'
@@ -134,6 +135,9 @@ async function createWindow(show = true): Promise<void> {
 }
 
 const focusedOrMainWindow = (): BrowserWindow | null => BrowserWindow.getFocusedWindow() ?? mainWindowRef()
+// Cập nhật từ GitHub Releases: kiểm khi mở app + mục menu; cài bản mới ở bước cuối của before-quit.
+const updater = new Updater(electronUpdateEnv(focusedOrMainWindow, getMenuLocale))
+setCheckUpdatesHandler(() => { void updater.check(true) })
 registerIpc(() => supervisor.getHandle(), focusedOrMainWindow, engineCommand, dataDir, accountDevHooks(app.isPackaged), () => { void createWindow() }, (locale) => installAppMenu(mainWindowRef, locale))
 ipcMain.handle('engine:status', () => supervisor.getStatus())
 ipcMain.handle('engine:restart', () => supervisor.restart())
@@ -227,6 +231,7 @@ app.whenReady().then(() => {
   installAppMenu(mainWindowRef)
   void createWindow()
   void supervisor.startEngine()
+  updater.scheduleStartupCheck()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) void createWindow()
   })
@@ -250,5 +255,6 @@ app.on('before-quit', (e) => {
   stopAllWatchers()
   closeAllAgents()
   stopEditorProcesses()
-  void Promise.all([supervisor.stop(), stopAllMcpHttp(), stopNexAccounts()]).finally(() => app.quit())
+  // Có bản cập nhật chờ cài (Windows): chạy bộ cài sau khi engine/agent đã dừng, rồi thoát.
+  void Promise.all([supervisor.stop(), stopAllMcpHttp(), stopNexAccounts()]).finally(() => updater.quitOrInstall())
 })
