@@ -2664,7 +2664,7 @@ input, select, textarea { max-width: 100%; }
 /* backwards, không both: animation transform giữ sau khi chạy làm .screen thành khung chứa của position:fixed (hộp thoại bị cuộn theo trang). */
 .app > .screen { animation: screen-enter 150ms ease-out backwards; }
 .screen { max-width: 1240px; padding: clamp(16px, 3vw, 38px); }
-.screen.projects-page, .screen.task-screen, .screen.settings { max-width: 1080px; }
+.screen.projects-page:not(.welcome-page), .screen.task-screen:not(.welcome-page), .screen.settings { max-width: 1080px; }
 .page-back { margin-bottom: 12px; }
 .page-title { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; min-width: 0; }
 .page-title > div:not(.page-actions) { min-width: 0; }
